@@ -1,0 +1,28 @@
+project_id = "vibetours"
+
+[api]
+enabled = true
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+enabled = true
+site_url = "vibetours://auth-callback"
+additional_redirect_urls = ["http://localhost:3000", "http://localhost:8080"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+redirect_uri = ""
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"

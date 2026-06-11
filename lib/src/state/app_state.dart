@@ -1,0 +1,601 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/config/app_config.dart';
+import '../core/services/auth_service.dart';
+import '../core/services/tour_runtime_services.dart';
+import '../data/demo_tours.dart';
+import '../data/discovery_repository.dart';
+import '../data/tour_repository.dart';
+import '../domain/models.dart';
+
+final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
+  if (!AppConfig.hasSupabase) return null;
+  return Supabase.instance.client;
+});
+
+final authServiceProvider = Provider<AuthService>((ref) {
+  return AuthService(ref.watch(supabaseClientProvider));
+});
+
+final authUserProvider = StreamProvider<User?>((ref) async* {
+  final client = ref.watch(supabaseClientProvider);
+  if (client == null) {
+    yield null;
+    return;
+  }
+  yield client.auth.currentUser;
+  await for (final state in client.auth.onAuthStateChange) {
+    yield state.session?.user;
+  }
+});
+
+final isAuthenticatedProvider = Provider<bool>((ref) {
+  return ref.watch(authUserProvider).valueOrNull != null;
+});
+
+final tourRepositoryProvider = Provider<TourRepository>((ref) {
+  return TourRepository(client: ref.watch(supabaseClientProvider));
+});
+
+final discoveryRepositoryProvider = Provider<DiscoveryRepository>((ref) {
+  return DiscoveryRepository();
+});
+
+final toursProvider = FutureProvider<List<Tour>>((ref) async {
+  return ref.watch(tourRepositoryProvider).getTours();
+});
+
+final eventsProvider = Provider<List<LocalEvent>>((ref) => buildDemoEvents());
+
+final currentPositionProvider = FutureProvider((ref) async {
+  return ref.watch(locationServiceProvider).currentPosition();
+});
+
+final weatherProvider = FutureProvider<WeatherSnapshot?>((ref) async {
+  final position = await ref.watch(currentPositionProvider.future);
+  if (position == null) return null;
+  return ref
+      .watch(discoveryRepositoryProvider)
+      .weather(latitude: position.latitude, longitude: position.longitude);
+});
+
+final nearbyPlacesProvider = FutureProvider<List<NearbyPlace>>((ref) async {
+  final position = await ref.watch(currentPositionProvider.future);
+  if (position == null) return const [];
+  return ref
+      .watch(discoveryRepositoryProvider)
+      .nearbyPlaces(latitude: position.latitude, longitude: position.longitude);
+});
+
+final localEventsProvider = FutureProvider<List<LocalEvent>>((ref) async {
+  final position = await ref.watch(currentPositionProvider.future);
+  if (position == null) return const [];
+  return ref
+      .watch(discoveryRepositoryProvider)
+      .localEvents(latitude: position.latitude, longitude: position.longitude);
+});
+
+final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
+
+final localeProvider = StateProvider<Locale?>((ref) => null);
+
+final mapStyleProvider = StateProvider<String>(
+  (ref) => 'https://tiles.openfreemap.org/styles/liberty',
+);
+
+final highRefreshRateProvider = StateProvider<bool>((ref) => true);
+
+final notificationsEnabledProvider = StateProvider<bool>((ref) => true);
+
+final onboardingCompleteProvider =
+    AsyncNotifierProvider<OnboardingCompleteController, bool>(
+      OnboardingCompleteController.new,
+    );
+
+final selectedTabProvider = StateProvider<int>((ref) => 0);
+
+final selectedTourProvider = StateProvider<Tour?>((ref) => null);
+
+final selectedNearbyPlaceProvider = StateProvider<NearbyPlace?>((ref) => null);
+
+final userToursProvider =
+    AsyncNotifierProvider<UserToursController, UserToursState>(
+      UserToursController.new,
+    );
+
+final favoriteTourIdsProvider = StateProvider<Set<String>>((ref) => <String>{});
+
+final guestAiRemainingProvider = StateProvider<int>((ref) => 2);
+
+final touristProfileProvider =
+    StateNotifierProvider<TouristProfileController, TouristProfile>(
+      (ref) => TouristProfileController(),
+    );
+
+final voiceGuideProvider = Provider<VoiceGuideService>(
+  (ref) => VoiceGuideService(),
+);
+
+final locationServiceProvider = Provider<LocationService>(
+  (ref) => LocationService(),
+);
+
+class TouristProfileController extends StateNotifier<TouristProfile> {
+  TouristProfileController() : super(TouristProfile.empty);
+
+  void toggleInterest(String interest) {
+    final interests = [...state.interests];
+    if (interests.contains(interest)) {
+      interests.remove(interest);
+    } else {
+      interests.add(interest);
+    }
+    state = state.copyWith(
+      interests: interests,
+      aiSummary: _summary(interests, state.preferredPace),
+    );
+  }
+
+  void setPace(String pace) {
+    state = state.copyWith(
+      preferredPace: pace,
+      aiSummary: _summary(state.interests, pace),
+    );
+  }
+
+  void setCountries(List<String> countries) {
+    state = state.copyWith(favoriteCountries: countries);
+  }
+
+  static String _summary(List<String> interests, String pace) {
+    if (interests.isEmpty) return '';
+    return 'Viajero $pace con afinidad por ${interests.take(4).join(', ')}. '
+        'VIBETOURS priorizara rutas logicas, experiencias variadas y lugares autenticos.';
+  }
+}
+
+class AiPlannerController extends AsyncNotifier<Tour?> {
+  @override
+  FutureOr<Tour?> build() => null;
+
+  Future<void> generate(AiTourRequest request) async {
+    final remaining = ref.read(guestAiRemainingProvider);
+    final user = ref.read(authServiceProvider).currentUser;
+    if (user == null && remaining <= 0) {
+      state = AsyncError(
+        StateError('La demo gratuita permite maximo 2 tours IA.'),
+        StackTrace.current,
+      );
+      return;
+    }
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final tour = await ref
+          .read(tourRepositoryProvider)
+          .generateAiTour(request);
+      if (user == null) {
+        ref.read(guestAiRemainingProvider.notifier).state = remaining - 1;
+      }
+      return tour;
+    });
+  }
+}
+
+final aiPlannerControllerProvider =
+    AsyncNotifierProvider<AiPlannerController, Tour?>(AiPlannerController.new);
+
+class OnboardingCompleteController extends AsyncNotifier<bool> {
+  static const _key = 'vibetours_onboarding_complete';
+
+  @override
+  Future<bool> build() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_key) ?? false;
+  }
+
+  Future<void> complete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key, true);
+    state = const AsyncData(true);
+  }
+}
+
+class UserToursState {
+  const UserToursState({
+    required this.manualTours,
+    required this.hiddenDefaultTourIds,
+  });
+
+  final List<Tour> manualTours;
+  final Set<String> hiddenDefaultTourIds;
+
+  static const empty = UserToursState(
+    manualTours: [],
+    hiddenDefaultTourIds: {},
+  );
+
+  UserToursState copyWith({
+    List<Tour>? manualTours,
+    Set<String>? hiddenDefaultTourIds,
+  }) {
+    return UserToursState(
+      manualTours: manualTours ?? this.manualTours,
+      hiddenDefaultTourIds: hiddenDefaultTourIds ?? this.hiddenDefaultTourIds,
+    );
+  }
+}
+
+class UserToursController extends AsyncNotifier<UserToursState> {
+  static const _manualToursKey = 'vibetours_manual_tours';
+  static const _hiddenDefaultsKey = 'vibetours_hidden_default_tours';
+  static const _clearAllToursKey = 'vibetours_clear_all_tours_20260610_1530';
+
+  @override
+  Future<UserToursState> build() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_clearAllToursKey) != true) {
+      await prefs.remove(_manualToursKey);
+      await prefs.setStringList(_hiddenDefaultsKey, const []);
+      await prefs.setBool(_clearAllToursKey, true);
+      return UserToursState.empty;
+    }
+    final manualRaw = prefs.getString(_manualToursKey);
+    final hidden = prefs.getStringList(_hiddenDefaultsKey) ?? const <String>[];
+    final manualTours = <Tour>[];
+    if (manualRaw != null && manualRaw.isNotEmpty) {
+      final decoded = jsonDecode(manualRaw);
+      if (decoded is List) {
+        for (final item in decoded) {
+          if (item is Map) {
+            manualTours.add(_tourFromJson(Map<String, dynamic>.from(item)));
+          }
+        }
+      }
+    }
+    return UserToursState(
+      manualTours: manualTours,
+      hiddenDefaultTourIds: hidden.toSet(),
+    );
+  }
+
+  Future<void> saveTour(Tour tour) async {
+    final current = state.valueOrNull ?? await future;
+    final nextTours = [
+      for (final item in current.manualTours)
+        if (item.id != tour.id) item,
+      tour,
+    ];
+    await _persist(current.copyWith(manualTours: nextTours));
+  }
+
+  Future<void> deleteTour(Tour tour) async {
+    final current = state.valueOrNull ?? await future;
+    if (tour.id.startsWith('manual-')) {
+      await _persist(
+        current.copyWith(
+          manualTours: [
+            for (final item in current.manualTours)
+              if (item.id != tour.id) item,
+          ],
+        ),
+      );
+      return;
+    }
+    await _persist(
+      current.copyWith(
+        hiddenDefaultTourIds: {...current.hiddenDefaultTourIds, tour.id},
+      ),
+    );
+  }
+
+  Future<void> approveTour(String tourId, {bool published = true}) async {
+    final current = state.valueOrNull ?? await future;
+    await _persist(
+      current.copyWith(
+        manualTours: [
+          for (final tour in current.manualTours)
+            tour.id == tourId ? _copyTour(tour, isPublished: published) : tour,
+        ],
+      ),
+    );
+  }
+
+  Future<void> _persist(UserToursState next) async {
+    state = AsyncData(next);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _manualToursKey,
+      jsonEncode([for (final tour in next.manualTours) _tourToJson(tour)]),
+    );
+    await prefs.setStringList(
+      _hiddenDefaultsKey,
+      next.hiddenDefaultTourIds.toList(),
+    );
+  }
+}
+
+Tour _copyTour(Tour tour, {bool? isPublished}) {
+  return Tour(
+    id: tour.id,
+    title: tour.title,
+    country: tour.country,
+    city: tour.city,
+    type: tour.type,
+    description: tour.description,
+    coverUrl: tour.coverUrl,
+    gallery: tour.gallery,
+    durationHours: tour.durationHours,
+    distanceKm: tour.distanceKm,
+    rating: tour.rating,
+    reviewCount: tour.reviewCount,
+    likes: tour.likes,
+    difficulty: tour.difficulty,
+    language: tour.language,
+    tags: tour.tags,
+    stops: tour.stops,
+    isPublished: isPublished ?? tour.isPublished,
+    isAiGenerated: tour.isAiGenerated,
+    shortSummary: tour.shortSummary,
+    subcategories: tour.subcategories,
+    featuredExperience: tour.featuredExperience,
+    placeHistory: tour.placeHistory,
+    culturalContext: tour.culturalContext,
+    availableLanguages: tour.availableLanguages,
+    recommendedAudience: tour.recommendedAudience,
+    bestSeason: tour.bestSeason,
+    recommendedSchedule: tour.recommendedSchedule,
+    meetingPoint: tour.meetingPoint,
+    meetingPointInfo: tour.meetingPointInfo,
+    includes: tour.includes,
+    excludes: tour.excludes,
+    recommendations: tour.recommendations,
+    whatToBring: tour.whatToBring,
+    tourRules: tour.tourRules,
+    keywords: tour.keywords,
+    mainCategory: tour.mainCategory,
+    budget: tour.budget,
+    additionalInfo: tour.additionalInfo,
+  );
+}
+
+Map<String, dynamic> _tourToJson(Tour tour) {
+  return {
+    'id': tour.id,
+    'title': tour.title,
+    'country': tour.country,
+    'city': tour.city,
+    'type': tour.type.name,
+    'description': tour.description,
+    'coverUrl': tour.coverUrl,
+    'gallery': tour.gallery,
+    'durationHours': tour.durationHours,
+    'distanceKm': tour.distanceKm,
+    'rating': tour.rating,
+    'reviewCount': tour.reviewCount,
+    'likes': tour.likes,
+    'difficulty': tour.difficulty.name,
+    'language': tour.language,
+    'tags': tour.tags,
+    'isPublished': tour.isPublished,
+    'isAiGenerated': tour.isAiGenerated,
+    'shortSummary': tour.shortSummary,
+    'subcategories': tour.subcategories,
+    'featuredExperience': tour.featuredExperience,
+    'placeHistory': tour.placeHistory,
+    'culturalContext': tour.culturalContext,
+    'availableLanguages': tour.availableLanguages,
+    'recommendedAudience': tour.recommendedAudience,
+    'bestSeason': tour.bestSeason,
+    'recommendedSchedule': tour.recommendedSchedule,
+    'meetingPoint': tour.meetingPoint,
+    'meetingPointInfo': _locationInfoToJson(tour.meetingPointInfo),
+    'includes': tour.includes,
+    'excludes': tour.excludes,
+    'recommendations': tour.recommendations,
+    'whatToBring': tour.whatToBring,
+    'tourRules': tour.tourRules,
+    'keywords': tour.keywords,
+    'mainCategory': tour.mainCategory,
+    'budget': {
+      'low': tour.budget.low,
+      'medium': tour.budget.medium,
+      'high': tour.budget.high,
+    },
+    'additionalInfo': {
+      'accesibilidad': tour.additionalInfo.accesibilidad,
+      'mascotasPermitidas': tour.additionalInfo.mascotasPermitidas,
+      'aptoParaNinos': tour.additionalInfo.aptoParaNinos,
+      'aptoParaAdultosMayores': tour.additionalInfo.aptoParaAdultosMayores,
+    },
+    'creationJson': tour.toCreationJson(),
+    'stops': [for (final stop in tour.stops) _stopToJson(stop)],
+  };
+}
+
+Map<String, dynamic> _stopToJson(TourStop stop) {
+  return {
+    'id': stop.id,
+    'name': stop.name,
+    'latitude': stop.location.latitude,
+    'longitude': stop.location.longitude,
+    'imageUrl': stop.imageUrl,
+    'description': stop.description,
+    'activities': stop.activities,
+    'curiousFacts': stop.curiousFacts,
+    'tips': stop.tips,
+    'locationInfo': _locationInfoToJson(stop.locationInfo),
+    'images': stop.images,
+    'suggestedMinutes': stop.suggestedMinutes,
+    'order': stop.order,
+  };
+}
+
+Tour _tourFromJson(Map<String, dynamic> json) {
+  return Tour(
+    id: _string(json['id'], 'manual-${DateTime.now().microsecondsSinceEpoch}'),
+    title: _string(json['title'], 'Tour sin nombre'),
+    country: _string(json['country'], 'Global'),
+    city: _string(json['city'], 'Personalizado'),
+    type: _enumValue(TourType.values, _string(json['type'], 'custom')),
+    description: _string(json['description'], ''),
+    coverUrl: _string(json['coverUrl'], ''),
+    gallery: _stringList(json['gallery']),
+    durationHours: _double(json['durationHours'], 2.5),
+    distanceKm: _double(json['distanceKm'], 0),
+    rating: _double(json['rating'], 0),
+    reviewCount: _int(json['reviewCount'], 0),
+    likes: _int(json['likes'], 0),
+    difficulty: _enumValue(
+      TourDifficulty.values,
+      _string(json['difficulty'], 'easy'),
+    ),
+    language: _string(json['language'], 'es'),
+    tags: _stringList(json['tags']),
+    stops: [
+      for (final item in json['stops'] is List ? json['stops'] as List : [])
+        if (item is Map) _stopFromJson(Map<String, dynamic>.from(item)),
+    ],
+    isPublished: json['isPublished'] == true,
+    isAiGenerated: json['isAiGenerated'] == true,
+    shortSummary: _string(json['shortSummary'], ''),
+    subcategories: _stringList(json['subcategories']),
+    featuredExperience: _string(json['featuredExperience'], ''),
+    placeHistory: _string(json['placeHistory'], ''),
+    culturalContext: _string(json['culturalContext'], ''),
+    availableLanguages: _stringList(json['availableLanguages']).isEmpty
+        ? [_string(json['language'], 'es')]
+        : _stringList(json['availableLanguages']),
+    recommendedAudience: _stringList(json['recommendedAudience']),
+    bestSeason: _string(json['bestSeason'], ''),
+    recommendedSchedule: _string(json['recommendedSchedule'], ''),
+    meetingPoint: _string(json['meetingPoint'], ''),
+    meetingPointInfo: _locationInfoFromJson(json['meetingPointInfo']),
+    includes: _stringList(json['includes']),
+    excludes: _stringList(json['excludes']),
+    recommendations: _stringList(json['recommendations']),
+    whatToBring: _stringList(json['whatToBring']),
+    tourRules: _stringList(json['tourRules']),
+    keywords: _stringList(json['keywords']),
+    mainCategory: _string(json['mainCategory'], ''),
+    budget: _budgetFromJson(json['budget']),
+    additionalInfo: _additionalInfoFromJson(json['additionalInfo']),
+  );
+}
+
+TourStop _stopFromJson(Map<String, dynamic> json) {
+  return TourStop(
+    id: _string(json['id'], 'stop-${DateTime.now().microsecondsSinceEpoch}'),
+    name: _string(json['name'], 'Parada'),
+    location: GeoPoint(
+      latitude: _double(json['latitude'], 0),
+      longitude: _double(json['longitude'], 0),
+    ),
+    imageUrl: _string(json['imageUrl'], ''),
+    description: _string(json['description'], 'Parada turistica'),
+    activities: _stringList(json['activities']).isEmpty
+        ? const ['Explorar']
+        : _stringList(json['activities']),
+    curiousFacts: _stringList(json['curiousFacts']),
+    tips: _stringList(json['tips']).isEmpty
+        ? const ['Confirma horarios locales antes de llegar']
+        : _stringList(json['tips']),
+    locationInfo: _locationInfoFromJson(json['locationInfo']),
+    images: _stringList(json['images']),
+    suggestedMinutes: _int(json['suggestedMinutes'], 25),
+    order: _int(json['order'], 0),
+  );
+}
+
+Map<String, dynamic> _locationInfoToJson(TourLocationInfo location) {
+  return {
+    'nombreLugar': location.nombreLugar,
+    'direccion': location.direccion,
+    'ciudad': location.ciudad,
+    'region': location.region,
+    'pais': location.pais,
+    'placeId': location.placeId,
+    'urlMapa': location.urlMapa,
+  };
+}
+
+TourLocationInfo _locationInfoFromJson(Object? value) {
+  if (value is! Map) return TourLocationInfo.empty;
+  final json = Map<String, dynamic>.from(value);
+  return TourLocationInfo(
+    nombreLugar: _string(json['nombreLugar'] ?? json['nombre_lugar'], ''),
+    direccion: _string(json['direccion'], ''),
+    ciudad: _string(json['ciudad'], ''),
+    region: _string(json['region'], ''),
+    pais: _string(json['pais'], ''),
+    placeId: _string(json['placeId'] ?? json['place_id'], ''),
+    urlMapa: _string(json['urlMapa'] ?? json['url_mapa'], ''),
+  );
+}
+
+TourBudget _budgetFromJson(Object? value) {
+  if (value is! Map) return TourBudget.empty;
+  final json = Map<String, dynamic>.from(value);
+  return TourBudget(
+    low: _int(json['low'] ?? json['bajo'], 0),
+    medium: _int(json['medium'] ?? json['medio'], 0),
+    high: _int(json['high'] ?? json['alto'], 0),
+  );
+}
+
+TourAdditionalInfo _additionalInfoFromJson(Object? value) {
+  if (value is! Map) return TourAdditionalInfo.standard;
+  final json = Map<String, dynamic>.from(value);
+  return TourAdditionalInfo(
+    accesibilidad: _string(
+      json['accesibilidad'],
+      TourAdditionalInfo.standard.accesibilidad,
+    ),
+    mascotasPermitidas:
+        json['mascotasPermitidas'] == true ||
+        json['mascotas_permitidas'] == true,
+    aptoParaNinos:
+        json['aptoParaNinos'] == false || json['apto_para_ninos'] == false
+        ? false
+        : true,
+    aptoParaAdultosMayores:
+        json['aptoParaAdultosMayores'] == false ||
+            json['apto_para_adultos_mayores'] == false
+        ? false
+        : true,
+  );
+}
+
+T _enumValue<T extends Enum>(List<T> values, String name) {
+  return values.firstWhere(
+    (item) => item.name == name,
+    orElse: () => values.first,
+  );
+}
+
+String _string(Object? value, String fallback) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? fallback : text;
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) return const [];
+  return [for (final item in value) item.toString()];
+}
+
+int _int(Object? value, int fallback) {
+  if (value is int) return value;
+  if (value is num) return value.round();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+double _double(Object? value, double fallback) {
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? fallback;
+}
