@@ -186,6 +186,7 @@ async function persistTour(tour, route, input, userId) {
     .from('tours')
     .insert({
       owner_id: userId,
+      created_by: userId,
       title: tour.nombre_tour,
       country: input.country,
       city: input.city || input.destination,
@@ -197,6 +198,7 @@ async function persistTour(tour, route, input, userId) {
       distance_meters: Math.round(route.distanceKm * 1000),
       is_ai_generated: true,
       is_published: false,
+      moderation_status: 'pending',
       tags: tour.etiquetas,
       creation_json: tour,
       short_summary: tour.resumen_corto,
@@ -227,6 +229,7 @@ async function persistTour(tour, route, input, userId) {
     const routeStop = route.stops[index] ?? {}
     return {
     tour_id: data.id,
+    position: index + 1,
     name: stop.nombre,
     latitude: routeStop.latitude ?? 0,
     longitude: routeStop.longitude ?? 0,

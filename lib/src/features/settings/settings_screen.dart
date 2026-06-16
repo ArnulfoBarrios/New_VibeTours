@@ -22,6 +22,7 @@ class SettingsScreen extends ConsumerWidget {
     final mapStyle = ref.watch(mapStyleProvider);
     final auth = ref.watch(authServiceProvider);
     final currentUser = ref.watch(authUserProvider).valueOrNull;
+    final isAdmin = ref.watch(isAdminProvider);
     final content = ListView(
       padding: EdgeInsets.fromLTRB(20, 10, 20, embedded ? 120 : 30),
       children: [
@@ -133,12 +134,13 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: const Icon(Icons.support_agent_rounded),
                 onTap: () => context.push('/pqrs'),
               ),
-              _SettingsTile(
-                title: 'Administrador',
-                subtitle: 'Aprobar tours y responder PQRS',
-                trailing: const Icon(Icons.admin_panel_settings_rounded),
-                onTap: () => context.push('/admin'),
-              ),
+              if (isAdmin)
+                _SettingsTile(
+                  title: 'Administrador',
+                  subtitle: 'Aprobar tours y responder PQRS',
+                  trailing: const Icon(Icons.admin_panel_settings_rounded),
+                  onTap: () => context.push('/admin'),
+                ),
               _SettingsTile(
                 title: l10n.privacy,
                 subtitle: 'Datos, ubicacion y recomendaciones',

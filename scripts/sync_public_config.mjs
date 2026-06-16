@@ -10,7 +10,10 @@ const allowedKeys = [
   'SUPABASE_ANON_KEY',
   'API_BASE_URL',
   'GOOGLE_WEB_CLIENT_ID',
-  'GOOGLE_IOS_CLIENT_ID'
+  'GOOGLE_IOS_CLIENT_ID',
+  'TOMTOM_API_KEY',
+  'ADMIN_EMAIL',
+  'ADMIN_USER_ID'
 ]
 
 const env = parseEnv(await readFile(envPath, 'utf8'))

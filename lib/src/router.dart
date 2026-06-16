@@ -22,8 +22,16 @@ import 'features/tours/tours_screen.dart';
 import 'state/app_state.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final currentUser = ref.watch(authUserProvider).valueOrNull;
+  final isAdmin = ref.watch(isAdminProvider);
   return GoRouter(
     initialLocation: '/',
+    redirect: (context, state) {
+      if (state.matchedLocation == '/admin' && !isAdmin) {
+        return currentUser == null ? '/login' : '/settings';
+      }
+      return null;
+    },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const _StartupRoute()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),

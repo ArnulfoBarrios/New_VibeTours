@@ -39,6 +39,11 @@ final isAuthenticatedProvider = Provider<bool>((ref) {
   return ref.watch(authUserProvider).valueOrNull != null;
 });
 
+final isAdminProvider = Provider<bool>((ref) {
+  final user = ref.watch(authUserProvider).valueOrNull;
+  return ref.watch(authServiceProvider).isConfiguredAdmin(user);
+});
+
 final tourRepositoryProvider = Provider<TourRepository>((ref) {
   return TourRepository(client: ref.watch(supabaseClientProvider));
 });
@@ -49,6 +54,13 @@ final discoveryRepositoryProvider = Provider<DiscoveryRepository>((ref) {
 
 final toursProvider = FutureProvider<List<Tour>>((ref) async {
   return ref.watch(tourRepositoryProvider).getTours();
+});
+
+final adminPendingToursProvider = FutureProvider.autoDispose<List<Tour>>((
+  ref,
+) async {
+  if (!ref.watch(isAdminProvider)) return const [];
+  return ref.watch(tourRepositoryProvider).getPendingModerationTours();
 });
 
 final eventsProvider = Provider<List<LocalEvent>>((ref) => buildDemoEvents());
@@ -232,21 +244,49 @@ class UserToursState {
 }
 
 class UserToursController extends AsyncNotifier<UserToursState> {
-  static const _manualToursKey = 'vibetours_manual_tours';
-  static const _hiddenDefaultsKey = 'vibetours_hidden_default_tours';
+  static String _manualToursKey(String? userId) => 'vibetours_manual_tours_${userId ?? 'guest'}';
+  static String _hiddenDefaultsKey(String? userId) => 'vibetours_hidden_default_tours_${userId ?? 'guest'}';
   static const _clearAllToursKey = 'vibetours_clear_all_tours_20260610_1530';
 
   @override
   Future<UserToursState> build() async {
     final prefs = await SharedPreferences.getInstance();
+    final user = ref.watch(authUserProvider).valueOrNull;
+    final client = ref.read(supabaseClientProvider);
+    final userId = user?.id;
+
     if (prefs.getBool(_clearAllToursKey) != true) {
-      await prefs.remove(_manualToursKey);
-      await prefs.setStringList(_hiddenDefaultsKey, const []);
+      await prefs.remove('vibetours_manual_tours');
+      await prefs.remove('vibetours_hidden_default_tours');
       await prefs.setBool(_clearAllToursKey, true);
       return UserToursState.empty;
     }
-    final manualRaw = prefs.getString(_manualToursKey);
-    final hidden = prefs.getStringList(_hiddenDefaultsKey) ?? const <String>[];
+
+    final hidden = prefs.getStringList(_hiddenDefaultsKey(userId)) ?? const <String>[];
+    if (client != null && user != null) {
+      try {
+        final rows = await client
+            .from('tours')
+            .select('*, tour_stops(*)')
+            .or('owner_id.eq.${user.id},created_by.eq.${user.id}')
+            .order('created_at', ascending: false);
+
+        final dbTours = [
+          for (final row in rows)
+            ref
+                .read(tourRepositoryProvider)
+                .parseDatabaseJson(Map<String, dynamic>.from(row)),
+        ];
+        return UserToursState(
+          manualTours: dbTours,
+          hiddenDefaultTourIds: hidden.toSet(),
+        );
+      } catch (_) {
+        // Fallback to local only if DB fetch fails
+      }
+    }
+
+    final manualRaw = prefs.getString(_manualToursKey(userId));
     final manualTours = <Tour>[];
     if (manualRaw != null && manualRaw.isNotEmpty) {
       final decoded = jsonDecode(manualRaw);
@@ -258,24 +298,39 @@ class UserToursController extends AsyncNotifier<UserToursState> {
         }
       }
     }
+
     return UserToursState(
       manualTours: manualTours,
       hiddenDefaultTourIds: hidden.toSet(),
     );
   }
 
-  Future<void> saveTour(Tour tour) async {
+  Future<Tour> saveTour(Tour tour) async {
     final current = state.valueOrNull ?? await future;
+    final user = ref.read(authServiceProvider).currentUser;
+    if (user == null) {
+      throw StateError('Debes iniciar sesion para guardar tours manuales.');
+    }
+    final storedTour = await ref.read(tourRepositoryProvider).saveUserTour(tour);
+    ref.invalidate(toursProvider);
+    ref.invalidate(adminPendingToursProvider);
     final nextTours = [
       for (final item in current.manualTours)
-        if (item.id != tour.id) item,
-      tour,
+        if (item.id != storedTour.id && item.id != tour.id) item,
+      storedTour,
     ];
     await _persist(current.copyWith(manualTours: nextTours));
+    return storedTour;
   }
 
   Future<void> deleteTour(Tour tour) async {
     final current = state.valueOrNull ?? await future;
+    final user = ref.read(authServiceProvider).currentUser;
+    if (user != null && !tour.id.startsWith('manual-')) {
+      await ref.read(tourRepositoryProvider).deleteUserTour(tour.id);
+      ref.invalidate(toursProvider);
+      ref.invalidate(adminPendingToursProvider);
+    }
     if (tour.id.startsWith('manual-')) {
       await _persist(
         current.copyWith(
@@ -289,6 +344,10 @@ class UserToursController extends AsyncNotifier<UserToursState> {
     }
     await _persist(
       current.copyWith(
+        manualTours: [
+          for (final item in current.manualTours)
+            if (item.id != tour.id) item,
+        ],
         hiddenDefaultTourIds: {...current.hiddenDefaultTourIds, tour.id},
       ),
     );
@@ -309,12 +368,13 @@ class UserToursController extends AsyncNotifier<UserToursState> {
   Future<void> _persist(UserToursState next) async {
     state = AsyncData(next);
     final prefs = await SharedPreferences.getInstance();
+    final userId = ref.read(authServiceProvider).currentUser?.id;
     await prefs.setString(
-      _manualToursKey,
+      _manualToursKey(userId),
       jsonEncode([for (final tour in next.manualTours) _tourToJson(tour)]),
     );
     await prefs.setStringList(
-      _hiddenDefaultsKey,
+      _hiddenDefaultsKey(userId),
       next.hiddenDefaultTourIds.toList(),
     );
   }

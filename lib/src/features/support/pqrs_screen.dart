@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../state/app_state.dart';
+import 'pqrs_history_screen.dart';
 
 class PqrsScreen extends ConsumerStatefulWidget {
   const PqrsScreen({super.key});
@@ -17,6 +18,7 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
   final _message = TextEditingController();
   String _kind = 'suggestion';
   bool _isSending = false;
+  int _currentTab = 0;
 
   static const _kinds = {
     'petition': 'Peticion',
@@ -40,166 +42,205 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
         child: Stack(
           children: [
             Positioned.fill(child: CustomPaint(painter: _SupportGlowPainter())),
-            ListView(
-              padding: const EdgeInsets.fromLTRB(26, 28, 26, 28),
+            Column(
               children: [
-                Row(
-                  children: [
-                    Text(
-                      'VibeTours',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            color: const Color(0xFFC8DAFF),
-                            fontSize: 31,
-                          ),
-                    ),
-                    const SizedBox(width: 14),
-                    const _HeaderPill(),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => context.canPop()
-                          ? context.pop()
-                          : context.go('/settings'),
-                      icon: const Icon(Icons.close_rounded),
-                      color: Colors.white70,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 26),
-                _MainFormCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Container(
+                  padding: const EdgeInsets.fromLTRB(26, 28, 26, 16),
+                  child: Row(
                     children: [
                       Text(
-                        'Crear PQRS',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(color: Colors.white, fontSize: 28),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Cuentanos tu experiencia. Estamos aqui para escucharte y mejorar nuestro servicio.',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.78),
-                          height: 1.35,
+                        'VibeTours',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: const Color(0xFFC8DAFF),
+                          fontSize: 31,
                         ),
                       ),
-                      const SizedBox(height: 34),
-                      const _FieldTitle('Tipo de solicitud'),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: _kind,
-                        items: [
-                          for (final entry in _kinds.entries)
-                            DropdownMenuItem(
-                              value: entry.key,
-                              child: Text(entry.value),
-                            ),
-                        ],
-                        onChanged: _isSending
-                            ? null
-                            : (value) => setState(() => _kind = value ?? _kind),
-                        decoration: _inputDecoration('Selecciona una opcion'),
-                        dropdownColor: const Color(0xFF111821),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                        ),
+                      const SizedBox(width: 14),
+                      const _HeaderPill(),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => context.canPop() ? context.pop() : context.go('/settings'),
+                        icon: const Icon(Icons.close_rounded),
+                        color: Colors.white70,
                       ),
-                      const SizedBox(height: 28),
-                      const _FieldTitle('Asunto'),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _subject,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: _inputDecoration(
-                          'Resumen corto de tu solicitud',
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      const _FieldTitle('Mensaje'),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _message,
-                        minLines: 5,
-                        maxLines: 8,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: _inputDecoration(
-                          'Describe detalladamente los hechos...',
-                        ),
-                      ),
-                      const SizedBox(height: 38),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 76,
-                        child: FilledButton.icon(
-                          onPressed: _isSending ? null : _submit,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(28),
-                            ),
-                            elevation: 24,
-                            shadowColor: AppTheme.primary.withValues(
-                              alpha: 0.36,
-                            ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 26),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _currentTab = 0),
+                          child: Column(
+                            children: [
+                              Text(
+                                'Crear',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: _currentTab == 0 ? const Color(0xFFAFCBFF) : Colors.white54,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                height: 3,
+                                color: _currentTab == 0 ? AppTheme.primary : Colors.transparent,
+                              ),
+                            ],
                           ),
-                          label: Text(
-                            _isSending ? 'Enviando...' : 'Enviar',
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w800,
-                            ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _currentTab = 1),
+                          child: Column(
+                            children: [
+                              Text(
+                                'Historial',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: _currentTab == 1 ? const Color(0xFFAFCBFF) : Colors.white54,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                height: 3,
+                                color: _currentTab == 1 ? AppTheme.primary : Colors.transparent,
+                              ),
+                            ],
                           ),
-                          icon: _isSending
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.send_rounded, size: 31),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 40),
-                Row(
-                  children: const [
-                    Expanded(
-                      child: _InfoCard(
-                        icon: Icons.schedule_rounded,
-                        title: 'Respuesta rapida',
-                        body: 'Menos de 24h habiles',
-                      ),
-                    ),
-                    SizedBox(width: 28),
-                    Expanded(
-                      child: _InfoCard(
-                        icon: Icons.verified_user_rounded,
-                        title: 'Seguro',
-                        body: 'Cifrado SSL',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 48),
-                Text(
-                  'NECESITAS AYUDA INMEDIATA? CONTACTAR POR WHATSAPP',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFFC8DAFF),
-                    letterSpacing: 1.2,
-                  ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _currentTab == 0 ? _buildCreateForm(context) : const PqrsHistoryScreen(),
                 ),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCreateForm(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(26, 0, 26, 28),
+      children: [
+        _MainFormCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Crear PQRS',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white, fontSize: 28),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Cuentanos tu experiencia. Estamos aqui para escucharte y mejorar nuestro servicio.',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.78),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 34),
+              const _FieldTitle('Tipo de solicitud'),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _kind,
+                items: [
+                  for (final entry in _kinds.entries)
+                    DropdownMenuItem(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    ),
+                ],
+                onChanged: _isSending ? null : (value) => setState(() => _kind = value ?? _kind),
+                decoration: _inputDecoration('Selecciona una opcion'),
+                dropdownColor: const Color(0xFF111821),
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+              ),
+              const SizedBox(height: 28),
+              const _FieldTitle('Asunto'),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _subject,
+                style: const TextStyle(color: Colors.white),
+                decoration: _inputDecoration('Resumen corto de tu solicitud'),
+              ),
+              const SizedBox(height: 28),
+              const _FieldTitle('Mensaje'),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _message,
+                minLines: 5,
+                maxLines: 8,
+                style: const TextStyle(color: Colors.white),
+                decoration: _inputDecoration('Describe detalladamente los hechos...'),
+              ),
+              const SizedBox(height: 38),
+              SizedBox(
+                width: double.infinity,
+                height: 76,
+                child: FilledButton.icon(
+                  onPressed: _isSending ? null : _submit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                    elevation: 24,
+                    shadowColor: AppTheme.primary.withValues(alpha: 0.36),
+                  ),
+                  label: Text(
+                    _isSending ? 'Enviando...' : 'Enviar',
+                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800),
+                  ),
+                  icon: _isSending
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_rounded, size: 31),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 40),
+        Row(
+          children: const [
+            Expanded(
+              child: _InfoCard(
+                icon: Icons.schedule_rounded,
+                title: 'Respuesta rapida',
+                body: 'Menos de 24h habiles',
+              ),
+            ),
+            SizedBox(width: 28),
+            Expanded(
+              child: _InfoCard(
+                icon: Icons.verified_user_rounded,
+                title: 'Seguro',
+                body: 'Cifrado SSL',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 48),
+        Text(
+          'NECESITAS AYUDA INMEDIATA? CONTACTAR POR WHATSAPP',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: const Color(0xFFC8DAFF),
+            letterSpacing: 1.2,
+          ),
+        ),
+      ],
     );
   }
 
@@ -284,11 +325,7 @@ class _HeaderPill extends StatelessWidget {
         padding: EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         child: Text(
           'Help Center',
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: Colors.white70, fontSize: 20, fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -331,11 +368,7 @@ class _FieldTitle extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
+  const _InfoCard({required this.icon, required this.title, required this.body});
 
   final IconData icon;
   final String title;
@@ -369,15 +402,14 @@ class _InfoCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(color: Colors.white),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
                   ),
                   Text(
                     body,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.72),
-                    ),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.copyWith(color: Colors.white.withValues(alpha: 0.72)),
                   ),
                 ],
               ),
@@ -393,18 +425,14 @@ class _SupportGlowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..shader =
-          RadialGradient(
-            colors: [
-              AppTheme.primary.withValues(alpha: 0.18),
-              Colors.transparent,
-            ],
-          ).createShader(
-            Rect.fromCircle(
-              center: Offset(size.width * 0.5, size.height * 0.48),
-              radius: size.width * 0.9,
-            ),
-          );
+      ..shader = RadialGradient(
+        colors: [AppTheme.primary.withValues(alpha: 0.18), Colors.transparent],
+      ).createShader(
+        Rect.fromCircle(
+          center: Offset(size.width * 0.5, size.height * 0.48),
+          radius: size.width * 0.9,
+        ),
+      );
     canvas.drawRect(Offset.zero & size, paint);
   }
 

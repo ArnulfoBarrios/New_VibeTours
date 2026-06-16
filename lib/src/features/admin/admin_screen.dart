@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,17 +22,28 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   final _search = TextEditingController();
   var _tab = 0;
   var _loadingTickets = true;
+  var _loadingTours = true;
+  String? _toursError;
   List<_AdminTicket> _tickets = const [];
+  List<Tour> _pendingTours = const [];
   _AdminTicket? _selectedTicket;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     Future.microtask(_loadTickets);
+    Future.microtask(_loadTours);
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) {
+        _loadTours();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _response.dispose();
     _search.dispose();
     super.dispose();
@@ -38,24 +51,53 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final localTours =
-        ref.watch(userToursProvider).valueOrNull?.manualTours ?? const <Tour>[];
-    final pendingTours = localTours.where((tour) => !tour.isPublished).toList();
+    final isAdmin = ref.watch(isAdminProvider);
+    if (!isAdmin) {
+      return PremiumScaffold(
+        safeBottom: true,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const EmptyState(
+                icon: Icons.lock_rounded,
+                title: 'Acceso restringido',
+                body: 'El administrador de VIBETOURS usa una cuenta unica.',
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 36),
+                child: LiquidButton(
+                  label: 'Volver a ajustes',
+                  icon: Icons.arrow_back_rounded,
+                  onPressed: () => context.go('/settings'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final filteredTickets = _filteredTickets();
     return Scaffold(
       backgroundColor: const Color(0xFF090E18),
       body: SafeArea(
         child: Column(
           children: [
-            _AdminTopBar(onClose: () => context.go('/settings')),
+            _AdminTopBar(
+              onClose: () => context.go('/settings'),
+              onRefresh: _loadTours,
+            ),
             Expanded(
               child: IndexedStack(
                 index: _tab,
                 children: [
                   _DashboardTab(
-                    pendingTours: pendingTours,
+                    loadingTours: _loadingTours,
+                    pendingTours: _pendingTours,
+                    toursError: _toursError,
                     onApproveTour: _approveTour,
                     onRejectTour: _rejectTour,
+                    onRefreshTours: _loadTours,
                   ),
                   _PqrsTab(
                     loading: _loadingTickets,
@@ -100,6 +142,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Future<void> _loadTickets() async {
+    if (!ref.read(isAdminProvider)) {
+      if (!mounted) return;
+      setState(() {
+        _tickets = const [];
+        _selectedTicket = null;
+        _loadingTickets = false;
+      });
+      return;
+    }
     setState(() => _loadingTickets = true);
     final client = ref.read(supabaseClientProvider);
     if (client == null) {
@@ -133,6 +184,63 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         _selectedTicket = _demoTickets.first;
         _loadingTickets = false;
       });
+    }
+  }
+
+  Future<void> _loadTours() async {
+    if (!ref.read(isAdminProvider)) {
+      if (!mounted) return;
+      setState(() {
+        _pendingTours = const [];
+        _loadingTours = false;
+        _toursError = null;
+      });
+      return;
+    }
+    setState(() => _loadingTours = true);
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      if (!mounted) return;
+      setState(() {
+        _pendingTours = const [];
+        _loadingTours = false;
+        _toursError = 'Supabase no esta configurado.';
+      });
+      return;
+    }
+    try {
+      final tours = await ref.read(tourRepositoryProvider).getPendingModerationTours();
+      if (!mounted) return;
+      setState(() {
+        _pendingTours = tours;
+        _loadingTours = false;
+        _toursError = null;
+      });
+    } catch (_) {
+      try {
+        final data = await client.rpc('admin_pending_tours') as List<dynamic>;
+        final tours = [
+          for (final item in data)
+            if (item is Map)
+              ref
+                  .read(tourRepositoryProvider)
+                  .parseDatabaseJson(Map<String, dynamic>.from(item)),
+        ];
+        if (!mounted) return;
+        setState(() {
+          _pendingTours = tours;
+          _loadingTours = false;
+          _toursError = null;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _pendingTours = const [];
+          _loadingTours = false;
+          _toursError =
+              'No se pudieron cargar los tours pendientes. Revisa permisos o migraciones.';
+        });
+      }
     }
   }
 
@@ -177,13 +285,28 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 
   Future<void> _approveTour(Tour tour) async {
-    await ref.read(userToursProvider.notifier).approveTour(tour.id);
-    _snack('${tour.title} aprobado para publicacion.');
+    try {
+      await ref
+          .read(tourRepositoryProvider)
+          .moderateTour(tour.id, approved: true);
+      await _loadTours();
+      ref.invalidate(toursProvider);
+      _snack('${tour.title} aprobado para publicacion.');
+    } catch (_) {
+      _snack('No se pudo aprobar el tour. Revisa permisos o conexion.');
+    }
   }
 
   Future<void> _rejectTour(Tour tour) async {
-    await ref.read(userToursProvider.notifier).deleteTour(tour);
-    _snack('${tour.title} rechazado.');
+    try {
+      await ref
+          .read(tourRepositoryProvider)
+          .moderateTour(tour.id, approved: false);
+      await _loadTours();
+      _snack('${tour.title} rechazado.');
+    } catch (_) {
+      _snack('No se pudo rechazar el tour. Revisa permisos o conexion.');
+    }
   }
 
   void _snack(String message) {
@@ -195,9 +318,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 }
 
 class _AdminTopBar extends StatelessWidget {
-  const _AdminTopBar({required this.onClose});
+  const _AdminTopBar({required this.onClose, required this.onRefresh});
 
   final VoidCallback onClose;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +353,11 @@ class _AdminTopBar extends StatelessWidget {
             icon: const Icon(Icons.notifications_none_rounded),
           ),
           IconButton(
+            tooltip: 'Actualizar tours',
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          IconButton(
             tooltip: 'Cerrar administrador',
             onPressed: onClose,
             icon: const Icon(Icons.close_rounded),
@@ -241,17 +370,57 @@ class _AdminTopBar extends StatelessWidget {
 
 class _DashboardTab extends StatelessWidget {
   const _DashboardTab({
+    required this.loadingTours,
     required this.pendingTours,
+    required this.toursError,
     required this.onApproveTour,
     required this.onRejectTour,
+    required this.onRefreshTours,
   });
 
+  final bool loadingTours;
   final List<Tour> pendingTours;
+  final String? toursError;
   final ValueChanged<Tour> onApproveTour;
   final ValueChanged<Tour> onRejectTour;
+  final VoidCallback onRefreshTours;
 
   @override
   Widget build(BuildContext context) {
+    final tourCards = loadingTours
+        ? const <Widget>[
+            _AdminEmptyCard(
+              icon: Icons.hourglass_empty_rounded,
+              title: 'Cargando tours pendientes',
+              body: 'Estamos consultando las solicitudes guardadas en Supabase.',
+            ),
+          ]
+        : pendingTours.isEmpty
+        ? <Widget>[
+            if (toursError != null)
+              _AdminEmptyCard(
+                icon: Icons.error_outline_rounded,
+                title: 'No se pudieron cargar',
+                body: toursError!,
+              )
+            else
+              const _AdminEmptyCard(
+                icon: Icons.verified_rounded,
+                title: 'Sin tours pendientes',
+                body:
+                    'Los tours manuales e IA nuevos apareceran aqui para aprobarlos o rechazarlos.',
+              ),
+          ]
+        : [
+            for (final tour in pendingTours) ...[
+              _PendingTourCard(
+                tour: tour,
+                onApprove: () => onApproveTour(tour),
+                onReject: () => onRejectTour(tour),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ];
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
       children: [
@@ -270,26 +439,23 @@ class _DashboardTab extends StatelessWidget {
         const SizedBox(height: 12),
         _AdminMetricPill(label: '12 Tickets Activos'),
         const SizedBox(height: 24),
-        _AdminSectionTitle(
-          icon: Icons.calendar_month_rounded,
-          title: 'Solicitudes de disponibilidad',
+        Row(
+          children: [
+            const Expanded(
+              child: _AdminSectionTitle(
+                icon: Icons.fact_check_rounded,
+                title: 'Tours por aprobar',
+              ),
+            ),
+            IconButton.filledTonal(
+              tooltip: 'Actualizar tours',
+              onPressed: onRefreshTours,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
         ),
         const SizedBox(height: 14),
-        if (pendingTours.isEmpty)
-          const _AdminEmptyCard(
-            icon: Icons.verified_rounded,
-            title: 'Sin tours pendientes',
-            body: 'Los tours manuales nuevos apareceran aqui para aprobarlos.',
-          )
-        else
-          for (final tour in pendingTours) ...[
-            _PendingTourCard(
-              tour: tour,
-              onApprove: () => onApproveTour(tour),
-              onReject: () => onRejectTour(tour),
-            ),
-            const SizedBox(height: 12),
-          ],
+        ...tourCards,
       ],
     );
   }
@@ -627,10 +793,18 @@ class _PendingTourCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${tour.durationHours.toStringAsFixed(1)}h - ${tour.stops.length} paradas',
+                  '${tour.city}, ${tour.country} - ${tour.durationHours.toStringAsFixed(1)}h - ${tour.stops.length} paradas',
                   style: Theme.of(
                     context,
                   ).textTheme.bodyMedium?.copyWith(color: Colors.white60),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  tour.isAiGenerated ? 'Creado con IA' : 'Creado manualmente',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: const Color(0xFFAFCBFF),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),

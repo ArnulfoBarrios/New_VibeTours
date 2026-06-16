@@ -14,6 +14,15 @@ class AuthService {
 
   bool get isConfigured => _client != null;
 
+  bool isConfiguredAdmin(User? user) {
+    if (user == null) return false;
+    final adminUserId = AppConfig.adminUserId;
+    if (adminUserId.isNotEmpty) return user.id == adminUserId;
+    final adminEmail = AppConfig.adminEmail;
+    if (adminEmail.isEmpty) return false;
+    return user.email?.trim().toLowerCase() == adminEmail;
+  }
+
   Future<void> signInWithPassword({
     required String email,
     required String password,

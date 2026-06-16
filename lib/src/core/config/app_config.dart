@@ -24,6 +24,8 @@ class AppConfig {
     'GOOGLE_WEB_CLIENT_ID',
   );
   static const _definedTomTomApiKey = String.fromEnvironment('TOMTOM_API_KEY');
+  static const _definedAdminEmail = String.fromEnvironment('ADMIN_EMAIL');
+  static const _definedAdminUserId = String.fromEnvironment('ADMIN_USER_ID');
 
   static Future<void> load() async {
     try {
@@ -67,6 +69,14 @@ class AppConfig {
   static String get tomTomApiKey => _definedTomTomApiKey.isNotEmpty
       ? _definedTomTomApiKey
       : _asset('TOMTOM_API_KEY');
+
+  static String get adminEmail => _definedAdminEmail.isNotEmpty
+      ? _definedAdminEmail.trim().toLowerCase()
+      : _asset('ADMIN_EMAIL').trim().toLowerCase();
+
+  static String get adminUserId => _definedAdminUserId.isNotEmpty
+      ? _definedAdminUserId.trim()
+      : _asset('ADMIN_USER_ID').trim();
 
   static String get apiBaseUrl => apiBaseUrls.first;
 

@@ -20,7 +20,8 @@ flutter run `
   --dart-define=SUPABASE_URL=https://your-project.supabase.co `
   --dart-define=SUPABASE_ANON_KEY=your-anon-key `
   --dart-define=API_BASE_URL=http://192.168.1.106:3000/api `
-  --dart-define=GOOGLE_WEB_CLIENT_ID=your-google-web-client-id
+  --dart-define=GOOGLE_WEB_CLIENT_ID=your-google-web-client-id `
+  --dart-define=ADMIN_EMAIL=admin@example.com
 ```
 
 Si `SUPABASE_URL` y `SUPABASE_ANON_KEY` no se envian, la app arranca en modo demo con los 50 tours locales.
@@ -31,7 +32,7 @@ La app tambien puede cargar configuracion publica desde `assets/config/public_co
 node scripts/sync_public_config.mjs
 ```
 
-Este archivo solo incluye `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `API_BASE_URL` y client IDs publicos de Google si existen.
+Este archivo solo incluye configuracion publica del cliente: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `API_BASE_URL`, client IDs publicos de Google, `TOMTOM_API_KEY`, `ADMIN_EMAIL` y `ADMIN_USER_ID` si existen.
 
 Para probar en un telefono fisico, `localhost` no apunta a tu PC: usa la IP Wi-Fi del computador que corre el backend. En esta maquina la IP detectada es `192.168.1.106`, por eso la URL local es `http://192.168.1.106:3000/api`. Si cambias de red, consulta la IP de nuevo con:
 
@@ -86,6 +87,21 @@ El seeder crea 50 tours completos:
 
 - 35 Colombia: Barranquilla, Cartagena, Santa Marta, Bogota, Medellin, Cali, Bucaramanga, Villa de Leyva, San Andres, Guatape.
 - 15 internacionales: Paris, Roma, Londres, Nueva York, Tokio, Kioto, Seul, Ciudad de Mexico, Barcelona, Dubai, Estambul, Bangkok, Singapur, Praga, Sidney.
+
+## Administrador unico
+
+El panel `/admin` no se muestra a usuarios normales. La app solo habilita el acceso cuando el usuario autenticado coincide con `ADMIN_USER_ID` o, si este no existe, con `ADMIN_EMAIL`.
+
+En Supabase, la migracion `20260611123000_single_admin_account.sql` crea `public.admin_account`, una tabla singleton que permite registrar una unica cuenta administradora. Despues de crear el usuario admin, registra una sola fila con permisos de servicio:
+
+```sql
+insert into public.admin_account (id, email)
+values (true, 'admin@example.com')
+on conflict (id) do update
+set email = excluded.email, user_id = null, updated_at = now();
+```
+
+Tambien puedes usar `user_id` en lugar de email. No publiques `SUPABASE_SERVICE_ROLE_KEY` en Flutter ni en Trello.
 
 ## Google Login
 

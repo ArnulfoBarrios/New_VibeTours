@@ -19,8 +19,7 @@ class MyToursScreen extends ConsumerStatefulWidget {
 class _MyToursScreenState extends ConsumerState<MyToursScreen> {
   @override
   Widget build(BuildContext context) {
-    final toursAsync = ref.watch(toursProvider);
-    final localState = ref.watch(userToursProvider).valueOrNull;
+    final localToursAsync = ref.watch(userToursProvider);
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 124),
       children: [
@@ -54,13 +53,16 @@ class _MyToursScreenState extends ConsumerState<MyToursScreen> {
           ],
         ),
         const SizedBox(height: 34),
-        toursAsync.when(
-          data: (tours) {
-            final hiddenDefaultIds =
-                localState?.hiddenDefaultTourIds ?? const <String>{};
-            final manualCards = [
-              for (final tour
-                  in (localState?.manualTours ?? const <Tour>[]).reversed)
+        localToursAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => EmptyState(
+            icon: Icons.error_outline_rounded,
+            title: 'No pudimos cargar tus tours',
+            body: error.toString(),
+          ),
+          data: (localState) {
+            final cards = [
+              for (final tour in localState.manualTours.reversed)
                 _OwnedTourData(
                   tour: tour,
                   title: tour.title,
@@ -68,10 +70,6 @@ class _MyToursScreenState extends ConsumerState<MyToursScreen> {
                   status: tour.isPublished ? 'Approved' : 'Pending',
                 ),
             ];
-            final defaultCards = _ownedCardsFor(
-              tours,
-            ).where((card) => !hiddenDefaultIds.contains(card.tour.id));
-            final cards = [...manualCards, ...defaultCards];
             if (cards.isEmpty) {
               return const EmptyState(
                 icon: Icons.confirmation_number_rounded,
@@ -100,13 +98,24 @@ class _MyToursScreenState extends ConsumerState<MyToursScreen> {
                           }
                         : null,
                     onDelete: () async {
-                      await ref
-                          .read(userToursProvider.notifier)
-                          .deleteTour(card.tour);
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('${card.title} eliminado')),
-                      );
+                      try {
+                        await ref
+                            .read(userToursProvider.notifier)
+                            .deleteTour(card.tour);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('${card.title} eliminado')),
+                        );
+                      } catch (_) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'No se pudo eliminar el tour. Revisa permisos o conexion.',
+                            ),
+                          ),
+                        );
+                      }
                     },
                   ),
                   const SizedBox(height: 22),
@@ -114,46 +123,9 @@ class _MyToursScreenState extends ConsumerState<MyToursScreen> {
               ],
             );
           },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stackTrace) => EmptyState(
-            icon: Icons.error_outline_rounded,
-            title: 'No pudimos cargar tus tours',
-            body: error.toString(),
-          ),
         ),
       ],
     );
-  }
-
-  List<_OwnedTourData> _ownedCardsFor(List<Tour> tours) {
-    Tour pick(String city, int fallback) {
-      return tours.firstWhere(
-        (tour) => tour.city.toLowerCase() == city.toLowerCase(),
-        orElse: () => tours[fallback.clamp(0, tours.length - 1).toInt()],
-      );
-    }
-
-    if (tours.isEmpty) return const [];
-    return [
-      _OwnedTourData(
-        tour: pick('Paris', 0),
-        title: 'Parisian Art & Patisseries',
-        description: 'A 4-hour curated walk through galleries and cafes.',
-        status: 'Approved',
-      ),
-      _OwnedTourData(
-        tour: pick('Tokio', 1),
-        title: 'Tokyo Cyberpunk Nights',
-        description: 'AI-generated neon photography route through backalleys.',
-        status: 'Pending',
-      ),
-      _OwnedTourData(
-        tour: pick('Cartagena', 2),
-        title: 'Hidden Caribbean Walls',
-        description: 'Explore quiet plazas, colors and heritage corners.',
-        status: 'Approved',
-      ),
-    ];
   }
 }
 

@@ -165,6 +165,160 @@ create table if not exists public.settings (
   updated_at timestamptz not null default now()
 );
 
+-- Compatibility repair for databases where a previous partial VIBETOURS schema
+-- already created these tables. `create table if not exists` does not add
+-- missing columns, so keep every referenced column present before indexes,
+-- triggers and RLS policies are created.
+alter table public.users
+  add column if not exists email text,
+  add column if not exists full_name text,
+  add column if not exists avatar_url text,
+  add column if not exists bio text,
+  add column if not exists country text,
+  add column if not exists followers_count integer not null default 0,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+alter table public.tourist_profiles
+  add column if not exists user_id uuid references public.users(id) on delete cascade,
+  add column if not exists interests text[] not null default '{}',
+  add column if not exists preferred_pace text not null default 'balanced',
+  add column if not exists favorite_countries text[] not null default '{}',
+  add column if not exists ai_summary text,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+alter table public.tours
+  add column if not exists owner_id uuid references public.users(id) on delete set null,
+  add column if not exists slug text,
+  add column if not exists title text not null default 'Tour sin titulo',
+  add column if not exists country text not null default 'Global',
+  add column if not exists city text not null default 'Global',
+  add column if not exists type text not null default 'custom',
+  add column if not exists description text not null default '',
+  add column if not exists cover_url text not null default '',
+  add column if not exists gallery text[] not null default '{}',
+  add column if not exists duration_minutes integer not null default 180,
+  add column if not exists distance_meters integer not null default 0,
+  add column if not exists difficulty text not null default 'easy',
+  add column if not exists language text not null default 'es',
+  add column if not exists rating numeric(3,2) not null default 0,
+  add column if not exists review_count integer not null default 0,
+  add column if not exists likes_count integer not null default 0,
+  add column if not exists views_count integer not null default 0,
+  add column if not exists tags text[] not null default '{}',
+  add column if not exists is_ai_generated boolean not null default false,
+  add column if not exists is_published boolean not null default false,
+  add column if not exists is_private boolean not null default false,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+alter table public.tour_days
+  add column if not exists tour_id uuid references public.tours(id) on delete cascade,
+  add column if not exists day_number integer not null default 1,
+  add column if not exists title text not null default 'Dia 1',
+  add column if not exists notes text,
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.tour_stops
+  add column if not exists tour_id uuid references public.tours(id) on delete cascade,
+  add column if not exists day_id uuid references public.tour_days(id) on delete set null,
+  add column if not exists stop_order integer not null default 0,
+  add column if not exists name text not null default 'Parada',
+  add column if not exists latitude double precision not null default 0,
+  add column if not exists longitude double precision not null default 0,
+  add column if not exists image_url text,
+  add column if not exists description text not null default '',
+  add column if not exists activities text[] not null default '{}',
+  add column if not exists tips text[] not null default '{}',
+  add column if not exists suggested_minutes integer not null default 30,
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.tour_comments
+  add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists tour_id uuid references public.tours(id) on delete cascade,
+  add column if not exists user_id uuid references public.users(id) on delete cascade,
+  add column if not exists rating integer,
+  add column if not exists body text not null default '',
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+alter table public.tour_likes
+  add column if not exists tour_id uuid references public.tours(id) on delete cascade,
+  add column if not exists user_id uuid references public.users(id) on delete cascade,
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.tour_favorites
+  add column if not exists tour_id uuid references public.tours(id) on delete cascade,
+  add column if not exists user_id uuid references public.users(id) on delete cascade,
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.tour_views
+  add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists tour_id uuid references public.tours(id) on delete cascade,
+  add column if not exists user_id uuid references public.users(id) on delete set null,
+  add column if not exists device_id text,
+  add column if not exists viewed_at timestamptz not null default now();
+
+alter table public.events
+  add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists title text not null default 'Evento',
+  add column if not exists country text,
+  add column if not exists city text not null default 'Global',
+  add column if not exists category text not null default 'cultural',
+  add column if not exists starts_at timestamptz not null default now(),
+  add column if not exists ends_at timestamptz,
+  add column if not exists latitude double precision,
+  add column if not exists longitude double precision,
+  add column if not exists image_url text,
+  add column if not exists source text not null default 'overpass',
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.notifications
+  add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists user_id uuid references public.users(id) on delete cascade,
+  add column if not exists title text not null default 'Notificacion',
+  add column if not exists body text not null default '',
+  add column if not exists type text not null default 'info',
+  add column if not exists read_at timestamptz,
+  add column if not exists created_at timestamptz not null default now();
+
+alter table public.reports
+  add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists reporter_id uuid references public.users(id) on delete set null,
+  add column if not exists tour_id uuid references public.tours(id) on delete cascade,
+  add column if not exists reason text not null default 'other',
+  add column if not exists details text,
+  add column if not exists status text not null default 'open',
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+alter table public.pqrs
+  add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists user_id uuid references public.users(id) on delete set null,
+  add column if not exists kind text not null default 'petition',
+  add column if not exists subject text not null default '',
+  add column if not exists body text not null default '',
+  add column if not exists status text not null default 'open',
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+alter table public.settings
+  add column if not exists user_id uuid references public.users(id) on delete cascade,
+  add column if not exists locale text not null default 'es',
+  add column if not exists appearance text not null default 'system',
+  add column if not exists refresh_rate text not null default '120hz',
+  add column if not exists notifications_enabled boolean not null default true,
+  add column if not exists map_style text not null default 'https://demotiles.maplibre.org/style.json',
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+create unique index if not exists tourist_profiles_user_id_unique
+on public.tourist_profiles (user_id);
+
+create unique index if not exists settings_user_id_unique
+on public.settings (user_id);
+
 create index if not exists idx_tours_public_rating on public.tours (is_published, rating desc);
 create index if not exists idx_tours_country_city on public.tours (country, city);
 create index if not exists idx_tours_type on public.tours (type);

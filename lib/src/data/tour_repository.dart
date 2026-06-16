@@ -8,7 +8,9 @@ import '../core/config/app_config.dart';
 import '../domain/models.dart';
 
 class TourRepository {
-  TourRepository({SupabaseClient? client});
+  TourRepository({SupabaseClient? client}) : _client = client;
+
+  final SupabaseClient? _client;
 
   static const _emptyRequest = AiTourRequest(
     destination: '',
@@ -57,6 +59,120 @@ class TourRepository {
       final typeOk = type == null || tour.type == type;
       return countryOk && cityOk && typeOk;
     }).toList();
+  }
+
+  Future<List<Tour>> getPendingModerationTours() async {
+    final client = _requireClient();
+    try {
+      final rows = await client.rpc('admin_pending_tours') as List<dynamic>;
+      return [
+        for (final row in rows)
+          if (row is Map)
+            _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
+      ];
+    } catch (_) {
+      for (final apiBaseUrl in AppConfig.apiBaseUrls) {
+        try {
+          final response = await http
+              .get(Uri.parse('$apiBaseUrl/tours/pending'))
+              .timeout(const Duration(seconds: 20));
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            final json = jsonDecode(response.body) as Map<String, dynamic>;
+            final items = json['tours'] is List
+                ? json['tours'] as List<dynamic>
+                : const <dynamic>[];
+            return [
+              for (final item in items)
+                if (item is Map)
+                  _tourFromDatabaseJson(Map<String, dynamic>.from(item)),
+            ];
+          }
+        } catch (_) {
+          // Try the next configured base URL.
+        }
+      }
+      final rows = await client
+          .from('tours')
+          .select('*, tour_stops(*)')
+          .eq('moderation_status', 'pending')
+          .order('created_at', ascending: false)
+          .limit(100);
+      return [
+        for (final row in rows)
+          if (row is Map)
+            _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
+      ];
+    }
+  }
+
+  Future<void> deleteUserTour(String tourId) async {
+    final client = _requireClient();
+    final user = client.auth.currentUser;
+    if (user == null) {
+      throw StateError('Debes iniciar sesion para eliminar tours.');
+    }
+
+    await client.from('tours').delete().eq('id', tourId);
+  }
+
+  Future<Tour> saveUserTour(Tour tour) async {
+    final client = _requireClient();
+    final user = client.auth.currentUser;
+    if (user == null) {
+      throw StateError('Debes iniciar sesion para guardar tours.');
+    }
+
+    final metadata = user.userMetadata ?? const <String, dynamic>{};
+    await client.from('users').upsert({
+      'id': user.id,
+      'email': user.email,
+      'full_name': metadata['full_name'] ??
+          metadata['name'] ??
+          user.email?.split('@').first,
+      'avatar_url': metadata['avatar_url'],
+    }, onConflict: 'id');
+
+    final payload = _tourPayload(tour, user.id);
+    final hasDatabaseId = _looksLikeUuid(tour.id);
+    final Map<String, dynamic> savedTour;
+    if (hasDatabaseId) {
+      final row = await client
+          .from('tours')
+          .update(payload)
+          .eq('id', tour.id)
+          .select()
+          .single();
+      savedTour = Map<String, dynamic>.from(row);
+    } else {
+      final row = await client.from('tours').insert(payload).select().single();
+      savedTour = Map<String, dynamic>.from(row);
+    }
+
+    final tourId = savedTour['id'].toString();
+    await client.from('tour_stops').delete().eq('tour_id', tourId);
+    if (tour.stops.isNotEmpty) {
+      await client.from('tour_stops').insert([
+        for (final stop in tour.stops) _stopPayload(stop, tourId),
+      ]);
+    }
+
+    final rows = await client
+        .from('tours')
+        .select('*, tour_stops(*)')
+        .eq('id', tourId)
+        .limit(1);
+    if (rows.isNotEmpty) {
+      return _tourFromDatabaseJson(Map<String, dynamic>.from(rows.first));
+    }
+    return _tourFromDatabaseJson(savedTour);
+  }
+
+  Future<void> moderateTour(String tourId, {required bool approved}) async {
+    final client = _requireClient();
+    await client.rpc(
+      'admin_moderate_tour',
+      params: {'p_tour_id': tourId, 'p_approved': approved},
+    );
   }
 
   Future<Tour> generateAiTour(AiTourRequest request) async {
@@ -312,6 +428,8 @@ class TourRepository {
     );
   }
 
+  Tour parseDatabaseJson(Map<String, dynamic> json) => _tourFromDatabaseJson(json);
+
   Tour _tourFromDatabaseJson(Map<String, dynamic> json) {
     final source = json['pending_edit_snapshot'] is Map
         ? Map<String, dynamic>.from(json['pending_edit_snapshot'] as Map)
@@ -449,6 +567,91 @@ class TourRepository {
       isAiGenerated: true,
       isPublished: json['is_published'] == true || json['status'] == 'approved',
     );
+  }
+
+  SupabaseClient _requireClient() {
+    final client = _client;
+    if (client == null) {
+      throw StateError('Supabase no esta configurado.');
+    }
+    return client;
+  }
+
+  bool _isPendingModeration(Map<String, dynamic> row) {
+    final moderationStatus = row['moderation_status']?.toString();
+    if (moderationStatus == 'approved' || moderationStatus == 'rejected') {
+      return false;
+    }
+    return row['is_published'] != true;
+  }
+
+  bool _looksLikeUuid(String value) {
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value);
+  }
+
+  Map<String, dynamic> _tourPayload(Tour tour, String ownerId) {
+    return {
+      'owner_id': ownerId,
+      'created_by': ownerId,
+      'title': tour.title,
+      'country': tour.country,
+      'city': tour.city,
+      'type': tour.type.name,
+      'description': tour.description,
+      'cover_url': tour.coverUrl,
+      'gallery': tour.gallery,
+      'duration_minutes': (tour.durationHours * 60).round(),
+      'distance_meters': (tour.distanceKm * 1000).round(),
+      'difficulty': tour.difficulty.name,
+      'language': tour.language,
+      'tags': tour.tags,
+      'is_ai_generated': tour.isAiGenerated,
+      'is_published': false,
+      'is_private': false,
+      'moderation_status': 'pending',
+      'creation_json': tour.toCreationJson(),
+      'short_summary': tour.shortSummary,
+      'subcategories': tour.subcategories,
+      'featured_experience': tour.featuredExperience,
+      'place_history': tour.placeHistory,
+      'cultural_context': tour.culturalContext,
+      'available_languages': tour.availableLanguages,
+      'recommended_audience': tour.recommendedAudience,
+      'best_season': tour.bestSeason,
+      'recommended_schedule': tour.recommendedSchedule,
+      'meeting_point': tour.meetingPoint,
+      'meeting_point_info': tour.meetingPointInfo.toCreationJson(),
+      'includes': tour.includes,
+      'excludes': tour.excludes,
+      'recommendations': tour.recommendations,
+      'what_to_bring': tour.whatToBring,
+      'tour_rules': tour.tourRules,
+      'keywords': tour.keywords,
+      'main_category': tour.mainCategory,
+      'budget': tour.budget.toCreationJson(),
+      'additional_info': tour.additionalInfo.toCreationJson(),
+    };
+  }
+
+  Map<String, dynamic> _stopPayload(TourStop stop, String tourId) {
+    return {
+      'tour_id': tourId,
+      'position': stop.order + 1,
+      'stop_order': stop.order,
+      'name': stop.name,
+      'latitude': stop.location.latitude,
+      'longitude': stop.location.longitude,
+      'image_url': stop.imageUrl,
+      'description': stop.description,
+      'activities': stop.activities,
+      'tips': stop.tips,
+      'suggested_minutes': stop.suggestedMinutes,
+      'curious_facts': stop.curiousFacts,
+      'location_info': stop.locationInfo.toCreationJson(),
+      'images': stop.images,
+    };
   }
 
   List<String> _stringList(Object? value) {

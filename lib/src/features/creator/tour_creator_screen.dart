@@ -928,11 +928,40 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
       return;
     }
     final tour = _buildTour();
-    await ref.read(userToursProvider.notifier).saveTour(tour);
-    ref.read(selectedTourProvider.notifier).state = tour;
+    late final Tour savedTour;
+    try {
+      savedTour = await ref.read(userToursProvider.notifier).saveTour(tour);
+    } catch (error) {
+      if (!mounted) return;
+      if (error is StateError &&
+          error.message.contains('iniciar sesion para guardar tours manuales')) {
+        _message('Inicia sesion para guardar y enviar tu tour a revision.');
+        context.push('/login');
+        return;
+      }
+      _message(_friendlySaveError(error));
+      return;
+    }
+    ref.read(selectedTourProvider.notifier).state = savedTour;
     if (!mounted) return;
-    _message('Tour guardado como borrador.');
+    _message('Tour guardado y enviado a revision del administrador.');
     context.go('/creator');
+  }
+
+  String _friendlySaveError(Object error) {
+    final text = error.toString();
+    if (text.contains('permission denied') ||
+        text.contains('row-level security') ||
+        text.contains('violates row-level security')) {
+      return 'No se pudo enviar el tour a revision. Revisa permisos o sesion.\n\n$text';
+    }
+    if (text.contains('SocketException') ||
+        text.contains('TimeoutException') ||
+        text.contains('connection') ||
+        text.contains('network')) {
+      return 'No se pudo enviar el tour a revision. Revisa tu conexion.\n\n$text';
+    }
+    return 'No se pudo enviar el tour a revision.\n\n$text';
   }
 
   double _routeDistanceKm(List<TourStop> stops) {
