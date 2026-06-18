@@ -161,7 +161,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get destination => 'Destination';
 
   @override
-  String get freePrompt => 'Free prompt';
+  String get freePrompt => 'Describe your tour';
+
+  @override
+  String get voicePromptPreparing => 'Preparing microphone...';
+
+  @override
+  String get voicePromptListening => 'Listening to your tour...';
+
+  @override
+  String get voicePromptStopped => 'Voice capture stopped.';
+
+  @override
+  String get voicePromptPermissionDenied =>
+      'Microphone permission denied. Enable it in Settings.';
+
+  @override
+  String get voicePromptUnavailable =>
+      'Speech recognition is unavailable on this device.';
+
+  @override
+  String get voicePromptNoMatch => 'We did not catch that clearly. Try again.';
+
+  @override
+  String get voicePromptBusy =>
+      'The speech service is busy. Please wait a moment.';
+
+  @override
+  String get voicePromptNetworkError => 'Check your connection and try again.';
+
+  @override
+  String get voicePromptError => 'We could not process the voice input.';
 
   @override
   String get detecting => 'Detecting experience';

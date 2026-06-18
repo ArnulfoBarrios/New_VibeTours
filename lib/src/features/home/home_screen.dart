@@ -754,9 +754,7 @@ class _NearbyPlaces extends ConsumerWidget {
                                     ),
                                     child: Text(
                                       _distance(place.distanceMeters),
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.labelLarge,
+                                      style: Theme.of(context).textTheme.labelLarge,
                                     ),
                                   ),
                                 ),

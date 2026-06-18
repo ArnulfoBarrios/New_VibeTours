@@ -1,17 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
+import 'demo_tours.dart';
 import '../domain/models.dart';
 
 class TourRepository {
   TourRepository({SupabaseClient? client}) : _client = client;
 
   final SupabaseClient? _client;
-
   static const _emptyRequest = AiTourRequest(
     destination: '',
     country: '',
@@ -33,17 +34,20 @@ class TourRepository {
           final items = json['tours'] is List
               ? json['tours'] as List<dynamic>
               : const <dynamic>[];
-          return [
+          final tours = [
             for (final item in items)
               if (item is Map)
                 _tourFromDatabaseJson(Map<String, dynamic>.from(item)),
           ];
+          if (tours.isNotEmpty) {
+            return tours;
+          }
         }
       } catch (_) {
         // Try the next configured base URL.
       }
     }
-    return const [];
+    return buildDemoTours();
   }
 
   Future<List<Tour>> searchTours({
@@ -65,14 +69,16 @@ class TourRepository {
     final client = _requireClient();
     try {
       final rows = await client.rpc('admin_pending_tours') as List<dynamic>;
+      debugPrint('RPC admin_pending_tours returned ${rows.length} tours');
       return [
         for (final row in rows)
-          if (row is Map)
-            _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
+          if (row is Map) _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
       ];
-    } catch (_) {
+    } catch (e) {
+      debugPrint('RPC failed: $e');
       for (final apiBaseUrl in AppConfig.apiBaseUrls) {
         try {
+          debugPrint('Trying HTTP endpoint: $apiBaseUrl/tours/pending');
           final response = await http
               .get(Uri.parse('$apiBaseUrl/tours/pending'))
               .timeout(const Duration(seconds: 20));
@@ -81,26 +87,28 @@ class TourRepository {
             final items = json['tours'] is List
                 ? json['tours'] as List<dynamic>
                 : const <dynamic>[];
+            debugPrint('HTTP endpoint returned ${items.length} tours');
             return [
               for (final item in items)
                 if (item is Map)
                   _tourFromDatabaseJson(Map<String, dynamic>.from(item)),
             ];
           }
-        } catch (_) {
-          // Try the next configured base URL.
+        } catch (e) {
+          debugPrint('HTTP endpoint failed: $e');
         }
       }
+      debugPrint('Falling back to direct Supabase query');
       final rows = await client
           .from('tours')
           .select('*, tour_stops(*)')
           .eq('moderation_status', 'pending')
           .order('created_at', ascending: false)
           .limit(100);
+      debugPrint('Direct query returned ${rows.length} tours');
       return [
         for (final row in rows)
-          if (row is Map)
-            _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
+          if (row is Map) _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
       ];
     }
   }
@@ -126,7 +134,8 @@ class TourRepository {
     await client.from('users').upsert({
       'id': user.id,
       'email': user.email,
-      'full_name': metadata['full_name'] ??
+      'full_name':
+          metadata['full_name'] ??
           metadata['name'] ??
           user.email?.split('@').first,
       'avatar_url': metadata['avatar_url'],
@@ -428,7 +437,8 @@ class TourRepository {
     );
   }
 
-  Tour parseDatabaseJson(Map<String, dynamic> json) => _tourFromDatabaseJson(json);
+  Tour parseDatabaseJson(Map<String, dynamic> json) =>
+      _tourFromDatabaseJson(json);
 
   Tour _tourFromDatabaseJson(Map<String, dynamic> json) {
     final source = json['pending_edit_snapshot'] is Map

@@ -21,8 +21,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   final _response = TextEditingController();
   final _search = TextEditingController();
   var _tab = 0;
+  var _didBootstrapAdminData = false;
   var _loadingTickets = true;
-  var _loadingTours = true;
   String? _toursError;
   List<_AdminTicket> _tickets = const [];
   List<Tour> _pendingTours = const [];
@@ -36,7 +36,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     Future.microtask(_loadTours);
     _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) {
-        _loadTours();
+        _refreshAdminTours();
       }
     });
   }
@@ -53,6 +53,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   Widget build(BuildContext context) {
     final isAdmin = ref.watch(isAdminProvider);
     if (!isAdmin) {
+      _didBootstrapAdminData = false;
       return PremiumScaffold(
         safeBottom: true,
         child: Center(
@@ -77,7 +78,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         ),
       );
     }
+    _scheduleAdminBootstrap();
     final filteredTickets = _filteredTickets();
+    final pendingToursAsync = ref.watch(adminPendingToursProvider);
     return Scaffold(
       backgroundColor: const Color(0xFF090E18),
       body: SafeArea(
@@ -85,19 +88,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           children: [
             _AdminTopBar(
               onClose: () => context.go('/settings'),
-              onRefresh: _loadTours,
+              onRefresh: _refreshAdminTours,
             ),
             Expanded(
               child: IndexedStack(
                 index: _tab,
                 children: [
                   _DashboardTab(
-                    loadingTours: _loadingTours,
-                    pendingTours: _pendingTours,
-                    toursError: _toursError,
+                    pendingToursAsync: pendingToursAsync,
+                    localPendingTours: _pendingTours,
+                    localToursError: _toursError,
                     onApproveTour: _approveTour,
                     onRejectTour: _rejectTour,
-                    onRefreshTours: _loadTours,
+                    onRefreshTours: _refreshAdminTours,
                   ),
                   _PqrsTab(
                     loading: _loadingTickets,
@@ -139,6 +142,21 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               ticket.kind.toLowerCase().contains(query),
         )
         .toList();
+  }
+
+  void _scheduleAdminBootstrap() {
+    if (_didBootstrapAdminData) return;
+    _didBootstrapAdminData = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadTickets();
+      _refreshAdminTours();
+    });
+  }
+
+  void _refreshAdminTours() {
+    ref.invalidate(adminPendingToursProvider);
+    unawaited(_loadTours());
   }
 
   Future<void> _loadTickets() async {
@@ -192,18 +210,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       if (!mounted) return;
       setState(() {
         _pendingTours = const [];
-        _loadingTours = false;
         _toursError = null;
       });
       return;
     }
-    setState(() => _loadingTours = true);
     final client = ref.read(supabaseClientProvider);
     if (client == null) {
       if (!mounted) return;
       setState(() {
         _pendingTours = const [];
-        _loadingTours = false;
         _toursError = 'Supabase no esta configurado.';
       });
       return;
@@ -213,7 +228,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       if (!mounted) return;
       setState(() {
         _pendingTours = tours;
-        _loadingTours = false;
         _toursError = null;
       });
     } catch (_) {
@@ -229,14 +243,12 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         if (!mounted) return;
         setState(() {
           _pendingTours = tours;
-          _loadingTours = false;
           _toursError = null;
         });
       } catch (_) {
         if (!mounted) return;
         setState(() {
           _pendingTours = const [];
-          _loadingTours = false;
           _toursError =
               'No se pudieron cargar los tours pendientes. Revisa permisos o migraciones.';
         });
@@ -370,57 +382,65 @@ class _AdminTopBar extends StatelessWidget {
 
 class _DashboardTab extends StatelessWidget {
   const _DashboardTab({
-    required this.loadingTours,
-    required this.pendingTours,
-    required this.toursError,
+    required this.pendingToursAsync,
+    required this.localPendingTours,
+    required this.localToursError,
     required this.onApproveTour,
     required this.onRejectTour,
     required this.onRefreshTours,
   });
 
-  final bool loadingTours;
-  final List<Tour> pendingTours;
-  final String? toursError;
+  final AsyncValue<List<Tour>> pendingToursAsync;
+  final List<Tour> localPendingTours;
+  final String? localToursError;
   final ValueChanged<Tour> onApproveTour;
   final ValueChanged<Tour> onRejectTour;
   final VoidCallback onRefreshTours;
 
   @override
   Widget build(BuildContext context) {
-    final tourCards = loadingTours
-        ? const <Widget>[
-            _AdminEmptyCard(
-              icon: Icons.hourglass_empty_rounded,
-              title: 'Cargando tours pendientes',
-              body: 'Estamos consultando las solicitudes guardadas en Supabase.',
-            ),
-          ]
-        : pendingTours.isEmpty
-        ? <Widget>[
-            if (toursError != null)
-              _AdminEmptyCard(
-                icon: Icons.error_outline_rounded,
-                title: 'No se pudieron cargar',
-                body: toursError!,
-              )
-            else
-              const _AdminEmptyCard(
-                icon: Icons.verified_rounded,
-                title: 'Sin tours pendientes',
-                body:
-                    'Los tours manuales e IA nuevos apareceran aqui para aprobarlos o rechazarlos.',
-              ),
-          ]
-        : [
-            for (final tour in pendingTours) ...[
-              _PendingTourCard(
-                tour: tour,
-                onApprove: () => onApproveTour(tour),
-                onReject: () => onRejectTour(tour),
-              ),
-              const SizedBox(height: 12),
-            ],
-          ];
+    final tourCards = pendingToursAsync.when(
+      loading: () {
+        if (localPendingTours.isNotEmpty) {
+          return _tourCards(localPendingTours);
+        }
+        return const <Widget>[
+          _AdminEmptyCard(
+            icon: Icons.hourglass_empty_rounded,
+            title: 'Cargando tours pendientes',
+            body: 'Estamos consultando las solicitudes guardadas en Supabase.',
+          ),
+        ];
+      },
+      error: (error, stackTrace) {
+        if (localPendingTours.isNotEmpty) {
+          return _tourCards(localPendingTours);
+        }
+        return <Widget>[
+          _AdminEmptyCard(
+            icon: Icons.error_outline_rounded,
+            title: 'No se pudieron cargar',
+            body: localToursError ?? error.toString(),
+          ),
+        ];
+      },
+      data: (pendingTours) {
+        if (pendingTours.isNotEmpty) {
+          return _tourCards(pendingTours);
+        }
+        if (localPendingTours.isNotEmpty) {
+          return _tourCards(localPendingTours);
+        }
+        return const <Widget>[
+          _AdminEmptyCard(
+            icon: Icons.verified_rounded,
+            title: 'Sin tours pendientes',
+            body:
+                'Los tours manuales e IA nuevos apareceran aqui para aprobarlos o rechazarlos.',
+          ),
+        ];
+      },
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
       children: [
@@ -458,6 +478,19 @@ class _DashboardTab extends StatelessWidget {
         ...tourCards,
       ],
     );
+  }
+
+  List<Widget> _tourCards(List<Tour> tours) {
+    return [
+      for (final tour in tours) ...[
+        _PendingTourCard(
+          tour: tour,
+          onApprove: () => onApproveTour(tour),
+          onReject: () => onRejectTour(tour),
+        ),
+        const SizedBox(height: 12),
+      ],
+    ];
   }
 }
 
@@ -698,7 +731,7 @@ class _AdminHeroCard extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.72),
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 28),
             FilledButton(onPressed: () {}, child: Text(action)),
           ],
         ),

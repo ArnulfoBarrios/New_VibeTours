@@ -161,7 +161,39 @@ class AppLocalizationsEs extends AppLocalizations {
   String get destination => 'Destino';
 
   @override
-  String get freePrompt => 'Prompt libre';
+  String get freePrompt => 'Describe tu tour';
+
+  @override
+  String get voicePromptPreparing => 'Preparando microfono...';
+
+  @override
+  String get voicePromptListening => 'Escuchando tu tour...';
+
+  @override
+  String get voicePromptStopped => 'La grabacion se detuvo.';
+
+  @override
+  String get voicePromptPermissionDenied =>
+      'Permiso de microfono denegado. Activalo desde Ajustes.';
+
+  @override
+  String get voicePromptUnavailable =>
+      'El reconocimiento de voz no esta disponible en este dispositivo.';
+
+  @override
+  String get voicePromptNoMatch =>
+      'No entendimos claramente tu voz. Intenta otra vez.';
+
+  @override
+  String get voicePromptBusy =>
+      'El servicio de voz esta ocupado. Espera un momento.';
+
+  @override
+  String get voicePromptNetworkError =>
+      'Revisa tu conexion e intenta otra vez.';
+
+  @override
+  String get voicePromptError => 'No pudimos procesar la entrada por voz.';
 
   @override
   String get detecting => 'Detectando experiencia';

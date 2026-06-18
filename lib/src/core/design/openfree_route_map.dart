@@ -143,12 +143,6 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
         widget.routeOverride == null &&
         widget.useRoadRouting &&
         widget.points.length > 1;
-    final fallbackRoute = RoadRouteResult(geometry: widget.points);
-    await _paintRoute(
-      fallbackRoute,
-      focusActiveStop: focusActiveStop,
-      fitRoute: !shouldResolveRoadRoute,
-    );
     if (widget.routeOverride != null) {
       await _paintRoute(
         widget.routeOverride!,
@@ -165,6 +159,13 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
       focusActiveStop: focusActiveStop,
       fitRoute: true,
     );
+    if (resolvedRoute.geometry.isEmpty) {
+      await _paintRoute(
+        RoadRouteResult(geometry: widget.points),
+        focusActiveStop: focusActiveStop,
+        fitRoute: true,
+      );
+    }
   }
 
   Future<void> _paintRoute(

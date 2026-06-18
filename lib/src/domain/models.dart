@@ -327,16 +327,30 @@ class Tour {
 
 class NearbyPlace {
   const NearbyPlace({
+    this.id = '',
     required this.name,
     required this.type,
     required this.distanceMeters,
     required this.location,
+    this.imageUrl = '',
+    this.thumbnailUrl = '',
+    this.category = '',
+    this.rating,
+    this.isOpenNow,
+    this.statusLabel = '',
   });
 
+  final String id;
   final String name;
   final String type;
   final int distanceMeters;
   final GeoPoint location;
+  final String imageUrl;
+  final String thumbnailUrl;
+  final String category;
+  final double? rating;
+  final bool? isOpenNow;
+  final String statusLabel;
 }
 
 class WeatherSnapshot {

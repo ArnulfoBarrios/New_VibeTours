@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/design/app_theme.dart';
 import '../../state/app_state.dart';
 
 class PqrsHistoryScreen extends ConsumerStatefulWidget {
@@ -46,7 +44,7 @@ class _PqrsHistoryScreenState extends ConsumerState<PqrsHistoryScreen> {
 
       final items = [
         for (final row in data)
-          if (row is Map) _PqrsItem.fromJson(Map<String, dynamic>.from(row)),
+          _PqrsItem.fromJson(Map<String, dynamic>.from(row as Map)),
       ];
 
       setState(() {

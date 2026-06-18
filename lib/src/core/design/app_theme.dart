@@ -198,5 +198,25 @@ class AppTheme {
 }
 
 extension VibeTheme on BuildContext {
-  VibeColors get vibe => Theme.of(this).extension<VibeColors>()!;
+  VibeColors get vibe {
+    final theme = Theme.of(this);
+    return theme.extension<VibeColors>() ??
+        (theme.brightness == Brightness.dark
+            ? VibeColors(
+                glass: Colors.white.withValues(alpha: 0.08),
+                glassStrong: Colors.white.withValues(alpha: 0.13),
+                luminousBorder: Colors.white.withValues(alpha: 0.18),
+                deepSurface: const Color(0xFF000000),
+                aiAccent: AppTheme.violet,
+                success: const Color(0xFF34C759),
+              )
+            : VibeColors(
+                glass: Colors.white.withValues(alpha: 0.62),
+                glassStrong: Colors.white.withValues(alpha: 0.82),
+                luminousBorder: Colors.white.withValues(alpha: 0.76),
+                deepSurface: AppTheme.lightBackground,
+                aiAccent: AppTheme.violet,
+                success: const Color(0xFF34C759),
+              ));
+  }
 }

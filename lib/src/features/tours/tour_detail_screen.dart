@@ -212,7 +212,14 @@ class TourDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       SectionHeader(title: l10n.stops),
-                      for (final stop in tour.stops) _StopTile(stop: stop),
+                      if (tour.stops.isEmpty)
+                        const EmptyState(
+                          icon: Icons.place_outlined,
+                          title: 'Sin paradas',
+                          body: 'Este tour aun no tiene paradas cargadas.',
+                        )
+                      else
+                        for (final stop in tour.stops) _StopTile(stop: stop),
                       const SizedBox(height: 24),
                       GlassPanel(
                         child: Row(
@@ -311,7 +318,7 @@ class _StopTile extends StatelessWidget {
                 Text(stop.name, style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  '${stop.suggestedMinutes} min - ${stop.activities.first}',
+                  '${stop.suggestedMinutes} min - ${stop.activities.isNotEmpty ? stop.activities.first : 'Explorar'}',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],

@@ -68,8 +68,10 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: themeMode.name,
                 trailing: DropdownButton<ThemeMode>(
                   value: themeMode,
-                  onChanged: (value) =>
-                      ref.read(themeModeProvider.notifier).state = value!,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    ref.read(themeModeProvider.notifier).state = value;
+                  },
                   items: const [
                     DropdownMenuItem(
                       value: ThemeMode.system,
@@ -220,7 +222,7 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () {
                 ref.read(mapStyleProvider.notifier).state =
                     'https://tiles.openfreemap.org/styles/liberty';
-                context.pop();
+                Navigator.of(context).pop();
               },
             ),
           ],

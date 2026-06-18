@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
@@ -19,22 +22,54 @@ class AiPlannerScreen extends ConsumerStatefulWidget {
   ConsumerState<AiPlannerScreen> createState() => _AiPlannerScreenState();
 }
 
-class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen> {
+class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
+    with WidgetsBindingObserver {
   final _destination = TextEditingController(text: 'Centro historico');
   final _country = TextEditingController(text: 'Colombia');
   final _city = TextEditingController(text: 'Cartagena');
   final _prompt = TextEditingController();
+  final _voicePrompt = _VoicePromptSession();
   double _duration = 4;
   TourType _type = TourType.cultural;
   String _language = 'es';
+  bool _isRecording = false;
+  bool _isStartingVoice = false;
+  String? _voiceFeedback;
+  bool _voiceFeedbackIsError = false;
+  String _baselinePrompt = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_voicePrompt.dispose());
     _destination.dispose();
     _country.dispose();
     _city.dispose();
     _prompt.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(_voicePrompt.stop());
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _isStartingVoice = false;
+          _voiceFeedback = AppLocalizations.of(context).voicePromptStopped;
+          _voiceFeedbackIsError = false;
+        });
+      }
+    }
   }
 
   @override
@@ -122,7 +157,64 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen> {
                 controller: _prompt,
                 minLines: 3,
                 maxLines: 5,
-                decoration: InputDecoration(labelText: l10n.freePrompt),
+                textInputAction: TextInputAction.newline,
+                decoration: InputDecoration(
+                  hintText: l10n.freePrompt,
+                  prefixIcon: const Icon(Icons.edit_note_rounded),
+                  suffixIcon: Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: _VoicePromptButton(
+                      isRecording: _isRecording,
+                      isBusy: _isStartingVoice,
+                      onPressed: _toggleVoiceInput,
+                    ),
+                  ),
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 64,
+                    minHeight: 64,
+                  ),
+                ),
+              ),
+              AnimatedSwitcher(
+                duration: 220.ms,
+                child: _voiceFeedback == null
+                    ? const SizedBox(height: 8)
+                    : Padding(
+                        key: ValueKey(_voiceFeedback),
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              _voiceFeedbackIsError
+                                  ? Icons.error_outline_rounded
+                                  : _isRecording
+                                      ? Icons.graphic_eq_rounded
+                                      : Icons.info_outline_rounded,
+                              size: 18,
+                              color: _voiceFeedbackIsError
+                                  ? Theme.of(context).colorScheme.error
+                                  : _isRecording
+                                      ? AppTheme.primary
+                                      : Theme.of(context).colorScheme.outline,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _voiceFeedback!,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: _voiceFeedbackIsError
+                                          ? Theme.of(context).colorScheme.error
+                                          : _isRecording
+                                              ? AppTheme.primary
+                                              : Theme.of(context).colorScheme.outline,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
               ),
             ],
           ),
@@ -205,6 +297,367 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen> {
             prompt: _prompt.text,
           ),
         );
+  }
+
+  Future<void> _toggleVoiceInput() async {
+    if (_isStartingVoice) return;
+    if (_voicePrompt.isListening) {
+      await _stopVoiceInput();
+      return;
+    }
+    await _startVoiceInput();
+  }
+
+  Future<void> _startVoiceInput() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() {
+      _isStartingVoice = true;
+      _voiceFeedback = l10n.voicePromptPreparing;
+      _voiceFeedbackIsError = false;
+      _baselinePrompt = _prompt.text.trim();
+    });
+
+    try {
+      await _voicePrompt.start(
+        localeCode: _language,
+        onResult: (words) {
+          if (!mounted) return;
+          _setPromptText(_mergePromptText(_baselinePrompt, words));
+        },
+        onStatus: (status) {
+          if (!mounted) return;
+          setState(() {
+            if (status == 'listening') {
+              _isRecording = true;
+              _isStartingVoice = false;
+              _voiceFeedback = l10n.voicePromptListening;
+              _voiceFeedbackIsError = false;
+            } else if (status == 'done' || status == 'notListening') {
+              _isRecording = false;
+              _isStartingVoice = false;
+              if (!_voiceFeedbackIsError) {
+                _voiceFeedback = l10n.voicePromptStopped;
+              }
+            }
+          });
+        },
+        onError: (error) {
+          if (!mounted) return;
+          final message = _voiceErrorMessage(l10n, error);
+          setState(() {
+            _isRecording = false;
+            _isStartingVoice = false;
+            _voiceFeedback = message;
+            _voiceFeedbackIsError = true;
+          });
+          ScaffoldMessenger.of(context)
+            ..clearSnackBars()
+            ..showSnackBar(SnackBar(content: Text(message)));
+        },
+      );
+    } on _VoicePromptException catch (error) {
+      if (!mounted) return;
+      final message = switch (error.reason) {
+        _VoicePromptFailure.permissionDenied =>
+          l10n.voicePromptPermissionDenied,
+        _VoicePromptFailure.unavailable => l10n.voicePromptUnavailable,
+      };
+      setState(() {
+        _isRecording = false;
+        _isStartingVoice = false;
+        _voiceFeedback = message;
+        _voiceFeedbackIsError = true;
+      });
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      final message = l10n.voicePromptError;
+      setState(() {
+        _isRecording = false;
+        _isStartingVoice = false;
+        _voiceFeedback = message;
+        _voiceFeedbackIsError = true;
+      });
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _stopVoiceInput() async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await _voicePrompt.stop();
+    } catch (_) {
+      await _voicePrompt.cancel();
+    }
+    if (!mounted) return;
+    setState(() {
+      _isRecording = false;
+      _isStartingVoice = false;
+      _voiceFeedback = l10n.voicePromptStopped;
+      _voiceFeedbackIsError = false;
+    });
+  }
+
+  void _setPromptText(String value) {
+    final nextValue = value.trimRight();
+    _prompt.value = TextEditingValue(
+      text: nextValue,
+      selection: TextSelection.collapsed(offset: nextValue.length),
+    );
+  }
+
+  String _mergePromptText(String baseline, String words) {
+    final base = baseline.trim();
+    final transcript = words.trim();
+    if (base.isEmpty) return transcript;
+    if (transcript.isEmpty) return base;
+    return '$base $transcript';
+  }
+
+  String _voiceErrorMessage(
+    AppLocalizations l10n,
+    SpeechRecognitionError error,
+  ) {
+    final code = error.errorMsg.toLowerCase();
+    if (code.contains('permission')) return l10n.voicePromptPermissionDenied;
+    if (code.contains('speech_recognizer_disabled') ||
+        code.contains('not_available')) {
+      return l10n.voicePromptUnavailable;
+    }
+    if (code.contains('busy')) return l10n.voicePromptBusy;
+    if (code.contains('network') || code.contains('timeout')) {
+      return l10n.voicePromptNetworkError;
+    }
+    if (code.contains('no_match')) return l10n.voicePromptNoMatch;
+    return l10n.voicePromptError;
+  }
+}
+
+class _VoicePromptButton extends StatefulWidget {
+  const _VoicePromptButton({
+    required this.isRecording,
+    required this.isBusy,
+    required this.onPressed,
+  });
+
+  final bool isRecording;
+  final bool isBusy;
+  final VoidCallback onPressed;
+
+  @override
+  State<_VoicePromptButton> createState() => _VoicePromptButtonState();
+}
+
+class _VoicePromptButtonState extends State<_VoicePromptButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1150),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _VoicePromptButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimation();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _syncAnimation() {
+    if (widget.isRecording) {
+      if (!_controller.isAnimating) {
+        _controller.repeat(reverse: true);
+      }
+    } else {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final active = widget.isRecording;
+    final busy = widget.isBusy;
+    final background = active
+        ? AppTheme.primary.withValues(alpha: 0.18)
+        : colorScheme.surfaceContainerHighest.withValues(alpha: 0.92);
+    final foreground = active ? AppTheme.primary : colorScheme.onSurfaceVariant;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final pulse = active ? 1 + (_controller.value * 0.08) : 1.0;
+        return Transform.scale(
+          scale: pulse,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: background,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: active
+                    ? AppTheme.primary.withValues(alpha: 0.45)
+                    : colorScheme.outlineVariant.withValues(alpha: 0.7),
+              ),
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: AppTheme.primary.withValues(alpha: 0.22),
+                        blurRadius: 18,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: IconButton(
+              tooltip: active ? 'Detener grabacion' : 'Activar voz',
+              onPressed: busy ? null : widget.onPressed,
+              icon: AnimatedSwitcher(
+                duration: 180.ms,
+                child: Icon(
+                  active ? Icons.stop_rounded : Icons.mic_rounded,
+                  key: ValueKey<bool>(active),
+                  color: foreground,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+enum _VoicePromptFailure { permissionDenied, unavailable }
+
+class _VoicePromptException implements Exception {
+  const _VoicePromptException(this.reason);
+
+  final _VoicePromptFailure reason;
+}
+
+class _VoicePromptSession {
+  final SpeechToText _speech = SpeechToText();
+  bool _initialized = false;
+  bool _disposed = false;
+
+  bool get isListening => _speech.isListening;
+
+  Future<void> start({
+    required String localeCode,
+    required void Function(String words) onResult,
+    required void Function(String status) onStatus,
+    required void Function(SpeechRecognitionError error) onError,
+  }) async {
+    if (_disposed) {
+      throw StateError('Voice session already disposed.');
+    }
+    if (_speech.isListening) {
+      await stop();
+    }
+
+    final hasPermission = await _speech.hasPermission;
+    final ready = await _initialize(onStatus: onStatus, onError: onError);
+    if (!ready) {
+      if (!hasPermission) {
+        throw const _VoicePromptException(_VoicePromptFailure.permissionDenied);
+      }
+      throw const _VoicePromptException(_VoicePromptFailure.unavailable);
+    }
+
+    final localeId = await _preferredLocaleId(localeCode);
+    await _speech.listen(
+      onResult: (result) => onResult(result.recognizedWords),
+      listenOptions: SpeechListenOptions(
+        partialResults: true,
+        cancelOnError: true,
+        listenMode: ListenMode.dictation,
+        localeId: localeId,
+        listenFor: const Duration(seconds: 45),
+        pauseFor: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Future<void> stop() async {
+    if (_speech.isListening) {
+      await _speech.stop();
+    }
+  }
+
+  Future<void> cancel() async {
+    if (_speech.isListening) {
+      await _speech.cancel();
+    }
+  }
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    try {
+      await stop();
+    } catch (_) {
+      try {
+        await cancel();
+      } catch (_) {
+        // Nothing else to release.
+      }
+    }
+  }
+
+  Future<bool> _initialize({
+    required void Function(String status) onStatus,
+    required void Function(SpeechRecognitionError error) onError,
+  }) async {
+    if (_initialized) return _speech.isAvailable;
+    _initialized = true;
+    return _speech.initialize(
+      onStatus: onStatus,
+      onError: onError,
+      options: [
+        SpeechToText.androidNoBluetooth,
+        SpeechToText.iosNoBluetooth,
+      ],
+    );
+  }
+
+  Future<String?> _preferredLocaleId(String languageCode) async {
+    try {
+      final locales = await _speech.locales();
+      final normalized = languageCode.toLowerCase();
+      for (final locale in locales) {
+        final value = locale.localeId.toLowerCase();
+        if (value == normalized ||
+            value.startsWith('${normalized}_') ||
+            value.startsWith('$normalized-')) {
+          return locale.localeId;
+        }
+      }
+      final systemLocale = await _speech.systemLocale();
+      if (systemLocale != null) {
+        return systemLocale.localeId;
+      }
+    } catch (_) {
+      // Fall back to a common locale below.
+    }
+    return languageCode == 'en' ? 'en_US' : 'es_ES';
   }
 }
 

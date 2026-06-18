@@ -401,8 +401,62 @@ abstract class AppLocalizations {
   /// No description provided for @freePrompt.
   ///
   /// In es, this message translates to:
-  /// **'Prompt libre'**
+  /// **'Describe tu tour'**
   String get freePrompt;
+
+  /// No description provided for @voicePromptPreparing.
+  ///
+  /// In es, this message translates to:
+  /// **'Preparando microfono...'**
+  String get voicePromptPreparing;
+
+  /// No description provided for @voicePromptListening.
+  ///
+  /// In es, this message translates to:
+  /// **'Escuchando tu tour...'**
+  String get voicePromptListening;
+
+  /// No description provided for @voicePromptStopped.
+  ///
+  /// In es, this message translates to:
+  /// **'La grabacion se detuvo.'**
+  String get voicePromptStopped;
+
+  /// No description provided for @voicePromptPermissionDenied.
+  ///
+  /// In es, this message translates to:
+  /// **'Permiso de microfono denegado. Activalo desde Ajustes.'**
+  String get voicePromptPermissionDenied;
+
+  /// No description provided for @voicePromptUnavailable.
+  ///
+  /// In es, this message translates to:
+  /// **'El reconocimiento de voz no esta disponible en este dispositivo.'**
+  String get voicePromptUnavailable;
+
+  /// No description provided for @voicePromptNoMatch.
+  ///
+  /// In es, this message translates to:
+  /// **'No entendimos claramente tu voz. Intenta otra vez.'**
+  String get voicePromptNoMatch;
+
+  /// No description provided for @voicePromptBusy.
+  ///
+  /// In es, this message translates to:
+  /// **'El servicio de voz esta ocupado. Espera un momento.'**
+  String get voicePromptBusy;
+
+  /// No description provided for @voicePromptNetworkError.
+  ///
+  /// In es, this message translates to:
+  /// **'Revisa tu conexion e intenta otra vez.'**
+  String get voicePromptNetworkError;
+
+  /// No description provided for @voicePromptError.
+  ///
+  /// In es, this message translates to:
+  /// **'No pudimos procesar la entrada por voz.'**
+  String get voicePromptError;
 
   /// No description provided for @detecting.
   ///
