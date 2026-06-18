@@ -30,7 +30,9 @@ export async function photonSearch(query, limit = 8) {
     city: feature.properties.city,
     country: feature.properties.country,
     latitude: feature.geometry.coordinates[1],
-    longitude: feature.geometry.coordinates[0]
+    longitude: feature.geometry.coordinates[0],
+    type: feature.properties.osm_value ?? feature.properties.type ?? 'place',
+    tags: feature.properties
   }))
 }
 
@@ -68,10 +70,29 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
         name,
         latitude: lat,
         longitude: lon,
-        type
+        type,
+        category: classifyAttraction(element.tags),
+        tags: element.tags
       }
     })
     .filter(Boolean)
+}
+
+function classifyAttraction(tags = {}) {
+  const tourism = String(tags.tourism ?? '').toLowerCase()
+  const historic = String(tags.historic ?? '').toLowerCase()
+  const amenity = String(tags.amenity ?? '').toLowerCase()
+  const leisure = String(tags.leisure ?? '').toLowerCase()
+  const natural = String(tags.natural ?? '').toLowerCase()
+
+  if (['museum', 'gallery', 'arts_centre'].includes(amenity) || tourism === 'museum') return 'museum'
+  if (['monument', 'memorial', 'ruins', 'castle', 'archaeological_site'].includes(historic)) return 'historic'
+  if (['attraction', 'viewpoint', 'theme_park', 'zoo', 'aquarium'].includes(tourism)) return tourism
+  if (amenity === 'marketplace') return 'market'
+  if (['park', 'garden', 'nature_reserve', 'forest'].includes(leisure) || ['tree', 'wood', 'grassland', 'beach'].includes(natural)) return 'nature'
+  if (['restaurant', 'cafe', 'food_court', 'pub', 'bar', 'nightclub'].includes(amenity)) return amenity
+  if (['cathedral', 'church', 'temple', 'mosque'].includes(historic)) return 'religious'
+  return tourism || historic || amenity || leisure || natural || 'place'
 }
 
 function isAccommodation(type) {

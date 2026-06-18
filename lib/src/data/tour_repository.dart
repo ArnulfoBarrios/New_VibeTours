@@ -21,6 +21,9 @@ class TourRepository {
     type: TourType.custom,
     language: 'es',
     prompt: '',
+    touristProfileSummary: '',
+    touristInterests: [],
+    touristPace: 'balanced',
   );
 
   Future<List<Tour>> getTours() async {
@@ -35,9 +38,8 @@ class TourRepository {
               ? json['tours'] as List<dynamic>
               : const <dynamic>[];
           final tours = [
-            for (final item in items)
-              if (item is Map)
-                _tourFromDatabaseJson(Map<String, dynamic>.from(item)),
+            for (final item in items.cast<Map<dynamic, dynamic>>())
+              _tourFromDatabaseJson(Map<String, dynamic>.from(item)),
           ];
           if (tours.isNotEmpty) {
             return tours;
@@ -71,8 +73,8 @@ class TourRepository {
       final rows = await client.rpc('admin_pending_tours') as List<dynamic>;
       debugPrint('RPC admin_pending_tours returned ${rows.length} tours');
       return [
-        for (final row in rows)
-          if (row is Map) _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
+        for (final row in rows.cast<Map<dynamic, dynamic>>())
+          _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
       ];
     } catch (e) {
       debugPrint('RPC failed: $e');
@@ -108,7 +110,7 @@ class TourRepository {
       debugPrint('Direct query returned ${rows.length} tours');
       return [
         for (final row in rows)
-          if (row is Map) _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
+          _tourFromDatabaseJson(Map<String, dynamic>.from(row as Map)),
       ];
     }
   }
@@ -585,14 +587,6 @@ class TourRepository {
       throw StateError('Supabase no esta configurado.');
     }
     return client;
-  }
-
-  bool _isPendingModeration(Map<String, dynamic> row) {
-    final moderationStatus = row['moderation_status']?.toString();
-    if (moderationStatus == 'approved' || moderationStatus == 'rejected') {
-      return false;
-    }
-    return row['is_published'] != true;
   }
 
   bool _looksLikeUuid(String value) {

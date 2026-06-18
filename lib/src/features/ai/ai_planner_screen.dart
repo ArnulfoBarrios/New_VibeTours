@@ -284,6 +284,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   }
 
   void _generate() {
+    final profile = ref.read(touristProfileProvider);
     ref
         .read(aiPlannerControllerProvider.notifier)
         .generate(
@@ -295,6 +296,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             type: _type,
             language: _language,
             prompt: _prompt.text,
+            touristProfileSummary: profile.aiSummary,
+            touristInterests: profile.interests,
+            touristPace: profile.preferredPace,
           ),
         );
   }

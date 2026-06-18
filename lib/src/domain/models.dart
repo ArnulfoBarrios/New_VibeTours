@@ -437,6 +437,9 @@ class AiTourRequest {
     required this.type,
     required this.language,
     required this.prompt,
+    required this.touristProfileSummary,
+    required this.touristInterests,
+    required this.touristPace,
   });
 
   final String destination;
@@ -446,6 +449,9 @@ class AiTourRequest {
   final TourType type;
   final String language;
   final String prompt;
+  final String touristProfileSummary;
+  final List<String> touristInterests;
+  final String touristPace;
 
   Map<String, dynamic> toJson() => {
     'destination': destination,
@@ -455,6 +461,9 @@ class AiTourRequest {
     'type': type.name,
     'language': language,
     'prompt': prompt,
+    'touristProfileSummary': touristProfileSummary,
+    'touristInterests': touristInterests,
+    'touristPace': touristPace,
   };
 }
 
