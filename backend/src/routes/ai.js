@@ -54,15 +54,20 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
 
     let ollama = null
     let ollamaError = null
+    const shouldAskOllama = shouldUseOllama(input, planner)
     try {
-      ollama = await planWithOllama({
-        ...input,
-        places: planner.selectedPlaces,
-        recommendedSchedule: planner.recommendedSchedule,
-        timeProfile: planner.timeProfile,
-        sourceSummary: { location: location ? { latitude: location.latitude, longitude: location.longitude } : null, candidateSource: candidatePack.source, candidateCount: candidatePack.rawCount, selectedCount: planner.selectedPlaces.length },
-      })
-      console.info('[tour-ai] ollama', { ok: true, hasItinerary: Array.isArray(ollama?.itinerario), itinerary: Array.isArray(ollama?.itinerario) ? ollama.itinerario.length : 0 })
+      if (!shouldAskOllama) {
+        console.info('[tour-ai] ollama-skipped', { reason: ollamaSkipReason(input, planner), durationHours: input.durationHours, selectedPlaces: planner.selectedPlaces.length })
+      } else {
+        ollama = await planWithOllama({
+          ...input,
+          places: planner.selectedPlaces,
+          recommendedSchedule: planner.recommendedSchedule,
+          timeProfile: planner.timeProfile,
+          sourceSummary: { location: location ? { latitude: location.latitude, longitude: location.longitude } : null, candidateSource: candidatePack.source, candidateCount: candidatePack.rawCount, selectedCount: planner.selectedPlaces.length },
+        })
+      }
+      console.info('[tour-ai] ollama', { ok: true, skipped: !shouldAskOllama, hasItinerary: Array.isArray(ollama?.itinerario), itinerary: Array.isArray(ollama?.itinerario) ? ollama.itinerario.length : 0 })
     } catch (error) {
       ollamaError = error
       console.warn('[tour-ai] ollama', { ok: false, message: error?.message ?? String(error) })
@@ -90,7 +95,7 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
       const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
         ? sourceTour.itinerario
         : sourceTour.stops ?? []
-      const stopTarget = Math.min(8, Math.max(3, plannedStops.length, planner.selectedPlaces.length))
+      const stopTarget = Math.min(12, Math.max(3, plannedStops.length, planner.selectedPlaces.length))
       const normalizedStops = await Promise.all(
         Array.from({ length: stopTarget }, (_, index) => {
           const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
@@ -410,22 +415,28 @@ function normalizeCandidate(place, index, input, origin) {
 
 function scorePlace(place, input) {
   const distanceKm = place.distanceMeters / 1000
-  const typeScore = typeAffinityScore(input.type, place.category, place.name)
-  const popularityScore = popularityScoreFor(place)
+  const typeScore = typeAffinityScore(input.type, place.category, place.name, place.tags)
+  const popularityScore = popularityScoreFor(place, input)
   const proximityScore = proximityScoreFor(distanceKm)
   const diversityScore = diversityBoostFor(input.type, place.category, place.name)
   const profileScore = profileScoreFor(input, place)
-  return (typeScore * 5) + (popularityScore * 4) + (proximityScore * 3) + (diversityScore * 3) + (profileScore * 4)
+  const cityScore = importantPlaceScore(place, input)
+  const mismatchPenalty = typeMismatchPenalty(input.type, place.category, place.name)
+  return (typeScore * 7) + (cityScore * 5) + (popularityScore * 4) + (proximityScore * 3) + (diversityScore * 3) + (profileScore * 4) - mismatchPenalty
 }
 
 function selectPlaces(scoredPlaces, targetCount, input) {
   const selected = []
   const seen = new Set()
-  const minCount = Math.min(3, scoredPlaces.length)
+  const aligned = scoredPlaces.filter((place) => isAlignedWithTourType(input.type, place.category, place.name))
+  const preferredQuota = Math.min(targetCount, Math.max(0, Math.ceil(targetCount * preferredQuotaFor(input.type))))
+
   while (selected.length < targetCount && seen.size < scoredPlaces.length) {
     let best = null
     let bestScore = -Infinity
-    for (const candidate of scoredPlaces) {
+    const mustPreferAligned = selected.length < preferredQuota && aligned.some((place) => !seen.has(normalizeKey(place.name)))
+    const pool = mustPreferAligned ? aligned : scoredPlaces
+    for (const candidate of pool) {
       const key = normalizeKey(candidate.name)
       if (seen.has(key)) continue
       const contextualScore = contextualScoreFor(candidate, selected, input)
@@ -437,7 +448,6 @@ function selectPlaces(scoredPlaces, targetCount, input) {
     if (!best) break
     selected.push(best)
     seen.add(normalizeKey(best.name))
-    if (selected.length >= minCount && selected.length >= targetCount) break
   }
   return selected
 }
@@ -511,27 +521,33 @@ function formatTime(minutes) {
 function stopCountForDuration(durationHours) {
   if (durationHours <= 3.5) return 3
   if (durationHours <= 5.5) return 4
-  if (durationHours <= 8) return 5
-  return 6
+  if (durationHours <= 7) return 6
+  if (durationHours <= 10) return 8
+  return 10
 }
 
 function normalizeCategory(place) {
   const category = String(place.category ?? place.type ?? '').toLowerCase()
   const name = String(place.name ?? '').toLowerCase()
   const tags = normalizeTags(place.tags)
-  const merged = `${category} ${name} ${tags.join(' ')}`
-  if (/(museum|gallery|arts? centre|art)/.test(merged)) return 'museum'
-  if (/(historic|monument|memorial|ruins|castle|archaeological|heritage)/.test(merged)) return 'historic'
-  if (/(restaurant|cafe|coffee|market|food|bar|pub|nightclub|bistro|bakery)/.test(merged)) return merged.includes('nightclub') || merged.includes('bar') ? 'nightlife' : merged.includes('market') ? 'market' : merged.includes('cafe') || merged.includes('coffee') ? 'cafe' : 'restaurant'
-  if (/(park|garden|reserve|nature|trail|forest|beach|viewpoint)/.test(merged)) return merged.includes('viewpoint') ? 'viewpoint' : merged.includes('trail') ? 'trail' : 'nature'
-  if (/(zoo|aquarium|playground|family|children)/.test(merged)) return 'family'
-  if (/(church|cathedral|mosque|temple)/.test(merged)) return 'religious'
+  const merged = (category + ' ' + name + ' ' + tags.join(' ')).toLowerCase()
+  if (/(stadium|sports_centre|sport|pitch|arena|track|fitness|cancha|estadio|deporte|running|ciclismo)/.test(merged)) return 'sports'
+  if (/(museum|gallery|arts? centre|art|museo|galeria)/.test(merged)) return 'museum'
+  if (/(marketplace|market|mercado|plaza de mercado)/.test(merged)) return 'market'
+  if (/(restaurant|restaurante|food|comida|ceviche|arepa|cocina|bistro|bakery|panaderia)/.test(merged)) return 'restaurant'
+  if (/(cafe|coffee|cafeteria)/.test(merged)) return 'cafe'
+  if (/(bar|pub|nightclub|discoteca|terraza|rooftop)/.test(merged)) return 'nightlife'
+  if (/(park|garden|reserve|nature|trail|forest|beach|viewpoint|parque|jardin|sendero|playa|mirador|malecon|river|rio)/.test(merged)) return merged.includes('viewpoint') || merged.includes('mirador') ? 'viewpoint' : merged.includes('trail') || merged.includes('sendero') ? 'trail' : 'nature'
+  if (/(zoo|aquarium|playground|family|children|ninos|infantil)/.test(merged)) return 'family'
+  if (/(church|cathedral|mosque|temple|catedral|iglesia)/.test(merged)) return 'religious'
+  if (/(historic|monument|memorial|ruins|castle|archaeological|heritage|monumento|histori|patrimonio|plaza)/.test(merged)) return 'historic'
   return category || 'place'
 }
 
 function groupForCategory(category, type) {
   if (['museum', 'historic', 'religious'].includes(category)) return 'heritage'
   if (['restaurant', 'cafe', 'market'].includes(category)) return 'food'
+  if (['sports'].includes(category)) return 'sports'
   if (['nature', 'viewpoint', 'trail'].includes(category)) return 'nature'
   if (['nightlife'].includes(category)) return 'night'
   if (['family'].includes(category)) return 'family'
@@ -542,33 +558,34 @@ function groupForCategory(category, type) {
   return 'urban'
 }
 
-function typeAffinityScore(type, category, name) {
-  const text = `${category} ${name}`.toLowerCase()
+function typeAffinityScore(type, category, name, tags = []) {
+  const text = (category + ' ' + name + ' ' + (Array.isArray(tags) ? tags.join(' ') : '')).toLowerCase()
   const rules = {
-    historical: ['museum', 'historic', 'religious', 'heritage', 'monument', 'memorial'],
-    gastronomic: ['restaurant', 'cafe', 'market', 'food', 'bakery', 'bar'],
-    ecological: ['nature', 'park', 'trail', 'viewpoint', 'forest', 'beach', 'reserve'],
-    night: ['nightlife', 'bar', 'pub', 'nightclub', 'event', 'theatre'],
-    family: ['family', 'park', 'museum', 'zoo', 'aquarium', 'playground'],
-    cultural: ['museum', 'historic', 'gallery', 'theatre', 'monument'],
-    urban: ['historic', 'museum', 'viewpoint', 'market', 'square'],
-    romantic: ['viewpoint', 'cafe', 'park', 'beach', 'garden'],
-    sports: ['trail', 'park', 'stadium', 'arena', 'beach', 'viewpoint'],
+    historical: ['museum', 'historic', 'religious', 'heritage', 'monument', 'memorial', 'plaza', 'catedral'],
+    gastronomic: ['restaurant', 'cafe', 'market', 'food', 'bakery', 'bar', 'mercado', 'cocina', 'restaurante'],
+    ecological: ['nature', 'park', 'trail', 'viewpoint', 'forest', 'beach', 'reserve', 'malecon', 'rio'],
+    night: ['nightlife', 'bar', 'pub', 'nightclub', 'event', 'theatre', 'terraza', 'rooftop'],
+    family: ['family', 'park', 'museum', 'zoo', 'aquarium', 'playground', 'plaza'],
+    cultural: ['museum', 'historic', 'gallery', 'theatre', 'monument', 'plaza', 'carnaval', 'catedral'],
+    urban: ['historic', 'museum', 'viewpoint', 'market', 'square', 'plaza', 'malecon', 'avenida'],
+    romantic: ['viewpoint', 'cafe', 'park', 'beach', 'garden', 'malecon'],
+    sports: ['sports', 'stadium', 'arena', 'pitch', 'track', 'park', 'trail', 'beach', 'estadio'],
     custom: ['museum', 'historic', 'market', 'park', 'viewpoint'],
   }
   return scoreFromTerms(text, rules[type] ?? rules.custom, 10)
 }
 
-function popularityScoreFor(place) {
-  const text = `${place.category} ${place.name}`.toLowerCase()
+function popularityScoreFor(place, input = {}) {
+  const text = (place.category + ' ' + place.name).toLowerCase()
   let score = 3
   if (text.includes('museum')) score += 4
   if (text.includes('historic') || text.includes('heritage')) score += 4
-  if (text.includes('monument') || text.includes('memorial')) score += 3
-  if (text.includes('market')) score += 3
-  if (text.includes('park') || text.includes('viewpoint')) score += 2
-  if (text.includes('restaurant') || text.includes('cafe')) score += 2
-  if (text.includes('nightclub') || text.includes('bar')) score += 2
+  if (text.includes('monument') || text.includes('memorial')) score += input.type === 'gastronomic' || input.type === 'sports' ? 0 : 3
+  if (text.includes('market')) score += 4
+  if (text.includes('park') || text.includes('viewpoint')) score += 3
+  if (text.includes('restaurant') || text.includes('cafe')) score += 4
+  if (text.includes('sports') || text.includes('stadium')) score += 4
+  if (text.includes('nightclub') || text.includes('bar')) score += 3
   return clamp(score, 1, 10)
 }
 
@@ -590,6 +607,53 @@ function diversityBoostFor(type, category, name) {
   if (type === 'family' && /family|park|museum|zoo|aquarium/.test(text)) return 6
   if (type === 'cultural' && /museum|historic|gallery|theatre|square/.test(text)) return 5
   return 1
+}
+
+function preferredQuotaFor(type) {
+  if (['gastronomic', 'sports', 'ecological', 'night'].includes(type)) return 0.75
+  if (['family', 'romantic'].includes(type)) return 0.6
+  return 0.45
+}
+
+function isAlignedWithTourType(type, category, name) {
+  const text = (category + ' ' + name).toLowerCase()
+  const aligned = {
+    gastronomic: /restaurant|cafe|market|food|bakery|bar|mercado|cocina|restaurante/,
+    sports: /sports|stadium|arena|pitch|track|park|trail|beach|estadio|cancha/,
+    ecological: /nature|park|trail|viewpoint|forest|beach|reserve|malecon|rio/,
+    night: /nightlife|bar|pub|nightclub|theatre|terraza|rooftop/,
+    family: /family|park|museum|zoo|aquarium|playground|plaza/,
+    romantic: /viewpoint|cafe|park|beach|garden|malecon/,
+    historical: /museum|historic|religious|heritage|monument|memorial|plaza|catedral/,
+    cultural: /museum|historic|gallery|theatre|monument|plaza|carnaval|catedral/,
+    urban: /historic|museum|viewpoint|market|plaza|malecon|avenida|square/,
+  }
+  return (aligned[type] ?? /museum|historic|market|park|viewpoint/).test(text)
+}
+
+function typeMismatchPenalty(type, category, name) {
+  const text = (category + ' ' + name).toLowerCase()
+  if (type === 'gastronomic' && /historic|monument|memorial|religious|museum/.test(text)) return 34
+  if (type === 'sports' && /historic|monument|memorial|religious|museum/.test(text)) return 32
+  if (type === 'ecological' && /restaurant|cafe|bar|nightlife|monument/.test(text)) return 22
+  if (type === 'night' && /museum|religious|trail/.test(text)) return 22
+  return 0
+}
+
+function importantPlaceScore(place, input) {
+  const city = normalizeKey(input.city || input.destination)
+  const text = normalizeKey(place.name)
+  const catalog = {
+    cartagena: ['torre-del-reloj', 'san-felipe', 'murallas', 'getsemani', 'santo-domingo', 'museo-del-oro', 'catedral', 'plaza-de-los-coches', 'blas-de-lezo', 'india-catalina'],
+    barranquilla: ['plaza-de-la-paz', 'catedral', 'paseo-bolivar', 'antigua-aduana', 'museo-del-caribe', 'barrio-abajo', 'casa-del-carnaval', 'gran-malecon', 'ventana-al-mundo', 'cumbia', 'edgar-renteria'],
+    'santa-marta': ['parque-de-los-novios', 'catedral', 'parque-bolivar', 'museo-del-oro', 'malecon', 'quinta-de-san-pedro', 'taganga', 'rodadero'],
+    cali: ['san-antonio', 'gato-del-rio', 'ermita', 'bulevar-del-rio', 'plazoleta-jairo-varela', 'museo-la-tertulia'],
+    medellin: ['plaza-botero', 'pueblito-paisa', 'parque-explora', 'jardin-botanico', 'comuna-13', 'parque-berrio'],
+    bogota: ['plaza-de-bolivar', 'museo-del-oro', 'monserrate', 'la-candelaria', 'chorrorro-de-quevedo', 'botero'],
+  }
+  const keys = Object.keys(catalog).filter((key) => city.includes(key) || key.includes(city))
+  const matches = keys.flatMap((key) => catalog[key]).filter((term) => text.includes(term))
+  return clamp(matches.length * 4, 0, 10)
 }
 
 function profileScoreFor(input, place) {
@@ -670,15 +734,21 @@ function buildShortSummary(input, planner) {
 }
 
 function buildTourDescription(input, planner) {
+  const city = input.city || input.destination
+  const country = input.country ? ', ' + input.country : ''
+  const places = planner.selectedPlaces.slice(0, 5).map((place) => place.name).join(', ')
   const mode = {
-    historical: 'centros historicos, museos y monumentos',
-    gastronomic: 'mercados, restaurantes y cafeterias emblematicas',
-    ecological: 'parques, reservas y miradores naturales',
-    night: 'bares, eventos y escenas nocturnas',
-    family: 'espacios educativos, recreativos y aptos para menores',
-    cultural: 'museos, galerias y espacios patrimoniales',
-  }[input.type] ?? 'paradas autenticas y variadas'
-  return `Experiencia ${typeLabel(input.type).toLowerCase()} pensada para ${input.durationHours} horas, con foco en ${mode} y una secuencia logica que reduce traslados innecesarios.`
+    historical: 'patrimonio, plazas, iglesias, museos y memoria urbana',
+    gastronomic: 'mercados, cafeterias, restaurantes, dulces, bebidas locales y conversaciones alrededor de la mesa',
+    ecological: 'parques, malecones, miradores, senderos suaves y espacios para respirar el paisaje',
+    night: 'terrazas, bares, musica, calles iluminadas y puntos seguros para vivir la ciudad despues del atardecer',
+    family: 'espacios abiertos, museos faciles de recorrer y paradas educativas con descansos comodos',
+    cultural: 'historia local, arquitectura, arte popular, plazas vivas y simbolos urbanos',
+    sports: 'escenarios deportivos, parques activos, zonas para caminar y lugares ligados al orgullo deportivo local',
+    urban: 'calles representativas, plazas, edificios publicos, malecones y contrastes cotidianos',
+    romantic: 'miradores, cafes, plazas tranquilas y rincones pensados para caminar sin prisa',
+  }[input.type] ?? 'paradas autenticas, bien conectadas y culturalmente relevantes'
+  return 'Este recorrido por ' + city + country + ' esta disenado para sentirse como un tour completo y no como una lista suelta de puntos en el mapa. Durante ' + input.durationHours + ' horas, la ruta combina ' + mode + ', manteniendo un orden logico para reducir traslados innecesarios y aprovechar mejor cada parada. El itinerario toma como base lugares reales cercanos al destino seleccionado y prioriza puntos reconocibles de la ciudad antes de sumar experiencias complementarias. Entre las paradas destacadas aparecen ' + (places || input.destination) + ', articuladas para que el viajero entienda que puede ver, hacer, probar o fotografiar en cada lugar. La experiencia busca parecerse a un tour guiado profesional: empieza con un punto de referencia claro, desarrolla una narrativa segun el tipo de tour y cierra con recomendaciones practicas para disfrutar el recorrido con seguridad y buen ritmo.'
 }
 
 function buildFeaturedExperience(input, planner) {
@@ -698,42 +768,81 @@ function buildCulturalContext(input, planner) {
 }
 
 function buildStopDescription(place, input) {
-  const intro = {
-    historical: 'Parada clave para comprender la historia local y la arquitectura del entorno.',
-    gastronomic: 'Parada pensada para probar sabores representativos y entender la escena culinaria.',
-    ecological: 'Parada ideal para conectar con el paisaje y caminar con calma.',
-    night: 'Parada con energia nocturna y ambiente social activo.',
-    family: 'Parada segura y dinamica, ideal para aprender y disfrutar en grupo.',
-  }[input.type] ?? 'Parada relevante dentro de la ruta.'
-  return `${place.name} es ${intro} Su ubicacion cerca de otros puntos afines ayuda a mantener un recorrido fluido y equilibrado.`
+  const category = place.category || 'place'
+  const city = input.city || input.destination
+  const action = stopActionFor(input.type, category)
+  const focus = stopFocusFor(input.type, category)
+  const why = importantPlaceScore(place, input) > 0
+    ? 'Ademas, es un punto reconocido dentro de la ciudad, por lo que funciona bien como referencia para orientarse y entender el caracter del destino.'
+    : 'Su valor dentro del recorrido esta en complementar la ruta principal sin romper la logica geografica del paseo.'
+  return place.name + ' es una parada pensada para ' + action + '. En esta parte del tour conviene dedicar tiempo a ' + focus + ', observar el movimiento del entorno y conectar el lugar con la identidad de ' + city + '. No se trata solo de llegar, tomar una foto y seguir: la parada esta incluida para que el viajero tenga una accion concreta, una lectura del espacio y una razon clara para permanecer unos minutos. ' + why + ' Si el lugar esta abierto al publico, vale la pena revisar horarios, recorrerlo con calma y usarlo como pausa antes de continuar hacia la siguiente parada.'
 }
 
 function buildActivities(place, type) {
   const byType = {
-    historical: ['Recorrer', 'Escuchar narrativa historica', 'Fotografiar detalles arquitectonicos'],
-    gastronomic: ['Degustar especialidades locales', 'Comparar sabores', 'Conversar con comerciantes'],
-    ecological: ['Caminar', 'Observar fauna o flora', 'Tomar descansos breves'],
-    night: ['Explorar ambiente nocturno', 'Tomar algo', 'Disfrutar musica o evento'],
-    family: ['Participar en actividades educativas', 'Jugar', 'Tomar fotos en grupo'],
+    historical: ['Recorrer el entorno con foco en arquitectura y memoria', 'Identificar detalles de epoca, placas o esculturas', 'Tomar fotografias desde angulos amplios', 'Comparar el lugar con la siguiente parada de la ruta'],
+    gastronomic: ['Probar una especialidad local o bebida tradicional', 'Preguntar por ingredientes de temporada', 'Comparar sabores entre paradas', 'Observar la dinamica del mercado o local'],
+    ecological: ['Caminar a ritmo suave', 'Observar paisaje, sombra, agua o vegetacion', 'Hacer una pausa para hidratacion', 'Registrar fotos sin salirse de las zonas permitidas'],
+    night: ['Explorar el ambiente nocturno de forma segura', 'Elegir una bebida o snack local', 'Escuchar musica o actividad del entorno', 'Confirmar horarios antes de permanecer mas tiempo'],
+    family: ['Hacer una pausa comoda para el grupo', 'Buscar una actividad educativa o visual', 'Tomar fotos familiares', 'Verificar banos, sombra y zonas de descanso'],
+    sports: ['Caminar o trotar un tramo corto si el espacio lo permite', 'Reconocer la historia deportiva del lugar', 'Tomar fotos del escenario o del entorno activo', 'Hacer una pausa de hidratacion'],
+    cultural: ['Leer el espacio desde su historia local', 'Fotografiar arquitectura, arte o vida cotidiana', 'Conversar sobre tradiciones del barrio', 'Conectar la parada con el relato general del tour'],
   }
-  return byType[type] ?? ['Explorar', 'Fotografiar', 'Aprender del lugar']
+  return byType[type] ?? ['Explorar el lugar con calma', 'Tomar fotografias', 'Leer senales o placas del entorno', 'Preparar la siguiente parada']
 }
 
 function buildCuriousFacts(place, type) {
+  const label = typeLabel(type).toLowerCase()
   return unique([
-    `${place.name} fue incluido por su relevancia ${typeLabel(type).toLowerCase()} y su cercania al eje principal de la ruta.`,
-    `La secuencia de paradas busca equilibrar iconos conocidos con experiencias complementarias.`,
+    place.name + ' fue elegido porque aporta valor ' + label + ' al recorrido, no solo por estar cerca en el mapa.',
+    'Esta parada ayuda a variar el ritmo del tour y evita que todas las visitas sean del mismo tipo.',
+    'Su categoria principal es ' + (categoryLabel(place.category || 'place') || 'Punto local') + ', por eso cumple una funcion especifica dentro de la ruta.',
   ]).slice(0, 3)
 }
 
 function buildTips(place, type) {
   const tips = {
-    night: ['Confirma horarios y politica de acceso', 'Mantente en zonas bien iluminadas'],
-    ecological: ['Lleva agua y calzado comodo', 'Revisa el clima antes de salir'],
-    gastronomic: ['Reserva si es un local popular', 'Pregunta por platos de temporada'],
-    family: ['Verifica instalaciones y servicios', 'Planifica pausas cortas para menores'],
+    night: ['Confirma horarios y politica de acceso', 'Mantente en zonas bien iluminadas', 'Evita traslados largos a pie al final de la noche'],
+    ecological: ['Lleva agua y calzado comodo', 'Revisa el clima antes de salir', 'Respeta senderos, jardines y zonas restringidas'],
+    gastronomic: ['Reserva si el local es pequeno o popular', 'Pregunta por platos de temporada', 'Deja espacio para probar algo en mas de una parada'],
+    family: ['Verifica banos, sombra y zonas de descanso', 'Planifica pausas cortas para menores', 'Evita las horas de mayor sol si el recorrido es al aire libre'],
+    sports: ['Lleva agua y ropa comoda', 'No invadas canchas o zonas privadas', 'Consulta si hay eventos que puedan cambiar el acceso'],
   }
-  return tips[type] ?? ['Revisa horarios de apertura', 'Llega unos minutos antes', 'Lleva bateria suficiente']
+  return tips[type] ?? ['Revisa horarios de apertura', 'Llega unos minutos antes', 'Lleva bateria suficiente para mapa y fotos']
+}
+
+function stopActionFor(type, category) {
+  if (type === 'gastronomic') return category === 'market' ? 'probar sabores locales y ver como se mueve la cocina cotidiana' : 'hacer una pausa de sabor, comparar preparaciones y descubrir productos locales'
+  if (type === 'sports') return category === 'sports' ? 'conocer un escenario deportivo o un punto de actividad fisica local' : 'mantener una ruta activa con caminata, vista urbana y descanso breve'
+  if (type === 'ecological') return 'caminar, observar el paisaje y bajar el ritmo del recorrido'
+  if (type === 'night') return 'vivir el ambiente social del destino con una logica segura de movilidad'
+  if (type === 'family') return 'aprender y descansar sin exigir demasiado al grupo'
+  if (type === 'cultural') return 'leer la historia, la arquitectura y las costumbres visibles en el espacio'
+  return 'entender mejor el destino desde una experiencia concreta'
+}
+
+function stopFocusFor(type, category) {
+  if (type === 'gastronomic') return category === 'market' ? 'identificar ingredientes, aromas, puestos tradicionales y platos que representan la ciudad' : 'elegir una preparacion local, preguntar por su origen y comparar sabores con otras paradas'
+  if (type === 'sports') return category === 'sports' ? 'observar el escenario, su relacion con equipos o practicas locales y el movimiento de los aficionados' : 'aprovechar el espacio para caminar, hidratarse y mantener el cuerpo activo'
+  if (type === 'ecological') return 'observar sombra, brisa, vegetacion, agua o panoramas y cuidar el entorno mientras se avanza'
+  if (type === 'night') return 'revisar horarios, seguridad, musica, iluminacion y opciones para quedarse sin perder el control de la ruta'
+  if (type === 'family') return 'buscar puntos de descanso, banos, sombra, explicaciones simples y actividades visuales'
+  if (type === 'cultural') return 'mirar detalles de fachada, plazas, arte urbano, vida cotidiana y simbolos del barrio'
+  return 'recorrer el lugar, fotografiarlo y entender por que aparece en la secuencia del tour'
+}
+
+function shouldUseOllama(input, planner) {
+  if (process.env.DISABLE_OLLAMA === 'true') return false
+  if (input.durationHours > 6) return false
+  if (planner.selectedPlaces.length > 5) return false
+  return true
+}
+
+function ollamaSkipReason(input, planner) {
+  if (process.env.DISABLE_OLLAMA === 'true') return 'disabled_by_env'
+  if (input.durationHours > 6) return 'long_tour_uses_deterministic_planner'
+  if (planner.selectedPlaces.length > 5) return 'too_many_places_for_local_model'
+  return 'not_skipped'
 }
 
 function isValidTourPlan(value) {
