@@ -291,10 +291,8 @@ class Tour {
       for (final entry in stops.asMap().entries)
         entry.value.toCreationJson(entry.key),
     ],
-    'orden_paradas': [
-      for (final entry in stops.asMap().entries)
-        {'orden': entry.key + 1, 'nombre': entry.value.name},
-    ],
+    'orden_paradas': [for (final stop in stops) stop.name],
+
     'incluye': includes,
     'no_incluye': excludes,
     'recomendaciones': recommendations,

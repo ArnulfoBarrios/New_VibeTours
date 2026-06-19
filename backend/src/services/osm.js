@@ -1,23 +1,40 @@
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
-
 export async function geocodePlace(query) {
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.searchParams.set('format', 'jsonv2')
   url.searchParams.set('limit', '3')
   url.searchParams.set('q', query)
-  const response = await fetch(url, {
-    headers: { 'User-Agent': USER_AGENT }
-  })
-  if (!response.ok) return null
-  const results = await response.json()
-  const [result] = Array.isArray(results) ? results : []
-  if (!result) return null
-  return {
-    name: result.display_name,
-    latitude: Number(result.lat),
-    longitude: Number(result.lon)
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT }
+    })
+    if (response.ok) {
+      const results = await response.json()
+      const [result] = Array.isArray(results) ? results : []
+      if (result) {
+        return {
+          name: result.display_name,
+          latitude: Number(result.lat),
+          longitude: Number(result.lon)
+        }
+      }
+    }
+  } catch {
+    // Fall through to Photon below.
   }
+
+  const photonResults = await photonSearch(query, 1)
+  const [photon] = photonResults
+  if (photon && Number.isFinite(photon.latitude) && Number.isFinite(photon.longitude)) {
+    return {
+      name: photon.name,
+      latitude: Number(photon.latitude),
+      longitude: Number(photon.longitude),
+    }
+  }
+  return null
 }
+
 
 export async function photonSearch(query, limit = 8) {
   const url = new URL('https://photon.komoot.io/api/')

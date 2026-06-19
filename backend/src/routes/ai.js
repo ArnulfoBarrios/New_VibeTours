@@ -90,8 +90,13 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
       const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
         ? sourceTour.itinerario
         : sourceTour.stops ?? []
+      const stopTarget = Math.min(8, Math.max(3, plannedStops.length, planner.selectedPlaces.length))
       const normalizedStops = await Promise.all(
-        plannedStops.slice(0, 8).map((stop, index) => normalizeStop(stop, index, input)),
+        Array.from({ length: stopTarget }, (_, index) => {
+          const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
+          const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
+          return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces)
+        }),
       )
       const stops = normalizedStops.map((stop) => stop.publicStop)
       const routeStops = normalizedStops.map((stop) => stop.routeStop)
@@ -133,7 +138,7 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
           ...stops.flatMap((stop) => stop.imagenes),
         ]).slice(0, 8),
         itinerario: stops,
-        orden_paradas: stops.map((stop, index) => ({ orden: index + 1, nombre: stop.nombre })),
+        orden_paradas: stops.map((stop) => stop.nombre),
         incluye: normalizeList(sourceTour.incluye, defaultIncludes(input.type)),
         no_incluye: normalizeList(sourceTour.no_incluye, defaultExcludes()),
         recomendaciones: normalizeList(sourceTour.recomendaciones, defaultRecommendations()),
@@ -180,15 +185,15 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
       const emergencyRoute = {
         durationHours: input.durationHours,
         distanceKm: Number(planner.distanceKm),
-        stops: emergencyTour.stops.map((stop) => ({
-          name: stop.name,
-          latitude: stop.location.latitude,
-          longitude: stop.location.longitude,
-          imageUrl: stop.imageUrl,
-          description: stop.description,
-          activities: stop.activities,
-          tips: stop.tips,
-          suggestedMinutes: stop.suggestedMinutes,
+        stops: emergencyTour.itinerario.map((stop, index) => ({
+          name: stop.nombre,
+          latitude: planner.selectedPlaces[index]?.latitude ?? 0,
+          longitude: planner.selectedPlaces[index]?.longitude ?? 0,
+          imageUrl: stop.imagenes?.[0] ?? '',
+          description: stop.descripcion,
+          activities: stop.actividades,
+          tips: stop.consejos,
+          suggestedMinutes: minutesFromLabel(stop.duracion_estimada),
         })),
       }
       res.json({ tour: emergencyTour, route: emergencyRoute })
@@ -242,7 +247,7 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
     imagen_portada: fallbackCover(input.destination),
     galeria_tour: stops.flatMap((stop) => stop.imagenes).slice(0, 8),
     itinerario: stops,
-    orden_paradas: stops.map((stop) => ({ orden: stop.parada, nombre: stop.nombre })),
+    orden_paradas: stops.map((stop) => stop.nombre),
     incluye: defaultIncludes(input.type),
     no_incluye: defaultExcludes(),
     recomendaciones: defaultRecommendations(),
@@ -304,7 +309,7 @@ async function buildFallbackTour(planner, input) {
     imagen_portada: coverUrl,
     galeria_tour: gallery,
     itinerario: itinerary,
-    orden_paradas: itinerary.map((stop, index) => ({ orden: index + 1, nombre: stop.nombre })),
+    orden_paradas: itinerary.map((stop) => stop.nombre),
     incluye: defaultIncludes(input.type),
     no_incluye: defaultExcludes(),
     recomendaciones: defaultRecommendations(),
@@ -735,36 +740,48 @@ function isValidTourPlan(value) {
   return Boolean(value && typeof value === 'object' && Array.isArray(value.itinerario) && value.itinerario.length >= 3)
 }
 
-async function normalizeStop(stop, index, input) {
-  const ubicacion = stop.ubicacion ?? stop.locationInfo ?? {}
-  const name = stop.nombre ?? stop.name ?? ubicacion.nombre_lugar ?? `${input.destination} parada ${index + 1}`
-  const latitude = numberValue(ubicacion.latitud ?? stop.latitude, 0)
-  const longitude = numberValue(ubicacion.longitud ?? stop.longitude, 0)
-  const images = normalizeList(stop.imagenes ?? stop.images, [])
-  const image = images[0] ?? stop.imageUrl ?? await imageForPlace(name, input.city || input.destination).catch(() => '')
+async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = []) {
+  const source = stop && typeof stop === 'object' ? stop : {}
+  const ubicacion = source.ubicacion ?? source.locationInfo ?? {}
+  const sourceName = [source.nombre, source.name, ubicacion.nombre_lugar]
+      .map((value) => value == null ? "" : value.toString().trim())
+      .find((value) => value.length > 0) ?? `${input.destination} parada ${index + 1}`
+  const matchedPlace = findCandidatePlace(sourceName, candidatePlaces, anchorPlace)
+  const fallbackPlace = matchedPlace ?? anchorPlace ?? null
+  const coordinates = await resolveStopCoordinates({
+    source,
+    input,
+    name: sourceName,
+    fallbackPlace,
+  })
+  const resolvedName = fallbackPlace?.name ?? sourceName
+  const description = source.descripcion ?? source.description ?? `${resolvedName} es una parada relevante dentro de la ruta.`
+  const durationText = source.duracion_estimada ?? `${source.suggestedMinutes ?? 25} minutos`
+  const images = normalizeList(source.imagenes ?? source.images, [])
+  const image = images[0] ?? source.imageUrl ?? await imageForPlace(resolvedName, input.city || input.destination).catch(() => "")
   const publicStop = {
     parada: index + 1,
-    nombre: name,
-    descripcion: stop.descripcion ?? stop.description ?? `${name} es una parada relevante dentro de la ruta.`,
-    duracion_estimada: stop.duracion_estimada ?? `${stop.suggestedMinutes ?? 25} minutos`,
-    actividades: normalizeList(stop.actividades ?? stop.activities, ['Explorar', 'Fotografiar']),
-    datos_curiosos: normalizeList(stop.datos_curiosos, [`${name} fue seleccionado por su relevancia local.`]),
-    consejos: normalizeList(stop.consejos ?? stop.tips, ['Confirma horarios locales antes de llegar']),
+    nombre: resolvedName,
+    descripcion: description,
+    duracion_estimada: durationText,
+    actividades: normalizeList(source.actividades ?? source.activities, ["Explorar", "Fotografiar"]),
+    datos_curiosos: normalizeList(source.datos_curiosos, [`${resolvedName} fue seleccionado por su relevancia local.`]),
+    consejos: normalizeList(source.consejos ?? source.tips, ["Confirma horarios locales antes de llegar"]),
     ubicacion: {
-      nombre_lugar: ubicacion.nombre_lugar ?? name,
-      direccion: ubicacion.direccion ?? stop.address ?? '',
-      ciudad: ubicacion.ciudad ?? input.city ?? '',
-      region: ubicacion.region ?? '',
-      pais: ubicacion.pais ?? input.country ?? '',
-      place_id: ubicacion.place_id ?? placeIdFor(name, latitude, longitude),
-      url_mapa: ubicacion.url_mapa ?? mapUrlFor(latitude, longitude),
+      nombre_lugar: fallbackPlace?.name ?? ubicacion.nombre_lugar ?? resolvedName,
+      direccion: fallbackPlace?.address ?? ubicacion.direccion ?? source.address ?? "",
+      ciudad: fallbackPlace?.city ?? ubicacion.ciudad ?? input.city ?? "",
+      region: fallbackPlace?.region ?? ubicacion.region ?? "",
+      pais: fallbackPlace?.country ?? ubicacion.pais ?? input.country ?? "",
+      place_id: fallbackPlace?.placeId ?? ubicacion.place_id ?? placeIdFor(resolvedName, coordinates.latitude, coordinates.longitude),
+      url_mapa: fallbackPlace?.urlMapa ?? ubicacion.url_mapa ?? mapUrlFor(coordinates.latitude, coordinates.longitude),
     },
     imagenes: unique([image, ...images]),
   }
   const routeStop = {
-    name,
-    latitude,
-    longitude,
+    name: publicStop.ubicacion.nombre_lugar,
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude,
     imageUrl: publicStop.imagenes[0],
     description: publicStop.descripcion,
     activities: publicStop.actividades,
@@ -995,7 +1012,9 @@ async function collectTourCandidates(input, location) {
   const overpassPrimary = location ? await overpassAttractions(location.latitude, location.longitude, 4500) : []
   const overpassWide = location ? await overpassAttractions(location.latitude, location.longitude, 9000) : []
   const pool = [...overpassPrimary, ...overpassWide, ...photonPlaces]
-  const normalizedPool = uniqueByName(pool).filter((place) => place && place.name)
+  const normalizedPool = uniqueByName(pool)
+    .filter((place) => place && place.name)
+    .filter((place) => hasUsableCoordinates(place.latitude, place.longitude) || place.city || place.country)
   const selected = normalizedPool.length >= 3
     ? normalizedPool
     : buildSyntheticFallbackPlaces(input, location)
@@ -1003,6 +1022,70 @@ async function collectTourCandidates(input, location) {
     ? (location ? 'overpass+photon' : 'photon')
     : 'synthetic-fallback'
   return { rawCount: pool.length, places: selected, source }
+}
+
+function isCandidateNearDestination(place, input, location) {
+  if (!location) return true
+  const latitude = numberValue(place.latitude, NaN)
+  const longitude = numberValue(place.longitude, NaN)
+  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
+  const cityKey = normalizeKey(place.city)
+  const countryKey = normalizeKey(place.country)
+  const inputCityKey = normalizeKey(input.city)
+  const inputCountryKey = normalizeKey(input.country)
+  const cityMatch = Boolean(inputCityKey && cityKey && (cityKey === inputCityKey || cityKey.includes(inputCityKey) || inputCityKey.includes(cityKey)))
+  const countryMatch = Boolean(inputCountryKey && countryKey && (countryKey === inputCountryKey || countryKey.includes(inputCountryKey) || inputCountryKey.includes(countryKey)))
+  if (cityMatch || countryMatch) return true
+  if (!hasCoordinates) return false
+  const distanceKm = haversineMeters(location.latitude, location.longitude, latitude, longitude) / 1000
+  return distanceKm <= 45
+}
+
+function findCandidatePlace(name, candidatePlaces, anchorPlace) {
+  const key = normalizeKey(name)
+  if (!key) return anchorPlace
+  const exact = candidatePlaces.find((place) => normalizeKey(place.name) === key)
+  if (exact) return exact
+  const contains = candidatePlaces.find((place) => {
+    const placeKey = normalizeKey(place.name)
+    return placeKey.includes(key) || key.includes(placeKey)
+  })
+  return contains ?? anchorPlace
+}
+
+async function resolveStopCoordinates({ source, input, name, fallbackPlace }) {
+  if (hasUsableCoordinates(fallbackPlace?.latitude, fallbackPlace?.longitude)) {
+    return {
+      latitude: fallbackPlace.latitude,
+      longitude: fallbackPlace.longitude,
+    }
+  }
+
+  const sourceLatitude = numberValue(source.latitude ?? source.ubicacion?.latitud, NaN)
+  const sourceLongitude = numberValue(source.longitude ?? source.ubicacion?.longitud, NaN)
+  if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
+    return {
+      latitude: sourceLatitude,
+      longitude: sourceLongitude,
+    }
+  }
+
+  const geocoded = await geocodePlace(`${name} ${input.city} ${input.country}`.trim())
+  if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
+    return {
+      latitude: geocoded.latitude,
+      longitude: geocoded.longitude,
+    }
+  }
+
+  return {
+    latitude: fallbackPlace?.latitude ?? sourceLatitude ?? 0,
+    longitude: fallbackPlace?.longitude ?? sourceLongitude ?? 0,
+  }
+}
+
+function hasUsableCoordinates(latitude, longitude) {
+  return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
 }
 
 function buildSyntheticFallbackPlaces(input, location) {
@@ -1160,6 +1243,7 @@ function persistTour(tour, route, input, userId) {
       if (stopError) throw stopError
     })
 }
+
 
 
 
