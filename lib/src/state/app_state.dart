@@ -11,7 +11,7 @@ import '../core/services/auth_service.dart';
 import '../core/services/tour_runtime_services.dart';
 import '../data/demo_tours.dart';
 import '../data/discovery_repository.dart';
-import '../data/tour_repository.dart';
+import 'package:vibetoursapp/src/data/tour_repository.dart';
 import '../domain/models.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
@@ -659,3 +659,4 @@ double _double(Object? value, double fallback) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '') ?? fallback;
 }
+

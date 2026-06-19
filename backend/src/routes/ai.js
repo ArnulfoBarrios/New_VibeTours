@@ -44,112 +44,222 @@ aiRouter.post('/tours/confirm', async (req, res, next) => {
 aiRouter.post('/tours/generate', async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)
+    console.info('[tour-ai] generate:start', { destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
     const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
-    const candidates = location
-      ? await overpassAttractions(location.latitude, location.longitude)
-      : await photonSearch(`${input.destination} ${input.city}`)
-    const places = candidates.length ? candidates.slice(0, 14) : fallbackPlaces(input, location)
-    const planner = buildTourPlanner(input, location, places)
-    const ollama = await planWithOllama({
-      ...input,
-      places: planner.selectedPlaces,
-      recommendedSchedule: planner.recommendedSchedule,
-      timeProfile: planner.timeProfile,
-    })
-    const sourceTour = isValidTourPlan(ollama)
-      ? ollama
-      : await buildFallbackTour(planner, input)
-    const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
-      ? sourceTour.itinerario
-      : sourceTour.stops ?? []
-    const normalizedStops = await Promise.all(
-      plannedStops.slice(0, 8).map((stop, index) => normalizeStop(stop, index, input)),
-    )
-    const stops = normalizedStops.map((stop) => stop.publicStop)
-    const routeStops = normalizedStops.map((stop) => stop.routeStop)
-    const coverUrl = stops[0]?.imagenes?.[0] ?? fallbackCover(input.destination)
-    const tour = {
-      id: sourceTour.id?.toString() ?? crypto.randomUUID(),
-      nombre_tour: sourceTour.nombre_tour ?? sourceTour.title ?? `${input.city || input.destination} VibeTour AI`,
-      resumen_corto:
-        sourceTour.resumen_corto ??
-        `Experiencia ${input.type} creada para descubrir ${input.city || input.destination} con una ruta logica, tiempos realistas y paradas variadas.`,
-      tipo_tour: sourceTour.tipo_tour ?? input.type,
-      subcategorias: normalizeList(sourceTour.subcategorias, [typeLabel(input.type)]),
-      descripcion_tour:
-        sourceTour.descripcion_tour ??
-        sourceTour.description ??
-        'Ruta creada por VIBETOURS AI con lugares reales, tiempos sugeridos y orden logico.',
-      experiencia_destacada:
-        sourceTour.experiencia_destacada ??
-        `Recorrido continuo por puntos clave de ${input.city || input.destination}.`,
-      historia_del_lugar: sourceTour.historia_del_lugar ?? '',
-      contexto_cultural: sourceTour.contexto_cultural ?? '',
-      duracion_estimada: sourceTour.duracion_estimada ?? `${input.durationHours} horas`,
-      distancia_total:
-        sourceTour.distancia_total ??
-        `${Number(sourceTour.distanceKm ?? planner.distanceKm).toFixed(1)} km`,
-      nivel_dificultad: sourceTour.nivel_dificultad ?? planner.difficulty,
-      idiomas_disponibles: normalizeList(sourceTour.idiomas_disponibles, [input.language]),
-      publico_recomendado: normalizeAudience(
-        sourceTour.publico_recomendado,
-        input.type,
-        input.touristInterests,
-      ),
-      mejor_epoca: sourceTour.mejor_epoca ?? planner.bestSeason,
-      horario_recomendado: sourceTour.horario_recomendado ?? planner.recommendedSchedule,
-      punto_encuentro: normalizeLocationInfo(sourceTour.punto_encuentro, stops[0], input),
-      imagen_portada: sourceTour.imagen_portada ?? sourceTour.coverUrl ?? coverUrl,
-      galeria_tour: unique([
-        ...(normalizeList(sourceTour.galeria_tour, [])),
-        ...stops.flatMap((stop) => stop.imagenes),
-      ]).slice(0, 8),
-      itinerario: stops,
-      orden_paradas: stops.map((stop, index) => ({ orden: index + 1, nombre: stop.nombre })),
-      incluye: normalizeList(sourceTour.incluye, defaultIncludes(input.type)),
-      no_incluye: normalizeList(sourceTour.no_incluye, defaultExcludes()),
-      recomendaciones: normalizeList(sourceTour.recomendaciones, defaultRecommendations()),
-      que_llevar: normalizeList(sourceTour.que_llevar, defaultWhatToBring(input.type)),
-      normas_del_tour: normalizeList(sourceTour.normas_del_tour, defaultRules()),
-      etiquetas: normalizeList(sourceTour.etiquetas ?? sourceTour.tags, [
-        'AI Planner',
-        typeLabel(input.type),
-        input.city || input.destination,
-      ]),
-      palabras_clave: normalizeList(sourceTour.palabras_clave, [
-        input.destination,
-        input.city,
-        input.country,
-        input.type,
-        ...input.touristInterests,
-      ]),
-      categoria_principal: sourceTour.categoria_principal ?? input.type,
-      presupuesto_estimado_usd: normalizeBudget(sourceTour.presupuesto_estimado_usd, input),
-      informacion_adicional: {
-        accesibilidad:
-          sourceTour.informacion_adicional?.accesibilidad ??
-          planner.accessibility,
-        mascotas_permitidas:
-          sourceTour.informacion_adicional?.mascotas_permitidas ?? planner.petsAllowed,
-        apto_para_ninos:
-          sourceTour.informacion_adicional?.apto_para_ninos ?? planner.familyFriendly,
-        apto_para_adultos_mayores:
-          sourceTour.informacion_adicional?.apto_para_adultos_mayores ?? true,
-      },
+    console.info('[tour-ai] geocode', location ? { name: location.name, latitude: location.latitude, longitude: location.longitude } : { ok: false })
+    const candidatePack = await collectTourCandidates(input, location)
+    console.info('[tour-ai] candidates', { raw: candidatePack.rawCount, normalized: candidatePack.places.length, source: candidatePack.source, selectedHint: candidatePack.places.slice(0, 5).map((place) => place.name) })
+    const planner = buildTourPlanner(input, location, candidatePack.places)
+    console.info('[tour-ai] planner', { selected: planner.selectedPlaces.length, stopTarget: planner.timeProfile.stopTarget, distanceKm: planner.distanceKm, schedule: planner.recommendedSchedule })
+
+    let ollama = null
+    let ollamaError = null
+    try {
+      ollama = await planWithOllama({
+        ...input,
+        places: planner.selectedPlaces,
+        recommendedSchedule: planner.recommendedSchedule,
+        timeProfile: planner.timeProfile,
+        sourceSummary: { location: location ? { latitude: location.latitude, longitude: location.longitude } : null, candidateSource: candidatePack.source, candidateCount: candidatePack.rawCount, selectedCount: planner.selectedPlaces.length },
+      })
+      console.info('[tour-ai] ollama', { ok: true, hasItinerary: Array.isArray(ollama?.itinerario), itinerary: Array.isArray(ollama?.itinerario) ? ollama.itinerario.length : 0 })
+    } catch (error) {
+      ollamaError = error
+      console.warn('[tour-ai] ollama', { ok: false, message: error?.message ?? String(error) })
     }
-    const route = {
-      durationHours: input.durationHours,
-      distanceKm: Number(sourceTour.distanceKm ?? planner.distanceKm),
-      stops: routeStops,
+
+    let sourceTour
+    let fallbackReason = null
+    if (isValidTourPlan(ollama) && planner.selectedPlaces.length >= 3) {
+      sourceTour = ollama
+    } else {
+      fallbackReason = !ollama
+        ? 'ollama_unavailable'
+        : !Array.isArray(ollama?.itinerario)
+          ? 'ollama_missing_itinerary'
+          : ollama.itinerario.length < 3
+            ? 'ollama_too_few_stops'
+            : planner.selectedPlaces.length < 3
+              ? 'too_few_real_candidates'
+              : 'unknown_fallback'
+      sourceTour = await buildFallbackTour(planner, input)
     }
-    if (input.persist && supabase && input.userId) {
-      await persistTour(tour, route, input, input.userId)
+    console.info('[tour-ai] plan-source', { usedFallback: sourceTour.id?.toString?.()?.startsWith('ai-') ?? false, itinerary: Array.isArray(sourceTour.itinerario) ? sourceTour.itinerario.length : 0, fallbackReason, ollamaError: ollamaError ? (ollamaError.message ?? String(ollamaError)) : null })
+    let tour = null
+    try {
+      const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
+        ? sourceTour.itinerario
+        : sourceTour.stops ?? []
+      const normalizedStops = await Promise.all(
+        plannedStops.slice(0, 8).map((stop, index) => normalizeStop(stop, index, input)),
+      )
+      const stops = normalizedStops.map((stop) => stop.publicStop)
+      const routeStops = normalizedStops.map((stop) => stop.routeStop)
+      const coverUrl = stops[0]?.imagenes?.[0] ?? fallbackCover(input.destination)
+      tour = {
+        id: sourceTour.id?.toString() ?? crypto.randomUUID(),
+        nombre_tour: sourceTour.nombre_tour ?? sourceTour.title ?? `${input.city || input.destination} VibeTour AI`,
+        resumen_corto:
+          sourceTour.resumen_corto ??
+          'Experiencia creada para descubrir con una ruta logica, tiempos realistas y paradas variadas.',
+        tipo_tour: sourceTour.tipo_tour ?? input.type,
+        subcategorias: normalizeList(sourceTour.subcategorias, [typeLabel(input.type)]),
+        descripcion_tour:
+          sourceTour.descripcion_tour ??
+          sourceTour.description ??
+          'Ruta creada por VIBETOURS AI con lugares reales, tiempos sugeridos y orden logico.',
+        experiencia_destacada:
+          sourceTour.experiencia_destacada ??
+          `Recorrido continuo por puntos clave de ${input.destination}.`,
+        historia_del_lugar: sourceTour.historia_del_lugar ?? '',
+        contexto_cultural: sourceTour.contexto_cultural ?? '',
+        duracion_estimada: sourceTour.duracion_estimada ?? `${input.durationHours} horas`,
+        distancia_total:
+          sourceTour.distancia_total ??
+          `${Number(sourceTour.distanceKm ?? planner.distanceKm).toFixed(1)} km`,
+        nivel_dificultad: sourceTour.nivel_dificultad ?? planner.difficulty,
+        idiomas_disponibles: normalizeList(sourceTour.idiomas_disponibles, [input.language]),
+        publico_recomendado: normalizeAudience(
+          sourceTour.publico_recomendado,
+          input.type,
+          input.touristInterests,
+        ),
+        mejor_epoca: sourceTour.mejor_epoca ?? planner.bestSeason,
+        horario_recomendado: sourceTour.horario_recomendado ?? planner.recommendedSchedule,
+        punto_encuentro: normalizeLocationInfo(sourceTour.punto_encuentro, stops[0], input),
+        imagen_portada: sourceTour.imagen_portada ?? sourceTour.coverUrl ?? coverUrl,
+        galeria_tour: unique([
+          ...(normalizeList(sourceTour.galeria_tour, [])),
+          ...stops.flatMap((stop) => stop.imagenes),
+        ]).slice(0, 8),
+        itinerario: stops,
+        orden_paradas: stops.map((stop, index) => ({ orden: index + 1, nombre: stop.nombre })),
+        incluye: normalizeList(sourceTour.incluye, defaultIncludes(input.type)),
+        no_incluye: normalizeList(sourceTour.no_incluye, defaultExcludes()),
+        recomendaciones: normalizeList(sourceTour.recomendaciones, defaultRecommendations()),
+        que_llevar: normalizeList(sourceTour.que_llevar, defaultWhatToBring(input.type)),
+        normas_del_tour: normalizeList(sourceTour.normas_del_tour, defaultRules()),
+        etiquetas: normalizeList(sourceTour.etiquetas ?? sourceTour.tags, [
+          'AI Planner',
+          typeLabel(input.type),
+          input.city || input.destination,
+        ]),
+        palabras_clave: normalizeList(sourceTour.palabras_clave, [
+          input.destination,
+          input.city,
+          input.country,
+          input.type,
+          ...input.touristInterests,
+        ]),
+        categoria_principal: sourceTour.categoria_principal ?? input.type,
+        presupuesto_estimado_usd: normalizeBudget(sourceTour.presupuesto_estimado_usd, input),
+        informacion_adicional: {
+          accesibilidad:
+            sourceTour.informacion_adicional?.accesibilidad ??
+            planner.accessibility,
+          mascotas_permitidas:
+            sourceTour.informacion_adicional?.mascotas_permitidas ?? planner.petsAllowed,
+          apto_para_ninos:
+            sourceTour.informacion_adicional?.apto_para_ninos ?? planner.familyFriendly,
+          apto_para_adultos_mayores:
+            sourceTour.informacion_adicional?.apto_para_adultos_mayores ?? true,
+        },
+      }
+      const route = {
+        durationHours: input.durationHours,
+        distanceKm: Number(sourceTour.distanceKm ?? planner.distanceKm),
+        stops: routeStops,
+      }
+      if (input.persist && supabase && input.userId) {
+        await persistTour(tour, route, input, input.userId)
+      }
+      res.json({ tour, route })
+    } catch (assemblyError) {
+      console.error('[tour-ai] assembly-failed', { message: assemblyError?.message ?? String(assemblyError), fallbackReason, ollamaError: ollamaError ? (ollamaError.message ?? String(ollamaError)) : null })
+      const emergencyTour = buildEmergencyTour(input, planner, fallbackReason)
+      const emergencyRoute = {
+        durationHours: input.durationHours,
+        distanceKm: Number(planner.distanceKm),
+        stops: emergencyTour.stops.map((stop) => ({
+          name: stop.name,
+          latitude: stop.location.latitude,
+          longitude: stop.location.longitude,
+          imageUrl: stop.imageUrl,
+          description: stop.description,
+          activities: stop.activities,
+          tips: stop.tips,
+          suggestedMinutes: stop.suggestedMinutes,
+        })),
+      }
+      res.json({ tour: emergencyTour, route: emergencyRoute })
     }
-    res.json({ tour, route })
   } catch (error) {
     next(error)
   }
 })
+
+function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
+  const city = input.city || input.destination || 'Destino'
+  const country = input.country || 'Global'
+  const templates = typeFallbackLabels(input.type, city)
+  const stops = templates.map((label, index) => ({
+    parada: index + 1,
+    nombre: label.name,
+    descripcion: `${label.name} funciona como parada de respaldo mientras se recupera la IA.`,
+    duracion_estimada: `${25 + (index * 10)} minutos`,
+    actividades: buildActivities({ name: label.name }, input.type),
+    datos_curiosos: buildCuriousFacts({ name: label.name }, input.type),
+    consejos: buildTips({ name: label.name }, input.type),
+    ubicacion: {
+      nombre_lugar: label.name,
+      direccion: city,
+      ciudad: city,
+      region: '',
+      pais: country,
+      place_id: `${normalizeKey(label.name)}-fallback`,
+      url_mapa: '',
+    },
+    imagenes: [fallbackCover(label.name)],
+  }))
+  return {
+    id: `ai-emergency-${Date.now()}`,
+    nombre_tour: buildTourTitle(input, planner),
+    resumen_corto: `${buildShortSummary(input, planner)}. Fallback: respuesta generada sin Ollama.`,
+    tipo_tour: input.type,
+    subcategorias: planner.subcategories,
+    descripcion_tour: buildTourDescription(input, planner),
+    experiencia_destacada: buildFeaturedExperience(input, planner),
+    historia_del_lugar: planner.selectedPlaces[0]?.history ?? '',
+    contexto_cultural: buildCulturalContext(input, planner),
+    duracion_estimada: `${input.durationHours} horas`,
+    distancia_total: `${planner.distanceKm.toFixed(1)} km`,
+    nivel_dificultad: planner.difficulty,
+    idiomas_disponibles: [input.language],
+    publico_recomendado: planner.audience,
+    mejor_epoca: planner.bestSeason,
+    horario_recomendado: planner.recommendedSchedule,
+    punto_encuentro: normalizeLocationInfo(null, stops[0], input),
+    imagen_portada: fallbackCover(input.destination),
+    galeria_tour: stops.flatMap((stop) => stop.imagenes).slice(0, 8),
+    itinerario: stops,
+    orden_paradas: stops.map((stop) => ({ orden: stop.parada, nombre: stop.nombre })),
+    incluye: defaultIncludes(input.type),
+    no_incluye: defaultExcludes(),
+    recomendaciones: defaultRecommendations(),
+    que_llevar: defaultWhatToBring(input.type),
+    normas_del_tour: defaultRules(),
+    etiquetas: ['AI Planner', typeLabel(input.type), city],
+    palabras_clave: unique([input.destination, input.city, input.country, input.type, ...input.touristInterests]),
+    categoria_principal: input.type,
+    presupuesto_estimado_usd: normalizeBudget(null, input),
+    informacion_adicional: {
+      accesibilidad: planner.accessibility,
+      mascotas_permitidas: planner.petsAllowed,
+      apto_para_ninos: planner.familyFriendly,
+      apto_para_adultos_mayores: true,
+    },
+  }
+}
 
 async function buildFallbackTour(planner, input) {
   const coverUrl = planner.selectedPlaces[0]?.imageUrl ?? fallbackCover(input.destination)
@@ -226,6 +336,10 @@ function buildTourPlanner(input, location, places) {
     .sort((a, b) => b.score - a.score)
   const stopTarget = stopCountForDuration(input.durationHours)
   const selectedPlaces = selectPlaces(scored, stopTarget, input)
+  if (selectedPlaces.length < Math.min(3, scored.length) && scored.length >= 3) {
+    const expanded = scored.filter((place) => !selectedPlaces.some((picked) => normalizeKey(picked.name) === normalizeKey(place.name)))
+    selectedPlaces.push(...expanded.slice(0, Math.max(0, Math.min(stopTarget, 3) - selectedPlaces.length)))
+  }
   const distanceKm = estimateRouteDistance(selectedPlaces, origin)
   const recommendedSchedule = recommendedScheduleFor(input, selectedPlaces.length)
   const difficulty = input.durationHours <= 3.5
@@ -302,6 +416,7 @@ function scorePlace(place, input) {
 function selectPlaces(scoredPlaces, targetCount, input) {
   const selected = []
   const seen = new Set()
+  const minCount = Math.min(3, scoredPlaces.length)
   while (selected.length < targetCount && seen.size < scoredPlaces.length) {
     let best = null
     let bestScore = -Infinity
@@ -317,6 +432,7 @@ function selectPlaces(scoredPlaces, targetCount, input) {
     if (!best) break
     selected.push(best)
     seen.add(normalizeKey(best.name))
+    if (selected.length >= minCount && selected.length >= targetCount) break
   }
   return selected
 }
@@ -616,7 +732,7 @@ function buildTips(place, type) {
 }
 
 function isValidTourPlan(value) {
-  return Boolean(value && typeof value === 'object' && Array.isArray(value.itinerario) && value.itinerario.length)
+  return Boolean(value && typeof value === 'object' && Array.isArray(value.itinerario) && value.itinerario.length >= 3)
 }
 
 async function normalizeStop(stop, index, input) {
@@ -625,7 +741,7 @@ async function normalizeStop(stop, index, input) {
   const latitude = numberValue(ubicacion.latitud ?? stop.latitude, 0)
   const longitude = numberValue(ubicacion.longitud ?? stop.longitude, 0)
   const images = normalizeList(stop.imagenes ?? stop.images, [])
-  const image = images[0] ?? stop.imageUrl ?? await imageForPlace(name, input.city || input.destination)
+  const image = images[0] ?? stop.imageUrl ?? await imageForPlace(name, input.city || input.destination).catch(() => '')
   const publicStop = {
     parada: index + 1,
     nombre: name,
@@ -826,6 +942,41 @@ function categoryLabel(category) {
   }
 }
 
+function defaultIncludes(type) {
+  switch (type) {
+    case 'gastronomic':
+      return ['Degustaciones guiadas', 'Ruta a pie', 'Recomendaciones culinarias'];
+    case 'ecological':
+      return ['Senderos suaves', 'Miradores naturales', 'Consejos de seguridad'];
+    case 'night':
+      return ['Ambiente nocturno', 'Paradas con bebidas', 'Ruta segura'];
+    case 'family':
+      return ['Actividades para todas las edades', 'Pausas de descanso', 'Espacios abiertos'];
+    default:
+      return ['Guia digital', 'Ruta en mapa', 'Narrativa contextual'];
+  }
+}
+
+function defaultExcludes() {
+  return ['Transporte privado', 'Entradas no incluidas', 'Consumos personales'];
+}
+
+function defaultRecommendations() {
+  return ['Lleva agua y bateria', 'Confirma horarios locales', 'Usa calzado comodo'];
+}
+
+function defaultWhatToBring(type) {
+  const items = ['Agua', 'Telefono cargado', 'Calzado comodo'];
+  if (type === 'ecological') items.push('Protector solar');
+  if (type === 'night') items.push('Documento de identificacion');
+  return items;
+}
+
+function defaultRules() {
+  return ['Respeta las normas locales', 'No ingreses a zonas restringidas', 'Sigue el orden de la ruta'];
+}
+
+
 function fallbackPlaces(input, location) {
   const latitude = location?.latitude ?? 0
   const longitude = location?.longitude ?? 0
@@ -836,6 +987,76 @@ function fallbackPlaces(input, location) {
     type: 'tourism',
     category: input.type,
   }]
+}
+
+async function collectTourCandidates(input, location) {
+  const query = `${input.destination} ${input.city} ${input.country}`.trim()
+  const photonPlaces = await photonSearch(query, 16)
+  const overpassPrimary = location ? await overpassAttractions(location.latitude, location.longitude, 4500) : []
+  const overpassWide = location ? await overpassAttractions(location.latitude, location.longitude, 9000) : []
+  const pool = [...overpassPrimary, ...overpassWide, ...photonPlaces]
+  const normalizedPool = uniqueByName(pool).filter((place) => place && place.name)
+  const selected = normalizedPool.length >= 3
+    ? normalizedPool
+    : buildSyntheticFallbackPlaces(input, location)
+  const source = normalizedPool.length >= 3
+    ? (location ? 'overpass+photon' : 'photon')
+    : 'synthetic-fallback'
+  return { rawCount: pool.length, places: selected, source }
+}
+
+function buildSyntheticFallbackPlaces(input, location) {
+  const centerLat = location?.latitude ?? 0
+  const centerLon = location?.longitude ?? 0
+  const baseName = input.city || input.destination || 'Destino'
+  const labels = typeFallbackLabels(input.type, baseName)
+  return labels.map((label, index) => ({
+    name: label.name,
+    latitude: centerLat + label.latOffset,
+    longitude: centerLon + label.lonOffset,
+    type: label.type,
+    category: label.category,
+    city: input.city,
+    country: input.country,
+    address: `${baseName} ${index + 1}`,
+    tags: { fallback: 'true' },
+  }))
+}
+
+function typeFallbackLabels(type, baseName) {
+  const city = baseName || 'Destino'
+  switch (type) {
+    case 'gastronomic':
+      return [
+        { name: `Mercado central de ${city}`, type: 'market', category: 'market', latOffset: 0.0012, lonOffset: 0 },
+        { name: `Cafeteria emblem�tica de ${city}`, type: 'cafe', category: 'cafe', latOffset: -0.001, lonOffset: 0.0014 },
+        { name: `Ruta de sabores de ${city}`, type: 'restaurant', category: 'restaurant', latOffset: 0.0015, lonOffset: -0.001 },
+      ]
+    case 'ecological':
+      return [
+        { name: `Parque natural de ${city}`, type: 'nature', category: 'nature', latOffset: 0.002, lonOffset: 0 },
+        { name: `Mirador de ${city}`, type: 'viewpoint', category: 'viewpoint', latOffset: -0.0015, lonOffset: 0.0015 },
+        { name: `Sendero de ${city}`, type: 'trail', category: 'trail', latOffset: 0.001, lonOffset: -0.0015 },
+      ]
+    case 'night':
+      return [
+        { name: `Centro nocturno de ${city}`, type: 'nightlife', category: 'nightlife', latOffset: 0.0008, lonOffset: 0 },
+        { name: `Bar o terraza de ${city}`, type: 'bar', category: 'nightlife', latOffset: -0.001, lonOffset: 0.0012 },
+        { name: `Punto panor�mico de ${city}`, type: 'viewpoint', category: 'viewpoint', latOffset: 0.0012, lonOffset: -0.0008 },
+      ]
+    case 'family':
+      return [
+        { name: `Parque familiar de ${city}`, type: 'family', category: 'family', latOffset: 0.001, lonOffset: 0 },
+        { name: `Museo interactivo de ${city}`, type: 'museum', category: 'museum', latOffset: -0.001, lonOffset: 0.001 },
+        { name: `Plaza principal de ${city}`, type: 'historic', category: 'historic', latOffset: 0.0015, lonOffset: -0.001 },
+      ]
+    default:
+      return [
+        { name: `Centro hist�rico de ${city}`, type: 'historic', category: 'historic', latOffset: 0.001, lonOffset: 0 },
+        { name: `Museo o monumento de ${city}`, type: 'museum', category: 'museum', latOffset: -0.001, lonOffset: 0.001 },
+        { name: `Mirador o plaza de ${city}`, type: 'viewpoint', category: 'viewpoint', latOffset: 0.0015, lonOffset: -0.001 },
+      ]
+  }
 }
 
 function fallbackCover(seed) {
@@ -939,3 +1160,7 @@ function persistTour(tour, route, input, userId) {
       if (stopError) throw stopError
     })
 }
+
+
+
+

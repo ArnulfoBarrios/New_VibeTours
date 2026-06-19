@@ -25,6 +25,7 @@ export async function planWithOllama({
   recommendedSchedule = '',
   timeProfile = {},
 }) {
+  const timeoutMs = Number.parseInt(process.env.OLLAMA_TIMEOUT_MS ?? '', 10) || 90000
   const baseUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
   const model = process.env.OLLAMA_MODEL ?? 'llama3.1'
   const selectedPlaces = summarizePlaces(places).slice(0, 8)
@@ -76,6 +77,9 @@ Reglas centrales:
   }
 
   try {
+    console.info('[ollama] request', { baseUrl, model, selectedPlaces: selectedPlaces.length, destination, city, country, durationHours, type })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(new Error(`Ollama request timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs)
     const response = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -165,11 +169,31 @@ Input: ${JSON.stringify(routeBrief)}`,
           },
         ],
       }),
+      signal: controller.signal,
     })
-    if (!response.ok) return null
+    clearTimeout(timeout)
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      console.warn('[ollama] non-ok', { status: response.status, statusText: response.statusText, text: text.slice(0, 400) })
+      return null
+    }
     const json = await response.json()
-    return JSON.parse(json.message?.content ?? '{}')
-  } catch {
+    const content = json.message?.content ?? '{}'
+    try {
+      const parsed = JSON.parse(content)
+      console.info('[ollama] parsed', { hasItinerary: Array.isArray(parsed.itinerario), itinerary: Array.isArray(parsed.itinerario) ? parsed.itinerario.length : 0 })
+      return parsed
+    } catch (parseError) {
+      console.warn('[ollama] parse-error', { message: parseError?.message ?? String(parseError), contentPreview: String(content).slice(0, 400) })
+      return null
+    }
+  } catch (error) {
+    const message = error?.name === 'AbortError'
+      ? `Ollama request timed out after ${Math.round(timeoutMs / 1000)}s`
+      : error?.message ?? String(error)
+    console.warn('[ollama] request-failed', { message })
     return null
   }
 }
+
+

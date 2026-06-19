@@ -167,9 +167,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                             child: LiquidButton(
                               label: l10n.voiceGuide,
                               icon: Icons.record_voice_over_rounded,
-                              onPressed: () => ref
-                                  .read(voiceGuideProvider)
-                                  .narrateStop(stop),
+                              onPressed: () async {
+                                await ref.read(voiceGuideProvider).narrateStop(stop);
+                              },
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -429,3 +429,5 @@ class _LiveChip extends StatelessWidget {
     );
   }
 }
+
+

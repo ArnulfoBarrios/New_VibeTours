@@ -57,7 +57,16 @@ class VoiceGuideService {
   final SpeechToText _speech = SpeechToText();
 
   Future<void> narrateStop(TourStop stop) async {
-    await _tts.speak('${stop.name}. ${stop.description}');
+    final title = stop.name.trim();
+    final description = stop.description.trim();
+    await speak(description.isEmpty ? title : title + '. ' + description);
+  }
+
+  Future<void> speak(String text) async {
+    final value = text.trim();
+    if (value.isEmpty) return;
+    await _tts.stop();
+    await _tts.speak(value);
   }
 
   Future<void> stop() => _tts.stop();
@@ -75,3 +84,10 @@ class VoiceGuideService {
     return words;
   }
 }
+
+
+
+
+
+
+

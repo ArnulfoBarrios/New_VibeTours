@@ -3,13 +3,14 @@ const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
 export async function geocodePlace(query) {
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.searchParams.set('format', 'jsonv2')
-  url.searchParams.set('limit', '1')
+  url.searchParams.set('limit', '3')
   url.searchParams.set('q', query)
   const response = await fetch(url, {
     headers: { 'User-Agent': USER_AGENT }
   })
   if (!response.ok) return null
-  const [result] = await response.json()
+  const results = await response.json()
+  const [result] = Array.isArray(results) ? results : []
   if (!result) return null
   return {
     name: result.display_name,
@@ -64,7 +65,7 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
       const lon = element.lon ?? element.center?.lon
       const name = element.tags?.name
       const type = element.tags?.tourism ?? element.tags?.historic ?? element.tags?.amenity ?? 'place'
-      if (!lat || !lon || !name) return null
+      if (lat == null || lon == null || !name) return null
       if (isAccommodation(type)) return null
       return {
         name,
@@ -76,6 +77,7 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
       }
     })
     .filter(Boolean)
+    .slice(0, 20)
 }
 
 function classifyAttraction(tags = {}) {

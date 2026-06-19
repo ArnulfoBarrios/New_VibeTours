@@ -195,7 +195,7 @@ class TourRepository {
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode(request.toJson()),
             )
-            .timeout(const Duration(seconds: 35));
+            .timeout(const Duration(seconds: 120));
         if (response.statusCode >= 200 && response.statusCode < 300) {
           final json = jsonDecode(response.body) as Map<String, dynamic>;
           return _tourFromAiJson(
@@ -210,16 +210,17 @@ class TourRepository {
         // Try the next configured base URL, then fall back offline.
       }
     }
+    final fallbackStops = _offlineAiStops(request);
     return Tour(
-      id: 'ai-${DateTime.now().millisecondsSinceEpoch}',
-      title: '${request.city} VibeTour AI',
+      id: 'ai-' + DateTime.now().millisecondsSinceEpoch.toString(),
+      title: (request.city.isEmpty ? request.destination : request.city) + ' VibeTour AI',
       country: request.country.isEmpty ? 'Global' : request.country,
       city: request.city.isEmpty ? request.destination : request.city,
       type: request.type,
       description:
-          'Tour generado por IA con ruta logica, paradas variadas, tiempos de traslado estimados y narrativa personalizada para ${request.destination}.',
-      coverUrl: _curatedImage('${request.destination} cover'),
-      gallery: [_curatedImage('${request.destination} gallery')],
+          'Tour generado por IA con ruta logica, paradas variadas, tiempos de traslado estimados y narrativa personalizada para ' + request.destination + '.',
+      coverUrl: _curatedImage(request.destination + ' cover'),
+      gallery: [_curatedImage(request.destination + ' gallery')],
       durationHours: request.durationHours,
       distanceKm: 0,
       rating: 4.9,
@@ -228,9 +229,9 @@ class TourRepository {
       difficulty: TourDifficulty.moderate,
       language: request.language,
       tags: ['AI Planner', tourTypeLabel(request.type), request.city],
-      shortSummary: 'Ruta IA inicial para ${request.destination}.',
+      shortSummary: 'Ruta IA inicial para ' + request.destination + '.',
       subcategories: [tourTypeLabel(request.type)],
-      featuredExperience: 'Planificacion guiada para ${request.destination}.',
+      featuredExperience: 'Planificacion guiada para ' + request.destination + '.',
       placeHistory: '',
       culturalContext: '',
       availableLanguages: [request.language],
@@ -253,43 +254,88 @@ class TourRepository {
         'Respeta las normas locales',
         'No ingreses a zonas restringidas',
       ],
-      keywords: [
-        request.destination,
-        request.city,
-        tourTypeLabel(request.type),
-      ],
+      keywords: [request.destination, request.city, tourTypeLabel(request.type)],
       mainCategory: tourTypeLabel(request.type),
       budget: const TourBudget(low: 0, medium: 0, high: 0),
       additionalInfo: TourAdditionalInfo.standard,
-      stops: [
-        TourStop(
-          id: 'ai-stop-empty',
-          name: request.destination,
-          location: const GeoPoint(latitude: 0, longitude: 0),
-          imageUrl: _curatedImage(request.destination),
-          description:
-              'Punto inicial generado sin catalogo local disponible. Conecta el backend de IA para obtener paradas reales.',
-          activities: const ['Planificar ruta'],
-          curiousFacts: const [
-            'La IA necesita datos del backend para enriquecer esta parada.',
-          ],
-          tips: const ['Activa el backend de IA para resultados completos'],
-          locationInfo: TourLocationInfo(
-            nombreLugar: request.destination,
-            direccion: request.destination,
-            ciudad: request.city,
-            region: '',
-            pais: request.country,
-            placeId: 'offline-${request.destination.hashCode.abs()}',
-            urlMapa: '',
-          ),
-          images: [_curatedImage(request.destination)],
-          suggestedMinutes: 30,
-        ),
-      ],
+      stops: fallbackStops,
       isAiGenerated: true,
       isPublished: false,
     );
+  }
+
+  List<TourStop> _offlineAiStops(AiTourRequest request) {
+    final city = request.city.isEmpty ? request.destination : request.city;
+    final country = request.country.isEmpty ? 'Global' : request.country;
+    final baseName = request.destination.isEmpty ? city : request.destination;
+    final templates = _offlineStopTemplates(request.type);
+    return [
+      for (final entry in templates.asMap().entries)
+        TourStop(
+          id: 'ai-offline-' + entry.key.toString(),
+          name: entry.value['name']!.replaceAll('{place}', baseName),
+          location: const GeoPoint(latitude: 0, longitude: 0),
+          imageUrl: _curatedImage(entry.value['name']! + ' ' + baseName),
+          description: entry.value['description']! + ' Esta parada se genero de forma temporal para ' + city + ', ' + country + '.',
+          activities: [entry.value['activity']!],
+          curiousFacts: const [
+            'Se usa como respaldo temporal mientras se recuperan los datos reales.',
+            'Sirve para mantener el recorrido con varias paradas reales de respaldo.',
+          ],
+          tips: const [
+            'Cuando vuelva la conexion, la generacion obtendra lugares reales del backend.',
+            'Verifica la red si quieres paradas geolocalizadas reales.',
+          ],
+          locationInfo: TourLocationInfo(
+            nombreLugar: entry.value['name']!.replaceAll('{place}', baseName),
+            direccion: city,
+            ciudad: city,
+            region: '',
+            pais: country,
+            placeId: 'offline-' + request.destination.hashCode.abs().toString() + '-' + entry.key.toString(),
+            urlMapa: '',
+          ),
+          images: [_curatedImage(entry.value['name']! + ' ' + baseName)],
+          suggestedMinutes: 25 + (entry.key * 10),
+          order: entry.key,
+        ),
+    ];
+  }
+
+
+  List<Map<String, String>> _offlineStopTemplates(TourType type) {
+    switch (type) {
+      case TourType.gastronomic:
+        return const [
+          {'name': 'Mercado central de {place}', 'description': 'Explora sabores y productos locales en un punto de referencia gastronómico.', 'activity': 'Degustar comida local'},
+          {'name': 'Cafeteria emblemática de {place}', 'description': 'Pausa para café y repostería en un lugar representativo.', 'activity': 'Tomar café de especialidad'},
+          {'name': 'Ruta de sabores de {place}', 'description': 'Cierra con una experiencia culinaria que resume el carácter del destino.', 'activity': 'Probar platos típicos'},
+        ];
+      case TourType.ecological:
+        return const [
+          {'name': 'Parque natural de {place}', 'description': 'Inicio en un entorno verde para reconectar con la naturaleza.', 'activity': 'Caminar y observar paisaje'},
+          {'name': 'Mirador de {place}', 'description': 'Un alto con vistas amplias para fotos y descanso.', 'activity': 'Tomar fotografías'},
+          {'name': 'Sendero de {place}', 'description': 'Tramo final con recorrido suave para completar la experiencia.', 'activity': 'Recorrer sendero'},
+        ];
+      case TourType.night:
+        return const [
+          {'name': 'Centro nocturno de {place}', 'description': 'Arranque en una zona viva para ambientar el recorrido.', 'activity': 'Explorar vida nocturna'},
+          {'name': 'Bar o terraza de {place}', 'description': 'Pausa para bebida y ambiente local.', 'activity': 'Tomar algo'},
+          {'name': 'Punto panorámico de {place}', 'description': 'Cierre con vistas de la ciudad iluminada.', 'activity': 'Disfrutar la vista'},
+        ];
+      case TourType.family:
+        return const [
+          {'name': 'Parque familiar de {place}', 'description': 'Espacio seguro y amable para empezar con calma.', 'activity': 'Jugar y descansar'},
+          {'name': 'Museo interactivo de {place}', 'description': 'Una parada educativa y entretenida para todas las edades.', 'activity': 'Aprender en familia'},
+          {'name': 'Plaza principal de {place}', 'description': 'Cierre clásico con caminata y fotos.', 'activity': 'Pasear por la plaza'},
+        ];
+      default:
+        return const [
+          {'name': 'Centro histórico de {place}', 'description': 'Punto inicial para entender el contexto urbano y cultural del destino.', 'activity': 'Recorrer a pie'},
+          {'name': 'Museo o monumento de {place}', 'description': 'Segunda parada para profundizar en historia y patrimonio.', 'activity': 'Visitar y aprender'},
+          {'name': 'Mirador o plaza de {place}', 'description': 'Cierre visual y narrativo del tour.', 'activity': 'Tomar fotos'},
+        ];
+    }
   }
 
   Tour _tourFromAiJson(
@@ -844,3 +890,6 @@ extension _StringFallback on String {
 extension _FirstOrNull<T> on List<T> {
   T? get firstOrNull => isEmpty ? null : first;
 }
+
+
+

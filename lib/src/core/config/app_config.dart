@@ -81,21 +81,17 @@ class AppConfig {
   static String get apiBaseUrl => apiBaseUrls.first;
 
   static List<String> get apiBaseUrls {
-    if (_definedApiBaseUrl.isNotEmpty) return [_definedApiBaseUrl];
-    final assetApiBaseUrl = _asset('API_BASE_URL');
-    if (assetApiBaseUrl.isNotEmpty) {
-      return [
-        assetApiBaseUrl,
-        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
-          _localNetworkApiBaseUrl,
-        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
-          'http://10.0.2.2:3000/api',
-      ];
-    }
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return [_localNetworkApiBaseUrl, 'http://10.0.2.2:3000/api'];
-    }
-    return ['http://localhost:3000/api'];
+    final candidates = <String>[
+      if (_definedApiBaseUrl.isNotEmpty) _definedApiBaseUrl,
+      _asset('API_BASE_URL'),
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+        _localNetworkApiBaseUrl,
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+        'http://10.0.2.2:3000/api',
+      'http://127.0.0.1:3000/api',
+      'http://localhost:3000/api',
+    ];
+    return [for (final url in candidates) if (url.isNotEmpty) url];
   }
 
   static String _asset(String key) => _assetValues[key] ?? '';
@@ -107,3 +103,4 @@ class AppConfig {
         .firstWhere((item) => item.isNotEmpty, orElse: () => '');
   }
 }
+
