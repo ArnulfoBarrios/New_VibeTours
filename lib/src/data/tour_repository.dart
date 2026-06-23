@@ -143,20 +143,42 @@ class TourRepository {
       'avatar_url': metadata['avatar_url'],
     }, onConflict: 'id');
 
-    final payload = _tourPayload(tour, user.id);
     final hasDatabaseId = _looksLikeUuid(tour.id);
-    final Map<String, dynamic> savedTour;
-    if (hasDatabaseId) {
-      final row = await client
-          .from('tours')
-          .update(payload)
-          .eq('id', tour.id)
-          .select()
-          .single();
-      savedTour = Map<String, dynamic>.from(row);
-    } else {
-      final row = await client.from('tours').insert(payload).select().single();
-      savedTour = Map<String, dynamic>.from(row);
+    late final Map<String, dynamic> savedTour;
+    Object? lastError;
+    for (final difficultyValue in [
+      tour.difficulty.name,
+      difficultyLabel(tour.difficulty),
+    ]) {
+      final payload = _tourPayload(
+        tour,
+        user.id,
+        difficultyValue: difficultyValue,
+      );
+      try {
+        if (hasDatabaseId) {
+          final row = await client
+              .from('tours')
+              .update(payload)
+              .eq('id', tour.id)
+              .select()
+              .single();
+          savedTour = Map<String, dynamic>.from(row);
+        } else {
+          final row = await client.from('tours').insert(payload).select().single();
+          savedTour = Map<String, dynamic>.from(row);
+        }
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (!_isDifficultyConstraintError(error)) {
+          rethrow;
+        }
+      }
+    }
+    if (lastError != null) {
+      throw lastError;
     }
 
     final tourId = savedTour['id'].toString();
@@ -307,31 +329,31 @@ class TourRepository {
     switch (type) {
       case TourType.gastronomic:
         return const [
-          {'name': 'Mercado central de {place}', 'description': 'Explora sabores y productos locales en un punto de referencia gastronómico.', 'activity': 'Degustar comida local'},
-          {'name': 'Cafeteria emblemática de {place}', 'description': 'Pausa para café y repostería en un lugar representativo.', 'activity': 'Tomar café de especialidad'},
-          {'name': 'Ruta de sabores de {place}', 'description': 'Cierra con una experiencia culinaria que resume el carácter del destino.', 'activity': 'Probar platos típicos'},
+          {'name': 'Mercado central de {place}', 'description': 'Explora sabores y productos locales en un punto de referencia gastronï¿½mico.', 'activity': 'Degustar comida local'},
+          {'name': 'Cafeteria emblemï¿½tica de {place}', 'description': 'Pausa para cafï¿½ y reposterï¿½a en un lugar representativo.', 'activity': 'Tomar cafï¿½ de especialidad'},
+          {'name': 'Ruta de sabores de {place}', 'description': 'Cierra con una experiencia culinaria que resume el carï¿½cter del destino.', 'activity': 'Probar platos tï¿½picos'},
         ];
       case TourType.ecological:
         return const [
           {'name': 'Parque natural de {place}', 'description': 'Inicio en un entorno verde para reconectar con la naturaleza.', 'activity': 'Caminar y observar paisaje'},
-          {'name': 'Mirador de {place}', 'description': 'Un alto con vistas amplias para fotos y descanso.', 'activity': 'Tomar fotografías'},
+          {'name': 'Mirador de {place}', 'description': 'Un alto con vistas amplias para fotos y descanso.', 'activity': 'Tomar fotografï¿½as'},
           {'name': 'Sendero de {place}', 'description': 'Tramo final con recorrido suave para completar la experiencia.', 'activity': 'Recorrer sendero'},
         ];
       case TourType.night:
         return const [
           {'name': 'Centro nocturno de {place}', 'description': 'Arranque en una zona viva para ambientar el recorrido.', 'activity': 'Explorar vida nocturna'},
           {'name': 'Bar o terraza de {place}', 'description': 'Pausa para bebida y ambiente local.', 'activity': 'Tomar algo'},
-          {'name': 'Punto panorámico de {place}', 'description': 'Cierre con vistas de la ciudad iluminada.', 'activity': 'Disfrutar la vista'},
+          {'name': 'Punto panorï¿½mico de {place}', 'description': 'Cierre con vistas de la ciudad iluminada.', 'activity': 'Disfrutar la vista'},
         ];
       case TourType.family:
         return const [
           {'name': 'Parque familiar de {place}', 'description': 'Espacio seguro y amable para empezar con calma.', 'activity': 'Jugar y descansar'},
           {'name': 'Museo interactivo de {place}', 'description': 'Una parada educativa y entretenida para todas las edades.', 'activity': 'Aprender en familia'},
-          {'name': 'Plaza principal de {place}', 'description': 'Cierre clásico con caminata y fotos.', 'activity': 'Pasear por la plaza'},
+          {'name': 'Plaza principal de {place}', 'description': 'Cierre clï¿½sico con caminata y fotos.', 'activity': 'Pasear por la plaza'},
         ];
       default:
         return const [
-          {'name': 'Centro histórico de {place}', 'description': 'Punto inicial para entender el contexto urbano y cultural del destino.', 'activity': 'Recorrer a pie'},
+          {'name': 'Centro histï¿½rico de {place}', 'description': 'Punto inicial para entender el contexto urbano y cultural del destino.', 'activity': 'Recorrer a pie'},
           {'name': 'Museo o monumento de {place}', 'description': 'Segunda parada para profundizar en historia y patrimonio.', 'activity': 'Visitar y aprender'},
           {'name': 'Mirador o plaza de {place}', 'description': 'Cierre visual y narrativo del tour.', 'activity': 'Tomar fotos'},
         ];
@@ -641,7 +663,11 @@ class TourRepository {
     ).hasMatch(value);
   }
 
-  Map<String, dynamic> _tourPayload(Tour tour, String ownerId) {
+  Map<String, dynamic> _tourPayload(
+    Tour tour,
+    String ownerId, {
+    required String difficultyValue,
+  }) {
     return {
       'owner_id': ownerId,
       'created_by': ownerId,
@@ -654,7 +680,7 @@ class TourRepository {
       'gallery': tour.gallery,
       'duration_minutes': (tour.durationHours * 60).round(),
       'distance_meters': (tour.distanceKm * 1000).round(),
-      'difficulty': tour.difficulty.name,
+      'difficulty': difficultyValue,
       'language': tour.language,
       'tags': tour.tags,
       'is_ai_generated': tour.isAiGenerated,
@@ -683,6 +709,12 @@ class TourRepository {
       'budget': tour.budget.toCreationJson(),
       'additional_info': tour.additionalInfo.toCreationJson(),
     };
+  }
+
+  bool _isDifficultyConstraintError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('tours_difficulty_check') ||
+        message.contains('difficulty');
   }
 
   Map<String, dynamic> _stopPayload(TourStop stop, String tourId) {
@@ -890,6 +922,7 @@ extension _StringFallback on String {
 extension _FirstOrNull<T> on List<T> {
   T? get firstOrNull => isEmpty ? null : first;
 }
+
 
 
 
