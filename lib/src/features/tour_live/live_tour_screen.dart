@@ -12,6 +12,7 @@ import '../../core/services/road_route_service.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import 'tour_rating_dialog.dart';
 
 class LiveTourScreen extends ConsumerStatefulWidget {
   const LiveTourScreen({super.key, required this.tourId});
@@ -196,19 +197,27 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: LiquidButton(
-                          label: l10n.nextStop,
-                          icon: Icons.arrow_forward_rounded,
-                          isPrimary: false,
+                          label: _activeStop == tour.stops.length - 1 ? 'Terminar tour' : l10n.nextStop,
+                          icon: _activeStop == tour.stops.length - 1 ? Icons.flag_rounded : Icons.arrow_forward_rounded,
+                          isPrimary: _activeStop == tour.stops.length - 1,
                           onPressed: () {
-                            setState(() {
-                              _activeStop =
-                                  ((_activeStop + 1) % tour.stops.length)
-                                      .toInt();
-                              _liveRoute = null;
-                              _liveRouteStopIndex = null;
-                              _isOffRoute = false;
-                            });
-                            _recalculateRoute(tour, force: true);
+                            if (_activeStop == tour.stops.length - 1) {
+                              showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (context) => TourRatingDialog(tour: tour),
+                              );
+                            } else {
+                              setState(() {
+                                _activeStop =
+                                    ((_activeStop + 1) % tour.stops.length)
+                                        .toInt();
+                                _liveRoute = null;
+                                _liveRouteStopIndex = null;
+                                _isOffRoute = false;
+                              });
+                              _recalculateRoute(tour, force: true);
+                            }
                           },
                         ),
                       ),
@@ -429,5 +438,3 @@ class _LiveChip extends StatelessWidget {
     );
   }
 }
-
-
