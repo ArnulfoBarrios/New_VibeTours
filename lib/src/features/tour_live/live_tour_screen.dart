@@ -202,11 +202,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                           isPrimary: _activeStop == tour.stops.length - 1,
                           onPressed: () {
                             if (_activeStop == tour.stops.length - 1) {
-                              showDialog(
-                                context: context,
-                                barrierDismissible: false,
-                                builder: (context) => TourRatingDialog(tour: tour),
-                              );
+                              final userTours = ref.read(userToursProvider).valueOrNull?.manualTours ?? [];
+                              final isOwnTour = userTours.any((t) => t.id == tour.id) || tour.id.startsWith('manual-');
+                              
+                              if (isOwnTour) {
+                                context.pop(); // User's own tour, just exit
+                              } else {
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (context) => TourRatingDialog(tour: tour),
+                                );
+                              }
                             } else {
                               setState(() {
                                 _activeStop =
