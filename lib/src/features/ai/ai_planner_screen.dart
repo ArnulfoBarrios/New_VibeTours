@@ -284,18 +284,48 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                         tour: tour,
                         onTap: () {
                           ref.read(selectedTourProvider.notifier).state = tour;
-                          context.push('/live/${tour.id}');
+                          context.push('/tours/${tour.id}');
                         },
                       ),
                       const SizedBox(height: 12),
                       _AiJsonPreview(tour: tour),
                       const SizedBox(height: 12),
                       LiquidButton(
-                        label: l10n.startTour,
-                        icon: Icons.navigation_rounded,
+                        label: 'Guardar tour',
+                        icon: Icons.save_rounded,
+                        onPressed: () async {
+                          try {
+                            await ref.read(userToursProvider.notifier).saveTour(tour);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Tour guardado exitosamente')),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error al guardar: $e')),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      LiquidButton(
+                        label: 'Previsualizar tour',
+                        icon: Icons.visibility_rounded,
                         onPressed: () {
                           ref.read(selectedTourProvider.notifier).state = tour;
-                          context.push('/live/${tour.id}');
+                          context.push('/tours/${tour.id}');
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      LiquidButton(
+                        label: 'Editar tour',
+                        icon: Icons.edit_rounded,
+                        onPressed: () {
+                          ref.read(selectedTourProvider.notifier).state = tour;
+                          context.push('/creator/manual');
                         },
                       ),
                     ],
