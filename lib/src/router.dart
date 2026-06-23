@@ -64,7 +64,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/creator',
         builder: (context, state) => const MainShell(
           currentIndex: 1,
-          child: RequireAuth(child: AiPlannerScreen()),
+          child: AiPlannerScreen(),
         ),
       ),
       GoRoute(
@@ -78,7 +78,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/creator/ai',
         builder: (context, state) => const MainShell(
           currentIndex: 1,
-          child: RequireAuth(child: AiPlannerScreen()),
+          child: AiPlannerScreen(),
         ),
       ),
       GoRoute(
