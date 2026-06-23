@@ -59,7 +59,7 @@ class VoiceGuideService {
   Future<void> narrateStop(TourStop stop) async {
     final title = stop.name.trim();
     final description = stop.description.trim();
-    await speak(description.isEmpty ? title : title + '. ' + description);
+    await speak(description.isEmpty ? title : '$title. $description');
   }
 
   Future<void> speak(String text) async {

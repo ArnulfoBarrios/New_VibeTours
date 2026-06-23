@@ -123,12 +123,7 @@ class SettingsScreen extends ConsumerWidget {
                 title: l10n.helpCenter,
                 subtitle: 'FAQ, soporte y guias',
                 trailing: const Icon(Icons.help_rounded),
-                onTap: () => _showInfo(
-                  context,
-                  title: l10n.helpCenter,
-                  body:
-                      'Encuentra respuestas sobre login, ubicacion, mapas, tours IA y recorridos guiados.',
-                ),
+                onTap: () => context.push('/help'),
               ),
               _SettingsTile(
                 title: 'PQRS',
@@ -231,25 +226,7 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showInfo(
-    BuildContext context, {
-    required String title,
-    required String body,
-  }) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => context.pop(),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
-  }
+
 }
 
 class _SettingsTile extends StatelessWidget {

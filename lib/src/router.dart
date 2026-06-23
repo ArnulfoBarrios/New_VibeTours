@@ -15,6 +15,7 @@ import 'features/onboarding/onboarding_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/shell/main_shell.dart';
+import 'features/support/help_center_screen.dart';
 import 'features/support/pqrs_screen.dart';
 import 'features/tour_live/live_tour_screen.dart';
 import 'features/tours/tour_detail_screen.dart';
@@ -105,6 +106,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/legal/:kind',
         builder: (context, state) =>
             LegalScreen(kind: state.pathParameters['kind'] ?? 'terms'),
+      ),
+      GoRoute(
+        path: '/help',
+        builder: (context, state) => const HelpCenterScreen(),
       ),
     ],
   );

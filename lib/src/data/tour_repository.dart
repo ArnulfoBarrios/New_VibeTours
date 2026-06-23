@@ -234,15 +234,15 @@ class TourRepository {
     }
     final fallbackStops = _offlineAiStops(request);
     return Tour(
-      id: 'ai-' + DateTime.now().millisecondsSinceEpoch.toString(),
-      title: (request.city.isEmpty ? request.destination : request.city) + ' VibeTour AI',
+      id: 'ai-${DateTime.now().millisecondsSinceEpoch}',
+      title: '${request.city.isEmpty ? request.destination : request.city} VibeTour AI',
       country: request.country.isEmpty ? 'Global' : request.country,
       city: request.city.isEmpty ? request.destination : request.city,
       type: request.type,
       description:
-          'Tour generado por IA con ruta logica, paradas variadas, tiempos de traslado estimados y narrativa personalizada para ' + request.destination + '.',
-      coverUrl: _curatedImage(request.destination + ' cover'),
-      gallery: [_curatedImage(request.destination + ' gallery')],
+          'Tour generado por IA con ruta logica, paradas variadas, tiempos de traslado estimados y narrativa personalizada para ${request.destination}.',
+      coverUrl: _curatedImage('${request.destination} cover'),
+      gallery: [_curatedImage('${request.destination} gallery')],
       durationHours: request.durationHours,
       distanceKm: 0,
       rating: 4.9,
@@ -251,9 +251,9 @@ class TourRepository {
       difficulty: TourDifficulty.moderate,
       language: request.language,
       tags: ['AI Planner', tourTypeLabel(request.type), request.city],
-      shortSummary: 'Ruta IA inicial para ' + request.destination + '.',
+      shortSummary: 'Ruta IA inicial para ${request.destination}.',
       subcategories: [tourTypeLabel(request.type)],
-      featuredExperience: 'Planificacion guiada para ' + request.destination + '.',
+      featuredExperience: 'Planificacion guiada para ${request.destination}.',
       placeHistory: '',
       culturalContext: '',
       availableLanguages: [request.language],
@@ -294,11 +294,11 @@ class TourRepository {
     return [
       for (final entry in templates.asMap().entries)
         TourStop(
-          id: 'ai-offline-' + entry.key.toString(),
+          id: 'ai-offline-${entry.key}',
           name: entry.value['name']!.replaceAll('{place}', baseName),
           location: const GeoPoint(latitude: 0, longitude: 0),
-          imageUrl: _curatedImage(entry.value['name']! + ' ' + baseName),
-          description: entry.value['description']! + ' Esta parada se genero de forma temporal para ' + city + ', ' + country + '.',
+          imageUrl: _curatedImage('${entry.value['name']} $baseName'),
+          description: '${entry.value['description']} Esta parada se genero de forma temporal para $city, $country.',
           activities: [entry.value['activity']!],
           curiousFacts: const [
             'Se usa como respaldo temporal mientras se recuperan los datos reales.',
@@ -314,10 +314,10 @@ class TourRepository {
             ciudad: city,
             region: '',
             pais: country,
-            placeId: 'offline-' + request.destination.hashCode.abs().toString() + '-' + entry.key.toString(),
+            placeId: 'offline-${request.destination.hashCode.abs()}-${entry.key}',
             urlMapa: '',
           ),
-          images: [_curatedImage(entry.value['name']! + ' ' + baseName)],
+          images: [_curatedImage('${entry.value['name']} $baseName')],
           suggestedMinutes: 25 + (entry.key * 10),
           order: entry.key,
         ),
