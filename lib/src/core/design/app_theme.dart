@@ -51,18 +51,18 @@ class VibeColors extends ThemeExtension<VibeColors> {
 class AppTheme {
   const AppTheme._();
 
-  static const primary = Color(0xFF007AFF);
-  static const primaryDeep = Color(0xFF0058BC);
+  static const primary = Color(0xFFB485FF);
+  static const primaryDeep = Color(0xFF9055FF);
   static const indigo = Color(0xFF5856D6);
   static const violet = Color(0xFFAF52DE);
-  static const lightBackground = Color(0xFFF9F9FF);
+  static const lightBackground = Color(0xFFF7F5F2);
   static const darkBackground = Color(0xFF000000);
 
   static ThemeData light() => _theme(
     brightness: Brightness.light,
     background: lightBackground,
     surface: const Color(0xFFFFFFFF),
-    onSurface: const Color(0xFF141B2B),
+    onSurface: const Color(0xFF2A1C31),
     glass: Colors.white.withValues(alpha: 0.62),
     glassStrong: Colors.white.withValues(alpha: 0.82),
     border: Colors.white.withValues(alpha: 0.76),
@@ -149,21 +149,21 @@ class AppTheme {
       fontSize: 42,
       fontWeight: FontWeight.w800,
       height: 1.05,
-      letterSpacing: 0,
+      letterSpacing: -1.0,
       color: color,
     ),
     headlineMedium: TextStyle(
       fontSize: 28,
       fontWeight: FontWeight.w800,
       height: 1.12,
-      letterSpacing: 0,
+      letterSpacing: -0.5,
       color: color,
     ),
     titleLarge: TextStyle(
       fontSize: 22,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w800,
       height: 1.2,
-      letterSpacing: 0,
+      letterSpacing: -0.5,
       color: color,
     ),
     titleMedium: TextStyle(

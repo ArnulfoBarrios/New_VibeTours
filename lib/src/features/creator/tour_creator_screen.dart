@@ -126,12 +126,14 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
   @override
   Widget build(BuildContext context) {
     final mapStyle = ref.watch(mapStyleProvider);
-    return Stack(
+    final bottomSafeArea = MediaQuery.paddingOf(context).bottom;
+    final navBarHeight = 84.0;
+    final totalBottomNavSpace = bottomSafeArea + navBarHeight;
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(17, 14, 17, totalBottomNavSpace + 30),
       children: [
-        ListView(
-          padding: const EdgeInsets.fromLTRB(17, 14, 17, 190),
-          children: [
-            _CreatorHeader(onBack: () => context.go('/creator')),
+        _CreatorHeader(onBack: () => context.go('/creator')),
             const SizedBox(height: 28),
             _SectionTitle(icon: Icons.edit_note_rounded, label: '1. Basicos'),
             const SizedBox(height: 12),
@@ -542,19 +544,13 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 24),
+            _CreatorActionBar(
+              onPreview: _showPreview,
+              onSave: _saveDraft,
+              onOptions: _showOptions,
+            ),
           ],
-        ),
-        Positioned(
-          left: 17,
-          right: 17,
-          bottom: 104,
-          child: _CreatorActionBar(
-            onPreview: _showPreview,
-            onSave: _saveDraft,
-            onOptions: _showOptions,
-          ),
-        ),
-      ],
     );
   }
 

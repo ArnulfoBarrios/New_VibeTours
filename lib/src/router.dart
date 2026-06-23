@@ -6,7 +6,6 @@ import 'features/ai/ai_planner_screen.dart';
 import 'features/admin/admin_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/require_auth.dart';
-import 'features/creator/my_tours_screen.dart';
 import 'features/creator/tour_creator_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/home/place_route_screen.dart';
@@ -44,7 +43,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/tours',
         builder: (context, state) =>
-            const MainShell(currentIndex: 1, child: ToursScreen()),
+            const MainShell(currentIndex: 2, child: ToursScreen()),
       ),
       GoRoute(
         path: '/tours/:id',
@@ -64,21 +63,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/creator',
         builder: (context, state) => const MainShell(
-          currentIndex: 2,
-          child: RequireAuth(child: MyToursScreen()),
+          currentIndex: 1,
+          child: RequireAuth(child: AiPlannerScreen()),
         ),
       ),
       GoRoute(
         path: '/creator/manual',
         builder: (context, state) => const MainShell(
-          currentIndex: 2,
+          currentIndex: 1,
           child: RequireAuth(child: TourCreatorScreen()),
         ),
       ),
       GoRoute(
         path: '/creator/ai',
         builder: (context, state) => const MainShell(
-          currentIndex: 2,
+          currentIndex: 1,
           child: RequireAuth(child: AiPlannerScreen()),
         ),
       ),

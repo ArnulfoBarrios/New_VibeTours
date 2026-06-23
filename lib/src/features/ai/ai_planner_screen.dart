@@ -79,269 +79,337 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     final l10n = AppLocalizations.of(context);
     final aiState = ref.watch(aiPlannerControllerProvider);
     final remaining = ref.watch(guestAiRemainingProvider);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
-      children: [
-        Text(l10n.aiPlanner, style: Theme.of(context).textTheme.displayLarge),
-        const SizedBox(height: 8),
-        Text(
-          l10n.guestLimit(remaining),
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 18),
-        GlassPanel(
-          child: Column(
-            children: [
-              TextField(
-                controller: _destination,
-                decoration: InputDecoration(
-                  labelText: l10n.destination,
-                  prefixIcon: const Icon(Icons.travel_explore_rounded),
+    final user = ref.watch(authUserProvider).valueOrNull;
+    final name = user?.userMetadata?['full_name']?.toString().split(' ').first ?? 'Arnulfo';
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          children: [
+            const _HeaderCollage(),
+            const SizedBox(height: 24),
+            Text(
+              'Hola $name,\n¿qué quieres\nexperimentar?',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 36,
+                  ),
+            ).animate().fadeIn().slideY(begin: 0.1),
+            if (user == null) ...[
+              const SizedBox(height: 8),
+              Text(
+                l10n.guestLimit(remaining),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+              ),
+            ],
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _country,
+                    decoration: InputDecoration(
+                      labelText: l10n.country,
+                      prefixIcon: const Icon(Icons.public_rounded),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _country,
-                      decoration: InputDecoration(labelText: l10n.country),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _city,
+                    decoration: InputDecoration(
+                      labelText: l10n.city,
+                      prefixIcon: const Icon(Icons.location_city_rounded),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _city,
-                      decoration: InputDecoration(labelText: l10n.city),
-                    ),
+                ),
+              ],
+            ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              DropdownMenu<TourType>(
-                width: double.infinity,
-                initialSelection: _type,
-                label: Text(l10n.type),
-                onSelected: (value) => setState(() => _type = value!),
-                dropdownMenuEntries: [
-                  for (final type in TourType.values)
-                    DropdownMenuEntry(value: type, label: tourTypeLabel(type)),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Slider(
-                      value: _duration,
-                      min: _isDays ? 1 : 2,
-                      max: _isDays ? 14 : 12,
-                      divisions: _isDays ? 13 : 10,
-                      label: '${_duration.toStringAsFixed(0)} ${_isDays ? 'dias' : 'h'}',
-                      onChanged: (value) => setState(() => _duration = value),
+                  TextField(
+                    controller: _prompt,
+                    minLines: 3,
+                    maxLines: 5,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: l10n.freePrompt,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      filled: false,
                     ),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          height: 1.4,
+                        ),
                   ),
-                  Text('${_duration.toStringAsFixed(0)} ${_isDays ? 'd' : 'h'}'),
-                  const SizedBox(width: 12),
-                  SegmentedButton<bool>(
-                    selected: {_isDays},
-                    onSelectionChanged: (value) => setState(() {
-                      _isDays = value.first;
-                      _duration = _isDays ? 2 : 4;
-                    }),
-                    segments: const [
-                      ButtonSegment(value: false, label: Text('h')),
-                      ButtonSegment(value: true, label: Text('d')),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _VoicePromptButton(
+                        isRecording: _isRecording,
+                        isBusy: _isStartingVoice,
+                        onPressed: _toggleVoiceInput,
+                      ),
+                      GestureDetector(
+                        onTap: aiState.isLoading ? null : _generate,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                'Comenzar',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ],
               ),
-              if (_isDays) ...[
-                const SizedBox(height: 12),
+            ).animate().fadeIn(delay: 150.ms).slideY(begin: 0.1),
+            AnimatedSwitcher(
+              duration: 220.ms,
+              child: _voiceFeedback == null
+                  ? const SizedBox(height: 8)
+                  : Padding(
+                      key: ValueKey(_voiceFeedback),
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            _voiceFeedbackIsError
+                                ? Icons.error_outline_rounded
+                                : _isRecording
+                                    ? Icons.graphic_eq_rounded
+                                    : Icons.info_outline_rounded,
+                            size: 18,
+                            color: _voiceFeedbackIsError
+                                ? Theme.of(context).colorScheme.error
+                                : _isRecording
+                                    ? AppTheme.primary
+                                    : Theme.of(context).colorScheme.outline,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _voiceFeedback!,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: _voiceFeedbackIsError
+                                        ? Theme.of(context).colorScheme.error
+                                        : _isRecording
+                                            ? AppTheme.primary
+                                            : Theme.of(context).colorScheme.outline,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            ExpansionTile(
+              title: const Text('Opciones avanzadas', style: TextStyle(fontWeight: FontWeight.w600)),
+              collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
+              childrenPadding: const EdgeInsets.all(16),
+              children: [
+                DropdownMenu<TourType>(
+                  width: double.infinity,
+                  initialSelection: _type,
+                  label: Text(l10n.type),
+                  onSelected: (value) => setState(() => _type = value!),
+                  dropdownMenuEntries: [
+                    for (final type in TourType.values) DropdownMenuEntry(value: type, label: tourTypeLabel(type)),
+                  ],
+                ),
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
                       child: Slider(
-                        value: _hoursPerDay,
-                        min: 2,
-                        max: 16,
-                        divisions: 14,
-                        label: '${_hoursPerDay.toStringAsFixed(0)} h/dia',
-                        onChanged: (value) => setState(() => _hoursPerDay = value),
+                        value: _duration,
+                        min: _isDays ? 1 : 2,
+                        max: _isDays ? 14 : 12,
+                        divisions: _isDays ? 13 : 10,
+                        label: '${_duration.toStringAsFixed(0)} ${_isDays ? 'dias' : 'h'}',
+                        onChanged: (value) => setState(() => _duration = value),
                       ),
                     ),
-                    Text('${_hoursPerDay.toStringAsFixed(0)} h/dia'),
+                    Text('${_duration.toStringAsFixed(0)} ${_isDays ? 'd' : 'h'}'),
+                    const SizedBox(width: 12),
+                    SegmentedButton<bool>(
+                      selected: {_isDays},
+                      onSelectionChanged: (value) => setState(() {
+                        _isDays = value.first;
+                        _duration = _isDays ? 2 : 4;
+                      }),
+                      segments: const [
+                        ButtonSegment(value: false, label: Text('h')),
+                        ButtonSegment(value: true, label: Text('d')),
+                      ],
+                    ),
+                  ],
+                ),
+                if (_isDays) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Slider(
+                          value: _hoursPerDay,
+                          min: 2,
+                          max: 16,
+                          divisions: 14,
+                          label: '${_hoursPerDay.toStringAsFixed(0)} h/dia',
+                          onChanged: (value) => setState(() => _hoursPerDay = value),
+                        ),
+                      ),
+                      Text('${_hoursPerDay.toStringAsFixed(0)} h/dia'),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                SegmentedButton<String>(
+                  selected: {_language},
+                  onSelectionChanged: (value) => setState(() => _language = value.first),
+                  segments: const [
+                    ButtonSegment(value: 'es', label: Text('ES')),
+                    ButtonSegment(value: 'en', label: Text('EN')),
                   ],
                 ),
               ],
-              const SizedBox(height: 12),
-              SegmentedButton<String>(
-                selected: {_language},
-                onSelectionChanged: (value) =>
-                    setState(() => _language = value.first),
-                segments: const [
-                  ButtonSegment(value: 'es', label: Text('ES')),
-                  ButtonSegment(value: 'en', label: Text('EN')),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _prompt,
-                minLines: 3,
-                maxLines: 5,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(
-                  hintText: l10n.freePrompt,
-                  prefixIcon: const Icon(Icons.edit_note_rounded),
-                  suffixIcon: Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _VoicePromptButton(
-                      isRecording: _isRecording,
-                      isBusy: _isStartingVoice,
-                      onPressed: _toggleVoiceInput,
+            ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
+            const SizedBox(height: 24),
+            GlassPanel(
+              child: Row(
+                children: [
+                  const Icon(Icons.radar_rounded, color: AppTheme.violet),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Detectamos: ${_city.text}, ${_country.text} · ${tourTypeLabel(_type)} · ${_duration.toStringAsFixed(0)} ${_isDays ? 'dias (${_hoursPerDay.toStringAsFixed(0)}h/d)' : 'h'}',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
-                  suffixIconConstraints: const BoxConstraints(
-                    minWidth: 64,
-                    minHeight: 64,
-                  ),
-                ),
+                ],
               ),
-              AnimatedSwitcher(
-                duration: 220.ms,
-                child: _voiceFeedback == null
-                    ? const SizedBox(height: 8)
-                    : Padding(
-                        key: ValueKey(_voiceFeedback),
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              _voiceFeedbackIsError
-                                  ? Icons.error_outline_rounded
-                                  : _isRecording
-                                      ? Icons.graphic_eq_rounded
-                                      : Icons.info_outline_rounded,
-                              size: 18,
-                              color: _voiceFeedbackIsError
-                                  ? Theme.of(context).colorScheme.error
-                                  : _isRecording
-                                      ? AppTheme.primary
-                                      : Theme.of(context).colorScheme.outline,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _voiceFeedback!,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: _voiceFeedbackIsError
-                                          ? Theme.of(context).colorScheme.error
-                                          : _isRecording
-                                              ? AppTheme.primary
-                                              : Theme.of(context).colorScheme.outline,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        GlassPanel(
-          child: Row(
-            children: [
-              const Icon(Icons.radar_rounded, color: AppTheme.violet),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Detectamos: ${_city.text}, ${_country.text} · ${tourTypeLabel(_type)} · ${_duration.toStringAsFixed(0)} ${_isDays ? 'dias (${_hoursPerDay.toStringAsFixed(0)}h/d)' : 'h'}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        LiquidButton(
-          label: l10n.generateTour,
-          icon: Icons.auto_awesome_rounded,
-          onPressed: aiState.isLoading ? null : _generate,
-        ),
-        if (aiState.isLoading) _GenerationProgress(l10n: l10n),
-        aiState.when(
-          data: (tour) => tour == null
-              ? const SizedBox.shrink()
-              : Padding(
-                  padding: const EdgeInsets.only(top: 18),
-                  child: Column(
-                    children: [
-                      TourCard(
-                        tour: tour,
-                        onTap: () {
-                          ref.read(selectedTourProvider.notifier).state = tour;
-                          context.push('/tours/${tour.id}');
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _AiJsonPreview(tour: tour),
-                      const SizedBox(height: 12),
-                      LiquidButton(
-                        label: 'Guardar tour',
-                        icon: Icons.save_rounded,
-                        onPressed: () async {
-                          try {
-                            await ref.read(userToursProvider.notifier).saveTour(tour);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Tour guardado exitosamente')),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error al guardar: $e')),
-                              );
-                            }
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      LiquidButton(
-                        label: 'Previsualizar tour',
-                        icon: Icons.visibility_rounded,
-                        onPressed: () {
-                          ref.read(selectedTourProvider.notifier).state = tour;
-                          context.push('/tours/${tour.id}');
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      LiquidButton(
-                        label: 'Editar tour',
-                        icon: Icons.edit_rounded,
-                        onPressed: () {
-                          ref.read(selectedTourProvider.notifier).state = tour;
-                          context.push('/creator/manual');
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-          loading: () => const SizedBox.shrink(),
-          error: (error, stackTrace) => Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: EmptyState(
-              icon: Icons.lock_clock_rounded,
-              title: 'Demo agotada',
-              body: error.toString(),
             ),
-          ),
+            const SizedBox(height: 16),
+            if (aiState.isLoading) _GenerationProgress(l10n: l10n),
+            aiState.when(
+              data: (tour) => tour == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 18),
+                      child: Column(
+                        children: [
+                          TourCard(
+                            tour: tour,
+                            onTap: () {
+                              ref.read(selectedTourProvider.notifier).state = tour;
+                              context.push('/tours/${tour.id}');
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _AiJsonPreview(tour: tour),
+                          const SizedBox(height: 12),
+                          LiquidButton(
+                            label: 'Guardar tour',
+                            icon: Icons.save_rounded,
+                            onPressed: () async {
+                              try {
+                                await ref.read(userToursProvider.notifier).saveTour(tour);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Tour guardado exitosamente')),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error al guardar: $e')),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          LiquidButton(
+                            label: 'Previsualizar tour',
+                            icon: Icons.visibility_rounded,
+                            onPressed: () {
+                              ref.read(selectedTourProvider.notifier).state = tour;
+                              context.push('/tours/${tour.id}');
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          LiquidButton(
+                            label: 'Editar tour',
+                            icon: Icons.edit_rounded,
+                            onPressed: () {
+                              ref.read(selectedTourProvider.notifier).state = tour;
+                              context.push('/creator/manual');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+              loading: () => const SizedBox.shrink(),
+              error: (error, stackTrace) => Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: EmptyState(
+                  icon: Icons.lock_clock_rounded,
+                  title: 'Demo agotada',
+                  body: error.toString(),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -810,6 +878,83 @@ class _GenerationProgress extends StatelessWidget {
                   duration: 1300.ms,
                   color: AppTheme.primary.withValues(alpha: 0.25),
                 ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderCollage extends StatelessWidget {
+  const _HeaderCollage();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 120,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            left: MediaQuery.of(context).size.width / 2 - 110,
+            top: 20,
+            child: Transform.rotate(
+              angle: -0.2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  color: Colors.grey.shade300,
+                  child: Image.network(
+                    'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=300&q=80',
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+          ).animate().fadeIn().slideX(begin: 0.2),
+          Positioned(
+            right: MediaQuery.of(context).size.width / 2 - 110,
+            top: 20,
+            child: Transform.rotate(
+              angle: 0.2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  color: Colors.grey.shade300,
+                  child: Image.network(
+                    'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&w=300&q=80',
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+          ).animate().fadeIn().slideX(begin: -0.2),
+          Positioned(
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 4),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: Image.network(
+                  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ).animate().fadeIn().scale(begin: const Offset(0.8, 0.8)),
         ],
       ),
     );

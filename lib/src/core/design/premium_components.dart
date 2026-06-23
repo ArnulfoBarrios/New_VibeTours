@@ -27,81 +27,15 @@ class PremiumScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       extendBody: true,
       appBar: appBar,
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: bottomNavigationBar,
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? const [
-                    Color(0xFF000000),
-                    Color(0xFF061428),
-                    Color(0xFF000000),
-                  ]
-                : const [
-                    Color(0xFFF9F9FF),
-                    Color(0xFFEAF1FF),
-                    Color(0xFFFFFFFF),
-                  ],
-          ),
-        ),
-        child: Stack(
-          children: [
-            const _AmbientGlow(),
-            SafeArea(bottom: safeBottom, child: child),
-          ],
-        ),
-      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(bottom: safeBottom, child: child),
     );
   }
-}
-
-class _AmbientGlow extends StatelessWidget {
-  const _AmbientGlow();
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: CustomPaint(painter: _AmbientGlowPainter(isDark: isDark)),
-      ),
-    );
-  }
-}
-
-class _AmbientGlowPainter extends CustomPainter {
-  const _AmbientGlowPainter({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..shader =
-          RadialGradient(
-            colors: [
-              AppTheme.primary.withValues(alpha: isDark ? 0.22 : 0.18),
-              Colors.transparent,
-            ],
-          ).createShader(
-            Rect.fromCircle(
-              center: Offset(size.width * 0.82, size.height * 0.12),
-              radius: size.width * 0.72,
-            ),
-          );
-    canvas.drawRect(Offset.zero & size, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _AmbientGlowPainter oldDelegate) =>
-      oldDelegate.isDark != isDark;
 }
 
 class GlassPanel extends StatelessWidget {
@@ -535,17 +469,17 @@ class VibeBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      (Icons.home_rounded, 'Home', '/home'),
-      (Icons.explore_rounded, 'Tours', '/tours'),
-      (Icons.confirmation_number_rounded, 'My Tours', '/creator'),
-      (Icons.settings_rounded, 'Settings', '/settings'),
+      (Icons.explore_outlined, 'Explorar', '/home'),
+      (Icons.add_circle_outline_rounded, 'Crear', '/creator'),
+      (Icons.beach_access_outlined, 'Viajes', '/tours'),
+      (Icons.person_outline_rounded, 'Perfil', '/profile'),
     ];
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
         child: GlassPanel(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           radius: 999,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -555,33 +489,31 @@ class VibeBottomNav extends StatelessWidget {
                   child: Tooltip(
                     message: items[i].$2,
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(999),
                       onTap: () {
                         onChanged(i);
                         context.go(items[i].$3);
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
-                        height: 54,
+                        height: 64,
                         decoration: BoxDecoration(
                           color: currentIndex == i
-                              ? AppTheme.primary.withValues(alpha: 0.10)
+                              ? AppTheme.primary
                               : Colors.transparent,
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: BorderRadius.circular(999),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               items[i].$1,
-                              size: 22,
+                              size: 24,
                               color: currentIndex == i
-                                  ? AppTheme.primary
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Theme.of(context).colorScheme.onSurface,
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 4),
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
@@ -589,12 +521,10 @@ class VibeBottomNav extends StatelessWidget {
                                 maxLines: 1,
                                 style: Theme.of(context).textTheme.labelLarge
                                     ?.copyWith(
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       color: currentIndex == i
-                                          ? AppTheme.primary
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
+                                          ? Theme.of(context).colorScheme.onSurface
+                                          : Theme.of(context).colorScheme.onSurface,
                                     ),
                               ),
                             ),

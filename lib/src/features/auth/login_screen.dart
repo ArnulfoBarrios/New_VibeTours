@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../state/app_state.dart';
-
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -15,184 +14,182 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
-  bool _isCreatingAccount = false;
+  final _confirmPassword = TextEditingController();
+  bool _isCreatingAccount = true;
   bool _isLoading = false;
   bool _obscure = true;
+  bool _obscureConfirm = true;
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _confirmPassword.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF070D18),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Stack(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
           children: [
-            Positioned.fill(child: CustomPaint(painter: _LoginGlowPainter())),
-            ListView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    onPressed: () => context.canPop()
-                        ? context.pop()
-                        : context.go('/settings'),
-                    icon: const Icon(Icons.close_rounded),
-                    color: Colors.white70,
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: () => context.canPop()
+                    ? context.pop()
+                    : context.go('/home'),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              _isCreatingAccount ? 'Crea tu cuenta' : 'Iniciar sesión',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Regístrate para sincronizar tu itinerario en todos tus dispositivos y nunca pierdas un viaje.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+            ),
+            const SizedBox(height: 48),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: OutlinedButton.icon(
+                onPressed: _isLoading ? null : _continueWithGoogle,
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-                const SizedBox(height: 4),
-                const _LoginLogo(),
-                const SizedBox(height: 26),
-                Text(
-                  'VibeTours',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    color: const Color(0xFF348BFF),
-                    fontSize: 48,
+                icon: const _GoogleMark(),
+                label: const Text(
+                  'Continuar con Google',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const _OrDivider(),
+            const SizedBox(height: 24),
+            _LoginTextField(
+              controller: _email,
+              hint: 'Correo electrónico',
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+            ),
+            const SizedBox(height: 12),
+            _LoginTextField(
+              controller: _password,
+              hint: 'Contraseña',
+              obscureText: _obscure,
+              autofillHints: const [AutofillHints.password],
+              trailing: IconButton(
+                onPressed: () => setState(() => _obscure = !_obscure),
+                icon: Icon(
+                  _obscure
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                ),
+              ),
+            ),
+            if (_isCreatingAccount) ...[
+              const SizedBox(height: 12),
+              _LoginTextField(
+                controller: _confirmPassword,
+                hint: 'Confirmar contraseña',
+                obscureText: _obscureConfirm,
+                trailing: IconButton(
+                  onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                  icon: Icon(
+                    _obscureConfirm
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                 ),
-                const SizedBox(height: 96),
-                _LoginCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            ],
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: FilledButton(
+                onPressed: _isLoading ? null : _submitPassword,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.onSurface,
+                  foregroundColor: Theme.of(context).colorScheme.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                child: _isLoading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.surface,
+                        ),
+                      )
+                    : Text(
+                        _isCreatingAccount ? 'Crear cuenta' : 'Entrar',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Center(
+              child: GestureDetector(
+                onTap: _isLoading
+                    ? null
+                    : () => setState(
+                        () => _isCreatingAccount = !_isCreatingAccount,
+                      ),
+                child: Text.rich(
+                  TextSpan(
+                    text: _isCreatingAccount ? '¿Ya tienes una cuenta? ' : '¿No tienes cuenta? ',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
                     children: [
-                      const _FieldLabel('EMAIL ADDRESS'),
-                      const SizedBox(height: 8),
-                      _LoginTextField(
-                        controller: _email,
-                        icon: Icons.mail_outline_rounded,
-                        hint: 'name@example.com',
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const [AutofillHints.email],
-                      ),
-                      const SizedBox(height: 26),
-                      Row(
-                        children: [
-                          const Expanded(child: _FieldLabel('PASSWORD')),
-                          TextButton(
-                            onPressed: _isLoading ? null : _forgotPassword,
-                            child: const Text('Forgot?'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      _LoginTextField(
-                        controller: _password,
-                        icon: Icons.lock_outline_rounded,
-                        hint: '********',
-                        obscureText: _obscure,
-                        autofillHints: const [AutofillHints.password],
-                        trailing: IconButton(
-                          onPressed: () => setState(() => _obscure = !_obscure),
-                          icon: Icon(
-                            _obscure
-                                ? Icons.visibility_rounded
-                                : Icons.visibility_off_rounded,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 48),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: FilledButton.icon(
-                          onPressed: _isLoading ? null : _submitPassword,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.primary,
-                            foregroundColor: const Color(0xFF07101D),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
+                      TextSpan(
+                        text: _isCreatingAccount ? 'Iniciar sesión' : 'Regístrate',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
-                            elevation: 18,
-                            shadowColor: AppTheme.primary.withValues(
-                              alpha: 0.45,
-                            ),
-                          ),
-                          label: Text(
-                            _isCreatingAccount ? 'Create' : 'Sign In',
-                          ),
-                          icon: _isLoading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.arrow_forward_rounded),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const _OrDivider(),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: OutlinedButton.icon(
-                          onPressed: _isLoading ? null : _continueWithGoogle,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white.withValues(
-                              alpha: 0.86,
-                            ),
-                            side: BorderSide(
-                              color: Colors.white.withValues(alpha: 0.14),
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          ),
-                          icon: const _GoogleMark(),
-                          label: const Text('Continue with Google'),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Center(
-                        child: TextButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () => setState(
-                                  () =>
-                                      _isCreatingAccount = !_isCreatingAccount,
-                                ),
-                          child: Text(
-                            _isCreatingAccount
-                                ? 'Already have an account? Sign in'
-                                : 'Create account',
-                          ),
-                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 96),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    TextButton(
-                      onPressed: () => context.push('/legal/terms'),
-                      child: const Text('TERMS'),
-                    ),
-                    Text(
-                      '/',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.36),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => context.push('/legal/privacy'),
-                      child: const Text('PRIVACY'),
-                    ),
-                  ],
-                ),
-              ],
+              ),
+            ),
+            const SizedBox(height: 48),
+            Text(
+              'Al continuar aceptas los Términos y la Política de Privacidad.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    decoration: TextDecoration.underline,
+                  ),
             ),
           ],
         ),
@@ -204,7 +201,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final email = _email.text.trim();
     final password = _password.text;
     if (email.isEmpty || password.length < 6) {
-      _message('Ingresa email y una contrasena de al menos 6 caracteres.');
+      _message('Ingresa email y una contraseña de al menos 6 caracteres.');
+      return;
+    }
+    if (_isCreatingAccount && password != _confirmPassword.text) {
+      _message('Las contraseñas no coinciden.');
       return;
     }
     setState(() => _isLoading = true);
@@ -236,23 +237,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _forgotPassword() async {
-    final email = _email.text.trim();
-    if (email.isEmpty) {
-      _message('Escribe tu email para enviarte el enlace de recuperacion.');
-      return;
-    }
-    setState(() => _isLoading = true);
-    try {
-      await ref.read(authServiceProvider).sendPasswordReset(email);
-      _message('Te enviamos un enlace de recuperacion.');
-    } catch (error) {
-      _message(_friendlyError(error));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
   String _friendlyError(Object error) {
     final text = error.toString();
     if (text.contains('Supabase no esta configurado')) {
@@ -272,75 +256,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-class _LoginLogo extends StatelessWidget {
-  const _LoginLogo();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 96,
-        height: 96,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-        ),
-        child: const Center(
-          child: Icon(Icons.public_rounded, color: AppTheme.primary, size: 42),
-        ),
-      ),
-    );
-  }
-}
-
-class _LoginCard extends StatelessWidget {
-  const _LoginCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFF111821).withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(34),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.34),
-            blurRadius: 40,
-            offset: const Offset(0, 24),
-          ),
-        ],
-      ),
-      child: Padding(padding: const EdgeInsets.all(34), child: child),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-        color: Colors.white.withValues(alpha: 0.64),
-        fontSize: 12,
-        fontWeight: FontWeight.w800,
-      ),
-    );
-  }
-}
-
 class _LoginTextField extends StatelessWidget {
   const _LoginTextField({
     required this.controller,
-    required this.icon,
     required this.hint,
     this.keyboardType,
     this.obscureText = false,
@@ -349,7 +267,6 @@ class _LoginTextField extends StatelessWidget {
   });
 
   final TextEditingController controller;
-  final IconData icon;
   final String hint;
   final TextInputType? keyboardType;
   final bool obscureText;
@@ -363,25 +280,30 @@ class _LoginTextField extends StatelessWidget {
       keyboardType: keyboardType,
       obscureText: obscureText,
       autofillHints: autofillHints,
-      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+      style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface,
+          fontWeight: FontWeight.w600),
       decoration: InputDecoration(
         hintText: hint,
-        prefixIcon: Icon(icon, color: AppTheme.primary),
         suffixIcon: trailing,
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.06),
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+        fillColor: Colors.transparent,
+        hintStyle: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+          borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+          borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(999),
-          borderSide: const BorderSide(color: AppTheme.primary, width: 1.3),
+          borderSide: const BorderSide(color: AppTheme.primary, width: 2),
         ),
       ),
     );
@@ -395,17 +317,22 @@ class _OrDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.08))),
+        Expanded(
+            child: Divider(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1))),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Text(
-            'OR',
+            'o',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white.withValues(alpha: 0.46),
-            ),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+                  fontWeight: FontWeight.w800,
+                ),
           ),
         ),
-        Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.08))),
+        Expanded(
+            child: Divider(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1))),
       ],
     );
   }
@@ -425,27 +352,4 @@ class _GoogleMark extends StatelessWidget {
       ),
     );
   }
-}
-
-class _LoginGlowPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..shader =
-          RadialGradient(
-            colors: [
-              AppTheme.primary.withValues(alpha: 0.22),
-              Colors.transparent,
-            ],
-          ).createShader(
-            Rect.fromCircle(
-              center: Offset(size.width * 0.55, size.height * 0.46),
-              radius: size.width * 0.75,
-            ),
-          );
-    canvas.drawRect(Offset.zero & size, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
