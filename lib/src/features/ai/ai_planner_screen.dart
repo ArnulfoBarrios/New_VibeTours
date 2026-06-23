@@ -30,6 +30,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   final _prompt = TextEditingController();
   final _voicePrompt = _VoicePromptSession();
   double _duration = 4;
+  bool _isDays = false;
+  double _hoursPerDay = 8;
   TourType _type = TourType.cultural;
   String _language = 'es';
   bool _isRecording = false;
@@ -132,16 +134,46 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   Expanded(
                     child: Slider(
                       value: _duration,
-                      min: 2,
-                      max: 12,
-                      divisions: 10,
-                      label: '${_duration.toStringAsFixed(0)} h',
+                      min: _isDays ? 1 : 2,
+                      max: _isDays ? 14 : 12,
+                      divisions: _isDays ? 13 : 10,
+                      label: '${_duration.toStringAsFixed(0)} ${_isDays ? 'dias' : 'h'}',
                       onChanged: (value) => setState(() => _duration = value),
                     ),
                   ),
-                  Text('${_duration.toStringAsFixed(0)} h'),
+                  Text('${_duration.toStringAsFixed(0)} ${_isDays ? 'd' : 'h'}'),
+                  const SizedBox(width: 12),
+                  SegmentedButton<bool>(
+                    selected: {_isDays},
+                    onSelectionChanged: (value) => setState(() {
+                      _isDays = value.first;
+                      _duration = _isDays ? 2 : 4;
+                    }),
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('h')),
+                      ButtonSegment(value: true, label: Text('d')),
+                    ],
+                  ),
                 ],
               ),
+              if (_isDays) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Slider(
+                        value: _hoursPerDay,
+                        min: 2,
+                        max: 16,
+                        divisions: 14,
+                        label: '${_hoursPerDay.toStringAsFixed(0)} h/dia',
+                        onChanged: (value) => setState(() => _hoursPerDay = value),
+                      ),
+                    ),
+                    Text('${_hoursPerDay.toStringAsFixed(0)} h/dia'),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
               SegmentedButton<String>(
                 selected: {_language},
@@ -227,7 +259,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Detectamos: ${_city.text}, ${_country.text} · ${tourTypeLabel(_type)} · ${_duration.toStringAsFixed(0)} h',
+                  'Detectamos: ${_city.text}, ${_country.text} · ${tourTypeLabel(_type)} · ${_duration.toStringAsFixed(0)} ${_isDays ? 'dias (${_hoursPerDay.toStringAsFixed(0)}h/d)' : 'h'}',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
@@ -285,6 +317,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
   void _generate() {
     final profile = ref.read(touristProfileProvider);
+    final finalPrompt = _isDays
+        ? 'El tour durara ${_duration.toInt()} dias, considerando ${_hoursPerDay.toInt()} horas habiles de actividad por dia. ${_prompt.text}'.trim()
+        : _prompt.text;
     ref
         .read(aiPlannerControllerProvider.notifier)
         .generate(
@@ -292,10 +327,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             destination: _destination.text,
             country: _country.text,
             city: _city.text,
-            durationHours: _duration,
+            durationHours: _isDays ? _duration * 24 : _duration,
             type: _type,
             language: _language,
-            prompt: _prompt.text,
+            prompt: finalPrompt,
             touristProfileSummary: profile.aiSummary,
             touristInterests: profile.interests,
             touristPace: profile.preferredPace,

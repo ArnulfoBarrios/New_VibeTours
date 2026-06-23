@@ -502,6 +502,13 @@ String difficultyLabel(TourDifficulty difficulty) {
 }
 
 String _hoursLabel(double hours) {
+  if (hours >= 24) {
+    final days = hours / 24;
+    final rounded = days.toStringAsFixed(
+      days.truncateToDouble() == days ? 0 : 1,
+    );
+    return '$rounded dias';
+  }
   final rounded = hours.toStringAsFixed(
     hours.truncateToDouble() == hours ? 0 : 1,
   );
