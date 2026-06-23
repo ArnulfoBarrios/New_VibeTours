@@ -47,8 +47,18 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
     console.info('[tour-ai] generate:start', { destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
     const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
     console.info('[tour-ai] geocode', location ? { name: location.name, latitude: location.latitude, longitude: location.longitude } : { ok: false })
+    
+    if (!location) {
+      return res.status(400).json({ error: 'No pudimos identificar la ubicación ingresada. Intenta con un nombre más específico o conocido.' })
+    }
+
     const candidatePack = await collectTourCandidates(input, location)
     console.info('[tour-ai] candidates', { raw: candidatePack.rawCount, normalized: candidatePack.places.length, source: candidatePack.source, selectedHint: candidatePack.places.slice(0, 5).map((place) => place.name) })
+    
+    if (!candidatePack.places || candidatePack.places.length === 0) {
+      return res.status(400).json({ error: 'No encontramos suficientes lugares de interés en este destino para generar un tour válido.' })
+    }
+
     const planner = buildTourPlanner(input, location, candidatePack.places)
     console.info('[tour-ai] planner', { selected: planner.selectedPlaces.length, stopTarget: planner.timeProfile.stopTarget, distanceKm: planner.distanceKm, schedule: planner.recommendedSchedule })
 
