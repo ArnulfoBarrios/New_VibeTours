@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/design/app_theme.dart';
+import '../../core/design/premium_components.dart';
 import '../../state/app_state.dart';
 
 class PqrsHistoryScreen extends ConsumerStatefulWidget {
@@ -68,7 +70,6 @@ class _PqrsHistoryScreenState extends ConsumerState<PqrsHistoryScreen> {
         Text(
           'Mis PQRS',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -76,7 +77,7 @@ class _PqrsHistoryScreenState extends ConsumerState<PqrsHistoryScreen> {
         Text(
           'Historial de tus solicitudes y respuestas del administrador',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Colors.white.withValues(alpha: 0.72),
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.72),
           ),
         ),
         const SizedBox(height: 20),
@@ -87,7 +88,7 @@ class _PqrsHistoryScreenState extends ConsumerState<PqrsHistoryScreen> {
         else if (_error != null)
           _ErrorCard(error: _error!)
         else if (_pqrsList.isEmpty)
-          _EmptyCard()
+          const _EmptyCard()
         else
           ...[
             for (final pqrs in _pqrsList) ...[
@@ -155,8 +156,8 @@ class _PqrsItem {
 
   Color get statusColor {
     return switch (status) {
-      'answered' => const Color(0xFFAFCBFF),
-      'open' => const Color(0xFFFFC875),
+      'answered' => AppTheme.primary,
+      'open' => Colors.orange,
       _ => Colors.grey,
     };
   }
@@ -173,12 +174,8 @@ class _PqrsHistoryCard extends StatelessWidget {
       onTap: pqrs.status == 'answered'
           ? () => _showResponseDialog(context)
           : null,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF141923).withValues(alpha: 0.82),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.11)),
-        ),
+      child: GlassPanel(
+        radius: 16,
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,7 +188,6 @@ class _PqrsHistoryCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -217,7 +213,7 @@ class _PqrsHistoryCard extends StatelessWidget {
             Text(
               '${pqrs.kindLabel} • ${pqrs.createdAt.day}/${pqrs.createdAt.month}/${pqrs.createdAt.year}',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: const Color(0xFFAFCBFF),
+                color: AppTheme.primary,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -227,7 +223,7 @@ class _PqrsHistoryCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.62),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.62),
               ),
             ),
             if (pqrs.status == 'answered' && pqrs.adminResponse != null) ...[
@@ -235,17 +231,17 @@ class _PqrsHistoryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFAFCBFF).withValues(alpha: 0.08),
+                  color: AppTheme.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: const Color(0xFFAFCBFF).withValues(alpha: 0.16),
+                    color: AppTheme.primary.withValues(alpha: 0.16),
                   ),
                 ),
                 child: Row(
                   children: [
                     const Icon(
                       Icons.check_circle_rounded,
-                      color: Color(0xFFAFCBFF),
+                      color: AppTheme.primary,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -253,7 +249,7 @@ class _PqrsHistoryCard extends StatelessWidget {
                       child: Text(
                         'Toca para ver la respuesta',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFFAFCBFF),
+                          color: AppTheme.primary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -272,19 +268,14 @@ class _PqrsHistoryCard extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF141923),
         title: Text(
           'Respuesta del Administrador',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: Colors.white,
-          ),
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         content: SingleChildScrollView(
           child: Text(
             pqrs.adminResponse ?? 'Sin respuesta',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white,
-            ),
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
         actions: [
@@ -325,33 +316,27 @@ class _EmptyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GlassPanel(
+      radius: 16,
       padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111821),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
       child: Column(
         children: [
           Icon(
             Icons.inbox_rounded,
-            color: const Color(0xFFAFCBFF).withValues(alpha: 0.5),
+            color: AppTheme.primary.withValues(alpha: 0.5),
             size: 48,
           ),
           const SizedBox(height: 16),
           Text(
             'Sin PQRS',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-            ),
+            style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
           Text(
             'Cuando envíes un PQRS, aparecerá aquí',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],

@@ -53,8 +53,7 @@ class SettingsScreen extends ConsumerWidget {
                   selected: {locale?.languageCode ?? 'system'},
                   onSelectionChanged: (value) {
                     final selected = value.first;
-                    ref.read(localeProvider.notifier).state =
-                        selected == 'system' ? null : Locale(selected);
+                    ref.read(localeProvider.notifier).setLocale(selected);
                   },
                   segments: const [
                     ButtonSegment(value: 'system', label: Text('Auto')),
@@ -70,7 +69,7 @@ class SettingsScreen extends ConsumerWidget {
                   value: themeMode,
                   onChanged: (value) {
                     if (value == null) return;
-                    ref.read(themeModeProvider.notifier).state = value;
+                    ref.read(themeModeProvider.notifier).setMode(value);
                   },
                   items: const [
                     DropdownMenuItem(

@@ -108,53 +108,61 @@ class _LegalSection {
 const _privacySections = [
   _LegalSection(
     'Datos que recopilamos',
-    'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, preferencias turisticas, favoritos, tours creados, tours realizados, ubicacion aproximada y datos tecnicos necesarios para operar la app.',
+    'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, biografía, preferencias turísticas, favoritos, tours creados, tours realizados, calificación de tours, historial de PQRS, ubicación aproximada y datos técnicos del dispositivo necesarios para operar y optimizar la app.',
   ),
   _LegalSection(
-    'Uso de ubicacion',
-    'La ubicacion se utiliza para calcular clima local, lugares cercanos, eventos de la zona, progreso durante un tour, distancia restante y recomendaciones. Puedes revocar el permiso desde los ajustes del sistema.',
+    'Uso de ubicación y permisos',
+    'La ubicación precisa o aproximada se utiliza para calcular clima local, lugares cercanos, eventos de la zona, progreso durante un tour, distancia restante y recomendaciones en tiempo real. Puedes revocar el permiso desde los ajustes del sistema, aunque algunas funciones dependerán de la ubicación manual.',
   ),
   _LegalSection(
-    'IA y recomendaciones',
-    'Las solicitudes al planificador IA pueden incluir destino, ciudad, pais, duracion, tipo de tour, idioma y prompt libre. Usamos estos datos para generar rutas logicas, descripciones, paradas e imagenes relacionadas.',
+    'Inteligencia Artificial y Recomendaciones',
+    'Las solicitudes al planificador IA pueden incluir destino, ciudad, país, duración, tipo de tour, idioma y texto libre. Usamos estos datos anónimamente para generar rutas lógicas, descripciones, paradas e imágenes. No compartimos tus datos personales con los proveedores de IA, solo los parámetros de búsqueda.',
   ),
   _LegalSection(
-    'Almacenamiento y seguridad',
-    'Los datos de cuenta se almacenan en Supabase con RLS. La app movil solo usa claves publicas. Las claves privadas de servidor, service role y secretos de proveedores no se incluyen en el cliente.',
+    'Almacenamiento, Seguridad y Sincronización',
+    'Tus datos de cuenta y preferencias (moneda, idioma, logros) se almacenan de manera segura en Supabase con políticas de seguridad de nivel de fila (RLS). La app móvil solo utiliza claves públicas para el acceso, asegurando que tus datos están protegidos contra accesos no autorizados.',
   ),
   _LegalSection(
-    'Contenido compartido',
-    'Si publicas tours, comentarios o PQRS, ese contenido puede asociarse a tu cuenta. Los tours privados y borradores no deben mostrarse publicamente salvo que el usuario decida publicarlos.',
+    'Contenido compartido y Público',
+    'Si decides publicar tours, dejar comentarios, valoraciones o enviar PQRS, este contenido estará asociado a tu cuenta. Los tours marcados como privados y los borradores no serán visibles para la comunidad.',
   ),
   _LegalSection(
-    'Retencion y eliminacion',
-    'Conservamos datos mientras sean necesarios para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar eliminacion o correccion mediante PQRS o soporte.',
+    'Terceros y Analíticas',
+    'Podemos compartir datos anonimizados con servicios de analítica para entender cómo se utiliza la aplicación y mejorar nuestros algoritmos de recomendación. Nunca venderemos tus datos a terceros para fines publicitarios.',
+  ),
+  _LegalSection(
+    'Retención y eliminación de datos',
+    'Conservamos tus datos mientras tu cuenta esté activa o sea necesario para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar una copia de tus datos o su eliminación definitiva a través del módulo de PQRS o contactando a soporte técnico.',
   ),
 ];
 
 const _termsSections = [
   _LegalSection(
-    'Uso de la aplicacion',
-    'VIBETOURS ofrece descubrimiento, creacion y recorrido de tours turisticos. El usuario debe usar la app de forma responsable, respetar normas locales y evitar zonas restringidas o peligrosas.',
+    'Aceptación y Uso de la aplicación',
+    'Al usar VIBETOURS, aceptas estos términos en su totalidad. La app ofrece descubrimiento, creación y recorrido de tours turísticos. El usuario se compromete a usar la app de forma responsable, respetando normativas locales, el medio ambiente y evitando zonas restringidas, propiedades privadas o peligrosas.',
   ),
   _LegalSection(
-    'Mapas y rutas',
-    'Los mapas, tiempos, distancias y rutas son estimaciones. Pueden existir cierres, cambios de horario, obras, clima adverso o riesgos locales. Verifica siempre la informacion antes de desplazarte.',
+    'Exactitud de Mapas, Rutas y Precios',
+    'Los mapas, tiempos, distancias, rutas y precios (incluso convertidos a diferentes monedas) son estimaciones referenciales. Pueden existir cierres, cambios de horario, variaciones cambiarias, clima adverso o riesgos. Verifica siempre la información con fuentes oficiales antes de desplazarte o realizar compras.',
   ),
   _LegalSection(
-    'Contenido generado por IA',
-    'Los tours generados por IA son recomendaciones automatizadas. Aunque se intenta usar lugares reales y rutas coherentes, el usuario debe validar horarios, accesibilidad, precios y disponibilidad.',
+    'Contenido generado por IA (VibeTour IA)',
+    'Los tours generados por nuestra Inteligencia Artificial son recomendaciones automatizadas basadas en bases de datos turísticas. Aunque nos esforzamos por ofrecer lugares reales y rutas coherentes, VIBETOURS no garantiza su precisión absoluta. El usuario debe validar horarios, accesibilidad y existencia real del lugar.',
   ),
   _LegalSection(
-    'Responsabilidad del usuario',
-    'El usuario es responsable de su seguridad, sus pertenencias, su comportamiento durante recorridos y el cumplimiento de leyes locales. VIBETOURS no reemplaza guias oficiales, autoridades o servicios de emergencia.',
+    'Propiedad Intelectual y Derechos de Autor',
+    'Todo el contenido original de la app pertenece a VIBETOURS. Al crear y hacer público un tour en nuestra plataforma, nos concedes una licencia no exclusiva para mostrarlo, promocionarlo y adaptarlo dentro del servicio.',
   ),
   _LegalSection(
-    'Publicacion de tours',
-    'No publiques contenido falso, ofensivo, discriminatorio, peligroso, con datos privados de terceros o que infrinja derechos de autor. Podemos ocultar o eliminar contenido que viole estas reglas.',
+    'Responsabilidad del usuario y Riesgos',
+    'El turismo al aire libre implica riesgos inherentes. El usuario es el único responsable de su seguridad, su salud, sus pertenencias y su comportamiento. VIBETOURS no actúa como agencia de viajes ni reemplaza a guías oficiales, autoridades o servicios de emergencia.',
   ),
   _LegalSection(
-    'Soporte y PQRS',
-    'Las peticiones, quejas, reclamos y sugerencias se atienden mediante el modulo PQRS. El tiempo objetivo de respuesta es menor a 24 horas habiles, sujeto a disponibilidad y complejidad del caso.',
+    'Directrices de Publicación de Tours y Reseñas',
+    'Queda estrictamente prohibido publicar contenido falso, difamatorio, ofensivo, discriminatorio, peligroso, spam o que infrinja derechos de autor o privacidad. VIBETOURS se reserva el derecho de moderar, ocultar o eliminar contenido y suspender cuentas que violen estas reglas.',
+  ),
+  _LegalSection(
+    'Soporte, Reclamos y PQRS',
+    'Todas las peticiones, quejas, reclamos y sugerencias deben canalizarse a través del módulo PQRS integrado en la app. El tiempo objetivo de respuesta es menor a 24 horas hábiles, sujeto a disponibilidad técnica y complejidad del requerimiento.',
   ),
 ];

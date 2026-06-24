@@ -1,18 +1,122 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../state/app_state.dart';
 
-class ProfileScreen extends ConsumerWidget {
+final userStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+  final user = ref.watch(authUserProvider).valueOrNull;
+  if (user == null) return {'createdTours': 0, 'participants': 0, 'toursRated': 0};
+  return ref.watch(tourRepositoryProvider).getUserStats(user.id);
+});
+
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  final TextEditingController _bioController = TextEditingController();
+  final TextEditingController _avatarUrlController = TextEditingController();
+  bool _isEditingBio = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = ref.read(authUserProvider).valueOrNull;
+    if (user != null) {
+      _bioController.text = user.userMetadata?['bio']?.toString() ?? '';
+      _avatarUrlController.text = user.userMetadata?['avatar_url']?.toString() ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _bioController.dispose();
+    _avatarUrlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveProfile() async {
+    await ref.read(authServiceProvider).updateUserProfile(
+      bio: _bioController.text,
+      avatarUrl: _avatarUrlController.text.isNotEmpty ? _avatarUrlController.text : null,
+    );
+    setState(() {
+      _isEditingBio = false;
+    });
+    // Fuerza recarga del usuario si es necesario actualizando estado local, pero supabase_flutter suele emitir en el stream.
+  }
+
+  void _pickFromGallery() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      _avatarUrlController.text = image.path;
+      _saveProfile();
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
+  void _showAvatarEditDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Cambiar foto de perfil'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Elegir de la galería'),
+                onTap: _pickFromGallery,
+              ),
+              const Divider(),
+              TextField(
+                controller: _avatarUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'URL de la imagen',
+                  hintText: 'https://ejemplo.com/foto.jpg',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _saveProfile();
+              },
+              child: const Text('Guardar URL'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(authUserProvider).valueOrNull;
-    final name = user?.userMetadata?['full_name']?.toString().split(' ').first ?? 'Ehrnesto';
-    final email = user?.email ?? 'ehrnesto1@gmail.com';
+    final metadata = user?.userMetadata ?? {};
+    final name = metadata['full_name']?.toString().split(' ').first ?? 'Usuario';
+    final email = user?.email ?? 'correo@ejemplo.com';
+    final bio = metadata['bio']?.toString() ?? 'Añade una biografía y tus gustos aquí...';
+    final avatarUrl = metadata['avatar_url']?.toString();
+    
+    final statsAsync = ref.watch(userStatsProvider);
+    final currency = ref.watch(currencyProvider);
+    final locale = ref.watch(localeProvider);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -38,54 +142,142 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Column(
+                  Row(
                     children: [
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary.withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            name.isNotEmpty ? name[0].toUpperCase() : 'E',
-                            style: const TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                      GestureDetector(
+                        onTap: _showAvatarEditDialog,
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.5),
+                                shape: BoxShape.circle,
+                                image: avatarUrl != null && avatarUrl.isNotEmpty
+                                    ? DecorationImage(
+                                        image: avatarUrl.startsWith('http') 
+                                            ? NetworkImage(avatarUrl) 
+                                            : FileImage(File(avatarUrl)) as ImageProvider,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: avatarUrl == null || avatarUrl.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                        name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                                        style: const TextStyle(
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
                             ),
-                          ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.edit, size: 14, color: Colors.white),
+                              ),
+                            )
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        name,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20),
-                      ),
-                      Text(
-                        email,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20),
                             ),
+                            Text(
+                              email,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                  ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 32),
-                  Expanded(
-                    child: Column(
+                  const SizedBox(height: 16),
+                  if (_isEditingBio) ...[
+                    TextField(
+                      controller: _bioController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Biografía',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isEditingBio = false;
+                              _bioController.text = bio;
+                            });
+                          },
+                          child: const Text('Cancelar'),
+                        ),
+                        ElevatedButton(
+                          onPressed: _saveProfile,
+                          child: const Text('Guardar'),
+                        ),
+                      ],
+                    )
+                  ] else ...[
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _StatItem(value: '1', label: 'Viajes'),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Divider(height: 1),
+                        Expanded(
+                          child: Text(
+                            bio,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
+                          ),
                         ),
-                        _StatItem(value: '0', label: 'Días en VibeTours'),
+                        IconButton(
+                          icon: const Icon(Icons.edit_note, size: 20),
+                          onPressed: () {
+                            setState(() {
+                              _isEditingBio = true;
+                              _bioController.text = bio;
+                            });
+                          },
+                        )
                       ],
                     ),
+                  ],
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 16),
+                  statsAsync.when(
+                    data: (stats) => Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _StatItem(value: '${stats['createdTours']}', label: 'Tours Creados'),
+                        _StatItem(value: '${stats['toursRated']}', label: 'Calificados'),
+                        _StatItem(value: '${stats['participants']}', label: 'Participantes'),
+                      ],
+                    ),
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (err, stack) => const Text('Error al cargar estadísticas'),
                   ),
                 ],
               ),
@@ -93,20 +285,93 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 32),
             _SectionTitle('Preferencias'),
             _SettingsListTile(icon: Icons.workspace_premium_outlined, title: 'Hazte premium', onTap: () {}),
-            _SettingsListTile(icon: Icons.monetization_on_outlined, title: 'Moneda', trailingText: 'USD', onTap: () {}),
-            _SettingsListTile(icon: Icons.translate_rounded, title: 'Idioma', onTap: () {}),
+            _SettingsListTile(
+              icon: Icons.monetization_on_outlined, 
+              title: 'Moneda', 
+              trailingText: currency.name.toUpperCase(), 
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (context) => SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          title: const Text('Dólares (USD)'),
+                          onTap: () {
+                            ref.read(currencyProvider.notifier).setCurrency(AppCurrency.usd);
+                            Navigator.pop(context);
+                          },
+                        ),
+                        ListTile(
+                          title: const Text('Euros (EUR)'),
+                          onTap: () {
+                            ref.read(currencyProvider.notifier).setCurrency(AppCurrency.eur);
+                            Navigator.pop(context);
+                          },
+                        ),
+                        ListTile(
+                          title: const Text('Pesos Colombianos (COP)'),
+                          onTap: () {
+                            ref.read(currencyProvider.notifier).setCurrency(AppCurrency.cop);
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ],
+                    ),
+                  )
+                );
+              }
+            ),
+            _SettingsListTile(
+              icon: Icons.translate_rounded, 
+              title: 'Idioma', 
+              trailingText: locale?.languageCode.toUpperCase() ?? 'Auto',
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (context) => SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          title: const Text('Automático (Sistema)'),
+                          onTap: () {
+                            ref.read(localeProvider.notifier).setLocale('system');
+                            Navigator.pop(context);
+                          },
+                        ),
+                        ListTile(
+                          title: const Text('Español'),
+                          onTap: () {
+                            ref.read(localeProvider.notifier).setLocale('es');
+                            Navigator.pop(context);
+                          },
+                        ),
+                        ListTile(
+                          title: const Text('Inglés'),
+                          onTap: () {
+                            ref.read(localeProvider.notifier).setLocale('en');
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ],
+                    ),
+                  )
+                );
+              }
+            ),
             const _ThemeToggleTile(),
-            
-            
-            const SizedBox(height: 24),
-            _SectionTitle('Corre la voz'),
-            _SettingsListTile(icon: Icons.people_outline_rounded, title: 'Invitar Amigos', onTap: () {}),
             
             const SizedBox(height: 24),
             _SectionTitle('Soporte'),
-            _SettingsListTile(icon: Icons.help_outline_rounded, title: 'Acerca de', onTap: () {}),
-            _SettingsListTile(icon: Icons.feedback_outlined, title: 'Comentarios', onTap: () {}),
-            _SettingsListTile(icon: Icons.headset_mic_outlined, title: 'Contáctenos', onTap: () {}),
+            _SettingsListTile(icon: Icons.help_outline_rounded, title: 'Acerca de', onTap: () => context.push('/help')),
+            _SettingsListTile(icon: Icons.feedback_outlined, title: 'Comentarios', onTap: () => context.push('/pqrs')),
+            _SettingsListTile(icon: Icons.star_border_rounded, title: 'Clasifícanos', onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Gracias por ayudar a mejorar VIBETOURS.')),
+              );
+            }),
             
             const SizedBox(height: 24),
             _SectionTitle('Legal'),
@@ -139,7 +404,7 @@ class _StatItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           value,
@@ -149,6 +414,7 @@ class _StatItem extends StatelessWidget {
           label,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                fontSize: 12,
               ),
         ),
       ],
@@ -230,16 +496,40 @@ class _ThemeToggleTile extends ConsumerWidget {
 
     return InkWell(
       onTap: () {
-        final current = ref.read(themeModeProvider);
-        ThemeMode next;
-        if (current == ThemeMode.system) {
-          next = ThemeMode.light;
-        } else if (current == ThemeMode.light) {
-          next = ThemeMode.dark;
-        } else {
-          next = ThemeMode.system;
-        }
-        ref.read(themeModeProvider.notifier).state = next;
+        showModalBottomSheet(
+          context: context,
+          builder: (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.brightness_auto),
+                  title: const Text('Sistema'),
+                  onTap: () {
+                    ref.read(themeModeProvider.notifier).setMode(ThemeMode.system);
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.light_mode),
+                  title: const Text('Claro'),
+                  onTap: () {
+                    ref.read(themeModeProvider.notifier).setMode(ThemeMode.light);
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.dark_mode),
+                  title: const Text('Oscuro'),
+                  onTap: () {
+                    ref.read(themeModeProvider.notifier).setMode(ThemeMode.dark);
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
+          )
+        );
       },
       borderRadius: BorderRadius.circular(12),
       child: Padding(

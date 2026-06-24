@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
+import '../../core/design/premium_components.dart';
 import '../../state/app_state.dart';
 import 'pqrs_history_screen.dart';
 
@@ -21,7 +22,7 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
   int _currentTab = 0;
 
   static const _kinds = {
-    'petition': 'Peticion',
+    'petition': 'Petición',
     'complaint': 'Queja',
     'claim': 'Reclamo',
     'suggestion': 'Sugerencia',
@@ -36,93 +37,90 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF090E18),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(child: CustomPaint(painter: _SupportGlowPainter())),
-            Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(26, 28, 26, 16),
-                  child: Row(
-                    children: [
-                      Text(
-                        'VibeTours',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: const Color(0xFFC8DAFF),
-                          fontSize: 31,
+    return PremiumScaffold(
+      safeBottom: true,
+      child: Stack(
+        children: [
+          Positioned.fill(child: CustomPaint(painter: _SupportGlowPainter(context))),
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(26, 28, 26, 16),
+                child: Row(
+                  children: [
+                    Text(
+                      'VibeTours',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontSize: 31,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const _HeaderPill(),
+                    const Spacer(),
+                    IconButton.filledTonal(
+                      onPressed: () => context.canPop() ? context.pop() : context.go('/settings'),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 26),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _currentTab = 0),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Crear',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: _currentTab == 0 ? AppTheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              height: 3,
+                              color: _currentTab == 0 ? AppTheme.primary : Colors.transparent,
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 14),
-                      const _HeaderPill(),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: () => context.canPop() ? context.pop() : context.go('/settings'),
-                        icon: const Icon(Icons.close_rounded),
-                        color: Colors.white70,
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 26),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => setState(() => _currentTab = 0),
-                          child: Column(
-                            children: [
-                              Text(
-                                'Crear',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: _currentTab == 0 ? const Color(0xFFAFCBFF) : Colors.white54,
-                                  fontWeight: FontWeight.w900,
-                                ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _currentTab = 1),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Historial',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: _currentTab == 1 ? AppTheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                fontWeight: FontWeight.w900,
                               ),
-                              const SizedBox(height: 8),
-                              Container(
-                                height: 3,
-                                color: _currentTab == 0 ? AppTheme.primary : Colors.transparent,
-                              ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              height: 3,
+                              color: _currentTab == 1 ? AppTheme.primary : Colors.transparent,
+                            ),
+                          ],
                         ),
                       ),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => setState(() => _currentTab = 1),
-                          child: Column(
-                            children: [
-                              Text(
-                                'Historial',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: _currentTab == 1 ? const Color(0xFFAFCBFF) : Colors.white54,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                height: 3,
-                                color: _currentTab == 1 ? AppTheme.primary : Colors.transparent,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: _currentTab == 0 ? _buildCreateForm(context) : const PqrsHistoryScreen(),
-                ),
-              ],
-            ),
-          ],
-        ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _currentTab == 0 ? _buildCreateForm(context) : const PqrsHistoryScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -137,13 +135,13 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
             children: [
               Text(
                 'Crear PQRS',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white, fontSize: 28),
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
-                'Cuentanos tu experiencia. Estamos aqui para escucharte y mejorar nuestro servicio.',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.78),
+                'Cuéntanos tu experiencia. Estamos aquí para escucharte y mejorar nuestro servicio.',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.78),
                   height: 1.35,
                 ),
               ),
@@ -160,16 +158,13 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
                     ),
                 ],
                 onChanged: _isSending ? null : (value) => setState(() => _kind = value ?? _kind),
-                decoration: _inputDecoration('Selecciona una opcion'),
-                dropdownColor: const Color(0xFF111821),
-                style: const TextStyle(color: Colors.white, fontSize: 18),
+                decoration: _inputDecoration('Selecciona una opción'),
               ),
               const SizedBox(height: 28),
               const _FieldTitle('Asunto'),
               const SizedBox(height: 10),
               TextField(
                 controller: _subject,
-                style: const TextStyle(color: Colors.white),
                 decoration: _inputDecoration('Resumen corto de tu solicitud'),
               ),
               const SizedBox(height: 28),
@@ -179,33 +174,30 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
                 controller: _message,
                 minLines: 5,
                 maxLines: 8,
-                style: const TextStyle(color: Colors.white),
                 decoration: _inputDecoration('Describe detalladamente los hechos...'),
               ),
               const SizedBox(height: 38),
               SizedBox(
                 width: double.infinity,
-                height: 76,
+                height: 60,
                 child: FilledButton.icon(
                   onPressed: _isSending ? null : _submit,
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                    elevation: 24,
-                    shadowColor: AppTheme.primary.withValues(alpha: 0.36),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   ),
                   label: Text(
                     _isSending ? 'Enviando...' : 'Enviar',
-                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   icon: _isSending
                       ? const SizedBox(
-                          width: 24,
-                          height: 24,
+                          width: 20,
+                          height: 20,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
-                      : const Icon(Icons.send_rounded, size: 31),
+                      : const Icon(Icons.send_rounded, size: 24),
                 ),
               ),
             ],
@@ -217,11 +209,11 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
             Expanded(
               child: _InfoCard(
                 icon: Icons.schedule_rounded,
-                title: 'Respuesta rapida',
-                body: 'Menos de 24h habiles',
+                title: 'Respuesta rápida',
+                body: 'Menos de 24h hábiles',
               ),
             ),
-            SizedBox(width: 28),
+            SizedBox(width: 20),
             Expanded(
               child: _InfoCard(
                 icon: Icons.verified_user_rounded,
@@ -231,38 +223,29 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 48),
-        Text(
-          'NECESITAS AYUDA INMEDIATA? CONTACTAR POR WHATSAPP',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: const Color(0xFFC8DAFF),
-            letterSpacing: 1.2,
-          ),
-        ),
       ],
     );
   }
 
   InputDecoration _inputDecoration(String hint) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
       hintText: hint,
       filled: true,
-      fillColor: const Color(0xFF090E18).withValues(alpha: 0.72),
-      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.28)),
+      fillColor: isDark ? Colors.black26 : Colors.white60,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(28),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+        borderRadius: BorderRadius.circular(20),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(28),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+        borderRadius: BorderRadius.circular(20),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(20),
         borderSide: const BorderSide(color: AppTheme.primary),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
     );
   }
 
@@ -317,15 +300,14 @@ class _HeaderPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         child: Text(
-          'Help Center',
-          style: TextStyle(color: Colors.white70, fontSize: 20, fontWeight: FontWeight.w700),
+          'Soporte',
+          style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer, fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -339,13 +321,10 @@ class _MainFormCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFF141923).withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(34),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
-      ),
-      child: Padding(padding: const EdgeInsets.all(40), child: child),
+    return GlassPanel(
+      radius: 34,
+      padding: const EdgeInsets.all(32),
+      child: child,
     );
   }
 }
@@ -360,8 +339,7 @@ class _FieldTitle extends StatelessWidget {
     return Text(
       text,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        color: Colors.white.withValues(alpha: 0.78),
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.bold,
       ),
     );
   }
@@ -376,57 +354,47 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFF141923).withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.11)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 58,
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.22),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Icon(icon, color: const Color(0xFFC8DAFF)),
+    return GlassPanel(
+      radius: 24,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
-                  ),
-                  Text(
-                    body,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyLarge
-                        ?.copyWith(color: Colors.white.withValues(alpha: 0.72)),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+            child: Icon(icon, color: AppTheme.primary, size: 28),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _SupportGlowPainter extends CustomPainter {
+  _SupportGlowPainter(this.context);
+  final BuildContext context;
+
   @override
   void paint(Canvas canvas, Size size) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = isDark ? AppTheme.primary.withValues(alpha: 0.1) : AppTheme.primary.withValues(alpha: 0.05);
     final paint = Paint()
       ..shader = RadialGradient(
-        colors: [AppTheme.primary.withValues(alpha: 0.18), Colors.transparent],
+        colors: [color, Colors.transparent],
       ).createShader(
         Rect.fromCircle(
           center: Offset(size.width * 0.5, size.height * 0.48),

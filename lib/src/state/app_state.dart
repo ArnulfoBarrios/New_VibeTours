@@ -14,6 +14,8 @@ import '../data/discovery_repository.dart';
 import 'package:vibetoursapp/src/data/tour_repository.dart';
 import '../domain/models.dart';
 
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError());
+
 final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
   if (!AppConfig.hasSupabase) return null;
   return Supabase.instance.client;
@@ -93,9 +95,22 @@ final localEventsProvider = FutureProvider<List<LocalEvent>>((ref) async {
       .localEvents(latitude: position.latitude, longitude: position.longitude);
 });
 
-final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
+final themeModeProvider = StateNotifierProvider<ThemeModeController, ThemeMode>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return ThemeModeController(prefs);
+});
 
-final localeProvider = StateProvider<Locale?>((ref) => null);
+final localeProvider = StateNotifierProvider<LocaleController, Locale?>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return LocaleController(prefs);
+});
+
+enum AppCurrency { usd, eur, cop }
+
+final currencyProvider = StateNotifierProvider<CurrencyController, AppCurrency>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return CurrencyController(prefs);
+});
 
 final mapStyleProvider = StateProvider<String>(
   (ref) => 'https://tiles.openfreemap.org/styles/liberty',
@@ -215,6 +230,86 @@ class OnboardingCompleteController extends AsyncNotifier<bool> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_key, true);
     state = const AsyncData(true);
+  }
+}
+
+class ThemeModeController extends StateNotifier<ThemeMode> {
+  ThemeModeController(this.prefs) : super(_init(prefs));
+
+  final SharedPreferences prefs;
+
+  static ThemeMode _init(SharedPreferences prefs) {
+    final val = prefs.getString('vibetours_theme_mode');
+    if (val != null) {
+      return ThemeMode.values.firstWhere((e) => e.name == val, orElse: () => ThemeMode.system);
+    }
+    return ThemeMode.system;
+  }
+
+  Future<void> setMode(ThemeMode mode) async {
+    state = mode;
+    await prefs.setString('vibetours_theme_mode', mode.name);
+  }
+}
+
+class LocaleController extends StateNotifier<Locale?> {
+  LocaleController(this.prefs) : super(_init(prefs));
+
+  final SharedPreferences prefs;
+
+  static Locale? _init(SharedPreferences prefs) {
+    final val = prefs.getString('vibetours_locale');
+    if (val != null && val != 'system') {
+      return Locale(val);
+    }
+    return null;
+  }
+
+  Future<void> setLocale(String? languageCode) async {
+    if (languageCode == null || languageCode == 'system') {
+      state = null;
+      await prefs.setString('vibetours_locale', 'system');
+    } else {
+      state = Locale(languageCode);
+      await prefs.setString('vibetours_locale', languageCode);
+    }
+  }
+}
+
+class CurrencyController extends StateNotifier<AppCurrency> {
+  CurrencyController(this.prefs) : super(_init(prefs));
+
+  final SharedPreferences prefs;
+
+  static AppCurrency _init(SharedPreferences prefs) {
+    final val = prefs.getString('vibetours_currency');
+    if (val != null) {
+      return AppCurrency.values.firstWhere((e) => e.name == val, orElse: () => AppCurrency.usd);
+    }
+    return AppCurrency.usd;
+  }
+
+  Future<void> setCurrency(AppCurrency currency) async {
+    state = currency;
+    await prefs.setString('vibetours_currency', currency.name);
+  }
+}
+
+extension CurrencyExtension on AppCurrency {
+  String get symbol {
+    switch (this) {
+      case AppCurrency.usd: return '\$';
+      case AppCurrency.eur: return '€';
+      case AppCurrency.cop: return '\$COP';
+    }
+  }
+
+  double convertFromUsd(double amountUsd) {
+    switch (this) {
+      case AppCurrency.usd: return amountUsd;
+      case AppCurrency.eur: return amountUsd * 0.93; // Approx
+      case AppCurrency.cop: return amountUsd * 4100.0; // Approx
+    }
   }
 }
 

@@ -85,6 +85,19 @@ class AuthService {
     );
   }
 
+  Future<void> updateUserProfile({String? fullName, String? avatarUrl, String? bio}) async {
+    if (_client == null) return;
+    
+    final Map<String, dynamic> data = {};
+    if (fullName != null) data['full_name'] = fullName;
+    if (avatarUrl != null) data['avatar_url'] = avatarUrl;
+    if (bio != null) data['bio'] = bio;
+
+    if (data.isNotEmpty) {
+      await _client.auth.updateUser(UserAttributes(data: data));
+    }
+  }
+
   Future<void> signOut() async {
     await _client?.auth.signOut();
   }

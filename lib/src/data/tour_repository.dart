@@ -212,6 +212,43 @@ class TourRepository {
     );
   }
 
+  Future<Map<String, dynamic>> getUserStats(String userId) async {
+    final client = _requireClient();
+    try {
+      // Intentamos llamar a RPC si existe, o hacemos consultas directas
+      // 1. Tours creados (ya los tenemos en UserToursState, pero podemos contar aquí)
+      final createdToursResponse = await client.from('tours').select('id').eq('owner_id', userId);
+      final createdCount = (createdToursResponse as List).length;
+
+      // 2. Participantes en tours creados (Simulado o real si hay tabla de participantes, aquí hacemos count de likes o ratings como aproximación si no hay participantes explícitos)
+      int totalParticipants = 0;
+      int totalRatings = 0;
+      
+      try {
+        // Consultamos suma de likes y reviews_count de todos sus tours
+        final toursStats = await client.from('tours').select('likes_count, review_count').eq('owner_id', userId);
+        for (final row in (toursStats as List)) {
+          final map = row as Map<String, dynamic>;
+          totalParticipants += (map['likes_count'] as num?)?.toInt() ?? 0;
+          totalRatings += (map['review_count'] as num?)?.toInt() ?? 0;
+        }
+      } catch (_) {}
+
+      return {
+        'createdTours': createdCount,
+        'participants': totalParticipants, // Aproximación usando likes
+        'toursRated': totalRatings, // Aproximación
+      };
+    } catch (e) {
+      debugPrint('Error fetching user stats: $e');
+      return {
+        'createdTours': 0,
+        'participants': 0,
+        'toursRated': 0,
+      };
+    }
+  }
+
   Future<Tour> generateAiTour(AiTourRequest request) async {
     final dest = request.destination.trim();
     final city = request.city.trim();
