@@ -19,7 +19,7 @@ flutter gen-l10n
 flutter run `
   --dart-define=SUPABASE_URL=https://your-project.supabase.co `
   --dart-define=SUPABASE_ANON_KEY=your-anon-key `
-  --dart-define=API_BASE_URL=http://192.168.1.106:3000/api `
+  --dart-define=API_BASE_URL=http://192.168.1.110:3000/api `
   --dart-define=GOOGLE_WEB_CLIENT_ID=your-google-web-client-id `
   --dart-define=ADMIN_EMAIL=admin@example.com
 ```
@@ -34,7 +34,7 @@ node scripts/sync_public_config.mjs
 
 Este archivo solo incluye configuracion publica del cliente: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `API_BASE_URL`, client IDs publicos de Google, `TOMTOM_API_KEY`, `ADMIN_EMAIL` y `ADMIN_USER_ID` si existen.
 
-Para probar en un telefono fisico, `localhost` no apunta a tu PC: usa la IP Wi-Fi del computador que corre el backend. En esta maquina la IP detectada es `192.168.1.106`, por eso la URL local es `http://192.168.1.106:3000/api`. Si cambias de red, consulta la IP de nuevo con:
+Para probar en un telefono fisico, `localhost` no apunta a tu PC: usa la IP Wi-Fi del computador que corre el backend. En esta maquina la IP detectada es `192.168.1.110`, por eso la URL local es `http://192.168.1.110:3000/api`. Si cambias de red, consulta la IP de nuevo con:
 
 ```powershell
 Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | Select-Object IPAddress,InterfaceAlias

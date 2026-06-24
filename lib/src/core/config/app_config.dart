@@ -15,7 +15,7 @@ class AppConfig {
   static const _definedApiBaseUrl = String.fromEnvironment('API_BASE_URL');
   static const _localNetworkApiBaseUrl = String.fromEnvironment(
     'LOCAL_NETWORK_API_BASE_URL',
-    defaultValue: 'http://192.168.1.106:3000/api',
+    defaultValue: 'http://192.168.1.110:3000/api',
   );
   static const _definedGoogleIosClientId = String.fromEnvironment(
     'GOOGLE_IOS_CLIENT_ID',

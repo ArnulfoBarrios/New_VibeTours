@@ -43,3 +43,4 @@ flutter:
   assets:
     - assets/lottie/ai_pulse.json
     - assets/config/
+    - assets/images/

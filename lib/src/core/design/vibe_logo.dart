@@ -10,30 +10,41 @@ class VibeLogoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: admin
-              ? const [Color(0xFF2B8CFF), Color(0xFF7FB1FF)]
-              : const [AppTheme.primary, AppTheme.indigo],
-        ),
-        borderRadius: BorderRadius.circular(size * 0.24),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withValues(alpha: 0.28),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+    if (admin) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF2B8CFF), Color(0xFF7FB1FF)],
           ),
-        ],
-      ),
-      child: Icon(
-        admin ? Icons.dashboard_customize_rounded : Icons.travel_explore,
-        color: Colors.white,
-        size: size * 0.58,
+          borderRadius: BorderRadius.circular(size * 0.24),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primary.withValues(alpha: 0.28),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Icon(
+          Icons.dashboard_customize_rounded,
+          color: Colors.white,
+          size: size * 0.58,
+        ),
+      );
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Transform.scale(
+      scale: 1.8,
+      child: Image.asset(
+        isDark ? 'assets/images/logo_dark.png' : 'assets/images/logo_light.png',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
       ),
     );
   }

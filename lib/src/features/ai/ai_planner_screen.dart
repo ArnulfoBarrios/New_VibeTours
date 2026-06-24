@@ -80,7 +80,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     final aiState = ref.watch(aiPlannerControllerProvider);
     final remaining = ref.watch(guestAiRemainingProvider);
     final user = ref.watch(authUserProvider).valueOrNull;
-    final name = user?.userMetadata?['full_name']?.toString().split(' ').first ?? 'Arnulfo';
+    final name =
+        user?.userMetadata?['full_name']?.toString().split(' ').first ??
+        'amigo';
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -94,9 +96,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               'Hola $name,\n¿qué quieres\nexperimentar?',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 36,
-                  ),
+                fontWeight: FontWeight.w800,
+                fontSize: 36,
+              ),
             ).animate().fadeIn().slideY(begin: 0.1),
             if (user == null) ...[
               const SizedBox(height: 8),
@@ -104,8 +106,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                 l10n.guestLimit(remaining),
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
               ),
             ],
             const SizedBox(height: 32),
@@ -162,9 +166,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                       filled: false,
                     ),
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          height: 1.4,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurface,
+                      height: 1.4,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -178,7 +182,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                       GestureDetector(
                         onTap: aiState.isLoading ? null : _generate,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.primary.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(999),
@@ -188,7 +195,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                               Text(
                                 'Comenzar',
                                 style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -221,25 +230,26 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                             _voiceFeedbackIsError
                                 ? Icons.error_outline_rounded
                                 : _isRecording
-                                    ? Icons.graphic_eq_rounded
-                                    : Icons.info_outline_rounded,
+                                ? Icons.graphic_eq_rounded
+                                : Icons.info_outline_rounded,
                             size: 18,
                             color: _voiceFeedbackIsError
                                 ? Theme.of(context).colorScheme.error
                                 : _isRecording
-                                    ? AppTheme.primary
-                                    : Theme.of(context).colorScheme.outline,
+                                ? AppTheme.primary
+                                : Theme.of(context).colorScheme.outline,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               _voiceFeedback!,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
                                     color: _voiceFeedbackIsError
                                         ? Theme.of(context).colorScheme.error
                                         : _isRecording
-                                            ? AppTheme.primary
-                                            : Theme.of(context).colorScheme.outline,
+                                        ? AppTheme.primary
+                                        : Theme.of(context).colorScheme.outline,
                                   ),
                             ),
                           ),
@@ -249,9 +259,16 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             ),
             const SizedBox(height: 16),
             ExpansionTile(
-              title: const Text('Opciones avanzadas', style: TextStyle(fontWeight: FontWeight.w600)),
-              collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text(
+                'Opciones avanzadas',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              collapsedShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               backgroundColor: Theme.of(context).colorScheme.surface,
               collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
               childrenPadding: const EdgeInsets.all(16),
@@ -262,7 +279,11 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   label: Text(l10n.type),
                   onSelected: (value) => setState(() => _type = value!),
                   dropdownMenuEntries: [
-                    for (final type in TourType.values) DropdownMenuEntry(value: type, label: tourTypeLabel(type)),
+                    for (final type in TourType.values)
+                      DropdownMenuEntry(
+                        value: type,
+                        label: tourTypeLabel(type),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -274,11 +295,14 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                         min: _isDays ? 1 : 2,
                         max: _isDays ? 14 : 12,
                         divisions: _isDays ? 13 : 10,
-                        label: '${_duration.toStringAsFixed(0)} ${_isDays ? 'dias' : 'h'}',
+                        label:
+                            '${_duration.toStringAsFixed(0)} ${_isDays ? 'dias' : 'h'}',
                         onChanged: (value) => setState(() => _duration = value),
                       ),
                     ),
-                    Text('${_duration.toStringAsFixed(0)} ${_isDays ? 'd' : 'h'}'),
+                    Text(
+                      '${_duration.toStringAsFixed(0)} ${_isDays ? 'd' : 'h'}',
+                    ),
                     const SizedBox(width: 12),
                     SegmentedButton<bool>(
                       selected: {_isDays},
@@ -304,7 +328,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           max: 16,
                           divisions: 14,
                           label: '${_hoursPerDay.toStringAsFixed(0)} h/dia',
-                          onChanged: (value) => setState(() => _hoursPerDay = value),
+                          onChanged: (value) =>
+                              setState(() => _hoursPerDay = value),
                         ),
                       ),
                       Text('${_hoursPerDay.toStringAsFixed(0)} h/dia'),
@@ -314,7 +339,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                 const SizedBox(height: 12),
                 SegmentedButton<String>(
                   selected: {_language},
-                  onSelectionChanged: (value) => setState(() => _language = value.first),
+                  onSelectionChanged: (value) =>
+                      setState(() => _language = value.first),
                   segments: const [
                     ButtonSegment(value: 'es', label: Text('ES')),
                     ButtonSegment(value: 'en', label: Text('EN')),
@@ -349,7 +375,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           TourCard(
                             tour: tour,
                             onTap: () {
-                              ref.read(selectedTourProvider.notifier).state = tour;
+                              ref.read(selectedTourProvider.notifier).state =
+                                  tour;
                               context.push('/tours/${tour.id}');
                             },
                           ),
@@ -361,16 +388,24 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                             icon: Icons.save_rounded,
                             onPressed: () async {
                               try {
-                                await ref.read(userToursProvider.notifier).saveTour(tour);
+                                await ref
+                                    .read(userToursProvider.notifier)
+                                    .saveTour(tour);
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Tour guardado exitosamente')),
+                                    const SnackBar(
+                                      content: Text(
+                                        'Tour guardado exitosamente',
+                                      ),
+                                    ),
                                   );
                                 }
                               } catch (e) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Error al guardar: $e')),
+                                    SnackBar(
+                                      content: Text('Error al guardar: $e'),
+                                    ),
                                   );
                                 }
                               }
@@ -381,7 +416,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                             label: 'Previsualizar tour',
                             icon: Icons.visibility_rounded,
                             onPressed: () {
-                              ref.read(selectedTourProvider.notifier).state = tour;
+                              ref.read(selectedTourProvider.notifier).state =
+                                  tour;
                               context.push('/tours/${tour.id}');
                             },
                           ),
@@ -390,7 +426,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                             label: 'Editar tour',
                             icon: Icons.edit_rounded,
                             onPressed: () {
-                              ref.read(selectedTourProvider.notifier).state = tour;
+                              ref.read(selectedTourProvider.notifier).state =
+                                  tour;
                               context.push('/creator/manual');
                             },
                           ),
@@ -398,14 +435,24 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                       ),
                     ),
               loading: () => const SizedBox.shrink(),
-              error: (error, stackTrace) => Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: EmptyState(
-                  icon: Icons.lock_clock_rounded,
-                  title: 'Demo agotada',
-                  body: error.toString(),
-                ),
-              ),
+              error: (error, stackTrace) {
+                final errorString = error.toString();
+                final isDemoError = errorString.contains('demo gratuita');
+                final title = isDemoError ? 'Demo agotada' : 'Tiempo agotado';
+                final body = errorString
+                    .replaceFirst('Exception: ', '')
+                    .replaceFirst('FormatException: ', '')
+                    .replaceFirst('Bad state: ', '');
+
+                return Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: EmptyState(
+                    icon: Icons.lock_clock_rounded,
+                    title: title,
+                    body: body,
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -416,7 +463,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   void _generate() {
     final profile = ref.read(touristProfileProvider);
     final finalPrompt = _isDays
-        ? 'El tour durara ${_duration.toInt()} dias, considerando ${_hoursPerDay.toInt()} horas habiles de actividad por dia. ${_prompt.text}'.trim()
+        ? 'El tour durara ${_duration.toInt()} dias, considerando ${_hoursPerDay.toInt()} horas habiles de actividad por dia. ${_prompt.text}'
+              .trim()
         : _prompt.text;
     ref
         .read(aiPlannerControllerProvider.notifier)
@@ -768,10 +816,7 @@ class _VoicePromptSession {
     return _speech.initialize(
       onStatus: onStatus,
       onError: onError,
-      options: [
-        SpeechToText.androidNoBluetooth,
-        SpeechToText.iosNoBluetooth,
-      ],
+      options: [SpeechToText.androidNoBluetooth, SpeechToText.iosNoBluetooth],
     );
   }
 
@@ -938,7 +983,10 @@ class _HeaderCollage extends StatelessWidget {
               height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 4),
+                border: Border.all(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  width: 4,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.1),

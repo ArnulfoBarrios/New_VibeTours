@@ -56,7 +56,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new_rounded),
                     onPressed: () => _pageController.previousPage(
-                        duration: 300.ms, curve: Curves.easeOutCubic),
+                      duration: 300.ms,
+                      curve: Curves.easeOutCubic,
+                    ),
                   ),
                   Expanded(
                     child: AnimatedContainer(
@@ -108,7 +110,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   width: double.infinity,
                   child: LiquidButton(
                     label: _page == 1 ? 'Continuar' : 'Comienza',
-                    icon: _page == 1 ? Icons.arrow_forward_rounded : Icons.rocket_launch_rounded,
+                    icon: _page == 1
+                        ? Icons.arrow_forward_rounded
+                        : Icons.rocket_launch_rounded,
                     onPressed: () {
                       if (_page == 1) {
                         _finish();
@@ -132,9 +136,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         children: [
                           TextSpan(
                             text: 'Iniciar sesión',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                 ),
                           ),
                         ],
@@ -167,30 +174,26 @@ class _IntroPage extends StatelessWidget {
       children: [
         Text(
           'VibeTours.',
-          style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 56),
+          style: Theme.of(
+            context,
+          ).textTheme.displayLarge?.copyWith(fontSize: 56),
         ).animate().fadeIn().slideY(begin: -0.1),
         const SizedBox(height: 16),
         Text(
           'Tu viaje en minutos,\nno en semanas.',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ).animate().fadeIn(delay: 100.ms).slideY(begin: -0.1),
         const SizedBox(height: 48),
-        Container(
-          height: 320,
+        Image.asset(
+          Theme.of(context).brightness == Brightness.dark 
+              ? 'assets/images/logo_dark.png' 
+              : 'assets/images/logo_light.png',
           width: 320,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(160),
-              topRight: Radius.circular(160),
-              bottomLeft: Radius.circular(160),
-              bottomRight: Radius.circular(80),
-            ),
-          ),
-          child: const Center(
-            child: Icon(Icons.travel_explore, size: 120, color: Colors.white),
-          ),
+          height: 320,
+          fit: BoxFit.contain,
         ).animate().fadeIn(delay: 200.ms).scale(begin: const Offset(0.9, 0.9)),
       ],
     );
@@ -216,7 +219,9 @@ class _ProfilePage extends StatelessWidget {
         Text(
           'Dime qué tipo de viajes te gustan.',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 24),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineMedium?.copyWith(fontSize: 24),
         ).animate().fadeIn(),
         const SizedBox(height: 32),
         Wrap(
@@ -256,10 +261,14 @@ class _InterestChip extends StatelessWidget {
         duration: 200.ms,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary.withValues(alpha: 0.15) : Colors.white,
+          color: isSelected
+              ? AppTheme.primary.withValues(alpha: 0.15)
+              : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: isSelected ? AppTheme.primary : Colors.grey.withValues(alpha: 0.2),
+            color: isSelected
+                ? AppTheme.primary
+                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
             width: isSelected ? 2 : 1,
           ),
           boxShadow: isSelected
@@ -275,9 +284,9 @@ class _InterestChip extends StatelessWidget {
         child: Text(
           label,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
       ),
     );
