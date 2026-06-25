@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../domain/models.dart';
+import '../../l10n/generated/app_localizations.dart';
 import 'app_theme.dart';
 
 class PremiumScaffold extends StatelessWidget {
@@ -468,11 +469,12 @@ class VibeBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final items = [
-      (Icons.explore_outlined, 'Explorar', '/home'),
-      (Icons.add_circle_outline_rounded, 'Crear', '/creator'),
-      (Icons.beach_access_outlined, 'Viajes', '/tours'),
-      (Icons.person_outline_rounded, 'Perfil', '/profile'),
+      (Icons.explore_outlined, l10n.explore, '/home'),
+      (Icons.add_circle_outline_rounded, l10n.create, '/creator'),
+      (Icons.beach_access_outlined, l10n.trips, '/tours'),
+      (Icons.person_outline_rounded, l10n.profile, '/profile'),
     ];
     return SafeArea(
       top: false,

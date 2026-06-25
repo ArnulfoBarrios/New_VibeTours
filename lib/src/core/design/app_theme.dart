@@ -51,10 +51,10 @@ class VibeColors extends ThemeExtension<VibeColors> {
 class AppTheme {
   const AppTheme._();
 
-  static const primary = Color(0xFFB485FF);
-  static const primaryDeep = Color(0xFF9055FF);
-  static const indigo = Color(0xFF5856D6);
-  static const violet = Color(0xFFAF52DE);
+  static const primary = Color(0xFF3B82F6);
+  static const primaryDeep = Color(0xFF2563EB);
+  static const indigo = Color(0xFF1D4ED8);
+  static const violet = Color(0xFF60A5FA);
   static const lightBackground = Color(0xFFF7F5F2);
   static const darkBackground = Color(0xFF000000);
 

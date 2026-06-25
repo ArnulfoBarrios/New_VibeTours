@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -30,6 +32,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
@@ -48,7 +51,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             const SizedBox(height: 32),
             Text(
-              _isCreatingAccount ? 'Crea tu cuenta' : 'Iniciar sesión',
+              _isCreatingAccount ? l10n.authCreateAccount : l10n.authLoginTitle,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w800,
@@ -56,7 +59,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Regístrate para sincronizar tu itinerario en todos tus dispositivos y nunca pierdas un viaje.',
+              l10n.authSyncPrompt,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
@@ -79,9 +82,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 icon: const _GoogleMark(),
-                label: const Text(
-                  'Continuar con Google',
-                  style: TextStyle(fontWeight: FontWeight.w700),
+                label: Text(
+                  l10n.authContinueGoogle,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             ),
@@ -90,14 +93,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             const SizedBox(height: 24),
             _LoginTextField(
               controller: _email,
-              hint: 'Correo electrónico',
+              hint: l10n.authEmail,
               keyboardType: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],
             ),
             const SizedBox(height: 12),
             _LoginTextField(
               controller: _password,
-              hint: 'Contraseña',
+              hint: l10n.authPassword,
               obscureText: _obscure,
               autofillHints: const [AutofillHints.password],
               trailing: IconButton(
@@ -114,7 +117,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 12),
               _LoginTextField(
                 controller: _confirmPassword,
-                hint: 'Confirmar contraseña',
+                hint: l10n.authConfirmPassword,
                 obscureText: _obscureConfirm,
                 trailing: IconButton(
                   onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
@@ -150,7 +153,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       )
                     : Text(
-                        _isCreatingAccount ? 'Crear cuenta' : 'Entrar',
+                        _isCreatingAccount ? l10n.authCreateAccountBtn : l10n.authEnter,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
               ),
@@ -165,13 +168,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                 child: Text.rich(
                   TextSpan(
-                    text: _isCreatingAccount ? '¿Ya tienes una cuenta? ' : '¿No tienes cuenta? ',
+                    text: _isCreatingAccount ? l10n.authHasAccount : l10n.authNoAccount,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                     children: [
                       TextSpan(
-                        text: _isCreatingAccount ? 'Iniciar sesión' : 'Regístrate',
+                        text: _isCreatingAccount ? l10n.authLoginPrompt : l10n.authRegister,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.onSurface,
@@ -184,7 +187,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             const SizedBox(height: 48),
             Text(
-              'Al continuar aceptas los Términos y la Política de Privacidad.',
+              l10n.authTermsPrompt,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
@@ -198,14 +201,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submitPassword() async {
+    final l10n = AppLocalizations.of(context);
     final email = _email.text.trim();
     final password = _password.text;
     if (email.isEmpty || password.length < 6) {
-      _message('Ingresa email y una contraseña de al menos 6 caracteres.');
+      _message(l10n.authErrorInvalid);
       return;
     }
     if (_isCreatingAccount && password != _confirmPassword.text) {
-      _message('Las contraseñas no coinciden.');
+      _message(l10n.authErrorMismatch);
       return;
     }
     setState(() => _isLoading = true);
@@ -213,37 +217,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final auth = ref.read(authServiceProvider);
       if (_isCreatingAccount) {
         await auth.signUpWithPassword(email: email, password: password);
-        _message('Cuenta creada. Revisa tu correo si Supabase pide confirmar.');
+        _message(l10n.authSuccessCreated);
       } else {
         await auth.signInWithPassword(email: email, password: password);
         if (mounted) context.go('/home');
       }
     } catch (error) {
-      _message(_friendlyError(error));
+      _message(_friendlyError(error, l10n));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _continueWithGoogle() async {
+    final l10n = AppLocalizations.of(context);
     setState(() => _isLoading = true);
     try {
       await ref.read(authServiceProvider).signInWithGoogle();
       if (mounted) context.go('/home');
     } catch (error) {
-      _message(_friendlyError(error));
+      _message(_friendlyError(error, l10n));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _friendlyError(Object error) {
+  String _friendlyError(Object error, AppLocalizations l10n) {
     final text = error.toString();
     if (text.contains('Supabase no esta configurado')) {
-      return 'Configura SUPABASE_URL y SUPABASE_ANON_KEY para iniciar sesion.';
+      return l10n.authErrorSupabase;
     }
     if (text.contains('GOOGLE_WEB_CLIENT_ID')) {
-      return 'Agrega GOOGLE_WEB_CLIENT_ID para usar Google nativo.';
+      return l10n.authErrorGoogle;
     }
     return text.replaceFirst('Exception: ', '');
   }

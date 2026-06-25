@@ -7,6 +7,7 @@ import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/design/vibe_logo.dart';
 import '../../domain/models.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -15,6 +16,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final toursAsync = ref.watch(toursProvider);
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -26,7 +28,7 @@ class HomeScreen extends ConsumerWidget {
             const VibeLogoMark(size: 32),
             const SizedBox(width: 8),
             Text(
-              'Explorar',
+              l10n.explore,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: Theme.of(context).colorScheme.onSurface,
@@ -45,7 +47,7 @@ class HomeScreen extends ConsumerWidget {
       body: toursAsync.when(
         data: (tours) {
           if (tours.isEmpty) {
-            return const Center(child: Text('No hay tours disponibles'));
+            return Center(child: Text(l10n.noToursAvailable));
           }
 
           final featured = tours.isNotEmpty ? tours.first : null;
@@ -63,8 +65,8 @@ class HomeScreen extends ConsumerWidget {
                 ),
               if (continuePlanning.isNotEmpty)
                 _HorizontalSection(
-                  title: 'Continuar planificando',
-                  subtitle: 'Retoma donde lo dejaste',
+                  title: l10n.continuePlanning,
+                  subtitle: l10n.continuePlanningSub,
                   tours: continuePlanning,
                   action: TextButton(
                     onPressed: () {},
@@ -75,19 +77,19 @@ class HomeScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
-                    child: const Text('Ver todo', style: TextStyle(fontWeight: FontWeight.w700)),
+                    child: Text(l10n.viewAll, style: const TextStyle(fontWeight: FontWeight.w700)),
                   ),
                 ),
               if (coastToCoast.isNotEmpty)
                 _HorizontalSection(
-                  title: 'De costa a costa',
-                  subtitle: 'Rascacielos, cañones salvajes y playas de surf',
+                  title: l10n.coastToCoast,
+                  subtitle: l10n.coastToCoastSub,
                   tours: coastToCoast,
                 ),
               if (wildBeauty.isNotEmpty || coastToCoast.isNotEmpty)
                 _HorizontalSection(
-                  title: 'Belleza salvaje',
-                  subtitle: 'Cielos infinitos, grandes animales y horizontes sin fin',
+                  title: l10n.wildBeauty,
+                  subtitle: l10n.wildBeautySub,
                   tours: wildBeauty.isNotEmpty ? wildBeauty : coastToCoast,
                 ),
             ],
@@ -150,9 +152,9 @@ class _FeaturedTourCard extends StatelessWidget {
                   color: AppTheme.primary,
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text(
-                  'DESTACADO',
-                  style: TextStyle(
+                child: Text(
+                  AppLocalizations.of(context).featured,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 10,
@@ -178,7 +180,7 @@ class _FeaturedTourCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${tour.durationHours ~/ 24} días',
+                    '${tour.durationHours ~/ 24} ${AppLocalizations.of(context).days}',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: Colors.white.withValues(alpha: 0.8),
                         ),
@@ -195,9 +197,9 @@ class _FeaturedTourCard extends StatelessWidget {
                       ),
                     ),
                     icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                    label: const Text(
-                      'Planificar viaje',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                    label: Text(
+                      AppLocalizations.of(context).planTrip,
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                     ),
                   ),
                 ],
@@ -311,7 +313,7 @@ class _SmallCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${tour.durationHours ~/ 24} días',
+              '${tour.durationHours ~/ 24} ${AppLocalizations.of(context).days}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),

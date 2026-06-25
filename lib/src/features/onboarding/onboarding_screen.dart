@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -41,9 +42,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
+  List<String> _getInterests(AppLocalizations l10n) => [
+    l10n.interestRomantic,
+    l10n.interestParty,
+    l10n.interestNature,
+    l10n.interestBeach,
+    l10n.interestSafari,
+    l10n.interestAdventure,
+    l10n.interestArtCulture,
+    l10n.interestFamily,
+    l10n.interestGourmet,
+    l10n.interestShopping,
+    l10n.interestWellness,
+    l10n.interestSkiing,
+    l10n.interestHiking,
+    l10n.interestOther,
+  ];
+
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(touristProfileProvider);
+    final l10n = AppLocalizations.of(context);
+    final currentInterests = _getInterests(l10n);
     return PremiumScaffold(
       safeBottom: true,
       child: Column(
@@ -93,7 +113,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 const _IntroPage(),
                 _ProfilePage(
                   profile: profile,
-                  interests: interests,
+                  interests: currentInterests,
                   onToggle: (interest) => ref
                       .read(touristProfileProvider.notifier)
                       .toggleInterest(interest),
@@ -109,7 +129,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: LiquidButton(
-                    label: _page == 1 ? 'Continuar' : 'Comienza',
+                    label: _page == 1 ? l10n.continueAction : l10n.startNow,
                     icon: _page == 1
                         ? Icons.arrow_forward_rounded
                         : Icons.rocket_launch_rounded,
@@ -131,11 +151,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     onTap: () => context.go('/login'),
                     child: Text.rich(
                       TextSpan(
-                        text: '¿Ya has usado VibeTours? ',
+                        text: l10n.alreadyUsedApp,
                         style: Theme.of(context).textTheme.bodyMedium,
                         children: [
                           TextSpan(
-                            text: 'Iniciar sesión',
+                            text: l10n.login,
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.bold,
@@ -180,7 +200,7 @@ class _IntroPage extends StatelessWidget {
         ).animate().fadeIn().slideY(begin: -0.1),
         const SizedBox(height: 16),
         Text(
-          'Tu viaje en minutos,\nno en semanas.',
+               AppLocalizations.of(context).introSlogan1,
           textAlign: TextAlign.center,
           style: Theme.of(
             context,
@@ -217,7 +237,7 @@ class _ProfilePage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
       children: [
         Text(
-          'Dime qué tipo de viajes te gustan.',
+          AppLocalizations.of(context).introWhatType,
           textAlign: TextAlign.center,
           style: Theme.of(
             context,

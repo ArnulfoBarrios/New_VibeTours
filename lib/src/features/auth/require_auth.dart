@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
 class RequireAuth extends ConsumerWidget {
@@ -56,18 +57,17 @@ class _SignInRequired extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               Text(
-                'Inicia sesion para continuar',
+                AppLocalizations.of(context).authRequireTitle,
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 8),
               Text(
-                error ??
-                    'Tu perfil, tus tours manuales y tus borradores privados se activan cuando entras con tu cuenta.',
+                error ?? AppLocalizations.of(context).authRequireBody,
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: 20),
               LiquidButton(
-                label: 'Iniciar sesion',
+                label: AppLocalizations.of(context).authLogin,
                 icon: Icons.login_rounded,
                 onPressed: () => context.push('/login'),
               ),

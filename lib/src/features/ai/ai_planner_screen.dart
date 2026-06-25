@@ -93,7 +93,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             const _HeaderCollage(),
             const SizedBox(height: 24),
             Text(
-              'Hola $name,\n¿qué quieres\nexperimentar?',
+              l10n.aiHello(name),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.displayLarge?.copyWith(
                 fontWeight: FontWeight.w800,
@@ -193,7 +193,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           child: Row(
                             children: [
                               Text(
-                                'Comenzar',
+                                l10n.aiStart,
                                 style: TextStyle(
                                   color: Theme.of(
                                     context,
@@ -259,9 +259,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             ),
             const SizedBox(height: 16),
             ExpansionTile(
-              title: const Text(
-                'Opciones avanzadas',
-                style: TextStyle(fontWeight: FontWeight.w600),
+              title: Text(
+                l10n.aiAdvancedOptions,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               collapsedShape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
@@ -296,7 +296,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                         max: _isDays ? 14 : 12,
                         divisions: _isDays ? 13 : 10,
                         label:
-                            '${_duration.toStringAsFixed(0)} ${_isDays ? 'dias' : 'h'}',
+                            '${_duration.toStringAsFixed(0)} ${_isDays ? l10n.aiDays : 'h'}',
                         onChanged: (value) => setState(() => _duration = value),
                       ),
                     ),
@@ -327,12 +327,12 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           min: 2,
                           max: 16,
                           divisions: 14,
-                          label: '${_hoursPerDay.toStringAsFixed(0)} h/dia',
+                          label: '${_hoursPerDay.toStringAsFixed(0)} ${l10n.aiHoursPerDay}',
                           onChanged: (value) =>
                               setState(() => _hoursPerDay = value),
                         ),
                       ),
-                      Text('${_hoursPerDay.toStringAsFixed(0)} h/dia'),
+                      Text('${_hoursPerDay.toStringAsFixed(0)} ${l10n.aiHoursPerDay}'),
                     ],
                   ),
                 ],
@@ -356,7 +356,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Detectamos: ${_city.text}, ${_country.text} · ${tourTypeLabel(_type)} · ${_duration.toStringAsFixed(0)} ${_isDays ? 'dias (${_hoursPerDay.toStringAsFixed(0)}h/d)' : 'h'}',
+                      '${l10n.aiDetected} ${_city.text}, ${_country.text} · ${tourTypeLabel(_type)} · ${_duration.toStringAsFixed(0)} ${_isDays ? '${l10n.aiDays} (${_hoursPerDay.toStringAsFixed(0)}${l10n.aiHoursPerDay})' : 'h'}',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
@@ -384,7 +384,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           _AiJsonPreview(tour: tour),
                           const SizedBox(height: 12),
                           LiquidButton(
-                            label: 'Guardar tour',
+                            label: l10n.aiSaveTour,
                             icon: Icons.save_rounded,
                             onPressed: () async {
                               try {
@@ -393,9 +393,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                                     .saveTour(tour);
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text(
-                                        'Tour guardado exitosamente',
+                                        l10n.aiTourSaved,
                                       ),
                                     ),
                                   );
@@ -413,7 +413,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           ),
                           const SizedBox(height: 12),
                           LiquidButton(
-                            label: 'Previsualizar tour',
+                            label: l10n.aiPreviewTour,
                             icon: Icons.visibility_rounded,
                             onPressed: () {
                               ref.read(selectedTourProvider.notifier).state =
@@ -423,7 +423,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           ),
                           const SizedBox(height: 12),
                           LiquidButton(
-                            label: 'Editar tour',
+                            label: l10n.aiEditTour,
                             icon: Icons.edit_rounded,
                             onPressed: () {
                               ref.read(selectedTourProvider.notifier).state =

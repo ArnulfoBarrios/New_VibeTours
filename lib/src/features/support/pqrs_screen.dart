@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import 'pqrs_history_screen.dart';
 
@@ -21,11 +22,11 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
   bool _isSending = false;
   int _currentTab = 0;
 
-  static const _kinds = {
-    'petition': 'Petición',
-    'complaint': 'Queja',
-    'claim': 'Reclamo',
-    'suggestion': 'Sugerencia',
+  Map<String, String> _getKinds(AppLocalizations l10n) => {
+    'petition': l10n.pqrsPetition,
+    'complaint': l10n.pqrsComplaint,
+    'claim': l10n.pqrsClaim,
+    'suggestion': l10n.pqrsSuggestion,
   };
 
   @override
@@ -37,6 +38,7 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return PremiumScaffold(
       safeBottom: true,
       child: Stack(
@@ -75,7 +77,7 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
                         child: Column(
                           children: [
                             Text(
-                              'Crear',
+                              l10n.pqrsCreateTab,
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                 color: _currentTab == 0 ? AppTheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                                 fontWeight: FontWeight.w900,
@@ -96,7 +98,7 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
                         child: Column(
                           children: [
                             Text(
-                              'Historial',
+                              l10n.pqrsHistoryTab,
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                 color: _currentTab == 1 ? AppTheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                                 fontWeight: FontWeight.w900,
@@ -126,6 +128,8 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
   }
 
   Widget _buildCreateForm(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final kinds = _getKinds(l10n);
     return ListView(
       padding: const EdgeInsets.fromLTRB(26, 0, 26, 28),
       children: [
@@ -134,61 +138,61 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Crear PQRS',
+                l10n.pqrsTitle,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
-                'Cuéntanos tu experiencia. Estamos aquí para escucharte y mejorar nuestro servicio.',
+                l10n.pqrsDesc,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.78),
                   height: 1.35,
                 ),
               ),
               const SizedBox(height: 34),
-              const _FieldTitle('Tipo de solicitud'),
+              _FieldTitle(l10n.pqrsReqType),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 initialValue: _kind,
                 items: [
-                  for (final entry in _kinds.entries)
+                  for (final entry in kinds.entries)
                     DropdownMenuItem(
                       value: entry.key,
                       child: Text(entry.value),
                     ),
                 ],
                 onChanged: _isSending ? null : (value) => setState(() => _kind = value ?? _kind),
-                decoration: _inputDecoration('Selecciona una opción'),
+                decoration: _inputDecoration(l10n.pqrsReqType),
               ),
               const SizedBox(height: 28),
-              const _FieldTitle('Asunto'),
+              _FieldTitle(l10n.pqrsSubject),
               const SizedBox(height: 10),
               TextField(
                 controller: _subject,
-                decoration: _inputDecoration('Resumen corto de tu solicitud'),
+                decoration: _inputDecoration(l10n.pqrsSubjectHint),
               ),
               const SizedBox(height: 28),
-              const _FieldTitle('Mensaje'),
+              _FieldTitle(l10n.pqrsMessage),
               const SizedBox(height: 10),
               TextField(
                 controller: _message,
                 minLines: 5,
                 maxLines: 8,
-                decoration: _inputDecoration('Describe detalladamente los hechos...'),
+                decoration: _inputDecoration(l10n.pqrsMessageHint),
               ),
               const SizedBox(height: 38),
               SizedBox(
                 width: double.infinity,
                 height: 60,
                 child: FilledButton.icon(
-                  onPressed: _isSending ? null : _submit,
+                  onPressed: _isSending ? null : () => _submit(l10n),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   ),
                   label: Text(
-                    _isSending ? 'Enviando...' : 'Enviar',
+                    _isSending ? l10n.pqrsSending : l10n.pqrsSend,
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   icon: _isSending
@@ -205,20 +209,20 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
         ),
         const SizedBox(height: 40),
         Row(
-          children: const [
+          children: [
             Expanded(
               child: _InfoCard(
                 icon: Icons.schedule_rounded,
-                title: 'Respuesta rápida',
-                body: 'Menos de 24h hábiles',
+                title: l10n.pqrsFastResponse,
+                body: l10n.pqrsUnder24h,
               ),
             ),
-            SizedBox(width: 20),
+            const SizedBox(width: 20),
             Expanded(
               child: _InfoCard(
                 icon: Icons.verified_user_rounded,
-                title: 'Seguro',
-                body: 'Cifrado SSL',
+                title: l10n.pqrsSecure,
+                body: l10n.pqrsSsl,
               ),
             ),
           ],
@@ -249,21 +253,21 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
     );
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit(AppLocalizations l10n) async {
     final subject = _subject.text.trim();
     final body = _message.text.trim();
     if (subject.length < 4 || body.length < 12) {
-      _snack('Completa asunto y mensaje con mas detalle.');
+      _snack(l10n.pqrsErrorFill);
       return;
     }
     final client = ref.read(supabaseClientProvider);
     final user = ref.read(authServiceProvider).currentUser;
     if (client == null) {
-      _snack('Supabase no esta configurado para enviar PQRS.');
+      _snack(l10n.pqrsErrorSupabase);
       return;
     }
     if (user == null) {
-      _snack('Inicia sesion para enviar tu PQRS.');
+      _snack(l10n.pqrsErrorLogin);
       context.push('/login');
       return;
     }
@@ -277,7 +281,7 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
       });
       _subject.clear();
       _message.clear();
-      _snack('PQRS enviada. Te responderemos en menos de 24h habiles.');
+      _snack(l10n.pqrsSuccess);
     } catch (error) {
       _snack(error.toString());
     } finally {

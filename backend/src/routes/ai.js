@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
+import crypto from 'crypto'
 
 import { imageForPlace } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch } from '../services/osm.js'
@@ -7,6 +8,19 @@ import { planWithOllama } from '../services/ollama.js'
 import { supabase } from '../services/supabase.js'
 
 export const aiRouter = Router()
+
+// Almacenamiento en memoria para trabajos de generación asíncrona
+const tourJobs = new Map()
+
+// Limpieza periódica de jobs antiguos (cada hora)
+setInterval(() => {
+  const now = Date.now()
+  for (const [jobId, job] of tourJobs.entries()) {
+    if (now - job.createdAt > 3600000) {
+      tourJobs.delete(jobId)
+    }
+  }
+}, 3600000)
 
 const requestSchema = z.object({
   destination: z.string().min(1),
@@ -26,6 +40,9 @@ const requestSchema = z.object({
 aiRouter.post('/tours/confirm', async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)
+    if (input.city && input.city.trim().length > 0) {
+      input.destination = input.city.trim()
+    }
     const geocode = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
     res.json({
       detected: {
@@ -44,23 +61,82 @@ aiRouter.post('/tours/confirm', async (req, res, next) => {
 aiRouter.post('/tours/generate', async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)
-    console.info('[tour-ai] generate:start', { destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
+    if (input.city && input.city.trim().length > 0) {
+      input.destination = input.city.trim()
+    }
+    const jobId = crypto.randomUUID()
+    
+    tourJobs.set(jobId, {
+      id: jobId,
+      status: 'geocoding',
+      message: 'Ubicando destino...',
+      createdAt: Date.now(),
+      tour: null,
+      route: null,
+      error: null
+    })
+
+    // Procesamiento en background
+    processTourGeneration(jobId, input).catch((err) => {
+      console.error(`[tour-ai] Job ${jobId} failed completely:`, err)
+      const job = tourJobs.get(jobId)
+      if (job) {
+        job.status = 'failed'
+        job.message = 'Ocurrió un error inesperado al generar el tour.'
+        job.error = String(err)
+      }
+    })
+
+    res.json({ jobId, status: 'geocoding', message: 'Ubicando destino...' })
+  } catch (error) {
+    next(error)
+  }
+})
+
+aiRouter.get('/tours/status/:jobId', (req, res) => {
+  const job = tourJobs.get(req.params.jobId)
+  if (!job) {
+    return res.status(404).json({ error: 'Job no encontrado o expirado' })
+  }
+  res.json({
+    id: job.id,
+    status: job.status,
+    message: job.message,
+    tour: job.tour,
+    route: job.route,
+    error: job.error
+  })
+})
+
+async function processTourGeneration(jobId, input) {
+  const updateJob = (updates) => {
+    const job = tourJobs.get(jobId)
+    if (job) Object.assign(job, updates)
+  }
+
+  try {
+    console.info('[tour-ai] generate:start', { jobId, destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
     const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
     console.info('[tour-ai] geocode', location ? { name: location.name, latitude: location.latitude, longitude: location.longitude } : { ok: false })
     
     if (!location) {
-      return res.status(400).json({ error: 'No pudimos identificar la ubicación ingresada. Intenta con un nombre más específico o conocido.' })
+      updateJob({ status: 'failed', message: 'No pudimos identificar la ubicación ingresada. Intenta con un nombre más específico o conocido.' })
+      return
     }
 
+    updateJob({ status: 'selecting_places', message: 'Seleccionando los mejores lugares turísticos...' })
     const candidatePack = await collectTourCandidates(input, location)
     console.info('[tour-ai] candidates', { raw: candidatePack.rawCount, normalized: candidatePack.places.length, source: candidatePack.source, selectedHint: candidatePack.places.slice(0, 5).map((place) => place.name) })
     
     if (!candidatePack.places || candidatePack.places.length === 0) {
-      return res.status(400).json({ error: 'No encontramos suficientes lugares de interés en este destino para generar un tour válido.' })
+      updateJob({ status: 'failed', message: 'No encontramos suficientes lugares de interés en este destino para generar un tour válido.' })
+      return
     }
 
     const planner = buildTourPlanner(input, location, candidatePack.places)
     console.info('[tour-ai] planner', { selected: planner.selectedPlaces.length, stopTarget: planner.timeProfile.stopTarget, distanceKm: planner.distanceKm, schedule: planner.recommendedSchedule })
+
+    updateJob({ status: 'generating_narrative', message: 'Creando narración única del tour con IA...' })
 
     let ollama = null
     let ollamaError = null
@@ -86,7 +162,7 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
     let sourceTour
     let fallbackReason = null
     if (isValidTourPlan(ollama) && planner.selectedPlaces.length >= 3) {
-      sourceTour = ollama
+      sourceTour = validateTourQuality(ollama, planner)
     } else {
       fallbackReason = !ollama
         ? 'ollama_unavailable'
@@ -100,6 +176,9 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
       sourceTour = await buildFallbackTour(planner, input)
     }
     console.info('[tour-ai] plan-source', { usedFallback: sourceTour.id?.toString?.()?.startsWith('ai-') ?? false, itinerary: Array.isArray(sourceTour.itinerario) ? sourceTour.itinerario.length : 0, fallbackReason, ollamaError: ollamaError ? (ollamaError.message ?? String(ollamaError)) : null })
+    
+    updateJob({ status: 'validating', message: 'Validando estructura y calidad del recorrido...' })
+    
     let tour = null
     try {
       const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
@@ -121,13 +200,13 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
         nombre_tour: sourceTour.nombre_tour ?? sourceTour.title ?? `${input.city || input.destination} VibeTour AI`,
         resumen_corto:
           sourceTour.resumen_corto ??
-          'Experiencia creada para descubrir con una ruta logica, tiempos realistas y paradas variadas.',
+          'Experiencia creada para descubrir con una ruta lógica, tiempos realistas y paradas variadas.',
         tipo_tour: sourceTour.tipo_tour ?? input.type,
         subcategorias: normalizeList(sourceTour.subcategorias, [typeLabel(input.type)]),
         descripcion_tour:
           sourceTour.descripcion_tour ??
           sourceTour.description ??
-          'Ruta creada por VIBETOURS AI con lugares reales, tiempos sugeridos y orden logico.',
+          'Ruta creada por VIBETOURS AI con lugares reales, tiempos sugeridos y orden lógico.',
         experiencia_destacada:
           sourceTour.experiencia_destacada ??
           `Recorrido continuo por puntos clave de ${input.destination}.`,
@@ -193,7 +272,7 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
       if (input.persist && supabase && input.userId) {
         await persistTour(tour, route, input, input.userId)
       }
-      res.json({ tour, route })
+      updateJob({ status: 'completed', message: 'Tour generado con éxito', tour, route })
     } catch (assemblyError) {
       console.error('[tour-ai] assembly-failed', { message: assemblyError?.message ?? String(assemblyError), fallbackReason, ollamaError: ollamaError ? (ollamaError.message ?? String(ollamaError)) : null })
       const emergencyTour = buildEmergencyTour(input, planner, fallbackReason)
@@ -211,12 +290,13 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
           suggestedMinutes: minutesFromLabel(stop.duracion_estimada),
         })),
       }
-      res.json({ tour: emergencyTour, route: emergencyRoute })
+      updateJob({ status: 'completed', message: 'Tour recuperado parcialmente (modo offline)', tour: emergencyTour, route: emergencyRoute })
     }
   } catch (error) {
-    next(error)
+    console.error('[tour-ai] fatal process error', error)
+    updateJob({ status: 'failed', message: 'Error fatal durante la generación.', error: String(error) })
   }
-})
+}
 
 function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
   const city = input.city || input.destination || 'Destino'
@@ -432,7 +512,14 @@ function scorePlace(place, input) {
   const profileScore = profileScoreFor(input, place)
   const cityScore = importantPlaceScore(place, input)
   const mismatchPenalty = typeMismatchPenalty(input.type, place.category, place.name)
-  return (typeScore * 7) + (cityScore * 5) + (popularityScore * 4) + (proximityScore * 3) + (diversityScore * 3) + (profileScore * 4) - mismatchPenalty
+  
+  // Penalizar fuertemente lugares genéricos (ej. "Lugar", "Punto turístico")
+  let genericPenalty = 0
+  if (/^(lugar|punto|sitio|parada|destino) \d+$/i.test(place.name) || place.category === 'place') {
+    genericPenalty = 50
+  }
+
+  return (typeScore * 8) + (cityScore * 6) + (popularityScore * 5) + (proximityScore * 3) + (diversityScore * 3) + (profileScore * 4) - mismatchPenalty - genericPenalty
 }
 
 function selectPlaces(scoredPlaces, targetCount, input) {
@@ -588,15 +675,19 @@ function typeAffinityScore(type, category, name, tags = []) {
 function popularityScoreFor(place, input = {}) {
   const text = (place.category + ' ' + place.name).toLowerCase()
   let score = 3
-  if (text.includes('museum')) score += 4
-  if (text.includes('historic') || text.includes('heritage')) score += 4
-  if (text.includes('monument') || text.includes('memorial')) score += input.type === 'gastronomic' || input.type === 'sports' ? 0 : 3
-  if (text.includes('market')) score += 4
-  if (text.includes('park') || text.includes('viewpoint')) score += 3
-  if (text.includes('restaurant') || text.includes('cafe')) score += 4
+  if (text.includes('museum')) score += 6
+  if (text.includes('historic') || text.includes('heritage') || text.includes('archaeological')) score += 6
+  if (text.includes('monument') || text.includes('memorial') || text.includes('castle')) score += input.type === 'gastronomic' || input.type === 'sports' ? 0 : 5
+  if (text.includes('market') || text.includes('marketplace')) score += 5
+  if (text.includes('park') || text.includes('viewpoint') || text.includes('nature_reserve')) score += 5
+  if (text.includes('restaurant') || text.includes('cafe')) score += 3
   if (text.includes('sports') || text.includes('stadium')) score += 4
-  if (text.includes('nightclub') || text.includes('bar')) score += 3
-  return clamp(score, 1, 10)
+  if (text.includes('nightclub') || text.includes('bar') || text.includes('pub')) score += 3
+  
+  // Extra points for very specific well-known tags
+  if (place.tags && (place.tags.wikidata || place.tags.wikipedia)) score += 5
+  
+  return clamp(score, 1, 15)
 }
 
 function proximityScoreFor(distanceKm) {
@@ -857,6 +948,54 @@ function ollamaSkipReason(input, planner) {
 
 function isValidTourPlan(value) {
   return Boolean(value && typeof value === 'object' && Array.isArray(value.itinerario) && value.itinerario.length >= 3)
+}
+
+function validateTourQuality(tour, planner) {
+  if (!tour || !Array.isArray(tour.itinerario)) return tour
+
+  // Verificar frases genéricas prohibidas y descripciones cortas
+  const forbiddenPhrases = [
+    'en esta parada', 'aqui puedes', 'ahora llegamos', 
+    'continuamos nuestro', 'el proximo destino', 'llegamos a'
+  ]
+
+  tour.itinerario = tour.itinerario.map((stop, index) => {
+    let description = stop.descripcion || ''
+    let isBadQuality = false
+
+    if (description.split(' ').length < 50) {
+      isBadQuality = true
+    }
+
+    const lowerDesc = description.toLowerCase()
+    for (const phrase of forbiddenPhrases) {
+      if (lowerDesc.includes(phrase)) {
+        // Remover la frase si es posible, o marcar baja calidad
+        description = description.replace(new RegExp(phrase, 'gi'), '')
+      }
+    }
+
+    if (isBadQuality) {
+      // Reemplazar descripción con fallback determinista si Ollama falló en seguir instrucciones
+      const fallbackPlace = planner.selectedPlaces[index] || planner.selectedPlaces[0]
+      if (fallbackPlace) {
+        stop.descripcion = `${stop.nombre} es un punto fundamental del recorrido. Este lugar destaca por su relevancia local y ofrece una excelente oportunidad para explorar su entorno. Dedica unos minutos para observar los detalles y comprender su importancia dentro de la identidad de la ciudad, tal como fue seleccionado para esta ruta especial.`
+      }
+    } else {
+      stop.descripcion = description.trim()
+    }
+
+    return stop
+  })
+
+  // Detectar paradas repetidas consecutivas
+  tour.itinerario = tour.itinerario.filter((stop, index, arr) => {
+    if (index === 0) return true
+    const prev = arr[index - 1]
+    return normalizeKey(stop.nombre) !== normalizeKey(prev.nombre)
+  })
+
+  return tour
 }
 
 async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = []) {

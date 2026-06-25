@@ -43,17 +43,13 @@ Reglas centrales:
 - Si no conoces una direccion exacta, deja el campo vacio antes de inventar datos.
 - Escribe en ${language}.
 - La descripcion del tour debe tener idealmente 150 a 400 palabras.
-- Cada descripcion de parada debe tener idealmente 80 a 250 palabras.
+- CRITICO: Cada descripcion de parada DEBE tener entre 150 y 350 palabras, ricas en contexto historico, cultural y narrativo.
+- CRITICO: Prohibido usar frases genericas de transicion como "En esta parada...", "Aqui puedes observar...", "Ahora llegamos a...", "Continuamos nuestro tour hacia...". Escribe la narracion de forma directa y cautivadora, como una guia de voz profesional.
 - Cada parada debe incluir actividades especificas, 2 a 5 datos curiosos reales y consejos practicos.
 - El orden debe optimizar tiempo de desplazamiento, flujo narrativo y comodidad.
+- Adapta el tono de la narrativa al tipo de tour (historico, cultural, gastronomico, ecologico, nocturno, aventurero).
 - Si el tiempo disponible es reducido, concentra el itinerario en 2 a 3 paradas muy representativas y minimiza traslados.
 - Si el tiempo disponible es amplio, agrega lugares complementarios, experiencias locales y al menos una parada menos conocida pero relevante.
-- Adapta la ruta al tipo de tour:
-  - Historico: museos, monumentos y centros historicos.
-  - Gastronomico: restaurantes, mercados y cafeterias emblematicas.
-  - Ecologico: parques, reservas y senderos.
-  - Nocturno: bares, discotecas y eventos nocturnos.
-  - Familiar: lugares aptos para menores, actividades educativas y espacios recreativos.
 - Asegura diversidad: evita itinerarios monotonos, paradas repetitivas y secuencias de lugares demasiado parecidos.
 - Ten en cuenta el perfil del viajero cuando exista: ${touristProfileSummary || 'sin perfil adicional'}.
 - Intereses del viajero: ${touristInterests.length ? touristInterests.join(', ') : 'no especificados'}.
@@ -76,22 +72,23 @@ Reglas centrales:
     selectedPlaces
   }
 
-  try {
-    console.info('[ollama] request', { baseUrl, model, selectedPlaces: selectedPlaces.length, destination, city, country, durationHours, type })
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(new Error(`Ollama request timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs)
-    const response = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        stream: false,
-        format: 'json',
-        messages: [
-          { role: 'system', content: system },
-          {
-            role: 'user',
-            content: `Genera un tour profesional con este esquema exacto de claves:
+  const makeRequest = async (attempt) => {
+    try {
+      console.info(`[ollama] request attempt ${attempt}`, { baseUrl, model, selectedPlaces: selectedPlaces.length, destination, city, country, durationHours, type })
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(new Error(`Ollama request timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs)
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          stream: false,
+          format: 'json',
+          messages: [
+            { role: 'system', content: system },
+            {
+              role: 'user',
+              content: `Genera un tour profesional con este esquema exacto de claves:
 {
   "nombre_tour": "",
   "resumen_corto": "",
@@ -166,34 +163,46 @@ No inventes lugares fuera de la lista de candidatos si ya hay suficientes opcion
 Usa la lista de candidatos como base del recorrido y mantente fiel al orden logico sugerido.
 No repitas categorias similares de forma consecutiva.
 Input: ${JSON.stringify(routeBrief)}`,
-          },
-        ],
-      }),
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-    if (!response.ok) {
-      const text = await response.text().catch(() => '')
-      console.warn('[ollama] non-ok', { status: response.status, statusText: response.statusText, text: text.slice(0, 400) })
-      return null
+            },
+          ],
+        }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        console.warn(`[ollama] non-ok on attempt ${attempt}`, { status: response.status, statusText: response.statusText, text: text.slice(0, 400) })
+        return { ok: false, error: 'non-ok status' }
+      }
+      const json = await response.json()
+      const content = json.message?.content ?? '{}'
+      try {
+        const parsed = JSON.parse(content)
+        console.info(`[ollama] parsed successfully on attempt ${attempt}`, { hasItinerary: Array.isArray(parsed.itinerario), itinerary: Array.isArray(parsed.itinerario) ? parsed.itinerario.length : 0 })
+        return { ok: true, data: parsed }
+      } catch (parseError) {
+        console.warn(`[ollama] parse-error on attempt ${attempt}`, { message: parseError?.message ?? String(parseError) })
+        return { ok: false, error: 'parse error' }
+      }
+    } catch (error) {
+      const message = error?.name === 'AbortError'
+        ? `Ollama request timed out after ${Math.round(timeoutMs / 1000)}s`
+        : error?.message ?? String(error)
+      console.warn(`[ollama] request-failed on attempt ${attempt}`, { message })
+      return { ok: false, error: message }
     }
-    const json = await response.json()
-    const content = json.message?.content ?? '{}'
-    try {
-      const parsed = JSON.parse(content)
-      console.info('[ollama] parsed', { hasItinerary: Array.isArray(parsed.itinerario), itinerary: Array.isArray(parsed.itinerario) ? parsed.itinerario.length : 0 })
-      return parsed
-    } catch (parseError) {
-      console.warn('[ollama] parse-error', { message: parseError?.message ?? String(parseError), contentPreview: String(content).slice(0, 400) })
-      return null
-    }
-  } catch (error) {
-    const message = error?.name === 'AbortError'
-      ? `Ollama request timed out after ${Math.round(timeoutMs / 1000)}s`
-      : error?.message ?? String(error)
-    console.warn('[ollama] request-failed', { message })
-    return null
   }
+
+  // Intento 1
+  let result = await makeRequest(1)
+  if (result.ok && result.data) return result.data
+
+  // Reintento
+  console.info('[ollama] Retrying generation after failure...')
+  result = await makeRequest(2)
+  if (result.ok && result.data) return result.data
+
+  return null
 }
 
 

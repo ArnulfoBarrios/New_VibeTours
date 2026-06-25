@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
 class PqrsHistoryScreen extends ConsumerStatefulWidget {
@@ -64,18 +65,19 @@ class _PqrsHistoryScreenState extends ConsumerState<PqrsHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
       children: [
         Text(
-          'Mis PQRS',
+          l10n.pqrsMyPqrs,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w900,
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Historial de tus solicitudes y respuestas del administrador',
+          l10n.pqrsHistorySub,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.72),
           ),
@@ -88,11 +90,11 @@ class _PqrsHistoryScreenState extends ConsumerState<PqrsHistoryScreen> {
         else if (_error != null)
           _ErrorCard(error: _error!)
         else if (_pqrsList.isEmpty)
-          const _EmptyCard()
+          _EmptyCard(l10n: l10n)
         else
           ...[
             for (final pqrs in _pqrsList) ...[
-              _PqrsHistoryCard(pqrs: pqrs),
+              _PqrsHistoryCard(pqrs: pqrs, l10n: l10n),
               const SizedBox(height: 12),
             ],
           ],
@@ -164,9 +166,10 @@ class _PqrsItem {
 }
 
 class _PqrsHistoryCard extends StatelessWidget {
-  const _PqrsHistoryCard({required this.pqrs});
+  const _PqrsHistoryCard({required this.pqrs, required this.l10n});
 
   final _PqrsItem pqrs;
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +202,7 @@ class _PqrsHistoryCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    pqrs.statusLabel,
+                    pqrs.status == 'answered' ? l10n.pqrsStatusAnswered : pqrs.status == 'open' ? l10n.pqrsStatusOpen : pqrs.statusLabel,
                     style: TextStyle(
                       color: pqrs.statusColor,
                       fontWeight: FontWeight.w800,
@@ -247,8 +250,8 @@ class _PqrsHistoryCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Toca para ver la respuesta',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        l10n.pqrsTapToView,
+                        style: TextStyle(
                           color: AppTheme.primary,
                           fontWeight: FontWeight.w600,
                         ),
@@ -269,8 +272,10 @@ class _PqrsHistoryCard extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Respuesta del Administrador',
-          style: Theme.of(context).textTheme.titleLarge,
+          l10n.pqrsAdminResponse,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         content: SingleChildScrollView(
           child: Text(
@@ -279,9 +284,12 @@ class _PqrsHistoryCard extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.pqrsClose),
+            ),
           ),
         ],
       ),
@@ -312,31 +320,26 @@ class _ErrorCard extends StatelessWidget {
 }
 
 class _EmptyCard extends StatelessWidget {
-  const _EmptyCard();
+  const _EmptyCard({required this.l10n});
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
-    return GlassPanel(
-      radius: 16,
-      padding: const EdgeInsets.all(28),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 20),
       child: Column(
         children: [
           Icon(
             Icons.inbox_rounded,
-            color: AppTheme.primary.withValues(alpha: 0.5),
-            size: 48,
+            size: 64,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
           ),
           const SizedBox(height: 16),
           Text(
-            'Sin PQRS',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Cuando envíes un PQRS, aparecerá aquí',
+            l10n.pqrsEmpty,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
         ],

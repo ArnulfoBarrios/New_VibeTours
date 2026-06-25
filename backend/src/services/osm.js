@@ -58,18 +58,14 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
   const query = `
     [out:json][timeout:25];
     (
-      node(around:${radius},${latitude},${longitude})["tourism"];
-      node(around:${radius},${latitude},${longitude})["historic"];
-      node(around:${radius},${latitude},${longitude})["amenity"~"museum|theatre|arts_centre|marketplace|restaurant|cafe|food_court|pub|bar|nightclub"];
-      node(around:${radius},${latitude},${longitude})["leisure"~"park|garden|sports_centre|stadium|pitch|track|fitness_centre|playground|nature_reserve"];
-      node(around:${radius},${latitude},${longitude})["sport"];
-      node(around:${radius},${latitude},${longitude})["natural"~"beach|wood|tree|water|peak|cliff|grassland"];
-      way(around:${radius},${latitude},${longitude})["tourism"];
-      way(around:${radius},${latitude},${longitude})["historic"];
-      way(around:${radius},${latitude},${longitude})["amenity"~"marketplace|restaurant|cafe|food_court|pub|bar|nightclub"];
-      way(around:${radius},${latitude},${longitude})["leisure"~"park|garden|sports_centre|stadium|pitch|track|fitness_centre|playground|nature_reserve"];
-      way(around:${radius},${latitude},${longitude})["sport"];
-      way(around:${radius},${latitude},${longitude})["natural"~"beach|wood|water|peak|cliff|grassland"];
+      node(around:${radius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
+      node(around:${radius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
+      node(around:${radius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
+      node(around:${radius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
+      way(around:${radius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
+      way(around:${radius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
+      way(around:${radius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
+      way(around:${radius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
     );
     out center tags 35;
   `

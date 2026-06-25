@@ -583,6 +583,1212 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Destinos favoritos'**
   String get favoriteDestinations;
+
+  /// No description provided for @explore.
+  ///
+  /// In es, this message translates to:
+  /// **'Explorar'**
+  String get explore;
+
+  /// No description provided for @noToursAvailable.
+  ///
+  /// In es, this message translates to:
+  /// **'No hay tours disponibles'**
+  String get noToursAvailable;
+
+  /// No description provided for @featured.
+  ///
+  /// In es, this message translates to:
+  /// **'DESTACADO'**
+  String get featured;
+
+  /// No description provided for @days.
+  ///
+  /// In es, this message translates to:
+  /// **'días'**
+  String get days;
+
+  /// No description provided for @planTrip.
+  ///
+  /// In es, this message translates to:
+  /// **'Planificar viaje'**
+  String get planTrip;
+
+  /// No description provided for @continuePlanning.
+  ///
+  /// In es, this message translates to:
+  /// **'Continuar planificando'**
+  String get continuePlanning;
+
+  /// No description provided for @continuePlanningSub.
+  ///
+  /// In es, this message translates to:
+  /// **'Retoma donde lo dejaste'**
+  String get continuePlanningSub;
+
+  /// No description provided for @viewAll.
+  ///
+  /// In es, this message translates to:
+  /// **'Ver todo'**
+  String get viewAll;
+
+  /// No description provided for @coastToCoast.
+  ///
+  /// In es, this message translates to:
+  /// **'De costa a costa'**
+  String get coastToCoast;
+
+  /// No description provided for @coastToCoastSub.
+  ///
+  /// In es, this message translates to:
+  /// **'Rascacielos, cañones salvajes y playas de surf'**
+  String get coastToCoastSub;
+
+  /// No description provided for @wildBeauty.
+  ///
+  /// In es, this message translates to:
+  /// **'Belleza salvaje'**
+  String get wildBeauty;
+
+  /// No description provided for @wildBeautySub.
+  ///
+  /// In es, this message translates to:
+  /// **'Cielos infinitos, grandes animales y horizontes sin fin'**
+  String get wildBeautySub;
+
+  /// No description provided for @biography.
+  ///
+  /// In es, this message translates to:
+  /// **'Biografía'**
+  String get biography;
+
+  /// No description provided for @editProfilePhoto.
+  ///
+  /// In es, this message translates to:
+  /// **'Cambiar foto de perfil'**
+  String get editProfilePhoto;
+
+  /// No description provided for @chooseFromGallery.
+  ///
+  /// In es, this message translates to:
+  /// **'Elegir de la galería'**
+  String get chooseFromGallery;
+
+  /// No description provided for @imageUrl.
+  ///
+  /// In es, this message translates to:
+  /// **'URL de la imagen'**
+  String get imageUrl;
+
+  /// No description provided for @cancel.
+  ///
+  /// In es, this message translates to:
+  /// **'Cancelar'**
+  String get cancel;
+
+  /// No description provided for @saveUrl.
+  ///
+  /// In es, this message translates to:
+  /// **'Guardar URL'**
+  String get saveUrl;
+
+  /// No description provided for @defaultBio.
+  ///
+  /// In es, this message translates to:
+  /// **'Añade una biografía y tus gustos aquí...'**
+  String get defaultBio;
+
+  /// No description provided for @createdTours.
+  ///
+  /// In es, this message translates to:
+  /// **'Tours Creados'**
+  String get createdTours;
+
+  /// No description provided for @toursRated.
+  ///
+  /// In es, this message translates to:
+  /// **'Calificados'**
+  String get toursRated;
+
+  /// No description provided for @participants.
+  ///
+  /// In es, this message translates to:
+  /// **'Participantes'**
+  String get participants;
+
+  /// No description provided for @errorLoadingStats.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al cargar estadísticas'**
+  String get errorLoadingStats;
+
+  /// No description provided for @preferences.
+  ///
+  /// In es, this message translates to:
+  /// **'Preferencias'**
+  String get preferences;
+
+  /// No description provided for @goPremium.
+  ///
+  /// In es, this message translates to:
+  /// **'Hazte premium'**
+  String get goPremium;
+
+  /// No description provided for @currency.
+  ///
+  /// In es, this message translates to:
+  /// **'Moneda'**
+  String get currency;
+
+  /// No description provided for @support.
+  ///
+  /// In es, this message translates to:
+  /// **'Soporte'**
+  String get support;
+
+  /// No description provided for @about.
+  ///
+  /// In es, this message translates to:
+  /// **'Acerca de'**
+  String get about;
+
+  /// No description provided for @feedback.
+  ///
+  /// In es, this message translates to:
+  /// **'Comentarios'**
+  String get feedback;
+
+  /// No description provided for @rateUs.
+  ///
+  /// In es, this message translates to:
+  /// **'Clasifícanos'**
+  String get rateUs;
+
+  /// No description provided for @legal.
+  ///
+  /// In es, this message translates to:
+  /// **'Legal'**
+  String get legal;
+
+  /// No description provided for @termsOfService.
+  ///
+  /// In es, this message translates to:
+  /// **'Términos de servicio'**
+  String get termsOfService;
+
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In es, this message translates to:
+  /// **'Política de Privacidad'**
+  String get privacyPolicy;
+
+  /// No description provided for @introSlogan1.
+  ///
+  /// In es, this message translates to:
+  /// **'Tu viaje en minutos,\nno en semanas.'**
+  String get introSlogan1;
+
+  /// No description provided for @introWhatType.
+  ///
+  /// In es, this message translates to:
+  /// **'Dime qué tipo de viajes te gustan.'**
+  String get introWhatType;
+
+  /// No description provided for @startNow.
+  ///
+  /// In es, this message translates to:
+  /// **'Comienza'**
+  String get startNow;
+
+  /// No description provided for @alreadyUsedApp.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Ya has usado VibeTours? '**
+  String get alreadyUsedApp;
+
+  /// No description provided for @interestRomantic.
+  ///
+  /// In es, this message translates to:
+  /// **'❤️ Romántico'**
+  String get interestRomantic;
+
+  /// No description provided for @interestParty.
+  ///
+  /// In es, this message translates to:
+  /// **'🎉 Fiesta'**
+  String get interestParty;
+
+  /// No description provided for @interestNature.
+  ///
+  /// In es, this message translates to:
+  /// **'🌳 Naturaleza'**
+  String get interestNature;
+
+  /// No description provided for @interestBeach.
+  ///
+  /// In es, this message translates to:
+  /// **'⛱️ Playa'**
+  String get interestBeach;
+
+  /// No description provided for @interestSafari.
+  ///
+  /// In es, this message translates to:
+  /// **'🦁 Safari'**
+  String get interestSafari;
+
+  /// No description provided for @interestAdventure.
+  ///
+  /// In es, this message translates to:
+  /// **'🏔️ Aventura'**
+  String get interestAdventure;
+
+  /// No description provided for @interestArtCulture.
+  ///
+  /// In es, this message translates to:
+  /// **'🎨 Arte y cultura'**
+  String get interestArtCulture;
+
+  /// No description provided for @interestFamily.
+  ///
+  /// In es, this message translates to:
+  /// **'👨‍👩‍👧 Familia'**
+  String get interestFamily;
+
+  /// No description provided for @interestGourmet.
+  ///
+  /// In es, this message translates to:
+  /// **'🍽️ Gourmet'**
+  String get interestGourmet;
+
+  /// No description provided for @interestShopping.
+  ///
+  /// In es, this message translates to:
+  /// **'🛍️ Compras'**
+  String get interestShopping;
+
+  /// No description provided for @interestWellness.
+  ///
+  /// In es, this message translates to:
+  /// **'🧘 Bienestar'**
+  String get interestWellness;
+
+  /// No description provided for @interestSkiing.
+  ///
+  /// In es, this message translates to:
+  /// **'🎿 Esquí'**
+  String get interestSkiing;
+
+  /// No description provided for @interestHiking.
+  ///
+  /// In es, this message translates to:
+  /// **'🥾 Senderismo'**
+  String get interestHiking;
+
+  /// No description provided for @interestOther.
+  ///
+  /// In es, this message translates to:
+  /// **'💭 ¿Otra cosa?'**
+  String get interestOther;
+
+  /// No description provided for @trips.
+  ///
+  /// In es, this message translates to:
+  /// **'Viajes'**
+  String get trips;
+
+  /// No description provided for @legalPrivacyPolicy.
+  ///
+  /// In es, this message translates to:
+  /// **'Política de Privacidad'**
+  String get legalPrivacyPolicy;
+
+  /// No description provided for @legalTermsConditions.
+  ///
+  /// In es, this message translates to:
+  /// **'Términos y Condiciones'**
+  String get legalTermsConditions;
+
+  /// No description provided for @legalPrivacyDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Tu ubicación y preferencias se usan para personalizar tours, clima, lugares cercanos y eventos.'**
+  String get legalPrivacyDesc;
+
+  /// No description provided for @legalTermsDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Usa VIBETOURS como guía de apoyo. Confirma condiciones reales antes de desplazarte.'**
+  String get legalTermsDesc;
+
+  /// No description provided for @pqrsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Crear PQRS'**
+  String get pqrsTitle;
+
+  /// No description provided for @pqrsDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Cuéntanos tu experiencia. Estamos aquí para escucharte y mejorar nuestro servicio.'**
+  String get pqrsDesc;
+
+  /// No description provided for @pqrsReqType.
+  ///
+  /// In es, this message translates to:
+  /// **'Tipo de solicitud'**
+  String get pqrsReqType;
+
+  /// No description provided for @pqrsPetition.
+  ///
+  /// In es, this message translates to:
+  /// **'Petición'**
+  String get pqrsPetition;
+
+  /// No description provided for @pqrsComplaint.
+  ///
+  /// In es, this message translates to:
+  /// **'Queja'**
+  String get pqrsComplaint;
+
+  /// No description provided for @pqrsClaim.
+  ///
+  /// In es, this message translates to:
+  /// **'Reclamo'**
+  String get pqrsClaim;
+
+  /// No description provided for @pqrsSuggestion.
+  ///
+  /// In es, this message translates to:
+  /// **'Sugerencia'**
+  String get pqrsSuggestion;
+
+  /// No description provided for @pqrsSubject.
+  ///
+  /// In es, this message translates to:
+  /// **'Asunto'**
+  String get pqrsSubject;
+
+  /// No description provided for @pqrsSubjectHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Resumen corto de tu solicitud'**
+  String get pqrsSubjectHint;
+
+  /// No description provided for @pqrsMessage.
+  ///
+  /// In es, this message translates to:
+  /// **'Mensaje'**
+  String get pqrsMessage;
+
+  /// No description provided for @pqrsMessageHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Describe detalladamente los hechos...'**
+  String get pqrsMessageHint;
+
+  /// No description provided for @pqrsSend.
+  ///
+  /// In es, this message translates to:
+  /// **'Enviar'**
+  String get pqrsSend;
+
+  /// No description provided for @pqrsSending.
+  ///
+  /// In es, this message translates to:
+  /// **'Enviando...'**
+  String get pqrsSending;
+
+  /// No description provided for @pqrsFastResponse.
+  ///
+  /// In es, this message translates to:
+  /// **'Respuesta rápida'**
+  String get pqrsFastResponse;
+
+  /// No description provided for @pqrsUnder24h.
+  ///
+  /// In es, this message translates to:
+  /// **'Menos de 24h hábiles'**
+  String get pqrsUnder24h;
+
+  /// No description provided for @pqrsSecure.
+  ///
+  /// In es, this message translates to:
+  /// **'Seguro'**
+  String get pqrsSecure;
+
+  /// No description provided for @pqrsSsl.
+  ///
+  /// In es, this message translates to:
+  /// **'Cifrado SSL'**
+  String get pqrsSsl;
+
+  /// No description provided for @pqrsCreateTab.
+  ///
+  /// In es, this message translates to:
+  /// **'Crear'**
+  String get pqrsCreateTab;
+
+  /// No description provided for @pqrsHistoryTab.
+  ///
+  /// In es, this message translates to:
+  /// **'Historial'**
+  String get pqrsHistoryTab;
+
+  /// No description provided for @pqrsErrorFill.
+  ///
+  /// In es, this message translates to:
+  /// **'Completa asunto y mensaje con más detalle.'**
+  String get pqrsErrorFill;
+
+  /// No description provided for @pqrsErrorSupabase.
+  ///
+  /// In es, this message translates to:
+  /// **'Supabase no está configurado para enviar PQRS.'**
+  String get pqrsErrorSupabase;
+
+  /// No description provided for @pqrsErrorLogin.
+  ///
+  /// In es, this message translates to:
+  /// **'Inicia sesión para enviar tu PQRS.'**
+  String get pqrsErrorLogin;
+
+  /// No description provided for @pqrsSuccess.
+  ///
+  /// In es, this message translates to:
+  /// **'PQRS enviada. Te responderemos en menos de 24h hábiles.'**
+  String get pqrsSuccess;
+
+  /// No description provided for @aiHello.
+  ///
+  /// In es, this message translates to:
+  /// **'Hola {name},\n¿qué quieres\nexperimentar?'**
+  String aiHello(String name);
+
+  /// No description provided for @aiAdvancedOptions.
+  ///
+  /// In es, this message translates to:
+  /// **'Opciones avanzadas'**
+  String get aiAdvancedOptions;
+
+  /// No description provided for @aiStart.
+  ///
+  /// In es, this message translates to:
+  /// **'Comenzar'**
+  String get aiStart;
+
+  /// No description provided for @aiDetected.
+  ///
+  /// In es, this message translates to:
+  /// **'Detectamos:'**
+  String get aiDetected;
+
+  /// No description provided for @aiSaveTour.
+  ///
+  /// In es, this message translates to:
+  /// **'Guardar tour'**
+  String get aiSaveTour;
+
+  /// No description provided for @aiTourSaved.
+  ///
+  /// In es, this message translates to:
+  /// **'Tour guardado exitosamente'**
+  String get aiTourSaved;
+
+  /// No description provided for @aiPreviewTour.
+  ///
+  /// In es, this message translates to:
+  /// **'Previsualizar tour'**
+  String get aiPreviewTour;
+
+  /// No description provided for @aiEditTour.
+  ///
+  /// In es, this message translates to:
+  /// **'Editar tour'**
+  String get aiEditTour;
+
+  /// No description provided for @aiDays.
+  ///
+  /// In es, this message translates to:
+  /// **'días'**
+  String get aiDays;
+
+  /// No description provided for @aiHoursPerDay.
+  ///
+  /// In es, this message translates to:
+  /// **'h/día'**
+  String get aiHoursPerDay;
+
+  /// No description provided for @helpGuides.
+  ///
+  /// In es, this message translates to:
+  /// **'Guías de la App'**
+  String get helpGuides;
+
+  /// No description provided for @helpDetailed.
+  ///
+  /// In es, this message translates to:
+  /// **'Guía detallada'**
+  String get helpDetailed;
+
+  /// No description provided for @helpDetailedSub.
+  ///
+  /// In es, this message translates to:
+  /// **'Para explorar, crear, editar, guardar y disfrutar tours.'**
+  String get helpDetailedSub;
+
+  /// No description provided for @helpSec1.
+  ///
+  /// In es, this message translates to:
+  /// **'1. Cuenta'**
+  String get helpSec1;
+
+  /// No description provided for @helpSec2.
+  ///
+  /// In es, this message translates to:
+  /// **'2. Descubrir'**
+  String get helpSec2;
+
+  /// No description provided for @helpSec3.
+  ///
+  /// In es, this message translates to:
+  /// **'3. Tours'**
+  String get helpSec3;
+
+  /// No description provided for @helpSec4.
+  ///
+  /// In es, this message translates to:
+  /// **'4. Mapa'**
+  String get helpSec4;
+
+  /// No description provided for @helpSec5.
+  ///
+  /// In es, this message translates to:
+  /// **'5. Crear'**
+  String get helpSec5;
+
+  /// No description provided for @helpSec6.
+  ///
+  /// In es, this message translates to:
+  /// **'6. AI'**
+  String get helpSec6;
+
+  /// No description provided for @helpSec7.
+  ///
+  /// In es, this message translates to:
+  /// **'7. Editar'**
+  String get helpSec7;
+
+  /// No description provided for @helpSec8.
+  ///
+  /// In es, this message translates to:
+  /// **'8. Perfil'**
+  String get helpSec8;
+
+  /// No description provided for @helpSec9.
+  ///
+  /// In es, this message translates to:
+  /// **'9. PQRS'**
+  String get helpSec9;
+
+  /// No description provided for @helpTitle1.
+  ///
+  /// In es, this message translates to:
+  /// **'1. Cuenta, invitado e inicio de sesión'**
+  String get helpTitle1;
+
+  /// No description provided for @helpTitle2.
+  ///
+  /// In es, this message translates to:
+  /// **'2. Descubrir lugares cerca de ti'**
+  String get helpTitle2;
+
+  /// No description provided for @helpTitle3.
+  ///
+  /// In es, this message translates to:
+  /// **'3. Pantalla Tours'**
+  String get helpTitle3;
+
+  /// No description provided for @helpTitle4.
+  ///
+  /// In es, this message translates to:
+  /// **'4. Mapa y navegación'**
+  String get helpTitle4;
+
+  /// No description provided for @helpTitle5.
+  ///
+  /// In es, this message translates to:
+  /// **'5. Creación manual de Tours'**
+  String get helpTitle5;
+
+  /// No description provided for @helpTitle6.
+  ///
+  /// In es, this message translates to:
+  /// **'6. IA VibeTour (Planificador)'**
+  String get helpTitle6;
+
+  /// No description provided for @helpTitle7.
+  ///
+  /// In es, this message translates to:
+  /// **'7. Edición y guardado'**
+  String get helpTitle7;
+
+  /// No description provided for @helpTitle8.
+  ///
+  /// In es, this message translates to:
+  /// **'8. Perfil y personalización'**
+  String get helpTitle8;
+
+  /// No description provided for @helpTitle9.
+  ///
+  /// In es, this message translates to:
+  /// **'9. PQRS y Soporte'**
+  String get helpTitle9;
+
+  /// No description provided for @appearanceSystem.
+  ///
+  /// In es, this message translates to:
+  /// **'Sistema'**
+  String get appearanceSystem;
+
+  /// No description provided for @appearanceLight.
+  ///
+  /// In es, this message translates to:
+  /// **'Claro'**
+  String get appearanceLight;
+
+  /// No description provided for @appearanceDark.
+  ///
+  /// In es, this message translates to:
+  /// **'Oscuro'**
+  String get appearanceDark;
+
+  /// No description provided for @pqrsMyPqrs.
+  ///
+  /// In es, this message translates to:
+  /// **'Mis PQRS'**
+  String get pqrsMyPqrs;
+
+  /// No description provided for @pqrsHistorySub.
+  ///
+  /// In es, this message translates to:
+  /// **'Historial de tus solicitudes y respuestas del administrador'**
+  String get pqrsHistorySub;
+
+  /// No description provided for @pqrsStatusAnswered.
+  ///
+  /// In es, this message translates to:
+  /// **'RESPONDIDO'**
+  String get pqrsStatusAnswered;
+
+  /// No description provided for @pqrsStatusOpen.
+  ///
+  /// In es, this message translates to:
+  /// **'PENDIENTE'**
+  String get pqrsStatusOpen;
+
+  /// No description provided for @pqrsTapToView.
+  ///
+  /// In es, this message translates to:
+  /// **'Toca para ver la respuesta'**
+  String get pqrsTapToView;
+
+  /// No description provided for @pqrsAdminResponse.
+  ///
+  /// In es, this message translates to:
+  /// **'Respuesta del administrador'**
+  String get pqrsAdminResponse;
+
+  /// No description provided for @pqrsClose.
+  ///
+  /// In es, this message translates to:
+  /// **'Cerrar'**
+  String get pqrsClose;
+
+  /// No description provided for @pqrsEmpty.
+  ///
+  /// In es, this message translates to:
+  /// **'Aún no tienes solicitudes en el historial.'**
+  String get pqrsEmpty;
+
+  /// No description provided for @helpBody1a.
+  ///
+  /// In es, this message translates to:
+  /// **'Puedes abrir VibeTours como invitado para explorar tours aprobados, lugares cercanos, el mapa basico y detalles publicos.'**
+  String get helpBody1a;
+
+  /// No description provided for @helpBody1b.
+  ///
+  /// In es, this message translates to:
+  /// **'Para crear tours, guardar favoritos en la nube, comentar, calificar, enviar PQRS o pedir disponibilidad necesitas iniciar sesion.'**
+  String get helpBody1b;
+
+  /// No description provided for @helpBody1c.
+  ///
+  /// In es, this message translates to:
+  /// **'Si intentas una accion privada, VibeTours mostrara el aviso \'Inicia sesion para continuar\' sin perder lo que estabas viendo.'**
+  String get helpBody1c;
+
+  /// No description provided for @helpBody1d.
+  ///
+  /// In es, this message translates to:
+  /// **'El login por correo se mantiene disponible. Si Google esta configurado, tambien puedes entrar con tu cuenta de Google.'**
+  String get helpBody1d;
+
+  /// No description provided for @helpBody2a.
+  ///
+  /// In es, this message translates to:
+  /// **'La seccion Descubrir muestra lugares destacados usando tu ubicacion y recomendaciones cercanas.'**
+  String get helpBody2a;
+
+  /// No description provided for @helpBody2b.
+  ///
+  /// In es, this message translates to:
+  /// **'Si el buscador esta vacio, veras recomendaciones populares o cercanas para que la pantalla nunca quede sin contenido.'**
+  String get helpBody2b;
+
+  /// No description provided for @helpBody2c.
+  ///
+  /// In es, this message translates to:
+  /// **'Puedes buscar palabras como museo, restaurante, parque, playa o mirador para encontrar lugares reales.'**
+  String get helpBody2c;
+
+  /// No description provided for @helpBody2d.
+  ///
+  /// In es, this message translates to:
+  /// **'Usa filtros de categoria, precio, distancia y apto para menores para ajustar los resultados.'**
+  String get helpBody2d;
+
+  /// No description provided for @helpBody3a.
+  ///
+  /// In es, this message translates to:
+  /// **'Explora tours creados por la comunidad o generados por nuestra IA.'**
+  String get helpBody3a;
+
+  /// No description provided for @helpBody3b.
+  ///
+  /// In es, this message translates to:
+  /// **'Usa la barra de busqueda superior para buscar tours por nombre o palabra clave.'**
+  String get helpBody3b;
+
+  /// No description provided for @helpBody3c.
+  ///
+  /// In es, this message translates to:
+  /// **'Toca el icono de filtros para ajustar la busqueda por categoria, precio y mas.'**
+  String get helpBody3c;
+
+  /// No description provided for @helpBody4a.
+  ///
+  /// In es, this message translates to:
+  /// **'Visualiza lugares turisticos, eventos y puntos de interes directamente en el mapa.'**
+  String get helpBody4a;
+
+  /// No description provided for @helpBody4b.
+  ///
+  /// In es, this message translates to:
+  /// **'Toca sobre los pines para ver una tarjeta rapida del lugar.'**
+  String get helpBody4b;
+
+  /// No description provided for @helpBody4c.
+  ///
+  /// In es, this message translates to:
+  /// **'Al tocar una tarjeta, se abrira el detalle del lugar donde puedes guardarlo, pedir disponibilidad si es un restaurante/hotel, o iniciar la ruta hasta alli.'**
+  String get helpBody4c;
+
+  /// No description provided for @helpBody5a.
+  ///
+  /// In es, this message translates to:
+  /// **'Crea tus propios tours agregando un nombre, descripcion e imagen de portada.'**
+  String get helpBody5a;
+
+  /// No description provided for @helpBody5b.
+  ///
+  /// In es, this message translates to:
+  /// **'Agrega paradas (lugares) buscandolos en nuestra base de datos conectada a mapas.'**
+  String get helpBody5b;
+
+  /// No description provided for @helpBody5c.
+  ///
+  /// In es, this message translates to:
+  /// **'Puedes definir cuantas personas y cuantos dias dura el tour.'**
+  String get helpBody5c;
+
+  /// No description provided for @helpBody6a.
+  ///
+  /// In es, this message translates to:
+  /// **'Genera un tour completo simplemente describiendo lo que quieres ver y hacer con la IA.'**
+  String get helpBody6a;
+
+  /// No description provided for @helpBody6b.
+  ///
+  /// In es, this message translates to:
+  /// **'Puedes usar opciones avanzadas para especificar si dura dias u horas.'**
+  String get helpBody6b;
+
+  /// No description provided for @helpBody6c.
+  ///
+  /// In es, this message translates to:
+  /// **'Una vez generado el tour, puedes guardarlo en tu cuenta o editarlo para agregar o quitar paradas antes de guardarlo.'**
+  String get helpBody6c;
+
+  /// No description provided for @helpBody7a.
+  ///
+  /// In es, this message translates to:
+  /// **'Puedes editar tus tours creados en la seccion de \'Mis Tours\'.'**
+  String get helpBody7a;
+
+  /// No description provided for @helpBody7b.
+  ///
+  /// In es, this message translates to:
+  /// **'Guarda tus lugares favoritos y organizalos para consultarlos rapidamente.'**
+  String get helpBody7b;
+
+  /// No description provided for @helpBody8a.
+  ///
+  /// In es, this message translates to:
+  /// **'Completa tu perfil turistico eligiendo tus intereses y categorias favoritas.'**
+  String get helpBody8a;
+
+  /// No description provided for @helpBody8b.
+  ///
+  /// In es, this message translates to:
+  /// **'Cambia tu foto, nombre y preferencias de idioma y tema visual.'**
+  String get helpBody8b;
+
+  /// No description provided for @helpBody9a.
+  ///
+  /// In es, this message translates to:
+  /// **'Envia Peticiones, Quejas, Reclamos y Sugerencias directamente desde la app.'**
+  String get helpBody9a;
+
+  /// No description provided for @helpBody9b.
+  ///
+  /// In es, this message translates to:
+  /// **'Revisa el estado de tus PQRS y las respuestas del administrador en la pestana \'Historial\'.'**
+  String get helpBody9b;
+
+  /// No description provided for @privSec1Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Datos que recopilamos'**
+  String get privSec1Title;
+
+  /// No description provided for @privSec1Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, biografía, preferencias turísticas, favoritos, tours creados, tours realizados, calificación de tours, historial de PQRS, ubicación aproximada y datos técnicos del dispositivo necesarios para operar y optimizar la app.'**
+  String get privSec1Body;
+
+  /// No description provided for @privSec2Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Uso de ubicación y permisos'**
+  String get privSec2Title;
+
+  /// No description provided for @privSec2Body.
+  ///
+  /// In es, this message translates to:
+  /// **'La ubicación precisa o aproximada se utiliza para calcular clima local, lugares cercanos, eventos de la zona, progreso durante un tour, distancia restante y recomendaciones en tiempo real. Puedes revocar el permiso desde los ajustes del sistema, aunque algunas funciones dependerán de la ubicación manual.'**
+  String get privSec2Body;
+
+  /// No description provided for @privSec3Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Inteligencia Artificial y Recomendaciones'**
+  String get privSec3Title;
+
+  /// No description provided for @privSec3Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Las solicitudes al planificador IA pueden incluir destino, ciudad, país, duración, tipo de tour, idioma y texto libre. Usamos estos datos anónimamente para generar rutas lógicas, descripciones, paradas e imágenes. No compartimos tus datos personales con los proveedores de IA, solo los parámetros de búsqueda.'**
+  String get privSec3Body;
+
+  /// No description provided for @privSec4Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Almacenamiento, Seguridad y Sincronización'**
+  String get privSec4Title;
+
+  /// No description provided for @privSec4Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Tus datos de cuenta y preferencias (moneda, idioma, logros) se almacenan de manera segura en Supabase con políticas de seguridad de nivel de fila (RLS). La app móvil solo utiliza claves públicas para el acceso, asegurando que tus datos están protegidos contra accesos no autorizados.'**
+  String get privSec4Body;
+
+  /// No description provided for @privSec5Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Contenido compartido y Público'**
+  String get privSec5Title;
+
+  /// No description provided for @privSec5Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Si decides publicar tours, dejar comentarios, valoraciones o enviar PQRS, este contenido estará asociado a tu cuenta. Los tours marcados como privados y los borradores no serán visibles para la comunidad.'**
+  String get privSec5Body;
+
+  /// No description provided for @privSec6Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Terceros y Analíticas'**
+  String get privSec6Title;
+
+  /// No description provided for @privSec6Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Podemos compartir datos anonimizados con servicios de analítica para entender cómo se utiliza la aplicación y mejorar nuestros algoritmos de recomendación. Nunca venderemos tus datos a terceros para fines publicitarios.'**
+  String get privSec6Body;
+
+  /// No description provided for @privSec7Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Retención y eliminación de datos'**
+  String get privSec7Title;
+
+  /// No description provided for @privSec7Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Conservamos tus datos mientras tu cuenta esté activa o sea necesario para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar una copia de tus datos o su eliminación definitiva a través del módulo de PQRS o contactando a soporte técnico.'**
+  String get privSec7Body;
+
+  /// No description provided for @termsSec1Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Aceptación y Uso de la aplicación'**
+  String get termsSec1Title;
+
+  /// No description provided for @termsSec1Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Al usar VIBETOURS, aceptas estos términos en su totalidad. La app ofrece descubrimiento, creación y recorrido de tours turísticos. El usuario se compromete a usar la app de forma responsable, respetando normativas locales, el medio ambiente y evitando zonas restringidas, propiedades privadas o peligrosas.'**
+  String get termsSec1Body;
+
+  /// No description provided for @termsSec2Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Exactitud de Mapas, Rutas y Precios'**
+  String get termsSec2Title;
+
+  /// No description provided for @termsSec2Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Los mapas, tiempos, distancias, rutas y precios (incluso convertidos a diferentes monedas) son estimaciones referenciales. Pueden existir cierres, cambios de horario, variaciones cambiarias, clima adverso o riesgos. Verifica siempre la información con fuentes oficiales antes de desplazarte o realizar compras.'**
+  String get termsSec2Body;
+
+  /// No description provided for @termsSec3Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Contenido generado por IA (VibeTour IA)'**
+  String get termsSec3Title;
+
+  /// No description provided for @termsSec3Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Los tours generados por nuestra Inteligencia Artificial son recomendaciones automatizadas basadas en bases de datos turísticas. Aunque nos esforzamos por ofrecer lugares reales y rutas coherentes, VIBETOURS no garantiza su precisión absoluta. El usuario debe validar horarios, accesibilidad y existencia real del lugar.'**
+  String get termsSec3Body;
+
+  /// No description provided for @termsSec4Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Propiedad Intelectual y Derechos de Autor'**
+  String get termsSec4Title;
+
+  /// No description provided for @termsSec4Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Todo el contenido original de la app pertenece a VIBETOURS. Al crear y hacer público un tour en nuestra plataforma, nos concedes una licencia no exclusiva para mostrarlo, promocionarlo y adaptarlo dentro del servicio.'**
+  String get termsSec4Body;
+
+  /// No description provided for @termsSec5Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Responsabilidad del usuario y Riesgos'**
+  String get termsSec5Title;
+
+  /// No description provided for @termsSec5Body.
+  ///
+  /// In es, this message translates to:
+  /// **'El turismo al aire libre implica riesgos inherentes. El usuario es el único responsable de su seguridad, su salud, sus pertenencias y su comportamiento. VIBETOURS no actúa como agencia de viajes ni reemplaza a guías oficiales, autoridades o servicios de emergencia.'**
+  String get termsSec5Body;
+
+  /// No description provided for @termsSec6Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Directrices de Publicación de Tours y Reseñas'**
+  String get termsSec6Title;
+
+  /// No description provided for @termsSec6Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Queda estrictamente prohibido publicar contenido falso, difamatorio, ofensivo, discriminatorio, peligroso, spam o que infrinja derechos de autor o privacidad. VIBETOURS se reserva el derecho de moderar, ocultar o eliminar contenido y suspender cuentas que violen estas reglas.'**
+  String get termsSec6Body;
+
+  /// No description provided for @termsSec7Title.
+  ///
+  /// In es, this message translates to:
+  /// **'Soporte, Reclamos y PQRS'**
+  String get termsSec7Title;
+
+  /// No description provided for @termsSec7Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Todas las peticiones, quejas, reclamos y sugerencias deben canalizarse a través del módulo PQRS integrado en la app. El tiempo objetivo de respuesta es menor a 24 horas hábiles, sujeto a disponibilidad técnica y complejidad del requerimiento.'**
+  String get termsSec7Body;
+
+  /// No description provided for @helpBody4d.
+  ///
+  /// In es, this message translates to:
+  /// **'Cuando inicias un tour, el mapa te mostrara el progreso y la distancia restante a cada parada.'**
+  String get helpBody4d;
+
+  /// No description provided for @helpBody7c.
+  ///
+  /// In es, this message translates to:
+  /// **'Guarda tours de otros usuarios en tus favoritos para acceder a ellos rapidamente.'**
+  String get helpBody7c;
+
+  /// No description provided for @helpBody8c.
+  ///
+  /// In es, this message translates to:
+  /// **'Tus preferencias se utilizan para personalizar las recomendaciones en la seccion Descubrir y en la generacion de IA.'**
+  String get helpBody8c;
+
+  /// No description provided for @helpBody9c.
+  ///
+  /// In es, this message translates to:
+  /// **'Puedes consultar el estado de tus solicitudes en el historial de PQRS.'**
+  String get helpBody9c;
+
+  /// No description provided for @authRequireTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Inicia sesión para continuar'**
+  String get authRequireTitle;
+
+  /// No description provided for @authRequireBody.
+  ///
+  /// In es, this message translates to:
+  /// **'Tu perfil, tus tours manuales y tus borradores privados se activan cuando entras con tu cuenta.'**
+  String get authRequireBody;
+
+  /// No description provided for @authLogin.
+  ///
+  /// In es, this message translates to:
+  /// **'Iniciar sesión'**
+  String get authLogin;
+
+  /// No description provided for @authLoginTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Iniciar sesión'**
+  String get authLoginTitle;
+
+  /// No description provided for @authCreateAccount.
+  ///
+  /// In es, this message translates to:
+  /// **'Crea tu cuenta'**
+  String get authCreateAccount;
+
+  /// No description provided for @authSyncPrompt.
+  ///
+  /// In es, this message translates to:
+  /// **'Regístrate para sincronizar tu itinerario en todos tus dispositivos y nunca pierdas un viaje.'**
+  String get authSyncPrompt;
+
+  /// No description provided for @authContinueGoogle.
+  ///
+  /// In es, this message translates to:
+  /// **'Continuar con Google'**
+  String get authContinueGoogle;
+
+  /// No description provided for @authEmail.
+  ///
+  /// In es, this message translates to:
+  /// **'Correo electrónico'**
+  String get authEmail;
+
+  /// No description provided for @authPassword.
+  ///
+  /// In es, this message translates to:
+  /// **'Contraseña'**
+  String get authPassword;
+
+  /// No description provided for @authConfirmPassword.
+  ///
+  /// In es, this message translates to:
+  /// **'Confirmar contraseña'**
+  String get authConfirmPassword;
+
+  /// No description provided for @authEnter.
+  ///
+  /// In es, this message translates to:
+  /// **'Entrar'**
+  String get authEnter;
+
+  /// No description provided for @authCreateAccountBtn.
+  ///
+  /// In es, this message translates to:
+  /// **'Crear cuenta'**
+  String get authCreateAccountBtn;
+
+  /// No description provided for @authNoAccount.
+  ///
+  /// In es, this message translates to:
+  /// **'¿No tienes cuenta? '**
+  String get authNoAccount;
+
+  /// No description provided for @authRegister.
+  ///
+  /// In es, this message translates to:
+  /// **'Regístrate'**
+  String get authRegister;
+
+  /// No description provided for @authHasAccount.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Ya tienes una cuenta? '**
+  String get authHasAccount;
+
+  /// No description provided for @authTermsPrompt.
+  ///
+  /// In es, this message translates to:
+  /// **'Al continuar aceptas los Términos y la Política de Privacidad.'**
+  String get authTermsPrompt;
+
+  /// No description provided for @authErrorInvalid.
+  ///
+  /// In es, this message translates to:
+  /// **'Ingresa email y una contraseña de al menos 6 caracteres.'**
+  String get authErrorInvalid;
+
+  /// No description provided for @authErrorMismatch.
+  ///
+  /// In es, this message translates to:
+  /// **'Las contraseñas no coinciden.'**
+  String get authErrorMismatch;
+
+  /// No description provided for @authSuccessCreated.
+  ///
+  /// In es, this message translates to:
+  /// **'Cuenta creada. Revisa tu correo si Supabase pide confirmar.'**
+  String get authSuccessCreated;
+
+  /// No description provided for @authErrorSupabase.
+  ///
+  /// In es, this message translates to:
+  /// **'Configura SUPABASE_URL y SUPABASE_ANON_KEY para iniciar sesión.'**
+  String get authErrorSupabase;
+
+  /// No description provided for @authErrorGoogle.
+  ///
+  /// In es, this message translates to:
+  /// **'Agrega GOOGLE_WEB_CLIENT_ID para usar Google nativo.'**
+  String get authErrorGoogle;
+
+  /// No description provided for @authLoginPrompt.
+  ///
+  /// In es, this message translates to:
+  /// **'Iniciar sesión'**
+  String get authLoginPrompt;
 }
 
 class _AppLocalizationsDelegate

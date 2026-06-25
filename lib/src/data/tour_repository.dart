@@ -266,20 +266,57 @@ class TourRepository {
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode(request.toJson()),
             )
-            .timeout(const Duration(seconds: 120));
+            .timeout(const Duration(seconds: 30));
+            
         if (response.statusCode >= 200 && response.statusCode < 300) {
           final json = jsonDecode(response.body) as Map<String, dynamic>;
-          return _tourFromAiJson(
-            json['tour'] as Map<String, dynamic>,
-            request,
-            json['route'] is Map
-                ? Map<String, dynamic>.from(json['route'] as Map)
-                : null,
-          );
-        } else if (response.statusCode >= 400 && response.statusCode < 500) {
+          final jobId = json['jobId'] as String?;
+          
+          if (jobId != null) {
+            // Polling logic
+            int attempts = 0;
+            while (attempts < 120) {
+              await Future.delayed(const Duration(seconds: 3));
+              attempts++;
+              
+              final statusResponse = await http
+                  .get(Uri.parse('$apiBaseUrl/ai/tours/status/$jobId'))
+                  .timeout(const Duration(seconds: 10));
+                  
+              if (statusResponse.statusCode == 200) {
+                final statusJson = jsonDecode(statusResponse.body) as Map<String, dynamic>;
+                final status = statusJson['status'] as String?;
+                
+                if (status == 'completed' && statusJson['tour'] != null) {
+                  return _tourFromAiJson(
+                    statusJson['tour'] as Map<String, dynamic>,
+                    request,
+                    statusJson['route'] is Map
+                        ? Map<String, dynamic>.from(statusJson['route'] as Map)
+                        : null,
+                  );
+                } else if (status == 'failed') {
+                   throw Exception(statusJson['error'] ?? 'Falló la generación del tour.');
+                }
+              }
+            }
+            throw Exception('El tour tardó demasiado en generarse. Intenta de nuevo.');
+          } else if (json['tour'] != null) {
+            // Fallback backward compatibility
+            return _tourFromAiJson(
+              json['tour'] as Map<String, dynamic>,
+              request,
+              json['route'] is Map
+                  ? Map<String, dynamic>.from(json['route'] as Map)
+                  : null,
+            );
+          }
+        } else if (response.statusCode >= 400) {
           final json = jsonDecode(response.body) as Map<String, dynamic>;
           if (json['error'] != null) {
             throw FormatException(json['error'] as String);
+          } else {
+             throw Exception('Error del servidor: ${response.statusCode}');
           }
         }
       } on FormatException {

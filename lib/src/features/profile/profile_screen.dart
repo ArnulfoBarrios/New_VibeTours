@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
 final userStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
@@ -117,6 +118,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final statsAsync = ref.watch(userStatsProvider);
     final currency = ref.watch(currencyProvider);
     final locale = ref.watch(localeProvider);
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -125,7 +127,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
           children: [
             Text(
-              'Perfil',
+              l10n.profile,
               style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 32),
             ),
             const SizedBox(height: 24),
@@ -271,23 +273,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     data: (stats) => Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _StatItem(value: '${stats['createdTours']}', label: 'Tours Creados'),
-                        _StatItem(value: '${stats['toursRated']}', label: 'Calificados'),
-                        _StatItem(value: '${stats['participants']}', label: 'Participantes'),
+                        _StatItem(value: '${stats['createdTours']}', label: l10n.createdTours),
+                        _StatItem(value: '${stats['toursRated']}', label: l10n.toursRated),
+                        _StatItem(value: '${stats['participants']}', label: l10n.participants),
                       ],
                     ),
                     loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (err, stack) => const Text('Error al cargar estadísticas'),
+                    error: (err, stack) => Text(l10n.errorLoadingStats),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
-            _SectionTitle('Preferencias'),
-            _SettingsListTile(icon: Icons.workspace_premium_outlined, title: 'Hazte premium', onTap: () {}),
+            _SectionTitle(l10n.preferences),
+            _SettingsListTile(icon: Icons.workspace_premium_outlined, title: l10n.goPremium, onTap: () {}),
             _SettingsListTile(
               icon: Icons.monetization_on_outlined, 
-              title: 'Moneda', 
+              title: l10n.currency, 
               trailingText: currency.name.toUpperCase(), 
               onTap: () {
                 showModalBottomSheet(
@@ -325,7 +327,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             _SettingsListTile(
               icon: Icons.translate_rounded, 
-              title: 'Idioma', 
+              title: l10n.language, 
               trailingText: locale?.languageCode.toUpperCase() ?? 'Auto',
               onTap: () {
                 showModalBottomSheet(
@@ -335,7 +337,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         ListTile(
-                          title: const Text('Automático (Sistema)'),
+                          title: Text('Automático (${l10n.appearanceSystem})'),
                           onTap: () {
                             ref.read(localeProvider.notifier).setLocale('system');
                             Navigator.pop(context);
@@ -364,19 +366,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const _ThemeToggleTile(),
             
             const SizedBox(height: 24),
-            _SectionTitle('Soporte'),
-            _SettingsListTile(icon: Icons.help_outline_rounded, title: 'Acerca de', onTap: () => context.push('/help')),
-            _SettingsListTile(icon: Icons.feedback_outlined, title: 'Comentarios', onTap: () => context.push('/pqrs')),
-            _SettingsListTile(icon: Icons.star_border_rounded, title: 'Clasifícanos', onTap: () {
+            _SectionTitle(l10n.support),
+            _SettingsListTile(icon: Icons.help_outline_rounded, title: l10n.about, onTap: () => context.push('/help')),
+            _SettingsListTile(icon: Icons.feedback_outlined, title: l10n.feedback, onTap: () => context.push('/pqrs')),
+            _SettingsListTile(icon: Icons.star_border_rounded, title: l10n.rateUs, onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Gracias por ayudar a mejorar VIBETOURS.')),
               );
             }),
             
             const SizedBox(height: 24),
-            _SectionTitle('Legal'),
-            _SettingsListTile(icon: Icons.description_outlined, title: 'Términos de servicio', onTap: () => context.push('/legal/terms')),
-            _SettingsListTile(icon: Icons.privacy_tip_outlined, title: 'Política de Privacidad', onTap: () => context.push('/legal/privacy')),
+            _SectionTitle(l10n.legal),
+            _SettingsListTile(icon: Icons.description_outlined, title: l10n.termsOfService, onTap: () => context.push('/legal/terms')),
+            _SettingsListTile(icon: Icons.privacy_tip_outlined, title: l10n.privacyPolicy, onTap: () => context.push('/legal/privacy')),
             
             const SizedBox(height: 32),
             Center(
@@ -385,7 +387,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   await ref.read(authServiceProvider).signOut();
                   if (context.mounted) context.go('/login');
                 },
-                child: const Text('Cerrar sesión', style: TextStyle(color: Colors.red)),
+                child: Text(l10n.logout, style: const TextStyle(color: Colors.red)),
               ),
             ),
           ],
@@ -493,6 +495,7 @@ class _ThemeToggleTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final l10n = AppLocalizations.of(context);
 
     return InkWell(
       onTap: () {
@@ -504,7 +507,7 @@ class _ThemeToggleTile extends ConsumerWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.brightness_auto),
-                  title: const Text('Sistema'),
+                  title: Text(l10n.appearanceSystem),
                   onTap: () {
                     ref.read(themeModeProvider.notifier).setMode(ThemeMode.system);
                     Navigator.pop(context);
@@ -512,7 +515,7 @@ class _ThemeToggleTile extends ConsumerWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.light_mode),
-                  title: const Text('Claro'),
+                  title: Text(l10n.appearanceLight),
                   onTap: () {
                     ref.read(themeModeProvider.notifier).setMode(ThemeMode.light);
                     Navigator.pop(context);
@@ -520,7 +523,7 @@ class _ThemeToggleTile extends ConsumerWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.dark_mode),
-                  title: const Text('Oscuro'),
+                  title: Text(l10n.appearanceDark),
                   onTap: () {
                     ref.read(themeModeProvider.notifier).setMode(ThemeMode.dark);
                     Navigator.pop(context);
@@ -544,16 +547,16 @@ class _ThemeToggleTile extends ConsumerWidget {
             const SizedBox(width: 16),
             Expanded(
               child: Text(
-                'Apariencia',
+                AppLocalizations.of(context).appearance,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
             Text(
               themeMode == ThemeMode.system
-                  ? 'Sistema'
+                  ? l10n.appearanceSystem
                   : themeMode == ThemeMode.light
-                      ? 'Claro'
-                      : 'Oscuro',
+                      ? l10n.appearanceLight
+                      : l10n.appearanceDark,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                   ),

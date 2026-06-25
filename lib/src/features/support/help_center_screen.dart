@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
+import '../../l10n/generated/app_localizations.dart';
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
@@ -44,6 +45,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return PremiumScaffold(
       safeBottom: true,
       child: Stack(
@@ -61,7 +63,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                     ),
                     const SizedBox(width: 14),
                     Text(
-                      'Guías de la App',
+                      l10n.helpGuides,
                       style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -75,21 +77,21 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
                   child: Column(
                     children: [
-                      const _HeaderCard(),
+                      _HeaderCard(l10n: l10n),
                       const SizedBox(height: 24),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            _SectionChip('1. Cuenta', onTap: () => _scrollTo(_key1)),
-                            _SectionChip('2. Descubrir', onTap: () => _scrollTo(_key2)),
-                            _SectionChip('3. Tours', onTap: () => _scrollTo(_key3)),
-                            _SectionChip('4. Mapa', onTap: () => _scrollTo(_key4)),
-                            _SectionChip('5. Crear', onTap: () => _scrollTo(_key5)),
-                            _SectionChip('6. AI', onTap: () => _scrollTo(_key6)),
-                            _SectionChip('7. Editar', onTap: () => _scrollTo(_key7)),
-                            _SectionChip('8. Perfil', onTap: () => _scrollTo(_key8)),
-                            _SectionChip('9. PQRS', onTap: () => _scrollTo(_key9)),
+                            _SectionChip(l10n.helpSec1, onTap: () => _scrollTo(_key1)),
+                            _SectionChip(l10n.helpSec2, onTap: () => _scrollTo(_key2)),
+                            _SectionChip(l10n.helpSec3, onTap: () => _scrollTo(_key3)),
+                            _SectionChip(l10n.helpSec4, onTap: () => _scrollTo(_key4)),
+                            _SectionChip(l10n.helpSec5, onTap: () => _scrollTo(_key5)),
+                            _SectionChip(l10n.helpSec6, onTap: () => _scrollTo(_key6)),
+                            _SectionChip(l10n.helpSec7, onTap: () => _scrollTo(_key7)),
+                            _SectionChip(l10n.helpSec8, onTap: () => _scrollTo(_key8)),
+                            _SectionChip(l10n.helpSec9, onTap: () => _scrollTo(_key9)),
                           ],
                         ),
                       ),
@@ -98,112 +100,111 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
                       // Sections
                       _InfoCard(
                         key: _key1,
-                        title: '1. Cuenta, invitado e inicio de sesion',
+                        title: l10n.helpTitle1,
                         icon: Icons.login_rounded,
-                        items: const [
-                          'Puedes abrir VibeTours como invitado para explorar tours aprobados, lugares cercanos, el mapa basico y detalles publicos.',
-                          'Para crear tours, guardar favoritos en la nube, comentar, calificar, enviar PQRS o pedir disponibilidad necesitas iniciar sesion.',
-                          'Si intentas una accion privada, VibeTours mostrara el aviso "Inicia sesion para continuar" sin perder lo que estabas viendo.',
-                          'El login por correo se mantiene disponible. Si Google esta configurado, tambien puedes entrar con tu cuenta de Google.',
+                        items: [
+                          l10n.helpBody1a,
+                          l10n.helpBody1b,
+                          l10n.helpBody1c,
+                          l10n.helpBody1d,
                         ],
                       ),
                       const SizedBox(height: 20),
                       
                       _InfoCard(
                         key: _key2,
-                        title: '2. Descubrir lugares cerca de ti',
+                        title: l10n.helpTitle2,
                         icon: Icons.explore_rounded,
-                        items: const [
-                          'La seccion Descubrir muestra lugares destacados usando tu ubicacion y recomendaciones cercanas.',
-                          'Si el buscador esta vacio, veras recomendaciones populares o cercanas para que la pantalla nunca quede sin contenido.',
-                          'Puedes buscar palabras como museo, restaurante, parque, playa o mirador para encontrar lugares reales.',
-                          'Usa filtros de categoria, precio, distancia y apto para menores para ajustar los resultados.',
-                          'El boton "Como llegar" abre la ruta hacia el lugar seleccionado desde el mapa.',
+                        items: [
+                          l10n.helpBody2a,
+                          l10n.helpBody2b,
+                          l10n.helpBody2c,
+                          l10n.helpBody2d,
                         ],
                       ),
                       const SizedBox(height: 20),
                       
                       _InfoCard(
                         key: _key3,
-                        title: '3. Pantalla Tours',
+                        title: l10n.helpTitle3,
                         icon: Icons.tour_rounded,
-                        items: const [
-                          'Explora tours creados por la comunidad o generados por nuestra IA.',
-                          'Los tours se pueden filtrar por tipo (aventura, gastronomia, etc.), dificultad o calificacion.',
-                          'Accede al detalle de cada tour para ver su ruta completa, paradas e informacion adicional antes de iniciarlo.',
+                        items: [
+                          l10n.helpBody3a,
+                          l10n.helpBody3b,
+                          l10n.helpBody3c,
                         ],
                       ),
                       const SizedBox(height: 20),
 
                       _InfoCard(
                         key: _key4,
-                        title: '4. Mapa y navegacion',
+                        title: l10n.helpTitle4,
                         icon: Icons.map_rounded,
-                        items: const [
-                          'Visualiza lugares turisticos, eventos y puntos de interes directamente en el mapa.',
-                          'Usa la brujula y la ubicacion en tiempo real para guiarte durante tu recorrido.',
-                          'El mapa soporta diferentes estilos visuales, ajustables desde la pantalla de configuracion.',
-                          'Cuando inicias un tour, el mapa te mostrara el progreso y la distancia restante a cada parada.',
+                        items: [
+                          l10n.helpBody4a,
+                          l10n.helpBody4b,
+                          l10n.helpBody4c,
+                          l10n.helpBody4d,
                         ],
                       ),
                       const SizedBox(height: 20),
                       
                       _InfoCard(
                         key: _key5,
-                        title: '5. Creacion manual de Tours',
+                        title: l10n.helpTitle5,
                         icon: Icons.add_location_alt_rounded,
-                        items: const [
-                          'Crea tus propios tours agregando un nombre, descripcion e imagen de portada.',
-                          'Agrega paradas especificas buscando lugares o marcandolas en el mapa.',
-                          'Asigna una categoria, etiquetas y nivel de dificultad para que otros usuarios puedan encontrar tu tour facilmente.',
+                        items: [
+                          l10n.helpBody5a,
+                          l10n.helpBody5b,
+                          l10n.helpBody5c,
                         ],
                       ),
                       const SizedBox(height: 20),
                       
                       _InfoCard(
                         key: _key6,
-                        title: '6. IA VibeTour (Planificador)',
+                        title: l10n.helpTitle6,
                         icon: Icons.auto_awesome_rounded,
-                        items: const [
-                          'Genera un tour completo simplemente describiendo lo que quieres ver y hacer con la IA.',
-                          'VibeTour IA organizara la ruta, sugerira lugares relevantes y preparara toda la experiencia para ti.',
-                          'La IA toma en cuenta tus preferencias y la ubicacion seleccionada para ofrecer un recorrido unico.',
+                        items: [
+                          l10n.helpBody6a,
+                          l10n.helpBody6b,
+                          l10n.helpBody6c,
                         ],
                       ),
                       const SizedBox(height: 20),
 
                       _InfoCard(
                         key: _key7,
-                        title: '7. Edicion y guardado',
+                        title: l10n.helpTitle7,
                         icon: Icons.edit_document,
-                        items: const [
-                          'Puedes editar tus tours creados en la seccion de "Mis Tours".',
-                          'Modifica el orden de las paradas, actualiza las imagenes o cambia la descripcion en cualquier momento.',
-                          'Guarda tours de otros usuarios en tus favoritos para acceder a ellos rapidamente.',
+                        items: [
+                          l10n.helpBody7a,
+                          l10n.helpBody7b,
+                          l10n.helpBody7c,
                         ],
                       ),
                       const SizedBox(height: 20),
 
                       _InfoCard(
                         key: _key8,
-                        title: '8. Perfil y personalizacion',
+                        title: l10n.helpTitle8,
                         icon: Icons.person_outline_rounded,
-                        items: const [
-                          'Completa tu perfil turistico eligiendo tus intereses y categorias favoritas.',
-                          'Sube una foto de perfil y actualiza tus datos basicos.',
-                          'Tus preferencias se utilizan para personalizar las recomendaciones en la seccion Descubrir y en la generacion de IA.',
+                        items: [
+                          l10n.helpBody8a,
+                          l10n.helpBody8b,
+                          l10n.helpBody8c,
                         ],
                       ),
                       const SizedBox(height: 20),
 
                       _InfoCard(
                         key: _key9,
-                        title: '9. PQRS y Soporte',
+                        title: l10n.helpTitle9,
                         icon: Icons.support_agent_rounded,
-                        items: const [
-                          'Envia Peticiones, Quejas, Reclamos y Sugerencias directamente desde la app.',
-                          'El equipo de VibeTours revisara tu solicitud y te dara respuesta en menos de 24 horas habiles.',
-                          'Puedes consultar el estado de tus solicitudes en el historial de PQRS.',
+                        items: [
+                          l10n.helpBody9a,
+                          l10n.helpBody9b,
+                          l10n.helpBody9c,
                         ],
                       ),
                       const SizedBox(height: 40),
@@ -220,7 +221,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
 }
 
 class _HeaderCard extends StatelessWidget {
-  const _HeaderCard();
+  const _HeaderCard({required this.l10n});
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -242,12 +244,12 @@ class _HeaderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Guía detallada',
+                  l10n.helpDetailed,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Para explorar, crear, editar, guardar y disfrutar tours.',
+                  l10n.helpDetailedSub,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
