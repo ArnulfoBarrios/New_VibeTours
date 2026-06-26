@@ -10,6 +10,43 @@ function summarizePlaces(places = []) {
   }))
 }
 
+export async function extractLocation(prompt) {
+  if (!prompt || typeof prompt !== 'string') return null
+  const timeoutMs = 40000
+  const baseUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
+  const model = process.env.OLLAMA_MODEL ?? 'llama3.1'
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        format: 'json',
+        messages: [
+          { role: 'system', content: 'Eres un asistente experto en viajes. Lee el prompt del usuario. Si menciona claramente a dónde quiere ir, ponlo en "explicit_destination" y "suggestions" vacío. Si NO menciona a dónde quiere ir, pon "explicit_destination" vacío y recomienda 3 destinos increíbles (ciudades) adaptados a sus gustos en "suggestions". Devuelve ÚNICAMENTE JSON válido con: "explicit_destination" (string), "city" (string), "country" (string), "suggestions": [{ "city": "...", "country": "...", "reason": "..." }]' },
+          { role: 'user', content: prompt }
+        ]
+      }),
+      signal: controller.signal
+    })
+    clearTimeout(timeout)
+    if (!response.ok) {
+      console.warn('[extractLocation] non-ok status', response.status)
+      return null
+    }
+    const json = await response.json()
+    let content = json.message?.content ?? '{}'
+    content = content.replace(/```json/g, '').replace(/```/g, '').trim()
+    return JSON.parse(content)
+  } catch (err) {
+    console.error('[extractLocation] error:', err.message)
+    return null
+  }
+}
+
 export async function planWithOllama({
   destination,
   country,
@@ -159,9 +196,9 @@ Reglas centrales:
   }
 }
 
-No inventes lugares fuera de la lista de candidatos si ya hay suficientes opciones reales.
-Usa la lista de candidatos como base del recorrido y mantente fiel al orden logico sugerido.
-No repitas categorias similares de forma consecutiva.
+No inventes lugares fuera de la lista proporcionada.
+DEBES usar EXACTAMENTE la lista de lugares seleccionados (selectedPlaces) como el itinerario final y mantenerte estrictamente fiel al orden lógico sugerido.
+Cada parada de la lista proporcionada debe estar en tu respuesta, sin agregar ni quitar ninguna.
 Input: ${JSON.stringify(routeBrief)}`,
             },
           ],

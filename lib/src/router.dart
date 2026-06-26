@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'features/ai/ai_builder_screen.dart';
 import 'features/ai/ai_planner_screen.dart';
 import 'features/admin/admin_screen.dart';
 import 'features/auth/login_screen.dart';
@@ -43,6 +44,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
               GoRoute(path: '/ai', builder: (context, state) => const AiPlannerScreen()),
+              GoRoute(path: '/ai/builder', builder: (context, state) => const AiBuilderScreen()),
             ],
           ),
           StatefulShellBranch(

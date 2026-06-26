@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch } from '../services/osm.js'
-import { planWithOllama } from '../services/ollama.js'
+import { planWithOllama, extractLocation } from '../services/ollama.js'
 import { supabase } from '../services/supabase.js'
 
 export const aiRouter = Router()
@@ -23,7 +23,7 @@ setInterval(() => {
 }, 3600000)
 
 const requestSchema = z.object({
-  destination: z.string().min(1),
+  destination: z.string().optional().default(''),
   country: z.string().optional().default(''),
   city: z.string().optional().default(''),
   durationHours: z.number().min(1).max(72).default(4),
@@ -107,6 +107,334 @@ aiRouter.get('/tours/status/:jobId', (req, res) => {
     error: job.error
   })
 })
+
+aiRouter.post('/tours/recommend', async (req, res, next) => {
+  try {
+    const input = requestSchema.parse(req.body)
+    
+    if (!input.destination && input.prompt) {
+      const extracted = await extractLocation(input.prompt)
+      if (extracted) {
+        if (!extracted.explicit_destination) {
+          const suggestions = (Array.isArray(extracted.suggestions) && extracted.suggestions.length > 0)
+            ? extracted.suggestions
+            : [
+                { city: "París", country: "Francia", reason: "Un destino clásico y hermoso." },
+                { city: "Bali", country: "Indonesia", reason: "Perfecto para relajarse y disfrutar la naturaleza." },
+                { city: "Nueva York", country: "Estados Unidos", reason: "Una ciudad vibrante llena de cultura." }
+              ]
+          return res.json({
+            needsDestination: true,
+            message: '¿A qué lugar te gustaría ir? Basado en lo que buscas, aquí tienes algunas recomendaciones:',
+            suggestions
+          })
+        }
+        input.destination = extracted.explicit_destination || extracted.city || extracted.country || ''
+        input.city = extracted.city || ''
+        input.country = extracted.country || ''
+      } else {
+        // Si falló extractLocation por timeout, usamos un fallback contextual rápido basado en el prompt
+        const text = input.prompt.toLowerCase()
+        let suggestions = [
+          { city: "París", country: "Francia", reason: "Un destino clásico y hermoso lleno de cultura." },
+          { city: "Bali", country: "Indonesia", reason: "Perfecto para relajarse y disfrutar de la naturaleza." },
+          { city: "Nueva York", country: "Estados Unidos", reason: "Una metrópolis vibrante, ideal para viajes urbanos." }
+        ]
+        
+        if (text.includes("frío") || text.includes("frio") || text.includes("nieve") || text.includes("invierno")) {
+          suggestions = [
+            { city: "Reikiavik", country: "Islandia", reason: "Ideal para disfrutar de paisajes nevados y auroras boreales." },
+            { city: "Bariloche", country: "Argentina", reason: "Famoso por su chocolate caliente, lagos y montañas." },
+            { city: "Quebec", country: "Canadá", reason: "Una ciudad hermosa con un clima invernal espectacular." }
+          ]
+        } else if (text.includes("playa") || text.includes("sol") || text.includes("calor") || text.includes("mar") || text.includes("tropical")) {
+          suggestions = [
+            { city: "Cancún", country: "México", reason: "Playas paradisíacas y aguas cristalinas." },
+            { city: "Punta Cana", country: "República Dominicana", reason: "El lugar perfecto para relajarse bajo el sol tropical." },
+            { city: "Maldivas", country: "", reason: "Un paraíso exclusivo rodeado de naturaleza." }
+          ]
+        } else if (text.includes("naturaleza") || text.includes("montaña") || text.includes("bosque") || text.includes("aventura")) {
+          suggestions = [
+            { city: "San José", country: "Costa Rica", reason: "Rodeado de biodiversidad y ecosistemas increíbles." },
+            { city: "Cusco", country: "Perú", reason: "Montañas majestuosas y un entorno natural inigualable." },
+            { city: "Banff", country: "Canadá", reason: "Parques nacionales y vida silvestre asombrosa." }
+          ]
+        } else if (text.includes("historia") || text.includes("ruinas") || text.includes("museo")) {
+          suggestions = [
+            { city: "Roma", country: "Italia", reason: "Sumérgete en la historia del antiguo imperio romano." },
+            { city: "Atenas", country: "Grecia", reason: "La cuna de la civilización occidental." },
+            { city: "El Cairo", country: "Egipto", reason: "Milenios de historia te esperan." }
+          ]
+        }
+
+        return res.json({
+          needsDestination: true,
+          message: '¿A dónde quieres ir? Por favor, ingresa o elige un destino:',
+          suggestions
+        })
+      }
+    }
+    
+    if (input.city && input.city.trim().length > 0) {
+      input.destination = input.city.trim()
+    }
+    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
+    if (!location) {
+      return res.status(400).json({ error: 'No pudimos identificar la ubicación ingresada.' })
+    }
+    const candidatePack = await collectTourCandidates(input, location)
+    if (!candidatePack.places || candidatePack.places.length === 0) {
+      return res.status(400).json({ error: 'No encontramos suficientes lugares de interés.' })
+    }
+    const planner = buildTourPlanner(input, location, candidatePack.places)
+    
+    // We send back the selected places as recommendations
+    const recommendations = planner.selectedPlaces.map(place => ({
+      id: place.placeId,
+      name: place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      category: place.category,
+      imageUrl: place.imageUrl || place.images?.[0] || '',
+      description: place.description || place.history || '',
+      reason: buildCuriousFacts(place, input.type)[0] || 'Recomendado por su relevancia en la ruta.',
+      durationMinutes: place.minutes || 25,
+      locationInfo: {
+        nombre_lugar: place.name,
+        direccion: place.address || '',
+        ciudad: place.city || input.city || '',
+        region: place.region || '',
+        pais: place.country || input.country || '',
+        place_id: place.placeId,
+        url_mapa: mapUrlFor(place.latitude, place.longitude)
+      }
+    }))
+    
+    res.json({
+      recommendations,
+      plannerContext: {
+        distanceKm: planner.distanceKm,
+        recommendedSchedule: planner.recommendedSchedule,
+        difficulty: planner.difficulty,
+        bestSeason: planner.bestSeason,
+        audience: planner.audience,
+        subcategories: planner.subcategories,
+        accessibility: planner.accessibility,
+        petsAllowed: planner.petsAllowed,
+        familyFriendly: planner.familyFriendly,
+      }
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+aiRouter.post('/tours/build', async (req, res, next) => {
+  try {
+    const buildSchema = z.object({
+      request: requestSchema,
+      places: z.array(z.any()), // The confirmed places
+      plannerContext: z.any()
+    })
+    const { request: input, places, plannerContext } = buildSchema.parse(req.body)
+    
+    const jobId = crypto.randomUUID()
+    tourJobs.set(jobId, {
+      id: jobId,
+      status: 'generating_narrative',
+      message: 'Creando narración única del tour con IA...',
+      createdAt: Date.now(),
+      tour: null,
+      route: null,
+      error: null
+    })
+
+    processTourBuild(jobId, input, places, plannerContext).catch((err) => {
+      console.error(`[tour-ai] Job ${jobId} failed completely:`, err)
+      const job = tourJobs.get(jobId)
+      if (job) {
+        job.status = 'failed'
+        job.message = 'Ocurrió un error inesperado al generar el tour.'
+        job.error = String(err)
+      }
+    })
+
+    res.json({ jobId, status: 'generating_narrative', message: 'Construyendo tour...' })
+  } catch (error) {
+    next(error)
+  }
+})
+
+aiRouter.post('/tours/alternatives', async (req, res, next) => {
+  try {
+    const altSchema = z.object({
+      request: requestSchema,
+      currentPlaces: z.array(z.any()),
+      excludeIds: z.array(z.string()).optional()
+    })
+    const { request: input, currentPlaces, excludeIds = [] } = altSchema.parse(req.body)
+    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
+    if (!location) {
+      return res.status(400).json({ error: 'Ubicación no encontrada' })
+    }
+    const candidatePack = await collectTourCandidates(input, location)
+    const planner = buildTourPlanner(input, location, candidatePack.places)
+    
+    const currentIds = new Set(currentPlaces.map(p => p.id || p.placeId))
+    const exclusions = new Set(excludeIds)
+    
+    const alternatives = planner.selectedPlaces
+      .filter(place => !currentIds.has(place.placeId) && !exclusions.has(place.placeId))
+      .slice(0, 5)
+      .map(place => ({
+        id: place.placeId,
+        name: place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        category: place.category,
+        imageUrl: place.imageUrl || place.images?.[0] || '',
+        description: place.description || place.history || '',
+        reason: 'Excelente alternativa que mantiene la coherencia de la ruta.',
+        durationMinutes: place.minutes || 25,
+        locationInfo: {
+          nombre_lugar: place.name,
+          direccion: place.address || '',
+          ciudad: place.city || input.city || '',
+          region: place.region || '',
+          pais: place.country || input.country || '',
+          place_id: place.placeId,
+          url_mapa: mapUrlFor(place.latitude, place.longitude)
+        }
+      }))
+      
+    res.json({ alternatives })
+  } catch (error) {
+    next(error)
+  }
+})
+
+async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
+  const updateJob = (updates) => {
+    const job = tourJobs.get(jobId)
+    if (job) Object.assign(job, updates)
+  }
+
+  try {
+    const planner = {
+      selectedPlaces: confirmedPlaces.map((p, i) => ({
+        ...p,
+        placeId: p.id,
+        order: i,
+        minutes: p.durationMinutes
+      })),
+      ...plannerContext,
+      distanceKm: estimateRouteDistance(confirmedPlaces, null),
+      timeProfile: {
+        durationHours: input.durationHours,
+        stopTarget: confirmedPlaces.length,
+        pace: input.touristPace,
+        hasProfile: Boolean(input.touristProfileSummary || input.touristInterests.length),
+      }
+    }
+
+    let ollama = null
+    let ollamaError = null
+    const shouldAskOllama = shouldUseOllama(input, planner)
+    try {
+      if (!shouldAskOllama) {
+        console.info('[tour-ai] ollama-skipped (build)')
+      } else {
+        ollama = await planWithOllama({
+          ...input,
+          places: planner.selectedPlaces,
+          recommendedSchedule: planner.recommendedSchedule,
+          timeProfile: planner.timeProfile,
+          sourceSummary: { location: null, candidateSource: 'user-confirmed', candidateCount: confirmedPlaces.length, selectedCount: confirmedPlaces.length },
+        })
+      }
+    } catch (error) {
+      ollamaError = error
+    }
+
+    let sourceTour
+    let fallbackReason = null
+    if (isValidTourPlan(ollama) && planner.selectedPlaces.length >= 2) {
+      sourceTour = validateTourQuality(ollama, planner)
+    } else {
+      fallbackReason = 'ollama_unavailable'
+      sourceTour = await buildFallbackTour(planner, input)
+    }
+    
+    updateJob({ status: 'validating', message: 'Validando estructura y calidad del recorrido...' })
+    
+    // We reuse the assembly logic
+    const stopsTarget = planner.selectedPlaces.length
+    const stops = await Promise.all(
+      Array.from({ length: stopsTarget }, (_, index) => {
+        const sourceStop = Array.isArray(sourceTour.itinerario) ? sourceTour.itinerario[index] : null
+        const anchorPlace = planner.selectedPlaces[index]
+        return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces)
+      })
+    )
+    
+    const publicStops = stops.map(s => s.publicStop)
+    const routeStops = stops.map(s => s.routeStop)
+    const coverUrl = publicStops[0]?.imagenes?.[0] ?? fallbackCover(input.destination)
+    
+    const tour = {
+      id: sourceTour.id?.toString() ?? crypto.randomUUID(),
+      nombre_tour: sourceTour.nombre_tour ?? sourceTour.title ?? `${input.city || input.destination} VibeTour AI`,
+      resumen_corto: sourceTour.resumen_corto ?? 'Experiencia creada a medida.',
+      tipo_tour: sourceTour.tipo_tour ?? input.type,
+      subcategorias: normalizeList(sourceTour.subcategorias, [typeLabel(input.type)]),
+      descripcion_tour: sourceTour.descripcion_tour ?? 'Ruta interactiva creada con IA.',
+      experiencia_destacada: sourceTour.experiencia_destacada ?? `Recorrido continuo por ${input.destination}.`,
+      historia_del_lugar: sourceTour.historia_del_lugar ?? '',
+      contexto_cultural: sourceTour.contexto_cultural ?? '',
+      duracion_estimada: sourceTour.duracion_estimada ?? `${input.durationHours} horas`,
+      distancia_total: sourceTour.distancia_total ?? `${Number(planner.distanceKm).toFixed(1)} km`,
+      nivel_dificultad: sourceTour.nivel_dificultad ?? planner.difficulty,
+      idiomas_disponibles: normalizeList(sourceTour.idiomas_disponibles, [input.language]),
+      publico_recomendado: normalizeAudience(sourceTour.publico_recomendado, input.type, input.touristInterests),
+      mejor_epoca: sourceTour.mejor_epoca ?? planner.bestSeason,
+      horario_recomendado: sourceTour.horario_recomendado ?? planner.recommendedSchedule,
+      punto_encuentro: normalizeLocationInfo(sourceTour.punto_encuentro, publicStops[0], input),
+      imagen_portada: sourceTour.imagen_portada ?? coverUrl,
+      galeria_tour: unique([...normalizeList(sourceTour.galeria_tour, []), ...publicStops.flatMap(s => s.imagenes)]).slice(0, 8),
+      itinerario: publicStops,
+      orden_paradas: publicStops.map(s => s.nombre),
+      incluye: normalizeList(sourceTour.incluye, defaultIncludes(input.type)),
+      no_incluye: normalizeList(sourceTour.no_incluye, defaultExcludes()),
+      recomendaciones: normalizeList(sourceTour.recomendaciones, defaultRecommendations()),
+      que_llevar: normalizeList(sourceTour.que_llevar, defaultWhatToBring(input.type)),
+      normas_del_tour: normalizeList(sourceTour.normas_del_tour, defaultRules()),
+      etiquetas: normalizeList(sourceTour.etiquetas, ['AI Builder', typeLabel(input.type), input.city || input.destination]),
+      palabras_clave: normalizeList(sourceTour.palabras_clave, [input.destination, input.type]),
+      categoria_principal: sourceTour.categoria_principal ?? input.type,
+      presupuesto_estimado_usd: normalizeBudget(sourceTour.presupuesto_estimado_usd, input),
+      informacion_adicional: {
+        accesibilidad: sourceTour.informacion_adicional?.accesibilidad ?? planner.accessibility,
+        mascotas_permitidas: sourceTour.informacion_adicional?.mascotas_permitidas ?? planner.petsAllowed,
+        apto_para_ninos: sourceTour.informacion_adicional?.apto_para_ninos ?? planner.familyFriendly,
+        apto_para_adultos_mayores: sourceTour.informacion_adicional?.apto_para_adultos_mayores ?? true,
+      },
+    }
+    
+    const route = {
+      durationHours: input.durationHours,
+      distanceKm: Number(planner.distanceKm),
+      stops: routeStops,
+    }
+    
+    if (input.persist && supabase && input.userId) {
+      await persistTour(tour, route, input, input.userId)
+    }
+    updateJob({ status: 'completed', message: 'Tour generado con éxito', tour, route })
+  } catch (error) {
+    console.error('[tour-ai] fatal process error (build)', error)
+    updateJob({ status: 'failed', message: 'Error fatal durante la generación.', error: String(error) })
+  }
+}
 
 async function processTourGeneration(jobId, input) {
   const updateJob = (updates) => {

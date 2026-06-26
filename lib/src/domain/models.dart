@@ -521,6 +521,68 @@ class AiTourRequest {
   };
 }
 
+class AiRecommendation {
+  const AiRecommendation({
+    required this.id,
+    required this.name,
+    required this.latitude,
+    required this.longitude,
+    required this.category,
+    required this.imageUrl,
+    required this.description,
+    required this.reason,
+    required this.durationMinutes,
+    required this.locationInfo,
+  });
+
+  final String id;
+  final String name;
+  final double latitude;
+  final double longitude;
+  final String category;
+  final String imageUrl;
+  final String description;
+  final String reason;
+  final int durationMinutes;
+  final TourLocationInfo locationInfo;
+
+  factory AiRecommendation.fromJson(Map<String, dynamic> json) {
+    return AiRecommendation(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      category: json['category'] as String? ?? '',
+      imageUrl: json['imageUrl'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      reason: json['reason'] as String? ?? '',
+      durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 25,
+      locationInfo: TourLocationInfo(
+        nombreLugar: json['locationInfo']?['nombre_lugar'] ?? '',
+        direccion: json['locationInfo']?['direccion'] ?? '',
+        ciudad: json['locationInfo']?['ciudad'] ?? '',
+        region: json['locationInfo']?['region'] ?? '',
+        pais: json['locationInfo']?['pais'] ?? '',
+        placeId: json['locationInfo']?['place_id'] ?? '',
+        urlMapa: json['locationInfo']?['url_mapa'] ?? '',
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'latitude': latitude,
+    'longitude': longitude,
+    'category': category,
+    'imageUrl': imageUrl,
+    'description': description,
+    'reason': reason,
+    'durationMinutes': durationMinutes,
+    'locationInfo': locationInfo.toCreationJson(),
+  };
+}
+
 String tourTypeLabel(TourType type) {
   switch (type) {
     case TourType.urban:
@@ -580,4 +642,28 @@ String _minutesLabel(int minutes) {
   if (minutes < 60) return '$minutes minutos';
   final hours = minutes / 60;
   return '${hours.toStringAsFixed(hours.truncateToDouble() == hours ? 0 : 1)} horas';
+}
+
+enum ChatMessageType { user, ai }
+
+class ChatMessage {
+  final String id;
+  final String text;
+  final ChatMessageType type;
+  final DateTime timestamp;
+  final Tour? embeddedTour;
+  final List<String>? actionChips;
+  final String? localImagePath;
+
+  ChatMessage({
+    required this.id,
+    required this.text,
+    required this.type,
+    required this.timestamp,
+    this.embeddedTour,
+    this.actionChips,
+    this.localImagePath,
+  });
+
+  bool get isUser => type == ChatMessageType.user;
 }

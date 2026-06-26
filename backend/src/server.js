@@ -34,7 +34,8 @@ app.use((req, res) => {
 })
 
 app.use((error, req, res, next) => {
-  const status = error.status ?? 500
+  console.error('[express-error]', error)
+  const status = error.status ?? (error.name === 'ZodError' ? 400 : 500)
   res.status(status).json({
     error: error.message ?? 'Internal server error',
     issues: error.issues

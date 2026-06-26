@@ -1,19 +1,19 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
-import '../../core/design/app_theme.dart';
-import '../../core/design/premium_components.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import 'ai_builder_controller.dart';
 
 class AiPlannerScreen extends ConsumerStatefulWidget {
   const AiPlannerScreen({super.key});
@@ -24,25 +24,24 @@ class AiPlannerScreen extends ConsumerStatefulWidget {
 
 class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     with WidgetsBindingObserver {
-  final _destination = TextEditingController(text: '');
   final _prompt = TextEditingController();
+  final _scrollController = ScrollController();
   final _voicePrompt = _VoicePromptSession();
-  double _duration = 4;
-  bool _isDays = false;
-  double _hoursPerDay = 8;
-  TourType _type = TourType.cultural;
-  String _language = 'es';
+  
   bool _isRecording = false;
   bool _isStartingVoice = false;
   String? _voiceFeedback;
   bool _voiceFeedbackIsError = false;
   String _baselinePrompt = '';
+  String? _selectedImagePath;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+      
       final initialPrompt = ref.read(aiPromptProvider);
       if (initialPrompt != null && initialPrompt.isNotEmpty) {
         _prompt.text = initialPrompt;
@@ -51,7 +50,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         final autoStart = ref.read(aiPromptAutoStartProvider);
         if (autoStart) {
           ref.read(aiPromptAutoStartProvider.notifier).state = false;
-          _generate();
+          _sendMessage();
         }
       }
     });
@@ -61,10 +60,19 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_voicePrompt.dispose());
-    _destination.dispose();
-
     _prompt.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   @override
@@ -84,420 +92,543 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     }
   }
 
+  void _sendMessage() {
+    if (_prompt.text.trim().isEmpty && _selectedImagePath == null) return;
+    ref.read(aiBuilderProvider.notifier).sendMessage(_prompt.text.trim(), imagePath: _selectedImagePath);
+    _prompt.clear();
+    setState(() {
+      _selectedImagePath = null;
+    });
+    Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _selectedImagePath = pickedFile.path;
+      });
+    }
+  }
+
+  void _sendChipMessage(String text) {
+    ref.read(aiBuilderProvider.notifier).sendMessage(text);
+    Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final aiState = ref.watch(aiPlannerControllerProvider);
-    final remaining = ref.watch(guestAiRemainingProvider);
-    final user = ref.watch(authUserProvider).valueOrNull;
-    final name =
-        user?.userMetadata?['full_name']?.toString().split(' ').first ??
-        'amigo';
+    final builderState = ref.watch(aiBuilderProvider);
+    
+    ref.listen<AiBuilderState>(
+      aiBuilderProvider,
+      (previous, next) {
+        if (next.messages.length > (previous?.messages.length ?? 0)) {
+          Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+        }
+      },
+    );
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // Fondo Siri / Apple Intelligence style
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).scaffoldBackgroundColor,
-                    AppTheme.violet.withValues(alpha: 0.15),
-                    AppTheme.indigo.withValues(alpha: 0.15),
-                    Theme.of(context).scaffoldBackgroundColor,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-            )
-            .animate(onPlay: (controller) => controller.repeat(reverse: true))
-            .shimmer(duration: 4000.ms, color: AppTheme.violet.withValues(alpha: 0.2)),
-          ),
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                GlassPanel(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              padding: const EdgeInsets.all(24),
-              radius: 32,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    l10n.aiHello(name),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ).animate().fadeIn().slideY(begin: 0.1),
-                  if (user == null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.guestLimit(remaining),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)),
-                    ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _prompt,
-                    minLines: 5,
-                    maxLines: 8,
-                    textInputAction: TextInputAction.newline,
-                    decoration: InputDecoration(
-                      hintText: l10n.freePrompt,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      filled: false,
-                    ),
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _VoicePromptButton(
-                        isRecording: _isRecording,
-                        isBusy: _isStartingVoice,
-                        onPressed: _toggleVoiceInput,
-                      ),
-                      GestureDetector(
-                        onTap: aiState.isLoading ? null : _generate,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                l10n.aiStart,
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                Icons.arrow_forward_rounded,
-                                size: 18,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ).animate().fadeIn(delay: 150.ms).slideY(begin: 0.1),
-            AnimatedSwitcher(
-              duration: 220.ms,
-              child: _voiceFeedback == null
-                  ? const SizedBox(height: 8)
-                  : Padding(
-                      key: ValueKey(_voiceFeedback),
-                      padding: const EdgeInsets.only(top: 10),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            _voiceFeedbackIsError
-                                ? Icons.error_outline_rounded
-                                : _isRecording
-                                ? Icons.graphic_eq_rounded
-                                : Icons.info_outline_rounded,
-                            size: 18,
-                            color: _voiceFeedbackIsError
-                                ? Theme.of(context).colorScheme.error
-                                : _isRecording
-                                ? AppTheme.primary
-                                : Theme.of(context).colorScheme.outline,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _voiceFeedback!,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: _voiceFeedbackIsError
-                                        ? Theme.of(context).colorScheme.error
-                                        : _isRecording
-                                        ? AppTheme.primary
-                                        : Theme.of(context).colorScheme.outline,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
+        centerTitle: true,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              backgroundColor: Colors.blue.shade100,
+              radius: 16,
+              child: const Icon(Icons.smart_toy_rounded, color: Colors.blue, size: 20),
             ),
-            const SizedBox(height: 16),
-            ExpansionTile(
-              title: Text(
-                l10n.aiAdvancedOptions,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              collapsedShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              collapsedBackgroundColor: Theme.of(context).colorScheme.surface,
-              childrenPadding: const EdgeInsets.all(16),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                DropdownMenu<TourType>(
-                  width: double.infinity,
-                  initialSelection: _type,
-                  label: Text(l10n.type),
-                  onSelected: (value) => setState(() => _type = value!),
-                  dropdownMenuEntries: [
-                    for (final type in TourType.values)
-                      DropdownMenuEntry(
-                        value: type,
-                        label: tourTypeL10n(context, type),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 14),
                 Row(
                   children: [
-                    Expanded(
-                      child: Slider(
-                        value: _duration,
-                        min: 1,
-                        max: 72,
-                        divisions: 71,
-                        activeColor: AppTheme.primary,
-                        onChanged: (value) => setState(() => _duration = value),
+                    const Text('Tour Planner AI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 4),
+                    Icon(Icons.auto_awesome, size: 14, color: Colors.blue.shade700),
+                  ],
+                ),
+                Text('Tu asistente de viajes', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
+              ],
+            ),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              children: [
+                _buildInitialAiMessage(),
+                const SizedBox(height: 16),
+                for (final msg in builderState.messages) ...[
+                  _buildMessageBubble(msg),
+                  const SizedBox(height: 16),
+                ],
+                if (builderState.isTyping || builderState.isLoading)
+                  _buildTypingIndicator(),
+              ],
+            ),
+          ),
+          _buildInputArea(builderState.isLoading),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInitialAiMessage() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              backgroundColor: Colors.blue.shade50,
+              radius: 16,
+              child: const Icon(Icons.smart_toy_rounded, color: Colors.blue, size: 20),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    )
+                  ],
+                ),
+                child: const Text(
+                  '¡Hola! Soy Tour Planner AI 🤖\n\nCuéntame qué tipo de tour tienes en mente y crearé una experiencia única para ti.',
+                  style: TextStyle(fontSize: 15, height: 1.4),
+                ),
+              ),
+            ),
+          ],
+        ).animate().fadeIn().slideX(begin: -0.1),
+        const SizedBox(height: 16),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildSuggestionChip('Explorar ciudades', Icons.public),
+              _buildSuggestionChip('Aventura y naturaleza', Icons.landscape),
+              _buildSuggestionChip('Cultura e historia', Icons.account_balance),
+              _buildSuggestionChip('Playa y relax', Icons.beach_access),
+            ],
+          ),
+        ).animate().fadeIn(delay: 200.ms),
+      ],
+    );
+  }
+
+  Widget _buildSuggestionChip(String text, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0, left: 2.0),
+      child: GestureDetector(
+        onTap: () => _sendChipMessage(text),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: Colors.blue.shade700),
+              const SizedBox(height: 8),
+              Text(
+                text,
+                style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w600, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(ChatMessage message) {
+    final isUser = message.isUser;
+    return Column(
+      crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isUser) ...[
+              CircleAvatar(
+                backgroundColor: Colors.blue.shade50,
+                radius: 16,
+                child: const Icon(Icons.smart_toy_rounded, color: Colors.blue, size: 20),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isUser ? Colors.blue.shade600 : Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16).copyWith(
+                    bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(16),
+                    bottomLeft: !isUser ? const Radius.circular(4) : const Radius.circular(16),
+                  ),
+                  boxShadow: !isUser
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          )
+                        ]
+                      : null,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (message.localImagePath != null) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          File(message.localImagePath!),
+                          width: 200,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (message.text.isNotEmpty)
+                      Text(
+                        message.text,
+                        style: TextStyle(
+                          color: isUser ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
+                      ),
+                    if (message.embeddedTour != null) ...[
+                      const SizedBox(height: 12),
+                      _buildEmbeddedTourCard(message.embeddedTour!),
+                    ],
+                    const SizedBox(height: 4),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Text(
-                          '${_duration.toStringAsFixed(0)} ',
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                          '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')} ${message.timestamp.hour < 12 ? 'AM' : 'PM'}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isUser ? Colors.white70 : Colors.grey.shade500,
+                          ),
                         ),
-                        SegmentedButton<bool>(
-                          selected: {_isDays},
-                          onSelectionChanged: (value) =>
-                              setState(() => _isDays = value.first),
-                          segments: const [
-                            ButtonSegment(value: false, label: Text('h')),
-                            ButtonSegment(value: true, label: Text('d')),
-                          ],
-                        ),
+                        if (isUser) ...[
+                          const SizedBox(width: 4),
+                          const Icon(Icons.done_all, size: 12, color: Colors.white70),
+                        ]
                       ],
                     ),
                   ],
                 ),
-                if (_isDays) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Slider(
-                          value: _hoursPerDay,
-                          min: 1,
-                          max: 12,
-                          divisions: 11,
-                          activeColor: AppTheme.primary.withValues(alpha: 0.7),
-                          onChanged: (value) =>
-                              setState(() => _hoursPerDay = value),
-                        ),
+              ),
+            ),
+            if (isUser) const SizedBox(width: 32),
+          ],
+        ).animate().fadeIn().slideY(begin: 0.05),
+        if (message.actionChips != null && message.actionChips!.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: EdgeInsets.only(left: isUser ? 0 : 40),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: message.actionChips!.map((action) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.blue.shade200),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       ),
-                      Text('${_hoursPerDay.toStringAsFixed(0)} ${l10n.aiHoursPerDay}'),
+                      onPressed: () {
+                        if (action == 'Ver en mapa') {
+                          context.push('/ai/builder');
+                        }
+                      },
+                      child: Row(
+                        children: [
+                          Text(action, style: TextStyle(color: Colors.blue.shade700)),
+                          const SizedBox(width: 4),
+                          Icon(
+                            action.contains('personalizar') ? Icons.edit : 
+                            action.contains('mapa') ? Icons.map : Icons.schedule,
+                            size: 14,
+                            color: Colors.blue.shade700,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ).animate().fadeIn(delay: 200.ms),
+        ]
+      ],
+    );
+  }
+
+  Widget _buildEmbeddedTourCard(Tour tour) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12)),
+                child: Image.network(
+                  'https://images.unsplash.com/photo-1583511666407-5f06533f2113?auto=format&fit=crop&q=80',
+                  width: 100,
+                  height: 130,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 100,
+                    height: 130,
+                    color: Colors.grey.shade200,
+                    child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tour.title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.schedule, size: 12, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text('Duración: ${tour.durationHours.toInt()} horas', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.place, size: 12, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text('${tour.stops.length} paradas', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.bar_chart, size: 12, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          const Text('Dificultad: Baja', style: TextStyle(fontSize: 12, color: Colors.grey)), 
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () {
+                          // Handle view itinerary
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text('Ver itinerario completo', style: TextStyle(color: Colors.blue.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
+                            const SizedBox(width: 4),
+                            Icon(Icons.arrow_forward_ios, size: 10, color: Colors.blue.shade700),
+                          ],
+                        ),
+                      )
                     ],
                   ),
-                ],
-                const SizedBox(height: 12),
-                SegmentedButton<String>(
-                  selected: {_language},
-                  onSelectionChanged: (value) =>
-                      setState(() => _language = value.first),
-                  segments: const [
-                    ButtonSegment(value: 'es', label: Text('ES')),
-                    ButtonSegment(value: 'en', label: Text('EN')),
-                  ],
                 ),
-              ],
-            ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
-            const SizedBox(height: 24),
-            GlassPanel(
-              child: Row(
-                children: [
-                  Icon(Icons.radar_rounded, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '${l10n.aiDetected} ${tourTypeL10n(context, _type)} · ${_duration.toStringAsFixed(0)} ${_isDays ? '${l10n.aiDays} (${_hoursPerDay.toStringAsFixed(0)}${l10n.aiHoursPerDay})' : 'h'}',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (aiState.isLoading) _GenerationProgress(l10n: l10n),
-            aiState.when(
-              data: (tour) => tour == null
-                  ? const SizedBox.shrink()
-                  : Padding(
-                      padding: const EdgeInsets.only(top: 18),
-                      child: Column(
-                        children: [
-                          TourCard(
-                            tour: tour,
-                            onTap: () {
-                              ref.read(selectedTourProvider.notifier).state =
-                                  tour;
-                              context.push('/tours/${tour.id}');
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          _AiJsonPreview(tour: tour),
-                          const SizedBox(height: 12),
-                          LiquidButton(
-                            label: l10n.aiSaveTour,
-                            icon: Icons.save_rounded,
-                            onPressed: () async {
-                              try {
-                                await ref
-                                    .read(userToursProvider.notifier)
-                                    .saveTour(tour);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        l10n.aiTourSaved,
-                                      ),
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Error al guardar: $e'),
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          LiquidButton(
-                            label: l10n.aiPreviewTour,
-                            icon: Icons.visibility_rounded,
-                            onPressed: () {
-                              ref.read(selectedTourProvider.notifier).state =
-                                  tour;
-                              context.push('/tours/${tour.id}');
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          LiquidButton(
-                            label: l10n.aiEditTour,
-                            icon: Icons.edit_rounded,
-                            onPressed: () {
-                              ref.read(selectedTourProvider.notifier).state =
-                                  tour;
-                              context.push('/creator/manual');
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-              loading: () => const SizedBox.shrink(),
-              error: (error, stackTrace) {
-                final errorString = error.toString();
-                final isDemoError = errorString.contains('demo gratuita');
-                final title = isDemoError ? 'Demo agotada' : 'Tiempo agotado';
-                final body = errorString
-                    .replaceFirst('Exception: ', '')
-                    .replaceFirst('FormatException: ', '')
-                    .replaceFirst('Bad state: ', '');
-
-                return Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: EmptyState(
-                    icon: Icons.lock_clock_rounded,
-                    title: title,
-                    body: body,
-                  ),
-                );
-              },
-            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+              )
+            ],
           ),
         ],
       ),
     );
   }
 
-  void _generate() {
-    final profile = ref.read(touristProfileProvider).valueOrNull ?? TouristProfileV2.empty;
-    final finalPrompt = _isDays
-        ? 'El tour durara ${_duration.toInt()} dias, considerando ${_hoursPerDay.toInt()} horas habiles de actividad por dia. ${_prompt.text}'
-              .trim()
-        : _prompt.text;
-    ref
-        .read(aiPlannerControllerProvider.notifier)
-        .generate(
-          AiTourRequest(
-            destination: _destination.text,
-            country: '',
-            city: '',
-            durationHours: _isDays ? _duration * 24 : _duration,
-            type: _type,
-            language: _language,
-            prompt: finalPrompt,
-            touristProfileSummary: profile.aiSummary,
-            touristInterests: profile.interests,
-            touristPace: profile.preferredPace,
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 40, top: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            height: 24,
+            width: 40,
+            child: Lottie.asset('assets/lottie/ai_pulse.json'),
           ),
-        );
+          const SizedBox(width: 8),
+          Text(
+            'Analizando...',
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+          ),
+        ],
+      ),
+    );
   }
+
+  Widget _buildInputArea(bool isBusy) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8).copyWith(
+        bottom: MediaQuery.of(context).padding.bottom + 8,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Column(
+        children: [
+          if (_voiceFeedback != null)
+             Padding(
+               padding: const EdgeInsets.only(bottom: 8.0, left: 16),
+               child: Row(
+                 children: [
+                   Icon(
+                     _voiceFeedbackIsError ? Icons.error_outline : Icons.mic,
+                     size: 14,
+                     color: _voiceFeedbackIsError ? Colors.red : Colors.blue,
+                   ),
+                   const SizedBox(width: 8),
+                   Expanded(
+                     child: Text(
+                       _voiceFeedback!,
+                       style: TextStyle(
+                         fontSize: 12,
+                         color: _voiceFeedbackIsError ? Colors.red : Colors.grey.shade600,
+                       ),
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+          if (_selectedImagePath != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0, left: 16),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(_selectedImagePath!),
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedImagePath = null),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close, color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.image, color: Colors.grey),
+                        onPressed: _pickImage,
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _prompt,
+                          minLines: 1,
+                          maxLines: 5,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _sendMessage(),
+                          decoration: const InputDecoration(
+                            hintText: 'Describe tu tour ideal...',
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: IconButton(
+                          icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.blue.shade600,
+                            padding: const EdgeInsets.all(8),
+                          ),
+                          onPressed: isBusy ? null : _sendMessage,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _VoicePromptButton(
+                isRecording: _isRecording,
+                isBusy: _isStartingVoice || isBusy,
+                onPressed: _toggleVoiceInput,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // === Voice Processing Logic ===
 
   Future<void> _toggleVoiceInput() async {
     if (_isStartingVoice) return;
@@ -519,7 +650,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
     try {
       await _voicePrompt.start(
-        localeCode: _language,
+        localeCode: 'es', 
         onResult: (words) {
           if (!mounted) return;
           _setPromptText(_mergePromptText(_baselinePrompt, words));
@@ -550,9 +681,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             _voiceFeedback = message;
             _voiceFeedbackIsError = true;
           });
-          ScaffoldMessenger.of(context)
-            ..clearSnackBars()
-            ..showSnackBar(SnackBar(content: Text(message)));
         },
       );
     } on _VoicePromptException catch (error) {
@@ -568,9 +696,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         _voiceFeedback = message;
         _voiceFeedbackIsError = true;
       });
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
       final message = l10n.voicePromptError;
@@ -580,9 +705,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         _voiceFeedback = message;
         _voiceFeedbackIsError = true;
       });
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -618,14 +740,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     return '$base $transcript';
   }
 
-  String _voiceErrorMessage(
-    AppLocalizations l10n,
-    SpeechRecognitionError error,
-  ) {
+  String _voiceErrorMessage(AppLocalizations l10n, SpeechRecognitionError error) {
     final code = error.errorMsg.toLowerCase();
     if (code.contains('permission')) return l10n.voicePromptPermissionDenied;
-    if (code.contains('speech_recognizer_disabled') ||
-        code.contains('not_available')) {
+    if (code.contains('speech_recognizer_disabled') || code.contains('not_available')) {
       return l10n.voicePromptUnavailable;
     }
     if (code.contains('busy')) return l10n.voicePromptBusy;
@@ -690,13 +808,12 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final active = widget.isRecording;
     final busy = widget.isBusy;
     final background = active
-        ? AppTheme.primary.withValues(alpha: 0.18)
-        : colorScheme.surfaceContainerHighest.withValues(alpha: 0.92);
-    final foreground = active ? AppTheme.primary : colorScheme.onSurfaceVariant;
+        ? Colors.blue.shade100
+        : Colors.blue.shade600;
+    final foreground = active ? Colors.blue.shade700 : Colors.white;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -710,15 +827,10 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
             decoration: BoxDecoration(
               color: background,
               shape: BoxShape.circle,
-              border: Border.all(
-                color: active
-                    ? AppTheme.primary.withValues(alpha: 0.45)
-                    : colorScheme.outlineVariant.withValues(alpha: 0.7),
-              ),
               boxShadow: active
                   ? [
                       BoxShadow(
-                        color: AppTheme.primary.withValues(alpha: 0.22),
+                        color: Colors.blue.withValues(alpha: 0.22),
                         blurRadius: 18,
                         spreadRadius: 1,
                       ),
@@ -726,7 +838,6 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
                   : null,
             ),
             child: IconButton(
-              tooltip: active ? 'Detener grabacion' : 'Activar voz',
               onPressed: busy ? null : widget.onPressed,
               icon: AnimatedSwitcher(
                 duration: 180.ms,
@@ -749,7 +860,6 @@ enum _VoicePromptFailure { permissionDenied, unavailable }
 
 class _VoicePromptException implements Exception {
   const _VoicePromptException(this.reason);
-
   final _VoicePromptFailure reason;
 }
 
@@ -852,95 +962,8 @@ class _VoicePromptSession {
         return systemLocale.localeId;
       }
     } catch (_) {
-      // Fall back to a common locale below.
+      // Fall back
     }
     return languageCode == 'en' ? 'en_US' : 'es_ES';
   }
 }
-
-class _AiJsonPreview extends StatelessWidget {
-  const _AiJsonPreview({required this.tour});
-
-  final Tour tour;
-
-  @override
-  Widget build(BuildContext context) {
-    final jsonPreview = const JsonEncoder.withIndent(
-      '  ',
-    ).convert(tour.toCreationJson());
-    return GlassPanel(
-      padding: const EdgeInsets.all(14),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: EdgeInsets.zero,
-        title: const Text('JSON de creacion IA'),
-        leading: const Icon(Icons.data_object_rounded),
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.28),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: SelectableText(
-              jsonPreview,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontFamily: 'monospace',
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GenerationProgress extends StatelessWidget {
-  const _GenerationProgress({required this.l10n});
-
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final steps = [
-      l10n.generatingDestination,
-      l10n.generatingPlaces,
-      l10n.generatingRoute,
-      l10n.generatingImages,
-      l10n.generatingExperience,
-    ];
-    return GlassPanel(
-      margin: const EdgeInsets.only(top: 18),
-      child: Column(
-        children: [
-          SizedBox(
-            height: 130,
-            child: Lottie.asset('assets/lottie/ai_pulse.json'),
-          ),
-          Text(
-            l10n.generatingTitle,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          for (final step in steps)
-            ListTile(
-                  dense: true,
-                  leading: const Icon(
-                    Icons.blur_circular_rounded,
-                    color: AppTheme.primary,
-                  ),
-                  title: Text(step),
-                )
-                .animate(onPlay: (controller) => controller.repeat())
-                .shimmer(
-                  duration: 1300.ms,
-                  color: AppTheme.primary.withValues(alpha: 0.25),
-                ),
-        ],
-      ),
-    );
-  }
-}
-
