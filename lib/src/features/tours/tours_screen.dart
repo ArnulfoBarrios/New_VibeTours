@@ -30,135 +30,125 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final toursAsync = ref.watch(toursProvider);
-    return toursAsync.when(
-      data: (allTours) {
-        final countries = allTours.map((tour) => tour.country).toSet().toList()
-          ..sort();
-        final cities =
-            allTours
-                .where((tour) => _country.isEmpty || tour.country == _country)
-                .map((tour) => tour.city)
-                .toSet()
-                .toList()
-              ..sort();
-        final tours = allTours.where((tour) {
-          final countryOk = _country.isEmpty || tour.country == _country;
-          final cityOk = _city.isEmpty || tour.city == _city;
-          final typeOk = _type == null || tour.type == _type;
-          final searchOk = _matchesSearch(tour, _search.text);
-          return countryOk && cityOk && typeOk && searchOk;
-        }).toList();
-        return CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                child: Text(
-                  l10n.tours,
-                  style: Theme.of(context).textTheme.displayLarge,
-                ),
+    
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor, // O fondo sólido si falla el mapa
+      body: toursAsync.when(
+        data: (allTours) {
+          final countries = allTours.map((tour) => tour.country).toSet().toList()..sort();
+          final cities = allTours
+              .where((tour) => _country.isEmpty || tour.country == _country)
+              .map((tour) => tour.city)
+              .toSet().toList()..sort();
+          
+          final tours = allTours.where((tour) {
+            final countryOk = _country.isEmpty || tour.country == _country;
+            final cityOk = _city.isEmpty || tour.city == _city;
+            final typeOk = _type == null || tour.type == _type;
+            final searchOk = _matchesSearch(tour, _search.text);
+            return countryOk && cityOk && typeOk && searchOk;
+          }).toList();
+
+          return CustomScrollView(
+            slivers: [
+              SliverAppBar.large(
+                title: Text(l10n.trips, style: const TextStyle(fontWeight: FontWeight.w800)),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: TextField(
-                  controller: _search,
-                  onChanged: (_) => setState(() {}),
-                  textInputAction: TextInputAction.search,
-                  decoration: const InputDecoration(
-                    hintText: 'Buscar destino, ciudad o tour',
-                    prefixIcon: Icon(Icons.search_rounded),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: TextField(
+                      controller: _search,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        hintText: l10n.searchDestination,
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: GlassPanel(
-                margin: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.filters,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        _MenuFilter(
-                          label: l10n.country,
-                          value: _country.isEmpty ? 'Todos' : _country,
-                          values: ['Todos', ...countries],
-                          onChanged: (value) => setState(() {
-                            _country = value == 'Todos' ? '' : value;
-                            _city = '';
-                          }),
-                        ),
-                        _MenuFilter(
-                          label: l10n.city,
-                          value: _city.isEmpty ? 'Todas' : _city,
-                          values: ['Todas', ...cities],
-                          onChanged: (value) => setState(() {
-                            _city = value == 'Todas' ? '' : value;
-                          }),
-                        ),
-                        _MenuFilter(
-                          label: l10n.type,
-                          value: _type == null
-                              ? 'Todos'
-                              : tourTypeLabel(_type!),
-                          values: [
-                            'Todos',
-                            ...TourType.values.map(tourTypeLabel),
-                          ],
-                          onChanged: (value) => setState(() {
-                            _type = value == 'Todos'
-                                ? null
-                                : TourType.values.firstWhere(
-                                    (type) => tourTypeLabel(type) == value,
-                                  );
-                          }),
-                        ),
-                      ],
-                    ),
-                  ],
+              SliverToBoxAdapter(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      _MenuFilter(
+                        label: l10n.country,
+                        value: _country.isEmpty ? l10n.all : _country,
+                        values: [l10n.all, ...countries],
+                        onChanged: (value) => setState(() {
+                          _country = value == l10n.all ? '' : value;
+                          _city = '';
+                        }),
+                      ),
+                      const SizedBox(width: 8),
+                      _MenuFilter(
+                        label: l10n.city,
+                        value: _city.isEmpty ? l10n.allFem : _city,
+                        values: [l10n.allFem, ...cities],
+                        onChanged: (value) => setState(() {
+                          _city = value == l10n.allFem ? '' : value;
+                        }),
+                      ),
+                      const SizedBox(width: 8),
+                      _MenuFilter(
+                        label: l10n.type,
+                        value: _type == null ? l10n.any : tourTypeL10n(context, _type!),
+                        values: [l10n.any, ...TourType.values.map((t) => tourTypeL10n(context, t))],
+                        onChanged: (value) => setState(() {
+                          _type = value == l10n.any
+                              ? null
+                              : TourType.values.firstWhere((t) => tourTypeL10n(context, t) == value);
+                        }),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-              sliver: tours.isEmpty
-                  ? const SliverToBoxAdapter(
-                      child: EmptyState(
-                        icon: Icons.search_off_rounded,
-                        title: 'Sin resultados',
-                        body: 'Prueba con otra ciudad, pais o tipo de tour.',
-                      ),
-                    )
-                  : SliverList.separated(
-                      itemCount: tours.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 16),
-                      itemBuilder: (context, index) {
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              if (tours.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 40),
+                    child: Center(
+                      child: Text(l10n.noToursAvailable, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
                         final tour = tours[index];
-                        return TourCard(
-                          tour: tour,
-                          onTap: () => context.push('/tours/${tour.id}'),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: TourCard(
+                            tour: tour,
+                            onTap: () => context.push('/tours/${tour.id}'),
+                          ),
                         );
                       },
+                      childCount: tours.length,
                     ),
-            ),
-          ],
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => EmptyState(
-        icon: Icons.error_outline_rounded,
-        title: 'Error',
-        body: error.toString(),
+                  ),
+                ),
+            ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) => Center(child: Text('Error: $error')),
       ),
     );
   }
@@ -171,7 +161,7 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
       tour.city,
       tour.country,
       tour.description,
-      tourTypeLabel(tour.type),
+      tourTypeL10n(context, tour.type),
       ...tour.tags,
     ].join(' ').toLowerCase();
     return haystack.contains(normalized);
@@ -194,11 +184,29 @@ class _MenuFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MenuAnchor(
-      builder: (context, controller, child) => ActionChip(
-        label: Text('$label: $value'),
-        avatar: const Icon(Icons.expand_more_rounded, size: 18),
-        onPressed: () =>
-            controller.isOpen ? controller.close() : controller.open(),
+      builder: (context, controller, child) => GestureDetector(
+        onTap: () => controller.isOpen ? controller.close() : controller.open(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.expand_more_rounded, size: 16),
+            ],
+          ),
+        ),
       ),
       menuChildren: [
         for (final item in values)
@@ -207,3 +215,4 @@ class _MenuFilter extends StatelessWidget {
     );
   }
 }
+

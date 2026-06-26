@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/design/app_theme.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import 'widgets/google_sign_in_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -81,7 +82,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-                icon: const _GoogleMark(),
+                icon: const GoogleSignInLogo(size: 20),
                 label: Text(
                   l10n.authContinueGoogle,
                   style: const TextStyle(fontWeight: FontWeight.w700),
@@ -339,22 +340,6 @@ class _OrDivider extends StatelessWidget {
             child: Divider(
                 color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1))),
       ],
-    );
-  }
-}
-
-class _GoogleMark extends StatelessWidget {
-  const _GoogleMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      'G',
-      style: TextStyle(
-        color: Color(0xFF4285F4),
-        fontWeight: FontWeight.w900,
-        fontSize: 20,
-      ),
     );
   }
 }

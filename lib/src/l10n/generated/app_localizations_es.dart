@@ -506,7 +506,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String aiHello(String name) {
-    return 'Hola $name,\n¿qué quieres\nexperimentar?';
+    return 'Hola $name,\n¿qué quieres hacer?';
   }
 
   @override
@@ -599,6 +599,75 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get helpTitle9 => '9. PQRS y Soporte';
+
+  @override
+  String get goodMorning => 'Buenos días';
+
+  @override
+  String get editorsChoice => 'SELECCIÓN DEL EDITOR';
+
+  @override
+  String get whereToNext => '¿A dónde vamos?';
+
+  @override
+  String get toursForYou => 'Tours para ti';
+
+  @override
+  String get yourCurrentArea => 'Tu zona actual';
+
+  @override
+  String get nearbyPointOfInterest => 'Punto de interes cercano';
+
+  @override
+  String get upcomingEvents => 'Próximos Eventos';
+
+  @override
+  String get all => 'Todos';
+
+  @override
+  String get allFem => 'Todas';
+
+  @override
+  String get any => 'Cualquiera';
+
+  @override
+  String get searchDestination => 'Buscar destino...';
+
+  @override
+  String get matchAffinity => 'Afinidad';
+
+  @override
+  String get vibeMatchAffinity => 'Afinidad Vibe';
+
+  @override
+  String get typeUrban => 'Urbano';
+
+  @override
+  String get typeHistorical => 'Histórico';
+
+  @override
+  String get typeGastronomic => 'Gastronómico';
+
+  @override
+  String get typeCultural => 'Cultural';
+
+  @override
+  String get typeEcological => 'Ecológico';
+
+  @override
+  String get typeRomantic => 'Romántico';
+
+  @override
+  String get typeSports => 'Deportivo';
+
+  @override
+  String get typeNightlife => 'Nocturno';
+
+  @override
+  String get typeFamily => 'Familiar';
+
+  @override
+  String get typeCustom => 'Personalizado';
 
   @override
   String get appearanceSystem => 'Sistema';

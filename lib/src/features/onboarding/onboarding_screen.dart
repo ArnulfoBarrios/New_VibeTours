@@ -3,10 +3,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
 import '../../l10n/generated/app_localizations.dart';
-import '../../state/app_state.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -16,110 +14,15 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  final _pageController = PageController();
-  int _page = 0;
-
-  static const interests = [
-    '❤️ Romántico',
-    '🎉 Fiesta',
-    '🌳 Naturaleza',
-    '⛱️ Playa',
-    '🦁 Safari',
-    '🏔️ Aventura',
-    '🎨 Arte y cultura',
-    '👨‍👩‍👧 Familia',
-    '🍽️ Gourmet',
-    '🛍️ Compras',
-    '🧘 Bienestar',
-    '🎿 Esquí',
-    '🥾 Senderismo',
-    '💭 ¿Otra cosa?',
-  ];
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  List<String> _getInterests(AppLocalizations l10n) => [
-    l10n.interestRomantic,
-    l10n.interestParty,
-    l10n.interestNature,
-    l10n.interestBeach,
-    l10n.interestSafari,
-    l10n.interestAdventure,
-    l10n.interestArtCulture,
-    l10n.interestFamily,
-    l10n.interestGourmet,
-    l10n.interestShopping,
-    l10n.interestWellness,
-    l10n.interestSkiing,
-    l10n.interestHiking,
-    l10n.interestOther,
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final profile = ref.watch(touristProfileProvider);
     final l10n = AppLocalizations.of(context);
-    final currentInterests = _getInterests(l10n);
     return PremiumScaffold(
       safeBottom: true,
       child: Column(
         children: [
-          if (_page > 0)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                    onPressed: () => _pageController.previousPage(
-                      duration: 300.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
-                  ),
-                  Expanded(
-                    child: AnimatedContainer(
-                      duration: 220.ms,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: FractionallySizedBox(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: 0.5,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 48), // Balance for back button
-                ],
-              ),
-            ),
           Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (value) => setState(() => _page = value),
-              children: [
-                const _IntroPage(),
-                _ProfilePage(
-                  profile: profile,
-                  interests: currentInterests,
-                  onToggle: (interest) => ref
-                      .read(touristProfileProvider.notifier)
-                      .toggleInterest(interest),
-                ),
-              ],
-            ),
+            child: const _IntroPage(),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
@@ -129,58 +32,38 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: LiquidButton(
-                    label: _page == 1 ? l10n.continueAction : l10n.startNow,
-                    icon: _page == 1
-                        ? Icons.arrow_forward_rounded
-                        : Icons.rocket_launch_rounded,
+                    label: l10n.startNow,
+                    icon: Icons.rocket_launch_rounded,
                     onPressed: () {
-                      if (_page == 1) {
-                        _finish();
-                      } else {
-                        _pageController.nextPage(
-                          duration: 300.ms,
-                          curve: Curves.easeOutCubic,
-                        );
-                      }
+                      context.push('/tourist_preferences');
                     },
                   ),
                 ),
-                if (_page == 0) ...[
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: () => context.go('/login'),
-                    child: Text.rich(
-                      TextSpan(
-                        text: l10n.alreadyUsedApp,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        children: [
-                          TextSpan(
-                            text: l10n.login,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
-                                ),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () => context.go('/login'),
+                  child: Text.rich(
+                    TextSpan(
+                      text: l10n.alreadyUsedApp,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      children: [
+                        TextSpan(
+                          text: l10n.login,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ],
             ),
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _finish() async {
-    await ref.read(onboardingCompleteProvider.notifier).complete();
-    if (!mounted) return;
-    context.go('/login');
   }
 }
 
@@ -194,17 +77,13 @@ class _IntroPage extends StatelessWidget {
       children: [
         Text(
           'VibeTours.',
-          style: Theme.of(
-            context,
-          ).textTheme.displayLarge?.copyWith(fontSize: 56),
+          style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 56),
         ).animate().fadeIn().slideY(begin: -0.1),
         const SizedBox(height: 16),
         Text(
-               AppLocalizations.of(context).introSlogan1,
+          AppLocalizations.of(context).introSlogan1,
           textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ).animate().fadeIn(delay: 100.ms).slideY(begin: -0.1),
         const SizedBox(height: 48),
         Image.asset(
@@ -216,99 +95,6 @@ class _IntroPage extends StatelessWidget {
           fit: BoxFit.contain,
         ).animate().fadeIn(delay: 200.ms).scale(begin: const Offset(0.9, 0.9)),
       ],
-    );
-  }
-}
-
-class _ProfilePage extends StatelessWidget {
-  const _ProfilePage({
-    required this.profile,
-    required this.interests,
-    required this.onToggle,
-  });
-
-  final dynamic profile;
-  final List<String> interests;
-  final ValueChanged<String> onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-      children: [
-        Text(
-          AppLocalizations.of(context).introWhatType,
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineMedium?.copyWith(fontSize: 24),
-        ).animate().fadeIn(),
-        const SizedBox(height: 32),
-        Wrap(
-          spacing: 12,
-          runSpacing: 16,
-          alignment: WrapAlignment.center,
-          children: [
-            for (final interest in interests)
-              _InterestChip(
-                label: interest,
-                isSelected: profile.interests.contains(interest),
-                onSelected: () => onToggle(interest),
-              ),
-          ],
-        ).animate().fadeIn(delay: 100.ms),
-      ],
-    );
-  }
-}
-
-class _InterestChip extends StatelessWidget {
-  const _InterestChip({
-    required this.label,
-    required this.isSelected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final bool isSelected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onSelected,
-      child: AnimatedContainer(
-        duration: 200.ms,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.primary.withValues(alpha: 0.15)
-              : Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: isSelected
-                ? AppTheme.primary
-                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: isSelected
-              ? []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-      ),
     );
   }
 }

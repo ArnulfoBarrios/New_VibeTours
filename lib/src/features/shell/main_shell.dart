@@ -4,21 +4,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design/premium_components.dart';
 import '../../state/app_state.dart';
 
-class MainShell extends ConsumerWidget {
-  const MainShell({super.key, required this.currentIndex, required this.child});
+import 'package:go_router/go_router.dart';
 
-  final int currentIndex;
-  final Widget child;
+class MainShell extends ConsumerWidget {
+  const MainShell({super.key, required this.navigationShell});
+
+  final StatefulNavigationShell navigationShell;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return PremiumScaffold(
       bottomNavigationBar: VibeBottomNav(
-        currentIndex: currentIndex,
-        onChanged: (index) =>
-            ref.read(selectedTabProvider.notifier).state = index,
+        currentIndex: navigationShell.currentIndex,
+        onChanged: (index) {
+          ref.read(selectedTabProvider.notifier).state = index;
+          navigationShell.goBranch(
+            index,
+            initialLocation: index == navigationShell.currentIndex,
+          );
+        },
       ),
-      child: child,
+      child: navigationShell,
     );
   }
 }

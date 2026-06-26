@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
+import '../../core/design/premium_components.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
@@ -122,30 +123,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
-          children: [
-            Text(
-              l10n.profile,
-              style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 32),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar.large(
+            title: Text(l10n.profile, style: const TextStyle(fontWeight: FontWeight.w800)),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                GlassPanel(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
                   Row(
                     children: [
                       GestureDetector(
@@ -284,101 +274,126 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 32),
-            _SectionTitle(l10n.preferences),
-            _SettingsListTile(icon: Icons.workspace_premium_outlined, title: l10n.goPremium, onTap: () {}),
-            _SettingsListTile(
-              icon: Icons.monetization_on_outlined, 
-              title: l10n.currency, 
-              trailingText: currency.name.toUpperCase(), 
-              onTap: () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) => SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ListTile(
-                          title: const Text('Dólares (USD)'),
-                          onTap: () {
-                            ref.read(currencyProvider.notifier).setCurrency(AppCurrency.usd);
-                            Navigator.pop(context);
-                          },
-                        ),
-                        ListTile(
-                          title: const Text('Euros (EUR)'),
-                          onTap: () {
-                            ref.read(currencyProvider.notifier).setCurrency(AppCurrency.eur);
-                            Navigator.pop(context);
-                          },
-                        ),
-                        ListTile(
-                          title: const Text('Pesos Colombianos (COP)'),
-                          onTap: () {
-                            ref.read(currencyProvider.notifier).setCurrency(AppCurrency.cop);
-                            Navigator.pop(context);
-                          },
-                        ),
-                      ],
-                    ),
-                  )
-                );
-              }
+            const SizedBox(height: 16),
+            GlassPanel(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionTitle(l10n.preferences),
+                  _SettingsListTile(icon: Icons.tune_rounded, title: 'Preferencias de viaje', onTap: () => context.push('/tourist_preferences')),
+                  _SettingsListTile(icon: Icons.workspace_premium_outlined, title: l10n.goPremium, onTap: () {}),
+                  _SettingsListTile(
+                    icon: Icons.monetization_on_outlined, 
+                    title: l10n.currency, 
+                    trailingText: currency.name.toUpperCase(), 
+                    onTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (context) => SafeArea(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListTile(
+                                title: const Text('Dólares (USD)'),
+                                onTap: () {
+                                  ref.read(currencyProvider.notifier).setCurrency(AppCurrency.usd);
+                                  Navigator.pop(context);
+                                },
+                              ),
+                              ListTile(
+                                title: const Text('Euros (EUR)'),
+                                onTap: () {
+                                  ref.read(currencyProvider.notifier).setCurrency(AppCurrency.eur);
+                                  Navigator.pop(context);
+                                },
+                              ),
+                              ListTile(
+                                title: const Text('Pesos Colombianos (COP)'),
+                                onTap: () {
+                                  ref.read(currencyProvider.notifier).setCurrency(AppCurrency.cop);
+                                  Navigator.pop(context);
+                                },
+                              ),
+                            ],
+                          ),
+                        )
+                      );
+                    }
+                  ),
+                  _SettingsListTile(
+                    icon: Icons.translate_rounded, 
+                    title: l10n.language, 
+                    trailingText: locale?.languageCode.toUpperCase() ?? 'Auto',
+                    onTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (context) => SafeArea(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListTile(
+                                title: Text('Automático (${l10n.appearanceSystem})'),
+                                onTap: () {
+                                  ref.read(localeProvider.notifier).setLocale('system');
+                                  Navigator.pop(context);
+                                },
+                              ),
+                              ListTile(
+                                title: const Text('Español'),
+                                onTap: () {
+                                  ref.read(localeProvider.notifier).setLocale('es');
+                                  Navigator.pop(context);
+                                },
+                              ),
+                              ListTile(
+                                title: const Text('Inglés'),
+                                onTap: () {
+                                  ref.read(localeProvider.notifier).setLocale('en');
+                                  Navigator.pop(context);
+                                },
+                              ),
+                            ],
+                          ),
+                        )
+                      );
+                    }
+                  ),
+                  const _ThemeToggleTile(),
+                ],
+              ),
             ),
-            _SettingsListTile(
-              icon: Icons.translate_rounded, 
-              title: l10n.language, 
-              trailingText: locale?.languageCode.toUpperCase() ?? 'Auto',
-              onTap: () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) => SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ListTile(
-                          title: Text('Automático (${l10n.appearanceSystem})'),
-                          onTap: () {
-                            ref.read(localeProvider.notifier).setLocale('system');
-                            Navigator.pop(context);
-                          },
-                        ),
-                        ListTile(
-                          title: const Text('Español'),
-                          onTap: () {
-                            ref.read(localeProvider.notifier).setLocale('es');
-                            Navigator.pop(context);
-                          },
-                        ),
-                        ListTile(
-                          title: const Text('Inglés'),
-                          onTap: () {
-                            ref.read(localeProvider.notifier).setLocale('en');
-                            Navigator.pop(context);
-                          },
-                        ),
-                      ],
-                    ),
-                  )
-                );
-              }
-            ),
-            const _ThemeToggleTile(),
             
             const SizedBox(height: 24),
-            _SectionTitle(l10n.support),
-            _SettingsListTile(icon: Icons.help_outline_rounded, title: l10n.about, onTap: () => context.push('/help')),
-            _SettingsListTile(icon: Icons.feedback_outlined, title: l10n.feedback, onTap: () => context.push('/pqrs')),
-            _SettingsListTile(icon: Icons.star_border_rounded, title: l10n.rateUs, onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Gracias por ayudar a mejorar VIBETOURS.')),
-              );
-            }),
+            GlassPanel(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionTitle(l10n.support),
+                  _SettingsListTile(icon: Icons.help_outline_rounded, title: l10n.about, onTap: () => context.push('/help')),
+                  _SettingsListTile(icon: Icons.feedback_outlined, title: l10n.feedback, onTap: () => context.push('/pqrs')),
+                  _SettingsListTile(icon: Icons.star_border_rounded, title: l10n.rateUs, onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Gracias por ayudar a mejorar VIBETOURS.')),
+                    );
+                  }),
+                ],
+              ),
+            ),
             
             const SizedBox(height: 24),
-            _SectionTitle(l10n.legal),
-            _SettingsListTile(icon: Icons.description_outlined, title: l10n.termsOfService, onTap: () => context.push('/legal/terms')),
-            _SettingsListTile(icon: Icons.privacy_tip_outlined, title: l10n.privacyPolicy, onTap: () => context.push('/legal/privacy')),
+            GlassPanel(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionTitle(l10n.legal),
+                  _SettingsListTile(icon: Icons.description_outlined, title: l10n.termsOfService, onTap: () => context.push('/legal/terms')),
+                  _SettingsListTile(icon: Icons.privacy_tip_outlined, title: l10n.privacyPolicy, onTap: () => context.push('/legal/privacy')),
+                ],
+              ),
+            ),
             
             const SizedBox(height: 32),
             Center(
@@ -390,8 +405,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: Text(l10n.logout, style: const TextStyle(color: Colors.red)),
               ),
             ),
-          ],
-        ),
+              ]),
+            ),
+          ),
+        ],
       ),
     );
   }

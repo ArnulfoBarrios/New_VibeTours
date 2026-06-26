@@ -360,6 +360,7 @@ class WeatherSnapshot {
     required this.condition,
     required this.code,
     required this.isDay,
+    this.locationName = 'Tokyo, Japan', // Mock fallback si no viene
   });
 
   final int temperatureC;
@@ -369,6 +370,7 @@ class WeatherSnapshot {
   final String condition;
   final int code;
   final bool isDay;
+  final String locationName;
 }
 
 class LocalEvent {
@@ -391,39 +393,93 @@ class LocalEvent {
   final GeoPoint location;
 }
 
-class TouristProfile {
-  const TouristProfile({
+class TouristProfileV2 {
+  const TouristProfileV2({
+    required this.travelerType,
+    required this.budget,
+    required this.companionType,
+    required this.hasChildren,
     required this.interests,
     required this.preferredPace,
-    required this.favoriteCountries,
     required this.aiSummary,
   });
 
+  final String travelerType;
+  final String budget;
+  final String companionType;
+  final bool hasChildren;
   final List<String> interests;
   final String preferredPace;
-  final List<String> favoriteCountries;
   final String aiSummary;
 
-  bool get isReady => interests.isNotEmpty;
+  bool get isReady => interests.isNotEmpty && travelerType.isNotEmpty;
 
-  TouristProfile copyWith({
+  TouristProfileV2 copyWith({
+    String? travelerType,
+    String? budget,
+    String? companionType,
+    bool? hasChildren,
     List<String>? interests,
     String? preferredPace,
-    List<String>? favoriteCountries,
     String? aiSummary,
-  }) => TouristProfile(
+  }) => TouristProfileV2(
+    travelerType: travelerType ?? this.travelerType,
+    budget: budget ?? this.budget,
+    companionType: companionType ?? this.companionType,
+    hasChildren: hasChildren ?? this.hasChildren,
     interests: interests ?? this.interests,
     preferredPace: preferredPace ?? this.preferredPace,
-    favoriteCountries: favoriteCountries ?? this.favoriteCountries,
     aiSummary: aiSummary ?? this.aiSummary,
   );
 
-  static const empty = TouristProfile(
+  static const empty = TouristProfileV2(
+    travelerType: '',
+    budget: '',
+    companionType: '',
+    hasChildren: false,
     interests: [],
     preferredPace: 'balanced',
-    favoriteCountries: [],
     aiSummary: '',
   );
+
+  Map<String, dynamic> toJson() => {
+    'travelerType': travelerType,
+    'budget': budget,
+    'companionType': companionType,
+    'hasChildren': hasChildren,
+    'interests': interests,
+    'preferredPace': preferredPace,
+    'aiSummary': aiSummary,
+  };
+
+  factory TouristProfileV2.fromJson(Map<String, dynamic> json) {
+    return TouristProfileV2(
+      travelerType: json['travelerType'] as String? ?? '',
+      budget: json['budget'] as String? ?? '',
+      companionType: json['companionType'] as String? ?? '',
+      hasChildren: json['hasChildren'] as bool? ?? false,
+      interests: (json['interests'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      preferredPace: json['preferredPace'] as String? ?? 'balanced',
+      aiSummary: json['aiSummary'] as String? ?? '',
+    );
+  }
+
+  /// Autogenera un resumen basado en las preferencias
+  static String generateSummary({
+    required String travelerType,
+    required String budget,
+    required String companionType,
+    required bool hasChildren,
+    required List<String> interests,
+    required String preferredPace,
+  }) {
+    if (interests.isEmpty) return '';
+    final kids = hasChildren ? 'viaja con niños' : 'sin niños';
+    return 'Viajero de tipo $travelerType, con presupuesto $budget, en compañía de $companionType ($kids). '
+        'Ritmo $preferredPace. '
+        'Intereses principales: ${interests.join(', ')}. '
+        'VIBETOURS priorizará rutas lógicas, experiencias afines a estos intereses y recomendaciones que se ajusten a su perfil.';
+  }
 }
 
 class AiTourRequest {

@@ -51,31 +51,31 @@ class VibeColors extends ThemeExtension<VibeColors> {
 class AppTheme {
   const AppTheme._();
 
-  static const primary = Color(0xFF3B82F6);
-  static const primaryDeep = Color(0xFF2563EB);
-  static const indigo = Color(0xFF1D4ED8);
-  static const violet = Color(0xFF60A5FA);
-  static const lightBackground = Color(0xFFF7F5F2);
-  static const darkBackground = Color(0xFF000000);
+  static const primary = Color(0xFF007AFF); // iOS Blue
+  static const primaryDeep = Color(0xFF0056B3);
+  static const indigo = Color(0xFF5856D6); // iOS Indigo
+  static const violet = Color(0xFFAF52DE); // iOS Purple
+  static const lightBackground = Color(0xFFF2F2F7); // iOS Grouped Background Light
+  static const darkBackground = Color(0xFF000000); // iOS Background Dark
 
   static ThemeData light() => _theme(
     brightness: Brightness.light,
     background: lightBackground,
     surface: const Color(0xFFFFFFFF),
-    onSurface: const Color(0xFF2A1C31),
-    glass: Colors.white.withValues(alpha: 0.62),
-    glassStrong: Colors.white.withValues(alpha: 0.82),
-    border: Colors.white.withValues(alpha: 0.76),
+    onSurface: const Color(0xFF000000),
+    glass: Colors.white.withValues(alpha: 0.85),
+    glassStrong: Colors.white,
+    border: const Color(0xFFC6C6C8), // iOS Separator
   );
 
   static ThemeData dark() => _theme(
     brightness: Brightness.dark,
     background: darkBackground,
-    surface: const Color(0xFF111827),
-    onSurface: Colors.white,
-    glass: Colors.white.withValues(alpha: 0.08),
-    glassStrong: Colors.white.withValues(alpha: 0.13),
-    border: Colors.white.withValues(alpha: 0.18),
+    surface: const Color(0xFF1C1C1E), // iOS Secondary System Background
+    onSurface: const Color(0xFFFFFFFF),
+    glass: const Color(0xFF1C1C1E).withValues(alpha: 0.85),
+    glassStrong: const Color(0xFF1C1C1E),
+    border: const Color(0xFF38383A), // iOS Opaque Separator
   );
 
   static ThemeData _theme({
@@ -138,7 +138,7 @@ class AppTheme {
           luminousBorder: border,
           deepSurface: background,
           aiAccent: violet,
-          success: const Color(0xFF34C759),
+          success: const Color(0xFF10B981),
         ),
       ],
     );
@@ -203,20 +203,20 @@ extension VibeTheme on BuildContext {
     return theme.extension<VibeColors>() ??
         (theme.brightness == Brightness.dark
             ? VibeColors(
-                glass: Colors.white.withValues(alpha: 0.08),
-                glassStrong: Colors.white.withValues(alpha: 0.13),
-                luminousBorder: Colors.white.withValues(alpha: 0.18),
-                deepSurface: const Color(0xFF000000),
-                aiAccent: AppTheme.violet,
-                success: const Color(0xFF34C759),
-              )
-            : VibeColors(
-                glass: Colors.white.withValues(alpha: 0.62),
-                glassStrong: Colors.white.withValues(alpha: 0.82),
-                luminousBorder: Colors.white.withValues(alpha: 0.76),
-                deepSurface: AppTheme.lightBackground,
-                aiAccent: AppTheme.violet,
-                success: const Color(0xFF34C759),
-              ));
+          glass: const Color(0xFF1E2433).withValues(alpha: 0.5),
+          glassStrong: const Color(0xFF1E2433).withValues(alpha: 0.8),
+          luminousBorder: Colors.white.withValues(alpha: 0.12),
+          deepSurface: const Color(0xFF090B10),
+          aiAccent: AppTheme.violet,
+          success: const Color(0xFF10B981),
+        )
+      : VibeColors(
+          glass: Colors.white.withValues(alpha: 0.75),
+          glassStrong: Colors.white.withValues(alpha: 0.90),
+          luminousBorder: Colors.white.withValues(alpha: 0.6),
+          deepSurface: AppTheme.lightBackground,
+          aiAccent: AppTheme.violet,
+          success: const Color(0xFF10B981),
+        ));
   }
 }

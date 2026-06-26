@@ -211,6 +211,14 @@ Las migraciones SQL del repo incluyen arreglos para admin, PQRS y politicas de s
 
 Si no hay credenciales de Supabase, la app puede arrancar en modo demo con contenido local. Eso permite probar la experiencia sin configurar todo el backend.
 
+## Actualizaciones Recientes
+
+- **Sistema de Soporte (PQRS)**: Se agrego un centro de ayuda completo que permite a los usuarios crear, enviar y hacer seguimiento de Peticiones, Quejas, Reclamos y Sugerencias, guardando el historial en Supabase.
+- **Rediseno Visual**: Se refino la paleta de colores, cambiando tonos morados por un esquema basado en colores azules primarios y acentos violeta, mejorando la claridad visual y el aspecto premium con elementos de *glassmorphism*.
+- **Localizacion Completa**: Se implemento la traduccion integral de la aplicacion en Ingles y Espanol utilizando archivos `.arb` (`app_es.arb`, `app_en.arb`), cubriendo dinamicamente todas las pantallas de la interfaz.
+- **Configuracion Dinamica y Recursos**: Se agregaron configuraciones segun el entorno mediante archivos JSON, y se generaron nuevos iconos adaptables e imagenes de logotipo (`logo_light.png`, `logo_dark.png`) por plataforma.
+- **Navegacion e Infraestructura**: Se consolido el enrutamiento con `GoRouter`, asegurando guardias de autenticacion y transiciones de pantalla fluidas en todos los flujos de la aplicacion.
+
 ## Resumen corto
 
 VibeTours es una app de turismo asistido que mezcla:

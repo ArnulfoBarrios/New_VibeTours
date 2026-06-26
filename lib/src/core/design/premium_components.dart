@@ -3,12 +3,28 @@ import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:go_router/go_router.dart';
+
 import 'package:shimmer/shimmer.dart';
 
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'app_theme.dart';
+
+String tourTypeL10n(BuildContext context, TourType type) {
+  final l10n = AppLocalizations.of(context);
+  switch (type) {
+    case TourType.urban: return l10n.typeUrban;
+    case TourType.historical: return l10n.typeHistorical;
+    case TourType.gastronomic: return l10n.typeGastronomic;
+    case TourType.cultural: return l10n.typeCultural;
+    case TourType.ecological: return l10n.typeEcological;
+    case TourType.romantic: return l10n.typeRomantic;
+    case TourType.sports: return l10n.typeSports;
+    case TourType.night: return l10n.typeNightlife;
+    case TourType.family: return l10n.typeFamily;
+    case TourType.custom: return l10n.typeCustom;
+  }
+}
 
 class PremiumScaffold extends StatelessWidget {
   const PremiumScaffold({
@@ -30,10 +46,11 @@ class PremiumScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
+      extendBodyBehindAppBar: true,
       appBar: appBar,
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: bottomNavigationBar,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Fondo sólido estilo iOS
       body: SafeArea(bottom: safeBottom, child: child),
     );
   }
@@ -57,27 +74,19 @@ class GlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.vibe;
-    final panel = ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.glass,
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: colors.luminousBorder),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.10),
-                blurRadius: 36,
-                offset: const Offset(0, 20),
-              ),
-            ],
+    final panel = Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
-          child: Padding(padding: padding, child: child),
-        ),
+        ],
       ),
+      child: Padding(padding: padding, child: child),
     );
     return Padding(
       padding: margin ?? EdgeInsets.zero,
@@ -200,7 +209,7 @@ class LiquidButton extends StatelessWidget {
         style: FilledButton.styleFrom(
           minimumSize: const Size(0, 50),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(14),
           ),
           backgroundColor: AppTheme.primary,
         ),
@@ -306,7 +315,7 @@ class TourCard extends StatelessWidget {
               left: 14,
               child: _CardChip(
                 icon: Icons.auto_awesome_rounded,
-                label: tour.isAiGenerated ? 'AI' : tourTypeLabel(tour.type),
+                label: tour.isAiGenerated ? 'AI' : tourTypeL10n(context, tour.type),
               ),
             ),
             Positioned(
@@ -350,7 +359,7 @@ class TourCard extends StatelessWidget {
                       ),
                       _MetaPill(
                         Icons.route_rounded,
-                        '${tour.stops.length} stops',
+                        '${tour.stops.length} paradas',
                       ),
                     ],
                   ),
@@ -470,74 +479,23 @@ class VibeBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final items = [
-      (Icons.explore_outlined, l10n.explore, '/home'),
-      (Icons.add_circle_outline_rounded, l10n.create, '/creator'),
-      (Icons.beach_access_outlined, l10n.trips, '/tours'),
-      (Icons.person_outline_rounded, l10n.profile, '/profile'),
-    ];
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-        child: GlassPanel(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          radius: 999,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              for (var i = 0; i < items.length; i++)
-                Expanded(
-                  child: Tooltip(
-                    message: items[i].$2,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: () {
-                        onChanged(i);
-                        context.go(items[i].$3);
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: currentIndex == i
-                              ? AppTheme.primary
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              items[i].$1,
-                              size: 24,
-                              color: currentIndex == i
-                                  ? Theme.of(context).colorScheme.onSurface
-                                  : Theme.of(context).colorScheme.onSurface,
-                            ),
-                            const SizedBox(height: 4),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                items[i].$2,
-                                maxLines: 1,
-                                style: Theme.of(context).textTheme.labelLarge
-                                    ?.copyWith(
-                                      fontSize: 12,
-                                      color: currentIndex == i
-                                          ? Theme.of(context).colorScheme.onSurface
-                                          : Theme.of(context).colorScheme.onSurface,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: BottomNavigationBar(
+          currentIndex: currentIndex,
+          onTap: onChanged,
+          backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+          selectedItemColor: AppTheme.primary,
+          unselectedItemColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          items: [
+            BottomNavigationBarItem(icon: const Icon(Icons.explore_outlined), activeIcon: const Icon(Icons.explore_rounded), label: l10n.explore),
+            BottomNavigationBarItem(icon: const Icon(Icons.chat_bubble_outline_rounded), activeIcon: const Icon(Icons.chat_bubble_rounded), label: 'Chat'),
+            BottomNavigationBarItem(icon: const Icon(Icons.beach_access_outlined), activeIcon: const Icon(Icons.beach_access_rounded), label: 'Tours'),
+            BottomNavigationBarItem(icon: const Icon(Icons.person_outline_rounded), activeIcon: const Icon(Icons.person_rounded), label: l10n.profile),
+          ],
         ),
       ),
     );

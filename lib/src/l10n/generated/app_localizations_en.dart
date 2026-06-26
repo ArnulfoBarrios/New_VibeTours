@@ -596,6 +596,75 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helpTitle9 => '9. PQRS and Support';
 
   @override
+  String get goodMorning => 'Good morning';
+
+  @override
+  String get editorsChoice => 'EDITOR\'S CHOICE';
+
+  @override
+  String get whereToNext => 'Where to next?';
+
+  @override
+  String get toursForYou => 'Tours for you';
+
+  @override
+  String get yourCurrentArea => 'Your current area';
+
+  @override
+  String get nearbyPointOfInterest => 'Nearby point of interest';
+
+  @override
+  String get upcomingEvents => 'Upcoming events';
+
+  @override
+  String get all => 'All';
+
+  @override
+  String get allFem => 'All';
+
+  @override
+  String get any => 'Any';
+
+  @override
+  String get searchDestination => 'Search destination...';
+
+  @override
+  String get matchAffinity => 'Match';
+
+  @override
+  String get vibeMatchAffinity => 'Vibe Match';
+
+  @override
+  String get typeUrban => 'Urban';
+
+  @override
+  String get typeHistorical => 'Historical';
+
+  @override
+  String get typeGastronomic => 'Gastronomic';
+
+  @override
+  String get typeCultural => 'Cultural';
+
+  @override
+  String get typeEcological => 'Ecological';
+
+  @override
+  String get typeRomantic => 'Romantic';
+
+  @override
+  String get typeSports => 'Sports';
+
+  @override
+  String get typeNightlife => 'Nightlife';
+
+  @override
+  String get typeFamily => 'Family';
+
+  @override
+  String get typeCustom => 'Custom';
+
+  @override
   String get appearanceSystem => 'System';
 
   @override

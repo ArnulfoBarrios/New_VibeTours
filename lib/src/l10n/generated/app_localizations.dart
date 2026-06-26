@@ -1061,7 +1061,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiHello.
   ///
   /// In es, this message translates to:
-  /// **'Hola {name},\n¿qué quieres\nexperimentar?'**
+  /// **'Hola {name},\n¿qué quieres hacer?'**
   String aiHello(String name);
 
   /// No description provided for @aiAdvancedOptions.
@@ -1243,6 +1243,144 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'9. PQRS y Soporte'**
   String get helpTitle9;
+
+  /// No description provided for @goodMorning.
+  ///
+  /// In es, this message translates to:
+  /// **'Buenos días'**
+  String get goodMorning;
+
+  /// No description provided for @editorsChoice.
+  ///
+  /// In es, this message translates to:
+  /// **'SELECCIÓN DEL EDITOR'**
+  String get editorsChoice;
+
+  /// No description provided for @whereToNext.
+  ///
+  /// In es, this message translates to:
+  /// **'¿A dónde vamos?'**
+  String get whereToNext;
+
+  /// No description provided for @toursForYou.
+  ///
+  /// In es, this message translates to:
+  /// **'Tours para ti'**
+  String get toursForYou;
+
+  /// No description provided for @yourCurrentArea.
+  ///
+  /// In es, this message translates to:
+  /// **'Tu zona actual'**
+  String get yourCurrentArea;
+
+  /// No description provided for @nearbyPointOfInterest.
+  ///
+  /// In es, this message translates to:
+  /// **'Punto de interes cercano'**
+  String get nearbyPointOfInterest;
+
+  /// No description provided for @upcomingEvents.
+  ///
+  /// In es, this message translates to:
+  /// **'Próximos Eventos'**
+  String get upcomingEvents;
+
+  /// No description provided for @all.
+  ///
+  /// In es, this message translates to:
+  /// **'Todos'**
+  String get all;
+
+  /// No description provided for @allFem.
+  ///
+  /// In es, this message translates to:
+  /// **'Todas'**
+  String get allFem;
+
+  /// No description provided for @any.
+  ///
+  /// In es, this message translates to:
+  /// **'Cualquiera'**
+  String get any;
+
+  /// No description provided for @searchDestination.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar destino...'**
+  String get searchDestination;
+
+  /// No description provided for @matchAffinity.
+  ///
+  /// In es, this message translates to:
+  /// **'Afinidad'**
+  String get matchAffinity;
+
+  /// No description provided for @vibeMatchAffinity.
+  ///
+  /// In es, this message translates to:
+  /// **'Afinidad Vibe'**
+  String get vibeMatchAffinity;
+
+  /// No description provided for @typeUrban.
+  ///
+  /// In es, this message translates to:
+  /// **'Urbano'**
+  String get typeUrban;
+
+  /// No description provided for @typeHistorical.
+  ///
+  /// In es, this message translates to:
+  /// **'Histórico'**
+  String get typeHistorical;
+
+  /// No description provided for @typeGastronomic.
+  ///
+  /// In es, this message translates to:
+  /// **'Gastronómico'**
+  String get typeGastronomic;
+
+  /// No description provided for @typeCultural.
+  ///
+  /// In es, this message translates to:
+  /// **'Cultural'**
+  String get typeCultural;
+
+  /// No description provided for @typeEcological.
+  ///
+  /// In es, this message translates to:
+  /// **'Ecológico'**
+  String get typeEcological;
+
+  /// No description provided for @typeRomantic.
+  ///
+  /// In es, this message translates to:
+  /// **'Romántico'**
+  String get typeRomantic;
+
+  /// No description provided for @typeSports.
+  ///
+  /// In es, this message translates to:
+  /// **'Deportivo'**
+  String get typeSports;
+
+  /// No description provided for @typeNightlife.
+  ///
+  /// In es, this message translates to:
+  /// **'Nocturno'**
+  String get typeNightlife;
+
+  /// No description provided for @typeFamily.
+  ///
+  /// In es, this message translates to:
+  /// **'Familiar'**
+  String get typeFamily;
+
+  /// No description provided for @typeCustom.
+  ///
+  /// In es, this message translates to:
+  /// **'Personalizado'**
+  String get typeCustom;
 
   /// No description provided for @appearanceSystem.
   ///

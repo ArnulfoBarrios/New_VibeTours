@@ -58,6 +58,73 @@ final toursProvider = FutureProvider<List<Tour>>((ref) async {
   return ref.watch(tourRepositoryProvider).getTours();
 });
 
+final recommendedToursProvider = FutureProvider<List<Tour>>((ref) async {
+  final allTours = await ref.watch(toursProvider.future);
+  final profile = ref.watch(touristProfileProvider).valueOrNull;
+
+  if (profile == null || profile.interests.isEmpty) {
+    final copy = List.of(allTours);
+    copy.shuffle();
+    return copy.take(10).toList();
+  }
+
+  final interestTypes = <TourType>{};
+  for (final interest in profile.interests) {
+    final lower = interest.toLowerCase();
+    if (lower.contains('playa') || lower.contains('relajación') || lower.contains('compras')) {
+      interestTypes.add(TourType.romantic); // relaxing mapping
+    }
+    if (lower.contains('naturaleza') || lower.contains('aventura')) {
+      interestTypes.add(TourType.ecological);
+      interestTypes.add(TourType.sports);
+    }
+    if (lower.contains('museo') || lower.contains('monumento') || lower.contains('historia')) {
+      interestTypes.add(TourType.cultural);
+      interestTypes.add(TourType.historical);
+    }
+    if (lower.contains('gastronomía') || lower.contains('comida') || lower.contains('nocturna')) {
+      interestTypes.add(TourType.gastronomic);
+      interestTypes.add(TourType.night);
+    }
+  }
+
+  final scoredTours = allTours.map((tour) {
+    int score = 0;
+    
+    if (interestTypes.contains(tour.type)) {
+      score += 3;
+    }
+
+    final targetAudiences = [
+      profile.travelerType.toLowerCase(),
+      profile.companionType.toLowerCase(),
+    ];
+
+    if (tour.recommendedAudience.isNotEmpty) {
+      for (final audience in tour.recommendedAudience) {
+        if (targetAudiences.any((t) => audience.toLowerCase().contains(t))) {
+          score += 2;
+        }
+      }
+    }
+
+    if (profile.hasChildren) {
+      final isForKids = tour.recommendedAudience.any((a) => a.toLowerCase().contains('niño') || a.toLowerCase().contains('familia'));
+      if (!isForKids) {
+        score -= 2;
+      } else {
+        score += 3;
+      }
+    }
+
+    return MapEntry(tour, score);
+  }).toList();
+
+  scoredTours.sort((a, b) => b.value.compareTo(a.value));
+
+  return scoredTours.map((e) => e.key).take(10).toList();
+});
+
 final adminPendingToursProvider = FutureProvider.autoDispose<List<Tour>>((
   ref,
 ) async {
@@ -127,6 +194,9 @@ final onboardingCompleteProvider =
 
 final selectedTabProvider = StateProvider<int>((ref) => 0);
 
+final aiPromptProvider = StateProvider<String?>((ref) => null);
+final aiPromptAutoStartProvider = StateProvider<bool>((ref) => false);
+
 final selectedTourProvider = StateProvider<Tour?>((ref) => null);
 
 final selectedNearbyPlaceProvider = StateProvider<NearbyPlace?>((ref) => null);
@@ -141,8 +211,8 @@ final favoriteTourIdsProvider = StateProvider<Set<String>>((ref) => <String>{});
 final guestAiRemainingProvider = StateProvider<int>((ref) => 2);
 
 final touristProfileProvider =
-    StateNotifierProvider<TouristProfileController, TouristProfile>(
-      (ref) => TouristProfileController(),
+    AsyncNotifierProvider<TouristProfileController, TouristProfileV2>(
+      () => TouristProfileController(),
     );
 
 final voiceGuideProvider = Provider<VoiceGuideService>(
@@ -153,37 +223,60 @@ final locationServiceProvider = Provider<LocationService>(
   (ref) => LocationService(),
 );
 
-class TouristProfileController extends StateNotifier<TouristProfile> {
-  TouristProfileController() : super(TouristProfile.empty);
-
-  void toggleInterest(String interest) {
-    final interests = [...state.interests];
-    if (interests.contains(interest)) {
-      interests.remove(interest);
-    } else {
-      interests.add(interest);
+class TouristProfileController extends AsyncNotifier<TouristProfileV2> {
+  @override
+  FutureOr<TouristProfileV2> build() {
+    final prefs = ref.watch(authServiceProvider).getUserPreferences();
+    if (prefs == null) return TouristProfileV2.empty;
+    try {
+      return TouristProfileV2.fromJson(prefs);
+    } catch (_) {
+      return TouristProfileV2.empty;
     }
-    state = state.copyWith(
-      interests: interests,
-      aiSummary: _summary(interests, state.preferredPace),
+  }
+
+  Future<void> saveProfile(TouristProfileV2 newProfile) async {
+    state = AsyncData(newProfile);
+    await ref.read(authServiceProvider).updateUserPreferences(newProfile.toJson());
+  }
+
+  Future<void> updatePreferences({
+    String? travelerType,
+    String? budget,
+    String? companionType,
+    bool? hasChildren,
+    List<String>? interests,
+    String? preferredPace,
+  }) async {
+    final current = state.valueOrNull ?? TouristProfileV2.empty;
+    
+    // Generar el nuevo aiSummary si algo cambia
+    final newTravelerType = travelerType ?? current.travelerType;
+    final newBudget = budget ?? current.budget;
+    final newCompanionType = companionType ?? current.companionType;
+    final newHasChildren = hasChildren ?? current.hasChildren;
+    final newInterests = interests ?? current.interests;
+    final newPreferredPace = preferredPace ?? current.preferredPace;
+
+    final summary = TouristProfileV2.generateSummary(
+      travelerType: newTravelerType,
+      budget: newBudget,
+      companionType: newCompanionType,
+      hasChildren: newHasChildren,
+      interests: newInterests,
+      preferredPace: newPreferredPace,
     );
-  }
 
-  void setPace(String pace) {
-    state = state.copyWith(
-      preferredPace: pace,
-      aiSummary: _summary(state.interests, pace),
+    final newProfile = current.copyWith(
+      travelerType: newTravelerType,
+      budget: newBudget,
+      companionType: newCompanionType,
+      hasChildren: newHasChildren,
+      interests: newInterests,
+      preferredPace: newPreferredPace,
+      aiSummary: summary,
     );
-  }
-
-  void setCountries(List<String> countries) {
-    state = state.copyWith(favoriteCountries: countries);
-  }
-
-  static String _summary(List<String> interests, String pace) {
-    if (interests.isEmpty) return '';
-    return 'Viajero $pace con afinidad por ${interests.take(4).join(', ')}. '
-        'VIBETOURS priorizara rutas logicas, experiencias variadas y lugares autenticos.';
+    await saveProfile(newProfile);
   }
 }
 
@@ -595,7 +688,7 @@ Tour _tourFromJson(Map<String, dynamic> json) {
   return Tour(
     id: _string(json['id'], 'manual-${DateTime.now().microsecondsSinceEpoch}'),
     title: _string(json['title'], 'Tour sin nombre'),
-    country: _string(json['country'], 'Global'),
+    country: _string(json['country'], 'Mundo'),
     city: _string(json['city'], 'Personalizado'),
     type: _enumValue(TourType.values, _string(json['type'], 'custom')),
     description: _string(json['description'], ''),

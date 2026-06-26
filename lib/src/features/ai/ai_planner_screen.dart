@@ -24,9 +24,7 @@ class AiPlannerScreen extends ConsumerStatefulWidget {
 
 class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     with WidgetsBindingObserver {
-  final _destination = TextEditingController(text: 'Centro historico');
-  final _country = TextEditingController(text: 'Colombia');
-  final _city = TextEditingController(text: 'Cartagena');
+  final _destination = TextEditingController(text: '');
   final _prompt = TextEditingController();
   final _voicePrompt = _VoicePromptSession();
   double _duration = 4;
@@ -44,6 +42,19 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final initialPrompt = ref.read(aiPromptProvider);
+      if (initialPrompt != null && initialPrompt.isNotEmpty) {
+        _prompt.text = initialPrompt;
+        ref.read(aiPromptProvider.notifier).state = null; // Clear it so it doesn't persist
+        
+        final autoStart = ref.read(aiPromptAutoStartProvider);
+        if (autoStart) {
+          ref.read(aiPromptAutoStartProvider.notifier).state = false;
+          _generate();
+        }
+      }
+    });
   }
 
   @override
@@ -51,8 +62,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_voicePrompt.dispose());
     _destination.dispose();
-    _country.dispose();
-    _city.dispose();
+
     _prompt.dispose();
     super.dispose();
   }
@@ -85,78 +95,75 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         'amigo';
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          children: [
-            const _HeaderCollage(),
-            const SizedBox(height: 24),
-            Text(
-              l10n.aiHello(name),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                fontSize: 36,
-              ),
-            ).animate().fadeIn().slideY(begin: 0.1),
-            if (user == null) ...[
-              const SizedBox(height: 8),
-              Text(
-                l10n.guestLimit(remaining),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-              ),
-            ],
-            const SizedBox(height: 32),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _country,
-                    decoration: InputDecoration(
-                      labelText: l10n.country,
-                      prefixIcon: const Icon(Icons.public_rounded),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _city,
-                    decoration: InputDecoration(
-                      labelText: l10n.city,
-                      prefixIcon: const Icon(Icons.location_city_rounded),
-                    ),
-                  ),
-                ),
-              ],
-            ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1),
-            const SizedBox(height: 16),
-            Container(
+      body: Stack(
+        children: [
+          // Fondo Siri / Apple Intelligence style
+          Positioned.fill(
+            child: Container(
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).scaffoldBackgroundColor,
+                    AppTheme.violet.withValues(alpha: 0.15),
+                    AppTheme.indigo.withValues(alpha: 0.15),
+                    Theme.of(context).scaffoldBackgroundColor,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               ),
+            )
+            .animate(onPlay: (controller) => controller.repeat(reverse: true))
+            .shimmer(duration: 4000.ms, color: AppTheme.violet.withValues(alpha: 0.2)),
+          ),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                GlassPanel(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              padding: const EdgeInsets.all(24),
+              radius: 32,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l10n.aiHello(name),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ).animate().fadeIn().slideY(begin: 0.1),
+                  if (user == null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.guestLimit(remaining),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)),
+                    ),
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextField(
                     controller: _prompt,
-                    minLines: 3,
-                    maxLines: 5,
+                    minLines: 5,
+                    maxLines: 8,
                     textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
                       hintText: l10n.freePrompt,
@@ -282,7 +289,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                     for (final type in TourType.values)
                       DropdownMenuEntry(
                         value: type,
-                        label: tourTypeLabel(type),
+                        label: tourTypeL10n(context, type),
                       ),
                   ],
                 ),
@@ -292,27 +299,28 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                     Expanded(
                       child: Slider(
                         value: _duration,
-                        min: _isDays ? 1 : 2,
-                        max: _isDays ? 14 : 12,
-                        divisions: _isDays ? 13 : 10,
-                        label:
-                            '${_duration.toStringAsFixed(0)} ${_isDays ? l10n.aiDays : 'h'}',
+                        min: 1,
+                        max: 72,
+                        divisions: 71,
+                        activeColor: AppTheme.primary,
                         onChanged: (value) => setState(() => _duration = value),
                       ),
                     ),
-                    Text(
-                      '${_duration.toStringAsFixed(0)} ${_isDays ? 'd' : 'h'}',
-                    ),
-                    const SizedBox(width: 12),
-                    SegmentedButton<bool>(
-                      selected: {_isDays},
-                      onSelectionChanged: (value) => setState(() {
-                        _isDays = value.first;
-                        _duration = _isDays ? 2 : 4;
-                      }),
-                      segments: const [
-                        ButtonSegment(value: false, label: Text('h')),
-                        ButtonSegment(value: true, label: Text('d')),
+                    Row(
+                      children: [
+                        Text(
+                          '${_duration.toStringAsFixed(0)} ',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                        ),
+                        SegmentedButton<bool>(
+                          selected: {_isDays},
+                          onSelectionChanged: (value) =>
+                              setState(() => _isDays = value.first),
+                          segments: const [
+                            ButtonSegment(value: false, label: Text('h')),
+                            ButtonSegment(value: true, label: Text('d')),
+                          ],
+                        ),
                       ],
                     ),
                   ],
@@ -324,10 +332,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                       Expanded(
                         child: Slider(
                           value: _hoursPerDay,
-                          min: 2,
-                          max: 16,
-                          divisions: 14,
-                          label: '${_hoursPerDay.toStringAsFixed(0)} ${l10n.aiHoursPerDay}',
+                          min: 1,
+                          max: 12,
+                          divisions: 11,
+                          activeColor: AppTheme.primary.withValues(alpha: 0.7),
                           onChanged: (value) =>
                               setState(() => _hoursPerDay = value),
                         ),
@@ -352,11 +360,11 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             GlassPanel(
               child: Row(
                 children: [
-                  const Icon(Icons.radar_rounded, color: AppTheme.violet),
+                  Icon(Icons.radar_rounded, color: Theme.of(context).colorScheme.primary),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      '${l10n.aiDetected} ${_city.text}, ${_country.text} · ${tourTypeLabel(_type)} · ${_duration.toStringAsFixed(0)} ${_isDays ? '${l10n.aiDays} (${_hoursPerDay.toStringAsFixed(0)}${l10n.aiHoursPerDay})' : 'h'}',
+                      '${l10n.aiDetected} ${tourTypeL10n(context, _type)} · ${_duration.toStringAsFixed(0)} ${_isDays ? '${l10n.aiDays} (${_hoursPerDay.toStringAsFixed(0)}${l10n.aiHoursPerDay})' : 'h'}',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
@@ -454,14 +462,21 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                 );
               },
             ),
-          ],
-        ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   void _generate() {
-    final profile = ref.read(touristProfileProvider);
+    final profile = ref.read(touristProfileProvider).valueOrNull ?? TouristProfileV2.empty;
     final finalPrompt = _isDays
         ? 'El tour durara ${_duration.toInt()} dias, considerando ${_hoursPerDay.toInt()} horas habiles de actividad por dia. ${_prompt.text}'
               .trim()
@@ -471,8 +486,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         .generate(
           AiTourRequest(
             destination: _destination.text,
-            country: _country.text,
-            city: _city.text,
+            country: '',
+            city: '',
             durationHours: _isDays ? _duration * 24 : _duration,
             type: _type,
             language: _language,
@@ -929,82 +944,3 @@ class _GenerationProgress extends StatelessWidget {
   }
 }
 
-class _HeaderCollage extends StatelessWidget {
-  const _HeaderCollage();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 120,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            left: MediaQuery.of(context).size.width / 2 - 110,
-            top: 20,
-            child: Transform.rotate(
-              angle: -0.2,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  color: Colors.grey.shade300,
-                  child: Image.network(
-                    'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=300&q=80',
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
-          ).animate().fadeIn().slideX(begin: 0.2),
-          Positioned(
-            right: MediaQuery.of(context).size.width / 2 - 110,
-            top: 20,
-            child: Transform.rotate(
-              angle: 0.2,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  color: Colors.grey.shade300,
-                  child: Image.network(
-                    'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&w=300&q=80',
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
-          ).animate().fadeIn().slideX(begin: -0.2),
-          Positioned(
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  width: 4,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: Image.network(
-                  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-          ).animate().fadeIn().scale(begin: const Offset(0.8, 0.8)),
-        ],
-      ),
-    );
-  }
-}

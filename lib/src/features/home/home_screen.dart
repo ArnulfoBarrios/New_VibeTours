@@ -1,11 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
-import '../../core/design/vibe_logo.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -15,83 +14,49 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final toursAsync = ref.watch(toursProvider);
+    final toursAsync = ref.watch(recommendedToursProvider);
+    final user = ref.watch(authServiceProvider).currentUser;
+    final weatherAsync = ref.watch(weatherProvider);
+    final placesAsync = ref.watch(nearbyPlacesProvider);
+    final eventsAsync = ref.watch(localEventsProvider);
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Row(
-          children: [
-            const VibeLogoMark(size: 32),
-            const SizedBox(width: 8),
-            Text(
-              l10n.explore,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.map_outlined, color: Theme.of(context).colorScheme.onSurface),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: toursAsync.when(
         data: (tours) {
           if (tours.isEmpty) {
-            return Center(child: Text(l10n.noToursAvailable));
+            return Center(
+              child: Text(l10n.noToursAvailable, style: const TextStyle(fontWeight: FontWeight.w700)),
+            );
           }
+          final heroTour = tours.first;
+          final restTours = tours.skip(1).toList();
+          final metadata = user?.userMetadata;
+          final name = metadata != null ? (metadata['full_name'] ?? metadata['name'] ?? 'Traveler') : 'Traveler';
+          final firstName = name.toString().split(' ').first;
 
-          final featured = tours.isNotEmpty ? tours.first : null;
-          final continuePlanning = tours.skip(1).take(2).toList();
-          final coastToCoast = tours.skip(3).take(3).toList();
-          final wildBeauty = tours.skip(6).take(3).toList();
-
-          return ListView(
-            padding: const EdgeInsets.only(bottom: 180),
-            children: [
-              if (featured != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: _FeaturedTourCard(tour: featured),
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: _HeaderSection(
+                  userName: firstName,
+                  weatherAsync: weatherAsync,
                 ),
-              if (continuePlanning.isNotEmpty)
-                _HorizontalSection(
-                  title: l10n.continuePlanning,
-                  subtitle: l10n.continuePlanningSub,
-                  tours: continuePlanning,
-                  action: TextButton(
-                    onPressed: () {},
-                    style: TextButton.styleFrom(
-                      backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
-                      foregroundColor: Theme.of(context).colorScheme.onSurface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    child: Text(l10n.viewAll, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              if (coastToCoast.isNotEmpty)
-                _HorizontalSection(
-                  title: l10n.coastToCoast,
-                  subtitle: l10n.coastToCoastSub,
-                  tours: coastToCoast,
-                ),
-              if (wildBeauty.isNotEmpty || coastToCoast.isNotEmpty)
-                _HorizontalSection(
-                  title: l10n.wildBeauty,
-                  subtitle: l10n.wildBeautySub,
-                  tours: wildBeauty.isNotEmpty ? wildBeauty : coastToCoast,
-                ),
+              ),
+              SliverToBoxAdapter(
+                child: _HeroTourSection(tour: heroTour),
+              ),
+              SliverToBoxAdapter(
+                child: _ToursForYouSection(tours: restTours),
+              ),
+              SliverToBoxAdapter(
+                child: _NearbyPlacesSection(placesAsync: placesAsync),
+              ),
+              SliverToBoxAdapter(
+                child: _UpcomingEventsSection(eventsAsync: eventsAsync),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           );
         },
@@ -102,225 +67,604 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _FeaturedTourCard extends StatelessWidget {
-  const _FeaturedTourCard({required this.tour});
+class _HeaderSection extends StatelessWidget {
+  final String userName;
+  final AsyncValue<WeatherSnapshot?> weatherAsync;
 
-  final Tour tour;
+  const _HeaderSection({required this.userName, required this.weatherAsync});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.push('/tours/${tour.id}'),
-      child: Container(
-        height: 500,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(32),
-          image: DecorationImage(
-            image: CachedNetworkImageProvider(tour.coverUrl),
-            fit: BoxFit.cover,
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${l10n.goodMorning}, $userName',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.2),
-                    Colors.black.withValues(alpha: 0.8),
+          // Weather badge
+          weatherAsync.when(
+            data: (weather) {
+              if (weather == null) return const SizedBox.shrink();
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
                   ],
                 ),
-              ),
-            ),
-            Positioned(
-              top: 24,
-              left: 24,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  AppLocalizations.of(context).featured,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 10,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 24,
-              right: 24,
-              bottom: 32,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tour.title,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          height: 1.2,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${tour.durationHours ~/ 24} ${AppLocalizations.of(context).days}',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: () => context.push('/tours/${tour.id}'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
-                      ),
+                child: Row(
+                  children: [
+                    Icon(
+                      weather.isDay ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
+                      color: weather.isDay ? Colors.orange.shade400 : Colors.indigo,
+                      size: 20,
                     ),
-                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                    label: Text(
-                      AppLocalizations.of(context).planTrip,
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${weather.temperatureC}°C',
+                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
+                        ),
+                        Text(
+                          weather.condition,
+                          style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+                  ],
+                ),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _HorizontalSection extends StatelessWidget {
-  const _HorizontalSection({
-    required this.title,
-    required this.subtitle,
-    required this.tours,
-    this.action,
-  });
+class _HeroTourSection extends ConsumerStatefulWidget {
+  final Tour tour;
+  const _HeroTourSection({required this.tour});
 
-  final String title;
-  final String subtitle;
-  final List<Tour> tours;
-  final Widget? action;
+  @override
+  ConsumerState<_HeroTourSection> createState() => _HeroTourSectionState();
+}
+
+class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
+  final _promptController = TextEditingController();
+
+  @override
+  void dispose() {
+    _promptController.dispose();
+    super.dispose();
+  }
+
+  void _submitPrompt() {
+    if (_promptController.text.trim().isNotEmpty) {
+      ref.read(aiPromptProvider.notifier).state = _promptController.text.trim();
+      context.go('/creator');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 32, 20, 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 22,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                    ),
-                  ],
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
+        children: [
+          GestureDetector(
+            onTap: () => context.push('/tours/${widget.tour.id}'),
+            child: Container(
+              width: double.infinity,
+              height: 380, // Taller size
+              margin: const EdgeInsets.only(bottom: 24), // Space for floating input
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(32),
+                image: DecorationImage(
+                  image: CachedNetworkImageProvider(widget.tour.coverUrl),
+                  fit: BoxFit.cover,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
-              ?action,
+              child: Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(32),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.3),
+                          Colors.black.withValues(alpha: 0.8),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 24,
+                    right: 24,
+                    bottom: 60, // Leave room so input doesn't overlap text
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                l10n.editorsChoice,
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                "98% ${l10n.vibeMatchAffinity}",
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          widget.tour.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.tour.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            left: 16,
+            right: 16,
+            child: GlassPanel(
+              radius: 999,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                children: [
+                  const SizedBox(width: 16),
+                  Icon(Icons.auto_awesome, color: Colors.grey.shade600, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _promptController,
+                      decoration: InputDecoration(
+                        hintText: l10n.whereToNext,
+                        hintStyle: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                        border: InputBorder.none,
+                      ),
+                      onSubmitted: (_) => _submitPrompt(),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _submitPrompt,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToursForYouSection extends StatelessWidget {
+  final List<Tour> tours;
+  const _ToursForYouSection({required this.tours});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (tours.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.toursForYou,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface),
+              ),
+              TextButton(
+                onPressed: () => context.go('/tours'),
+                child: Text(l10n.viewAll, style: const TextStyle(fontWeight: FontWeight.w700)),
+              ),
             ],
           ),
-        ),
-        SizedBox(
-          height: 240,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            itemCount: tours.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 16),
-            itemBuilder: (context, index) => _SmallCard(tour: tours[index]),
-          ),
+          const SizedBox(height: 16),
+          if (tours.isNotEmpty) _buildStaggeredGrid(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStaggeredGrid(BuildContext context) {
+    final t1 = tours.isNotEmpty ? tours[0] : null;
+    final t2 = tours.length > 1 ? tours[1] : null;
+    final t3 = tours.length > 2 ? tours[2] : null;
+    final t4 = tours.length > 3 ? tours[3] : null;
+
+    return Column(
+      children: [
+        if (t1 != null) _StaggeredTourCard(tour: t1, height: 220, isLarge: true),
+        const SizedBox(height: 12),
+        if (t2 != null) _StaggeredTourCard(tour: t2, height: 100, isLarge: false),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            if (t3 != null) Expanded(child: _StaggeredTourCard(tour: t3, height: 120, isLarge: false, alignBottom: true)),
+            if (t3 != null && t4 != null) const SizedBox(width: 12),
+            if (t4 != null) Expanded(child: _StaggeredTourCard(tour: t4, height: 120, isLarge: false, alignBottom: true)),
+          ],
         ),
       ],
     );
   }
 }
 
-class _SmallCard extends StatelessWidget {
-  const _SmallCard({required this.tour});
-
+class _StaggeredTourCard extends StatelessWidget {
   final Tour tour;
+  final double height;
+  final bool isLarge;
+  final bool alignBottom;
+
+  const _StaggeredTourCard({
+    required this.tour,
+    required this.height,
+    required this.isLarge,
+    this.alignBottom = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return GestureDetector(
       onTap: () => context.push('/tours/${tour.id}'),
-      child: SizedBox(
-        width: 160,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: CachedNetworkImage(
-                  imageUrl: tour.coverUrl,
-                  fit: BoxFit.cover,
-                  width: 160,
-                  placeholder: (context, url) => const SkeletonBox(),
-                  errorWidget: (context, url, error) => TravelImageFallback(title: tour.title),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              tour.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    height: 1.2,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${tour.durationHours ~/ 24} ${AppLocalizations.of(context).days}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
+      child: Container(
+        height: height,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          image: DecorationImage(
+            image: CachedNetworkImageProvider(tour.coverUrl),
+            fit: BoxFit.cover,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.black.withValues(alpha: isLarge ? 0.7 : 0.6),
+              ],
+            ),
+          ),
+          padding: const EdgeInsets.all(16),
+          alignment: alignBottom ? Alignment.bottomCenter : Alignment.bottomLeft,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: alignBottom ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+            children: [
+              if (isLarge) ...[
+                Text(
+                  tourTypeLabel(tour.type).toUpperCase(),
+                  style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1),
+                ),
+                const SizedBox(height: 4),
+              ],
+              Text(
+                tour.title,
+                textAlign: alignBottom ? TextAlign.center : TextAlign.left,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: isLarge ? 22 : 16,
+                  fontWeight: FontWeight.w800,
+                  height: 1.1,
+                ),
+              ),
+              if (!alignBottom) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '${tour.durationHours.toStringAsFixed(1)}h • ${90 + (tour.title.length % 10)}% ${l10n.matchAffinity}',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
+  }
+}
+
+class _NearbyPlacesSection extends StatelessWidget {
+  final AsyncValue<List<NearbyPlace>> placesAsync;
+  const _NearbyPlacesSection({required this.placesAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return placesAsync.when(
+      data: (places) {
+        if (places.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 16, bottom: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      l10n.nearbyPlaces,
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface),
+                    ),
+                    Row(
+                      children: [
+                        Icon(Icons.near_me_outlined, size: 14, color: Colors.grey.shade500),
+                        const SizedBox(width: 4),
+                        Text('A menos de 5km', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 180,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: places.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 16),
+                  itemBuilder: (context, index) {
+                    final place = places[index];
+                    return SizedBox(
+                      width: 220,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                image: place.imageUrl.isNotEmpty
+                                    ? DecorationImage(
+                                        image: CachedNetworkImageProvider(place.imageUrl),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                              ),
+                              alignment: Alignment.topRight,
+                              padding: const EdgeInsets.all(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${(place.distanceMeters / 1000).toStringAsFixed(1)} km',
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            place.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
+                          ),
+                          Text(
+                            place.category.isEmpty ? place.type : place.category,
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _UpcomingEventsSection extends StatelessWidget {
+  final AsyncValue<List<LocalEvent>> eventsAsync;
+  const _UpcomingEventsSection({required this.eventsAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return eventsAsync.when(
+      data: (events) {
+        if (events.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.upcomingEvents,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface),
+              ),
+              const SizedBox(height: 16),
+              ...events.take(3).map((event) => _EventTile(event: event)),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _EventTile extends StatelessWidget {
+  final LocalEvent event;
+  const _EventTile({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final month = _monthName(event.startsAt.month);
+    final day = event.startsAt.day.toString();
+    final timeStr = '${event.startsAt.hour.toString().padLeft(2, '0')}:${event.startsAt.minute.toString().padLeft(2, '0')}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(month, style: const TextStyle(color: AppTheme.primary, fontSize: 10, fontWeight: FontWeight.w800)),
+                Text(day, style: const TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.w800)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Theme.of(context).colorScheme.onSurface),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${event.category} • $timeStr',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: AppTheme.primary),
+        ],
+      ),
+    );
+  }
+
+  String _monthName(int m) {
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    return months[m - 1];
   }
 }

@@ -14,6 +14,7 @@ class DiscoveryRepository {
     if (json == null) return null;
     final weather = json['weather'] as Map<String, dynamic>? ?? const {};
     return WeatherSnapshot(
+      locationName: json['locationName']?.toString() ?? 'Tokyo, Japan',
       temperatureC: _int(weather['temperatureC']),
       apparentC: _int(weather['apparentC']),
       humidity: _int(weather['humidity']),

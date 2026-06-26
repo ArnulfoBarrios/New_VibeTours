@@ -559,8 +559,8 @@ class TourRepository {
           source['nombre_tour']?.toString() ??
           json['title']?.toString() ??
           'Tour',
-      country: country.ifEmpty('Global'),
-      city: city.ifEmpty('Global'),
+      country: country.ifEmpty('Mundo'),
+      city: city.ifEmpty('Mundo'),
       type: _tourTypeFromText(source['tipo_tour'] ?? json['type']),
       description:
           source['descripcion_tour']?.toString() ??

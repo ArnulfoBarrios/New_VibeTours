@@ -98,6 +98,24 @@ class AuthService {
     }
   }
 
+  Future<void> updateUserPreferences(Map<String, dynamic> preferences) async {
+    if (_client == null || _client.auth.currentUser == null) return;
+    try {
+      await _client.auth.updateUser(UserAttributes(data: {'tourist_preferences': preferences}));
+    } catch (e) {
+      // Ignorar error si falla por no tener sesión activa
+    }
+  }
+
+  Map<String, dynamic>? getUserPreferences() {
+    if (_client == null) return null;
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+    final prefs = user.userMetadata?['tourist_preferences'];
+    if (prefs is Map<String, dynamic>) return prefs;
+    return null;
+  }
+
   Future<void> signOut() async {
     await _client?.auth.signOut();
   }

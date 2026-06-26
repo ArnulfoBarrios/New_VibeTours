@@ -205,6 +205,15 @@ En la experiencia en vivo, la IA del planner y la guia por voz son cosas distint
 
 La narracion de cada parada usa TTS desde Flutter, no el modelo de Ollama.
 
+## Actualizaciones Recientes (Arquitectura IA)
+
+El motor de IA recibio recientemente mejoras estructurales importantes:
+
+- **Mayor Integracion con Servicios Geoespaciales**: Se unificaron y mejoraron las integraciones con OpenStreetMap (Nominatim, Photon, Overpass) en servicios dedicados (`osm.js`), garantizando resultados geograficos precisos antes de llegar a la IA.
+- **Refinamiento Estricto de Prompts (Ollama)**: Se ajustaron fuertemente las instrucciones del sistema para el modelo local, asegurando respuestas JSON perfectamente estructuradas, con menos alucinaciones de lugares inexistentes y narrativas mejor adaptadas al tipo de tour.
+- **Gestion Avanzada del Repositorio de Tours**: Se refactorizo la comunicacion entre el front-end y el backend para la generacion de tours, actualizando `tour_repository.dart` para manejar de forma robusta la vista previa y guardado de los itinerarios creados por la IA.
+- **Interfaz del Planner Evolucionada**: La pantalla de planificacion en Flutter (`ai_planner_screen.dart`) se actualizo para incluir mejores controles de viaje, captura de dictado por voz integrada y retroalimentacion fluida acorde al rediseno general de la aplicacion.
+
 ## En sintesis
 
 La IA de VibeTours funciona como una cadena:
