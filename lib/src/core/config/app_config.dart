@@ -15,7 +15,7 @@ class AppConfig {
   static const _definedApiBaseUrl = String.fromEnvironment('API_BASE_URL');
   static const _localNetworkApiBaseUrl = String.fromEnvironment(
     'LOCAL_NETWORK_API_BASE_URL',
-    defaultValue: 'http://192.168.1.110:3000/api',
+    defaultValue: 'http://192.168.1.114:3000/api',
   );
   static const _definedGoogleIosClientId = String.fromEnvironment(
     'GOOGLE_IOS_CLIENT_ID',
@@ -91,7 +91,10 @@ class AppConfig {
       'http://127.0.0.1:3000/api',
       'http://localhost:3000/api',
     ];
-    return [for (final url in candidates) if (url.isNotEmpty) url];
+    return [
+      for (final url in candidates)
+        if (url.isNotEmpty) url,
+    ];
   }
 
   static String _asset(String key) => _assetValues[key] ?? '';
@@ -103,4 +106,3 @@ class AppConfig {
         .firstWhere((item) => item.isNotEmpty, orElse: () => '');
   }
 }
-
