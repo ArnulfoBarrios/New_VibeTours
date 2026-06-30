@@ -69,18 +69,19 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
     );
     out center tags 35;
   `
-  const response = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': USER_AGENT
-    },
-    body: new URLSearchParams({ data: query })
-  })
-  if (!response.ok) return []
-  const json = await response.json()
-  return (json.elements ?? [])
-    .map((element) => {
+  try {
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': USER_AGENT
+      },
+      body: new URLSearchParams({ data: query })
+    })
+    if (!response.ok) return []
+    const json = await response.json()
+    return (json.elements ?? [])
+      .map((element) => {
       const lat = element.lat ?? element.center?.lat
       const lon = element.lon ?? element.center?.lon
       const name = element.tags?.name
@@ -96,8 +97,12 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
         tags: element.tags
       }
     })
-    .filter(Boolean)
-    .slice(0, 20)
+      .filter(Boolean)
+      .slice(0, 20)
+  } catch (error) {
+    console.error('[osm] overpassAttractions error:', error.message)
+    return []
+  }
 }
 
 export async function overpassNearbyCities(latitude, longitude, radius = 100000) {
@@ -108,18 +113,19 @@ export async function overpassNearbyCities(latitude, longitude, radius = 100000)
     );
     out center tags 15;
   `
-  const response = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': USER_AGENT
-    },
-    body: new URLSearchParams({ data: query })
-  })
-  if (!response.ok) return []
-  const json = await response.json()
-  return (json.elements ?? [])
-    .map((element) => {
+  try {
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': USER_AGENT
+      },
+      body: new URLSearchParams({ data: query })
+    })
+    if (!response.ok) return []
+    const json = await response.json()
+    return (json.elements ?? [])
+      .map((element) => {
       const name = element.tags?.name
       if (!name) return null
       return {
@@ -128,7 +134,11 @@ export async function overpassNearbyCities(latitude, longitude, radius = 100000)
         longitude: element.lon
       }
     })
-    .filter(Boolean)
+      .filter(Boolean)
+  } catch (error) {
+    console.error('[osm] overpassNearbyCities error:', error.message)
+    return []
+  }
 }
 
 function classifyAttraction(tags = {}) {
