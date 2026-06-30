@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities } from '../services/osm.js'
 import { planWithOllama, extractLocation } from '../services/ollama.js'
 import { supabase } from '../services/supabase.js'
 
@@ -35,6 +35,9 @@ const requestSchema = z.object({
   touristPace: z.string().optional().default('balanced'),
   persist: z.boolean().optional().default(false),
   userId: z.string().uuid().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  budget: z.string().optional()
 })
 
 aiRouter.post('/tours/confirm', async (req, res, next) => {
@@ -166,10 +169,28 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
             { city: "El Cairo", country: "Egipto", reason: "Milenios de historia te esperan." }
           ]
         }
+        
+        let isGpsBased = false;
+        if (input.latitude && input.longitude) {
+            const nearby = await overpassNearbyCities(input.latitude, input.longitude, 50000)
+            if (nearby.length > 0) {
+                const closePlaces = nearby.slice(0, 3)
+                suggestions = closePlaces.map(p => ({
+                    city: p.name,
+                    country: "Cerca de ti",
+                    reason: `Te sugiero ${p.name} porque está muy cerca de tu ubicación actual y encaja perfecto con lo que buscas.`
+                }))
+                isGpsBased = true;
+            }
+        }
+
+        const message = isGpsBased
+          ? 'He notado que no has especificado una ciudad explícita en tu petición. Dado que tengo tu ubicación actual, he encontrado algunos municipios cercanos que son ideales para tu viaje. ¿Cuál te llama más la atención?'
+          : 'Basado en lo que buscas, aquí tienes algunos destinos increíbles que te podrían encantar. ¿O prefieres ingresar otro destino?';
 
         return res.json({
           needsDestination: true,
-          message: '¿A dónde quieres ir? Por favor, ingresa o elige un destino:',
+          message,
           suggestions
         })
       }
@@ -308,6 +329,30 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       }))
       
     res.json({ alternatives })
+  } catch (error) {
+    next(error)
+  }
+})
+
+aiRouter.post('/tours/hotels', async (req, res, next) => {
+  try {
+    const hotelSchema = z.object({
+      latitude: z.number(),
+      longitude: z.number(),
+      budget: z.string().optional().default('moderate')
+    })
+    const { latitude, longitude, budget } = hotelSchema.parse(req.body)
+    
+    const hotels = await overpassHotels(latitude, longitude, budget, 15000)
+    
+    // Sort hotels so the ones with the right amount of stars appear first
+    hotels.sort((a, b) => {
+      const aStars = parseInt(a.stars || '0')
+      const bStars = parseInt(b.stars || '0')
+      return bStars - aStars
+    })
+
+    res.json({ hotels: hotels.slice(0, 5) })
   } catch (error) {
     next(error)
   }

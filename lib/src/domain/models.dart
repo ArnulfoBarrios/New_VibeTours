@@ -494,6 +494,9 @@ class AiTourRequest {
     required this.touristProfileSummary,
     required this.touristInterests,
     required this.touristPace,
+    this.latitude,
+    this.longitude,
+    this.budget,
   });
 
   final String destination;
@@ -506,6 +509,9 @@ class AiTourRequest {
   final String touristProfileSummary;
   final List<String> touristInterests;
   final String touristPace;
+  final double? latitude;
+  final double? longitude;
+  final String? budget;
 
   Map<String, dynamic> toJson() => {
     'destination': destination,
@@ -518,6 +524,9 @@ class AiTourRequest {
     'touristProfileSummary': touristProfileSummary,
     'touristInterests': touristInterests,
     'touristPace': touristPace,
+    if (latitude != null) 'latitude': latitude,
+    if (longitude != null) 'longitude': longitude,
+    if (budget != null) 'budget': budget,
   };
 }
 

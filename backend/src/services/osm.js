@@ -100,6 +100,37 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
     .slice(0, 20)
 }
 
+export async function overpassNearbyCities(latitude, longitude, radius = 100000) {
+  const query = `
+    [out:json][timeout:25];
+    (
+      node(around:${radius},${latitude},${longitude})["place"~"city|town"]["wikipedia"];
+    );
+    out center tags 15;
+  `
+  const response = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': USER_AGENT
+    },
+    body: new URLSearchParams({ data: query })
+  })
+  if (!response.ok) return []
+  const json = await response.json()
+  return (json.elements ?? [])
+    .map((element) => {
+      const name = element.tags?.name
+      if (!name) return null
+      return {
+        name,
+        latitude: element.lat,
+        longitude: element.lon
+      }
+    })
+    .filter(Boolean)
+}
+
 function classifyAttraction(tags = {}) {
   const tourism = String(tags.tourism ?? '').toLowerCase()
   const historic = String(tags.historic ?? '').toLowerCase()
@@ -131,3 +162,54 @@ function isAccommodation(type) {
     'chalet'
   ].includes(type)
 }
+
+export async function overpassHotels(latitude, longitude, budget = 'moderate', radius = 4500) {
+  let starsRegex = "2|3|4"
+  if (budget === 'economic') {
+    starsRegex = "1|2|3"
+  } else if (budget === 'luxury') {
+    starsRegex = "4|5"
+  }
+
+  const query = `
+    [out:json][timeout:25];
+    (
+      node(around:${radius},${latitude},${longitude})["tourism"="hotel"]["stars"~"${starsRegex}"];
+      way(around:${radius},${latitude},${longitude})["tourism"="hotel"]["stars"~"${starsRegex}"];
+    );
+    out center tags 15;
+  `
+  try {
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': USER_AGENT
+      },
+      body: new URLSearchParams({ data: query })
+    })
+    if (!response.ok) return []
+    const json = await response.json()
+    return (json.elements ?? [])
+      .map((element) => {
+        const lat = element.lat ?? element.center?.lat
+        const lon = element.lon ?? element.center?.lon
+        const name = element.tags?.name
+        if (lat == null || lon == null || !name) return null
+        return {
+          id: element.id,
+          name,
+          latitude: lat,
+          longitude: lon,
+          stars: element.tags?.stars,
+          type: 'hotel',
+          tags: element.tags
+        }
+      })
+      .filter(Boolean)
+  } catch (error) {
+    console.error('overpassHotels error', error)
+    return []
+  }
+}
+

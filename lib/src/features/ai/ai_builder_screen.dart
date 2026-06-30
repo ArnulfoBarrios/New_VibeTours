@@ -121,7 +121,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
           Positioned(
             left: 0,
             right: 0,
-            bottom: 32,
+            bottom: 90, // Increased to avoid overlap with BottomNavigationBar
             height: 240,
             child: PageView.builder(
               controller: _pageController,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../core/config/app_config.dart';
 
 class AiBuilderState {
   const AiBuilderState({
@@ -18,6 +19,8 @@ class AiBuilderState {
     this.destinationMessage,
     this.destinationSuggestions = const [],
     this.messages = const [],
+    this.hotels = const [],
+    this.needsBudget = false,
   });
 
   final bool isLoading;
@@ -32,6 +35,8 @@ class AiBuilderState {
   final String? destinationMessage;
   final List<dynamic> destinationSuggestions;
   final List<ChatMessage> messages;
+  final List<dynamic> hotels;
+  final bool needsBudget;
 
   AiBuilderState copyWith({
     bool? isLoading,
@@ -46,6 +51,8 @@ class AiBuilderState {
     String? destinationMessage,
     List<dynamic>? destinationSuggestions,
     List<ChatMessage>? messages,
+    List<dynamic>? hotels,
+    bool? needsBudget,
   }) {
     return AiBuilderState(
       isLoading: isLoading ?? this.isLoading,
@@ -60,6 +67,8 @@ class AiBuilderState {
       destinationMessage: destinationMessage ?? this.destinationMessage,
       destinationSuggestions: destinationSuggestions ?? this.destinationSuggestions,
       messages: messages ?? this.messages,
+      hotels: hotels ?? this.hotels,
+      needsBudget: needsBudget ?? this.needsBudget,
     );
   }
 }
@@ -68,7 +77,40 @@ class AiBuilderState {
 class AiBuilderController extends StateNotifier<AiBuilderState> {
   AiBuilderController() : super(const AiBuilderState());
 
-  static const _baseUrl = 'http://192.168.1.110:3000/api';
+  String? _workingBaseUrl;
+
+  Future<String> _findWorkingBaseUrl() async {
+    if (_workingBaseUrl != null) return _workingBaseUrl!;
+    
+    Exception? lastError;
+    for (final baseUrl in AppConfig.apiBaseUrls) {
+      try {
+        final healthUrl = baseUrl.replaceAll('/api', '/health');
+        final response = await http.get(Uri.parse(healthUrl)).timeout(const Duration(seconds: 3));
+        if (response.statusCode == 200) {
+          _workingBaseUrl = baseUrl;
+          return baseUrl;
+        }
+      } catch (e) {
+        lastError = e is Exception ? e : Exception(e.toString());
+      }
+    }
+    throw lastError ?? Exception('No se pudo encontrar el servidor local. Revisa que el backend esté corriendo.');
+  }
+
+  Future<http.Response> _postJson(String path, Map<String, dynamic> body) async {
+    final baseUrl = await _findWorkingBaseUrl();
+    return await http.post(
+      Uri.parse('$baseUrl$path'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    ).timeout(const Duration(minutes: 3));
+  }
+  
+  Future<http.Response> _getJson(String path) async {
+    final baseUrl = await _findWorkingBaseUrl();
+    return await http.get(Uri.parse('$baseUrl$path')).timeout(const Duration(minutes: 1));
+  }
 
   void setInitialData(AiTourRequest request, List<AiRecommendation> initialRecs, Map<String, dynamic> context) {
     state = state.copyWith(
@@ -78,7 +120,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     );
   }
 
-  Future<void> sendMessage(String text, {String? imagePath}) async {
+  Future<void> sendMessage(String text, {String? imagePath, double? lat, double? lon}) async {
     final userMsg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       text: text,
@@ -91,19 +133,39 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       isTyping: true,
     );
 
-    // Call the backend with a synthesized request
-    final request = AiTourRequest(
-      prompt: text,
-      destination: '',
-      country: '',
-      city: '',
-      type: TourType.custom,
-      durationHours: 4, // default 4 hours
-      language: 'es',
-      touristProfileSummary: '',
-      touristInterests: [],
-      touristPace: 'Medium',
-    );
+    AiTourRequest request;
+    if (state.needsDestination && state.request != null) {
+      request = AiTourRequest(
+        prompt: state.request!.prompt,
+        destination: text, // Use the user's message as destination
+        country: state.request!.country,
+        city: state.request!.city,
+        type: state.request!.type,
+        durationHours: state.request!.durationHours,
+        language: state.request!.language,
+        touristProfileSummary: state.request!.touristProfileSummary,
+        touristInterests: state.request!.touristInterests,
+        touristPace: state.request!.touristPace,
+        latitude: lat ?? state.request!.latitude,
+        longitude: lon ?? state.request!.longitude,
+      );
+    } else {
+      request = AiTourRequest(
+        prompt: text,
+        destination: '',
+        country: '',
+        city: '',
+        type: TourType.custom,
+        durationHours: 4, // default 4 hours
+        language: 'es',
+        touristProfileSummary: '',
+        touristInterests: [],
+        touristPace: 'Medium',
+        latitude: lat,
+        longitude: lon,
+      );
+    }
+    
     await startPlanning(request);
   }
 
@@ -118,60 +180,67 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       destinationSuggestions: [],
     );
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/ai/tours/recommend'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(request.toJson()),
-      );
+      final response = await _postJson('/ai/tours/recommend', request.toJson());
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['needsDestination'] == true) {
+          final suggs = data['suggestions'] as List? ?? [];
+          final actionChips = suggs.map((e) => (e['city'] ?? '').toString()).where((e) => e.isNotEmpty).toList();
+          
+          final aiMsg = ChatMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            text: data['message'] ?? '¿A qué lugar te gustaría ir?',
+            type: ChatMessageType.ai,
+            timestamp: DateTime.now(),
+            actionChips: actionChips.isNotEmpty ? actionChips : null,
+          );
+          
           state = state.copyWith(
             isLoading: false,
+            isTyping: false,
             needsDestination: true,
             destinationMessage: data['message'],
-            destinationSuggestions: data['suggestions'] ?? [],
+            destinationSuggestions: suggs,
+            messages: [...state.messages, aiMsg],
           );
           return;
         }
         
         final recs = (data['recommendations'] as List).map((e) => AiRecommendation.fromJson(e)).toList();
         final context = data['plannerContext'] as Map<String, dynamic>;
+
+        if (recs.isNotEmpty) {
+          state = state.copyWith(
+            isLoading: false, 
+            plannerContext: context,
+            recommendations: [recs.first],
+          );
+          
+          // Animación progresiva
+          for (int i = 1; i < recs.length; i++) {
+            await Future.delayed(const Duration(milliseconds: 800));
+            if (!mounted) return;
+            state = state.copyWith(
+              recommendations: [...state.recommendations, recs[i]],
+            );
+          }
+        }
+
         final aiMsg = ChatMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           text: '¡Excelente elección! He diseñado este tour para ti:',
           type: ChatMessageType.ai,
           timestamp: DateTime.now(),
-          actionChips: ['Si, personalizar', 'Ver en mapa', 'Cambiar duración'],
-          // For now, we embed a dummy tour or use the first recommendation data
-          embeddedTour: Tour(
-            id: 'mock-1',
-            title: request.prompt.isNotEmpty ? request.prompt : 'Tour Generado',
-            description: 'Un tour increíble basado en tus preferencias.',
-            country: request.country,
-            city: request.city,
-            type: request.type,
-            coverUrl: 'https://images.unsplash.com/photo-1583511666407-5f06533f2113?auto=format&fit=crop&q=80',
-            gallery: [],
-            durationHours: request.durationHours,
-            distanceKm: 0,
-            rating: 5.0,
-            reviewCount: 0,
-            likes: 0,
-            difficulty: TourDifficulty.easy,
-            language: request.language,
-            tags: [],
-            stops: [],
-          ),
+          actionChips: ['Ver paradas sugeridas', 'Quiero cambiar lugares'],
         );
 
         state = state.copyWith(
           isLoading: false, 
           isTyping: false,
-          recommendations: recs, 
           plannerContext: context,
           messages: [...state.messages, aiMsg],
+          needsBudget: true,
         );
       } else {
         String errorMsg = 'Error: ${response.statusCode}';
@@ -187,6 +256,64 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       state = state.copyWith(isLoading: false, isTyping: false, error: e.toString());
     }
   }
+  
+  Future<void> setBudgetAndFetchHotels(String budget) async {
+    if (state.request == null || state.recommendations.isEmpty) return;
+    state = state.copyWith(isLoading: true, needsBudget: false);
+    
+    // update request budget
+    final newRequest = AiTourRequest(
+      prompt: state.request!.prompt,
+      destination: state.request!.destination,
+      country: state.request!.country,
+      city: state.request!.city,
+      durationHours: state.request!.durationHours,
+      type: state.request!.type,
+      language: state.request!.language,
+      touristProfileSummary: state.request!.touristProfileSummary,
+      touristInterests: state.request!.touristInterests,
+      touristPace: state.request!.touristPace,
+      latitude: state.request!.latitude,
+      longitude: state.request!.longitude,
+      budget: budget,
+    );
+    state = state.copyWith(request: newRequest);
+
+    try {
+      final centerLat = state.recommendations.first.latitude;
+      final centerLon = state.recommendations.first.longitude;
+      
+      final response = await _postJson('/ai/tours/hotels', {
+        'latitude': centerLat,
+        'longitude': centerLon,
+        'budget': budget == 'Económico' ? 'economic' : budget == 'Lujo' ? 'luxury' : 'moderate',
+      });
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final hotels = data['hotels'] ?? [];
+        
+        final aiMsg = ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: 'He encontrado estos hoteles ideales para tu presupuesto en la zona de tu tour. ¡Crearé el itinerario final con guía turístico!',
+          type: ChatMessageType.ai,
+          timestamp: DateTime.now(),
+          actionChips: ['Generar Tour Final'],
+        );
+
+        state = state.copyWith(
+          isLoading: false,
+          hotels: hotels,
+          messages: [...state.messages, aiMsg],
+        );
+      } else {
+        state = state.copyWith(isLoading: false, error: 'Error obteniendo hoteles');
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
   Future<void> removeStop(int index) async {
     final newRecs = List<AiRecommendation>.from(state.recommendations);
     newRecs.removeAt(index);
@@ -198,15 +325,11 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     try {
       final currentIds = state.recommendations.map((e) => e.id).toList();
       
-      final response = await http.post(
-        Uri.parse('$_baseUrl/ai/tours/alternatives'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'request': state.request!.toJson(),
-          'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
-          'excludeIds': currentIds,
-        }),
-      );
+      final response = await _postJson('/ai/tours/alternatives', {
+        'request': state.request!.toJson(),
+        'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
+        'excludeIds': currentIds,
+      });
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -230,15 +353,11 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     try {
       final currentIds = state.recommendations.map((e) => e.id).toList();
       
-      final response = await http.post(
-        Uri.parse('$_baseUrl/ai/tours/alternatives'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'request': state.request!.toJson(),
-          'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
-          'excludeIds': currentIds,
-        }),
-      );
+      final response = await _postJson('/ai/tours/alternatives', {
+        'request': state.request!.toJson(),
+        'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
+        'excludeIds': currentIds,
+      });
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -262,15 +381,11 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     state = state.copyWith(isBuilding: true, error: null);
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/ai/tours/build'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'request': state.request!.toJson(),
-          'places': state.recommendations.map((e) => e.toJson()).toList(),
-          'plannerContext': state.plannerContext,
-        }),
-      );
+      final response = await _postJson('/ai/tours/build', {
+        'request': state.request!.toJson(),
+        'places': state.recommendations.map((e) => e.toJson()).toList(),
+        'plannerContext': state.plannerContext,
+      });
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -288,7 +403,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     while (state.isBuilding) {
       await Future.delayed(const Duration(seconds: 2));
       try {
-        final response = await http.get(Uri.parse('$_baseUrl/ai/tours/status/$jobId'));
+        final response = await _getJson('/ai/tours/status/$jobId');
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           if (data['status'] == 'completed') {

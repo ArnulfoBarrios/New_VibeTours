@@ -10,6 +10,9 @@ import 'package:lottie/lottie.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import 'package:geolocator/geolocator.dart';
+
+import '../../core/design/openfree_route_map.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -92,9 +95,32 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     }
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     if (_prompt.text.trim().isEmpty && _selectedImagePath == null) return;
-    ref.read(aiBuilderProvider.notifier).sendMessage(_prompt.text.trim(), imagePath: _selectedImagePath);
+    
+    // Grab location
+    double? lat;
+    double? lon;
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 3),
+          ),
+        );
+        lat = position.latitude;
+        lon = position.longitude;
+      }
+    } catch (_) {
+      // Ignorar error de ubicación
+    }
+
+    ref.read(aiBuilderProvider.notifier).sendMessage(_prompt.text.trim(), imagePath: _selectedImagePath, lat: lat, lon: lon);
     _prompt.clear();
     setState(() {
       _selectedImagePath = null;
@@ -175,15 +201,181 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   _buildMessageBubble(msg),
                   const SizedBox(height: 16),
                 ],
-                if (builderState.isTyping || builderState.isLoading)
+                if (builderState.recommendations.isNotEmpty) ...[
+                  _buildMapCard(builderState),
+                  const SizedBox(height: 16),
+                ],
+                if (builderState.needsBudget) ...[
+                  _buildBudgetSelector(),
+                  const SizedBox(height: 16),
+                ],
+                if (builderState.hotels.isNotEmpty && !builderState.isBuilding && builderState.builtTour == null) ...[
+                  _buildHotelsList(builderState.hotels),
+                  const SizedBox(height: 16),
+                ],
+                if (builderState.error != null) ...[
+                  _buildErrorBanner(builderState.error!),
+                  const SizedBox(height: 16),
+                ],
+                if (builderState.isTyping || builderState.isLoading || builderState.isBuilding)
                   _buildTypingIndicator(),
               ],
             ),
           ),
-          _buildInputArea(builderState.isLoading),
+          _buildInputArea(builderState.isLoading || builderState.isBuilding),
         ],
       ),
     );
+  }
+
+  Widget _buildMapCard(AiBuilderState builderState) {
+    final points = builderState.recommendations
+        .map((r) => GeoPoint(latitude: r.latitude, longitude: r.longitude))
+        .toList();
+    final labels = builderState.recommendations.map((r) => r.name).toList();
+
+    return Container(
+      height: 250,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: OpenFreeRouteMap(
+          points: points,
+          labels: labels,
+          styleUrl: ref.watch(mapStyleProvider),
+          activeIndex: -1,
+          height: 250,
+          borderRadius: 0,
+          showNumbers: true,
+          useRoadRouting: true,
+        ),
+      ),
+    ).animate().fadeIn().slideY(begin: 0.05);
+  }
+
+  Widget _buildBudgetSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: Colors.blue.shade50,
+              radius: 16,
+              child: const Icon(Icons.smart_toy_rounded, color: Colors.blue, size: 20),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16).copyWith(topLeft: const Radius.circular(4)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2))
+                  ],
+                ),
+                child: const Text('Para terminar, ¿cuál es tu presupuesto para hoteles? (Opcional)', style: TextStyle(fontSize: 15)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.only(left: 40),
+          child: Row(
+            children: [
+              _buildBudgetChip('Económico', Icons.money_off),
+              const SizedBox(width: 8),
+              _buildBudgetChip('Moderado', Icons.attach_money),
+              const SizedBox(width: 8),
+              _buildBudgetChip('Lujo', Icons.diamond),
+            ],
+          ),
+        ),
+      ],
+    ).animate().fadeIn().slideY(begin: 0.05);
+  }
+
+  Widget _buildBudgetChip(String label, IconData icon) {
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: Colors.blue.shade700),
+      label: Text(label, style: TextStyle(color: Colors.blue.shade700, fontSize: 12)),
+      backgroundColor: Colors.blue.shade50,
+      side: BorderSide(color: Colors.blue.shade200),
+      onPressed: () {
+        ref.read(aiBuilderProvider.notifier).setBudgetAndFetchHotels(label);
+        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+      },
+    );
+  }
+
+  Widget _buildHotelsList(List<dynamic> hotels) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: hotels.map((h) => Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.hotel, color: Colors.blue),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(h['name'] ?? 'Hotel', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      children: List.generate(int.tryParse(h['stars'] ?? '0') ?? 3, (index) => const Icon(Icons.star, size: 12, color: Colors.amber)),
+                    )
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      )).toList(),
+    ).animate().fadeIn();
+  }
+
+  Widget _buildErrorBanner(String errorMsg) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              errorMsg,
+              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn();
   }
 
   Widget _buildInitialAiMessage() {
@@ -369,8 +561,15 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       ),
                       onPressed: () {
-                        if (action == 'Ver en mapa') {
+                        if (action == 'Ver paradas sugeridas') {
                           context.push('/ai/builder');
+                        } else if (action == 'Quiero cambiar lugares') {
+                          context.push('/ai/builder');
+                        } else if (action == 'Generar Tour Final') {
+                          ref.read(aiBuilderProvider.notifier).buildTour();
+                        } else {
+                          _prompt.text = action;
+                          _sendMessage();
                         }
                       },
                       child: Row(
@@ -378,8 +577,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           Text(action, style: TextStyle(color: Colors.blue.shade700)),
                           const SizedBox(width: 4),
                           Icon(
-                            action.contains('personalizar') ? Icons.edit : 
-                            action.contains('mapa') ? Icons.map : Icons.schedule,
+                            action.contains('Generar') ? Icons.check_circle : 
+                            action.contains('cambiar') ? Icons.edit : Icons.map,
                             size: 14,
                             color: Colors.blue.shade700,
                           ),
