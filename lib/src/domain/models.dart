@@ -676,3 +676,35 @@ class ChatMessage {
 
   bool get isUser => type == ChatMessageType.user;
 }
+
+class TourComment {
+  const TourComment({
+    required this.id,
+    required this.tourId,
+    required this.userId,
+    required this.rating,
+    required this.body,
+    required this.createdAt,
+    this.userName = '',
+    this.userAvatarUrl = '',
+  });
+
+  final String id;
+  final String tourId;
+  final String userId;
+  final int rating;
+  final String body;
+  final DateTime createdAt;
+  final String userName;
+  final String userAvatarUrl;
+}
+
+class UserTourRating {
+  const UserTourRating({
+    required this.comment,
+    required this.tour,
+  });
+
+  final TourComment comment;
+  final Tour tour;
+}

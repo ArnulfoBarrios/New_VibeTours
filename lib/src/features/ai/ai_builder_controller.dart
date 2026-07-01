@@ -253,7 +253,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         state = state.copyWith(isLoading: false, isTyping: false, error: errorMsg);
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, isTyping: false, error: e.toString());
+      state = state.copyWith(isLoading: false, isTyping: false, error: _friendlyError(e));
     }
   }
   
@@ -307,10 +307,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           messages: [...state.messages, aiMsg],
         );
       } else {
-        state = state.copyWith(isLoading: false, error: 'Error obteniendo hoteles');
+        state = state.copyWith(isLoading: false, error: '¡Ups! No pudimos buscar hoteles en este momento. Intenta nuevamente.');
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: _friendlyError(e));
     }
   }
 
@@ -392,10 +392,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         final jobId = data['jobId'];
         await _pollBuildJob(jobId);
       } else {
-        state = state.copyWith(isBuilding: false, error: 'Error iniciando construcción');
+        state = state.copyWith(isBuilding: false, error: '¡Ups! Hubo un problema al iniciar la creación del tour. Intenta de nuevo.');
       }
     } catch (e) {
-      state = state.copyWith(isBuilding: false, error: e.toString());
+      state = state.copyWith(isBuilding: false, error: _friendlyError(e));
     }
   }
 
@@ -459,10 +459,34 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           }
         }
       } catch (e) {
-        state = state.copyWith(isBuilding: false, error: e.toString());
+        state = state.copyWith(isBuilding: false, error: _friendlyError(e));
         return;
       }
     }
+  }
+
+  // Converts technical exceptions into friendly user-facing messages.
+  static String _friendlyError(Object e) {
+    final raw = e.toString().toLowerCase();
+    if (raw.contains('socketexception') ||
+        raw.contains('connection refused') ||
+        raw.contains('connection reset') ||
+        raw.contains('network') ||
+        raw.contains('host lookup') ||
+        raw.contains('errno = 111') ||
+        raw.contains('errno = 7')) {
+      return '😕 Parece que el asistente no está disponible en este momento.\n\nPor favor verifica tu conexión a internet o intenta más tarde.';
+    }
+    if (raw.contains('timeout') || raw.contains('timed out')) {
+      return '⏳ La respuesta tardó demasiado. Por favor intenta de nuevo en unos segundos.';
+    }
+    if (raw.contains('500') || raw.contains('internal server')) {
+      return '🔧 Ocurrió un error en el servidor. Estamos trabajando para solucionarlo.';
+    }
+    if (raw.contains('401') || raw.contains('unauthorized')) {
+      return '🔒 No tienes permiso para realizar esta acción. Por favor inicia sesión nuevamente.';
+    }
+    return '😕 Algo salió mal. Por favor intenta de nuevo.';
   }
 }
 

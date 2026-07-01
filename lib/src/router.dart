@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,11 +25,15 @@ import 'features/tours/tours_screen.dart';
 import 'state/app_state.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final currentUser = ref.watch(authUserProvider).valueOrNull;
-  final isAdmin = ref.watch(isAdminProvider);
+  final client = ref.watch(supabaseClientProvider);
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: client != null
+        ? GoRouterRefreshStream(client.auth.onAuthStateChange)
+        : null,
     redirect: (context, state) {
+      final currentUser = ref.read(authServiceProvider).currentUser;
+      final isAdmin = ref.read(isAdminProvider);
       if (state.matchedLocation == '/admin' && !isAdmin) {
         return currentUser == null ? '/login' : '/settings';
       }
@@ -136,5 +141,20 @@ class _StartupRouteState extends ConsumerState<_StartupRoute> {
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, stackTrace) => const OnboardingScreen(),
     );
+  }
+}
+
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
   }
 }

@@ -356,26 +356,33 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
   Widget _buildErrorBanner(String errorMsg) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.shade200),
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.shade200),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.wifi_off_rounded, color: Colors.orange.shade700, size: 20),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               errorMsg,
-              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+              style: TextStyle(color: Colors.orange.shade900, fontSize: 14, height: 1.4),
             ),
           ),
         ],
       ),
-    ).animate().fadeIn();
+    ).animate().fadeIn().slideY(begin: 0.05);
   }
 
   Widget _buildInitialAiMessage() {

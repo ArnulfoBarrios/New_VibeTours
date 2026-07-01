@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,6 +44,12 @@ class TourDetailScreen extends ConsumerWidget {
                 );
           final favorites = ref.watch(favoriteTourIdsProvider);
           final isFavorite = favorites.contains(tour.id);
+          final commentsAsync = ref.watch(tourCommentsProvider(tour.id));
+          final comments = commentsAsync.valueOrNull ?? [];
+          final displayRating = comments.isNotEmpty
+              ? (comments.map((c) => c.rating).reduce((a, b) => a + b) / comments.length).toStringAsFixed(1)
+              : 'S/C';
+          final displayCommentsCount = comments.isNotEmpty ? comments.length : tour.reviewCount;
           return CustomScrollView(
             slivers: [
               SliverAppBar(
@@ -111,7 +118,7 @@ class TourDetailScreen extends ConsumerWidget {
                         children: [
                           _Metric(
                             icon: Icons.star_rounded,
-                            value: tour.rating.toStringAsFixed(1),
+                            value: displayRating,
                             label: l10n.rating,
                           ),
                           _Metric(
@@ -121,7 +128,7 @@ class TourDetailScreen extends ConsumerWidget {
                           ),
                           _Metric(
                             icon: Icons.schedule_rounded,
-                            value: '${tour.durationHours} h',
+                            value: formatDuration(tour.durationHours),
                             label: l10n.duration,
                           ),
                         ],
@@ -231,12 +238,57 @@ class TourDetailScreen extends ConsumerWidget {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                '${tour.likes} ${l10n.love} - ${tour.reviewCount} comentarios',
+                                '${tour.likes} ${l10n.love} - $displayCommentsCount comentarios',
                               ),
                             ),
                           ],
                         ),
                       ),
+                      const SizedBox(height: 24),
+                      SectionHeader(title: 'Opiniones de Viajeros'),
+                      const SizedBox(height: 8),
+                      ref.watch(tourCommentsProvider(tour.id)).when(
+                            data: (comments) {
+                              if (comments.isEmpty) {
+                                return Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Column(
+                                    children: [
+                                      Icon(Icons.rate_review_outlined, size: 28, color: Colors.grey),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'Aun no hay opiniones sobre este tour.',
+                                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              return ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: comments.length,
+                                itemBuilder: (context, index) {
+                                  return _ReviewTile(comment: comments[index]);
+                                },
+                              );
+                            },
+                            loading: () => const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16.0),
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                            error: (err, _) => Text(
+                              'Error al cargar opiniones: $err',
+                              style: const TextStyle(color: Colors.redAccent),
+                            ),
+                          ),
                     ],
                   ),
                 ),
@@ -327,5 +379,103 @@ class _StopTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ReviewTile extends StatelessWidget {
+  const _ReviewTile({required this.comment});
+  final TourComment comment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: comment.userAvatarUrl.startsWith('data:image')
+                    ? Image.memory(
+                        base64Decode(comment.userAvatarUrl.split(',').last),
+                        width: 38,
+                        height: 38,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const CircleAvatar(radius: 19, child: Icon(Icons.person_outline_rounded)),
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: comment.userAvatarUrl,
+                        width: 38,
+                        height: 38,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => const SkeletonBox(width: 38, height: 38),
+                        errorWidget: (context, url, error) => CircleAvatar(
+                          radius: 19,
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                          child: Text(
+                            comment.userName.isNotEmpty ? comment.userName[0].toUpperCase() : 'U',
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
+                          ),
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      comment.userName,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: List.generate(5, (index) {
+                        return Icon(
+                          Icons.star_rounded,
+                          size: 14,
+                          color: index < comment.rating ? Colors.amber : Colors.grey.shade300,
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                _formatDate(comment.createdAt),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
+                    ),
+              ),
+            ],
+          ),
+          if (comment.body.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              comment.body,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    height: 1.35,
+                  ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 }

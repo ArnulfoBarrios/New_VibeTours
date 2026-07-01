@@ -61,7 +61,11 @@ class HomeScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => const EmptyState(
+              icon: Icons.wifi_off_rounded,
+              title: 'Sin conexión',
+              body: '¡Vaya! Parece que no podemos conectar con los servidores ahora mismo. Verifica tu conexión a internet y vuelve a intentarlo.',
+            ),
       ),
     );
   }
@@ -451,7 +455,7 @@ class _StaggeredTourCard extends StatelessWidget {
               if (!alignBottom) ...[
                 const SizedBox(height: 4),
                 Text(
-                  '${tour.durationHours.toStringAsFixed(1)}h • ${90 + (tour.title.length % 10)}% ${l10n.matchAffinity}',
+                  '${formatDuration(tour.durationHours)} • ${90 + (tour.title.length % 10)}% ${l10n.matchAffinity}',
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
                 ),
               ],
@@ -463,12 +467,12 @@ class _StaggeredTourCard extends StatelessWidget {
   }
 }
 
-class _NearbyPlacesSection extends StatelessWidget {
+class _NearbyPlacesSection extends ConsumerWidget {
   final AsyncValue<List<NearbyPlace>> placesAsync;
   const _NearbyPlacesSection({required this.placesAsync});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return placesAsync.when(
       data: (places) {
@@ -509,48 +513,55 @@ class _NearbyPlacesSection extends StatelessWidget {
                     final place = places[index];
                     return SizedBox(
                       width: 220,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                image: place.imageUrl.isNotEmpty
-                                    ? DecorationImage(
-                                        image: CachedNetworkImageProvider(place.imageUrl),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : null,
-                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              ),
-                              alignment: Alignment.topRight,
-                              padding: const EdgeInsets.all(8),
+                      child: InkWell(
+                        onTap: () {
+                          ref.read(selectedNearbyPlaceProvider.notifier).state = place;
+                          context.push('/place-route');
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(20),
+                                  image: place.imageUrl.isNotEmpty
+                                      ? DecorationImage(
+                                          image: CachedNetworkImageProvider(place.imageUrl),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                 ),
-                                child: Text(
-                                  '${(place.distanceMeters / 1000).toStringAsFixed(1)} km',
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+                                alignment: Alignment.topRight,
+                                padding: const EdgeInsets.all(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${(place.distanceMeters / 1000).toStringAsFixed(1)} km',
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            place.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
-                          ),
-                          Text(
-                            place.category.isEmpty ? place.type : place.category,
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            Text(
+                              place.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
+                            ),
+                            Text(
+                              place.category.isEmpty ? place.type : place.category,
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },

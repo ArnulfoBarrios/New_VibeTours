@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
-import 'demo_tours.dart';
 import '../domain/models.dart';
 
 class TourRepository {
@@ -49,7 +48,7 @@ class TourRepository {
         // Try the next configured base URL.
       }
     }
-    return buildDemoTours();
+    throw Exception('No se pudo establecer conexion con el servidor. Por favor, comprueba tu conexion a internet e intenta de nuevo.');
   }
 
   Future<List<Tour>> searchTours({
@@ -215,29 +214,32 @@ class TourRepository {
   Future<Map<String, dynamic>> getUserStats(String userId) async {
     final client = _requireClient();
     try {
-      // Intentamos llamar a RPC si existe, o hacemos consultas directas
       // 1. Tours creados (ya los tenemos en UserToursState, pero podemos contar aquí)
       final createdToursResponse = await client.from('tours').select('id').eq('owner_id', userId);
       final createdCount = (createdToursResponse as List).length;
 
-      // 2. Participantes en tours creados (Simulado o real si hay tabla de participantes, aquí hacemos count de likes o ratings como aproximación si no hay participantes explícitos)
+      // 2. Participantes en tours creados (Suma de likes)
       int totalParticipants = 0;
-      int totalRatings = 0;
+      int ratedCount = 0;
       
       try {
-        // Consultamos suma de likes y reviews_count de todos sus tours
-        final toursStats = await client.from('tours').select('likes_count, review_count').eq('owner_id', userId);
+        final toursStats = await client.from('tours').select('likes_count').eq('owner_id', userId);
         for (final row in (toursStats as List)) {
           final map = row as Map<String, dynamic>;
           totalParticipants += (map['likes_count'] as num?)?.toInt() ?? 0;
-          totalRatings += (map['review_count'] as num?)?.toInt() ?? 0;
         }
+      } catch (_) {}
+
+      try {
+        // Consultamos la cantidad real de comentarios hechos por el usuario
+        final ratedToursResponse = await client.from('tour_comments').select('id').eq('user_id', userId);
+        ratedCount = (ratedToursResponse as List).length;
       } catch (_) {}
 
       return {
         'createdTours': createdCount,
         'participants': totalParticipants, // Aproximación usando likes
-        'toursRated': totalRatings, // Aproximación
+        'toursRated': ratedCount, // Valor real exacto
       };
     } catch (e) {
       debugPrint('Error fetching user stats: $e');
@@ -246,6 +248,142 @@ class TourRepository {
         'participants': 0,
         'toursRated': 0,
       };
+    }
+  }
+
+  Future<void> submitTourReview({
+    required String tourId,
+    required int rating,
+    required String body,
+  }) async {
+    final client = _requireClient();
+    final user = client.auth.currentUser;
+    if (user == null) {
+      throw StateError('Debes iniciar sesion para calificar un tour.');
+    }
+
+    await client.from('tour_comments').insert({
+      'tour_id': tourId,
+      'user_id': user.id,
+      'rating': rating,
+      'body': body,
+    });
+
+    // Intentamos actualizar la tabla tours utilizando la función RPC (security definer)
+    try {
+      await client.rpc('update_tour_rating', params: {'p_tour_id': tourId});
+      debugPrint('Tour rating updated via RPC successfully.');
+    } catch (e) {
+      debugPrint('RPC update_tour_rating failed: $e. Falling back to direct client-side update.');
+      // Fallback: Actualización directa del cliente (puede fallar por RLS si no es el dueño)
+      try {
+        final commentsResponse = await client
+            .from('tour_comments')
+            .select('rating')
+            .eq('tour_id', tourId);
+        final commentsList = commentsResponse as List;
+        if (commentsList.isNotEmpty) {
+          double sum = 0;
+          for (final row in commentsList) {
+            sum += (row['rating'] as num?)?.toDouble() ?? 0;
+          }
+          final newRating = sum / commentsList.length;
+          await client.from('tours').update({
+            'rating': newRating,
+            'review_count': commentsList.length,
+          }).eq('id', tourId);
+        }
+      } catch (err) {
+        debugPrint('Fallback tour update failed: $err');
+      }
+    }
+  }
+
+  Future<List<TourComment>> getTourComments(String tourId) async {
+    final client = _requireClient();
+    try {
+      final rows = await client
+          .from('tour_comments')
+          .select('*')
+          .eq('tour_id', tourId)
+          .order('created_at', ascending: false);
+      
+      final comments = <TourComment>[];
+      for (final row in (rows as List)) {
+        final commentMap = Map<String, dynamic>.from(row);
+        final userId = commentMap['user_id']?.toString() ?? '';
+        
+        String fullName = 'Viajero';
+        String avatarUrl = '';
+        if (userId.isNotEmpty) {
+          try {
+            final userRow = await client
+                .from('users')
+                .select('full_name, avatar_url')
+                .eq('id', userId)
+                .maybeSingle();
+            if (userRow != null) {
+              fullName = userRow['full_name']?.toString() ?? 'Viajero';
+              avatarUrl = userRow['avatar_url']?.toString() ?? '';
+            }
+          } catch (e) {
+            debugPrint('Error getting user profile for comment: $e');
+          }
+        }
+        
+        comments.add(TourComment(
+          id: commentMap['id']?.toString() ?? '',
+          tourId: commentMap['tour_id']?.toString() ?? '',
+          userId: userId,
+          rating: _intValue(commentMap['rating'], 5),
+          body: commentMap['body']?.toString() ?? '',
+          createdAt: DateTime.tryParse(commentMap['created_at']?.toString() ?? '') ?? DateTime.now(),
+          userName: fullName,
+          userAvatarUrl: avatarUrl,
+        ));
+      }
+      return comments;
+    } catch (e) {
+      debugPrint('Error getting tour comments: $e');
+      return const [];
+    }
+  }
+
+
+  Future<List<UserTourRating>> getUserRatings(String userId) async {
+    final client = _requireClient();
+    try {
+      final commentsRows = await client
+          .from('tour_comments')
+          .select('*, tours(*, tour_stops(*))')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+      
+      final ratings = <UserTourRating>[];
+      for (final row in (commentsRows as List)) {
+        final commentMap = Map<String, dynamic>.from(row);
+        final tourMap = row['tours'] is Map
+            ? Map<String, dynamic>.from(row['tours'] as Map)
+            : null;
+        if (tourMap != null) {
+          final comment = TourComment(
+            id: commentMap['id']?.toString() ?? '',
+            tourId: commentMap['tour_id']?.toString() ?? '',
+            userId: commentMap['user_id']?.toString() ?? '',
+            rating: _intValue(commentMap['rating'], 5),
+            body: commentMap['body']?.toString() ?? '',
+            createdAt: DateTime.tryParse(commentMap['created_at']?.toString() ?? '') ?? DateTime.now(),
+            userName: '',
+            userAvatarUrl: '',
+          );
+          final tour = _tourFromDatabaseJson(tourMap);
+          ratings.add(UserTourRating(comment: comment, tour: tour));
+        }
+      }
+      return ratings;
+    } catch (e) {
+      debugPrint('Error getting user ratings: $e');
+      return const [];
     }
   }
 

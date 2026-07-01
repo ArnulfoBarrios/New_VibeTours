@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
 import '../../domain/models.dart';
+import '../../state/app_state.dart';
 
-class TourRatingDialog extends StatefulWidget {
+class TourRatingDialog extends ConsumerStatefulWidget {
   const TourRatingDialog({super.key, required this.tour});
 
   final Tour tour;
 
   @override
-  State<TourRatingDialog> createState() => _TourRatingDialogState();
+  ConsumerState<TourRatingDialog> createState() => _TourRatingDialogState();
 }
 
-class _TourRatingDialogState extends State<TourRatingDialog> {
+class _TourRatingDialogState extends ConsumerState<TourRatingDialog> {
   int _rating = 0;
   final TextEditingController _commentController = TextEditingController();
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -57,11 +60,13 @@ class _TourRatingDialogState extends State<TourRatingDialog> {
               children: List.generate(5, (index) {
                 final isSelected = index < _rating;
                 return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _rating = index + 1;
-                    });
-                  },
+                  onTap: _submitting
+                      ? null
+                      : () {
+                          setState(() {
+                            _rating = index + 1;
+                          });
+                        },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Icon(
@@ -86,6 +91,7 @@ class _TourRatingDialogState extends State<TourRatingDialog> {
               child: TextField(
                 controller: _commentController,
                 maxLines: 4,
+                enabled: !_submitting,
                 decoration: InputDecoration(
                   hintText: 'Escribe un comentario...',
                   hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
@@ -106,23 +112,70 @@ class _TourRatingDialogState extends State<TourRatingDialog> {
                     label: 'Cancelar',
                     icon: Icons.close_rounded,
                     isPrimary: false,
-                    onPressed: () {
-                      context.pop();
-                      context.pop(); // Pop the dialog and the live tour screen
-                    },
+                    onPressed: _submitting
+                        ? null
+                        : () {
+                            context.pop();
+                            context.pop(); // Pop the dialog and the live tour screen
+                          },
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: LiquidButton(
-                    label: 'Enviar',
+                    label: _submitting ? 'Enviando...' : 'Enviar',
                     icon: Icons.send_rounded,
                     isPrimary: true,
-                    onPressed: () {
-                      // Submit rating logic could go here
-                      context.pop();
-                      context.pop(); // Pop the dialog and the live tour screen
-                    },
+                    onPressed: _submitting
+                        ? null
+                        : () async {
+                            if (_rating == 0) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Por favor selecciona una calificacion en estrellas.'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                              return;
+                            }
+                            setState(() => _submitting = true);
+                            try {
+                              await ref.read(tourRepositoryProvider).submitTourReview(
+                                    tourId: widget.tour.id,
+                                    rating: _rating,
+                                    body: _commentController.text.trim(),
+                                  );
+                              // Refrescar providers de tours, comentarios y stats
+                              ref.invalidate(toursProvider);
+                              ref.invalidate(tourCommentsProvider(widget.tour.id));
+                              ref.invalidate(userStatsProvider);
+                              final currentUser = ref.read(authServiceProvider).currentUser;
+                              if (currentUser != null) {
+                                ref.invalidate(userRatingsProvider(currentUser.id));
+                              }
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('¡Muchas gracias por tu calificacion!'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                              context.pop();
+                              context.pop(); // Cerrar dialogo y terminar tour en vivo
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error al enviar calificacion: $e'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            } finally {
+                              if (mounted) {
+                                setState(() => _submitting = false);
+                              }
+                            }
+                          },
                   ),
                 ),
               ],

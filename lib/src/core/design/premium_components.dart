@@ -26,6 +26,20 @@ String tourTypeL10n(BuildContext context, TourType type) {
   }
 }
 
+String formatDuration(double hours) {
+  final totalMinutes = (hours * 60).round();
+  final h = totalMinutes ~/ 60;
+  final m = totalMinutes % 60;
+  if (h > 0 && m > 0) {
+    return '$h h $m min';
+  } else if (h > 0) {
+    return '$h h';
+  } else {
+    return '$m min';
+  }
+}
+
+
 class PremiumScaffold extends StatelessWidget {
   const PremiumScaffold({
     super.key,
@@ -318,14 +332,15 @@ class TourCard extends StatelessWidget {
                 label: tour.isAiGenerated ? 'AI' : tourTypeL10n(context, tour.type),
               ),
             ),
-            Positioned(
-              right: 14,
-              top: 14,
-              child: _CardChip(
-                icon: Icons.star_rounded,
-                label: tour.rating.toStringAsFixed(1),
+            if (tour.reviewCount > 0)
+              Positioned(
+                right: 14,
+                top: 14,
+                child: _CardChip(
+                  icon: Icons.star_rounded,
+                  label: tour.rating.toStringAsFixed(1),
+                ),
               ),
-            ),
             Positioned(
               left: 16,
               right: 16,
@@ -355,7 +370,7 @@ class TourCard extends StatelessWidget {
                       ),
                       _MetaPill(
                         Icons.schedule_rounded,
-                        '${tour.durationHours} h',
+                        formatDuration(tour.durationHours),
                       ),
                       _MetaPill(
                         Icons.route_rounded,

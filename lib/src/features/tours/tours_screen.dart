@@ -148,7 +148,11 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(child: Text('Error: $error')),
+        error: (error, stackTrace) => const EmptyState(
+              icon: Icons.wifi_off_rounded,
+              title: 'Sin conexión',
+              body: '¡Vaya! No pudimos cargar los tours. Verifica tu conexión a internet y vuelve a intentarlo.',
+            ),
       ),
     );
   }

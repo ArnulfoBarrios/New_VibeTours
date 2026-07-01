@@ -848,3 +848,18 @@ double _double(Object? value, double fallback) {
   return double.tryParse(value?.toString() ?? '') ?? fallback;
 }
 
+final tourCommentsProvider = FutureProvider.family<List<TourComment>, String>((ref, tourId) async {
+  return ref.watch(tourRepositoryProvider).getTourComments(tourId);
+});
+
+final userRatingsProvider = FutureProvider.family<List<UserTourRating>, String>((ref, userId) async {
+  return ref.watch(tourRepositoryProvider).getUserRatings(userId);
+});
+
+final userStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+  final user = ref.watch(authUserProvider).valueOrNull;
+  if (user == null) return {'createdTours': 0, 'participants': 0, 'toursRated': 0};
+  return ref.watch(tourRepositoryProvider).getUserStats(user.id);
+});
+
+

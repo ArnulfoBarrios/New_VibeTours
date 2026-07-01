@@ -18,7 +18,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
-  bool _isCreatingAccount = true;
+  bool _isCreatingAccount = false;
   bool _isLoading = false;
   bool _obscure = true;
   bool _obscureConfirm = true;
