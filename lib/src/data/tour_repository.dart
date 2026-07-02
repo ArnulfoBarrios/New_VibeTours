@@ -136,10 +136,11 @@ class TourRepository {
       'id': user.id,
       'email': user.email,
       'full_name':
+          metadata['custom_full_name'] ??
           metadata['full_name'] ??
           metadata['name'] ??
           user.email?.split('@').first,
-      'avatar_url': metadata['avatar_url'],
+      'avatar_url': metadata['custom_avatar_url'] ?? metadata['avatar_url'],
     }, onConflict: 'id');
 
     final hasDatabaseId = _looksLikeUuid(tour.id);
@@ -261,6 +262,13 @@ class TourRepository {
     if (user == null) {
       throw StateError('Debes iniciar sesion para calificar un tour.');
     }
+
+    // Eliminar calificacion previa si existe para asegurar que solo haya una por usuario
+    await client
+        .from('tour_comments')
+        .delete()
+        .eq('tour_id', tourId)
+        .eq('user_id', user.id);
 
     await client.from('tour_comments').insert({
       'tour_id': tourId,

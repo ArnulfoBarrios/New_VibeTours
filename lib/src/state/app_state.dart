@@ -226,6 +226,7 @@ final locationServiceProvider = Provider<LocationService>(
 class TouristProfileController extends AsyncNotifier<TouristProfileV2> {
   @override
   FutureOr<TouristProfileV2> build() {
+    ref.watch(authUserProvider); // Rebuilds automatically on login/logout
     final prefs = ref.watch(authServiceProvider).getUserPreferences();
     if (prefs == null) return TouristProfileV2.empty;
     try {

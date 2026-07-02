@@ -296,11 +296,21 @@ class TourCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final height = compact ? 210.0 : 286.0;
-    return SizedBox(
+    return Container(
       width: compact ? 260 : double.infinity,
       height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -318,9 +328,11 @@ class TourCard extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.28),
-                    Colors.black.withValues(alpha: 0.74),
+                    Colors.black.withValues(alpha: 0.05),
+                    Colors.black.withValues(alpha: 0.4),
+                    Colors.black.withValues(alpha: 0.8),
                   ],
+                  stops: const [0.0, 0.4, 0.7, 1.0],
                 ),
               ),
             ),
@@ -354,6 +366,7 @@ class TourCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: Colors.white,
+                      fontWeight: FontWeight.bold,
                       shadows: const [
                         Shadow(blurRadius: 18, color: Colors.black54),
                       ],
@@ -445,13 +458,16 @@ class _MetaPill extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: Colors.white70, size: 15),
+        Icon(icon, color: Colors.white70, size: 14),
         const SizedBox(width: 4),
         Text(
           label,
           style: Theme.of(
             context,
-          ).textTheme.labelLarge?.copyWith(color: Colors.white),
+          ).textTheme.labelMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w600,
+              ),
         ),
       ],
     );

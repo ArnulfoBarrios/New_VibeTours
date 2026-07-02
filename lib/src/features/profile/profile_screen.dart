@@ -12,6 +12,7 @@ import '../../core/design/premium_components.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../../domain/models.dart';
+import '../tour_live/tour_rating_dialog.dart';
 
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -32,7 +33,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.read(authUserProvider).valueOrNull;
     if (user != null) {
       _bioController.text = user.userMetadata?['bio']?.toString() ?? '';
-      _avatarUrlController.text = user.userMetadata?['avatar_url']?.toString() ?? '';
+      _avatarUrlController.text = user.userMetadata?['custom_avatar_url']?.toString() ?? user.userMetadata?['avatar_url']?.toString() ?? '';
     }
   }
 
@@ -348,10 +349,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authUserProvider).valueOrNull;
     final metadata = user?.userMetadata ?? {};
-    final name = metadata['full_name']?.toString().split(' ').first ?? 'Usuario';
+    final name = (metadata['custom_full_name']?.toString() ?? metadata['full_name']?.toString() ?? 'Usuario').split(' ').first;
     final email = user?.email ?? 'correo@ejemplo.com';
     final bio = metadata['bio']?.toString() ?? 'Añade una biografía y tus gustos aquí...';
-    final avatarUrl = metadata['avatar_url']?.toString();
+    final avatarUrl = metadata['custom_avatar_url']?.toString() ?? metadata['avatar_url']?.toString();
     final createdTours = ref.watch(userToursProvider).valueOrNull?.manualTours ?? [];
     final userRatings = user != null
         ? ref.watch(userRatingsProvider(user.id)).valueOrNull ?? []
@@ -647,13 +648,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _SectionTitle(l10n.preferences),
                       _SettingsListTile(
                         icon: Icons.tune_rounded,
-                        iconColor: Colors.orange,
+                        iconColor: Colors.blue,
                         title: 'Preferencias de viaje',
                         onTap: () => context.push('/tourist_preferences'),
                       ),
                       _SettingsListTile(
                         icon: Icons.workspace_premium_outlined,
-                        iconColor: AppTheme.violet,
+                        iconColor: Colors.blue,
                         title: l10n.goPremium,
                         onTap: () {},
                       ),
@@ -686,13 +687,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _SectionTitle(l10n.support),
                       _SettingsListTile(
                         icon: Icons.help_outline_rounded,
-                        iconColor: Colors.blueGrey,
+                        iconColor: Colors.blue,
                         title: l10n.about,
                         onTap: () => context.push('/help'),
                       ),
                       _SettingsListTile(
                         icon: Icons.feedback_outlined,
-                        iconColor: Colors.purple,
+                        iconColor: Colors.blue,
                         title: l10n.feedback,
                         onTap: () => context.push('/pqrs'),
                       ),
@@ -720,13 +721,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _SectionTitle(l10n.legal),
                       _SettingsListTile(
                         icon: Icons.description_outlined,
-                        iconColor: Colors.blueGrey,
+                        iconColor: Colors.blue,
                         title: l10n.termsOfService,
                         onTap: () => context.push('/legal/terms'),
                       ),
                       _SettingsListTile(
                         icon: Icons.privacy_tip_outlined,
-                        iconColor: Colors.redAccent,
+                        iconColor: Colors.blue,
                         title: l10n.privacyPolicy,
                         onTap: () => context.push('/legal/privacy'),
                       ),
@@ -1271,13 +1272,13 @@ class _ThemeToggleTile extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: (themeMode == ThemeMode.dark ? Colors.indigo : Colors.orange).withValues(alpha: 0.12),
+                color: Colors.blue.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 themeMode == ThemeMode.dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
                 size: 20,
-                color: themeMode == ThemeMode.dark ? Colors.indigo : Colors.orange,
+                color: Colors.blue,
               ),
             ),
             const SizedBox(width: 16),
@@ -1404,9 +1405,23 @@ class _RatedTourTile extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                    IconButton(
+                      tooltip: 'Editar calificación',
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => TourRatingDialog(
+                            tour: rating.tour,
+                            existingRating: rating,
+                          ),
+                        );
+                      },
+                      icon: Icon(
+                        Icons.edit_rounded,
+                        size: 22,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
                     ),
                   ],
                 ),

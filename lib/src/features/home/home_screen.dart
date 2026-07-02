@@ -15,7 +15,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final toursAsync = ref.watch(recommendedToursProvider);
-    final user = ref.watch(authServiceProvider).currentUser;
+    final user = ref.watch(authUserProvider).valueOrNull;
     final weatherAsync = ref.watch(weatherProvider);
     final placesAsync = ref.watch(nearbyPlacesProvider);
     final eventsAsync = ref.watch(localEventsProvider);
@@ -33,14 +33,20 @@ class HomeScreen extends ConsumerWidget {
           final heroTour = tours.first;
           final restTours = tours.skip(1).toList();
           final metadata = user?.userMetadata;
-          final name = metadata != null ? (metadata['full_name'] ?? metadata['name'] ?? 'Traveler') : 'Traveler';
+          final defaultName = Localizations.localeOf(context).languageCode == 'es' ? 'viajero' : 'traveler';
+          final name = metadata != null ? (metadata['custom_full_name'] ?? metadata['full_name'] ?? metadata['name'] ?? defaultName) : defaultName;
           final firstName = name.toString().split(' ').first;
+          
+          // Capitalizar la primera letra si es 'viajero' o 'traveler'
+          final finalName = (firstName == 'viajero' || firstName == 'traveler') 
+              ? '${firstName[0].toUpperCase()}${firstName.substring(1)}'
+              : firstName;
 
           return CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
                 child: _HeaderSection(
-                  userName: firstName,
+                  userName: finalName,
                   weatherAsync: weatherAsync,
                 ),
               ),

@@ -89,8 +89,8 @@ class AuthService {
     if (_client == null) return;
     
     final Map<String, dynamic> data = {};
-    if (fullName != null) data['full_name'] = fullName;
-    if (avatarUrl != null) data['avatar_url'] = avatarUrl;
+    if (fullName != null) data['custom_full_name'] = fullName;
+    if (avatarUrl != null) data['custom_avatar_url'] = avatarUrl;
     if (bio != null) data['bio'] = bio;
 
     if (data.isNotEmpty) {

@@ -202,11 +202,21 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                           isPrimary: _activeStop == tour.stops.length - 1,
                           onPressed: () {
                             if (_activeStop == tour.stops.length - 1) {
+                              final currentUser = ref.read(authServiceProvider).currentUser;
+                              
+                              if (currentUser == null) {
+                                context.pop(); // Invitados no pueden calificar
+                                return;
+                              }
+
                               final userTours = ref.read(userToursProvider).valueOrNull?.manualTours ?? [];
                               final isOwnTour = userTours.any((t) => t.id == tour.id) || tour.id.startsWith('manual-');
                               
-                              if (isOwnTour) {
-                                context.pop(); // User's own tour, just exit
+                              final userRatings = ref.read(userRatingsProvider(currentUser.id)).valueOrNull ?? [];
+                              final hasRated = userRatings.any((r) => r.tour.id == tour.id);
+                              
+                              if (isOwnTour || hasRated) {
+                                context.pop(); // Si es su propio tour o ya lo calificó, simplemente salir
                               } else {
                                 showDialog(
                                   context: context,

@@ -8,9 +8,10 @@ import '../../domain/models.dart';
 import '../../state/app_state.dart';
 
 class TourRatingDialog extends ConsumerStatefulWidget {
-  const TourRatingDialog({super.key, required this.tour});
+  const TourRatingDialog({super.key, required this.tour, this.existingRating});
 
   final Tour tour;
+  final UserTourRating? existingRating;
 
   @override
   ConsumerState<TourRatingDialog> createState() => _TourRatingDialogState();
@@ -18,8 +19,15 @@ class TourRatingDialog extends ConsumerStatefulWidget {
 
 class _TourRatingDialogState extends ConsumerState<TourRatingDialog> {
   int _rating = 0;
-  final TextEditingController _commentController = TextEditingController();
+  late TextEditingController _commentController;
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _rating = widget.existingRating?.comment.rating ?? 0;
+    _commentController = TextEditingController(text: widget.existingRating?.comment.body ?? '');
+  }
 
   @override
   void dispose() {

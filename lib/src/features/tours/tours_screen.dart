@@ -51,26 +51,32 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
 
           return CustomScrollView(
             slivers: [
-              SliverAppBar.large(
-                title: Text(l10n.trips, style: const TextStyle(fontWeight: FontWeight.w800)),
+              SliverAppBar(
+                pinned: true,
+                floating: true,
+                centerTitle: false,
+                title: Text(l10n.trips, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 32)),
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                   child: Container(
+                    height: 42,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(14),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: TextField(
                       controller: _search,
                       onChanged: (_) => setState(() {}),
+                      style: const TextStyle(fontSize: 16),
                       decoration: InputDecoration(
                         hintText: l10n.searchDestination,
-                        prefixIcon: const Icon(Icons.search_rounded),
+                        prefixIcon: Icon(Icons.search_rounded, size: 20, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
                   ),
@@ -191,11 +197,10 @@ class _MenuFilter extends StatelessWidget {
       builder: (context, controller, child) => GestureDetector(
         onTap: () => controller.isOpen ? controller.close() : controller.open(),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -203,11 +208,12 @@ class _MenuFilter extends StatelessWidget {
               Text(
                 value,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(Icons.expand_more_rounded, size: 16),
+              Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
             ],
           ),
         ),

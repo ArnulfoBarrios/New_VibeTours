@@ -12,7 +12,7 @@ class MyToursScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authUserProvider).valueOrNull;
-    final name = user?.userMetadata?['full_name']?.toString().split(' ').first ?? 'Ehrnesto';
+    final name = user?.userMetadata?['custom_full_name']?.toString().split(' ').first ?? user?.userMetadata?['full_name']?.toString().split(' ').first ?? 'Ehrnesto';
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
