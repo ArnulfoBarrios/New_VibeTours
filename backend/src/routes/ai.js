@@ -136,62 +136,8 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         input.city = extracted.city || ''
         input.country = extracted.country || ''
       } else {
-        // Si falló extractLocation por timeout, usamos un fallback contextual rápido basado en el prompt
-        const text = input.prompt.toLowerCase()
-        let suggestions = [
-          { city: "París", country: "Francia", reason: "Un destino clásico y hermoso lleno de cultura." },
-          { city: "Bali", country: "Indonesia", reason: "Perfecto para relajarse y disfrutar de la naturaleza." },
-          { city: "Nueva York", country: "Estados Unidos", reason: "Una metrópolis vibrante, ideal para viajes urbanos." }
-        ]
-        
-        if (text.includes("frío") || text.includes("frio") || text.includes("nieve") || text.includes("invierno")) {
-          suggestions = [
-            { city: "Reikiavik", country: "Islandia", reason: "Ideal para disfrutar de paisajes nevados y auroras boreales." },
-            { city: "Bariloche", country: "Argentina", reason: "Famoso por su chocolate caliente, lagos y montañas." },
-            { city: "Quebec", country: "Canadá", reason: "Una ciudad hermosa con un clima invernal espectacular." }
-          ]
-        } else if (text.includes("playa") || text.includes("sol") || text.includes("calor") || text.includes("mar") || text.includes("tropical")) {
-          suggestions = [
-            { city: "Cancún", country: "México", reason: "Playas paradisíacas y aguas cristalinas." },
-            { city: "Punta Cana", country: "República Dominicana", reason: "El lugar perfecto para relajarse bajo el sol tropical." },
-            { city: "Maldivas", country: "", reason: "Un paraíso exclusivo rodeado de naturaleza." }
-          ]
-        } else if (text.includes("naturaleza") || text.includes("montaña") || text.includes("bosque") || text.includes("aventura")) {
-          suggestions = [
-            { city: "San José", country: "Costa Rica", reason: "Rodeado de biodiversidad y ecosistemas increíbles." },
-            { city: "Cusco", country: "Perú", reason: "Montañas majestuosas y un entorno natural inigualable." },
-            { city: "Banff", country: "Canadá", reason: "Parques nacionales y vida silvestre asombrosa." }
-          ]
-        } else if (text.includes("historia") || text.includes("ruinas") || text.includes("museo")) {
-          suggestions = [
-            { city: "Roma", country: "Italia", reason: "Sumérgete en la historia del antiguo imperio romano." },
-            { city: "Atenas", country: "Grecia", reason: "La cuna de la civilización occidental." },
-            { city: "El Cairo", country: "Egipto", reason: "Milenios de historia te esperan." }
-          ]
-        }
-        
-        let isGpsBased = false;
-        if (input.latitude && input.longitude) {
-            const nearby = await overpassNearbyCities(input.latitude, input.longitude, 50000)
-            if (nearby.length > 0) {
-                const closePlaces = nearby.slice(0, 3)
-                suggestions = closePlaces.map(p => ({
-                    city: p.name,
-                    country: "Cerca de ti",
-                    reason: `Te sugiero ${p.name} porque está muy cerca de tu ubicación actual y encaja perfecto con lo que buscas.`
-                }))
-                isGpsBased = true;
-            }
-        }
-
-        const message = isGpsBased
-          ? 'He notado que no has especificado una ciudad explícita en tu petición. Dado que tengo tu ubicación actual, he encontrado algunos municipios cercanos que son ideales para tu viaje. ¿Cuál te llama más la atención?'
-          : 'Basado en lo que buscas, aquí tienes algunos destinos increíbles que te podrían encantar. ¿O prefieres ingresar otro destino?';
-
-        return res.json({
-          needsDestination: true,
-          message,
-          suggestions
+        return res.status(503).json({ 
+          error: 'El asistente de IA no está disponible en este momento para procesar tu solicitud. Por favor intenta más tarde.' 
         })
       }
     }

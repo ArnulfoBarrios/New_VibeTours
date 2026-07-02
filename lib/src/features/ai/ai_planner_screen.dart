@@ -788,9 +788,14 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.image, color: Colors.grey),
-                        onPressed: _pickImage,
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4.0, left: 4.0),
+                        child: IconButton(
+                          icon: const Icon(Icons.image, color: Colors.grey, size: 22),
+                          onPressed: _pickImage,
+                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                          padding: EdgeInsets.zero,
+                        ),
                       ),
                       Expanded(
                         child: TextField(
@@ -803,16 +808,18 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                             hintText: 'Describe tu tour ideal...',
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.symmetric(vertical: 12),
+                            isDense: true,
                           ),
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.all(4.0),
+                        padding: const EdgeInsets.only(bottom: 4.0, right: 4.0, left: 4.0),
                         child: IconButton(
                           icon: const Icon(Icons.send, color: Colors.white, size: 18),
                           style: IconButton.styleFrom(
                             backgroundColor: Colors.blue.shade600,
                             padding: const EdgeInsets.all(8),
+                            minimumSize: const Size(36, 36),
                           ),
                           onPressed: isBusy ? null : _sendMessage,
                         ),
@@ -822,10 +829,13 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              _VoicePromptButton(
-                isRecording: _isRecording,
-                isBusy: _isStartingVoice || isBusy,
-                onPressed: _toggleVoiceInput,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: _VoicePromptButton(
+                  isRecording: _isRecording,
+                  isBusy: _isStartingVoice || isBusy,
+                  onPressed: _toggleVoiceInput,
+                ),
               ),
             ],
           ),

@@ -38,6 +38,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
   bool _isRouting = false;
   bool _isOffRoute = false;
   bool _locationStreamRequested = false;
+  bool _noLandRouteAvailable = false;
 
   @override
   void dispose() {
@@ -85,9 +86,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                   fitPadding: const EdgeInsets.fromLTRB(36, 108, 36, 360),
                   showNumbers: _currentPoint == null,
                   myLocationEnabled: true,
-                  routeOverride: liveRoute,
-                  currentLocation: _currentPoint,
-                  useRoadRouting: liveRoute == null,
+                  routeOverride: _noLandRouteAvailable || liveRoute == null ? const RoadRouteResult(geometry: []) : liveRoute,
+                  useRoadRouting: false,
                 ),
               ),
               Positioned(
@@ -126,22 +126,50 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       const SizedBox(height: 12),
+                      if (_noLandRouteAvailable)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.directions_off_rounded, color: Theme.of(context).colorScheme.onErrorContainer),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'No se puede calcular la ruta debido a que no hay ruta terrestre disponible.',
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onErrorContainer,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          _LiveChip(
-                            icon: Icons.route_rounded,
-                            label: _distanceLabel(tour, progress, liveRoute),
-                          ),
-                          _LiveChip(
-                            icon: Icons.schedule_rounded,
-                            label: _timeLabel(tour, progress, liveRoute),
-                          ),
-                          _LiveChip(
-                            icon: Icons.traffic_rounded,
-                            label: _trafficLabel(liveRoute),
-                          ),
+                          if (!_noLandRouteAvailable)
+                            _LiveChip(
+                              icon: Icons.route_rounded,
+                              label: _distanceLabel(tour, progress, liveRoute),
+                            ),
+                          if (!_noLandRouteAvailable)
+                            _LiveChip(
+                              icon: Icons.schedule_rounded,
+                              label: _timeLabel(tour, progress, liveRoute),
+                            ),
+                          if (!_noLandRouteAvailable)
+                            _LiveChip(
+                              icon: Icons.traffic_rounded,
+                              label: _trafficLabel(liveRoute),
+                            ),
                           if (_isOffRoute || _isRouting)
                             _LiveChip(
                               icon: Icons.alt_route_rounded,
@@ -161,7 +189,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                             ),
                         ],
                       ),
-                      const SizedBox(height: 14),
+                      if (!_noLandRouteAvailable)
+                        const SizedBox(height: 14),
                       Row(
                         children: [
                           Expanded(
@@ -232,6 +261,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                                 _liveRoute = null;
                                 _liveRouteStopIndex = null;
                                 _isOffRoute = false;
+                                _noLandRouteAvailable = false;
                               });
                               _recalculateRoute(tour, force: true);
                             }
@@ -357,6 +387,28 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
       forceRefresh: true,
     );
     if (!mounted) return;
+    
+    final directDist = Geolocator.distanceBetween(
+      origin.latitude, origin.longitude,
+      destination.latitude, destination.longitude,
+    );
+    
+    bool isUnreachable = route.usedFallback && directDist > 20000;
+    
+    if (route.geometry.isNotEmpty) {
+      final snapStart = Geolocator.distanceBetween(
+        origin.latitude, origin.longitude,
+        route.geometry.first.latitude, route.geometry.first.longitude,
+      );
+      if (snapStart > 50000) {
+        isUnreachable = true;
+      }
+    }
+    
+    if (route.usesMaritimeTransfer && directDist > 500000) {
+      isUnreachable = true;
+    }
+
     setState(() {
       _liveRoute = route;
       _liveRouteStopIndex = stopIndex;
@@ -364,6 +416,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
       _lastTrafficRefreshAt = DateTime.now();
       _isRouting = false;
       _isOffRoute = false;
+      _noLandRouteAvailable = isUnreachable;
     });
   }
 

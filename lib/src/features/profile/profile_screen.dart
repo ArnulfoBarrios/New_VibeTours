@@ -649,7 +649,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _SettingsListTile(
                         icon: Icons.tune_rounded,
                         iconColor: Colors.blue,
-                        title: 'Preferencias de viaje',
+                        title: l10n.prefTravelPreferences,
                         onTap: () => context.push('/tourist_preferences'),
                       ),
                       _SettingsListTile(

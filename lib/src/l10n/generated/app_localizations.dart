@@ -1927,6 +1927,337 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Iniciar sesión'**
   String get authLoginPrompt;
+
+  /// No description provided for @prefTravelPreferences.
+  ///
+  /// In es, this message translates to:
+  /// **'Preferencias de viaje'**
+  String get prefTravelPreferences;
+
+  /// No description provided for @prefStepOf.
+  ///
+  /// In es, this message translates to:
+  /// **'Paso {current} de {total}'**
+  String prefStepOf(Object current, Object total);
+
+  /// No description provided for @prefCompleteProfile.
+  ///
+  /// In es, this message translates to:
+  /// **'Completar Perfil'**
+  String get prefCompleteProfile;
+
+  /// No description provided for @prefNext.
+  ///
+  /// In es, this message translates to:
+  /// **'Siguiente'**
+  String get prefNext;
+
+  /// No description provided for @prefSolo.
+  ///
+  /// In es, this message translates to:
+  /// **'Solo'**
+  String get prefSolo;
+
+  /// No description provided for @prefCouple.
+  ///
+  /// In es, this message translates to:
+  /// **'Pareja'**
+  String get prefCouple;
+
+  /// No description provided for @prefFriends.
+  ///
+  /// In es, this message translates to:
+  /// **'Amigos'**
+  String get prefFriends;
+
+  /// No description provided for @prefFamily.
+  ///
+  /// In es, this message translates to:
+  /// **'Familia'**
+  String get prefFamily;
+
+  /// No description provided for @prefBudgetEcon.
+  ///
+  /// In es, this message translates to:
+  /// **'Económico'**
+  String get prefBudgetEcon;
+
+  /// No description provided for @prefBudgetMod.
+  ///
+  /// In es, this message translates to:
+  /// **'Moderado'**
+  String get prefBudgetMod;
+
+  /// No description provided for @prefBudgetLux.
+  ///
+  /// In es, this message translates to:
+  /// **'Lujo'**
+  String get prefBudgetLux;
+
+  /// No description provided for @prefTransWalk.
+  ///
+  /// In es, this message translates to:
+  /// **'Caminando'**
+  String get prefTransWalk;
+
+  /// No description provided for @prefTransPub.
+  ///
+  /// In es, this message translates to:
+  /// **'Transporte Público'**
+  String get prefTransPub;
+
+  /// No description provided for @prefTransCar.
+  ///
+  /// In es, this message translates to:
+  /// **'Auto Rentado'**
+  String get prefTransCar;
+
+  /// No description provided for @prefTransTaxi.
+  ///
+  /// In es, this message translates to:
+  /// **'Taxis/Apps'**
+  String get prefTransTaxi;
+
+  /// No description provided for @prefTimeMorn.
+  ///
+  /// In es, this message translates to:
+  /// **'Mañanas'**
+  String get prefTimeMorn;
+
+  /// No description provided for @prefTimeAft.
+  ///
+  /// In es, this message translates to:
+  /// **'Tardes'**
+  String get prefTimeAft;
+
+  /// No description provided for @prefTimeEve.
+  ///
+  /// In es, this message translates to:
+  /// **'Noches'**
+  String get prefTimeEve;
+
+  /// No description provided for @prefIntBeaches.
+  ///
+  /// In es, this message translates to:
+  /// **'Playas'**
+  String get prefIntBeaches;
+
+  /// No description provided for @prefIntNature.
+  ///
+  /// In es, this message translates to:
+  /// **'Naturaleza'**
+  String get prefIntNature;
+
+  /// No description provided for @prefIntMuseums.
+  ///
+  /// In es, this message translates to:
+  /// **'Museos'**
+  String get prefIntMuseums;
+
+  /// No description provided for @prefIntMonuments.
+  ///
+  /// In es, this message translates to:
+  /// **'Monumentos históricos'**
+  String get prefIntMonuments;
+
+  /// No description provided for @prefIntGastronomy.
+  ///
+  /// In es, this message translates to:
+  /// **'Gastronomía'**
+  String get prefIntGastronomy;
+
+  /// No description provided for @prefIntShopping.
+  ///
+  /// In es, this message translates to:
+  /// **'Compras'**
+  String get prefIntShopping;
+
+  /// No description provided for @prefIntNightlife.
+  ///
+  /// In es, this message translates to:
+  /// **'Vida nocturna'**
+  String get prefIntNightlife;
+
+  /// No description provided for @prefIntAdventures.
+  ///
+  /// In es, this message translates to:
+  /// **'Aventuras'**
+  String get prefIntAdventures;
+
+  /// No description provided for @prefIntFamActivities.
+  ///
+  /// In es, this message translates to:
+  /// **'Actividades familiares'**
+  String get prefIntFamActivities;
+
+  /// No description provided for @prefTitleTraveler.
+  ///
+  /// In es, this message translates to:
+  /// **'Tipo de Viajero'**
+  String get prefTitleTraveler;
+
+  /// No description provided for @prefSubTraveler.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Con quién sueles viajar?'**
+  String get prefSubTraveler;
+
+  /// No description provided for @prefTitleBudget.
+  ///
+  /// In es, this message translates to:
+  /// **'Presupuesto Ideal'**
+  String get prefTitleBudget;
+
+  /// No description provided for @prefSubBudget.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Cuál es tu presupuesto promedio por viaje?'**
+  String get prefSubBudget;
+
+  /// No description provided for @prefTitlePace.
+  ///
+  /// In es, this message translates to:
+  /// **'Ritmo de Viaje'**
+  String get prefTitlePace;
+
+  /// No description provided for @prefSubPace.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Cómo prefieres vivir tus días de tour?'**
+  String get prefSubPace;
+
+  /// No description provided for @prefPaceRelaxed.
+  ///
+  /// In es, this message translates to:
+  /// **'Ritmo Relajado'**
+  String get prefPaceRelaxed;
+
+  /// No description provided for @prefPaceRelaxedDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Un lugar por día, mucho tiempo libre.'**
+  String get prefPaceRelaxedDesc;
+
+  /// No description provided for @prefPaceBalanced.
+  ///
+  /// In es, this message translates to:
+  /// **'Ritmo Equilibrado'**
+  String get prefPaceBalanced;
+
+  /// No description provided for @prefPaceBalancedDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Combinación ideal de visitas y descansos.'**
+  String get prefPaceBalancedDesc;
+
+  /// No description provided for @prefPaceFast.
+  ///
+  /// In es, this message translates to:
+  /// **'Ritmo Acelerado'**
+  String get prefPaceFast;
+
+  /// No description provided for @prefPaceFastDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Ver lo más posible, sin parar.'**
+  String get prefPaceFastDesc;
+
+  /// No description provided for @prefTitleTransport.
+  ///
+  /// In es, this message translates to:
+  /// **'Modo de Transporte'**
+  String get prefTitleTransport;
+
+  /// No description provided for @prefSubTransport.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Cómo prefieres moverte en el destino?'**
+  String get prefSubTransport;
+
+  /// No description provided for @prefTitleTime.
+  ///
+  /// In es, this message translates to:
+  /// **'Horario Preferido'**
+  String get prefTitleTime;
+
+  /// No description provided for @prefSubTime.
+  ///
+  /// In es, this message translates to:
+  /// **'¿En qué momento del día prefieres hacer tours?'**
+  String get prefSubTime;
+
+  /// No description provided for @prefTitleInterests.
+  ///
+  /// In es, this message translates to:
+  /// **'Tus Intereses'**
+  String get prefTitleInterests;
+
+  /// No description provided for @prefSubInterests.
+  ///
+  /// In es, this message translates to:
+  /// **'¿Qué te apasiona descubrir?'**
+  String get prefSubInterests;
+
+  /// No description provided for @prefTitleLocation.
+  ///
+  /// In es, this message translates to:
+  /// **'Permisos de Ubicación'**
+  String get prefTitleLocation;
+
+  /// No description provided for @prefSubLocation.
+  ///
+  /// In es, this message translates to:
+  /// **'Para sugerirte lugares cercanos y optimizar tus rutas, necesitamos acceso a tu ubicación.'**
+  String get prefSubLocation;
+
+  /// No description provided for @prefBtnLocation.
+  ///
+  /// In es, this message translates to:
+  /// **'Permitir Acceso'**
+  String get prefBtnLocation;
+
+  /// No description provided for @prefAiPrompt.
+  ///
+  /// In es, this message translates to:
+  /// **'Hola. Me gustaría que me diseñes un viaje para {traveler}, manejando un presupuesto {budget}. Prefiero llevar un ritmo {pace} y me gustaría moverme principalmente en {transport}. El momento ideal para mis actividades sería por las {time}. Mis intereses principales son: {interests}.'**
+  String prefAiPrompt(
+    Object traveler,
+    Object budget,
+    Object pace,
+    Object transport,
+    Object time,
+    Object interests,
+  );
+
+  /// No description provided for @prefAlmostDone.
+  ///
+  /// In es, this message translates to:
+  /// **'¡Casi terminamos!'**
+  String get prefAlmostDone;
+
+  /// No description provided for @prefPleaseGrant.
+  ///
+  /// In es, this message translates to:
+  /// **'Por favor concede el permiso para tener la mejor experiencia.'**
+  String get prefPleaseGrant;
+
+  /// No description provided for @prefGrantPermission.
+  ///
+  /// In es, this message translates to:
+  /// **'Conceder Permiso'**
+  String get prefGrantPermission;
+
+  /// No description provided for @prefPermissionGranted.
+  ///
+  /// In es, this message translates to:
+  /// **'¡Permiso concedido!'**
+  String get prefPermissionGranted;
+
+  /// No description provided for @prefPermissionDenied.
+  ///
+  /// In es, this message translates to:
+  /// **'Permiso denegado. Podrás activarlo después.'**
+  String get prefPermissionDenied;
 }
 
 class _AppLocalizationsDelegate

@@ -401,6 +401,8 @@ class TouristProfileV2 {
     required this.hasChildren,
     required this.interests,
     required this.preferredPace,
+    required this.transportPreference,
+    required this.preferredTimeOfDay,
     required this.aiSummary,
   });
 
@@ -410,6 +412,8 @@ class TouristProfileV2 {
   final bool hasChildren;
   final List<String> interests;
   final String preferredPace;
+  final String transportPreference;
+  final String preferredTimeOfDay;
   final String aiSummary;
 
   bool get isReady => interests.isNotEmpty && travelerType.isNotEmpty;
@@ -421,6 +425,8 @@ class TouristProfileV2 {
     bool? hasChildren,
     List<String>? interests,
     String? preferredPace,
+    String? transportPreference,
+    String? preferredTimeOfDay,
     String? aiSummary,
   }) => TouristProfileV2(
     travelerType: travelerType ?? this.travelerType,
@@ -429,6 +435,8 @@ class TouristProfileV2 {
     hasChildren: hasChildren ?? this.hasChildren,
     interests: interests ?? this.interests,
     preferredPace: preferredPace ?? this.preferredPace,
+    transportPreference: transportPreference ?? this.transportPreference,
+    preferredTimeOfDay: preferredTimeOfDay ?? this.preferredTimeOfDay,
     aiSummary: aiSummary ?? this.aiSummary,
   );
 
@@ -439,6 +447,8 @@ class TouristProfileV2 {
     hasChildren: false,
     interests: [],
     preferredPace: 'balanced',
+    transportPreference: '',
+    preferredTimeOfDay: '',
     aiSummary: '',
   );
 
@@ -449,6 +459,8 @@ class TouristProfileV2 {
     'hasChildren': hasChildren,
     'interests': interests,
     'preferredPace': preferredPace,
+    'transportPreference': transportPreference,
+    'preferredTimeOfDay': preferredTimeOfDay,
     'aiSummary': aiSummary,
   };
 
@@ -460,6 +472,8 @@ class TouristProfileV2 {
       hasChildren: json['hasChildren'] as bool? ?? false,
       interests: (json['interests'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       preferredPace: json['preferredPace'] as String? ?? 'balanced',
+      transportPreference: json['transportPreference'] as String? ?? '',
+      preferredTimeOfDay: json['preferredTimeOfDay'] as String? ?? '',
       aiSummary: json['aiSummary'] as String? ?? '',
     );
   }

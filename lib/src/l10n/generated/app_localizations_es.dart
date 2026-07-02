@@ -993,4 +993,181 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authLoginPrompt => 'Iniciar sesión';
+
+  @override
+  String get prefTravelPreferences => 'Preferencias de viaje';
+
+  @override
+  String prefStepOf(Object current, Object total) {
+    return 'Paso $current de $total';
+  }
+
+  @override
+  String get prefCompleteProfile => 'Completar Perfil';
+
+  @override
+  String get prefNext => 'Siguiente';
+
+  @override
+  String get prefSolo => 'Solo';
+
+  @override
+  String get prefCouple => 'Pareja';
+
+  @override
+  String get prefFriends => 'Amigos';
+
+  @override
+  String get prefFamily => 'Familia';
+
+  @override
+  String get prefBudgetEcon => 'Económico';
+
+  @override
+  String get prefBudgetMod => 'Moderado';
+
+  @override
+  String get prefBudgetLux => 'Lujo';
+
+  @override
+  String get prefTransWalk => 'Caminando';
+
+  @override
+  String get prefTransPub => 'Transporte Público';
+
+  @override
+  String get prefTransCar => 'Auto Rentado';
+
+  @override
+  String get prefTransTaxi => 'Taxis/Apps';
+
+  @override
+  String get prefTimeMorn => 'Mañanas';
+
+  @override
+  String get prefTimeAft => 'Tardes';
+
+  @override
+  String get prefTimeEve => 'Noches';
+
+  @override
+  String get prefIntBeaches => 'Playas';
+
+  @override
+  String get prefIntNature => 'Naturaleza';
+
+  @override
+  String get prefIntMuseums => 'Museos';
+
+  @override
+  String get prefIntMonuments => 'Monumentos históricos';
+
+  @override
+  String get prefIntGastronomy => 'Gastronomía';
+
+  @override
+  String get prefIntShopping => 'Compras';
+
+  @override
+  String get prefIntNightlife => 'Vida nocturna';
+
+  @override
+  String get prefIntAdventures => 'Aventuras';
+
+  @override
+  String get prefIntFamActivities => 'Actividades familiares';
+
+  @override
+  String get prefTitleTraveler => 'Tipo de Viajero';
+
+  @override
+  String get prefSubTraveler => '¿Con quién sueles viajar?';
+
+  @override
+  String get prefTitleBudget => 'Presupuesto Ideal';
+
+  @override
+  String get prefSubBudget => '¿Cuál es tu presupuesto promedio por viaje?';
+
+  @override
+  String get prefTitlePace => 'Ritmo de Viaje';
+
+  @override
+  String get prefSubPace => '¿Cómo prefieres vivir tus días de tour?';
+
+  @override
+  String get prefPaceRelaxed => 'Ritmo Relajado';
+
+  @override
+  String get prefPaceRelaxedDesc => 'Un lugar por día, mucho tiempo libre.';
+
+  @override
+  String get prefPaceBalanced => 'Ritmo Equilibrado';
+
+  @override
+  String get prefPaceBalancedDesc =>
+      'Combinación ideal de visitas y descansos.';
+
+  @override
+  String get prefPaceFast => 'Ritmo Acelerado';
+
+  @override
+  String get prefPaceFastDesc => 'Ver lo más posible, sin parar.';
+
+  @override
+  String get prefTitleTransport => 'Modo de Transporte';
+
+  @override
+  String get prefSubTransport => '¿Cómo prefieres moverte en el destino?';
+
+  @override
+  String get prefTitleTime => 'Horario Preferido';
+
+  @override
+  String get prefSubTime => '¿En qué momento del día prefieres hacer tours?';
+
+  @override
+  String get prefTitleInterests => 'Tus Intereses';
+
+  @override
+  String get prefSubInterests => '¿Qué te apasiona descubrir?';
+
+  @override
+  String get prefTitleLocation => 'Permisos de Ubicación';
+
+  @override
+  String get prefSubLocation =>
+      'Para sugerirte lugares cercanos y optimizar tus rutas, necesitamos acceso a tu ubicación.';
+
+  @override
+  String get prefBtnLocation => 'Permitir Acceso';
+
+  @override
+  String prefAiPrompt(
+    Object traveler,
+    Object budget,
+    Object pace,
+    Object transport,
+    Object time,
+    Object interests,
+  ) {
+    return 'Hola. Me gustaría que me diseñes un viaje para $traveler, manejando un presupuesto $budget. Prefiero llevar un ritmo $pace y me gustaría moverme principalmente en $transport. El momento ideal para mis actividades sería por las $time. Mis intereses principales son: $interests.';
+  }
+
+  @override
+  String get prefAlmostDone => '¡Casi terminamos!';
+
+  @override
+  String get prefPleaseGrant =>
+      'Por favor concede el permiso para tener la mejor experiencia.';
+
+  @override
+  String get prefGrantPermission => 'Conceder Permiso';
+
+  @override
+  String get prefPermissionGranted => '¡Permiso concedido!';
+
+  @override
+  String get prefPermissionDenied =>
+      'Permiso denegado. Podrás activarlo después.';
 }

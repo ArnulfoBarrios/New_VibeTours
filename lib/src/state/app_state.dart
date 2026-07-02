@@ -248,6 +248,8 @@ class TouristProfileController extends AsyncNotifier<TouristProfileV2> {
     bool? hasChildren,
     List<String>? interests,
     String? preferredPace,
+    String? transportPreference,
+    String? preferredTimeOfDay,
   }) async {
     final current = state.valueOrNull ?? TouristProfileV2.empty;
     
@@ -258,6 +260,8 @@ class TouristProfileController extends AsyncNotifier<TouristProfileV2> {
     final newHasChildren = hasChildren ?? current.hasChildren;
     final newInterests = interests ?? current.interests;
     final newPreferredPace = preferredPace ?? current.preferredPace;
+    final newTransportPreference = transportPreference ?? current.transportPreference;
+    final newPreferredTimeOfDay = preferredTimeOfDay ?? current.preferredTimeOfDay;
 
     final summary = TouristProfileV2.generateSummary(
       travelerType: newTravelerType,
@@ -275,6 +279,8 @@ class TouristProfileController extends AsyncNotifier<TouristProfileV2> {
       hasChildren: newHasChildren,
       interests: newInterests,
       preferredPace: newPreferredPace,
+      transportPreference: newTransportPreference,
+      preferredTimeOfDay: newPreferredTimeOfDay,
       aiSummary: summary,
     );
     await saveProfile(newProfile);
