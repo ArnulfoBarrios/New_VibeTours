@@ -67,6 +67,7 @@ export async function planWithOpenAI({
   touristPace = 'balanced',
   recommendedSchedule = '',
   timeProfile = {},
+  selectedHotel = null,
 }) {
   const timeoutMs = Number.parseInt(process.env.OPENAI_TIMEOUT_MS ?? '', 10) || 90000
   const apiKey = process.env.OPENAI_API_KEY
@@ -77,7 +78,7 @@ export async function planWithOpenAI({
   }
 
   const selectedPlaces = summarizePlaces(places).slice(0, 8)
-  const system = `Eres TourSync AI, una inteligencia artificial de lujo especializada exclusivamente en crear tours turisticos vibrantes, atractivos y altamente personalizados.
+  let system = `Eres TourSync AI, una inteligencia artificial de lujo especializada exclusivamente en crear tours turisticos vibrantes, atractivos y altamente personalizados.
 
 Tu respuesta debe ser siempre un unico objeto JSON valido. No agregues markdown, comentarios, etiquetas, explicaciones ni texto fuera del JSON.
 
@@ -95,6 +96,10 @@ Reglas centrales:
 - Intereses del viajero: ${touristInterests.length ? touristInterests.join(', ') : 'no especificados'}.
 - Ritmo preferido: ${touristPace}.
 - Estima un presupuesto realista en USD.`
+
+  if (selectedHotel && selectedHotel.name) {
+    system += `\n- CRÍTICO: El turista se hospedará o iniciará en el hotel: "${selectedHotel.name}". El "punto_encuentro" (meetingPoint) del tour DEBE ser obligatoriamente este hotel y debes integrarlo de manera relevante al inicio del itinerario.`
+  }
 
   const routeBrief = {
     destination,

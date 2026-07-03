@@ -23,6 +23,7 @@ class AiBuilderState {
     this.hotels = const [],
     this.needsBudget = false,
     this.needsDuration = false,
+    this.selectedHotel,
   });
 
   final bool isLoading;
@@ -40,6 +41,7 @@ class AiBuilderState {
   final List<dynamic> hotels;
   final bool needsBudget;
   final bool needsDuration;
+  final Map<String, dynamic>? selectedHotel;
 
   AiBuilderState copyWith({
     bool? isLoading,
@@ -57,6 +59,7 @@ class AiBuilderState {
     List<dynamic>? hotels,
     bool? needsBudget,
     bool? needsDuration,
+    Map<String, dynamic>? selectedHotel,
   }) {
     return AiBuilderState(
       isLoading: isLoading ?? this.isLoading,
@@ -74,6 +77,7 @@ class AiBuilderState {
       hotels: hotels ?? this.hotels,
       needsBudget: needsBudget ?? this.needsBudget,
       needsDuration: needsDuration ?? this.needsDuration,
+      selectedHotel: selectedHotel ?? this.selectedHotel,
     );
   }
 }
@@ -429,6 +433,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     }
   }
 
+  void selectHotel(Map<String, dynamic> hotel) {
+    state = state.copyWith(selectedHotel: hotel);
+  }
+
   Future<void> buildTour() async {
     if (state.request == null || state.recommendations.isEmpty) return;
     state = state.copyWith(isBuilding: true, error: null);
@@ -437,7 +445,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       final response = await _postJson('/ai/tours/build', {
         'request': state.request!.toJson(),
         'places': state.recommendations.map((e) => e.toJson()).toList(),
-        'plannerContext': state.plannerContext,
+        'plannerContext': {
+          ...?state.plannerContext,
+          if (state.selectedHotel != null) 'selectedHotel': state.selectedHotel,
+        },
       });
 
       if (response.statusCode == 200) {

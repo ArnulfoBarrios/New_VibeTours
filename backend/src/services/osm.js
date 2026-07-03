@@ -182,20 +182,13 @@ function isAccommodation(type) {
 }
 
 export async function overpassHotels(latitude, longitude, budget = 'moderate', radius = 4500) {
-  let starsRegex = "2|3|4"
-  if (budget === 'economic') {
-    starsRegex = "1|2|3"
-  } else if (budget === 'luxury') {
-    starsRegex = "4|5"
-  }
-
   const query = `
     [out:json][timeout:25];
     (
-      node(around:${radius},${latitude},${longitude})["tourism"="hotel"]["stars"~"${starsRegex}"];
-      way(around:${radius},${latitude},${longitude})["tourism"="hotel"]["stars"~"${starsRegex}"];
+      node(around:${radius},${latitude},${longitude})["tourism"~"hotel|hostel"];
+      way(around:${radius},${latitude},${longitude})["tourism"~"hotel|hostel"];
     );
-    out center tags 15;
+    out center tags 25;
   `
   try {
     const response = await fetch('https://overpass-api.de/api/interpreter', {
@@ -204,29 +197,91 @@ export async function overpassHotels(latitude, longitude, budget = 'moderate', r
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': USER_AGENT
       },
-      body: new URLSearchParams({ data: query })
+      body: new URLSearchParams({ data: query }),
+      signal: AbortSignal.timeout(4000)
     })
+    if (response.ok) {
+      const json = await response.json()
+      const elements = (json.elements ?? [])
+        .map((element) => {
+          const lat = element.lat ?? element.center?.lat
+          const lon = element.lon ?? element.center?.lon
+          const name = element.tags?.name
+          if (lat == null || lon == null || !name) return null
+          
+          let stars = element.tags?.stars
+          if (!stars) {
+            if (budget === 'economic') {
+              stars = '3'
+            } else if (budget === 'luxury') {
+              stars = '5'
+            } else {
+              stars = '4'
+            }
+          }
+
+          return {
+            id: element.id,
+            name,
+            latitude: lat,
+            longitude: lon,
+            stars,
+            type: 'hotel',
+            tags: element.tags
+          }
+        })
+        .filter(Boolean)
+      
+      if (elements.length > 0) return elements
+    }
+  } catch (error) {
+    console.warn('[osm] overpassHotels query failed or timed out, falling back to Photon search:', error.message)
+  }
+
+  return photonHotelsFallback(latitude, longitude, budget)
+}
+
+async function photonHotelsFallback(latitude, longitude, budget) {
+  try {
+    const url = new URL('https://photon.komoot.io/api/')
+    url.searchParams.set('q', 'hotel')
+    url.searchParams.set('lat', String(latitude))
+    url.searchParams.set('lon', String(longitude))
+    url.searchParams.set('limit', '10')
+    const response = await fetch(url, { signal: AbortSignal.timeout(3000) })
     if (!response.ok) return []
     const json = await response.json()
-    return (json.elements ?? [])
-      .map((element) => {
-        const lat = element.lat ?? element.center?.lat
-        const lon = element.lon ?? element.center?.lon
-        const name = element.tags?.name
-        if (lat == null || lon == null || !name) return null
+    return (json.features ?? [])
+      .map((feature) => {
+        const name = feature.properties.name
+        const lat = feature.geometry.coordinates[1]
+        const lon = feature.geometry.coordinates[0]
+        if (!name || lat == null || lon == null) return null
+        
+        let stars = feature.properties.stars
+        if (!stars) {
+          if (budget === 'economic') {
+            stars = '3'
+          } else if (budget === 'luxury') {
+            stars = '5'
+          } else {
+            stars = '4'
+          }
+        }
+        
         return {
-          id: element.id,
+          id: feature.properties.osm_id ? String(feature.properties.osm_id) : `photon-${Math.random().toString(36).slice(2, 9)}`,
           name,
           latitude: lat,
           longitude: lon,
-          stars: element.tags?.stars,
+          stars: String(stars),
           type: 'hotel',
-          tags: element.tags
+          tags: feature.properties
         }
       })
       .filter(Boolean)
-  } catch (error) {
-    console.error('overpassHotels error', error)
+  } catch (err) {
+    console.warn('[osm] photonHotelsFallback error:', err.message)
     return []
   }
 }

@@ -12,6 +12,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 import 'package:geolocator/geolocator.dart';
 
+import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -263,8 +264,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   _buildBudgetSelector(),
                   const SizedBox(height: 16),
                 ],
-                if (builderState.hotels.isNotEmpty && !builderState.isBuilding && builderState.builtTour == null) ...[
-                  _buildHotelsList(builderState.hotels),
+                if (builderState.hotels.isNotEmpty && !builderState.isBuilding) ...[
+                  _buildHotelsList(builderState.hotels, builderState.selectedHotel),
                   const SizedBox(height: 16),
                 ],
                 if (builderState.error != null) ...[
@@ -374,37 +375,56 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     );
   }
 
-  Widget _buildHotelsList(List<dynamic> hotels) {
+  Widget _buildHotelsList(List<dynamic> hotels, Map<String, dynamic>? selectedHotel) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: hotels.map((h) => Padding(
-        padding: const EdgeInsets.only(bottom: 8.0),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+      children: hotels.map((h) {
+        final isSelected = selectedHotel?['name'] == h['name'];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: InkWell(
+            onTap: () {
+              ref.read(aiBuilderProvider.notifier).selectHotel(Map<String, dynamic>.from(h));
+            },
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.hotel, color: Colors.blue),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(h['name'] ?? 'Hotel', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Row(
-                      children: List.generate(int.tryParse(h['stars'] ?? '0') ?? 3, (index) => const Icon(Icons.star, size: 12, color: Colors.amber)),
-                    )
-                  ],
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isSelected 
+                    ? AppTheme.primary.withValues(alpha: 0.08)
+                    : Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected 
+                      ? AppTheme.primary 
+                      : Colors.grey.shade200,
+                  width: isSelected ? 2 : 1,
                 ),
               ),
-            ],
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? Icons.check_circle_rounded : Icons.hotel,
+                    color: isSelected ? AppTheme.primary : Colors.blue,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(h['name'] ?? 'Hotel', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Row(
+                          children: List.generate(int.tryParse(h['stars'] ?? '0') ?? 3, (index) => const Icon(Icons.star, size: 12, color: Colors.amber)),
+                        )
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      )).toList(),
+        );
+      }).toList(),
     ).animate().fadeIn();
   }
 
@@ -675,7 +695,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               ClipRRect(
                 borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12)),
                 child: Image.network(
-                  'https://images.unsplash.com/photo-1583511666407-5f06533f2113?auto=format&fit=crop&q=80',
+                  tour.coverUrl,
                   width: 100,
                   height: 130,
                   fit: BoxFit.cover,
