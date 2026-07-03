@@ -37,6 +37,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   bool _voiceFeedbackIsError = false;
   String _baselinePrompt = '';
   String? _selectedImagePath;
+  bool _isProcessingAction = false;
 
   @override
   void initState() {
@@ -96,21 +97,37 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   }
 
   Future<void> _sendMessage() async {
-    if (_prompt.text.trim().isEmpty && _selectedImagePath == null) return;
+    if (_isProcessingAction) return;
+    final builderState = ref.read(aiBuilderProvider);
+    if (builderState.isLoading || builderState.isBuilding) return;
+
+    final text = _prompt.text.trim();
+    if (text.isEmpty && _selectedImagePath == null) return;
+    
+    final imagePath = _selectedImagePath;
+    
+    // Limpiar inmediatamente para evitar múltiples envíos mientras se obtiene la ubicación
+    _prompt.clear();
+    setState(() {
+      _selectedImagePath = null;
+      _isProcessingAction = true;
+    });
     
     // Grab location
     double? lat;
     double? lon;
     try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-        final position = await Geolocator.getCurrentPosition(
+      if (serviceEnabled && (permission == LocationPermission.whileInUse || permission == LocationPermission.always)) {
+        var position = await Geolocator.getLastKnownPosition();
+        position ??= await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.medium,
-            timeLimit: Duration(seconds: 3),
+            timeLimit: Duration(seconds: 8),
           ),
         );
         lat = position.latitude;
@@ -120,11 +137,12 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       // Ignorar error de ubicación
     }
 
-    ref.read(aiBuilderProvider.notifier).sendMessage(_prompt.text.trim(), imagePath: _selectedImagePath, lat: lat, lon: lon);
-    _prompt.clear();
-    setState(() {
-      _selectedImagePath = null;
-    });
+    ref.read(aiBuilderProvider.notifier).sendMessage(text, imagePath: imagePath, lat: lat, lon: lon);
+    if (mounted) {
+      setState(() {
+        _isProcessingAction = false;
+      });
+    }
     Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
   }
 
@@ -138,8 +156,44 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     }
   }
 
-  void _sendChipMessage(String text) {
-    ref.read(aiBuilderProvider.notifier).sendMessage(text);
+  void _sendChipMessage(String text) async {
+    if (_isProcessingAction) return;
+    final builderState = ref.read(aiBuilderProvider);
+    if (builderState.isLoading || builderState.isBuilding) return;
+    
+    setState(() {
+      _isProcessingAction = true;
+    });
+
+    double? lat;
+    double? lon;
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (serviceEnabled && (permission == LocationPermission.whileInUse || permission == LocationPermission.always)) {
+        var position = await Geolocator.getLastKnownPosition();
+        position ??= await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+        lat = position.latitude;
+        lon = position.longitude;
+      }
+    } catch (_) {
+      // Ignorar error de ubicación
+    }
+
+    ref.read(aiBuilderProvider.notifier).sendMessage(text, lat: lat, lon: lon);
+    if (mounted) {
+      setState(() {
+        _isProcessingAction = false;
+      });
+    }
     Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
   }
 
@@ -198,7 +252,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                 _buildInitialAiMessage(),
                 const SizedBox(height: 16),
                 for (final msg in builderState.messages) ...[
-                  _buildMessageBubble(msg),
+                  _buildMessageBubble(msg, builderState.isLoading || builderState.isBuilding),
                   const SizedBox(height: 16),
                 ],
                 if (builderState.recommendations.isNotEmpty) ...[
@@ -464,7 +518,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage message) {
+  Widget _buildMessageBubble(ChatMessage message, bool isBusy) {
     final isUser = message.isUser;
     return Column(
       crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -567,13 +621,16 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                         side: BorderSide(color: Colors.blue.shade200),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       ),
-                      onPressed: () {
+                      onPressed: isBusy ? null : () {
                         if (action == 'Ver paradas sugeridas') {
                           context.push('/ai/builder');
                         } else if (action == 'Quiero cambiar lugares') {
                           context.push('/ai/builder');
                         } else if (action == 'Generar Tour Final') {
+                          if (_isProcessingAction) return;
+                          setState(() => _isProcessingAction = true);
                           ref.read(aiBuilderProvider.notifier).buildTour();
+                          if (mounted) setState(() => _isProcessingAction = false);
                         } else {
                           _prompt.text = action;
                           _sendMessage();
@@ -669,7 +726,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                       const SizedBox(height: 8),
                       GestureDetector(
                         onTap: () {
-                          // Handle view itinerary
+                          ref.read(selectedTourProvider.notifier).state = tour;
+                          context.push('/tours/${tour.id}', extra: tour);
                         },
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,

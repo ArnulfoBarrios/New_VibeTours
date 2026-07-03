@@ -512,6 +512,7 @@ class TourRepository {
       return TourStop(
         id: 'ai-stop-${entry.key}',
         name: name,
+        day: _intValue(item['dia'] ?? item['day'], 1),
         location: GeoPoint(
           latitude: _doubleValue(
             location['latitud'] ?? item['latitude'] ?? legacy['latitude'],
@@ -583,7 +584,7 @@ class TourRepository {
             }).toList(),
       durationHours: _hoursFromValue(
         json['duracion_estimada'] ?? json['durationHours'],
-        request.durationHours,
+        request.durationHours ?? 4.0,
       ),
       distanceKm: _kilometersFromValue(
         json['distancia_total'] ?? json['distanceKm'],
@@ -660,6 +661,7 @@ class TourRepository {
             item['name']?.toString() ??
             item['custom_name']?.toString() ??
             'Parada ${entry.key + 1}',
+        day: _intValue(metadata['dia'] ?? metadata['day'] ?? item['day'] ?? item['dia'], 1),
         location: GeoPoint(
           latitude: _doubleValue(item['latitude'], 0),
           longitude: _doubleValue(item['longitude'], 0),
@@ -801,8 +803,8 @@ class TourRepository {
       'tags': tour.tags,
       'is_ai_generated': tour.isAiGenerated,
       'is_published': false,
-      'is_private': false,
-      'moderation_status': 'pending',
+      'is_private': !tour.isPublished,
+      'moderation_status': tour.isPublished ? 'pending' : 'approved',
       'creation_json': tour.toCreationJson(),
       'short_summary': tour.shortSummary,
       'subcategories': tour.subcategories,

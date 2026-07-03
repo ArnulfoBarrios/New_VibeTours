@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities } from '../services/osm.js'
-import { planWithOllama, extractLocation } from '../services/ollama.js'
+import { planWithOpenAI, extractLocation } from '../services/openai.js'
 import { supabase } from '../services/supabase.js'
 
 export const aiRouter = Router()
@@ -26,7 +26,7 @@ const requestSchema = z.object({
   destination: z.string().optional().default(''),
   country: z.string().optional().default(''),
   city: z.string().optional().default(''),
-  durationHours: z.number().min(1).max(72).default(4),
+  durationHours: z.number().min(1).max(120).optional(),
   type: z.string().optional().default('cultural'),
   language: z.string().optional().default('es'),
   prompt: z.string().optional().default(''),
@@ -115,31 +115,53 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)
     
-    if (!input.destination && input.prompt) {
-      const extracted = await extractLocation(input.prompt)
+    let extracted = null
+    if ((!input.destination || !input.durationHours) && input.prompt) {
+      extracted = await extractLocation(input.prompt, input.latitude, input.longitude)
       if (extracted) {
-        if (!extracted.explicit_destination) {
-          const suggestions = (Array.isArray(extracted.suggestions) && extracted.suggestions.length > 0)
-            ? extracted.suggestions
-            : [
-                { city: "París", country: "Francia", reason: "Un destino clásico y hermoso." },
-                { city: "Bali", country: "Indonesia", reason: "Perfecto para relajarse y disfrutar la naturaleza." },
-                { city: "Nueva York", country: "Estados Unidos", reason: "Una ciudad vibrante llena de cultura." }
-              ]
-          return res.json({
-            needsDestination: true,
-            message: '¿A qué lugar te gustaría ir? Basado en lo que buscas, aquí tienes algunas recomendaciones:',
-            suggestions
-          })
+        if (extracted.explicit_destination && !input.destination) {
+          input.destination = extracted.explicit_destination || extracted.city || extracted.country || ''
+          input.city = extracted.city || ''
+          input.country = extracted.country || ''
         }
-        input.destination = extracted.explicit_destination || extracted.city || extracted.country || ''
-        input.city = extracted.city || ''
-        input.country = extracted.country || ''
-      } else {
-        return res.status(503).json({ 
-          error: 'El asistente de IA no está disponible en este momento para procesar tu solicitud. Por favor intenta más tarde.' 
-        })
+        if (extracted.duration_hours && !input.durationHours) {
+          input.durationHours = Number(extracted.duration_hours)
+        }
+        if (extracted.budget && !input.budget) {
+          input.budget = extracted.budget
+        }
+        if (extracted.companion_type) {
+          input.touristProfileSummary = `${input.touristProfileSummary || ''}\nCompañeros de viaje: ${extracted.companion_type}`.trim()
+        }
       }
+    }
+    
+    if (!input.destination) {
+      const suggestions = (extracted && Array.isArray(extracted.suggestions) && extracted.suggestions.length > 0)
+        ? extracted.suggestions
+        : [
+            { city: "Santa Marta", country: "Colombia", reason: "Playas hermosas cerca del Parque Tayrona." },
+            { city: "Cartagena", country: "Colombia", reason: "Ciudad histórica con hermosas playas caribeñas." },
+            { city: "Medellín", country: "Colombia", reason: "La ciudad de la eterna primavera llena de cultura." }
+          ]
+      return res.json({
+        needsDestination: true,
+        message: '¿A qué lugar te gustaría ir? Basado en lo que buscas, aquí tienes algunas recomendaciones:',
+        suggestions
+      })
+    }
+    
+    if (!input.durationHours) {
+      return res.json({
+        needsDuration: true,
+        message: '¿Cuánto tiempo te gustaría que dure tu viaje o recorrido?',
+        suggestions: [
+          { label: '4 horas', hours: 4 },
+          { label: '1 día (8 horas)', hours: 8 },
+          { label: '3 días', hours: 72 },
+          { label: '5 días', hours: 120 }
+        ]
+      })
     }
     
     if (input.city && input.city.trim().length > 0) {
@@ -205,6 +227,14 @@ aiRouter.post('/tours/build', async (req, res, next) => {
     })
     const { request: input, places, plannerContext } = buildSchema.parse(req.body)
     
+    if ((!input.city || !input.country) && input.destination) {
+      const location = await geocodePlace(input.destination)
+      if (location) {
+        input.city = location.city || ''
+        input.country = location.country || ''
+      }
+    }
+    
     const jobId = crypto.randomUUID()
     tourJobs.set(jobId, {
       id: jobId,
@@ -250,7 +280,8 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
     const currentIds = new Set(currentPlaces.map(p => p.id || p.placeId))
     const exclusions = new Set(excludeIds)
     
-    const alternatives = planner.selectedPlaces
+    const sortedCandidates = candidatePack.places.sort((a, b) => (b.score || 0) - (a.score || 0))
+    const alternatives = sortedCandidates
       .filter(place => !currentIds.has(place.placeId) && !exclusions.has(place.placeId))
       .slice(0, 5)
       .map(place => ({
@@ -333,9 +364,9 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     const shouldAskOllama = shouldUseOllama(input, planner)
     try {
       if (!shouldAskOllama) {
-        console.info('[tour-ai] ollama-skipped (build)')
+        console.info('[tour-ai] openai-skipped (build)')
       } else {
-        ollama = await planWithOllama({
+        ollama = await planWithOpenAI({
           ...input,
           places: planner.selectedPlaces,
           recommendedSchedule: planner.recommendedSchedule,
@@ -462,9 +493,9 @@ async function processTourGeneration(jobId, input) {
     const shouldAskOllama = shouldUseOllama(input, planner)
     try {
       if (!shouldAskOllama) {
-        console.info('[tour-ai] ollama-skipped', { reason: ollamaSkipReason(input, planner), durationHours: input.durationHours, selectedPlaces: planner.selectedPlaces.length })
+        console.info('[tour-ai] openai-skipped', { reason: ollamaSkipReason(input, planner), durationHours: input.durationHours, selectedPlaces: planner.selectedPlaces.length })
       } else {
-        ollama = await planWithOllama({
+        ollama = await planWithOpenAI({
           ...input,
           places: planner.selectedPlaces,
           recommendedSchedule: planner.recommendedSchedule,
@@ -472,7 +503,7 @@ async function processTourGeneration(jobId, input) {
           sourceSummary: { location: location ? { latitude: location.latitude, longitude: location.longitude } : null, candidateSource: candidatePack.source, candidateCount: candidatePack.rawCount, selectedCount: planner.selectedPlaces.length },
         })
       }
-      console.info('[tour-ai] ollama', { ok: true, skipped: !shouldAskOllama, hasItinerary: Array.isArray(ollama?.itinerario), itinerary: Array.isArray(ollama?.itinerario) ? ollama.itinerario.length : 0 })
+      console.info('[tour-ai] openai', { ok: true, skipped: !shouldAskOllama, hasItinerary: Array.isArray(ollama?.itinerario), itinerary: Array.isArray(ollama?.itinerario) ? ollama.itinerario.length : 0 })
     } catch (error) {
       ollamaError = error
       console.warn('[tour-ai] ollama', { ok: false, message: error?.message ?? String(error) })
@@ -1253,8 +1284,8 @@ function stopFocusFor(type, category) {
 
 function shouldUseOllama(input, planner) {
   if (process.env.DISABLE_OLLAMA === 'true') return false
-  if (input.durationHours > 6) return false
-  if (planner.selectedPlaces.length > 5) return false
+  if (input.durationHours > 120) return false
+  if (planner.selectedPlaces.length > 15) return false
   return true
 }
 
@@ -1338,6 +1369,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   const image = images[0] ?? source.imageUrl ?? await imageForPlace(resolvedName, input.city || input.destination).catch(() => "")
   const publicStop = {
     parada: index + 1,
+    dia: Number(source.dia ?? 1),
     nombre: resolvedName,
     descripcion: description,
     duracion_estimada: durationText,
@@ -1350,6 +1382,8 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
       ciudad: fallbackPlace?.city ?? ubicacion.ciudad ?? input.city ?? "",
       region: fallbackPlace?.region ?? ubicacion.region ?? "",
       pais: fallbackPlace?.country ?? ubicacion.pais ?? input.country ?? "",
+      latitud: coordinates.latitude,
+      longitud: coordinates.longitude,
       place_id: fallbackPlace?.placeId ?? ubicacion.place_id ?? placeIdFor(resolvedName, coordinates.latitude, coordinates.longitude),
       url_mapa: fallbackPlace?.urlMapa ?? ubicacion.url_mapa ?? mapUrlFor(coordinates.latitude, coordinates.longitude),
     },
@@ -1584,7 +1618,9 @@ function fallbackPlaces(input, location) {
 }
 
 async function collectTourCandidates(input, location) {
-  const query = `${input.destination} ${input.city} ${input.country}`.trim()
+  const city = location?.city || input.city || ''
+  const country = location?.country || input.country || ''
+  const query = `${input.destination} ${city} ${country}`.trim()
   const photonPlaces = await photonSearch(query, 16)
   const overpassPrimary = location ? await overpassAttractions(location.latitude, location.longitude, 4500) : []
   const overpassWide = location ? await overpassAttractions(location.latitude, location.longitude, 9000) : []
@@ -1592,6 +1628,7 @@ async function collectTourCandidates(input, location) {
   const normalizedPool = uniqueByName(pool)
     .filter((place) => place && place.name)
     .filter((place) => hasUsableCoordinates(place.latitude, place.longitude) || place.city || place.country)
+    .filter((place) => isCandidateNearDestination(place, input, location))
   const selected = normalizedPool.length >= 3
     ? normalizedPool
     : buildSyntheticFallbackPlaces(input, location)
@@ -1631,19 +1668,19 @@ function findCandidatePlace(name, candidatePlaces, anchorPlace) {
 }
 
 async function resolveStopCoordinates({ source, input, name, fallbackPlace }) {
-  if (hasUsableCoordinates(fallbackPlace?.latitude, fallbackPlace?.longitude)) {
-    return {
-      latitude: fallbackPlace.latitude,
-      longitude: fallbackPlace.longitude,
-    }
-  }
-
   const sourceLatitude = numberValue(source.latitude ?? source.ubicacion?.latitud, NaN)
   const sourceLongitude = numberValue(source.longitude ?? source.ubicacion?.longitud, NaN)
   if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
     return {
       latitude: sourceLatitude,
       longitude: sourceLongitude,
+    }
+  }
+
+  if (hasUsableCoordinates(fallbackPlace?.latitude, fallbackPlace?.longitude)) {
+    return {
+      latitude: fallbackPlace.latitude,
+      longitude: fallbackPlace.longitude,
     }
   }
 

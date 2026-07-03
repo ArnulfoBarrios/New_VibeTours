@@ -30,25 +30,6 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
     final state = ref.watch(aiBuilderProvider);
     final mapStyle = ref.watch(mapStyleProvider);
 
-    if (state.isBuilding) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 24),
-              Text(
-                'Construyendo tu tour...',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              const Text('Ollama está redactando la experiencia perfecta.'),
-            ],
-          ),
-        ),
-      );
-    }
 
     if (state.builtTour != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -118,7 +99,8 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
             ),
           ),
           // Tarjetas deslizables
-          Positioned(
+          if (!state.isBuilding)
+            Positioned(
             left: 0,
             right: 0,
             bottom: 90, // Increased to avoid overlap with BottomNavigationBar
@@ -231,7 +213,80 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
               },
             ),
           ),
+          
+          if (state.isBuilding)
+            Positioned.fill(
+              child: Container(
+                color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.8),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Diseñando tu viaje...',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      const _AnimatedLoaderText(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+class _AnimatedLoaderText extends StatefulWidget {
+  const _AnimatedLoaderText();
+
+  @override
+  State<_AnimatedLoaderText> createState() => _AnimatedLoaderTextState();
+}
+
+class _AnimatedLoaderTextState extends State<_AnimatedLoaderText> {
+  final List<String> _messages = [
+    'Analizando puntos de interés...',
+    'Optimizando rutas de desplazamiento...',
+    'Buscando datos curiosos históricos...',
+    'Redactando una narrativa vibrante...',
+    'Añadiendo consejos locales...',
+    'Preparando tu itinerario final...'
+  ];
+  
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _cycleMessages();
+  }
+
+  void _cycleMessages() async {
+    while (mounted) {
+      await Future.delayed(const Duration(seconds: 3));
+      if (mounted) {
+        setState(() {
+          _currentIndex = (_currentIndex + 1) % _messages.length;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 500),
+      child: Text(
+        _messages[_currentIndex],
+        key: ValueKey<int>(_currentIndex),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Colors.grey.shade600,
+        ),
       ),
     );
   }

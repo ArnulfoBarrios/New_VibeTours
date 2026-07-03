@@ -114,6 +114,10 @@ class TourDetailScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (tour.id.startsWith('ai-')) ...[
+                        _buildAiDraftBanner(context, ref, tour),
+                        const SizedBox(height: 16),
+                      ],
                       Row(
                         children: [
                           _Metric(
@@ -225,8 +229,56 @@ class TourDetailScreen extends ConsumerWidget {
                           title: 'Sin paradas',
                           body: 'Este tour aun no tiene paradas cargadas.',
                         )
-                      else
-                        for (final stop in tour.stops) _StopTile(stop: stop),
+                      else ...[
+                        ...() {
+                          final Map<int, List<TourStop>> stopsByDay = {};
+                          for (final stop in tour.stops) {
+                            stopsByDay.putIfAbsent(stop.day, () => []).add(stop);
+                          }
+                          
+                          final sortedDays = stopsByDay.keys.toList()..sort();
+                          final showDays = sortedDays.length > 1 || tour.durationHours >= 24;
+                          
+                          return [
+                            for (final day in sortedDays) ...[
+                              if (showDays) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 14, bottom: 8),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.primary.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                                        ),
+                                        child: Text(
+                                          'Día $day',
+                                          style: const TextStyle(
+                                            color: AppTheme.primary,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Divider(
+                                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
+                                          thickness: 1,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              for (final stop in stopsByDay[day]!)
+                                _StopTile(stop: stop),
+                            ],
+                          ];
+                        }(),
+                      ],
                       const SizedBox(height: 24),
                       GlassPanel(
                         child: Row(
@@ -303,6 +355,170 @@ class TourDetailScreen extends ConsumerWidget {
           body: error.toString(),
         ),
       ),
+    );
+  }
+
+  Widget _buildAiDraftBanner(BuildContext context, WidgetRef ref, Tour tour) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Borrador temporal de IA',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Este tour fue generado dinámicamente y aún no está guardado. Elige cómo deseas conservarlo:',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      final personalTour = _copyTour(tour, isPublished: false);
+                      final saved = await ref.read(userToursProvider.notifier).saveTour(personalTour);
+                      ref.read(selectedTourProvider.notifier).state = saved;
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Guardado en tus tours personales exitosamente.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error al guardar: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.lock_outline_rounded),
+                  label: const Text('Guardar Personal'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      final publicTour = _copyTour(tour, isPublished: true);
+                      final saved = await ref.read(userToursProvider.notifier).saveTour(publicTour);
+                      ref.read(selectedTourProvider.notifier).state = saved;
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Enviado a revisión para el catálogo público.'),
+                            backgroundColor: AppTheme.primary,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error al publicar: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.public_rounded),
+                  label: const Text('Publicar Catálogo'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Tour _copyTour(Tour tour, {required bool isPublished}) {
+    return Tour(
+      id: tour.id,
+      title: tour.title,
+      country: tour.country,
+      city: tour.city,
+      type: tour.type,
+      description: tour.description,
+      coverUrl: tour.coverUrl,
+      gallery: tour.gallery,
+      durationHours: tour.durationHours,
+      distanceKm: tour.distanceKm,
+      rating: tour.rating,
+      reviewCount: tour.reviewCount,
+      likes: tour.likes,
+      difficulty: tour.difficulty,
+      language: tour.language,
+      tags: tour.tags,
+      stops: tour.stops,
+      isPublished: isPublished,
+      isAiGenerated: tour.isAiGenerated,
+      shortSummary: tour.shortSummary,
+      subcategories: tour.subcategories,
+      featuredExperience: tour.featuredExperience,
+      placeHistory: tour.placeHistory,
+      culturalContext: tour.culturalContext,
+      availableLanguages: tour.availableLanguages,
+      recommendedAudience: tour.recommendedAudience,
+      bestSeason: tour.bestSeason,
+      recommendedSchedule: tour.recommendedSchedule,
+      meetingPoint: tour.meetingPoint,
+      meetingPointInfo: tour.meetingPointInfo,
+      includes: tour.includes,
+      excludes: tour.excludes,
+      recommendations: tour.recommendations,
+      whatToBring: tour.whatToBring,
+      tourRules: tour.tourRules,
+      keywords: tour.keywords,
+      mainCategory: tour.mainCategory,
+      budget: tour.budget,
+      additionalInfo: tour.additionalInfo,
     );
   }
 }

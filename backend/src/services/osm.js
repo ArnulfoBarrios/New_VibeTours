@@ -3,6 +3,7 @@ export async function geocodePlace(query) {
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.searchParams.set('format', 'jsonv2')
   url.searchParams.set('limit', '3')
+  url.searchParams.set('addressdetails', '1')
   url.searchParams.set('q', query)
   try {
     const response = await fetch(url, {
@@ -12,10 +13,15 @@ export async function geocodePlace(query) {
       const results = await response.json()
       const [result] = Array.isArray(results) ? results : []
       if (result) {
+        const address = result.address || {}
+        const city = address.city || address.town || address.village || address.municipality || address.county || ''
+        const country = address.country || ''
         return {
           name: result.display_name,
           latitude: Number(result.lat),
-          longitude: Number(result.lon)
+          longitude: Number(result.lon),
+          city,
+          country
         }
       }
     }
@@ -30,6 +36,8 @@ export async function geocodePlace(query) {
       name: photon.name,
       latitude: Number(photon.latitude),
       longitude: Number(photon.longitude),
+      city: photon.city || '',
+      country: photon.country || ''
     }
   }
   return null

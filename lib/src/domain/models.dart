@@ -136,6 +136,7 @@ class TourStop {
     this.curiousFacts = const [],
     this.locationInfo = TourLocationInfo.empty,
     this.images = const [],
+    this.day = 1,
   });
 
   final String id;
@@ -150,6 +151,7 @@ class TourStop {
   final List<String> curiousFacts;
   final TourLocationInfo locationInfo;
   final List<String> images;
+  final int day;
 
   TourStop copyWith({int? order}) => TourStop(
     id: id,
@@ -164,10 +166,12 @@ class TourStop {
     curiousFacts: curiousFacts,
     locationInfo: locationInfo,
     images: images,
+    day: day,
   );
 
   Map<String, dynamic> toCreationJson(int index) => {
     'parada': index + 1,
+    'dia': day,
     'nombre': name,
     'descripcion': description,
     'duracion_estimada': _minutesLabel(suggestedMinutes),
@@ -501,7 +505,7 @@ class AiTourRequest {
     required this.destination,
     required this.country,
     required this.city,
-    required this.durationHours,
+    this.durationHours,
     required this.type,
     required this.language,
     required this.prompt,
@@ -516,7 +520,7 @@ class AiTourRequest {
   final String destination;
   final String country;
   final String city;
-  final double durationHours;
+  final double? durationHours;
   final TourType type;
   final String language;
   final String prompt;
@@ -531,7 +535,7 @@ class AiTourRequest {
     'destination': destination,
     'country': country,
     'city': city,
-    'durationHours': durationHours,
+    if (durationHours != null) 'durationHours': durationHours,
     'type': type.name,
     'language': language,
     'prompt': prompt,

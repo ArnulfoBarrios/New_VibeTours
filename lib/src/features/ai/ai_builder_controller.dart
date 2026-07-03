@@ -4,6 +4,7 @@ import '../../domain/models.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../core/config/app_config.dart';
+import '../../state/app_state.dart';
 
 class AiBuilderState {
   const AiBuilderState({
@@ -21,6 +22,7 @@ class AiBuilderState {
     this.messages = const [],
     this.hotels = const [],
     this.needsBudget = false,
+    this.needsDuration = false,
   });
 
   final bool isLoading;
@@ -37,6 +39,7 @@ class AiBuilderState {
   final List<ChatMessage> messages;
   final List<dynamic> hotels;
   final bool needsBudget;
+  final bool needsDuration;
 
   AiBuilderState copyWith({
     bool? isLoading,
@@ -53,6 +56,7 @@ class AiBuilderState {
     List<ChatMessage>? messages,
     List<dynamic>? hotels,
     bool? needsBudget,
+    bool? needsDuration,
   }) {
     return AiBuilderState(
       isLoading: isLoading ?? this.isLoading,
@@ -69,13 +73,15 @@ class AiBuilderState {
       messages: messages ?? this.messages,
       hotels: hotels ?? this.hotels,
       needsBudget: needsBudget ?? this.needsBudget,
+      needsDuration: needsDuration ?? this.needsDuration,
     );
   }
 }
 
 
 class AiBuilderController extends StateNotifier<AiBuilderState> {
-  AiBuilderController() : super(const AiBuilderState());
+  AiBuilderController(this.ref) : super(const AiBuilderState());
+  final Ref ref;
 
   String? _workingBaseUrl;
 
@@ -136,7 +142,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     AiTourRequest request;
     if (state.needsDestination && state.request != null) {
       request = AiTourRequest(
-        prompt: state.request!.prompt,
+        prompt: '${state.request!.prompt}\n$text',
         destination: text, // Use the user's message as destination
         country: state.request!.country,
         city: state.request!.city,
@@ -149,18 +155,43 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         latitude: lat ?? state.request!.latitude,
         longitude: lon ?? state.request!.longitude,
       );
+    } else if (state.needsDuration && state.request != null) {
+      request = AiTourRequest(
+        prompt: '${state.request!.prompt}\n$text',
+        destination: state.request!.destination,
+        country: state.request!.country,
+        city: state.request!.city,
+        type: state.request!.type,
+        durationHours: null, // will be parsed on backend
+        language: state.request!.language,
+        touristProfileSummary: state.request!.touristProfileSummary,
+        touristInterests: state.request!.touristInterests,
+        touristPace: state.request!.touristPace,
+        latitude: lat ?? state.request!.latitude,
+        longitude: lon ?? state.request!.longitude,
+      );
     } else {
+      final profile = ref.read(touristProfileProvider).valueOrNull ?? TouristProfileV2.empty;
+      final summary = TouristProfileV2.generateSummary(
+        travelerType: profile.travelerType,
+        budget: profile.budget,
+        companionType: profile.companionType,
+        hasChildren: profile.hasChildren,
+        interests: profile.interests,
+        preferredPace: profile.preferredPace,
+      );
+
       request = AiTourRequest(
         prompt: text,
         destination: '',
         country: '',
         city: '',
         type: TourType.custom,
-        durationHours: 4, // default 4 hours
+        durationHours: null, // default to null to trigger prompt if absent
         language: 'es',
-        touristProfileSummary: '',
-        touristInterests: [],
-        touristPace: 'Medium',
+        touristProfileSummary: summary,
+        touristInterests: profile.interests,
+        touristPace: profile.preferredPace,
         latitude: lat,
         longitude: lon,
       );
@@ -176,6 +207,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       request: request,
       recommendations: [],
       needsDestination: false,
+      needsDuration: false,
       destinationMessage: null,
       destinationSuggestions: [],
     );
@@ -202,6 +234,27 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             needsDestination: true,
             destinationMessage: data['message'],
             destinationSuggestions: suggs,
+            messages: [...state.messages, aiMsg],
+          );
+          return;
+        }
+
+        if (data['needsDuration'] == true) {
+          final suggs = data['suggestions'] as List? ?? [];
+          final actionChips = suggs.map((e) => (e['label'] ?? '').toString()).where((e) => e.isNotEmpty).toList();
+          
+          final aiMsg = ChatMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            text: data['message'] ?? '¿Cuánto tiempo te gustaría que dure tu viaje?',
+            type: ChatMessageType.ai,
+            timestamp: DateTime.now(),
+            actionChips: actionChips.isNotEmpty ? actionChips : null,
+          );
+          
+          state = state.copyWith(
+            isLoading: false,
+            isTyping: false,
+            needsDuration: true,
             messages: [...state.messages, aiMsg],
           );
           return;
@@ -450,8 +503,19 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
                 );
               }).toList(),
             );
+            final aiMsg = ChatMessage(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              text: '¡Tu tour personalizado está listo! Aquí tienes el itinerario detallado:',
+              type: ChatMessageType.ai,
+              timestamp: DateTime.now(),
+              embeddedTour: tour,
+            );
             
-            state = state.copyWith(isBuilding: false, builtTour: tour);
+            state = state.copyWith(
+              isBuilding: false, 
+              builtTour: tour,
+              messages: [...state.messages, aiMsg],
+            );
             return;
           } else if (data['status'] == 'failed') {
             state = state.copyWith(isBuilding: false, error: data['message']);
@@ -491,5 +555,5 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 }
 
 final aiBuilderProvider = StateNotifierProvider<AiBuilderController, AiBuilderState>((ref) {
-  return AiBuilderController();
+  return AiBuilderController(ref);
 });
