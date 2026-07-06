@@ -374,6 +374,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             stretch: true,
             backgroundColor: Colors.transparent,
             elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_rounded, color: Colors.white),
+                onPressed: () => context.push('/settings'),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               stretchModes: const [
                 StretchMode.zoomBackground,
@@ -673,6 +679,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         onTap: () => _showLanguageSelection(context, l10n),
                       ),
                       const _ThemeToggleTile(),
+                      _SettingsListTile(
+                        icon: Icons.settings_rounded,
+                        iconColor: Colors.blueGrey,
+                        title: l10n.settings,
+                        onTap: () => context.push('/settings'),
+                      ),
                     ],
                   ),
                 ).animate().fadeIn(delay: 100.ms, duration: 400.ms).slideY(begin: 0.05, end: 0),

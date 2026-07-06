@@ -22,12 +22,18 @@ import 'features/support/pqrs_screen.dart';
 import 'features/tour_live/live_tour_screen.dart';
 import 'features/tours/tour_detail_screen.dart';
 import 'features/tours/tours_screen.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'state/app_state.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final client = ref.watch(supabaseClientProvider);
   return GoRouter(
     initialLocation: '/',
+    observers: [
+      if (Firebase.apps.isNotEmpty)
+        FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+    ],
     refreshListenable: client != null
         ? GoRouterRefreshStream(client.auth.onAuthStateChange)
         : null,
@@ -67,7 +73,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(path: '/profile', builder: (context, state) => const RequireAuth(child: ProfileScreen())),
-              GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen(embedded: true)),
             ],
           ),
         ],
@@ -100,6 +105,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/help',
         builder: (context, state) => const HelpCenterScreen(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsScreen(),
       ),
     ],
   );

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "780496859647",
+    "project_id": "vibetours-e614d",
+    "storage_bucket": "vibetours-e614d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:780496859647:android:e3c14363c55b7a8a9237ca",
+        "android_client_info": {
+          "package_name": "com.vibetours.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChVRqJFFXdmndJE4q1yZ_YIGrxxk5MGDk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

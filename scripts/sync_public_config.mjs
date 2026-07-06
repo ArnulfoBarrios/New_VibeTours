@@ -24,7 +24,7 @@ for (const key of allowedKeys) {
 }
 
 if (!output.API_BASE_URL) {
-  output.API_BASE_URL = 'http://192.168.1.220:3000/api'
+  output.API_BASE_URL = 'http://192.168.1.221:3000/api'
 }
 
 await mkdir(dirname(outputPath), { recursive: true })

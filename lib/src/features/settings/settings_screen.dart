@@ -31,7 +31,7 @@ class SettingsScreen extends ConsumerWidget {
             if (!embedded) ...[
               IconButton.filledTonal(
                 onPressed: () =>
-                    context.canPop() ? context.pop() : context.go('/home'),
+                    context.canPop() ? context.pop() : context.go('/profile'),
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
               const SizedBox(width: 10),
