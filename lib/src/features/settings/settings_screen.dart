@@ -17,6 +17,7 @@ class SettingsScreen extends ConsumerWidget {
     final highRefresh = ref.watch(highRefreshRateProvider);
     final notifications = ref.watch(notificationsEnabledProvider);
     final mapStyle = ref.watch(mapStyleProvider);
+    final isAdmin = ref.watch(isAdminProvider);
     
     final content = ListView(
       padding: EdgeInsets.fromLTRB(16, 16, 16, embedded ? 120 : 30),
@@ -39,6 +40,26 @@ class SettingsScreen extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 24),
+        if (isAdmin) ...[
+          GlassPanel(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _SectionTitle('Administración'),
+                _SettingsListTile(
+                  icon: Icons.admin_panel_settings_rounded,
+                  iconColor: Colors.redAccent,
+                  title: 'Panel de Control Administrador',
+                  subtitle: 'Gestionar tours pendientes y soporte',
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                  onTap: () => context.push('/admin'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         GlassPanel(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           child: Column(
