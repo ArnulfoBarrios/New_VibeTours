@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeTours - Legal & Privacy</title>
+  <meta name="description" content="Términos de Servicio y Política de Privacidad de la aplicación VibeTours. Conoce cómo protegemos tus datos y las condiciones de uso.">
+  <link rel="icon" type="image/png" href="../../assets/logo_light.png" error="this.style.display='none'">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    /* Reset & CSS variables */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #007AFF;
+      --primary-deep: #0056B3;
+      --indigo: #5856D6;
+      --violet: #AF52DE;
+      --bg-dark: #090B10;
+      --glass-bg: rgba(30, 36, 51, 0.45);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text-main: rgba(255, 255, 255, 0.95);
+      --text-muted: rgba(255, 255, 255, 0.70);
+      --text-dimmed: rgba(255, 255, 255, 0.50);
+      --font-family: 'Outfit', sans-serif;
+      --transition-speed: 0.3s;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Ambient animated backgrounds */
+    .aurora-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .aurora-sphere {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(130px);
+      opacity: 0.15;
+      mix-blend-mode: screen;
+      animation: float 20s infinite alternate ease-in-out;
+    }
+
+    .sphere-1 {
+      top: -10%;
+      left: -10%;
+      width: 50vw;
+      height: 50vw;
+      background: radial-gradient(circle, var(--primary) 0%, transparent 80%);
+      animation-duration: 25s;
+    }
+
+    .sphere-2 {
+      bottom: -10%;
+      right: -10%;
+      width: 60vw;
+      height: 60vw;
+      background: radial-gradient(circle, var(--violet) 0%, transparent 80%);
+      animation-duration: 30s;
+      animation-delay: -5s;
+    }
+
+    .sphere-3 {
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40vw;
+      height: 40vw;
+      background: radial-gradient(circle, var(--indigo) 0%, transparent 80%);
+      opacity: 0.08;
+      animation-duration: 22s;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0% {
+        transform: translate(0, 0) scale(1);
+      }
+      50% {
+        transform: translate(5%, 8%) scale(1.1);
+      }
+      100% {
+        transform: translate(-5%, -5%) scale(0.9);
+      }
+    }
+
+    /* Header & Navigation */
+    header {
+      width: 100%;
+      padding: 1.5rem 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+    }
+
+    .logo-svg {
+      width: 38px;
+      height: 38px;
+      fill: none;
+    }
+
+    .logo-text {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #FFF 30%, var(--primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Language Switcher */
+    .lang-switcher {
+      display: flex;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--glass-border);
+      border-radius: 30px;
+      padding: 3px;
+      position: relative;
+    }
+
+    .lang-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dimmed);
+      padding: 6px 14px;
+      font-family: var(--font-family);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 20px;
+      transition: color var(--transition-speed);
+      z-index: 2;
+    }
+
+    .lang-btn.active {
+      color: #fff;
+    }
+
+    .lang-indicator {
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: 3px;
+      width: 42px;
+      background: var(--primary);
+      border-radius: 20px;
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 1;
+      box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem 4rem 1.5rem;
+      z-index: 5;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 0.5rem;
+      line-height: 1.2;
+    }
+
+    .hero p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin: 0 auto;
+      font-weight: 400;
+    }
+
+    /* Tab navigation */
+    .tabs-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .tabs {
+      display: flex;
+      background: var(--glass-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 40px;
+      padding: 5px;
+      position: relative;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 14px 20px;
+      font-family: var(--font-family);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 35px;
+      transition: color var(--transition-speed);
+      z-index: 2;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .tab-btn.active {
+      color: #fff;
+    }
+
+    .tab-indicator {
+      position: absolute;
+      top: 5px;
+      bottom: 5px;
+      left: 5px;
+      width: calc(50% - 5px);
+      background: linear-gradient(135deg, var(--primary) 0%, var(--indigo) 100%);
+      border-radius: 35px;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 1;
+      box-shadow: 0 4px 20px rgba(88, 86, 214, 0.25);
+    }
+
+    /* Content Cards */
+    .content-wrapper {
+      position: relative;
+      min-height: 400px;
+    }
+
+    .legal-content {
+      display: none;
+      flex-direction: column;
+      gap: 1.25rem;
+      animation: fadeIn var(--transition-speed) forwards;
+    }
+
+    .legal-content.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(15px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Glass card style */
+    .card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 1.75rem;
+      display: flex;
+      gap: 1.25rem;
+      align-items: flex-start;
+      transition: transform var(--transition-speed), border-color var(--transition-speed), box-shadow var(--transition-speed);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 12px 40px 0 rgba(88, 86, 214, 0.1);
+    }
+
+    .card-icon {
+      background: rgba(0, 122, 255, 0.12);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--primary);
+      flex-shrink: 0;
+      transition: background var(--transition-speed), color var(--transition-speed);
+    }
+
+    .card:hover .card-icon {
+      background: rgba(175, 82, 222, 0.15);
+      color: var(--violet);
+    }
+
+    .card-icon svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    .card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .card-body h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.2px;
+    }
+
+    .card-body p {
+      color: var(--text-muted);
+      font-size: 0.98rem;
+      font-weight: 400;
+      text-align: justify;
+    }
+
+    /* Highlight Banner Card */
+    .banner-card {
+      background: linear-gradient(135deg, rgba(0, 122, 255, 0.08) 0%, rgba(175, 82, 222, 0.08) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    .banner-icon {
+      color: var(--primary);
+      flex-shrink: 0;
+      animation: pulse 3s infinite alternate ease-in-out;
+    }
+
+    .banner-icon svg {
+      width: 32px;
+      height: 32px;
+    }
+
+    .banner-text {
+      font-size: 1.05rem;
+      font-weight: 500;
+      color: var(--text-main);
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 0px var(--primary));
+      }
+      100% {
+        transform: scale(1.05);
+        filter: drop-shadow(0 0 8px rgba(0, 122, 255, 0.4));
+      }
+    }
+
+    /* Footer */
+    footer {
+      width: 100%;
+      padding: 2.5rem 2rem;
+      border-top: 1px solid var(--glass-border);
+      background: rgba(9, 11, 16, 0.8);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      margin-top: auto;
+      z-index: 10;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .footer-left {
+      color: var(--text-dimmed);
+      font-size: 0.9rem;
+    }
+
+    .footer-right {
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    .footer-link {
+      color: var(--text-dimmed);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color var(--transition-speed);
+    }
+
+    .footer-link:hover {
+      color: var(--primary);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      header {
+        padding: 1.25rem 1.5rem;
+      }
+
+      .hero h1 {
+        font-size: 2rem;
+      }
+
+      .hero p {
+        font-size: 1rem;
+      }
+
+      .tabs {
+        max-width: 100%;
+      }
+
+      .tab-btn {
+        padding: 12px 10px;
+        font-size: 0.88rem;
+      }
+
+      .card {
+        flex-direction: column;
+        padding: 1.5rem;
+        gap: 1rem;
+      }
+
+      .card-icon {
+        align-self: flex-start;
+      }
+
+      .footer-content {
+        flex-direction: column;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient aurora background shapes -->
+  <div class="aurora-bg">
+    <div class="aurora-sphere sphere-1"></div>
+    <div class="aurora-sphere sphere-2"></div>
+    <div class="aurora-sphere sphere-3"></div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <a href="#" class="logo-container">
+      <svg class="logo-svg" viewBox="0 0 40 40">
+        <defs>
+          <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#007AFF" />
+            <stop offset="100%" stop-color="#AF52DE" />
+          </linearGradient>
+        </defs>
+        <circle cx="20" cy="20" r="18" stroke="url(#logo-grad)" stroke-width="3" />
+        <path d="M20 10 L28 26 L20 22 L12 26 Z" fill="url(#logo-grad)" />
+      </svg>
+      <span class="logo-text">VIBETOURS</span>
+    </a>
+
+    <!-- Language Selector -->
+    <div class="lang-switcher">
+      <div class="lang-indicator" id="lang-indicator"></div>
+      <button class="lang-btn active" onclick="setLanguage('es')" id="btn-es">ES</button>
+      <button class="lang-btn" onclick="setLanguage('en')" id="btn-en">EN</button>
+    </div>
+  </header>
+
+  <!-- Main Portal -->
+  <main>
+    <div class="hero">
+      <h1 id="hero-title">Términos & Privacidad</h1>
+      <p id="hero-desc">Conoce cómo protegemos tu información y las pautas que rigen nuestra plataforma para ofrecerte la mejor experiencia.</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-container">
+      <div class="tabs">
+        <div class="tab-indicator" id="tab-indicator"></div>
+        <button class="tab-btn active" onclick="switchTab('terms')" id="tab-btn-terms">Términos de Servicio</button>
+        <button class="tab-btn" onclick="switchTab('privacy')" id="tab-btn-privacy">Política de Privacidad</button>
+      </div>
+    </div>
+
+    <!-- Legal Header Info Card -->
+    <div class="banner-card">
+      <div class="banner-icon">
+        <svg fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+        </svg>
+      </div>
+      <div class="banner-text" id="legal-banner-desc">
+        Tu ubicación y preferencias se usan para personalizar tours, clima, lugares cercanos y eventos.
+      </div>
+    </div>
+
+    <!-- Content Sections Wrapper -->
+    <div class="content-wrapper">
+      
+      <!-- Terms and Conditions Content -->
+      <div class="legal-content active" id="content-terms">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Privacy Policy Content -->
+      <div class="legal-content" id="content-privacy">
+        <!-- Rendered dynamically -->
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-left">
+        &copy; <span id="footer-year">2026</span> VibeTours. <span id="footer-rights">Todos los derechos reservados.</span>
+      </div>
+      <div class="footer-right">
+        <a href="#" class="footer-link" onclick="switchTab('terms'); return false;" id="footer-link-terms">Términos</a>
+        <a href="#" class="footer-link" onclick="switchTab('privacy'); return false;" id="footer-link-privacy">Privacidad</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- SVG Icons Library -->
+  <div style="display: none;">
+    <!-- Icon 1: Accept/Shield -->
+    <svg id="icon-accept" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    <!-- Icon 2: Map/Compass -->
+    <svg id="icon-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+      <line x1="9" y1="3" x2="9" y2="18"/>
+      <line x1="15" y1="6" x2="15" y2="21"/>
+    </svg>
+    <!-- Icon 3: AI/Sparkles -->
+    <svg id="icon-ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.3-6.3l-.7.7M6.7 17.3l-.7.7m12.6 0l-.7-.7M6.7 6.7l-.7-.7N"/>
+      <circle cx="12" cy="12" r="4"/>
+    </svg>
+    <!-- Icon 4: Copyright/Intellectual Property -->
+    <svg id="icon-copyright" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M14.83 9.17a4 4 0 1 0 0 5.66"/>
+    </svg>
+    <!-- Icon 5: Alerts/Liability/Risks -->
+    <svg id="icon-risks" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    <!-- Icon 6: Guidelines/Edit/Pen -->
+    <svg id="icon-guidelines" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+    </svg>
+    <!-- Icon 7: Support/Help/Chat -->
+    <svg id="icon-support" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+    <!-- Icon Privacy 1: Database/Keys -->
+    <svg id="icon-data" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+      <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
+    </svg>
+    <!-- Icon Privacy 2: GPS/Location -->
+    <svg id="icon-gps" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/>
+      <circle cx="12" cy="10" r="3"/>
+    </svg>
+    <!-- Icon Privacy 4: Security/Database -->
+    <svg id="icon-security" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+    <!-- Icon Privacy 5: Group/Shared -->
+    <svg id="icon-shared" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+    <!-- Icon Privacy 6: Analytics/Chart -->
+    <svg id="icon-analytics" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="14"/>
+    </svg>
+    <!-- Icon Privacy 7: Trash/Delete -->
+    <svg id="icon-delete" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    </svg>
+  </div>
+
+  <script>
+    // State management
+    let currentLang = 'es';
+    let currentTab = 'terms';
+
+    // Content translations database
+    const db = {
+      es: {
+        heroTitle: 'Términos & Privacidad',
+        heroDesc: 'Conoce cómo protegemos tu información y las pautas que rigen nuestra plataforma para ofrecerte la mejor experiencia turística.',
+        tabTerms: 'Términos de Servicio',
+        tabPrivacy: 'Política de Privacidad',
+        bannerTerms: 'Al usar VIBETOURS, aceptas estas condiciones. Recomendamos leerlas atentamente antes de planificar un recorrido.',
+        bannerPrivacy: 'Tu ubicación y preferencias se usan para personalizar tours, clima, lugares cercanos y eventos.',
+        footerRights: 'Todos los derechos reservados.',
+        terms: [
+          {
+            icon: 'icon-accept',
+            title: 'Aceptación y Uso de la aplicación',
+            body: 'Al usar VIBETOURS, aceptas estos términos en su totalidad. La app ofrece descubrimiento, creación y recorrido de tours turísticos. El usuario se compromete a usar la app de forma responsable, respetando normativas locales, el medio ambiente y evitando zonas restringidas, propiedades privadas o peligrosas.'
+          },
+          {
+            icon: 'icon-map',
+            title: 'Exactitud de Mapas, Rutas y Precios',
+            body: 'Los mapas, tiempos, distancias, rutas y precios (incluso convertidos a diferentes monedas) son estimaciones referenciales. Pueden existir cierres, cambios de horario, variaciones cambiarias, clima adverso o riesgos. Verifica siempre la información con fuentes oficiales antes de desplazarte o realizar compras.'
+          },
+          {
+            icon: 'icon-ai',
+            title: 'Contenido generado por IA (VibeTour IA)',
+            body: 'Los tours generados por nuestra Inteligencia Artificial son recomendaciones automatizadas basadas en bases de datos turísticas. Aunque nos esforzamos por ofrecer lugares reales y rutas coherentes, VIBETOURS no garantiza su precisión absoluta. El usuario debe validar horarios, accesibilidad y existencia real del lugar.'
+          },
+          {
+            icon: 'icon-copyright',
+            title: 'Propiedad Intelectual y Derechos de Autor',
+            body: 'Todo el contenido original de la app pertenece a VIBETOURS. Al crear y hacer público un tour en nuestra plataforma, nos concedes una licencia no exclusiva para mostrarlo, promocionarlo y adaptarlo dentro del servicio.'
+          },
+          {
+            icon: 'icon-risks',
+            title: 'Responsabilidad del usuario y Riesgos',
+            body: 'El turismo al aire libre implica riesgos inherentes. El usuario es el único responsable de su seguridad, su salud, sus pertenencias y su comportamiento. VIBETOURS no actúa como agencia de viajes ni reemplaza a guías oficiales, autoridades o servicios de emergencia.'
+          },
+          {
+            icon: 'icon-guidelines',
+            title: 'Directrices de Publicación de Tours y Reseñas',
+            body: 'Queda estrictamente prohibido publicar contenido falso, difamatorio, ofensivo, discriminatorio, peligroso, spam o que infrinja derechos de autor o privacidad. VIBETOURS se reserva el derecho de moderar, ocultar o eliminar contenido y suspender cuentas que violen estas reglas.'
+          },
+          {
+            icon: 'icon-support',
+            title: 'Soporte, Reclamos y PQRS',
+            body: 'Todas las peticiones, quejas, reclamos y sugerencias deben canalizarse a través del módulo PQRS integrado en la app. El tiempo objetivo de respuesta es menor a 24 horas hábiles, sujeto a disponibilidad técnica y complejidad del requerimiento.'
+          }
+        ],
+        privacy: [
+          {
+            icon: 'icon-data',
+            title: 'Datos que recopilamos',
+            body: 'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, biografía, preferencias turísticas, favoritos, tours creados, tours realizados, calificación de tours, historial de PQRS, ubicación aproximada y datos técnicos del dispositivo necesarios para operar y optimizar la app.'
+          },
+          {
+            icon: 'icon-gps',
+            title: 'Uso de ubicación y permisos',
+            body: 'La ubicación precisa o aproximada se utiliza para calcular clima local, lugares cercanos, eventos de la zona, progreso durante un tour, distancia restante y recomendaciones en tiempo real. Puedes revocar el permiso desde los ajustes del sistema, aunque algunas funciones dependerán de la ubicación manual.'
+          },
+          {
+            icon: 'icon-ai',
+            title: 'Inteligencia Artificial y Recomendaciones',
+            body: 'Las solicitudes al planificador IA pueden incluir destino, ciudad, país, duración, tipo de tour, idioma y texto libre. Usamos estos datos anónimamente para generar rutas lógicas, descripciones, paradas e imágenes. No compartimos tus datos personales con los proveedores de IA, solo los parámetros de búsqueda.'
+          },
+          {
+            icon: 'icon-security',
+            title: 'Almacenamiento, Seguridad y Sincronización',
+            body: 'Tus datos de cuenta y preferencias (moneda, idioma, logros) se almacenan de manera segura en Supabase con políticas de seguridad de nivel de fila (RLS). La app móvil solo utiliza claves públicas para el acceso, asegurando que tus datos están protegidos contra accesos no autorizados.'
+          },
+          {
+            icon: 'icon-shared',
+            title: 'Contenido compartido y Público',
+            body: 'Si decides publicar tours, dejar comentarios, valoraciones o enviar PQRS, este contenido estará asociado a tu cuenta. Los tours marcados como privados y los borradores no serán visibles para la comunidad.'
+          },
+          {
+            icon: 'icon-analytics',
+            title: 'Terceros y Analíticas',
+            body: 'Podemos compartir datos anonimizados con servicios de analítica para entender cómo se utiliza la aplicación y mejorar nuestros algoritmos de recomendación. Nunca venderemos tus datos a terceros para fines publicitarios.'
+          },
+          {
+            icon: 'icon-delete',
+            title: 'Retención y eliminación de datos',
+            body: 'Conservamos tus datos mientras tu cuenta esté activa o sea necesario para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar una copia de tus datos o su eliminación definitiva a través del módulo de PQRS o contactando a soporte técnico.'
+          }
+        ]
+      },
+      en: {
+        heroTitle: 'Terms & Privacy',
+        heroDesc: 'Understand how we protect your information and the guidelines that govern our platform to offer you the best touring experience.',
+        tabTerms: 'Terms of Service',
+        tabPrivacy: 'Privacy Policy',
+        bannerTerms: 'By using VIBETOURS, you agree to these terms. We recommend reading them carefully before planning a journey.',
+        bannerPrivacy: 'Your location and preferences are used to customize tours, weather, nearby places, and events.',
+        footerRights: 'All rights reserved.',
+        terms: [
+          {
+            icon: 'icon-accept',
+            title: 'Acceptance and Use of the application',
+            body: 'By using VIBETOURS, you accept these terms in their entirety. The app offers discovery, creation and touring of tourist tours. The user agrees to use the app responsibly, respecting local regulations, the environment and avoiding restricted areas, private or dangerous properties.'
+          },
+          {
+            icon: 'icon-map',
+            title: 'Accuracy of Maps, Routes and Prices',
+            body: 'Maps, times, distances, routes and prices (even converted to different currencies) are reference estimates. There may be closures, schedule changes, exchange rate variations, adverse weather or risks. Always verify information with official sources before traveling or making purchases.'
+          },
+          {
+            icon: 'icon-ai',
+            title: 'AI Generated Content (VibeTour AI)',
+            body: 'Tours generated by our Artificial Intelligence are automated recommendations based on tourist databases. Although we strive to offer real places and coherent routes, VIBETOURS does not guarantee its absolute accuracy. The user must validate schedules, accessibility and real existence of the place.'
+          },
+          {
+            icon: 'icon-copyright',
+            title: 'Intellectual Property and Copyright',
+            body: 'All original content of the app belongs to VIBETOURS. By creating and publishing a tour on our platform, you grant us a non-exclusive license to display, promote and adapt it within the service.'
+          },
+          {
+            icon: 'icon-risks',
+            title: 'User Responsibility and Risks',
+            body: 'Outdoor tourism involves inherent risks. The user is solely responsible for their safety, health, belongings and behavior. VIBETOURS does not act as a travel agency nor replaces official guides, authorities or emergency services.'
+          },
+          {
+            icon: 'icon-guidelines',
+            title: 'Tour Publishing and Review Guidelines',
+            body: 'It is strictly prohibited to publish false, defamatory, offensive, discriminatory, dangerous, spam content or that infringes copyrights or privacy. VIBETOURS reserves the right to moderate, hide or remove content and suspend accounts that violate these rules.'
+          },
+          {
+            icon: 'icon-support',
+            title: 'Support, Claims and PQRS',
+            body: 'All petitions, complaints, claims and suggestions must be channeled through the PQRS module integrated in the app. The target response time is less than 24 business hours, subject to technical availability and complexity of the requirement.'
+          }
+        ],
+        privacy: [
+          {
+            icon: 'icon-data',
+            title: 'Data we collect',
+            body: 'We can process email, user identifier, display name, profile picture, biography, tourist preferences, favorites, created tours, completed tours, tour rating, PQRS history, approximate location and technical device data necessary to operate and optimize the app.'
+          },
+          {
+            icon: 'icon-gps',
+            title: 'Use of location and permissions',
+            body: 'Precise or approximate location is used to calculate local weather, nearby places, area events, progress during a tour, remaining distance and real-time recommendations. You can revoke permission from system settings, although some functions will depend on manual location.'
+          },
+          {
+            icon: 'icon-ai',
+            title: 'Artificial Intelligence and Recommendations',
+            body: 'Requests to the AI planner can include destination, city, country, duration, tour type, language and free text. We use these data anonymously to generate logical routes, descriptions, stops and images. We do not share your personal data with AI providers, only search parameters.'
+          },
+          {
+            icon: 'icon-security',
+            title: 'Storage, Security and Synchronization',
+            body: 'Your account data and preferences (currency, language, achievements) are securely stored in Supabase with row-level security (RLS) policies. The mobile app only uses public keys for access, ensuring that your data is protected against unauthorized access.'
+          },
+          {
+            icon: 'icon-shared',
+            title: 'Shared and Public Content',
+            body: 'If you decide to publish tours, leave comments, ratings or send PQRS, this content will be associated with your account. Tours marked as private and drafts will not be visible to the community.'
+          },
+          {
+            icon: 'icon-analytics',
+            title: 'Third parties and Analytics',
+            body: 'We can share anonymized data with analytics services to understand how the application is used and improve our recommendation algorithms. We will never sell your data to third parties for advertising purposes.'
+          },
+          {
+            icon: 'icon-delete',
+            title: 'Data retention and deletion',
+            body: 'We keep your data as long as your account is active or necessary to provide the service, security, support and legal obligations. You can request a copy of your data or its definitive deletion through the PQRS module or by contacting technical support.'
+          }
+        ]
+      }
+    };
+
+    // Initialize content
+    function init() {
+      // Set current year
+      document.getElementById('footer-year').textContent = new Date().getFullYear();
+      
+      // Auto detect user browser language
+      const browserLang = navigator.language || navigator.userLanguage;
+      if (browserLang.startsWith('en')) {
+        setLanguage('en');
+      } else {
+        setLanguage('es');
+      }
+      
+      // Check query params if any
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get('tab');
+      if (tabParam === 'privacy' || tabParam === 'terms') {
+        switchTab(tabParam);
+      } else {
+        renderContent();
+      }
+    }
+
+    // Set Language (es / en)
+    function setLanguage(lang) {
+      if (lang === currentLang) return;
+      currentLang = lang;
+
+      // Update UI elements for language
+      const btnEs = document.getElementById('btn-es');
+      const btnEn = document.getElementById('btn-en');
+      const indicator = document.getElementById('lang-indicator');
+
+      if (lang === 'es') {
+        btnEs.classList.add('active');
+        btnEn.classList.remove('active');
+        indicator.style.transform = 'translateX(0)';
+      } else {
+        btnEs.classList.remove('active');
+        btnEn.classList.add('active');
+        indicator.style.transform = 'translateX(45px)';
+      }
+
+      // Update static translated labels
+      document.getElementById('hero-title').textContent = db[currentLang].heroTitle;
+      document.getElementById('hero-desc').textContent = db[currentLang].heroDesc;
+      document.getElementById('tab-btn-terms').textContent = db[currentLang].tabTerms;
+      document.getElementById('tab-btn-privacy').textContent = db[currentLang].tabPrivacy;
+      document.getElementById('footer-rights').textContent = db[currentLang].footerRights;
+      document.getElementById('footer-link-terms').textContent = lang === 'es' ? 'Términos' : 'Terms';
+      document.getElementById('footer-link-privacy').textContent = lang === 'es' ? 'Privacidad' : 'Privacy';
+
+      // Update banner based on active tab
+      updateBannerText();
+
+      // Render cards
+      renderContent();
+    }
+
+    // Switch Tab (terms / privacy)
+    function switchTab(tab) {
+      if (tab === currentTab) return;
+      currentTab = tab;
+
+      const tabTerms = document.getElementById('tab-btn-terms');
+      const tabPrivacy = document.getElementById('tab-btn-privacy');
+      const indicator = document.getElementById('tab-indicator');
+      const contentTerms = document.getElementById('content-terms');
+      const contentPrivacy = document.getElementById('content-privacy');
+
+      if (tab === 'terms') {
+        tabTerms.classList.add('active');
+        tabPrivacy.classList.remove('active');
+        indicator.style.transform = 'translateX(0)';
+        contentTerms.classList.add('active');
+        contentPrivacy.classList.remove('active');
+      } else {
+        tabTerms.classList.remove('active');
+        tabPrivacy.classList.add('active');
+        indicator.style.transform = 'translateX(100%)';
+        contentTerms.classList.remove('active');
+        contentPrivacy.classList.add('active');
+      }
+
+      // Scroll smoothly to top of content area on mobile
+      if (window.innerWidth <= 768) {
+        document.querySelector('.tabs-container').scrollIntoView({ behavior: 'smooth' });
+      }
+
+      updateBannerText();
+    }
+
+    function updateBannerText() {
+      const bannerText = document.getElementById('legal-banner-desc');
+      if (currentTab === 'terms') {
+        bannerText.textContent = db[currentLang].bannerTerms;
+      } else {
+        bannerText.textContent = db[currentLang].bannerPrivacy;
+      }
+    }
+
+    // Helper to get SVG string from hidden template
+    function getSvgMarkup(iconId) {
+      const svgElement = document.getElementById(iconId);
+      if (svgElement) {
+        return svgElement.outerHTML;
+      }
+      // Fallback default icon
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>`;
+    }
+
+    // Render localized items dynamically
+    function renderContent() {
+      const termsContainer = document.getElementById('content-terms');
+      const privacyContainer = document.getElementById('content-privacy');
+
+      // 1. Render Terms
+      termsContainer.innerHTML = '';
+      db[currentLang].terms.forEach((item) => {
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-icon">
+            ${getSvgMarkup(item.icon)}
+          </div>
+          <div class="card-body">
+            <h3>${item.title}</h3>
+            <p>${item.body}</p>
+          </div>
+        `;
+        termsContainer.appendChild(card);
+      });
+
+      // 2. Render Privacy
+      privacyContainer.innerHTML = '';
+      db[currentLang].privacy.forEach((item) => {
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-icon">
+            ${getSvgMarkup(item.icon)}
+          </div>
+          <div class="card-body">
+            <h3>${item.title}</h3>
+            <p>${item.body}</p>
+          </div>
+        `;
+        privacyContainer.appendChild(card);
+      });
+    }
+
+    // Run init on window load
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
