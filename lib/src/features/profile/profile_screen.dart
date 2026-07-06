@@ -44,6 +44,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.dispose();
   }
 
+  String _getFriendlyError(Object error) {
+    final errStr = error.toString().toLowerCase();
+    if (errStr.contains('socket') || errStr.contains('network') || errStr.contains('failed host lookup') || errStr.contains('clientexception')) {
+      return 'No hay conexión a internet. Por favor, revisa tu red e intenta de nuevo.';
+    }
+    return 'Ocurrió un error inesperado. Intenta más tarde.';
+  }
+
   Future<void> _saveProfile() async {
     await ref.read(authServiceProvider).updateUserProfile(
       bio: _bioController.text,
@@ -84,7 +92,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ..clearSnackBars()
           ..showSnackBar(
             SnackBar(
-              content: Text('Error al procesar la imagen: $e'),
+              content: Text(_getFriendlyError(e)),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -201,15 +209,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           final navigator = Navigator.of(context);
                           final messenger = ScaffoldMessenger.of(context);
                           navigator.pop();
-                          await _saveProfile();
-                          messenger
-                            ..clearSnackBars()
-                            ..showSnackBar(
-                              const SnackBar(
-                                content: Text('Foto de perfil actualizada con éxito.'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
+                          try {
+                            await _saveProfile();
+                            messenger
+                              ..clearSnackBars()
+                              ..showSnackBar(
+                                const SnackBar(
+                                  content: Text('Foto de perfil actualizada con éxito.'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                          } catch (e) {
+                            messenger
+                              ..clearSnackBars()
+                              ..showSnackBar(
+                                SnackBar(
+                                  content: Text(_getFriendlyError(e)),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                          }
                         },
                         style: FilledButton.styleFrom(
                           minimumSize: const Size(0, 50),
@@ -374,12 +393,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             stretch: true,
             backgroundColor: Colors.transparent,
             elevation: 0,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.settings_rounded, color: Colors.white),
-                onPressed: () => context.push('/settings'),
-              ),
-            ],
             flexibleSpace: FlexibleSpaceBar(
               stretchModes: const [
                 StretchMode.zoomBackground,
@@ -586,7 +599,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             ),
                             const SizedBox(width: 8),
                             FilledButton(
-                              onPressed: _saveProfile,
+                              onPressed: () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                try {
+                                  await _saveProfile();
+                                } catch (e) {
+                                  messenger
+                                    ..clearSnackBars()
+                                    ..showSnackBar(
+                                      SnackBar(
+                                        content: Text(_getFriendlyError(e)),
+                                        backgroundColor: Colors.redAccent,
+                                      ),
+                                    );
+                                }
+                              },
                               style: FilledButton.styleFrom(
                                 backgroundColor: AppTheme.primary,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -641,7 +668,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ],
                   ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOutQuad),
                   loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (err, stack) => Text(l10n.errorLoadingStats),
+                  error: (err, stack) => Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.2)),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.wifi_off_rounded, color: Theme.of(context).colorScheme.error, size: 32),
+                        const SizedBox(height: 12),
+                        Text(
+                          _getFriendlyError(err),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(duration: 300.ms),
                 ),
                 const SizedBox(height: 24),
                 

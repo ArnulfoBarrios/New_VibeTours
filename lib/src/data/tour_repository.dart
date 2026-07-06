@@ -26,29 +26,22 @@ class TourRepository {
   );
 
   Future<List<Tour>> getTours() async {
-    for (final apiBaseUrl in AppConfig.apiBaseUrls) {
-      try {
-        final response = await http
-            .get(Uri.parse('$apiBaseUrl/tours'))
-            .timeout(const Duration(seconds: 25));
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          final json = jsonDecode(response.body) as Map<String, dynamic>;
-          final items = json['tours'] is List
-              ? json['tours'] as List<dynamic>
-              : const <dynamic>[];
-          final tours = [
-            for (final item in items.cast<Map<dynamic, dynamic>>())
-              _tourFromDatabaseJson(Map<String, dynamic>.from(item)),
-          ];
-          if (tours.isNotEmpty) {
-            return tours;
-          }
-        }
-      } catch (_) {
-        // Try the next configured base URL.
-      }
+    final client = _requireClient();
+    try {
+      final rows = await client
+          .from('tours')
+          .select('*, tour_stops(*)')
+          .or('is_published.eq.true,moderation_status.eq.approved')
+          .order('rating', ascending: false)
+          .limit(100);
+      return [
+        for (final row in rows)
+          _tourFromDatabaseJson(Map<String, dynamic>.from(row as Map)),
+      ];
+    } catch (e) {
+      debugPrint('Error fetching tours from Supabase: $e');
+      throw Exception('No se pudo establecer conexión con la base de datos para obtener los tours.');
     }
-    throw Exception('No se pudo establecer conexion con el servidor. Por favor, comprueba tu conexion a internet e intenta de nuevo.');
   }
 
   Future<List<Tour>> searchTours({
@@ -76,37 +69,13 @@ class TourRepository {
           _tourFromDatabaseJson(Map<String, dynamic>.from(row)),
       ];
     } catch (e) {
-      debugPrint('RPC failed: $e');
-      for (final apiBaseUrl in AppConfig.apiBaseUrls) {
-        try {
-          debugPrint('Trying HTTP endpoint: $apiBaseUrl/tours/pending');
-          final response = await http
-              .get(Uri.parse('$apiBaseUrl/tours/pending'))
-              .timeout(const Duration(seconds: 20));
-          if (response.statusCode >= 200 && response.statusCode < 300) {
-            final json = jsonDecode(response.body) as Map<String, dynamic>;
-            final items = json['tours'] is List
-                ? json['tours'] as List<dynamic>
-                : const <dynamic>[];
-            debugPrint('HTTP endpoint returned ${items.length} tours');
-            return [
-              for (final item in items)
-                if (item is Map)
-                  _tourFromDatabaseJson(Map<String, dynamic>.from(item)),
-            ];
-          }
-        } catch (e) {
-          debugPrint('HTTP endpoint failed: $e');
-        }
-      }
-      debugPrint('Falling back to direct Supabase query');
+      debugPrint('RPC failed: $e. Falling back to direct Supabase query');
       final rows = await client
           .from('tours')
           .select('*, tour_stops(*)')
           .eq('moderation_status', 'pending')
           .order('created_at', ascending: false)
           .limit(100);
-      debugPrint('Direct query returned ${rows.length} tours');
       return [
         for (final row in rows)
           _tourFromDatabaseJson(Map<String, dynamic>.from(row as Map)),

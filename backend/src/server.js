@@ -44,6 +44,11 @@ app.use((error, req, res, next) => {
   })
 })
 
-app.listen(port, () => {
-  console.log(`VIBETOURS API listening on http://localhost:${port}`)
-})
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(port, () => {
+    console.log(`VIBETOURS API listening on http://localhost:${port}`)
+  })
+}
+
+export default app
+

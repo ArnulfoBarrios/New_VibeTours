@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
@@ -10,36 +11,49 @@ class DiscoveryRepository {
     required double latitude,
     required double longitude,
   }) async {
-    final json = await _get('/discovery/weather', latitude, longitude);
-    if (json == null) return null;
-    final weather = json['weather'] as Map<String, dynamic>? ?? const {};
-    return WeatherSnapshot(
-      locationName: json['locationName']?.toString() ?? 'Tokyo, Japan',
-      temperatureC: _int(weather['temperatureC']),
-      apparentC: _int(weather['apparentC']),
-      humidity: _int(weather['humidity']),
-      windKmh: _int(weather['windKmh']),
-      condition: weather['condition']?.toString() ?? 'Actual',
-      code: _int(weather['code']),
-      isDay: weather['isDay'] != false,
-    );
+    try {
+      final url = Uri.parse(
+        'https://api.open-meteo.com/v1/forecast'
+        '?latitude=$latitude'
+        '&longitude=$longitude'
+        '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m'
+        '&timezone=auto'
+      );
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final current = json['current'] as Map<String, dynamic>? ?? const {};
+        final code = _int(current['weather_code']);
+        final isDay = _int(current['is_day']) == 1;
+        
+        return WeatherSnapshot(
+          locationName: 'Ubicación actual',
+          temperatureC: _int(current['temperature_2m']),
+          apparentC: _int(current['apparent_temperature'] ?? current['temperature_2m']),
+          humidity: _int(current['relative_humidity_2m']),
+          windKmh: _int(current['wind_speed_10m']),
+          condition: _weatherLabel(code, isDay),
+          code: code,
+          isDay: isDay,
+        );
+      }
+    } catch (_) {
+      // Fall through to return null
+    }
+    return null;
   }
 
   Future<List<NearbyPlace>> nearbyPlaces({
     required double latitude,
     required double longitude,
   }) async {
-    final json = await _get('/discovery/nearby', latitude, longitude);
-    final items = json?['places'] as List<dynamic>? ?? const [];
-    if (items.isNotEmpty) {
-      return [
-        for (final item in items.take(12))
-          _nearbyPlaceFromJson(Map<String, dynamic>.from(item as Map)),
-      ];
-    }
     final tomtomPlaces = await _nearbyTomTomPlaces(latitude: latitude, longitude: longitude);
     if (tomtomPlaces.isNotEmpty) {
       return tomtomPlaces;
+    }
+    final overpassPlaces = await _nearbyOverpassPlaces(latitude, longitude);
+    if (overpassPlaces.isNotEmpty) {
+      return overpassPlaces;
     }
     return _fallbackPlaces(latitude: latitude, longitude: longitude);
   }
@@ -51,25 +65,22 @@ class DiscoveryRepository {
     if (tomTomResults.isNotEmpty) {
       return tomTomResults;
     }
-    for (final baseUrl in AppConfig.apiBaseUrls) {
-      try {
-        final uri = Uri.parse(
-          '$baseUrl/discovery/search',
-        ).replace(queryParameters: {'q': trimmed, 'limit': '8'});
-        final response = await http
-            .get(uri)
-            .timeout(const Duration(seconds: 8));
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          final json = jsonDecode(response.body) as Map<String, dynamic>;
-          final items = json['places'] as List<dynamic>? ?? const [];
-          return [
-            for (final item in items.take(8))
-              _nearbyPlaceFromJson(Map<String, dynamic>.from(item as Map)),
-          ];
-        }
-      } catch (_) {
-        continue;
+    try {
+      final uri = Uri.parse('https://photon.komoot.io/api/').replace(
+        queryParameters: {'q': trimmed, 'limit': '8'},
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final features = json['features'] as List<dynamic>? ?? const [];
+        return [
+          for (int i = 0; i < features.length; i++)
+            if (features[i] is Map)
+              _nearbyPlaceFromPhotonFeature(Map<String, dynamic>.from(features[i] as Map), i),
+        ];
       }
+    } catch (_) {
+      // Fall through
     }
     return const [];
   }
@@ -78,83 +89,186 @@ class DiscoveryRepository {
     required double latitude,
     required double longitude,
   }) async {
-    final json = await _get('/discovery/events', latitude, longitude);
-    final items = json?['events'] as List<dynamic>? ?? const [];
-    if (items.isEmpty) {
-      return _fallbackEvents(latitude: latitude, longitude: longitude);
-    }
-    return [
-      for (final item in items.take(8))
-        _eventFromJson(Map<String, dynamic>.from(item as Map)),
-    ];
-  }
-
-  Future<Map<String, dynamic>?> _get(
-    String path,
-    double latitude,
-    double longitude,
-  ) async {
-    for (final baseUrl in AppConfig.apiBaseUrls) {
-      try {
-        final uri = Uri.parse('$baseUrl$path').replace(
-          queryParameters: {
-            'lat': latitude.toString(),
-            'lng': longitude.toString(),
-          },
-        );
-        final response = await http
-            .get(uri)
-            .timeout(const Duration(seconds: 8));
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          return jsonDecode(response.body) as Map<String, dynamic>;
-        }
-      } catch (_) {
-        continue;
+    try {
+      final places = await nearbyPlaces(latitude: latitude, longitude: longitude);
+      if (places.isNotEmpty) {
+        return [
+          for (int i = 0; i < places.length && i < 8; i++)
+            LocalEvent(
+              id: 'event-$i',
+              title: _eventTitle(i, places[i].name),
+              city: places[i].category,
+              category: const ['Concierto', 'Festival', 'Feria', 'Deportivo', 'Cultural'][i % 5],
+              startsAt: DateTime.now().add(Duration(days: i + 1)),
+              imageUrl: places[i].imageUrl.isNotEmpty ? places[i].imageUrl : _getRandomImageUrlForCategory(places[i].category, places[i].name),
+              location: places[i].location,
+            )
+        ];
       }
+    } catch (_) {
+      // Fall through
     }
-    return null;
+    return _fallbackEvents(latitude: latitude, longitude: longitude);
   }
 
-  NearbyPlace _nearbyPlaceFromJson(Map<String, dynamic> json) {
+  // PRIVATE HELPERS FOR BYPASSING BACKEND
+
+  String _weatherLabel(int code, bool isDay) {
+    if (code == 0) return isDay ? 'Soleado' : 'Despejado';
+    if (const [1, 2, 3].contains(code)) return 'Parcial';
+    if (const [45, 48].contains(code)) return 'Niebla';
+    if (const [51, 53, 55, 56, 57].contains(code)) return 'Llovizna';
+    if (const [61, 63, 65, 66, 67, 80, 81, 82].contains(code)) return 'Lluvia';
+    if (const [71, 73, 75, 77, 85, 86].contains(code)) return 'Nieve';
+    if (const [95, 96, 99].contains(code)) return 'Tormenta';
+    return 'Actual';
+  }
+
+  NearbyPlace _nearbyPlaceFromPhotonFeature(Map<String, dynamic> feature, int index) {
+    final properties = feature['properties'] is Map ? Map<String, dynamic>.from(feature['properties'] as Map) : const <String, dynamic>{};
+    final geometry = feature['geometry'] is Map ? Map<String, dynamic>.from(feature['geometry'] as Map) : const <String, dynamic>{};
+    final coordinates = geometry['coordinates'] is List ? geometry['coordinates'] as List : const [];
+    final name = properties['name']?.toString() ?? properties['city']?.toString() ?? 'Lugar';
+    final typeStr = properties['osm_value']?.toString() ?? properties['type']?.toString() ?? 'place';
+    final lat = coordinates.length > 1 ? _double(coordinates[1]) : 0.0;
+    final lng = coordinates.isNotEmpty ? _double(coordinates[0]) : 0.0;
+    final category = _classifyAttraction(properties);
+    final imageUrl = _getRandomImageUrlForCategory(category, name);
     return NearbyPlace(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? 'Lugar cercano',
-      type: _typeLabel(json['type']?.toString() ?? 'place'),
-      distanceMeters: _int(json['distanceMeters']),
-      location: GeoPoint(
-        latitude: _double(json['latitude']),
-        longitude: _double(json['longitude']),
-      ),
-      imageUrl: json['imageUrl']?.toString() ?? '',
-      thumbnailUrl:
-          json['thumbnailUrl']?.toString() ??
-          json['imageUrl']?.toString() ??
-          '',
-      category:
-          json['category']?.toString() ??
-          _typeLabel(json['type']?.toString() ?? 'place'),
-      rating: _nullableDouble(json['rating']),
-      isOpenNow: _nullableBool(json['isOpenNow']),
-      statusLabel: json['statusLabel']?.toString() ?? 'Horario no disponible',
+      id: 'search-$index',
+      name: name,
+      type: _typeLabel(typeStr),
+      distanceMeters: 0,
+      location: GeoPoint(latitude: lat, longitude: lng),
+      category: category,
+      imageUrl: imageUrl,
+      thumbnailUrl: imageUrl,
+      statusLabel: 'Disponible',
+      isOpenNow: true,
     );
   }
 
-  LocalEvent _eventFromJson(Map<String, dynamic> json) {
-    return LocalEvent(
-      id: json['id']?.toString() ?? 'event',
-      title: json['title']?.toString() ?? 'Evento local',
-      city: json['category']?.toString() ?? 'Cerca de ti',
-      category: json['category']?.toString() ?? 'Local',
-      startsAt:
-          DateTime.tryParse(json['startsAt']?.toString() ?? '') ??
-          DateTime.now().add(const Duration(days: 1)),
-      imageUrl: json['imageUrl']?.toString() ?? '',
-      location: GeoPoint(
-        latitude: _double(json['latitude']),
-        longitude: _double(json['longitude']),
-      ),
-    );
+  Future<List<NearbyPlace>> _nearbyOverpassPlaces(double latitude, double longitude) async {
+    const radius = 4500;
+    final query = '''
+      [out:json][timeout:25];
+      (
+        node(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
+        node(around:$radius,$latitude,$longitude)["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
+        node(around:$radius,$latitude,$longitude)["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
+        node(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve"];
+        way(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
+        way(around:$radius,$latitude,$longitude)["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
+        way(around:$radius,$latitude,$longitude)["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
+        way(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve"];
+      );
+      out center tags 35;
+    ''';
+    try {
+      final response = await http.post(
+        Uri.parse('https://overpass-api.de/api/interpreter'),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'VIBETOURS/1.0 contact=ops@vibetours.app'
+        },
+        body: {'data': query},
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final elements = json['elements'] as List<dynamic>? ?? const [];
+        final List<NearbyPlace> places = [];
+        int idx = 0;
+        for (final element in elements) {
+          if (element is Map) {
+            final tags = element['tags'] is Map ? Map<String, dynamic>.from(element['tags'] as Map) : const <String, dynamic>{};
+            final name = tags['name']?.toString();
+            final lat = _double(element['lat'] ?? (element['center'] as Map?)?['lat']);
+            final lon = _double(element['lon'] ?? (element['center'] as Map?)?['lon']);
+            final typeStr = tags['tourism']?.toString() ?? tags['historic']?.toString() ?? tags['amenity']?.toString() ?? tags['leisure']?.toString() ?? tags['sport']?.toString() ?? tags['natural']?.toString() ?? 'place';
+            if (name == null || lat == 0.0 || lon == 0.0) continue;
+            if (_isAccommodation(typeStr)) continue;
+            
+            final distance = _distanceMeters(latitude, longitude, lat, lon);
+            final category = _classifyAttraction(tags);
+            final imageUrl = _getRandomImageUrlForCategory(category, name);
+            places.add(NearbyPlace(
+              id: 'overpass-${element['id'] ?? idx++}',
+              name: name,
+              type: _typeLabel(typeStr),
+              distanceMeters: distance.round(),
+              location: GeoPoint(latitude: lat, longitude: lon),
+              category: category,
+              imageUrl: imageUrl,
+              thumbnailUrl: imageUrl,
+              statusLabel: 'Abierto',
+              isOpenNow: true,
+            ));
+          }
+        }
+        places.sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
+        return places.toList();
+      }
+    } catch (_) {
+      // Fall through
+    }
+    return const [];
   }
+
+  double _distanceMeters(double lat1, double lon1, double lat2, double lon2) {
+    const radius = 6371000.0;
+    double toRad(double value) => value * 3.141592653589793 / 180.0;
+    final dLat = toRad(lat2 - lat1);
+    final dLon = toRad(lon2 - lon1);
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(toRad(lat1)) * cos(toRad(lat2)) *
+        sin(dLon / 2) * sin(dLon / 2);
+    return 2 * radius * atan2(sqrt(a), sqrt(1 - a));
+  }
+
+  String _classifyAttraction(Map<String, dynamic> tags) {
+    final tourism = tags['tourism']?.toString().toLowerCase() ?? '';
+    final historic = tags['historic']?.toString().toLowerCase() ?? '';
+    final amenity = tags['amenity']?.toString().toLowerCase() ?? '';
+    final leisure = tags['leisure']?.toString().toLowerCase() ?? '';
+    final natural = tags['natural']?.toString().toLowerCase() ?? '';
+    final sport = tags['sport']?.toString().toLowerCase() ?? '';
+
+    if (const ['museum', 'gallery', 'arts_centre'].contains(amenity) || tourism == 'museum') return 'museum';
+    if (const ['monument', 'memorial', 'ruins', 'castle', 'archaeological_site'].contains(historic)) return 'historic';
+    if (const ['attraction', 'viewpoint', 'theme_park', 'zoo', 'aquarium'].contains(tourism)) return tourism;
+    if (amenity == 'marketplace') return 'market';
+    if (const ['sports_centre', 'stadium', 'pitch', 'track', 'fitness_centre'].contains(leisure) || sport.isNotEmpty) return 'sports';
+    if (const ['park', 'garden', 'nature_reserve', 'forest'].contains(leisure) || const ['tree', 'wood', 'grassland', 'beach'].contains(natural)) return 'nature';
+    if (const ['restaurant', 'cafe', 'food_court', 'pub', 'bar', 'nightclub'].contains(amenity)) return amenity;
+    if (const ['cathedral', 'church', 'temple', 'mosque'].contains(historic)) return 'religious';
+    return tourism.isNotEmpty ? tourism : (historic.isNotEmpty ? historic : (amenity.isNotEmpty ? amenity : (leisure.isNotEmpty ? leisure : (natural.isNotEmpty ? natural : 'place'))));
+  }
+
+  bool _isAccommodation(String type) {
+    return const [
+      'hotel',
+      'hostel',
+      'guest_house',
+      'apartment',
+      'motel',
+      'camp_site',
+      'caravan_site',
+      'chalet'
+    ].contains(type.toLowerCase());
+  }
+
+  String _eventTitle(int index, String place) {
+    final titles = [
+      'Noche cultural cerca de $place',
+      'Festival local en $place',
+      'Feria gastronómica de $place',
+      'Recorrido deportivo urbano',
+      'Encuentro artístico y patrimonial'
+    ];
+    return titles[index % titles.length];
+  }
+
+
 
   List<NearbyPlace> _fallbackPlaces({
     required double latitude,
@@ -338,19 +452,6 @@ class DiscoveryRepository {
         : 'Lugar';
   }
 
-  double? _nullableDouble(Object? value) {
-    if (value == null) return null;
-    if (value is num) return value.toDouble();
-    return double.tryParse(value.toString());
-  }
-
-  bool? _nullableBool(Object? value) {
-    if (value is bool) return value;
-    final text = value?.toString().toLowerCase();
-    if (text == 'true') return true;
-    if (text == 'false') return false;
-    return null;
-  }
 
   Future<List<NearbyPlace>> _nearbyTomTomPlaces({
     required double latitude,
