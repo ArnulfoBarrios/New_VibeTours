@@ -786,7 +786,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         iconColor: Colors.blue,
                         title: l10n.termsOfService,
                         onTap: () async {
-                          final url = Uri.parse('https://new-vibe-tours-legal.vercel.app/?tab=terms');
+                          final url = Uri.parse('https://new-vibe-tours-19hp.vercel.app/?tab=terms');
                           try {
                             await launchUrl(url, mode: LaunchMode.externalApplication);
                           } catch (e) {
@@ -799,7 +799,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         iconColor: Colors.blue,
                         title: l10n.privacyPolicy,
                         onTap: () async {
-                          final url = Uri.parse('https://new-vibe-tours-legal.vercel.app/?tab=privacy');
+                          final url = Uri.parse('https://new-vibe-tours-19hp.vercel.app/?tab=privacy');
                           try {
                             await launchUrl(url, mode: LaunchMode.externalApplication);
                           } catch (e) {
