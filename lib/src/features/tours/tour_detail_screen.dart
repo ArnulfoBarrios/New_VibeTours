@@ -565,17 +565,40 @@ class _StopTile extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: CachedNetworkImage(
-              imageUrl: stop.imageUrl,
-              width: 76,
-              height: 76,
-              fit: BoxFit.cover,
-              placeholder: (context, url) =>
-                  const SkeletonBox(width: 76, height: 76),
-              errorWidget: (context, url, error) => TravelImageFallback(
-                title: stop.name,
-                icon: Icons.place_rounded,
-              ),
+            child: Stack(
+              children: [
+                CachedNetworkImage(
+                  imageUrl: stop.imageUrl,
+                  width: 76,
+                  height: 76,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) =>
+                      const SkeletonBox(width: 76, height: 76),
+                  errorWidget: (context, url, error) => TravelImageFallback(
+                    title: stop.name,
+                    icon: Icons.place_rounded,
+                  ),
+                ),
+                if (stop.isFallbackImage)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      color: Colors.black54,
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'Demo',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(width: 12),

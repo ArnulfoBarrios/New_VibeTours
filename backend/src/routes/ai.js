@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import crypto from 'crypto'
 
-import { imageForPlace } from '../services/imageSearch.js'
+import { imageForPlace, imageForPlaceWithStatus } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities } from '../services/osm.js'
 import { planWithOpenAI, extractLocation } from '../services/openai.js'
 import { supabase } from '../services/supabase.js'
@@ -1455,11 +1455,13 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   const description = source.descripcion ?? source.description ?? `${resolvedName} es una parada relevante dentro de la ruta.`
   const durationText = source.duracion_estimada ?? `${source.suggestedMinutes ?? 25} minutos`
   const images = normalizeList(source.imagenes ?? source.images, [])
-  const image = images[0] ?? source.imageUrl ?? await imageForPlace(resolvedName, input.city || input.destination).catch(() => "")
+  const imageStatus = await imageForPlaceWithStatus(resolvedName, input.city || input.destination).catch(() => ({ url: "", isFallback: true }))
+  const image = images[0] ?? source.imageUrl ?? imageStatus.url
   const publicStop = {
     parada: index + 1,
     dia: Number(source.dia ?? 1),
     nombre: resolvedName,
+    isFallbackImage: imageStatus.isFallback && !images[0] && !source.imageUrl,
     descripcion: description,
     duracion_estimada: durationText,
     actividades: normalizeList(source.actividades ?? source.activities, ["Explorar", "Fotografiar"]),

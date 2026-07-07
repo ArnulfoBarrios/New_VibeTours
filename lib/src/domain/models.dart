@@ -137,6 +137,7 @@ class TourStop {
     this.locationInfo = TourLocationInfo.empty,
     this.images = const [],
     this.day = 1,
+    this.isFallbackImage = false,
   });
 
   final String id;
@@ -152,6 +153,7 @@ class TourStop {
   final TourLocationInfo locationInfo;
   final List<String> images;
   final int day;
+  final bool isFallbackImage;
 
   TourStop copyWith({int? order}) => TourStop(
     id: id,
@@ -167,6 +169,7 @@ class TourStop {
     locationInfo: locationInfo,
     images: images,
     day: day,
+    isFallbackImage: isFallbackImage,
   );
 
   Map<String, dynamic> toCreationJson(int index) => {
@@ -180,6 +183,7 @@ class TourStop {
     'consejos': tips,
     'ubicacion': locationInfo.toCreationJson(),
     'imagenes': images.isEmpty ? [if (imageUrl.isNotEmpty) imageUrl] : images,
+    'isFallbackImage': isFallbackImage,
   };
 }
 

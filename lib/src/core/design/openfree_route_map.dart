@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
@@ -179,7 +180,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
       for (final point in widget.points)
         LatLng(point.latitude, point.longitude),
     ];
-    final routePoints = [
+    List<LatLng> routePoints = [
       for (final point in route.geometry)
         LatLng(point.latitude, point.longitude),
     ];
@@ -192,19 +193,70 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
     final currentPoint = currentLocation == null
         ? null
         : LatLng(currentLocation.latitude, currentLocation.longitude);
+        
+    if (widget.routeOverride != null && routePoints.isNotEmpty && currentPoint != null) {
+      int closestIndex = 0;
+      double minDist = double.infinity;
+      for (int i = 0; i < routePoints.length; i++) {
+        final d = _distanceSquared(currentPoint, routePoints[i]);
+        if (d < minDist) {
+          minDist = d;
+          closestIndex = i;
+        }
+      }
+      if (closestIndex > 0) {
+        routePoints = [currentPoint, ...routePoints.skip(closestIndex)];
+      }
+    }
+
     await controller.clearLines();
     await controller.clearCircles();
     await controller.clearSymbols();
     if (routePoints.length > 1) {
-      await controller.addLine(
-        LineOptions(
-          geometry: routePoints,
-          lineColor: _routeColor(route),
-          lineWidth: 6,
-          lineOpacity: 0.96,
-          lineJoin: 'round',
-        ),
+      final lineOptions = LineOptions(
+        geometry: routePoints,
+        lineColor: _routeColor(route),
+        lineWidth: 6,
+        lineOpacity: 0.96,
+        lineJoin: 'round',
       );
+
+      if (widget.routeOverride == null && routePoints.length > 5) {
+        final line = await controller.addLine(
+          LineOptions(
+            geometry: [routePoints[0], routePoints[1]],
+            lineColor: _routeColor(route),
+            lineWidth: 6,
+            lineOpacity: 0.96,
+            lineJoin: 'round',
+          ),
+        );
+        int currentPoints = 2;
+        Timer.periodic(const Duration(milliseconds: 16), (timer) {
+          if (!mounted || currentPoints >= routePoints.length) {
+            timer.cancel();
+            if (mounted && currentPoints < routePoints.length) {
+              controller.updateLine(line, lineOptions);
+            }
+            return;
+          }
+          currentPoints += (routePoints.length / 45).ceil();
+          if (currentPoints > routePoints.length) currentPoints = routePoints.length;
+          
+          controller.updateLine(
+            line,
+            LineOptions(
+              geometry: routePoints.sublist(0, currentPoints),
+              lineColor: _routeColor(route),
+              lineWidth: 6,
+              lineOpacity: 0.96,
+              lineJoin: 'round',
+            ),
+          );
+        });
+      } else {
+        await controller.addLine(lineOptions);
+      }
     }
     for (final maritimeSegment in route.maritimeSegments) {
       final segmentPoints = [
@@ -339,6 +391,12 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
       southwest: LatLng(minLat, minLng),
       northeast: LatLng(maxLat, maxLng),
     );
+  }
+
+  double _distanceSquared(LatLng p1, LatLng p2) {
+    final dLat = p1.latitude - p2.latitude;
+    final dLng = p1.longitude - p2.longitude;
+    return dLat * dLat + dLng * dLng;
   }
 
   String _routeColor(RoadRouteResult route) {

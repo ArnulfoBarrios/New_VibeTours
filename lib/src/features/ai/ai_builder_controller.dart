@@ -130,10 +130,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     );
   }
 
-  Future<void> sendMessage(String text, {String? imagePath, double? lat, double? lon}) async {
+  Future<void> sendMessage(String text, {String? imagePath, double? lat, double? lon, String? displayLabel}) async {
     final userMsg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      text: text,
+      text: displayLabel ?? text,
       type: ChatMessageType.user,
       timestamp: DateTime.now(),
       localImagePath: imagePath,

@@ -157,7 +157,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     }
   }
 
-  void _sendChipMessage(String text) async {
+  void _sendChipMessage(String label, String promptText) async {
     if (_isProcessingAction) return;
     final builderState = ref.read(aiBuilderProvider);
     if (builderState.isLoading || builderState.isBuilding) return;
@@ -189,7 +189,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       // Ignorar error de ubicación
     }
 
-    ref.read(aiBuilderProvider.notifier).sendMessage(text, lat: lat, lon: lon);
+    ref.read(aiBuilderProvider.notifier).sendMessage(promptText, lat: lat, lon: lon, displayLabel: label);
     if (mounted) {
       setState(() {
         _isProcessingAction = false;
@@ -499,10 +499,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _buildSuggestionChip('Explorar ciudades', Icons.public),
-              _buildSuggestionChip('Aventura y naturaleza', Icons.landscape),
-              _buildSuggestionChip('Cultura e historia', Icons.account_balance),
-              _buildSuggestionChip('Playa y relax', Icons.beach_access),
+              _buildSuggestionChip('Explorar ciudades', 'Quiero explorar los puntos más icónicos y famosos de la ciudad, conocer su arquitectura urbana, caminar por sus calles principales y ver sus monumentos más reconocidos mundialmente.', Icons.public),
+              _buildSuggestionChip('Aventura y naturaleza', 'Busco una experiencia que me conecte con la naturaleza, como parques ecológicos, senderos suaves, áreas verdes, miradores o reservas naturales que ofrezcan un ambiente tranquilo.', Icons.landscape),
+              _buildSuggestionChip('Cultura e historia', 'Deseo sumergirme en el patrimonio histórico, visitar museos relevantes, galerías, plazas fundacionales, arquitectura patrimonial y sitios que narren la identidad del lugar.', Icons.account_balance),
+              _buildSuggestionChip('Playa y relax', 'Necesito un tour tranquilo y relajante cerca al agua, como playas principales, malecones, miradores con vista al mar, paseos peatonales, ideal para descansar.', Icons.beach_access),
             ],
           ),
         ).animate().fadeIn(delay: 200.ms),
@@ -510,11 +510,11 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     );
   }
 
-  Widget _buildSuggestionChip(String text, IconData icon) {
+  Widget _buildSuggestionChip(String label, String promptText, IconData icon) {
     return Padding(
       padding: const EdgeInsets.only(right: 8.0, left: 2.0),
       child: GestureDetector(
-        onTap: () => _sendChipMessage(text),
+        onTap: () => _sendChipMessage(label, promptText),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -527,7 +527,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               Icon(icon, color: Colors.blue.shade700),
               const SizedBox(height: 8),
               Text(
-                text,
+                label,
                 style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w600, fontSize: 12),
                 textAlign: TextAlign.center,
               ),

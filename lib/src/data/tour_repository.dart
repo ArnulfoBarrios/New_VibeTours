@@ -524,6 +524,7 @@ class TourRepository {
           30,
         ),
         order: entry.key,
+        isFallbackImage: item['isFallbackImage'] == true,
       );
     }).toList();
     final gallery = _stringList(json['galeria_tour'] ?? json['gallery']);
@@ -654,6 +655,7 @@ class TourRepository {
           30,
         ),
         order: entry.key,
+        isFallbackImage: item['isFallbackImage'] == true,
       );
     }).toList();
     final gallery = _stringList(

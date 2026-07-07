@@ -1,9 +1,14 @@
 export async function imageForPlace(placeName, city) {
+  const result = await imageForPlaceWithStatus(placeName, city)
+  return result.url
+}
+
+export async function imageForPlaceWithStatus(placeName, city) {
   const wiki = await wikimediaImage(placeName)
-  if (wiki) return wiki
+  if (wiki) return { url: wiki, isFallback: false }
   const openverse = await openverseImage(`${placeName} ${city}`)
-  if (openverse) return openverse
-  return curatedImage(`${placeName} ${city} travel`)
+  if (openverse) return { url: openverse, isFallback: false }
+  return { url: curatedImage(`${placeName} ${city} travel`), isFallback: true }
 }
 
 async function wikimediaImage(query) {
