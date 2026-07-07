@@ -365,6 +365,72 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  void _showDeleteAccountConfirmation(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+            SizedBox(width: 8),
+            Expanded(child: Text('Eliminar cuenta')),
+          ],
+        ),
+        content: const Text(
+          'Esta acción es completamente irreversible. Se borrarán todos tus datos personales, tus tours creados, y todas tus configuraciones. ¿Estás absolutamente seguro de que deseas eliminar tu cuenta?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                // Mostrar indicador de carga básico
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const Center(child: CircularProgressIndicator()),
+                );
+                
+                await ref.read(authServiceProvider).deleteAccount();
+                
+                if (context.mounted) {
+                  Navigator.pop(context); // cerrar dialogo de carga
+                  context.go('/login');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Cuenta eliminada con éxito.'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  Navigator.pop(context); // cerrar dialogo de carga
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(_getFriendlyError(e)),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Sí, eliminar cuenta'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authUserProvider).valueOrNull;
@@ -812,30 +878,49 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ).animate().fadeIn(delay: 300.ms, duration: 400.ms).slideY(begin: 0.05, end: 0),
                 
                 const SizedBox(height: 32),
-                Center(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await ref.read(authServiceProvider).signOut();
-                      if (context.mounted) context.go('/login');
-                    },
-                    icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
-                    label: Text(
-                      l10n.logout,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
+                Column(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await ref.read(authServiceProvider).signOut();
+                        if (context.mounted) context.go('/login');
+                      },
+                      icon: const Icon(Icons.logout_rounded, color: Colors.orange, size: 18),
+                      label: Text(
+                        l10n.logout,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
                       ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(180, 48),
-                      side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(220, 48),
+                        side: BorderSide(color: Colors.orange.withValues(alpha: 0.3)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
-                    ),
-                  ),
-                ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
+                    ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: () => _showDeleteAccountConfirmation(context, ref),
+                      icon: const Icon(Icons.person_remove_rounded, color: Colors.redAccent, size: 16),
+                      label: Text(
+                        'Eliminar cuenta',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.redAccent,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(220, 48),
+                      ),
+                    ).animate().fadeIn(delay: 500.ms, duration: 400.ms),
+                  ],
+                ),
               ]),
             ),
           ),

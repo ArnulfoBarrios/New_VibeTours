@@ -11,6 +11,7 @@ import '../../core/design/premium_components.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../shared/location_disclosure_dialog.dart';
 
 class TourDetailScreen extends ConsumerWidget {
   const TourDetailScreen({super.key, required this.tourId});
@@ -60,6 +61,29 @@ class TourDetailScreen extends ConsumerWidget {
                   onPressed: () => context.pop(),
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
+                actions: [
+                  if (tour.ownerId != null && tour.ownerId != ref.watch(authUserProvider).valueOrNull?.id)
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                      onSelected: (value) {
+                        if (value == 'report') {
+                          _showReportDialog(context, ref, tour);
+                        } else if (value == 'block') {
+                          _showBlockDialog(context, ref, tour);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Text('Reportar Tour'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'block',
+                          child: Text('Bloquear Creador'),
+                        ),
+                      ],
+                    ),
+                ],
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
                     fit: StackFit.expand,
@@ -162,10 +186,19 @@ class TourDetailScreen extends ConsumerWidget {
                             child: LiquidButton(
                               label: l10n.startTour,
                               icon: Icons.navigation_rounded,
-                              onPressed: () {
+                              onPressed: () async {
+                                final granted = await checkAndRequestLocationPermission(context, ref);
+                                if (!granted && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Se requiere ubicación para iniciar el tour.')),
+                                  );
+                                  return;
+                                }
                                 ref.read(selectedTourProvider.notifier).state =
                                     tour;
-                                context.push('/live/${tour.id}');
+                                if (context.mounted) {
+                                  context.push('/live/${tour.id}');
+                                }
                               },
                             ),
                           ),
@@ -519,6 +552,105 @@ class TourDetailScreen extends ConsumerWidget {
       mainCategory: tour.mainCategory,
       budget: tour.budget,
       additionalInfo: tour.additionalInfo,
+    );
+  }
+
+  void _showReportDialog(BuildContext context, WidgetRef ref, Tour tour) {
+    String selectedReason = 'Spam';
+    final TextEditingController detailsController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Reportar Tour'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButton<String>(
+                value: selectedReason,
+                isExpanded: true,
+                items: ['Spam', 'Contenido Ofensivo', 'Fraude', 'Violencia', 'Otro']
+                    .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                    .toList(),
+                onChanged: (v) => setState(() => selectedReason = v!),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: detailsController,
+                decoration: const InputDecoration(
+                  labelText: 'Detalles adicionales (opcional)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final nav = Navigator.of(context);
+                final scaffold = ScaffoldMessenger.of(context);
+                try {
+                  await ref.read(moderationRepositoryProvider).reportContent(
+                    tourId: tour.id,
+                    reportedUserId: tour.ownerId,
+                    reason: selectedReason,
+                    details: detailsController.text,
+                  );
+                  nav.pop();
+                  scaffold.showSnackBar(const SnackBar(content: Text('Reporte enviado correctamente.')));
+                } catch (e) {
+                  scaffold.showSnackBar(const SnackBar(content: Text('Error al enviar reporte.')));
+                }
+              },
+              child: const Text('Enviar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showBlockDialog(BuildContext context, WidgetRef ref, Tour tour) {
+    if (tour.ownerId == null) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Bloquear Creador'),
+        content: const Text(
+            'Si bloqueas al creador de este tour, dejarás de ver sus tours y comentarios. ¿Estás seguro?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final nav = Navigator.of(context);
+              final router = GoRouter.of(context);
+              final scaffold = ScaffoldMessenger.of(context);
+              try {
+                await ref.read(blockedUsersProvider.notifier).blockUser(tour.ownerId!);
+                nav.pop();
+                if (router.canPop()) {
+                  router.pop();
+                } else {
+                  router.go('/');
+                }
+                scaffold.showSnackBar(const SnackBar(content: Text('Usuario bloqueado.')));
+              } catch (e) {
+                scaffold.showSnackBar(const SnackBar(content: Text('Error al bloquear usuario.')));
+              }
+            },
+            child: const Text('Bloquear'),
+          ),
+        ],
+      ),
     );
   }
 }

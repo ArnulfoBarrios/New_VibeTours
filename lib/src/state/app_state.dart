@@ -11,6 +11,7 @@ import '../core/services/auth_service.dart';
 import '../core/services/tour_runtime_services.dart';
 import '../data/demo_tours.dart';
 import '../data/discovery_repository.dart';
+import '../data/moderation_repository.dart';
 import 'package:vibetoursapp/src/data/tour_repository.dart';
 import '../domain/models.dart';
 
@@ -50,12 +51,33 @@ final tourRepositoryProvider = Provider<TourRepository>((ref) {
   return TourRepository(client: ref.watch(supabaseClientProvider));
 });
 
+final moderationRepositoryProvider = Provider<ModerationRepository>((ref) {
+  return ModerationRepository(client: ref.watch(supabaseClientProvider));
+});
+
+class BlockedUsersController extends AsyncNotifier<Set<String>> {
+  @override
+  FutureOr<Set<String>> build() async {
+    return ref.watch(moderationRepositoryProvider).getBlockedUsers();
+  }
+
+  Future<void> blockUser(String userId) async {
+    await ref.read(moderationRepositoryProvider).blockUser(userId);
+    final current = state.valueOrNull ?? {};
+    state = AsyncData({...current, userId});
+    ref.invalidate(toursProvider);
+  }
+}
+
+final blockedUsersProvider = AsyncNotifierProvider<BlockedUsersController, Set<String>>(BlockedUsersController.new);
+
 final discoveryRepositoryProvider = Provider<DiscoveryRepository>((ref) {
   return DiscoveryRepository();
 });
 
 final toursProvider = FutureProvider<List<Tour>>((ref) async {
-  return ref.watch(tourRepositoryProvider).getTours();
+  final blockedUsers = await ref.watch(blockedUsersProvider.future);
+  return ref.watch(tourRepositoryProvider).getTours(blockedUsers: blockedUsers);
 });
 
 final recommendedToursProvider = FutureProvider<List<Tour>>((ref) async {
@@ -220,7 +242,7 @@ final voiceGuideProvider = Provider<VoiceGuideService>(
 );
 
 final locationServiceProvider = Provider<LocationService>(
-  (ref) => LocationService(),
+  (ref) => LocationService(ref.watch(sharedPreferencesProvider)),
 );
 
 class TouristProfileController extends AsyncNotifier<TouristProfileV2> {
@@ -856,7 +878,8 @@ double _double(Object? value, double fallback) {
 }
 
 final tourCommentsProvider = FutureProvider.family<List<TourComment>, String>((ref, tourId) async {
-  return ref.watch(tourRepositoryProvider).getTourComments(tourId);
+  final blockedUsers = await ref.watch(blockedUsersProvider.future);
+  return ref.watch(tourRepositoryProvider).getTourComments(tourId, blockedUsers: blockedUsers);
 });
 
 final userRatingsProvider = FutureProvider.family<List<UserTourRating>, String>((ref, userId) async {

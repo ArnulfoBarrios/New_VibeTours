@@ -190,6 +190,7 @@ class TourStop {
 class Tour {
   const Tour({
     required this.id,
+    this.ownerId,
     required this.title,
     required this.country,
     required this.city,
@@ -231,6 +232,7 @@ class Tour {
   });
 
   final String id;
+  final String? ownerId;
   final String title;
   final String country;
   final String city;

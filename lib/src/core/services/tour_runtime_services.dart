@@ -1,10 +1,22 @@
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../domain/models.dart';
 
 class LocationService {
+  LocationService(this._prefs);
+  final SharedPreferences _prefs;
+  
+  static const String _disclosureKey = 'vibetours_location_disclosure_accepted';
+
+  bool get hasAcceptedDisclosure => _prefs.getBool(_disclosureKey) ?? false;
+
+  Future<void> acceptDisclosure() async {
+    await _prefs.setBool(_disclosureKey, true);
+  }
+
   Future<Position?> currentPosition() async {
     final ready = await _ensureLocationReady();
     if (!ready) {
@@ -38,12 +50,21 @@ class LocationService {
   Future<bool> _ensureLocationReady() async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) return false;
+    
+    // Ya NO solicitamos permisos automáticamente aquí. 
+    // Solo comprobamos si existen. Si no, devolvemos false.
+    final permission = await Geolocator.checkPermission();
+    return permission == LocationPermission.always || 
+           permission == LocationPermission.whileInUse;
+  }
+
+  Future<bool> requestPermissionExplicitly() async {
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    return permission != LocationPermission.denied &&
-        permission != LocationPermission.deniedForever;
+    return permission == LocationPermission.always || 
+           permission == LocationPermission.whileInUse;
   }
 }
 

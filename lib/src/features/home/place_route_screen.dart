@@ -8,6 +8,7 @@ import '../../core/design/openfree_route_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../domain/models.dart';
 import '../../state/app_state.dart';
+import '../shared/location_disclosure_dialog.dart';
 
 class PlaceRouteScreen extends ConsumerWidget {
   const PlaceRouteScreen({super.key});
@@ -133,8 +134,16 @@ class PlaceRouteScreen extends ConsumerWidget {
                         child: LiquidButton(
                           label: 'Recalcular',
                           icon: Icons.my_location_rounded,
-                          onPressed: () =>
-                              ref.invalidate(currentPositionProvider),
+                          onPressed: () async {
+                            final granted = await checkAndRequestLocationPermission(context, ref);
+                            if (granted) {
+                              ref.invalidate(currentPositionProvider);
+                            } else if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Se requiere ubicación para esta acción.')),
+                              );
+                            }
+                          },
                         ),
                       ),
                       const SizedBox(width: 10),

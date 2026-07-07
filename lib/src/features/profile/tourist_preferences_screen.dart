@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
 import '../../state/app_state.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../shared/location_disclosure_dialog.dart';
 
 class TouristPreferencesScreen extends ConsumerStatefulWidget {
   const TouristPreferencesScreen({super.key, this.isOnboarding = false});
@@ -418,8 +418,8 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
                 final messenger = ScaffoldMessenger.of(context);
                 final l10n = AppLocalizations.of(context);
                 try {
-                  final permission = await Geolocator.requestPermission();
-                  if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+                  final granted = await checkAndRequestLocationPermission(context, ref);
+                  if (!granted) {
                     messenger.showSnackBar(
                       SnackBar(content: Text(l10n.prefPermissionDenied)),
                     );

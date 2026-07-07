@@ -116,6 +116,16 @@ class AuthService {
     return null;
   }
 
+  Future<void> deleteAccount() async {
+    if (_client == null || _client.auth.currentUser == null) return;
+    try {
+      await _client.rpc('delete_user');
+      await signOut();
+    } catch (e) {
+      throw StateError('Error al eliminar la cuenta: $e');
+    }
+  }
+
   Future<void> signOut() async {
     await _client?.auth.signOut();
   }

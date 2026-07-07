@@ -25,15 +25,22 @@ class TourRepository {
     touristPace: 'balanced',
   );
 
-  Future<List<Tour>> getTours() async {
+  Future<List<Tour>> getTours({Set<String> blockedUsers = const {}}) async {
     final client = _requireClient();
     try {
-      final rows = await client
+      var query = client
           .from('tours')
           .select('*, tour_stops(*)')
-          .or('is_published.eq.true,moderation_status.eq.approved')
+          .or('is_published.eq.true,moderation_status.eq.approved');
+          
+      if (blockedUsers.isNotEmpty) {
+        query = query.not('owner_id', 'in', blockedUsers.toList());
+      }
+      
+      final rows = await query
           .order('rating', ascending: false)
           .limit(100);
+          
       return [
         for (final row in rows)
           _tourFromDatabaseJson(Map<String, dynamic>.from(row as Map)),
@@ -276,14 +283,19 @@ class TourRepository {
     }
   }
 
-  Future<List<TourComment>> getTourComments(String tourId) async {
+  Future<List<TourComment>> getTourComments(String tourId, {Set<String> blockedUsers = const {}}) async {
     final client = _requireClient();
     try {
-      final rows = await client
+      var query = client
           .from('tour_comments')
           .select('*')
-          .eq('tour_id', tourId)
-          .order('created_at', ascending: false);
+          .eq('tour_id', tourId);
+          
+      if (blockedUsers.isNotEmpty) {
+        query = query.not('user_id', 'in', blockedUsers.toList());
+      }
+      
+      final rows = await query.order('created_at', ascending: false);
       
       final comments = <TourComment>[];
       for (final row in (rows as List)) {
@@ -532,6 +544,7 @@ class TourRepository {
       id:
           json['id']?.toString() ??
           'ai-${DateTime.now().millisecondsSinceEpoch}',
+      ownerId: json['owner_id']?.toString(),
       title:
           json['nombre_tour']?.toString() ??
           json['title']?.toString() ??
@@ -674,6 +687,7 @@ class TourRepository {
       id:
           json['id']?.toString() ??
           'db-${DateTime.now().microsecondsSinceEpoch}',
+      ownerId: json['owner_id']?.toString() ?? source['owner_id']?.toString(),
       title:
           source['nombre_tour']?.toString() ??
           json['title']?.toString() ??
