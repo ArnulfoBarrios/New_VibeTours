@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VibeTours - Legal & Privacy</title>
-  <meta name="description" content="Términos de Servicio y Política de Privacidad de la aplicación VibeTours. Conoce cómo protegemos tus datos y las condiciones de uso.">
-  <link rel="icon" type="image/png" href="../../assets/logo_light.png" error="this.style.display='none'">
+  <title>VibeTours - Términos & Privacidad</title>
+  <meta name="description" content="Términos de Servicio y Política de Privacidad de la aplicación VibeTours. Conoce en detalle tus derechos y obligaciones en nuestra plataforma.">
+  <link rel="icon" type="image/png" href="../images/logo_light.png">
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   
   <style>
-    /* Reset & CSS variables */
+    /* Reset & CSS variables (Minimalismo Plano Claro: Blanco y Azul) */
     * {
       margin: 0;
       padding: 0;
@@ -24,275 +24,180 @@
       --primary-deep: #0056B3;
       --indigo: #5856D6;
       --violet: #AF52DE;
-      --bg-dark: #090B10;
-      --glass-bg: rgba(30, 36, 51, 0.45);
-      --glass-border: rgba(255, 255, 255, 0.08);
-      --text-main: rgba(255, 255, 255, 0.95);
-      --text-muted: rgba(255, 255, 255, 0.70);
-      --text-dimmed: rgba(255, 255, 255, 0.50);
+      --text-main: #1E293B;
+      --text-muted: #334155;
+      --text-dimmed: #64748B;
       --font-family: 'Outfit', sans-serif;
-      --transition-speed: 0.3s;
+      --transition-speed: 0.25s;
     }
 
     body {
       font-family: var(--font-family);
-      background-color: var(--bg-dark);
+      background-color: #ffffff;
       color: var(--text-main);
       min-height: 100vh;
-      overflow-x: hidden;
       display: flex;
       flex-direction: column;
-      position: relative;
-      line-height: 1.6;
+      line-height: 1.65;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Ambient animated backgrounds */
-    .aurora-bg {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: -1;
-      overflow: hidden;
-      pointer-events: none;
-    }
-
-    .aurora-sphere {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(130px);
-      opacity: 0.15;
-      mix-blend-mode: screen;
-      animation: float 20s infinite alternate ease-in-out;
-    }
-
-    .sphere-1 {
-      top: -10%;
-      left: -10%;
-      width: 50vw;
-      height: 50vw;
-      background: radial-gradient(circle, var(--primary) 0%, transparent 80%);
-      animation-duration: 25s;
-    }
-
-    .sphere-2 {
-      bottom: -10%;
-      right: -10%;
-      width: 60vw;
-      height: 60vw;
-      background: radial-gradient(circle, var(--violet) 0%, transparent 80%);
-      animation-duration: 30s;
-      animation-delay: -5s;
-    }
-
-    .sphere-3 {
-      top: 40%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 40vw;
-      height: 40vw;
-      background: radial-gradient(circle, var(--indigo) 0%, transparent 80%);
-      opacity: 0.08;
-      animation-duration: 22s;
-      animation-delay: -10s;
-    }
-
-    @keyframes float {
-      0% {
-        transform: translate(0, 0) scale(1);
-      }
-      50% {
-        transform: translate(5%, 8%) scale(1.1);
-      }
-      100% {
-        transform: translate(-5%, -5%) scale(0.9);
-      }
-    }
-
-    /* Header & Navigation */
+    /* Minimalist Navbar (Estilo Vibeloop) */
     header {
       width: 100%;
-      padding: 1.5rem 2rem;
-      max-width: 1200px;
+      background: #ffffff;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-container {
+      max-width: 1000px;
       margin: 0 auto;
+      padding: 1rem 1.5rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      z-index: 10;
     }
 
     .logo-container {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.6rem;
       text-decoration: none;
     }
 
-    .logo-svg {
-      width: 38px;
-      height: 38px;
-      fill: none;
+    .logo-img {
+      height: 28px;
+      width: auto;
+      object-fit: contain;
     }
 
     .logo-text {
-      font-size: 1.5rem;
+      font-size: 1.15rem;
       font-weight: 800;
-      letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #FFF 30%, var(--primary) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      letter-spacing: 0.8px;
+      color: #091E42;
     }
 
-    /* Language Switcher */
-    .lang-switcher {
+    .nav-right {
       display: flex;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--glass-border);
-      border-radius: 30px;
-      padding: 3px;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .nav-link {
+      background: transparent;
+      border: none;
+      color: var(--text-dimmed);
+      font-family: var(--font-family);
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color var(--transition-speed);
+      padding: 4px 0;
       position: relative;
+    }
+
+    .nav-link:hover {
+      color: var(--primary);
+    }
+
+    .nav-link.active {
+      color: #000000;
+      font-weight: 600;
+    }
+
+    /* Selector de Idioma Minimalista */
+    .lang-selector {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      border-left: 1px solid rgba(0, 0, 0, 0.12);
+      padding-left: 1.2rem;
     }
 
     .lang-btn {
       background: transparent;
       border: none;
       color: var(--text-dimmed);
-      padding: 6px 14px;
       font-family: var(--font-family);
       font-size: 0.85rem;
       font-weight: 600;
       cursor: pointer;
-      border-radius: 20px;
       transition: color var(--transition-speed);
-      z-index: 2;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .lang-btn:hover {
+      color: var(--primary);
     }
 
     .lang-btn.active {
-      color: #fff;
+      color: var(--primary);
+      background: rgba(0, 122, 255, 0.08);
     }
 
-    .lang-indicator {
-      position: absolute;
-      top: 3px;
-      bottom: 3px;
-      left: 3px;
-      width: 42px;
-      background: var(--primary);
-      border-radius: 20px;
-      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 1;
-      box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+    .lang-sep {
+      color: rgba(0, 0, 0, 0.15);
+      font-size: 0.8rem;
+      user-select: none;
     }
 
-    /* Main Container */
+    /* Main Container (Scroll Plano) */
     main {
       flex: 1;
       width: 100%;
-      max-width: 1000px;
+      max-width: 800px;
       margin: 0 auto;
-      padding: 1rem 1.5rem 4rem 1.5rem;
-      z-index: 5;
+      padding: 3rem 1.5rem 5rem 1.5rem;
     }
 
-    .hero {
-      text-align: center;
-      margin-bottom: 2.5rem;
+    /* Title Section */
+    .legal-header {
+      margin-bottom: 2rem;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      padding-bottom: 1.5rem;
     }
 
-    .hero h1 {
+    .title-gradient {
       font-size: 2.5rem;
       font-weight: 800;
-      letter-spacing: -1px;
-      margin-bottom: 0.5rem;
-      line-height: 1.2;
+      letter-spacing: -0.8px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--violet) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.4rem;
     }
 
-    .hero p {
-      color: var(--text-muted);
-      font-size: 1.1rem;
-      max-width: 600px;
-      margin: 0 auto;
-      font-weight: 400;
+    .meta-info {
+      font-size: 0.88rem;
+      color: var(--text-dimmed);
     }
 
-    /* Tab navigation */
-    .tabs-container {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 2.5rem;
-    }
-
-    .tabs {
-      display: flex;
-      background: var(--glass-bg);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid var(--glass-border);
-      border-radius: 40px;
-      padding: 5px;
-      position: relative;
-      width: 100%;
-      max-width: 520px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    }
-
-    .tab-btn {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      padding: 14px 20px;
-      font-family: var(--font-family);
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-      border-radius: 35px;
-      transition: color var(--transition-speed);
-      z-index: 2;
-      text-align: center;
-      white-space: nowrap;
-    }
-
-    .tab-btn.active {
-      color: #fff;
-    }
-
-    .tab-indicator {
-      position: absolute;
-      top: 5px;
-      bottom: 5px;
-      left: 5px;
-      width: calc(50% - 5px);
-      background: linear-gradient(135deg, var(--primary) 0%, var(--indigo) 100%);
-      border-radius: 35px;
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 1;
-      box-shadow: 0 4px 20px rgba(88, 86, 214, 0.25);
-    }
-
-    /* Content Cards */
-    .content-wrapper {
-      position: relative;
-      min-height: 400px;
-    }
-
-    .legal-content {
+    /* Legal View Containers */
+    .legal-view {
       display: none;
       flex-direction: column;
-      gap: 1.25rem;
       animation: fadeIn var(--transition-speed) forwards;
     }
 
-    .legal-content.active {
+    .legal-view.active {
       display: flex;
     }
 
     @keyframes fadeIn {
       from {
         opacity: 0;
-        transform: translateY(15px);
+        transform: translateY(10px);
       }
       to {
         opacity: 1;
@@ -300,124 +205,152 @@
       }
     }
 
-    /* Glass card style */
-    .card {
-      background: var(--glass-bg);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--glass-border);
-      border-radius: 24px;
-      padding: 1.75rem;
-      display: flex;
-      gap: 1.25rem;
-      align-items: flex-start;
-      transition: transform var(--transition-speed), border-color var(--transition-speed), box-shadow var(--transition-speed);
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+    /* Vista de Inicio (Home) */
+    .home-hero {
+      text-align: center;
+      margin-bottom: 3.5rem;
     }
 
-    .card:hover {
-      transform: translateY(-2px);
-      border-color: rgba(255, 255, 255, 0.15);
-      box-shadow: 0 12px 40px 0 rgba(88, 86, 214, 0.1);
+    .home-hero p {
+      color: var(--text-muted);
+      font-size: 1.15rem;
+      max-width: 650px;
+      margin: 1rem auto 0 auto;
+      line-height: 1.7;
     }
 
-    .card-icon {
-      background: rgba(0, 122, 255, 0.12);
-      border-radius: 16px;
-      padding: 12px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      color: var(--primary);
-      flex-shrink: 0;
-      transition: background var(--transition-speed), color var(--transition-speed);
+    .cards-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-top: 1rem;
     }
 
-    .card:hover .card-icon {
-      background: rgba(175, 82, 222, 0.15);
-      color: var(--violet);
-    }
-
-    .card-icon svg {
-      width: 26px;
-      height: 26px;
-    }
-
-    .card-body {
+    .legal-card {
+      background: #ffffff;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 20px;
+      padding: 2.25rem 2rem;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      justify-content: space-between;
+      transition: transform var(--transition-speed), border-color var(--transition-speed), box-shadow var(--transition-speed);
+      cursor: pointer;
+      text-align: left;
     }
 
-    .card-body h3 {
-      font-size: 1.25rem;
+    .legal-card:hover {
+      transform: translateY(-5px);
+      border-color: var(--primary);
+      box-shadow: 0 10px 30px rgba(0, 122, 255, 0.08);
+    }
+
+    .card-content h3 {
+      font-size: 1.45rem;
       font-weight: 700;
-      color: #fff;
-      letter-spacing: -0.2px;
+      letter-spacing: -0.3px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--violet) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.8rem;
     }
 
-    .card-body p {
+    .card-content p {
       color: var(--text-muted);
       font-size: 0.98rem;
-      font-weight: 400;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    .card-action-btn {
+      align-self: flex-start;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--indigo) 100%);
+      color: #ffffff;
+      border: none;
+      padding: 10px 20px;
+      font-family: var(--font-family);
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: 30px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: opacity var(--transition-speed), transform var(--transition-speed);
+    }
+
+    .legal-card:hover .card-action-btn {
+      opacity: 0.95;
+      transform: scale(1.02);
+    }
+
+    /* Flat Legal Sections */
+    .legal-section {
+      padding: 2.25rem 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .legal-section:last-child {
+      border-bottom: none;
+    }
+
+    .section-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--violet) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1rem;
+    }
+
+    .section-body {
+      color: var(--text-muted);
+      font-size: 1.02rem;
+      line-height: 1.7;
+    }
+
+    .section-body p {
+      margin-bottom: 1rem;
       text-align: justify;
     }
 
-    /* Highlight Banner Card */
-    .banner-card {
-      background: linear-gradient(135deg, rgba(0, 122, 255, 0.08) 0%, rgba(175, 82, 222, 0.08) 100%);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 24px;
-      padding: 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 2rem;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+    .section-body p:last-child {
+      margin-bottom: 0;
     }
 
-    .banner-icon {
-      color: var(--primary);
-      flex-shrink: 0;
-      animation: pulse 3s infinite alternate ease-in-out;
+    .section-body strong {
+      color: #000000;
+      font-weight: 600;
     }
 
-    .banner-icon svg {
-      width: 32px;
-      height: 32px;
+    .section-body ul {
+      margin-left: 1.5rem;
+      margin-top: 0.5rem;
+      margin-bottom: 1rem;
+      list-style-type: disc;
     }
 
-    .banner-text {
-      font-size: 1.05rem;
-      font-weight: 500;
-      color: var(--text-main);
+    .section-body li {
+      margin-bottom: 0.4rem;
+      text-align: justify;
     }
 
-    @keyframes pulse {
-      0% {
-        transform: scale(1);
-        filter: drop-shadow(0 0 0px var(--primary));
-      }
-      100% {
-        transform: scale(1.05);
-        filter: drop-shadow(0 0 8px rgba(0, 122, 255, 0.4));
-      }
+    .section-body li::marker {
+      color: var(--text-dimmed);
     }
 
-    /* Footer */
+    /* Footer minimalista */
     footer {
       width: 100%;
-      padding: 2.5rem 2rem;
-      border-top: 1px solid var(--glass-border);
-      background: rgba(9, 11, 16, 0.8);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      padding: 2.5rem 1.5rem;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+      background: #ffffff;
       margin-top: auto;
-      z-index: 10;
     }
 
     .footer-content {
-      max-width: 1200px;
+      max-width: 1000px;
       margin: 0 auto;
       display: flex;
       justify-content: space-between;
@@ -449,35 +382,37 @@
 
     /* Responsive */
     @media (max-width: 768px) {
-      header {
-        padding: 1.25rem 1.5rem;
+      .header-container {
+        padding: 1rem 1.25rem;
       }
 
-      .hero h1 {
-        font-size: 2rem;
+      .nav-right {
+        gap: 1.2rem;
       }
 
-      .hero p {
-        font-size: 1rem;
-      }
-
-      .tabs {
-        max-width: 100%;
-      }
-
-      .tab-btn {
-        padding: 12px 10px;
-        font-size: 0.88rem;
-      }
-
-      .card {
-        flex-direction: column;
-        padding: 1.5rem;
+      .nav-links {
         gap: 1rem;
       }
 
-      .card-icon {
-        align-self: flex-start;
+      .lang-selector {
+        padding-left: 0.8rem;
+      }
+
+      main {
+        padding: 2rem 1.25rem 4rem 1.25rem;
+      }
+
+      .title-gradient {
+        font-size: 2rem;
+      }
+
+      .section-title {
+        font-size: 1.4rem;
+      }
+
+      .cards-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
       }
 
       .footer-content {
@@ -489,79 +424,68 @@
 </head>
 <body>
 
-  <!-- Ambient aurora background shapes -->
-  <div class="aurora-bg">
-    <div class="aurora-sphere sphere-1"></div>
-    <div class="aurora-sphere sphere-2"></div>
-    <div class="aurora-sphere sphere-3"></div>
-  </div>
-
-  <!-- Header -->
+  <!-- Minimalist Navbar -->
   <header>
-    <a href="#" class="logo-container">
-      <svg class="logo-svg" viewBox="0 0 40 40">
-        <defs>
-          <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#007AFF" />
-            <stop offset="100%" stop-color="#AF52DE" />
-          </linearGradient>
-        </defs>
-        <circle cx="20" cy="20" r="18" stroke="url(#logo-grad)" stroke-width="3" />
-        <path d="M20 10 L28 26 L20 22 L12 26 Z" fill="url(#logo-grad)" />
-      </svg>
-      <span class="logo-text">VIBETOURS</span>
-    </a>
+    <div class="header-container">
+      <a href="#" class="logo-container" onclick="switchView('home'); return false;">
+        <img src="../images/logo_light.png" alt="VibeTours Logo" class="logo-img">
+        <span class="logo-text">VIBETOURS</span>
+      </a>
 
-    <!-- Language Selector -->
-    <div class="lang-switcher">
-      <div class="lang-indicator" id="lang-indicator"></div>
-      <button class="lang-btn active" onclick="setLanguage('es')" id="btn-es">ES</button>
-      <button class="lang-btn" onclick="setLanguage('en')" id="btn-en">EN</button>
+      <div class="nav-right">
+        <!-- Navigation Menu -->
+        <nav class="nav-links">
+          <button class="nav-link active" onclick="switchView('home')" id="nav-link-home">Inicio</button>
+          <button class="nav-link" onclick="switchView('terms')" id="nav-link-terms">Términos de servicio</button>
+          <button class="nav-link" onclick="switchView('privacy')" id="nav-link-privacy">Política de privacidad</button>
+        </nav>
+
+        <!-- Language Selector -->
+        <div class="lang-selector">
+          <button class="lang-btn active" onclick="setLanguage('es')" id="btn-es">ES</button>
+          <span class="lang-sep">|</span>
+          <button class="lang-btn" onclick="setLanguage('en')" id="btn-en">EN</button>
+        </div>
+      </div>
     </div>
   </header>
 
-  <!-- Main Portal -->
+  <!-- Main Content (Scroll Plano) -->
   <main>
-    <div class="hero">
-      <h1 id="hero-title">Términos & Privacidad</h1>
-      <p id="hero-desc">Conoce cómo protegemos tu información y las pautas que rigen nuestra plataforma para ofrecerte la mejor experiencia.</p>
-    </div>
-
-    <!-- Tabs -->
-    <div class="tabs-container">
-      <div class="tabs">
-        <div class="tab-indicator" id="tab-indicator"></div>
-        <button class="tab-btn active" onclick="switchTab('terms')" id="tab-btn-terms">Términos de Servicio</button>
-        <button class="tab-btn" onclick="switchTab('privacy')" id="tab-btn-privacy">Política de Privacidad</button>
+    
+    <!-- Home Flat View -->
+    <div class="legal-view active" id="view-home">
+      <div class="home-hero">
+        <h1 class="title-gradient" id="home-main-title">Portal Legal de VibeTours</h1>
+        <p id="home-main-desc">VibeTours es tu compañero de viaje inteligente. Te ayudamos a descubrir el mundo con tours increíbles, planificación impulsada por IA y guías locales apasionados. Selecciona una sección a continuación para leer nuestras pautas legales.</p>
+      </div>
+      <div class="cards-grid" id="home-cards-grid">
+        <!-- Generated dynamically with language support -->
       </div>
     </div>
-
-    <!-- Legal Header Info Card -->
-    <div class="banner-card">
-      <div class="banner-icon">
-        <svg fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-        </svg>
+    
+    <!-- Terms and Conditions Flat View -->
+    <div class="legal-view" id="view-terms">
+      <div class="legal-header">
+        <h1 class="title-gradient" id="terms-main-title">Términos de servicio</h1>
+        <div class="meta-info" id="terms-meta-info">Última actualización: 19 de junio de 2026</div>
       </div>
-      <div class="banner-text" id="legal-banner-desc">
-        Tu ubicación y preferencias se usan para personalizar tours, clima, lugares cercanos y eventos.
-      </div>
-    </div>
-
-    <!-- Content Sections Wrapper -->
-    <div class="content-wrapper">
-      
-      <!-- Terms and Conditions Content -->
-      <div class="legal-content active" id="content-terms">
+      <div id="container-terms">
         <!-- Rendered dynamically -->
       </div>
+    </div>
 
-      <!-- Privacy Policy Content -->
-      <div class="legal-content" id="content-privacy">
+    <!-- Privacy Policy Flat View -->
+    <div class="legal-view" id="view-privacy">
+      <div class="legal-header">
+        <h1 class="title-gradient" id="privacy-main-title">Política de privacidad</h1>
+        <div class="meta-info" id="privacy-meta-info">Última actualización: 19 de junio de 2026</div>
+      </div>
+      <div id="container-privacy">
         <!-- Rendered dynamically -->
       </div>
-
     </div>
+
   </main>
 
   <!-- Footer -->
@@ -571,255 +495,282 @@
         &copy; <span id="footer-year">2026</span> VibeTours. <span id="footer-rights">Todos los derechos reservados.</span>
       </div>
       <div class="footer-right">
-        <a href="#" class="footer-link" onclick="switchTab('terms'); return false;" id="footer-link-terms">Términos</a>
-        <a href="#" class="footer-link" onclick="switchTab('privacy'); return false;" id="footer-link-privacy">Privacidad</a>
+        <a href="#" class="footer-link" onclick="switchView('terms'); return false;" id="footer-link-terms">Términos</a>
+        <a href="#" class="footer-link" onclick="switchView('privacy'); return false;" id="footer-link-privacy">Privacidad</a>
       </div>
     </div>
   </footer>
 
-  <!-- SVG Icons Library -->
-  <div style="display: none;">
-    <!-- Icon 1: Accept/Shield -->
-    <svg id="icon-accept" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-    </svg>
-    <!-- Icon 2: Map/Compass -->
-    <svg id="icon-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
-      <line x1="9" y1="3" x2="9" y2="18"/>
-      <line x1="15" y1="6" x2="15" y2="21"/>
-    </svg>
-    <!-- Icon 3: AI/Sparkles -->
-    <svg id="icon-ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.3-6.3l-.7.7M6.7 17.3l-.7.7m12.6 0l-.7-.7M6.7 6.7l-.7-.7N"/>
-      <circle cx="12" cy="12" r="4"/>
-    </svg>
-    <!-- Icon 4: Copyright/Intellectual Property -->
-    <svg id="icon-copyright" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <path d="M14.83 9.17a4 4 0 1 0 0 5.66"/>
-    </svg>
-    <!-- Icon 5: Alerts/Liability/Risks -->
-    <svg id="icon-risks" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-      <line x1="12" y1="9" x2="12" y2="13"/>
-      <line x1="12" y1="17" x2="12.01" y2="17"/>
-    </svg>
-    <!-- Icon 6: Guidelines/Edit/Pen -->
-    <svg id="icon-guidelines" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 20h9"/>
-      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-    </svg>
-    <!-- Icon 7: Support/Help/Chat -->
-    <svg id="icon-support" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-    </svg>
-    <!-- Icon Privacy 1: Database/Keys -->
-    <svg id="icon-data" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <ellipse cx="12" cy="5" rx="9" ry="3"/>
-      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-      <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
-    </svg>
-    <!-- Icon Privacy 2: GPS/Location -->
-    <svg id="icon-gps" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/>
-      <circle cx="12" cy="10" r="3"/>
-    </svg>
-    <!-- Icon Privacy 4: Security/Database -->
-    <svg id="icon-security" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-    <!-- Icon Privacy 5: Group/Shared -->
-    <svg id="icon-shared" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-      <circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-    <!-- Icon Privacy 6: Analytics/Chart -->
-    <svg id="icon-analytics" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="18" y1="20" x2="18" y2="10"/>
-      <line x1="12" y1="20" x2="12" y2="4"/>
-      <line x1="6" y1="20" x2="6" y2="14"/>
-    </svg>
-    <!-- Icon Privacy 7: Trash/Delete -->
-    <svg id="icon-delete" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="3 6 5 6 21 6"/>
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-    </svg>
-  </div>
-
   <script>
     // State management
     let currentLang = 'es';
-    let currentTab = 'terms';
+    let currentTab = 'home';
 
-    // Content translations database
+    // Content translations database (Specific content adapted for VibeTours)
     const db = {
       es: {
-        heroTitle: 'Términos & Privacidad',
-        heroDesc: 'Conoce cómo protegemos tu información y las pautas que rigen nuestra plataforma para ofrecerte la mejor experiencia turística.',
-        tabTerms: 'Términos de Servicio',
-        tabPrivacy: 'Política de Privacidad',
-        bannerTerms: 'Al usar VIBETOURS, aceptas estas condiciones. Recomendamos leerlas atentamente antes de planificar un recorrido.',
-        bannerPrivacy: 'Tu ubicación y preferencias se usan para personalizar tours, clima, lugares cercanos y eventos.',
+        termsTitle: 'Términos de servicio',
+        privacyTitle: 'Política de privacidad',
+        metaInfo: 'Última actualización: 19 de junio de 2026',
+        navHome: 'Inicio',
+        navTerms: 'Términos de servicio',
+        navPrivacy: 'Política de privacidad',
         footerRights: 'Todos los derechos reservados.',
+        homeTitle: 'Portal Legal de VibeTours',
+        homeDesc: 'VibeTours es tu compañero de viaje inteligente. Te ayudamos a descubrir el mundo con tours increíbles, planificación impulsada por IA y guías locales apasionados. Selecciona una sección a continuación para leer nuestras pautas legales.',
+        cardTermsTitle: 'Términos de servicio',
+        cardTermsDesc: 'Conoce las reglas de uso de la plataforma, el proceso de reserva para tours gratuitos y de pago, cancelaciones, reembolsos y condiciones de pago.',
+        cardTermsBtn: 'Leer términos de servicio',
+        cardPrivacyTitle: 'Política de privacidad',
+        cardPrivacyDesc: 'Aprende cómo protegemos tus datos, el uso de la ubicación GPS para tours en vivo, la interacción con nuestra IA de planificación y tus derechos.',
+        cardPrivacyBtn: 'Leer política de privacidad',
         terms: [
           {
-            icon: 'icon-accept',
-            title: 'Aceptación y Uso de la aplicación',
-            body: 'Al usar VIBETOURS, aceptas estos términos en su totalidad. La app ofrece descubrimiento, creación y recorrido de tours turísticos. El usuario se compromete a usar la app de forma responsable, respetando normativas locales, el medio ambiente y evitando zonas restringidas, propiedades privadas o peligrosas.'
+            title: 'Acuerdo General de Uso',
+            body: '<p>Este acuerdo es entre usted, el usuario de los sitios web y Aplicaciones de VibeTours ("Usted" o "Usuario") y <strong>VIBETOURS</strong> ("nosotros", "nos"). Cuando se mencionan "sitio(s) web(s)", "plataforma(s)" o "aplicación(es)", se supone que incluye todos los sitios de VibeTours, sitios optimizados para móviles y aplicaciones móviles oficiales.</p><p>El uso de la plataforma está condicionado a la aceptación y comprensión de los <strong>Términos de Uso</strong> y la <strong>Política de Privacidad</strong>. Cualquier uso posterior del sitio web y de la aplicación móvil es indicativo de que usted los ha leído y comprendido en su totalidad.</p>'
           },
           {
-            icon: 'icon-map',
-            title: 'Exactitud de Mapas, Rutas y Precios',
-            body: 'Los mapas, tiempos, distancias, rutas y precios (incluso convertidos a diferentes monedas) son estimaciones referenciales. Pueden existir cierres, cambios de horario, variaciones cambiarias, clima adverso o riesgos. Verifica siempre la información con fuentes oficiales antes de desplazarte o realizar compras.'
+            title: 'Definiciones: Proveedor y Tours',
+            body: '<p><strong>"El proveedor del tour"</strong> es el organizador independiente del tour que ofrece servicios (Tours) para reservar o vender a través de la plataforma de VibeTours. VibeTours actúa únicamente como facilitador técnico.</p><p><strong>"Tour"</strong> debe considerarse como que incluye todos los servicios turísticos, de guiado, paradas, valor agregado y otros ofrecidos por el proveedor del tour que se muestran "tal cual" en la aplicación y el sitio web.</p>'
           },
           {
-            icon: 'icon-ai',
-            title: 'Contenido generado por IA (VibeTour IA)',
-            body: 'Los tours generados por nuestra Inteligencia Artificial son recomendaciones automatizadas basadas en bases de datos turísticas. Aunque nos esforzamos por ofrecer lugares reales y rutas coherentes, VIBETOURS no garantiza su precisión absoluta. El usuario debe validar horarios, accesibilidad y existencia real del lugar.'
+            title: 'Capacidad Legal y Responsabilidad',
+            body: '<p>Usted confirma que es <strong>mayor de edad</strong> para usar legalmente la plataforma y los servicios de VibeTours, para celebrar un contrato vinculante y que es el único responsable de todos los usos que usted realice en dichos sitios / servicios, incluso si lo hace en nombre de otra persona.</p><p>Cuando realiza gestiones en nombre de un tercero, confirma que tiene el permiso expreso para proporcionar los datos obligatorios y voluntarios pertenecientes a dicha persona.</p>'
           },
           {
-            icon: 'icon-copyright',
-            title: 'Propiedad Intelectual y Derechos de Autor',
-            body: 'Todo el contenido original de la app pertenece a VIBETOURS. Al crear y hacer público un tour en nuestra plataforma, nos concedes una licencia no exclusiva para mostrarlo, promocionarlo y adaptarlo dentro del servicio.'
+            title: 'Relación Contractual con Proveedores',
+            body: '<p>Usted comprende que VibeTours es una plataforma que facilita la reserva de tours con proveedores de tours independientes y que VibeTours <strong>no es propietario, ni opera ni ofrece tours por sí mismo</strong>.</p><p>Además, comprende que está celebrando un contrato directo con el proveedor del tour y no con VibeTours ni con nuestra infraestructura. El proveedor del tour es el único responsable de cumplir con dicho contrato por su parte y de brindarle el servicio de tour según lo reservado o con una alternativa a su satisfacción cuando corresponda.</p>'
           },
           {
-            icon: 'icon-risks',
-            title: 'Responsabilidad del usuario y Riesgos',
-            body: 'El turismo al aire libre implica riesgos inherentes. El usuario es el único responsable de su seguridad, su salud, sus pertenencias y su comportamiento. VIBETOURS no actúa como agencia de viajes ni reemplaza a guías oficiales, autoridades o servicios de emergencia.'
+            title: 'Precisión de la Información',
+            body: '<p>Es responsabilidad exclusiva del proveedor del tour garantizar la precisión, legitimidad y corrección de todo el contenido y la información relacionada con su tour y servicios tal como se muestra en los sitios web y la aplicación de VibeTours.</p><p>VibeTours no es de ninguna manera responsable de la calidad de cualquier tour o servicio reservado en la plataforma, ni del cumplimiento de los itinerarios.</p>'
           },
           {
-            icon: 'icon-guidelines',
-            title: 'Directrices de Publicación de Tours y Reseñas',
-            body: 'Queda estrictamente prohibido publicar contenido falso, difamatorio, ofensivo, discriminatorio, peligroso, spam o que infrinja derechos de autor o privacidad. VIBETOURS se reserva el derecho de moderar, ocultar o eliminar contenido y suspender cuentas que violen estas reglas.'
+            title: 'Exactitud de Precios y Moneda',
+            body: '<p>La información contenida en esta plataforma no constituye una oferta vinculante para nosotros. Los acuerdos vinculantes con proveedores de actividades requieren una solicitud de reserva a través de la plataforma VibeTours y la aceptación por parte del proveedor de viajes de la solicitud de reserva.</p><p>Todas las conversiones de moneda que se muestran se calculan utilizando un tipo de cambio derivado de un sitio web de conversión de moneda de confianza de un tercero en tiempo real, sirviendo únicamente como estimaciones de referencia.</p>'
           },
           {
-            icon: 'icon-support',
-            title: 'Soporte, Reclamos y PQRS',
-            body: 'Todas las peticiones, quejas, reclamos y sugerencias deben canalizarse a través del módulo PQRS integrado en la app. El tiempo objetivo de respuesta es menor a 24 horas hábiles, sujeto a disponibilidad técnica y complejidad del requerimiento.'
+            title: 'Proceso de Reserva: Tours Gratuitos',
+            body: '<p>VibeTours facilita la reserva de "recorridos gratuitos" (Free Tours) por parte de los proveedores de tours gratuitos. Bajo esta modalidad, usted es libre de pagar lo que crea que valió la experiencia del recorrido directamente al proveedor del tour al final de la actividad, en persona, en el día del tour.</p><p><strong>No está obligado a pagar ningún importe en el momento de la reserva a través de la plataforma.</strong> Los montos pagados de forma directa quedan fuera de la plataforma.</p><p>VibeTours sigue siendo responsable únicamente de todos los montos de las transacciones realizadas directamente en nuestro sitio/app, incluida la facilitación de devoluciones de cargo y reembolsos de dichos montos cuando sea necesario. No somos responsables de otros montos pagados y procesados fuera de nuestro sitio, incluidos pagos directos o costos incurridos durante el servicio por complementos o impuestos locales.</p><p>Una "reserva confirmada" registra su solicitud para unirse al tour. El proveedor se reserva el derecho de rechazar su reserva o negarle el servicio por exceso de reserva o si se ha alcanzado la capacidad máxima del tour a su llegada.</p><p>Donde esté disponible, puede optar por una <strong>reserva garantizada</strong> que requiere inicio de sesión con redes sociales como verificación. Esto le garantiza un lugar en el tour y lo protege en caso de sobrecupo. Algunos proveedores solo aceptan reservas verificadas por redes sociales para validar clientes.</p><p>Recibirá una confirmación de la reserva por correo electrónico poco después de completar el proceso.</p>'
+          },
+          {
+            title: 'Proceso de Reserva: Tours de Pago',
+            body: '<p>La plataforma también facilita la reserva de servicios de "tours pagados" ofrecidos por los proveedores de actividades.</p><ul><li><strong>Pago Total al reservar:</strong> Algunas actividades son posibles de reservar solo si se paga la suma total en el momento de la reserva. Las reservas son gratuitas para cancelar hasta 24 horas antes de la fecha del tour.</li><li><strong>Pagar a la llegada:</strong> Algunas actividades se pueden reservar sin pago previo. En tales casos, debe pagar la suma total a la llegada, en el punto de encuentro de la actividad.</li></ul><p>Usted confirma que toda la información enviada a VibeTours (incluidos los detalles de la tarjeta de crédito / débito) es completa y precisa y que se le han otorgado los permisos y autorizaciones requeridos para usar dicha tarjeta.</p><p>Recibirá una confirmación de reserva por correo electrónico poco después de completar el proceso, siempre que la información sea correcta y haya fondos suficientes.</p>'
+          },
+          {
+            title: 'Políticas de Cancelación Detalladas',
+            body: '<p><strong>Free Tours:</strong> Eres libre de cancelar una reserva en cualquier momento. Te recordamos que canceles las reservas a las que no puedas asistir. Ser reportado como ausente (no-show) de forma recurrente disminuye sus puntos de nivel de cliente y los beneficios o reservas prioritarias que puede disfrutar dentro de la aplicación móvil.</p><p><strong>Tours de Pago:</strong> Cancelación gratuita hasta 24 horas antes del inicio de la actividad. La cancelación tardía o su no llegada (no-show) no es reembolsable.</p>'
+          },
+          {
+            title: 'Políticas de Reembolsos',
+            body: '<p>Se puede aplicar un reembolso a las reservas que se pagan en su totalidad en el momento de la reserva. Los reembolsos se ejecutan automáticamente en el momento de la cancelación o rechazo de una actividad paga.</p><p>En caso de que no reciba un reembolso, comuníquese con <strong>support@vibetours.com</strong> con su número de confirmación de reserva. Si bien nos esforzamos por procesar los reembolsos de la manera más oportuna posible, deje suficiente tiempo para que se realicen, lo que puede depender de factores del banco y la ubicación geográfica.</p>'
+          },
+          {
+            title: 'Condiciones de Pago y Seguridad de Tarjetas',
+            body: '<p>Al hacer una reserva, acepta las políticas de los proveedores de viajes, incluidas todas las políticas de cancelación y no presentación relevantes que se muestran en su perfil. En caso de no cumplir con dichas políticas (incluido el no llegar a la hora acordada o no cancelar en el plazo permitido), autoriza a VibeTours a cobrar a su tarjeta de crédito / débito una cantidad no mayor que el saldo adeudado por el servicio reservado tras la tarifa de servicio.</p><p>Al realizar una reserva, usted permite que VibeTours inicie el pago, o una serie de pagos, en su nombre en relación con los productos comprados que requieran pagos únicos o recurrentes. Usted autoriza a VibeTours a utilizar los datos de su tarjeta guardada para estos fines y para futuras reservas en la plataforma, para un proceso de reserva más sencillo.</p><p>Los datos de la tarjeta de crédito / débito se ingresan en una página segura y se transfieren mediante tecnología <strong>SSL</strong>. El pago se procesa mediante un portal de pago seguro y confiable (Stripe).</p><p>Es su responsabilidad notificar al proveedor del tour directamente para realizar cualquier modificación en su reserva o informarle de cualquier requisito especial que usted o su grupo necesiten.</p><p>La lista de proveedores de viajes no debe considerarse como una recomendación específica de VibeTours sobre la idoneidad del proveedor. VibeTours puede ofrecerle la oportunidad de revisar el servicio posterior al proveedor del tour. Las clasificaciones y calificaciones en nuestros sitios están influenciadas por estos comentarios y serán visibles de forma pública.</p>'
+          },
+          {
+            title: 'Gestión del Perfil del Usuario',
+            body: '<p>Puede crear un perfil de usuario registrado en la plataforma sin realizar una reserva. Cuando realiza una reserva inicial sin haber creado ya un perfil de usuario, se generará automáticamente un perfil para usted y se le otorgará acceso a este perfil para utilizarlo en futuras reservas.</p><p>Su perfil de usuario registrado consta de la información que proporciona, incluidos nombre y apellidos, correo electrónico, fecha de nacimiento, número de teléfono de contacto, nacionalidad, sexo y foto de perfil.</p><p>Retendremos la información personal enviada mientras tenga un perfil de usuario registrado personal en la plataforma. Puede solicitar la eliminación de su perfil de usuario y la información asociada en cualquier momento enviando un correo electrónico a <strong>support@vibetours.com</strong>.</p><p>Todos los datos personales facilitados a VibeTours se tratan, controlan y procesan de acuerdo con las leyes locales y el protocolo <strong>GDPR</strong>. Nunca proporcionaremos sus datos a ningún tercero sin consentimiento. Consulte la Política de Privacidad para obtener más detalles.</p>'
+          },
+          {
+            title: 'Propiedad Intelectual y Licencia',
+            body: '<p>El logotipo de VibeTours y todos las demás marcas comerciales, marcas de servicio, nombres comerciales, logotipos, nombres de dominio y URLs que aparecen en este sitio web y aplicación, registrados o no, son propiedad exclusiva de VibeTours. Nada le otorga ningún derecho o licencia para usar cualquiera de las Marcas sin el permiso expreso por escrito de VibeTours.</p><p>Solo puede usar la aplicación y los sitios de VibeTours para sus fines personales como consumidor. No puede, ni permitir que un tercero, copie, adapte, realice ingeniería inversa, descompile, desmonte, modifique o haga correcciones de errores en la aplicación o en los sitios en su totalidad o en parte.</p><p>Los sitios web de VibeTours y los materiales incluidos, en su totalidad, están protegidos por las leyes de derechos de autor, marcas registradas, derechos de bases de datos y otros derechos de propiedad intelectual bajo leyes y tratados internacionales.</p>'
+          },
+          {
+            title: 'Información Exclusiva, Limitaciones y Ley Aplicable',
+            body: '<p>La información en este sitio web se proporciona "TAL CUAL" sin garantía de ningún tipo, ya sea expresa o implícita. La información aquí contenida es solo para fines informativos y no se garantiza que esté libre de errores. Una vez que abandone este sitio a través de enlaces externos, VibeTours no acepta responsabilidad por el contenido de los mismos.</p><p>VibeTours puede permitir la publicación de contenido de terceros o blogs en la plataforma para facilitar la interacción dinámica y de ninguna manera tiene la intención de actuar como moderador absoluto. VibeTours no se hace responsable de la exactitud de contenido externo.</p><p>Usted acepta indemnizar y mantener a VibeTours, afiliados y empleados, indemnes de cualquier pérdida, responsabilidad, reclamo o demanda (incluidos honorarios legales) que surjan de su uso de la plataforma en contravención de estos términos.</p><p>NI NOSOTROS NI NUESTROS DIRECTORES O EMPLEADOS SEREMOS RESPONSABLES POR PÉRDIDAS INDIRECTAS, DAÑOS ESPECIALES O CONSECUENTES, PÉRDIDA DE DATOS, INGRESOS, BENEFICIOS U OPORTUNIDADES DERIVADOS DEL USO DE ESTE SITIO WEB Y APLICACIÓN.</p><p>Hacemos esfuerzos razonables para garantizar transacciones seguras; sin embargo, no seremos responsables de ningún cargo no autorizado que aparezca en su tarjeta a menos que ocurra como resultado directo de nuestra negligencia comprobada.</p><p>Su uso de la plataforma y este acuerdo se rigen de acuerdo con las leyes y regulaciones aplicables. Cualquier disputa está sujeta a la jurisdicción exclusiva de los tribunales correspondientes. Estos términos están redactados originalmente en inglés y traducidos. En caso de disputas de interpretación sobre las traducciones automáticas, prevalecerá la versión en inglés de los términos.</p>'
           }
         ],
         privacy: [
           {
-            icon: 'icon-data',
-            title: 'Datos que recopilamos',
-            body: 'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, biografía, preferencias turísticas, favoritos, tours creados, tours realizados, calificación de tours, historial de PQRS, ubicación aproximada y datos técnicos del dispositivo necesarios para operar y optimizar la app.'
+            title: 'Responsable del Tratamiento y Datos Generales',
+            body: '<p>Su privacidad es primordial para nosotros. Este documento explica qué datos personales procesamos en nuestros servicios en línea —incluidos nuestro sitio web y aplicaciones—, por qué los procesamos, quién los recibe y los derechos y controles que usted tiene.</p><p><strong>Entidad responsable del tratamiento:</strong> VibeTours. Para consultas de privacidad y protección de datos, contáctenos directamente en nuestro canal de soporte oficial: <strong>support@vibetours.com</strong>.</p>'
           },
           {
-            icon: 'icon-gps',
-            title: 'Uso de ubicación y permisos',
-            body: 'La ubicación precisa o aproximada se utiliza para calcular clima local, lugares cercanos, eventos de la zona, progreso durante un tour, distancia restante y recomendaciones en tiempo real. Puedes revocar el permiso desde los ajustes del sistema, aunque algunas funciones dependerán de la ubicación manual.'
+            title: 'Términos Clave y Responsables',
+            body: '<p><strong>Los datos personales</strong> son cualquier información que pueda identificarle directa o indirectamente (email, nombre, ubicación GPS).</p><p><strong>Elaboración de perfiles:</strong> procesamiento automatizado de datos personales para evaluar ciertos aspectos personales, como preferencias turísticas o comportamiento de viaje.</p><p><strong>Responsable y Encargado del tratamiento:</strong> VibeTours es la responsable del tratamiento; nosotros decidimos por qué y cómo se procesan sus datos. Los encargados del tratamiento son empresas colaboradoras que procesan datos siguiendo nuestras instrucciones documentadas y de conformidad con acuerdos de tratamiento de datos.</p>'
           },
           {
-            icon: 'icon-ai',
-            title: 'Inteligencia Artificial y Recomendaciones',
-            body: 'Las solicitudes al planificador IA pueden incluir destino, ciudad, país, duración, tipo de tour, idioma y texto libre. Usamos estos datos anónimamente para generar rutas lógicas, descripciones, paradas e imágenes. No compartimos tus datos personales con los proveedores de IA, solo los parámetros de búsqueda.'
+            title: 'Datos Personales que Procesamos',
+            body: '<ul><li><strong>Datos de la cuenta:</strong> dirección de correo electrónico, nombre, foto de perfil, proveedor de inicio de sesión (Google, Facebook, Apple o correo electrónico), número de teléfono opcional, idioma, moneda, preferencias de unidades, su ubicación aproximada derivada de su dirección IP (ciudad, país) y un registro de sus opciones de consentimiento.</li><li><strong>Tus conversaciones con la IA:</strong> los mensajes que escribes, las respuestas de la IA y los metadatos relacionados, como la fecha y hora del chat. El chat es de texto libre; comparte solo lo necesario para tu viaje.</li><li><strong>Viajes e itinerarios:</strong> destinos, fechas, presupuestos, preferencias de viaje y cualquier dato del viajero que añadas para las reservas (nombres, fechas de nacimiento, datos de contacto, información de los documentos de viaje). Si proporciona los datos de sus acompañantes, confirma que tiene derecho a compartirlos.</li><li><strong>Documentos de identidad:</strong> si su reserva requiere verificación de identidad, puede subir documentos de identificación oficiales. Estos se almacenan en un área privada con acceso controlado y se utilizan únicamente para gestionar su reserva.</li><li><strong>Datos de pago:</strong> Stripe procesa los pagos. Nunca almacenamos los números de tarjeta; solo conservamos las referencias de los clientes y las transacciones, así como los registros de las transacciones completadas.</li><li><strong>Datos técnicos y de uso:</strong> eventos del producto (páginas y funciones utilizadas), información del dispositivo y del navegador, archivos de registro del servidor que se conservan brevemente por motivos de seguridad, informes de errores y conversaciones de soporte.</li><li><strong>Datos de boletín informativo y marketing:</strong> su dirección de correo electrónico y estado de suscripción, junto con los registros de registro que evidencian su consentimiento.</li></ul>'
           },
           {
-            icon: 'icon-security',
-            title: 'Almacenamiento, Seguridad y Sincronización',
-            body: 'Tus datos de cuenta y preferencias (moneda, idioma, logros) se almacenan de manera segura en Supabase con políticas de seguridad de nivel de fila (RLS). La app móvil solo utiliza claves públicas para el acceso, asegurando que tus datos están protegidos contra accesos no autorizados.'
+            title: 'Uso de Datos de Ubicación (GPS)',
+            body: '<p>Recopilamos datos de ubicación precisos o aproximados tanto de los proveedores de tours como de los usuarios de los tours para permitir el uso de las funciones de nuestra aplicación, incluida la verificación del punto de encuentro o la ubicación de recolección entre los proveedores de tours y los usuarios.</p><p>Los datos de ubicación del viajero (cliente) también se solicitan para el uso de la función <strong>"recorrido en vivo"</strong>, que muestra los recorridos activos en el mapa en la aplicación de un posible usuario, lo que le permite ubicar y unirse a los recorridos que se realizan en tiempo real en su vecindad.</p><p>Usted puede activar o desactivar este permiso en los ajustes de su dispositivo móvil en cualquier momento.</p>'
           },
           {
-            icon: 'icon-shared',
-            title: 'Contenido compartido y Público',
-            body: 'Si decides publicar tours, dejar comentarios, valoraciones o enviar PQRS, este contenido estará asociado a tu cuenta. Los tours marcados como privados y los borradores no serán visibles para la comunidad.'
+            title: 'Tratamiento de Información Confidencial (Art. 9 RGPD)',
+            body: '<p>VibeTours no está diseñada para recopilar categorías especiales de datos personales según el artículo 9 del RGPD, como información que revele la salud, creencias religiosas o filosóficas, origen étnico u orientación sexual. Por favor, no introduzca dicha información en el chat de texto libre a menos que sea realmente necesaria para su viaje.</p><p>Si decide compartirla —por ejemplo, una necesidad de movilidad, una restricción dietética por motivos religiosos o una consideración de salud para una actividad—, usted <strong>consiente explícitamente</strong> que la procesemos con el propósito limitado de organizar su viaje (Art. 9(2)(a) RGPD), y solo procesamos lo necesario para atender su solicitud. No utilizamos datos de categorías especiales para la elaboración de perfiles, análisis ni publicidad, y usted puede retirar su consentimiento o solicitar que los eliminemos en cualquier momento a través de support@vibetours.com.</p>'
           },
           {
-            icon: 'icon-analytics',
-            title: 'Terceros y Analíticas',
-            body: 'Podemos compartir datos anonimizados con servicios de analítica para entender cómo se utiliza la aplicación y mejorar nuestros algoritmos de recomendación. Nunca venderemos tus datos a terceros para fines publicitarios.'
+            title: 'Procesamiento e Interacción con IA',
+            body: '<p>VibeTours es una asistente de viajes con inteligencia artificial. La prestación de este servicio implica el procesamiento mediante IA de la información que compartes. Sus mensajes de chat y el contenido de su viaje son procesados por sistemas de modelos lingüísticos a gran escala (LLMs) gestionados por nosotros y por nuestros proveedores de IA (OpenAI, Google) para generar itinerarios, respuestas y de guiado en tiempo real.</p><p><strong>Transparencia:</strong> al chatear, siempre interactúas con un sistema de IA, no con una persona. Dejamos esto claro en cumplimiento de los requisitos de transparencia de la Ley de IA de la UE.</p><p><strong>Formación:</strong> no utilizamos sus datos personales para entrenar ni perfeccionar nuestros propios modelos de IA. Los proveedores de IA que procesan sus mensajes actúan como encargados del tratamiento de datos, de conformidad con el artículo 28 del RGPD, y no utilizan su contenido para entrenar sus modelos; lo utilizan únicamente para generar sus resultados.</p><p>Podemos obtener información sobre sus preferencias de viaje a partir de lo que comparte para mejorar sugerencias. Esto constituye elaboración de perfiles según el artículo 4, apartado 4, del RGPD; no produce efectos jurídicos ni efectos significativos similares. La IA solo ofrece sugerencias; no se toma ninguna decisión sobre usted automáticamente.</p><p><strong>Precisión:</strong> La IA puede cometer errores. Las respuestas, recomendaciones y detalles de viaje que genera pueden estar incompletos, desactualizados o ser inexactos. Le recomendamos verificar la información importante (precios, disponibilidad, horarios, visados, requisitos de salud) antes de viajar.</p>'
           },
           {
-            icon: 'icon-delete',
-            title: 'Retención y eliminación de datos',
-            body: 'Conservamos tus datos mientras tu cuenta esté activa o sea necesario para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar una copia de tus datos o su eliminación definitiva a través del módulo de PQRS o contactando a soporte técnico.'
+            title: 'Análisis de Conversación y Personalidad Viajera',
+            body: '<p>Además de responderte al instante, analizamos las conversaciones para operar y mejorar la plataforma:</p><ul><li><strong>Calidad del servicio:</strong> utilizamos herramientas de IA para comprender la experiencia de los usuarios con el chat y los temas que surgen, de modo que podamos solucionar problemas. Estos análisis se realizan eliminando los identificadores siempre que sea posible.</li><li><strong>Análisis de personalidad viajera:</strong> utilizamos IA para crear un perfil de personalidad viajera a partir de tus conversaciones y viajes (intereses y preferencias, aventura, cultura, relajación) para personalizar las recomendaciones. Esto constituye un perfilado según el artículo 4(4) del RGPD; no produce efectos legales ni otros efectos significativos para ti, y puedes desactivarlo en cualquier momento mediante la opción "Perfilado de viaje" en la configuración de cookies y consentimiento.</li><li><strong>Priorizamos la ayuda humana:</strong> utilizamos análisis automatizados para estimar qué usuarios se beneficiarían más de la atención personalizada de un experto en viajes, basándose en sus conversaciones e historial de compras. La decisión final de contacto siempre la toma una persona. Puede oponerse a este análisis en cualquier momento escribiendo a support@vibetours.com.</li><li><strong>Llamadas con expertos:</strong> las llamadas con nuestros expertos en viajes pueden grabarse y transcribirse cuando esté permitido, y las herramientas de IA ayudan a nuestro equipo a preparar el seguimiento. Nuestro personal podrá leer las conversaciones relacionadas con sus solicitudes de asistencia o reservas, sujeto a obligaciones de confidencialidad y controles de acceso.</li></ul>'
+          },
+          {
+            title: 'Compartir y Exportar tus Viajes',
+            body: '<p>VibeTours te permite compartir y exportar los viajes que creas. Tú tienes el control de lo que compartes y con quién.</p><p>Cuando compartes un viaje a través de un enlace, cualquier persona que tenga ese enlace puede ver el itinerario que compartiste, incluidos los destinos, las fechas y las notas que contiene; por lo tanto, compártelo solo con personas de confianza y evita agregar detalles personales sensibles a un viaje que tengas intención de compartir.</p><p>Cuando exportas un viaje, por ejemplo, como PDF, el archivo exportado es tuyo para gestionarlo; una vez que sale de la plataforma VibeTours, ya no podemos controlar cómo se almacena o se reenvía.</p><p>Compartir o exportar un viaje no expone los datos de tu cuenta, tus conversaciones ni tu información de pago.</p>'
+          },
+          {
+            title: 'Quiénes Reciben sus Datos (Destinatarios)',
+            body: '<p>Utilizamos proveedores de servicios cuidadosamente seleccionados, vinculados por acuerdos de procesamiento de datos conforme al Art. 28 del RGPD:</p><ul><li><strong>Infraestructura y alojamiento:</strong> Google (autenticación de Firebase, base de datos, almacenamiento en la nube), Vercel (alojamiento).</li><li><strong>Pagos:</strong> Stripe.</li><li><strong>Procesamiento de IA:</strong> OpenAI, Google (Gemini), Anthropic; Pinecone para el almacenamiento seguro de notas generadas por IA. Estos proveedores siguen nuestras instrucciones y no utilizan sus datos para entrenar sus modelos.</li><li><strong>Comunicación y soporte:</strong> Braze, Intercom (chat de soporte), Aircall, Calendly.</li><li><strong>Análisis y publicidad:</strong> Google Analytics, Microsoft (Clarity, Bing), Meta, Pinterest.</li><li><strong>Mapas, contenido y documentos:</strong> Mapbox, Google Maps, Browserless; monitorización de errores mediante Sentry.</li><li><strong>Socios de reserva:</strong> cuando usted realiza una reserva, compartimos los detalles del viaje necesarios para su correcta realización con aerolíneas, hoteles, proveedores de actividades y traslados.</li><li><strong>Audiencias personalizadas (Meta):</strong> con tu consentimiento, compartimos una versión cifrada (SHA-256) de tu dirección de correo electrónico con Meta para mostrarte a ti y a audiencias similares anuncios más relevantes. Puedes revocar este consentimiento en cualquier momento escribiendo a support@vibetours.com.</li><li><strong>Asesores y autoridades:</strong> asesores financieros y legales, y autoridades públicas cuando estamos legalmente obligados.</li></ul>'
+          },
+          {
+            title: 'Transferencias Internacionales de Datos',
+            body: '<p>Muchos de nuestros proveedores procesan datos en Estados Unidos, y nuestra infraestructura de base de datos se ejecuta en Google Cloud en una región de EE. UU. Cuando los datos se transfieren fuera de la UE/EEE, nos basamos en decisiones de adecuación y en las Cláusulas Contractuales Tipo de la UE (artículo 44 y siguientes del RGPD) para garantizar el cumplimiento de seguridad.</p>'
+          },
+          {
+            title: 'Tiempos de Retención de Datos',
+            body: '<p>Los datos de tu cuenta, tus conversaciones y tus viajes se conservan mientras tu cuenta esté activa, para que puedas volver cuando quieras y seguir planificando. Puedes eliminar conversaciones individuales en la aplicación y solicitar la eliminación de tu cuenta y tus datos en cualquier momento.</p><p>Los registros de reservas y pagos se conservan tras la eliminación de la cuenta durante el tiempo que exija la legislación mercantil y fiscal. Los archivos de registro del servidor se conservan por motivos de seguridad durante un breve período (hasta 7 días). Los datos analíticos se rigen por la configuración de retención de las herramientas correspondientes.</p>'
+          },
+          {
+            title: 'Sus Derechos y Controles (RGPD / ARCO)',
+            body: '<p>Puedes ejercer los derechos más importantes directamente en el producto:</p><ul><li><strong>Descarga tus datos:</strong> en tu perfil, la opción "Descargar mis datos" te permite obtener una copia de tus datos personales en formato PDF o JSON legible por máquina (artículos 15 y 20 del RGPD).</li><li><strong>Eliminar cuenta:</strong> en tu perfil, la opción "Eliminar cuenta" borra permanentemente tu cuenta, conversaciones y viajes lo antes posible, normalmente en 24 horas. Puedes descargar tus datos antes de continuar y las comunicaciones de marketing se detendrán de inmediato.</li></ul><p>También dispone de los derechos de acceso (Art. 15), rectificación (Art. 16), supresión (Art. 17), limitación del tratamiento (Art. 18) y portabilidad (Art. 20 del RGPD). Escríbanos a support@vibetours.com para consultas.</p><p><strong>Derecho de oposición (Art. 21 RGPD):</strong> usted puede oponerse en cualquier momento al tratamiento de sus datos basado en nuestros intereses legítimos. Puede presentar una reclamación ante la autoridad de control de protección de datos correspondiente.</p>'
+          },
+          {
+            title: 'Boletín, Cookies y Seguimiento',
+            body: '<p>Enviamos nuestro boletín informativo únicamente con su consentimiento previo (Art. 6(1)(a) RGPD). Cada boletín incluye un enlace para cancelar la suscripción.</p><p>Utilizamos cookies y tecnologías similares (almacenamiento local, identificadores SDK) para mantener las sesiones activas en la app. Las cookies no esenciales corren únicamente tras su aceptación mediante el banner de cookies. Puede modificar sus preferencias en cualquier momento.</p><ul><li><strong>Estrictamente necesario (siempre activo):</strong> Autenticación y sesión (Google Firebase), preferencias de consentimiento de cookies ("cookieConsentV2"), seguridad (Vercel).</li><li><strong>Funcionales:</strong> Chat de soporte (Intercom), contexto.</li><li><strong>Analytics y rendimiento:</strong> Google Analytics 4 (_ga, _gid), Microsoft Clarity (_clck, _clsk), Sentry.</li><li><strong>Publicidad y segmentación:</strong> Píxel de Meta (_fbp), de Pinterest, Microsoft Advertising, Braze.</li><li><strong>Perfilado de viajes:</strong> perfil de viaje personalizado derivado de tus chats y personalidad viajera.</li></ul>'
+          },
+          {
+            title: 'Seguridad y Protección de Menores',
+            body: '<p>De conformidad con la legislación aplicable, aplicamos medidas técnicas y organizativas adecuadas al riesgo, incluyendo el cifrado en tránsito y en reposo (SSL), controles de acceso, almacenamiento privado separado para documentos de identidad, garantías contractuales con encargados del tratamiento y procedimientos para incidentes de datos.</p><p>VibeTours no está dirigida a menores de 16 años y no procesamos sus datos a sabiendas. Actualizaremos esta política a medida que el producto evolucione. Canal de contacto oficial: **support@vibetours.com**.</p>'
           }
         ]
       },
       en: {
-        heroTitle: 'Terms & Privacy',
-        heroDesc: 'Understand how we protect your information and the guidelines that govern our platform to offer you the best touring experience.',
-        tabTerms: 'Terms of Service',
-        tabPrivacy: 'Privacy Policy',
-        bannerTerms: 'By using VIBETOURS, you agree to these terms. We recommend reading them carefully before planning a journey.',
-        bannerPrivacy: 'Your location and preferences are used to customize tours, weather, nearby places, and events.',
+        termsTitle: 'Terms of Service',
+        privacyTitle: 'Privacy Policy',
+        metaInfo: 'Last updated: June 19, 2026',
+        navHome: 'Home',
+        navTerms: 'Terms of service',
+        navPrivacy: 'Privacy policy',
         footerRights: 'All rights reserved.',
+        homeTitle: 'VibeTours Legal Portal',
+        homeDesc: 'VibeTours is your smart travel companion. We help you discover the world with amazing tours, AI-driven planning, and passionate local guides. Below, select a document to learn about our policies and terms of service.',
+        cardTermsTitle: 'Terms of service',
+        cardTermsDesc: 'Learn the platform rules of use, booking processes for free and paid tours, cancellations, refunds, and payment conditions.',
+        cardTermsBtn: 'Read terms of service',
+        cardPrivacyTitle: 'Privacy policy',
+        cardPrivacyDesc: 'Learn how we protect your data, the use of GPS location for live tours, interactions with our planning AI, and your rights.',
+        cardPrivacyBtn: 'Read privacy policy',
         terms: [
           {
-            icon: 'icon-accept',
-            title: 'Acceptance and Use of the application',
-            body: 'By using VIBETOURS, you accept these terms in their entirety. The app offers discovery, creation and touring of tourist tours. The user agrees to use the app responsibly, respecting local regulations, the environment and avoiding restricted areas, private or dangerous properties.'
+            title: 'General Agreement of Use',
+            body: '<p>This agreement is between you, the user of VibeTours websites and Applications, ("You" or "User") and <strong>VIBETOURS</strong> ("we", "us"). When "website(s)", "platform(s)", or "application(s)" are mentioned, they are assumed to include all VibeTours sites, mobile-optimized sites, and official mobile apps.</p><p>Use of the platform is conditioned on the acceptance and understanding of the **Terms of Use** and the **Privacy Policy**. Any subsequent use of the website and mobile app indicates that you have read and understood them in their entirety.</p>'
           },
           {
-            icon: 'icon-map',
-            title: 'Accuracy of Maps, Routes and Prices',
-            body: 'Maps, times, distances, routes and prices (even converted to different currencies) are reference estimates. There may be closures, schedule changes, exchange rate variations, adverse weather or risks. Always verify information with official sources before traveling or making purchases.'
+            title: 'Definitions: Provider and Tours',
+            body: '<p><strong>"The tour provider"</strong> is the independent tour organizer who offers services (Tours) to book or sell through the VibeTours platform. VibeTours acts solely as a technical facilitator.</p><p><strong>"Tour"</strong> shall be considered to include all travel services, guiding, stops, value-added, and others offered by the tour provider and displayed "as is" on the app and website.</p>'
           },
           {
-            icon: 'icon-ai',
-            title: 'AI Generated Content (VibeTour AI)',
-            body: 'Tours generated by our Artificial Intelligence are automated recommendations based on tourist databases. Although we strive to offer real places and coherent routes, VIBETOURS does not guarantee its absolute accuracy. The user must validate schedules, accessibility and real existence of the place.'
+            title: 'Legal Capacity and Responsibility',
+            body: '<p>You confirm that you are of **legal age** to legally use the VibeTours platform and services, to enter into a binding contract, and that you are solely responsible for all uses made by you of such sites/services, even if done on behalf of another person.</p><p>When performing actions on behalf of another, you confirm that you have express permission to provide the mandatory and voluntary data belonging to such other person.</p>'
           },
           {
-            icon: 'icon-copyright',
-            title: 'Intellectual Property and Copyright',
-            body: 'All original content of the app belongs to VIBETOURS. By creating and publishing a tour on our platform, you grant us a non-exclusive license to display, promote and adapt it within the service.'
+            title: 'Contractual Relationship with Providers',
+            body: '<p>You understand that VibeTours is a platform that facilitates booking tours with independent tour providers and that VibeTours **does not own, operate, or offer tours by itself**.</p><p>Furthermore, you understand that by booking you are entering into a contract directly with the tour provider and not with VibeTours or our infrastructure. The tour provider is solely responsible for fulfilling such contract on its part and providing the tour service as booked, or an alternative to your satisfaction when applicable.</p>'
           },
           {
-            icon: 'icon-risks',
-            title: 'User Responsibility and Risks',
-            body: 'Outdoor tourism involves inherent risks. The user is solely responsible for their safety, health, belongings and behavior. VIBETOURS does not act as a travel agency nor replaces official guides, authorities or emergency services.'
+            title: 'Accuracy of Content',
+            body: '<p>It is the sole responsibility of the tour provider to ensure the accuracy, legitimacy, and correctness of all content and information related to their tour and services as displayed on VibeTours platforms.</p><p>VibeTours is in no way responsible for the quality of any tour or service booked on the platform, nor for compliance with itineraries.</p>'
           },
           {
-            icon: 'icon-guidelines',
-            title: 'Tour Publishing and Review Guidelines',
-            body: 'It is strictly prohibited to publish false, defamatory, offensive, discriminatory, dangerous, spam content or that infringes copyrights or privacy. VIBETOURS reserves the right to moderate, hide or remove content and suspend accounts that violate these rules.'
+            title: 'Price Accuracy and Currency',
+            body: '<p>The information contained on this platform does not constitute a binding offer for us. Binding agreements with activity providers require a booking request through the VibeTours platform and the provider\'s acceptance of the booking request.</p><p>All currency conversions displayed are calculated using a real-time exchange rate derived from a trusted third-party currency conversion website, serving solely as reference estimates.</p>'
           },
           {
-            icon: 'icon-support',
-            title: 'Support, Claims and PQRS',
-            body: 'All petitions, complaints, claims and suggestions must be channeled through the PQRS module integrated in the app. The target response time is less than 24 business hours, subject to technical availability and complexity of the requirement.'
+            title: 'Booking Process: Free Tours',
+            body: '<p>VibeTours facilitates the booking of "free tours" offered by free tour providers. Under this modality, you are free to pay what you believe the tour experience was worth directly to the tour provider at the end of the activity, in person, on the day of the tour.</p><p><strong>You are not required to pay any amount at the time of booking through the platform.</strong> All amounts paid directly remain outside the platform.</p><p>VibeTours remains responsible only for the amounts of transactions carried out directly on our site/app, including the facilitation of chargebacks and refunds of such amounts when necessary. We are not responsible for other amounts paid and processed outside our site, including direct payments or costs incurred during the service for add-ons or local taxes.</p><p>A "confirmed booking" registers your request to join the tour. The provider reserves the right to reject your booking or deny service due to overbooking or if the maximum capacity of the tour has been reached upon arrival.</p><p>Where available, you can opt for a **guaranteed booking** which requires logging in with social networks as verification. This guarantees you a spot on the tour and protects you in case of overbooking. Some providers only accept bookings verified by social networks to validate customers.</p><p>You will receive booking confirmation by email shortly after completing the process.</p>'
+          },
+          {
+            title: 'Booking Process: Paid Tours',
+            body: '<p>The platform also facilitates the booking of "paid tour" services offered by activity providers.</p><ul><li><strong>Full Payment at booking:</strong> Some activities can only be booked if the total sum is paid at the time of booking. Bookings are free to cancel up to 24 hours before the tour date.</li><li><strong>Pay upon arrival:</strong> Some activities can be booked without payment at the time of booking. In such cases, you must pay the total sum upon arrival, at the meeting point.</li></ul><p>You confirm that all information submitted by you to VibeTours (including credit/debit card details) is complete and accurate and that you possess the required permissions to use such card.</p><p>You will receive booking confirmation by email shortly after completing the process, provided the info is correct and sufficient funds are available.</p>'
+          },
+          {
+            title: 'Detailed Cancellation Policies',
+            body: '<p><strong>Free Tours:</strong> You are free to cancel a booking at any time. We remind you to cancel bookings you cannot attend. Being reported as absent (no-show) repeatedly decreases your customer tier points and priority booking benefits within the mobile app.</p><p><strong>Paid Tours:</strong> Free cancellation up to 24 hours before the activity starts. Late cancellation or no-show is non-refundable.</p>'
+          },
+          {
+            title: 'Refunds Policies',
+            body: '<p>A refund applies to bookings paid in full at the time of booking. Refunds are executed automatically at the time of cancellation or rejection of a paid activity.</p><p>If you do not receive a refund, contact **support@vibetours.com** with your booking confirmation number. While we strive to process refunds timely, leave sufficient time for refunds to clear depending on your bank and geographic location.</p>'
+          },
+          {
+            title: 'Payment Conditions and Card Security',
+            body: '<p>By making a booking, you accept the tour providers\' policies, including all relevant cancellation and no-show policies. In case of non-compliance (no-show or late cancellation), you authorize VibeTours to charge your card an amount no greater than the balance due for the booked service.</p><p>By making a booking, you allow VibeTours to initiate payments in your name for purchased products. You authorize VibeTours to use your saved card data for these purposes and for future bookings on the platform for a simpler process.</p><p>Credit/debit card data is entered on a secure page and transferred using **SSL** technology. Payments are processed through a secure, trusted gateway (Stripe).</p><p>It is your responsibility to notify the tour provider directly for modifications or special requirements.</p><p>The listing of tour providers is not a recommendation of suitability. VibeTours may offer you the opportunity to review the tour provider, and ratings will be visible publicly.</p>'
+          },
+          {
+            title: 'User Profile Management',
+            body: '<p>You can create a registered profile on the platform without booking. When you make an initial booking without a profile, one is generated automatically for you for future bookings.</p><p>Your registered profile consists of the name, surname, email, birthdate, phone, nationality, gender, and profile picture.</p><p>We retain submitted personal info while you have a registered profile. You can request profile deletion at any time by emailing **support@vibetours.com**.</p><p>All personal data is processed in accordance with local laws and the **GDPR** protocol. We never provide your data to third parties without consent. See the Privacy Policy for details.</p>'
+          },
+          {
+            title: 'Intellectual Property and License',
+            body: '<p>The VibeTours logo and all other trademarks, service marks, domain names, and URLs appearing on this site, registered or not, are the exclusive property of VibeTours. Nothing grants you any right to use them without express written permission.</p><p>You may only use the VibeTours app for personal consumer purposes. You may not copy, adapt, reverse engineer, decompile, disassemble, modify, or make error corrections to the app or platform in whole or in part.</p><p>VibeTours websites and materials are protected by copyright, trademarks, database rights, and other intellectual property rights under international laws.</p>'
+          },
+          {
+            title: 'Exclusive Information, Limitations, and Governing Law',
+            body: '<p>Information on this website is provided "AS IS" without warranty of any kind. The info is for informational purposes and is not guaranteed error-free. Once you leave via external links, VibeTours accepts no liability for their content.</p><p>VibeTours may allow third-party blog posts to facilitate dynamic interaction but does not act as moderator. We are not responsible for the accuracy of external content.</p><p>You agree to indemnify and hold VibeTours and employees harmless from any losses, claims, or demands arising from your use of the platform in violation of these terms.</p><p>WE SHALL NOT BE LIABLE FOR INDIRECT, SPECIAL, OR CONSEQUENTIAL LOSSES, LOSS OF DATA, REVENUES, PROFITS, OR OPPORTUNITIES ARISING FROM THE USE OF THIS PLATFORM.</p><p>We make reasonable efforts for secure transactions; however, we are not liable for unauthorized card charges unless they occur as a direct result of our proven negligence.</p><p>Your use of the platform and this agreement are governed by the laws and regulations applicable. Disputes are subject to the exclusive jurisdiction of the courts. These terms are written in English/Spanish. In case of interpretation disputes, the English version shall prevail.</p>'
           }
         ],
         privacy: [
           {
-            icon: 'icon-data',
-            title: 'Data we collect',
-            body: 'We can process email, user identifier, display name, profile picture, biography, tourist preferences, favorites, created tours, completed tours, tour rating, PQRS history, approximate location and technical device data necessary to operate and optimize the app.'
+            title: 'Data Controller and General Data',
+            body: '<p>Your privacy is paramount to us. This document explains what personal data we process on our online services —including our website and apps—, why we process them, who receives them, and your rights and controls.</p><p><strong>Entity responsible for processing:</strong> VibeTours. For privacy inquiries, contact us directly at our official support channel: **support@vibetours.com**.</p>'
           },
           {
-            icon: 'icon-gps',
-            title: 'Use of location and permissions',
-            body: 'Precise or approximate location is used to calculate local weather, nearby places, area events, progress during a tour, remaining distance and real-time recommendations. You can revoke permission from system settings, although some functions will depend on manual location.'
+            title: 'Key Privacy Terms',
+            body: '<p><strong>Personal data:</strong> any information that can identify you directly or indirectly (email, name, GPS location).</p><p><strong>Profiling:</strong> automated processing of personal data to evaluate travel preferences to customize recommendations.</p><p><strong>Controller and Processor:</strong> VibeTours is the controller; we decide why and how your data is processed. Processors are partner companies processing data following our instructions under data processing agreements.</p>'
           },
           {
-            icon: 'icon-ai',
-            title: 'Artificial Intelligence and Recommendations',
-            body: 'Requests to the AI planner can include destination, city, country, duration, tour type, language and free text. We use these data anonymously to generate logical routes, descriptions, stops and images. We do not share your personal data with AI providers, only search parameters.'
+            title: 'Personal Data We Process',
+            body: '<ul><li><strong>Account Data:</strong> email, name, profile picture, login provider (Google, Facebook, Apple, or email), phone number, language, currency, unit preferences, approximate location (IP), and consent log.</li><li><strong>AI Chat Conversations:</strong> messages you write, AI responses, and metadata (date/time). Chat is free-text; share only what is necessary.</li><li><strong>Trips and Itineraries:</strong> destinations, dates, budgets, travel preferences, and companion details.</li><li><strong>Identity Documents:</strong> upload of official IDs if booking verification requires it. Stored in a private, controlled access area.</li><li><strong>Payment Data:</strong> processed securely by Stripe. We never store card numbers; only customer/transaction references.</li><li><strong>Technical & Usage Data:</strong> product events (pages/features used), device/browser info, server logs (7 days), error reports, support chats.</li><li><strong>Newsletter & Marketing Data:</strong> email address and newsletter consent records.</li></ul>'
           },
           {
-            icon: 'icon-security',
-            title: 'Storage, Security and Synchronization',
-            body: 'Your account data and preferences (currency, language, achievements) are securely stored in Supabase with row-level security (RLS) policies. The mobile app only uses public keys for access, ensuring that your data is protected against unauthorized access.'
+            title: 'Use of Location Data (GPS)',
+            body: '<p>We collect precise or approximate location data from both tour providers and users to enable application features, including meeting point or pick-up location verification.</p><p>Traveler location data is also requested for the **"live tour"** feature, which displays active tours on the map in real-time, allowing users to locate and join tours nearby.</p><p>You can enable or disable this permission in your device settings at any time.</p>'
           },
           {
-            icon: 'icon-shared',
-            title: 'Shared and Public Content',
-            body: 'If you decide to publish tours, leave comments, ratings or send PQRS, this content will be associated with your account. Tours marked as private and drafts will not be visible to the community.'
+            title: 'Processing Sensitive Data (GDPR Art. 9)',
+            body: '<p>VibeTours is not designed to collect special categories of personal data (health, religion, ethnicity, orientation). Please do not write them in the free-text chat unless necessary.</p><p>If you choose to share them —e.g., mobility needs, diet restrictions—, you **explicitly consent** to us processing them for the limited purpose of organizing your trip (Art. 9(2)(a) GDPR). We do not use special category data for profiling or advertising. Revoke consent at support@vibetours.com.</p>'
           },
           {
-            icon: 'icon-analytics',
-            title: 'Third parties and Analytics',
-            body: 'We can share anonymized data with analytics services to understand how the application is used and improve our recommendation algorithms. We will never sell your data to third parties for advertising purposes.'
+            title: 'AI Processing and Interaction',
+            body: '<p>VibeTours features an AI travel assistant. Using it implies AI processing of shared content. Messages and trip content are processed by Large Language Models (LLMs) managed by us and our AI providers (OpenAI, Google) to generate real-time itineraries.</p><p><strong>Transparency:</strong> when chatting, you interact with an AI system, not a human, compliant with EU AI Act transparency rules.</p><p><strong>Training:</strong> we do not use your personal data to train or fine-tune LLMs. AI providers process data as processors under Art. 28 GDPR and do not use content for training.</p><p>We may profile preferences (Art. 4(4) GDPR) from chats to improve suggestions, without legal effects. The AI only offers suggestions; no automated decisions are taken.</p><p><strong>Accuracy:</strong> AI makes mistakes. AI-generated answers can be incomplete, outdated, or inaccurate. Verify important details before booking.</p>'
           },
           {
-            icon: 'icon-delete',
-            title: 'Data retention and deletion',
-            body: 'We keep your data as long as your account is active or necessary to provide the service, security, support and legal obligations. You can request a copy of your data or its definitive deletion through the PQRS module or by contacting technical support.'
+            title: 'Conversation Analysis and Profiling',
+            body: '<p>Besides responding, we analyze conversations to operate and improve the platform:</p><ul><li><strong>Service quality:</strong> AI tools to understand user experience and solve issues (anonymized where possible).</li><li><strong>Travel personality analysis:</strong> AI profiling to customize recommendations. You can disable "Travel Profiling" in cookie settings.</li><li><strong>Human-first priority:</strong> automated analysis to estimate which users need personalized human expert support. Contact decisions are always made by humans. Object to this at support@vibetours.com.</li><li><strong>Expert calls:</strong> calls may be recorded/transcribed. Staff may read chats for support or bookings subject to confidentiality.</li></ul>'
+          },
+          {
+            title: 'Sharing and Exporting Your Trips',
+            body: '<p>VibeTours allows sharing created tours via links. Anyone with the link can view dates and notes; avoid adding sensitive personal details to public tours.</p><p>Exporting to PDF or other external files is the user\'s responsibility; VibeTours cannot control shared files once exported.</p><p>Sharing or exporting does not expose account data, chats, or payment info.</p>'
+          },
+          {
+            title: 'Who Receives Your Data (Recipients)',
+            body: '<p>We share data under strict GDPR Art. 28 processing contracts with:</p><ul><li><strong>Infrastructure & Hosting:</strong> Google (Firebase Auth, database, storage), Vercel (hosting).</li><li><strong>Payments:</strong> Stripe.</li><li><strong>AI Processing:</strong> OpenAI, Google Cloud (Gemini), Pinecone.</li><li><strong>Support & Communications:</strong> Braze, Intercom, Sentry, Mapbox.</li><li><strong>Booking Partners:</strong> airlines, hotels, activity providers.</li><li><strong>Custom Audiences (Meta):</strong> encrypted SHA-256 email sharing with Meta to show relevant ads. Revoke consent at support@vibetours.com.</li><li><strong>Advisors & Authorities:</strong> financial/legal advisors, and public authorities under legal duties.</li></ul>'
+          },
+          {
+            title: 'International Data Transfers',
+            body: '<p>Many of our providers process data in the US, and our database runs on Google Cloud in a US region. When data is transferred outside the EEA, we rely on adequacy decisions and EU Standard Contractual Clauses (GDPR Art. 44) to guarantee safety compliance.</p>'
+          },
+          {
+            title: 'Data Retention Times',
+            body: '<p>Account data, chats, and trips are kept as long as the account is active. Booking/payment logs are retained as required by tax laws. Server logs are kept for up to 7 days. Analytics data is governed by tool settings.</p>'
+          },
+          {
+            title: 'Your Rights and Controls (GDPR / ARCO)',
+            body: '<p>Exercise key rights directly in the product:</p><ul><li><strong>Download my data:</strong> download a copy of personal data in PDF or JSON formats (GDPR Art. 15, 20).</li><li><strong>Delete account:</strong> permanently deletes account, chats, and trips within 24 hours.</li></ul><p>You have rights to Access, Rectification, Erasure, Restriction, and Portability. Write to support@vibetours.com. You can object to processing based on legitimate interests or lodge a complaint with the corresponding protection authority.</p>'
+          },
+          {
+            title: 'Newsletter, Cookies and Tracking',
+            body: '<p>Newsletters are sent only with prior consent (GDPR Art. 6(1)(a)). Cancel subscription via email links.</p><p>We use cookies (local storage, SDKs). Non-essential cookies run only after acceptance via the cookie banner. You can modify preferences at any time.</p><ul><li><strong>Strictly Necessary:</strong> Firebase Auth, consent settings ("cookieConsentV2"), security (Vercel).</li><li><strong>Functional:</strong> Support chat (Intercom), context.</li><li><strong>Analytics & Performance:</strong> Google Analytics 4 (_ga, _gid), Microsoft Clarity (_clck, _clsk), Sentry.</li><li><strong>Advertising & Target:</strong> Meta Pixel (_fbp), Pinterest, Microsoft Advertising, Braze.</li><li><strong>Travel Profiling:</strong> custom profiles derived from chats.</li></ul>'
+          },
+          {
+            title: 'Security and Minor Protection',
+            body: '<p>We implement technical and organizational measures including SSL encryption for data in transit and rest under GDPR Art. 32.</p><p>VibeTours is not intended for children under 16. We do not knowingly collect minor data. Contact us at **support@vibetours.com**.</p>'
           }
         ]
       }
@@ -838,141 +789,163 @@
         setLanguage('es');
       }
       
-      // Check query params if any
+      // Load view based on query string if exists
       const urlParams = new URLSearchParams(window.location.search);
       const tabParam = urlParams.get('tab');
       if (tabParam === 'privacy' || tabParam === 'terms') {
-        switchTab(tabParam);
+        switchView(tabParam);
       } else {
-        renderContent();
+        switchView('home');
       }
     }
 
-    // Set Language (es / en)
+    // Set Language (es / en) and trigger translation across all views
     function setLanguage(lang) {
-      if (lang === currentLang) return;
       currentLang = lang;
 
-      // Update UI elements for language
+      // Update active language button classes
       const btnEs = document.getElementById('btn-es');
       const btnEn = document.getElementById('btn-en');
-      const indicator = document.getElementById('lang-indicator');
 
       if (lang === 'es') {
         btnEs.classList.add('active');
         btnEn.classList.remove('active');
-        indicator.style.transform = 'translateX(0)';
       } else {
         btnEs.classList.remove('active');
         btnEn.classList.add('active');
-        indicator.style.transform = 'translateX(45px)';
       }
 
-      // Update static translated labels
-      document.getElementById('hero-title').textContent = db[currentLang].heroTitle;
-      document.getElementById('hero-desc').textContent = db[currentLang].heroDesc;
-      document.getElementById('tab-btn-terms').textContent = db[currentLang].tabTerms;
-      document.getElementById('tab-btn-privacy').textContent = db[currentLang].tabPrivacy;
+      // 1. Translate Navigation Menu
+      document.getElementById('nav-link-home').textContent = db[currentLang].navHome;
+      document.getElementById('nav-link-terms').textContent = db[currentLang].navTerms;
+      document.getElementById('nav-link-privacy').textContent = db[currentLang].navPrivacy;
+
+      // 2. Translate Static Page Titles
+      document.getElementById('home-main-title').textContent = db[currentLang].homeTitle;
+      document.getElementById('home-main-desc').textContent = db[currentLang].homeDesc;
+      
+      document.getElementById('terms-main-title').textContent = db[currentLang].termsTitle;
+      document.getElementById('privacy-main-title').textContent = db[currentLang].privacyTitle;
+      
+      document.getElementById('terms-meta-info').textContent = db[currentLang].metaInfo;
+      document.getElementById('privacy-meta-info').textContent = db[currentLang].metaInfo;
+
+      // 3. Translate Footer
       document.getElementById('footer-rights').textContent = db[currentLang].footerRights;
       document.getElementById('footer-link-terms').textContent = lang === 'es' ? 'Términos' : 'Terms';
       document.getElementById('footer-link-privacy').textContent = lang === 'es' ? 'Privacidad' : 'Privacy';
 
-      // Update banner based on active tab
-      updateBannerText();
-
-      // Render cards
+      // 4. Render Dynamic Elements
+      renderHome();
       renderContent();
     }
 
-    // Switch Tab (terms / privacy)
-    function switchTab(tab) {
-      if (tab === currentTab) return;
-      currentTab = tab;
+    // Switch View (home / terms / privacy)
+    function switchView(view) {
+      currentTab = view;
 
-      const tabTerms = document.getElementById('tab-btn-terms');
-      const tabPrivacy = document.getElementById('tab-btn-privacy');
-      const indicator = document.getElementById('tab-indicator');
-      const contentTerms = document.getElementById('content-terms');
-      const contentPrivacy = document.getElementById('content-privacy');
+      // Menu buttons
+      const navHome = document.getElementById('nav-link-home');
+      const navTerms = document.getElementById('nav-link-terms');
+      const navPrivacy = document.getElementById('nav-link-privacy');
 
-      if (tab === 'terms') {
-        tabTerms.classList.add('active');
-        tabPrivacy.classList.remove('active');
-        indicator.style.transform = 'translateX(0)';
-        contentTerms.classList.add('active');
-        contentPrivacy.classList.remove('active');
-      } else {
-        tabTerms.classList.remove('active');
-        tabPrivacy.classList.add('active');
-        indicator.style.transform = 'translateX(100%)';
-        contentTerms.classList.remove('active');
-        contentPrivacy.classList.add('active');
+      // Containers
+      const viewHome = document.getElementById('view-home');
+      const viewTerms = document.getElementById('view-terms');
+      const viewPrivacy = document.getElementById('view-privacy');
+
+      // Reset active states
+      navHome.classList.remove('active');
+      navTerms.classList.remove('active');
+      navPrivacy.classList.remove('active');
+
+      viewHome.classList.remove('active');
+      viewTerms.classList.remove('active');
+      viewPrivacy.classList.remove('active');
+
+      // Set active states
+      if (view === 'home') {
+        navHome.classList.add('active');
+        viewHome.classList.add('active');
+      } else if (view === 'terms') {
+        navTerms.classList.add('active');
+        viewTerms.classList.add('active');
+      } else if (view === 'privacy') {
+        navPrivacy.classList.add('active');
+        viewPrivacy.classList.add('active');
       }
 
-      // Scroll smoothly to top of content area on mobile
-      if (window.innerWidth <= 768) {
-        document.querySelector('.tabs-container').scrollIntoView({ behavior: 'smooth' });
-      }
-
-      updateBannerText();
+      // Scroll smoothly to top of window
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    function updateBannerText() {
-      const bannerText = document.getElementById('legal-banner-desc');
-      if (currentTab === 'terms') {
-        bannerText.textContent = db[currentLang].bannerTerms;
-      } else {
-        bannerText.textContent = db[currentLang].bannerPrivacy;
-      }
+    // Render localized home cards dynamically
+    function renderHome() {
+      const cardsContainer = document.getElementById('home-cards-grid');
+      cardsContainer.innerHTML = `
+        <!-- Terms Card -->
+        <div class="legal-card" onclick="switchView('terms')">
+          <div class="card-content">
+            <h3>${db[currentLang].cardTermsTitle}</h3>
+            <p>${db[currentLang].cardTermsDesc}</p>
+          </div>
+          <button class="card-action-btn">
+            <span>${db[currentLang].cardTermsBtn}</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Privacy Card -->
+        <div class="legal-card" onclick="switchView('privacy')">
+          <div class="card-content">
+            <h3>${db[currentLang].cardPrivacyTitle}</h3>
+            <p>${db[currentLang].cardPrivacyDesc}</p>
+          </div>
+          <button class="card-action-btn">
+            <span>${db[currentLang].cardPrivacyBtn}</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+        </div>
+      `;
     }
 
-    // Helper to get SVG string from hidden template
-    function getSvgMarkup(iconId) {
-      const svgElement = document.getElementById(iconId);
-      if (svgElement) {
-        return svgElement.outerHTML;
-      }
-      // Fallback default icon
-      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>`;
-    }
-
-    // Render localized items dynamically
+    // Render localized flat items dynamically
     function renderContent() {
-      const termsContainer = document.getElementById('content-terms');
-      const privacyContainer = document.getElementById('content-privacy');
+      const termsContainer = document.getElementById('container-terms');
+      const privacyContainer = document.getElementById('container-privacy');
 
       // 1. Render Terms
       termsContainer.innerHTML = '';
-      db[currentLang].terms.forEach((item) => {
-        const card = document.createElement('article');
-        card.className = 'card';
-        card.innerHTML = `
-          <div class="card-icon">
-            ${getSvgMarkup(item.icon)}
-          </div>
-          <div class="card-body">
-            <h3>${item.title}</h3>
-            <p>${item.body}</p>
+      db[currentLang].terms.forEach((item, index) => {
+        const section = document.createElement('section');
+        section.className = 'legal-section';
+        section.innerHTML = `
+          <h2 class="section-title">${item.title}</h2>
+          <div class="section-body">
+            ${item.body}
           </div>
         `;
-        termsContainer.appendChild(card);
+        termsContainer.appendChild(section);
       });
 
       // 2. Render Privacy
       privacyContainer.innerHTML = '';
-      db[currentLang].privacy.forEach((item) => {
-        const card = document.createElement('article');
-        card.className = 'card';
-        card.innerHTML = `
-          <div class="card-icon">
-            ${getSvgMarkup(item.icon)}
-          </div>
-          <div class="card-body">
-            <h3>${item.title}</h3>
-            <p>${item.body}</p>
+      db[currentLang].privacy.forEach((item, index) => {
+        const section = document.createElement('section');
+        section.className = 'legal-section';
+        section.innerHTML = `
+          <h2 class="section-title">${item.title}</h2>
+          <div class="section-body">
+            ${item.body}
           </div>
         `;
-        privacyContainer.appendChild(card);
+        privacyContainer.appendChild(section);
       });
     }
 
