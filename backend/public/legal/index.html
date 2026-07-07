@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VibeTours - Términos & Privacidad</title>
-  <meta name="description" content="Términos de Servicio y Política de Privacidad de la aplicación VibeTours. Conoce en detalle tus derechos y obligaciones en nuestra plataforma.">
-  <link rel="icon" type="image/png" href="/images/logo_light.png">
+  <meta name="description"
+    content="Términos de Servicio y Política de Privacidad de la aplicación VibeTours. Conoce en detalle tus derechos y obligaciones en nuestra plataforma.">
+  <link rel="icon" type="image/png" href="images/logo_light.png">
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+
   <style>
     /* Reset & CSS variables (Minimalismo Plano Claro: Blanco y Azul) */
     * {
@@ -174,6 +177,7 @@
       letter-spacing: -0.8px;
       background: linear-gradient(135deg, var(--primary) 0%, var(--violet) 100%);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 0.4rem;
     }
@@ -199,6 +203,7 @@
         opacity: 0;
         transform: translateY(10px);
       }
+
       to {
         opacity: 1;
         transform: translateY(0);
@@ -251,6 +256,7 @@
       letter-spacing: -0.3px;
       background: linear-gradient(135deg, var(--primary) 0%, var(--violet) 100%);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 0.8rem;
     }
@@ -300,6 +306,7 @@
       letter-spacing: -0.4px;
       background: linear-gradient(135deg, var(--primary) 0%, var(--violet) 100%);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 1rem;
     }
@@ -383,19 +390,26 @@
     /* Responsive */
     @media (max-width: 768px) {
       .header-container {
-        padding: 1rem 1.25rem;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 0.8rem 1rem;
+        align-items: center;
       }
 
       .nav-right {
-        gap: 1.2rem;
+        width: 100%;
+        justify-content: center;
+        gap: 1rem;
       }
 
       .nav-links {
         gap: 1rem;
+        justify-content: center;
       }
 
       .lang-selector {
         padding-left: 0.8rem;
+        border-left: 1px solid rgba(0, 0, 0, 0.12);
       }
 
       main {
@@ -422,13 +436,14 @@
     }
   </style>
 </head>
+
 <body>
 
   <!-- Minimalist Navbar -->
   <header>
     <div class="header-container">
       <a href="#" class="logo-container" onclick="switchView('home'); return false;">
-        <img src="/images/logo_light.png" alt="VibeTours Logo" class="logo-img">
+        <img src="images/logo_light.png" alt="VibeTours Logo" class="logo-img">
         <span class="logo-text">VIBETOURS</span>
       </a>
 
@@ -452,18 +467,20 @@
 
   <!-- Main Content (Scroll Plano) -->
   <main>
-    
+
     <!-- Home Flat View -->
     <div class="legal-view active" id="view-home">
       <div class="home-hero">
         <h1 class="title-gradient" id="home-main-title">Portal Legal de VibeTours</h1>
-        <p id="home-main-desc">VibeTours es tu compañero de viaje inteligente. Te ayudamos a descubrir el mundo con tours increíbles, planificación impulsada por IA y guías locales apasionados. Selecciona una sección a continuación para leer nuestras pautas legales.</p>
+        <p id="home-main-desc">VibeTours es tu compañero de viaje inteligente. Te ayudamos a descubrir el mundo con
+          tours increíbles, planificación impulsada por IA y guías locales apasionados. Selecciona una sección a
+          continuación para leer nuestras pautas legales.</p>
       </div>
       <div class="cards-grid" id="home-cards-grid">
         <!-- Generated dynamically with language support -->
       </div>
     </div>
-    
+
     <!-- Terms and Conditions Flat View -->
     <div class="legal-view" id="view-terms">
       <div class="legal-header">
@@ -492,11 +509,13 @@
   <footer>
     <div class="footer-content">
       <div class="footer-left">
-        &copy; <span id="footer-year">2026</span> VibeTours. <span id="footer-rights">Todos los derechos reservados.</span>
+        &copy; <span id="footer-year">2026</span> VibeTours. <span id="footer-rights">Todos los derechos
+          reservados.</span>
       </div>
       <div class="footer-right">
         <a href="#" class="footer-link" onclick="switchView('terms'); return false;" id="footer-link-terms">Términos</a>
-        <a href="#" class="footer-link" onclick="switchView('privacy'); return false;" id="footer-link-privacy">Privacidad</a>
+        <a href="#" class="footer-link" onclick="switchView('privacy'); return false;"
+          id="footer-link-privacy">Privacidad</a>
       </div>
     </div>
   </footer>
@@ -780,7 +799,7 @@
     function init() {
       // Set current year
       document.getElementById('footer-year').textContent = new Date().getFullYear();
-      
+
       // Auto detect user browser language
       const browserLang = navigator.language || navigator.userLanguage;
       if (browserLang.startsWith('en')) {
@@ -788,7 +807,7 @@
       } else {
         setLanguage('es');
       }
-      
+
       // Load view based on query string if exists
       const urlParams = new URLSearchParams(window.location.search);
       const tabParam = urlParams.get('tab');
@@ -823,10 +842,10 @@
       // 2. Translate Static Page Titles
       document.getElementById('home-main-title').textContent = db[currentLang].homeTitle;
       document.getElementById('home-main-desc').textContent = db[currentLang].homeDesc;
-      
+
       document.getElementById('terms-main-title').textContent = db[currentLang].termsTitle;
       document.getElementById('privacy-main-title').textContent = db[currentLang].privacyTitle;
-      
+
       document.getElementById('terms-meta-info').textContent = db[currentLang].metaInfo;
       document.getElementById('privacy-meta-info').textContent = db[currentLang].metaInfo;
 
@@ -953,4 +972,5 @@
     window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
+
 </html>

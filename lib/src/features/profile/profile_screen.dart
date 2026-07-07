@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
@@ -784,13 +785,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         icon: Icons.description_outlined,
                         iconColor: Colors.blue,
                         title: l10n.termsOfService,
-                        onTap: () => context.push('/legal/terms'),
+                        onTap: () async {
+                          final url = Uri.parse('https://new-vibe-tours-legal.vercel.app/?tab=terms');
+                          try {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } catch (e) {
+                            debugPrint('Could not launch $url: $e');
+                          }
+                        },
                       ),
                       _SettingsListTile(
                         icon: Icons.privacy_tip_outlined,
                         iconColor: Colors.blue,
                         title: l10n.privacyPolicy,
-                        onTap: () => context.push('/legal/privacy'),
+                        onTap: () async {
+                          final url = Uri.parse('https://new-vibe-tours-legal.vercel.app/?tab=privacy');
+                          try {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } catch (e) {
+                            debugPrint('Could not launch $url: $e');
+                          }
+                        },
                       ),
                     ],
                   ),
