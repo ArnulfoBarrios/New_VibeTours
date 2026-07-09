@@ -267,6 +267,27 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         final recs = (data['recommendations'] as List).map((e) => AiRecommendation.fromJson(e)).toList();
         final context = data['plannerContext'] as Map<String, dynamic>;
 
+        AiTourRequest finalRequest = state.request!;
+        if (data['durationHours'] != null) {
+          finalRequest = AiTourRequest(
+            prompt: finalRequest.prompt,
+            destination: data['destination'] as String? ?? finalRequest.destination,
+            country: data['country'] as String? ?? finalRequest.country,
+            city: data['city'] as String? ?? finalRequest.city,
+            type: finalRequest.type,
+            durationHours: (data['durationHours'] as num).toDouble(),
+            language: finalRequest.language,
+            touristProfileSummary: finalRequest.touristProfileSummary,
+            touristInterests: finalRequest.touristInterests,
+            touristPace: finalRequest.touristPace,
+            latitude: finalRequest.latitude,
+            longitude: finalRequest.longitude,
+            budget: data['budget'] as String? ?? finalRequest.budget,
+          );
+        }
+        
+        state = state.copyWith(request: finalRequest);
+
         if (recs.isNotEmpty) {
           state = state.copyWith(
             isLoading: false, 

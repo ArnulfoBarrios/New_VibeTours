@@ -205,6 +205,11 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     }))
     
     res.json({
+      durationHours: input.durationHours,
+      destination: input.destination,
+      city: input.city,
+      country: input.country,
+      budget: input.budget,
       recommendations,
       plannerContext: {
         distanceKm: planner.distanceKm,
