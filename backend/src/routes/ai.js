@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry } from '../services/osm.js'
 import { planWithOpenAI, extractLocation } from '../services/openai.js'
 import { supabase } from '../services/supabase.js'
 
@@ -46,7 +46,7 @@ aiRouter.post('/tours/confirm', async (req, res, next) => {
     if (input.city && input.city.trim().length > 0) {
       input.destination = input.city.trim()
     }
-    const geocode = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
+    const geocode = await geocodePlace(`${input.destination} ${input.city} ${input.country}`, input.latitude, input.longitude)
     res.json({
       detected: {
         city: input.city || geocode?.name?.split(',')[0] || input.destination,
@@ -115,9 +115,14 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)
     
+    let userCountry = null;
+    if (input.latitude && input.longitude) {
+      userCountry = await reverseGeocodeUserCountry(input.latitude, input.longitude)
+    }
+    
     let extracted = null
     if ((!input.destination || !input.durationHours) && input.prompt) {
-      extracted = await extractLocation(input.prompt, input.latitude, input.longitude)
+      extracted = await extractLocation(input.prompt, input.latitude, input.longitude, userCountry)
       if (extracted) {
         if (extracted.explicit_destination && !input.destination) {
           input.destination = extracted.explicit_destination || extracted.city || extracted.country || ''

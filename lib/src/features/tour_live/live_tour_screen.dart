@@ -39,6 +39,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
   bool _isOffRoute = false;
   bool _locationStreamRequested = false;
   bool _noLandRouteAvailable = false;
+  bool _isTrackingMode = false;
+  double? _currentHeading;
 
   @override
   void dispose() {
@@ -87,7 +89,27 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                   showNumbers: _currentPoint == null,
                   myLocationEnabled: true,
                   routeOverride: _noLandRouteAvailable || liveRoute == null ? const RoadRouteResult(geometry: []) : liveRoute,
+                  currentLocation: _currentPoint,
                   useRoadRouting: false,
+                  trackingMode: _isTrackingMode,
+                  trackingHeading: _currentHeading,
+                ),
+              ),
+              Positioned(
+                right: 16,
+                top: MediaQuery.of(context).padding.top + 8,
+                child: FloatingActionButton.small(
+                  heroTag: 'tracking_btn',
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  onPressed: () {
+                    setState(() {
+                      _isTrackingMode = !_isTrackingMode;
+                    });
+                  },
+                  child: Icon(
+                    _isTrackingMode ? Icons.map_rounded : Icons.explore_rounded,
+                    color: AppTheme.primary,
+                  ),
                 ),
               ),
               Positioned(
@@ -323,6 +345,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
     if (!mounted) return;
     setState(() {
       _currentPoint = point;
+      if (position.heading > 0) {
+        _currentHeading = position.heading;
+      }
     });
     final tour = _navigationTour;
     if (tour == null || tour.stops.isEmpty) return;

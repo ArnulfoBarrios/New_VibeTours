@@ -10,7 +10,7 @@ export function summarizePlaces(places = []) {
   }))
 }
 
-export async function extractLocation(prompt, lat, lon) {
+export async function extractLocation(prompt, lat, lon, userCountry = null) {
   if (!prompt || typeof prompt !== 'string') return null
   const timeoutMs = 40000
   const apiKey = process.env.OPENAI_API_KEY
@@ -33,7 +33,7 @@ export async function extractLocation(prompt, lat, lon) {
         model: 'gpt-4o-mini',
         response_format: { type: 'json_object' },
         messages: [
-          { role: 'system', content: `Eres un asistente experto en viajes. Lee el prompt del usuario. Si menciona claramente a dónde quiere ir, ponlo en "explicit_destination" y "suggestions" vacío. Si NO menciona a dónde quiere ir, pon "explicit_destination" vacío y recomienda 3 destinos increíbles (ciudades) adaptados a sus gustos en "suggestions". Extrae también la duración (ej: "viaje de 3 días" = 72, "tour de 4 horas" = 4) en "duration_hours" (number o null). Extrae el presupuesto en "budget" (string: "bajo", "medio", "alto", o null). Extrae el tipo de acompañamiento en "companion_type" (string: "solo", "pareja", "familia", "amigos", o null). ${lat && lon ? `IMPORTANTE: El usuario se encuentra en las coordenadas geográficas latitud ${lat}, longitud ${lon}. Si el usuario pide lugares genéricos, DEBEN estar en el mismo país o región cercana. CRÍTICO: Si el usuario menciona una ciudad con homónimos (como "Cartagena" o "Córdoba"), ASUME STRICTAMENTE que se refiere a la ciudad ubicada en el país correspondiente a sus coordenadas actuales, y rellena el campo "country" con el nombre de ese país. ` : ''}Devuelve ÚNICAMENTE JSON válido con: "explicit_destination" (string), "city" (string), "country" (string), "duration_hours" (number o null), "budget" (string o null), "companion_type" (string o null), "suggestions": [{ "city": "...", "country": "...", "reason": "..." }]` },
+          { role: 'system', content: `Eres un asistente experto en viajes. Lee el prompt del usuario. Si menciona claramente a dónde quiere ir, ponlo en "explicit_destination" y "suggestions" vacío. Si NO menciona a dónde quiere ir, pon "explicit_destination" vacío y recomienda 3 destinos increíbles (ciudades) adaptados a sus gustos en "suggestions". Extrae también la duración (ej: "viaje de 3 días" = 72, "tour de 4 horas" = 4) en "duration_hours" (number o null). Extrae el presupuesto en "budget" (string: "bajo", "medio", "alto", o null). Extrae el tipo de acompañamiento en "companion_type" (string: "solo", "pareja", "familia", "amigos", o null). ${lat && lon ? `IMPORTANTE: El usuario se encuentra en las coordenadas geográficas latitud ${lat}, longitud ${lon}${userCountry ? ` ubicadas en el país de ${userCountry}` : ''}. Si el usuario pide lugares genéricos, DEBEN estar en el mismo país o región cercana. CRÍTICO: Si el usuario menciona una ciudad con homónimos (como "Cartagena" o "Córdoba"), ASUME STRICTAMENTE que se refiere a la ciudad ubicada en ${userCountry || 'su país correspondiente a sus coordenadas actuales'}, y rellena el campo "country" con el nombre de ese país. ` : ''}Devuelve ÚNICAMENTE JSON válido con: "explicit_destination" (string), "city" (string), "country" (string), "duration_hours" (number o null), "budget" (string o null), "companion_type" (string o null), "suggestions": [{ "city": "...", "country": "...", "reason": "..." }]` },
           { role: 'user', content: prompt }
         ]
       }),

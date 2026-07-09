@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
@@ -9,11 +10,30 @@ import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestNotifications();
+    });
+  }
+
+  Future<void> _requestNotifications() async {
+    try {
+      await FirebaseMessaging.instance.requestPermission();
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final toursAsync = ref.watch(recommendedToursProvider);
     final user = ref.watch(authUserProvider).valueOrNull;
     final weatherAsync = ref.watch(weatherProvider);

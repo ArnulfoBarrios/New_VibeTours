@@ -1,5 +1,27 @@
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
-export async function geocodePlace(query) {
+
+export async function reverseGeocodeUserCountry(lat, lon) {
+  if (!lat || !lon) return null
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse')
+    url.searchParams.set('format', 'jsonv2')
+    url.searchParams.set('lat', lat)
+    url.searchParams.set('lon', lon)
+    url.searchParams.set('zoom', '10')
+    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
+    if (response.ok) {
+      const data = await response.json()
+      if (data && data.address && data.address.country) {
+        return data.address.country
+      }
+    }
+  } catch (err) {
+    console.error('Reverse geocode error:', err)
+  }
+  return null
+}
+
+export async function geocodePlace(query, lat = null, lon = null) {
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.searchParams.set('format', 'jsonv2')
   url.searchParams.set('limit', '3')
@@ -29,7 +51,7 @@ export async function geocodePlace(query) {
     // Fall through to Photon below.
   }
 
-  const photonResults = await photonSearch(query, 1)
+  const photonResults = await photonSearch(query, 1, lat, lon)
   const [photon] = photonResults
   if (photon && Number.isFinite(photon.latitude) && Number.isFinite(photon.longitude)) {
     return {
@@ -44,10 +66,14 @@ export async function geocodePlace(query) {
 }
 
 
-export async function photonSearch(query, limit = 8) {
+export async function photonSearch(query, limit = 8, lat = null, lon = null) {
   const url = new URL('https://photon.komoot.io/api/')
   url.searchParams.set('q', query)
   url.searchParams.set('limit', String(limit))
+  if (lat && lon) {
+    url.searchParams.set('lat', String(lat))
+    url.searchParams.set('lon', String(lon))
+  }
   const response = await fetch(url)
   if (!response.ok) return []
   const json = await response.json()

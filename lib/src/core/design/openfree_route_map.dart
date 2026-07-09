@@ -21,6 +21,8 @@ class OpenFreeRouteMap extends StatefulWidget {
     this.showPortWaypoints = true,
     this.routeOverride,
     this.currentLocation,
+    this.trackingMode = false,
+    this.trackingHeading,
   });
 
   factory OpenFreeRouteMap.fromStops({
@@ -37,6 +39,8 @@ class OpenFreeRouteMap extends StatefulWidget {
     bool showPortWaypoints = true,
     RoadRouteResult? routeOverride,
     GeoPoint? currentLocation,
+    bool trackingMode = false,
+    double? trackingHeading,
   }) {
     return OpenFreeRouteMap(
       key: key,
@@ -53,6 +57,8 @@ class OpenFreeRouteMap extends StatefulWidget {
       showPortWaypoints: showPortWaypoints,
       routeOverride: routeOverride,
       currentLocation: currentLocation,
+      trackingMode: trackingMode,
+      trackingHeading: trackingHeading,
     );
   }
 
@@ -69,6 +75,8 @@ class OpenFreeRouteMap extends StatefulWidget {
   final bool showPortWaypoints;
   final RoadRouteResult? routeOverride;
   final GeoPoint? currentLocation;
+  final bool trackingMode;
+  final double? trackingHeading;
 
   @override
   State<OpenFreeRouteMap> createState() => _OpenFreeRouteMapState();
@@ -95,6 +103,38 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
       _drawRoute(
         focusActiveStop:
             oldWidget.activeIndex != widget.activeIndex && !routeChanged,
+      );
+    } 
+    
+    final trackingChanged = oldWidget.trackingMode != widget.trackingMode;
+    if (trackingChanged) {
+      if (widget.trackingMode && widget.currentLocation != null) {
+        _controller?.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: LatLng(widget.currentLocation!.latitude, widget.currentLocation!.longitude),
+              zoom: 18.0,
+              tilt: 60.0,
+              bearing: widget.trackingHeading ?? 0.0,
+            ),
+          ),
+          duration: const Duration(milliseconds: 1000),
+        );
+      } else if (!widget.trackingMode) {
+        _hasFitRoute = false;
+        _drawRoute();
+      }
+    } else if (widget.trackingMode && widget.currentLocation != null && widget.currentLocation != oldWidget.currentLocation) {
+      _controller?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(widget.currentLocation!.latitude, widget.currentLocation!.longitude),
+            zoom: 18.0,
+            tilt: 60.0,
+            bearing: widget.trackingHeading ?? 0.0,
+          ),
+        ),
+        duration: const Duration(milliseconds: 1000),
       );
     }
   }
@@ -350,7 +390,21 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
       );
       return;
     }
-    if (fitRoute && !_hasFitRoute) {
+    
+    if (widget.trackingMode && currentPoint != null) {
+      _hasFitRoute = true;
+      await controller.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: currentPoint,
+            zoom: 18.0,
+            tilt: 60.0,
+            bearing: widget.trackingHeading ?? 0.0,
+          ),
+        ),
+        duration: const Duration(milliseconds: 650),
+      );
+    } else if (fitRoute && !_hasFitRoute) {
       _hasFitRoute = true;
       final boundsPoints = [
         if (routePoints.isNotEmpty) ...routePoints else ...points,
@@ -358,6 +412,20 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
         ...portPoints,
         ?currentPoint,
       ];
+      final pos = await controller.queryCameraPosition();
+      if (pos != null && (pos.tilt > 0 || pos.bearing != 0)) {
+        await controller.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: pos.target,
+              zoom: pos.zoom,
+              tilt: 0.0,
+              bearing: 0.0,
+            ),
+          ),
+          duration: const Duration(milliseconds: 300),
+        );
+      }
       await controller.animateCamera(
         CameraUpdate.newLatLngBounds(
           _boundsFor(boundsPoints),

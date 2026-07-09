@@ -17,6 +17,7 @@ import '../../core/design/openfree_route_map.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../shared/location_disclosure_dialog.dart';
 import 'ai_builder_controller.dart';
 
 class AiPlannerScreen extends ConsumerStatefulWidget {
@@ -119,11 +120,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     double? lon;
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (serviceEnabled && (permission == LocationPermission.whileInUse || permission == LocationPermission.always)) {
+      if (!mounted) return;
+      final granted = await checkAndRequestLocationPermission(context, ref);
+      if (serviceEnabled && granted) {
         var position = await Geolocator.getLastKnownPosition();
         position ??= await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
@@ -170,11 +169,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     double? lon;
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (serviceEnabled && (permission == LocationPermission.whileInUse || permission == LocationPermission.always)) {
+      if (!mounted) return;
+      final granted = await checkAndRequestLocationPermission(context, ref);
+      if (serviceEnabled && granted) {
         var position = await Geolocator.getLastKnownPosition();
         position ??= await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
