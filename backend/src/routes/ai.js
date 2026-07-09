@@ -172,7 +172,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     if (input.city && input.city.trim().length > 0) {
       input.destination = input.city.trim()
     }
-    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
+    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`, input.latitude, input.longitude)
     if (!location) {
       return res.status(400).json({ error: 'No pudimos identificar la ubicación ingresada.' })
     }
@@ -228,12 +228,12 @@ aiRouter.post('/tours/build', async (req, res, next) => {
     const buildSchema = z.object({
       request: requestSchema,
       places: z.array(z.any()), // The confirmed places
-      plannerContext: z.any()
+      plannerContext: z.record(z.any()).optional()
     })
     const { request: input, places, plannerContext } = buildSchema.parse(req.body)
     
     if ((!input.city || !input.country) && input.destination) {
-      const location = await geocodePlace(input.destination)
+      const location = await geocodePlace(input.destination, input.latitude, input.longitude)
       if (location) {
         input.city = location.city || ''
         input.country = location.country || ''
@@ -275,7 +275,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       excludeIds: z.array(z.string()).optional()
     })
     const { request: input, currentPlaces, excludeIds = [] } = altSchema.parse(req.body)
-    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
+    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`, input.latitude, input.longitude)
     if (!location) {
       return res.status(400).json({ error: 'Ubicación no encontrada' })
     }
@@ -725,7 +725,7 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
     nombre_tour: buildTourTitle(input, planner),
     resumen_corto: `${buildShortSummary(input, planner)}. Fallback: respuesta generada sin Ollama.`,
     tipo_tour: input.type,
-    subcategorias: planner.subcategories,
+    subcategorias: planner.subcategorias,
     descripcion_tour: buildTourDescription(input, planner),
     experiencia_destacada: buildFeaturedExperience(input, planner),
     historia_del_lugar: planner.selectedPlaces[0]?.history ?? '',
@@ -787,7 +787,7 @@ async function buildFallbackTour(planner, input) {
     nombre_tour: buildTourTitle(input, planner),
     resumen_corto: buildShortSummary(input, planner),
     tipo_tour: input.type,
-    subcategorias: planner.subcategories,
+    subcategorias: planner.subcategorias,
     descripcion_tour: buildTourDescription(input, planner),
     experiencia_destacada: buildFeaturedExperience(input, planner),
     historia_del_lugar: planner.selectedPlaces[0]?.history ?? '',
@@ -1780,7 +1780,7 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace }) {
     }
   }
 
-  const geocoded = await geocodePlace(`${name} ${input.city} ${input.country}`.trim())
+  const geocoded = await geocodePlace(`${name} ${input.city} ${input.country}`.trim(), input.latitude, input.longitude)
   if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
     return {
       latitude: geocoded.latitude,
