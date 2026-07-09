@@ -22,6 +22,20 @@ export async function reverseGeocodeUserCountry(lat, lon) {
 }
 
 export async function geocodePlace(query, lat = null, lon = null) {
+  if (lat && lon) {
+    const photonResults = await photonSearch(query, 1, lat, lon)
+    const [photon] = photonResults
+    if (photon && Number.isFinite(photon.latitude) && Number.isFinite(photon.longitude)) {
+      return {
+        name: photon.name,
+        latitude: Number(photon.latitude),
+        longitude: Number(photon.longitude),
+        city: photon.city || '',
+        country: photon.country || ''
+      }
+    }
+  }
+
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.searchParams.set('format', 'jsonv2')
   url.searchParams.set('limit', '3')
@@ -48,18 +62,20 @@ export async function geocodePlace(query, lat = null, lon = null) {
       }
     }
   } catch {
-    // Fall through to Photon below.
+    // Fall through
   }
 
-  const photonResults = await photonSearch(query, 1, lat, lon)
-  const [photon] = photonResults
-  if (photon && Number.isFinite(photon.latitude) && Number.isFinite(photon.longitude)) {
-    return {
-      name: photon.name,
-      latitude: Number(photon.latitude),
-      longitude: Number(photon.longitude),
-      city: photon.city || '',
-      country: photon.country || ''
+  if (!lat || !lon) {
+    const photonFallback = await photonSearch(query, 1)
+    const [photon] = photonFallback
+    if (photon && Number.isFinite(photon.latitude) && Number.isFinite(photon.longitude)) {
+      return {
+        name: photon.name,
+        latitude: Number(photon.latitude),
+        longitude: Number(photon.longitude),
+        city: photon.city || '',
+        country: photon.country || ''
+      }
     }
   }
   return null

@@ -515,7 +515,7 @@ async function processTourGeneration(jobId, input) {
 
   try {
     console.info('[tour-ai] generate:start', { jobId, destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
-    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
+    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`, input.latitude, input.longitude)
     console.info('[tour-ai] geocode', location ? { name: location.name, latitude: location.latitude, longitude: location.longitude } : { ok: false })
     
     if (!location) {
