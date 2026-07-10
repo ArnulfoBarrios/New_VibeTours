@@ -105,7 +105,8 @@ Tu respuesta debe ser siempre un unico objeto JSON valido. No agregues markdown,
 
 Reglas centrales:
 - Crea experiencias inmersivas y altamente atractivas. ¡No seas aburrido, estándar ni monótono!
-- Prioriza obligatoriamente Puntos de Interés (POIs) turísticos altamente populares, icónicos reales, sitios históricos verificables y joyas turísticas reales. Si la petición del usuario es general, asume que quiere visitar los lugares más concurridos y famosos de la ciudad.
+- Prioriza obligatoriamente Puntos de Interés (POIs) turísticos altamente populares, icónicos reales, sitios históricos verificables y joyas turísticas reales. La lista de lugares (selectedPlaces) que recibes representa los puntos más populares, emblemáticos y mejor calificados de la ciudad. Destaca siempre su carácter emblemático, historia y valor cultural en la narración.
+- Si la petición del usuario es abierta o general, enfoca el tour como un recorrido clásico e imprescindible por la esencia misma de la ciudad, resaltando por qué cada parada es legendaria. Si la petición es específica, enfoca la narrativa en torno a ese tema de interés, seleccionando lo mejor y más selecto.
 - PROHIBIDO INVENTAR: No alucines, no inventes monumentos, museos, restaurantes ni direcciones que no existan en la vida real. Si no conoces una dirección exacta, deja el campo vacío en vez de inventar.
 - No uses coordenadas geográficas en el JSON.
 - Escribe en ${language}.

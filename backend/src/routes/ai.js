@@ -939,7 +939,24 @@ function scorePlace(place, input) {
     genericPenalty = 50
   }
 
-  return (typeScore * 8) + (cityScore * 6) + (popularityScore * 5) + (proximityScore * 3) + (diversityScore * 3) + (profileScore * 4) - mismatchPenalty - genericPenalty
+  // Detección de prompt general/abierto
+  const isGeneral = isGeneralOrOpenPrompt(input)
+  
+  // Calcular boost por palabras clave del prompt específico
+  const themeBoost = isGeneral ? 0 : keywordAffinityScore(input.prompt, place)
+  
+  let finalScore = 0
+  if (isGeneral) {
+    // Si es un prompt general, la popularidad turística (wikidata/wikipedia/monumentos) es prioritaria
+    const wikiBoost = (place.tags && (place.tags.wikidata || place.tags.wikipedia)) ? 30 : 0
+    finalScore = (typeScore * 6) + (cityScore * 6) + (popularityScore * 16) + (proximityScore * 2) + (diversityScore * 2) + wikiBoost - mismatchPenalty - genericPenalty
+  } else {
+    // Si es específico, el boost temático y la afinidad de categoría tienen el mayor peso, 
+    // pero la popularidad actúa como criterio de desempate/calidad importante
+    finalScore = (typeScore * 8) + (cityScore * 6) + (popularityScore * 8) + (proximityScore * 3) + (diversityScore * 3) + (profileScore * 4) + themeBoost - mismatchPenalty - genericPenalty
+  }
+
+  return finalScore
 }
 
 function selectPlaces(scoredPlaces, targetCount, input) {
@@ -1095,22 +1112,138 @@ function typeAffinityScore(type, category, name, tags = []) {
   return scoreFromTerms(text, rules[type] ?? rules.custom, 10)
 }
 
+function isGeneralOrOpenPrompt(input) {
+  const prompt = (input.prompt || '').trim().toLowerCase()
+  
+  // Si no hay prompt o es muy corto, es abierto
+  if (!prompt || prompt.length < 12) {
+    return true
+  }
+  
+  // Lista de términos genéricos
+  const genericTerms = [
+    'pasar un buen rato', 'conocer la ciudad', 'caminar', 'turismo', 'viaje', 'hacer turismo',
+    'ver cosas', 'dar una vuelta', 'explorar', 'lo mejor de', 'lo mas popular', 'lo más popular',
+    'sitios importantes', 'puntos de interes', 'puntos de interés', 'que ver', 'visitar', 'que hacer',
+    'tour general', 'tour basico', 'tour básico', 'todo un poco', 'pasear', 'dar un paseo',
+    'conocer un poco', 'sitios emblematicos', 'sitios emblemáticos', 'atracciones principales',
+    'have a good time', 'explore', 'sightseeing', 'general tour', 'best of', 'popular places',
+    'tourist spots', 'top things', 'things to do', 'visit', 'walk around', 'stroll'
+  ]
+  
+  // Si coincide con alguna frase genérica o abierta
+  if (genericTerms.some(term => prompt.includes(term))) {
+    return true
+  }
+  
+  // Si no hay intereses definidos y el prompt no contiene palabras clave específicas de categorías
+  const specificKeywords = [
+    'cafe', 'café', 'coffee', 'museo', 'museum', 'gallery', 'galeria', 'galería', 'restaurante',
+    'restaurant', 'food', 'comida', 'gastronomi', 'bar', 'pub', 'discoteca', 'club', 'nightlife',
+    'rumba', 'cerveza', 'beer', 'parque', 'park', 'nature', 'naturaleza', 'playa', 'beach',
+    'sender', 'trail', 'hike', 'deporte', 'sport', 'stadium', 'estadio', 'compras', 'shopping',
+    'mall', 'tienda', 'shop', 'iglesia', 'church', 'catedral', 'cathedral', 'templo', 'temple',
+    'historico', 'histórico', 'monument', 'monumento', 'castillo', 'castle', 'teatro', 'theatre',
+    'concierto', 'concert'
+  ]
+  
+  const hasSpecificKeyword = specificKeywords.some(keyword => prompt.includes(keyword))
+  const hasInterests = input.touristInterests && input.touristInterests.length > 0
+  
+  if (!hasSpecificKeyword && !hasInterests) {
+    return true
+  }
+  
+  return false
+}
+
+function keywordAffinityScore(promptText, place) {
+  if (!promptText || promptText.length < 3) return 0
+  
+  const cleanPrompt = promptText.toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "") // quitar puntuación
+    .trim()
+  
+  // Ignorar palabras comunes (stop words) en español e inglés
+  const stopWords = new Set([
+    'de', 'la', 'el', 'en', 'y', 'a', 'los', 'del', 'se', 'las', 'un', 'una', 'para', 'con', 'no', 'por', 'lo', 'como', 'mas', 'más',
+    'que', 'quiero', 'gustaria', 'gustaría', 'quisiera', 'visitar', 'conocer', 'ir', 'ver', 'tour', 'ruta', 'viaje', 'ciudad',
+    'the', 'of', 'in', 'and', 'to', 'a', 'for', 'with', 'on', 'at', 'by', 'an', 'i', 'want', 'like', 'visit', 'know', 'go', 'see', 'trip', 'city'
+  ])
+  
+  const words = cleanPrompt.split(/\s+/).filter(word => word.length > 2 && !stopWords.has(word))
+  if (words.length === 0) return 0
+  
+  const name = String(place.name || '').toLowerCase()
+  const category = String(place.category || '').toLowerCase()
+  const placeText = `${name} ${category} ${place.tags ? Object.values(place.tags).join(' ') : ''}`.toLowerCase()
+  
+  let matches = 0
+  for (const word of words) {
+    if (placeText.includes(word)) {
+      matches += 1
+    }
+    // Mapeo inteligente de sinónimos semánticos
+    if ((word.startsWith('gastronom') || word === 'comer' || word === 'comida' || word === 'rico' || word === 'cena' || word === 'almuerzo') && 
+        (category === 'restaurant' || category === 'cafe' || category === 'market')) {
+      matches += 1.5
+    }
+    if ((word === 'cafe' || word === 'café' || word === 'coffee' || word === 'desayuno') && category === 'cafe') {
+      matches += 1.5
+    }
+    if ((word === 'museo' || word === 'museum' || word === 'arte' || word === 'historia' || word === 'cultura') && 
+        (category === 'museum' || category === 'historic')) {
+      matches += 1.5
+    }
+    if ((word === 'parque' || word === 'park' || word === 'naturaleza' || word === 'verde' || word === 'bosque') && 
+        (category === 'nature' || category === 'viewpoint')) {
+      matches += 1.5
+    }
+  }
+  
+  return matches * 30
+}
+
 function popularityScoreFor(place, input = {}) {
-  const text = (place.category + ' ' + place.name).toLowerCase()
+  const name = String(place.name || '').toLowerCase()
+  const category = String(place.category || '').toLowerCase()
+  const text = (category + ' ' + name).toLowerCase()
   let score = 3
-  if (text.includes('museum')) score += 6
-  if (text.includes('historic') || text.includes('heritage') || text.includes('archaeological')) score += 6
-  if (text.includes('monument') || text.includes('memorial') || text.includes('castle')) score += input.type === 'gastronomic' || input.type === 'sports' ? 0 : 5
-  if (text.includes('market') || text.includes('marketplace')) score += 5
-  if (text.includes('park') || text.includes('viewpoint') || text.includes('nature_reserve')) score += 5
-  if (text.includes('restaurant') || text.includes('cafe')) score += 3
-  if (text.includes('sports') || text.includes('stadium')) score += 4
+  
+  if (text.includes('museum')) score += 8
+  if (text.includes('historic') || text.includes('heritage') || text.includes('archaeological')) score += 8
+  if (text.includes('monument') || text.includes('memorial') || text.includes('castle') || text.includes('fortress') || text.includes('alcazar')) {
+    score += input.type === 'gastronomic' || input.type === 'sports' ? 0 : 8
+  }
+  if (text.includes('palace') || text.includes('palacio') || text.includes('basilica') || text.includes('basílica') || text.includes('catedral') || text.includes('cathedral')) {
+    score += 8
+  }
+  if (text.includes('market') || text.includes('marketplace')) score += 6
+  if (text.includes('park') || text.includes('viewpoint') || text.includes('nature_reserve') || text.includes('mirador')) score += 6
+  if (text.includes('restaurant') || text.includes('cafe') || text.includes('coffee')) score += 3
+  if (text.includes('sports') || text.includes('stadium') || text.includes('arena')) score += 5
   if (text.includes('nightclub') || text.includes('bar') || text.includes('pub')) score += 3
+
+  // Mayor peso para etiquetas turísticas principales de OSM
+  if (place.tags) {
+    const tourism = String(place.tags.tourism || '').toLowerCase()
+    const historic = String(place.tags.historic || '').toLowerCase()
+    if (['museum', 'gallery', 'theme_park', 'attraction', 'aquarium', 'zoo', 'viewpoint'].includes(tourism)) {
+      score += 10
+    }
+    if (['monument', 'castle', 'fort', 'archaeological_site', 'ruins', 'city_gate'].includes(historic)) {
+      score += 10
+    }
+    if (place.tags.heritage) {
+      score += 8
+    }
+    // Boost masivo si tiene wikidata o wikipedia (indicador clave de POI icónico)
+    if (place.tags.wikidata || place.tags.wikipedia) {
+      score += 20
+    }
+  }
   
-  // Extra points for very specific well-known tags
-  if (place.tags && (place.tags.wikidata || place.tags.wikipedia)) score += 5
-  
-  return clamp(score, 1, 15)
+  return clamp(score, 1, 40)
 }
 
 function proximityScoreFor(distanceKm) {
@@ -1157,10 +1290,10 @@ function isAlignedWithTourType(type, category, name) {
 
 function typeMismatchPenalty(type, category, name) {
   const text = (category + ' ' + name).toLowerCase()
-  if (type === 'gastronomic' && /historic|monument|memorial|religious|museum/.test(text)) return 34
-  if (type === 'sports' && /historic|monument|memorial|religious|museum/.test(text)) return 32
-  if (type === 'ecological' && /restaurant|cafe|bar|nightlife|monument/.test(text)) return 22
-  if (type === 'night' && /museum|religious|trail/.test(text)) return 22
+  if (type === 'gastronomic' && /historic|monument|memorial|religious|museum/.test(text)) return 180
+  if (type === 'sports' && /historic|monument|memorial|religious|museum/.test(text)) return 180
+  if (type === 'ecological' && /restaurant|cafe|bar|nightlife|monument/.test(text)) return 140
+  if (type === 'night' && /museum|religious|trail/.test(text)) return 140
   return 0
 }
 

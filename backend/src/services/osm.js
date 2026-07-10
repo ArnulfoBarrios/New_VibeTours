@@ -117,7 +117,7 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
       way(around:${radius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
       way(around:${radius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
     );
-    out center tags 35;
+    out center tags 80;
   `
   try {
     const response = await fetch('https://overpass-api.de/api/interpreter', {
@@ -148,7 +148,7 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
       }
     })
       .filter(Boolean)
-      .slice(0, 20)
+      .slice(0, 60)
   } catch (error) {
     console.error('[osm] overpassAttractions error:', error.message)
     return []
