@@ -1487,7 +1487,8 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
 
   const images = normalizeList(source.imagenes ?? source.images, [])
   const cityFallback = input.city ? `${input.city}, ${input.country || ''}`.trim().replace(/,\s*$/, '') : input.destination
-  const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback).catch(() => ({ url: "", isFallback: true }))
+  const placeCategory = fallbackPlace?.category || fallbackPlace?.type || ''
+  const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory).catch(() => ({ url: "", isFallback: true }))
   const image = images[0] ?? source.imageUrl ?? imageStatus.url
   const publicStop = {
     parada: index + 1,
