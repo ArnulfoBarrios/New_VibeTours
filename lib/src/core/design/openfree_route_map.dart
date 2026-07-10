@@ -88,6 +88,25 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
   bool _styleLoaded = false;
   bool _hasFitRoute = false;
   int _drawRequest = 0;
+  Timer? _animationTimer;
+
+  bool _isIncrementalUpdate(List<GeoPoint> oldPoints, List<GeoPoint> newPoints) {
+    if (oldPoints.isEmpty || newPoints.length <= oldPoints.length) {
+      return false;
+    }
+    for (int i = 0; i < oldPoints.length; i++) {
+      if (oldPoints[i].latitude != newPoints[i].latitude ||
+          oldPoints[i].longitude != newPoints[i].longitude) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _cancelAnimationTimer() {
+    _animationTimer?.cancel();
+    _animationTimer = null;
+  }
 
   @override
   void didUpdateWidget(covariant OpenFreeRouteMap oldWidget) {
@@ -96,13 +115,19 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
         oldWidget.points != widget.points ||
         oldWidget.styleUrl != widget.styleUrl ||
         oldWidget.routeOverride != widget.routeOverride;
+    
+    final isIncremental = _isIncrementalUpdate(oldWidget.points, widget.points);
+
     if (routeChanged) {
-      _hasFitRoute = false;
+      if (!isIncremental) {
+        _hasFitRoute = false;
+      }
     }
     if (routeChanged || oldWidget.activeIndex != widget.activeIndex) {
       _drawRoute(
         focusActiveStop:
             oldWidget.activeIndex != widget.activeIndex && !routeChanged,
+        isIncremental: isIncremental,
       );
     } 
     
@@ -141,6 +166,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
 
   @override
   void dispose() {
+    _cancelAnimationTimer();
     _controller?.dispose();
     super.dispose();
   }
@@ -176,7 +202,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
     );
   }
 
-  Future<void> _drawRoute({bool focusActiveStop = false}) async {
+  Future<void> _drawRoute({bool focusActiveStop = false, bool isIncremental = false}) async {
     final controller = _controller;
     if (controller == null || !_styleLoaded || widget.points.isEmpty) return;
     final requestId = ++_drawRequest;
@@ -189,6 +215,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
         widget.routeOverride!,
         focusActiveStop: focusActiveStop,
         fitRoute: true,
+        isIncremental: isIncremental,
       );
       return;
     }
@@ -199,12 +226,14 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
       resolvedRoute,
       focusActiveStop: focusActiveStop,
       fitRoute: true,
+      isIncremental: isIncremental,
     );
     if (resolvedRoute.geometry.isEmpty) {
       await _paintRoute(
         RoadRouteResult(geometry: widget.points),
         focusActiveStop: focusActiveStop,
         fitRoute: true,
+        isIncremental: isIncremental,
       );
     }
   }
@@ -213,9 +242,13 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
     RoadRouteResult route, {
     required bool focusActiveStop,
     required bool fitRoute,
+    bool isIncremental = false,
   }) async {
     final controller = _controller;
     if (controller == null || !_styleLoaded || widget.points.isEmpty) return;
+    
+    _cancelAnimationTimer();
+
     final points = [
       for (final point in widget.points)
         LatLng(point.latitude, point.longitude),
@@ -252,52 +285,64 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
     await controller.clearLines();
     await controller.clearCircles();
     await controller.clearSymbols();
-    if (routePoints.length > 1) {
-      final lineOptions = LineOptions(
-        geometry: routePoints,
-        lineColor: _routeColor(route),
-        lineWidth: 6,
-        lineOpacity: 0.96,
-        lineJoin: 'round',
-      );
 
-      if (widget.routeOverride == null && routePoints.length > 5) {
-        final line = await controller.addLine(
-          LineOptions(
-            geometry: [routePoints[0], routePoints[1]],
-            lineColor: _routeColor(route),
-            lineWidth: 6,
-            lineOpacity: 0.96,
-            lineJoin: 'round',
+    // Map stops to their closest indices on the road geometry
+    final stopIndices = <int>[];
+    for (final stop in points) {
+      int closestIndex = 0;
+      double minDist = double.infinity;
+      for (int i = 0; i < routePoints.length; i++) {
+        final dist = _distanceSquared(stop, routePoints[i]);
+        if (dist < minDist) {
+          minDist = dist;
+          closestIndex = i;
+        }
+      }
+      stopIndices.add(closestIndex);
+    }
+
+    final drawnStops = <int>{};
+
+    int splitIndex = 0;
+    if (isIncremental && routePoints.isNotEmpty && points.length > 1) {
+      final lastStopPoint = points[points.length - 2];
+      double minDist = double.infinity;
+      for (int i = 0; i < routePoints.length; i++) {
+        final dist = _distanceSquared(lastStopPoint, routePoints[i]);
+        if (dist < minDist) {
+          minDist = dist;
+          splitIndex = i;
+        }
+      }
+
+      // Pre-draw previous stops immediately without pop animation
+      for (int i = 0; i < points.length - 1; i++) {
+        await controller.addCircle(
+          CircleOptions(
+            geometry: points[i],
+            circleRadius: i == activeIndex ? 11 : 8,
+            circleColor: i == activeIndex ? '#007AFF' : '#FFFFFF',
+            circleOpacity: 0.98,
+            circleStrokeColor: '#007AFF',
+            circleStrokeWidth: i == activeIndex ? 4 : 2.5,
           ),
         );
-        int currentPoints = 2;
-        Timer.periodic(const Duration(milliseconds: 16), (timer) {
-          if (!mounted || currentPoints >= routePoints.length) {
-            timer.cancel();
-            if (mounted && currentPoints < routePoints.length) {
-              controller.updateLine(line, lineOptions);
-            }
-            return;
-          }
-          currentPoints += (routePoints.length / 45).ceil();
-          if (currentPoints > routePoints.length) currentPoints = routePoints.length;
-          
-          controller.updateLine(
-            line,
-            LineOptions(
-              geometry: routePoints.sublist(0, currentPoints),
-              lineColor: _routeColor(route),
-              lineWidth: 6,
-              lineOpacity: 0.96,
-              lineJoin: 'round',
+        if (widget.showNumbers) {
+          await controller.addSymbol(
+            SymbolOptions(
+              geometry: points[i],
+              textField: '${i + 1}',
+              textSize: i == activeIndex ? 13 : 11,
+              textColor: i == activeIndex ? '#FFFFFF' : '#007AFF',
+              textHaloColor: i == activeIndex ? '#007AFF' : '#FFFFFF',
+              textHaloWidth: 1.2,
             ),
           );
-        });
-      } else {
-        await controller.addLine(lineOptions);
+        }
+        drawnStops.add(i);
       }
     }
+
     for (final maritimeSegment in route.maritimeSegments) {
       final segmentPoints = [
         for (final point in maritimeSegment)
@@ -315,6 +360,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
         );
       }
     }
+
     if (widget.showPortWaypoints && portPoints.isNotEmpty) {
       await controller.addCircles([
         for (final point in portPoints)
@@ -339,17 +385,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
           ),
       ]);
     }
-    await controller.addCircles([
-      for (var index = 0; index < points.length; index++)
-        CircleOptions(
-          geometry: points[index],
-          circleRadius: index == activeIndex ? 11 : 8,
-          circleColor: index == activeIndex ? '#007AFF' : '#FFFFFF',
-          circleOpacity: 0.98,
-          circleStrokeColor: '#007AFF',
-          circleStrokeWidth: index == activeIndex ? 4 : 2.5,
-        ),
-    ]);
+
     if (currentPoint != null) {
       await controller.addCircles([
         CircleOptions(
@@ -370,19 +406,170 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
         ),
       ]);
     }
-    if (widget.showNumbers) {
-      await controller.addSymbols([
-        for (var index = 0; index < points.length; index++)
-          SymbolOptions(
-            geometry: points[index],
-            textField: '${index + 1}',
-            textSize: index == activeIndex ? 13 : 11,
-            textColor: index == activeIndex ? '#FFFFFF' : '#007AFF',
-            textHaloColor: index == activeIndex ? '#007AFF' : '#FFFFFF',
-            textHaloWidth: 1.2,
-          ),
-      ]);
+
+    if (routePoints.length > 1) {
+      final lineOptions = LineOptions(
+        geometry: routePoints,
+        lineColor: _routeColor(route),
+        lineWidth: 6,
+        lineOpacity: 0.96,
+        lineJoin: 'round',
+      );
+
+      if (widget.routeOverride == null) {
+        if (isIncremental) {
+          final completedLinePoints = routePoints.sublist(0, splitIndex + 1);
+          Line? mainLine;
+          if (completedLinePoints.length > 1) {
+            mainLine = await controller.addLine(
+              LineOptions(
+                geometry: completedLinePoints,
+                lineColor: _routeColor(route),
+                lineWidth: 6,
+                lineOpacity: 0.96,
+                lineJoin: 'round',
+              ),
+            );
+          }
+
+          final newSegmentPoints = routePoints.sublist(splitIndex);
+          if (newSegmentPoints.length > 1) {
+            int currentSegmentIndex = 1;
+            final totalNewPoints = newSegmentPoints.length;
+            final stepSize = (totalNewPoints / 25).ceil();
+
+            if (mainLine == null) {
+              mainLine = await controller.addLine(
+                LineOptions(
+                  geometry: [newSegmentPoints[0], newSegmentPoints[1]],
+                  lineColor: _routeColor(route),
+                  lineWidth: 6,
+                  lineOpacity: 0.96,
+                  lineJoin: 'round',
+                ),
+              );
+              currentSegmentIndex = 2;
+            }
+
+            _animationTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) async {
+              if (!mounted || _controller == null) {
+                timer.cancel();
+                return;
+              }
+
+              currentSegmentIndex += stepSize;
+              if (currentSegmentIndex >= totalNewPoints) {
+                timer.cancel();
+                _animationTimer = null;
+
+                if (mounted && mainLine != null) {
+                  await controller.updateLine(
+                    mainLine,
+                    lineOptions,
+                  );
+                  await _drawNewStopWithEffect(points.last, points.length - 1, activeIndex);
+                }
+                return;
+              }
+
+              final visibleGeometry = [
+                ...completedLinePoints,
+                ...newSegmentPoints.sublist(1, currentSegmentIndex),
+              ];
+
+              if (mounted && mainLine != null) {
+                await controller.updateLine(
+                  mainLine,
+                  LineOptions(
+                    geometry: visibleGeometry,
+                    lineColor: _routeColor(route),
+                    lineWidth: 6,
+                    lineOpacity: 0.96,
+                    lineJoin: 'round',
+                  ),
+                );
+              }
+            });
+          } else {
+            await _drawNewStopWithEffect(points.last, points.length - 1, activeIndex);
+          }
+        } else {
+          // Normal full tracing animation starting from stop 0
+          if (!drawnStops.contains(0) && points.isNotEmpty) {
+            await _drawNewStopWithEffect(points.first, 0, activeIndex);
+            drawnStops.add(0);
+          }
+
+          final line = await controller.addLine(
+            LineOptions(
+              geometry: [routePoints[0], routePoints[1]],
+              lineColor: _routeColor(route),
+              lineWidth: 6,
+              lineOpacity: 0.96,
+              lineJoin: 'round',
+            ),
+          );
+
+          int currentPoints = 2;
+          final totalPoints = routePoints.length;
+          final stepSize = (totalPoints / 35).ceil();
+
+          _animationTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) async {
+            if (!mounted || _controller == null) {
+              timer.cancel();
+              return;
+            }
+
+            currentPoints += stepSize;
+            if (currentPoints >= totalPoints) {
+              timer.cancel();
+              _animationTimer = null;
+
+              if (mounted) {
+                await controller.updateLine(line, lineOptions);
+                for (int i = 0; i < points.length; i++) {
+                  if (!drawnStops.contains(i)) {
+                    await _drawNewStopWithEffect(points[i], i, activeIndex);
+                    drawnStops.add(i);
+                  }
+                }
+              }
+              return;
+            }
+
+            if (mounted) {
+              await controller.updateLine(
+                line,
+                LineOptions(
+                  geometry: routePoints.sublist(0, currentPoints),
+                  lineColor: _routeColor(route),
+                  lineWidth: 6,
+                  lineOpacity: 0.96,
+                  lineJoin: 'round',
+                ),
+              );
+
+              for (int i = 0; i < points.length; i++) {
+                if (!drawnStops.contains(i) && currentPoints >= stopIndices[i]) {
+                  await _drawNewStopWithEffect(points[i], i, activeIndex);
+                  drawnStops.add(i);
+                }
+              }
+            }
+          });
+        }
+      } else {
+        await controller.addLine(lineOptions);
+        for (int i = 0; i < points.length; i++) {
+          await _drawNewStopWithEffect(points[i], i, activeIndex);
+        }
+      }
+    } else {
+      if (points.isNotEmpty) {
+        await _drawNewStopWithEffect(points.first, 0, activeIndex);
+      }
     }
+
     if (points.length == 1) {
       await controller.animateCamera(
         CameraUpdate.newLatLngZoom(points.first, 16),
@@ -426,6 +613,8 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
           duration: const Duration(milliseconds: 300),
         );
       }
+      
+      final animDuration = isIncremental ? 1100 : 650;
       await controller.animateCamera(
         CameraUpdate.newLatLngBounds(
           _boundsFor(boundsPoints),
@@ -434,12 +623,68 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
           right: widget.fitPadding.right,
           bottom: widget.fitPadding.bottom,
         ),
-        duration: const Duration(milliseconds: 650),
+        duration: Duration(milliseconds: animDuration),
       );
     } else if (focusActiveStop) {
       await controller.animateCamera(
         CameraUpdate.newLatLngZoom(points[activeIndex], 15),
         duration: const Duration(milliseconds: 450),
+      );
+    }
+  }
+
+  Future<void> _drawNewStopWithEffect(LatLng location, int index, int activeIndex) async {
+    final controller = _controller;
+    if (controller == null || !mounted) return;
+
+    final isActive = index == activeIndex;
+    final finalRadius = isActive ? 11.0 : 8.0;
+    final finalStrokeWidth = isActive ? 4.0 : 2.5;
+    final circleColor = isActive ? '#007AFF' : '#FFFFFF';
+
+    // Start with a small scale circle
+    final circle = await controller.addCircle(
+      CircleOptions(
+        geometry: location,
+        circleRadius: 3.0,
+        circleColor: circleColor,
+        circleOpacity: 0.98,
+        circleStrokeColor: '#007AFF',
+        circleStrokeWidth: 1.0,
+      ),
+    );
+
+    // Dynamic pop-in scale animation (overshoot scale-up and settle down)
+    await Future.delayed(const Duration(milliseconds: 60));
+    if (!mounted) return;
+    await controller.updateCircle(
+      circle,
+      CircleOptions(
+        circleRadius: finalRadius * 1.3,
+        circleStrokeWidth: finalStrokeWidth * 1.2,
+      ),
+    );
+
+    await Future.delayed(const Duration(milliseconds: 60));
+    if (!mounted) return;
+    await controller.updateCircle(
+      circle,
+      CircleOptions(
+        circleRadius: finalRadius,
+        circleStrokeWidth: finalStrokeWidth,
+      ),
+    );
+
+    if (widget.showNumbers) {
+      await controller.addSymbol(
+        SymbolOptions(
+          geometry: location,
+          textField: '${index + 1}',
+          textSize: isActive ? 13.0 : 11.0,
+          textColor: isActive ? '#FFFFFF' : '#007AFF',
+          textHaloColor: isActive ? '#007AFF' : '#FFFFFF',
+          textHaloWidth: 1.2,
+        ),
       );
     }
   }
