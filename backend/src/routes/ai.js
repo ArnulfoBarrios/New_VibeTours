@@ -2023,6 +2023,7 @@ function persistTour(tour, route, input, userId) {
           images: stop.imagenes,
           suggested_minutes: minutesFromLabel(stop.duracion_estimada),
           stop_order: index,
+          is_fallback_image: stop.isFallbackImage || false,
         }
       })
       const { error: stopError } = await supabase.from('tour_stops').insert(stops)

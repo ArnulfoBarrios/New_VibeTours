@@ -8,6 +8,15 @@ export async function imageForPlaceWithStatus(placeName, city) {
   if (wiki) return { url: wiki, isFallback: false }
   const openverse = await openverseImage(`${placeName} ${city}`)
   if (openverse) return { url: openverse, isFallback: false }
+  
+  // Fallback: Buscar imagen de la ciudad/región
+  if (city) {
+    const wikiCity = await wikimediaImage(city)
+    if (wikiCity) return { url: wikiCity, isFallback: true }
+    const openverseCity = await openverseImage(city)
+    if (openverseCity) return { url: openverseCity, isFallback: true }
+  }
+
   return { url: curatedImage(`${placeName} ${city} travel`), isFallback: true }
 }
 

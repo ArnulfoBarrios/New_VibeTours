@@ -533,6 +533,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
                   order: entry.key,
                   day: int.tryParse(s['dia']?.toString() ?? '1') ?? 1,
                   curiousFacts: List<String>.from(s['datos_curiosos'] ?? []),
+                  isFallbackImage: s['isFallbackImage'] == true,
                 );
               }).toList(),
             );

@@ -668,7 +668,7 @@ class TourRepository {
           30,
         ),
         order: entry.key,
-        isFallbackImage: item['isFallbackImage'] == true,
+        isFallbackImage: item['is_fallback_image'] == true || item['isFallbackImage'] == true,
       );
     }).toList();
     final gallery = _stringList(
@@ -836,6 +836,7 @@ class TourRepository {
       'curious_facts': stop.curiousFacts,
       'location_info': stop.locationInfo.toCreationJson(),
       'images': stop.images,
+      'is_fallback_image': stop.isFallbackImage,
     };
   }
 
