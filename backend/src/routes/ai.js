@@ -1487,8 +1487,17 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
 
   const images = normalizeList(source.imagenes ?? source.images, [])
   const cityFallback = input.city ? `${input.city}, ${input.country || ''}`.trim().replace(/,\s*$/, '') : input.destination
-  const placeCategory = fallbackPlace?.category || fallbackPlace?.type || ''
-  const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory).catch(() => ({ url: "", isFallback: true }))
+  
+  // Obtener la categoría dinámicamente usando el nombre y propiedades del objeto AI (source)
+  const rawCategory = source.categoria || source.category || source.type || fallbackPlace?.category || fallbackPlace?.type || ''
+  const placeCategory = normalizeCategory({
+    category: rawCategory,
+    name: resolvedName,
+    tags: source.etiquetas || source.tags || []
+  })
+  
+  // Pasar 'index' como semilla para evitar imágenes idénticas en paradas de la misma categoría
+  const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index).catch(() => ({ url: "", isFallback: true }))
   const image = images[0] ?? source.imageUrl ?? imageStatus.url
   const publicStop = {
     parada: index + 1,
