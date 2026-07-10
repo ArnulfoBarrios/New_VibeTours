@@ -588,7 +588,7 @@ async function processTourGeneration(jobId, input) {
       const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
         ? sourceTour.itinerario
         : sourceTour.stops ?? []
-      const stopTarget = Math.min(12, Math.max(3, plannedStops.length, planner.selectedPlaces.length))
+      const stopTarget = Math.min(30, Math.max(3, plannedStops.length, planner.selectedPlaces.length))
       const normalizedStops = await Promise.all(
         Array.from({ length: stopTarget }, (_, index) => {
           const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
@@ -1737,6 +1737,7 @@ async function collectTourCandidates(input, location) {
     .filter((place) => place && place.name)
     .filter((place) => hasUsableCoordinates(place.latitude, place.longitude) || place.city || place.country)
     .filter((place) => isCandidateNearDestination(place, input, location))
+    .filter((place) => isValidTouristAttraction(place, input))
   const selected = normalizedPool.length >= 3
     ? normalizedPool
     : buildSyntheticFallbackPlaces(input, location)
@@ -1744,6 +1745,41 @@ async function collectTourCandidates(input, location) {
     ? (location ? 'overpass+photon' : 'photon')
     : 'synthetic-fallback'
   return { rawCount: pool.length, places: selected, source }
+}
+
+function isValidTouristAttraction(place, input) {
+  if (!place || !place.name) return false
+  
+  const name = place.name.trim()
+  const nameKey = normalizeKey(name)
+  const cityKey = normalizeKey(input.city)
+  const destKey = normalizeKey(input.destination)
+  const countryKey = normalizeKey(input.country)
+  
+  // 1. Excluir si el nombre es exactamente el de la ciudad, destino o país
+  if (nameKey === cityKey || nameKey === destKey || nameKey === countryKey) return false
+  
+  // 2. Excluir nombres genéricos que no representan una atracción única
+  const genericNames = new Set([
+    'restaurante', 'restaurant', 'cafe', 'bar', 'hotel', 'hostal', 'plaza', 'parque', 'museum', 'museo',
+    'iglesia', 'church', 'playa', 'beach', 'mirador', 'viewpoint', 'aeropuerto', 'airport',
+    'estacion', 'station', 'supermercado', 'supermarket', 'centro', 'mall', 'tienda', 'shop',
+    'tourism', 'attraction', 'turismo', 'atraccion'
+  ])
+  if (genericNames.has(nameKey)) return false
+  
+  // 3. Excluir combinaciones genéricas de "centro"
+  if (nameKey === `centro-de-${cityKey}` || nameKey === `centro-${cityKey}` || nameKey === `${cityKey}-centro`) return false
+  
+  // 4. Excluir límites administrativos, distritos o barrios
+  const osmKey = place.tags?.osm_key || ''
+  const osmVal = place.tags?.osm_value || place.type || ''
+  if (osmKey === 'boundary' || osmKey === 'place' && ['city', 'town', 'village', 'suburb', 'neighbourhood', 'state', 'country', 'continent', 'locality', 'isolated_dwelling'].includes(osmVal)) {
+    return false
+  }
+  if (osmVal === 'administrative') return false
+  
+  return true
 }
 
 function isCandidateNearDestination(place, input, location) {
@@ -1766,13 +1802,27 @@ function isCandidateNearDestination(place, input, location) {
 function findCandidatePlace(name, candidatePlaces, anchorPlace) {
   const key = normalizeKey(name)
   if (!key) return anchorPlace
+  
+  // 1. Coincidencia exacta
   const exact = candidatePlaces.find((place) => normalizeKey(place.name) === key)
   if (exact) return exact
-  const contains = candidatePlaces.find((place) => {
+  
+  // 2. Coincidencia donde el candidato contiene la parada (Ej: Parada "Catedral", Candidato "Catedral de Santa Marta")
+  const candidateContainsStop = candidatePlaces.find((place) => {
     const placeKey = normalizeKey(place.name)
-    return placeKey.includes(key) || key.includes(placeKey)
+    return placeKey.includes(key)
   })
-  return contains ?? anchorPlace
+  if (candidateContainsStop) return candidateContainsStop
+
+  // 3. Coincidencia donde la parada contiene al candidato, sólo si no es un término genérico muy corto
+  const stopContainsCandidate = candidatePlaces.find((place) => {
+    const placeKey = normalizeKey(place.name)
+    if (placeKey.length < 6) return false
+    return key.includes(placeKey)
+  })
+  if (stopContainsCandidate) return stopContainsCandidate
+
+  return anchorPlace
 }
 
 async function resolveStopCoordinates({ source, input, name, fallbackPlace }) {

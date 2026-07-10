@@ -77,7 +77,7 @@ export async function planWithOpenAI({
     return null
   }
 
-  const selectedPlaces = summarizePlaces(places).slice(0, 8)
+  const selectedPlaces = summarizePlaces(places).slice(0, 30)
   let system = `Eres TourSync AI, una inteligencia artificial de lujo especializada exclusivamente en crear tours turisticos vibrantes, atractivos y altamente personalizados.
 
 Tu respuesta debe ser siempre un unico objeto JSON valido. No agregues markdown, comentarios, etiquetas, explicaciones ni texto fuera del JSON.

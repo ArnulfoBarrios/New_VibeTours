@@ -531,6 +531,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
                   tips: List<String>.from(s['consejos'] ?? []),
                   suggestedMinutes: int.tryParse(s['duracion_estimada'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 25,
                   order: entry.key,
+                  day: int.tryParse(s['dia']?.toString() ?? '1') ?? 1,
                   curiousFacts: List<String>.from(s['datos_curiosos'] ?? []),
                 );
               }).toList(),
