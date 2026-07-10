@@ -287,6 +287,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     final labels = builderState.recommendations.map((r) => r.name).toList();
 
     return Container(
+      key: const ValueKey('ai_planner_map_card'),
       height: 250,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -302,6 +303,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: OpenFreeRouteMap(
+          key: const ValueKey('ai_planner_openfree_map'),
           points: points,
           labels: labels,
           styleUrl: ref.watch(mapStyleProvider),

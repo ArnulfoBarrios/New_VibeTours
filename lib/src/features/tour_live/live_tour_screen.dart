@@ -40,7 +40,32 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
   bool _locationStreamRequested = false;
   bool _noLandRouteAvailable = false;
   bool _isTrackingMode = false;
+  bool _navigatingToHotel = false;
   double? _currentHeading;
+
+  TourStop? _findHotelStop(Tour tour) {
+    for (final stop in tour.stops) {
+      if (stop.id == 'hotel_end') return stop;
+    }
+    for (final stop in tour.stops) {
+      if (stop.id == 'hotel_start') return stop;
+    }
+    for (final stop in tour.stops.reversed) {
+      if (stop.name.toLowerCase().contains('hotel')) return stop;
+    }
+    return null;
+  }
+
+  void _startHotelNavigation() {
+    final tour = _navigationTour;
+    if (tour == null) return;
+    setState(() {
+      _navigatingToHotel = true;
+      _liveRoute = null;
+      _liveRouteStopIndex = null;
+    });
+    _recalculateRoute(tour, force: true);
+  }
 
   @override
   void dispose() {
@@ -67,7 +92,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
           final progress = (_activeStop + 1) / tour.stops.length;
           _navigationTour = tour;
           _scheduleLiveNavigation(tour);
-          final liveRoute = _liveRouteStopIndex == _activeStop
+          final liveRoute = (_navigatingToHotel && _liveRouteStopIndex == -1) ||
+                            (!_navigatingToHotel && _liveRouteStopIndex == _activeStop)
               ? _liveRoute
               : null;
           final mapPoints = _mapPointsFor(stop);
@@ -75,11 +101,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
             children: [
               Positioned.fill(
                 child: OpenFreeRouteMap(
-                  key: ValueKey('${tour.id}-$mapStyle'),
+                  key: ValueKey('${tour.id}-$mapStyle-${_navigatingToHotel ? "hotel" : "stop"}'),
                   points: mapPoints,
                   labels: [
                     if (_currentPoint != null) 'Tu ubicacion',
-                    stop.name,
+                    _navigatingToHotel
+                        ? (_findHotelStop(tour)?.name ?? 'Hotel')
+                        : stop.name,
                   ],
                   activeIndex: _currentPoint == null ? 0 : 1,
                   styleUrl: mapStyle,
@@ -120,178 +148,27 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                   icon: const Icon(Icons.close_rounded),
                 ),
               ),
+              if (_findHotelStop(tour) != null && !_navigatingToHotel)
+                Positioned(
+                  right: 16,
+                  bottom: 270,
+                  child: FloatingActionButton.extended(
+                    heroTag: 'return_hotel_fab',
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    onPressed: _startHotelNavigation,
+                    icon: const Icon(Icons.hotel_rounded),
+                    label: const Text('Regresar al hotel'),
+                  ),
+                ),
               Positioned(
                 left: 16,
                 right: 16,
                 bottom: 18,
                 child: GlassPanel(
                   padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              stop.name,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ),
-                          Text('${_activeStop + 1}/${tour.stops.length}'),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 8,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_noLandRouteAvailable)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.directions_off_rounded, color: Theme.of(context).colorScheme.onErrorContainer),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'No se puede calcular la ruta debido a que no hay ruta terrestre disponible.',
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onErrorContainer,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          if (!_noLandRouteAvailable)
-                            _LiveChip(
-                              icon: Icons.route_rounded,
-                              label: _distanceLabel(tour, progress, liveRoute),
-                            ),
-                          if (!_noLandRouteAvailable)
-                            _LiveChip(
-                              icon: Icons.schedule_rounded,
-                              label: _timeLabel(tour, progress, liveRoute),
-                            ),
-                          if (!_noLandRouteAvailable)
-                            _LiveChip(
-                              icon: Icons.traffic_rounded,
-                              label: _trafficLabel(liveRoute),
-                            ),
-                          if (_isOffRoute || _isRouting)
-                            _LiveChip(
-                              icon: Icons.alt_route_rounded,
-                              label: _isRouting
-                                  ? 'Actualizando ruta'
-                                  : 'Desvio detectado',
-                            ),
-                          if (_currentPoint != null)
-                            const _LiveChip(
-                              icon: Icons.gps_fixed_rounded,
-                              label: 'GPS live',
-                            )
-                          else
-                            const _LiveChip(
-                              icon: Icons.gps_not_fixed_rounded,
-                              label: 'Buscando GPS',
-                            ),
-                        ],
-                      ),
-                      if (!_noLandRouteAvailable)
-                        const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: LiquidButton(
-                              label: l10n.voiceGuide,
-                              icon: Icons.record_voice_over_rounded,
-                              onPressed: () async {
-                                await ref.read(voiceGuideProvider).narrateStop(stop);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          IconButton.filledTonal(
-                            tooltip: l10n.handsFree,
-                            onPressed: () => setState(() {
-                              _handsFree = !_handsFree;
-                            }),
-                            icon: Icon(
-                              _handsFree
-                                  ? Icons.hearing_rounded
-                                  : Icons.hearing_disabled_rounded,
-                            ),
-                          ),
-                          IconButton.filledTonal(
-                            tooltip: l10n.recalculate,
-                            onPressed: () =>
-                                _recalculateRoute(tour, force: true),
-                            icon: const Icon(Icons.sync_rounded),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: LiquidButton(
-                          label: _activeStop == tour.stops.length - 1 ? 'Terminar tour' : l10n.nextStop,
-                          icon: _activeStop == tour.stops.length - 1 ? Icons.flag_rounded : Icons.arrow_forward_rounded,
-                          isPrimary: _activeStop == tour.stops.length - 1,
-                          onPressed: () {
-                            if (_activeStop == tour.stops.length - 1) {
-                              final currentUser = ref.read(authServiceProvider).currentUser;
-                              
-                              if (currentUser == null) {
-                                context.pop(); // Invitados no pueden calificar
-                                return;
-                              }
-
-                              final userTours = ref.read(userToursProvider).valueOrNull?.manualTours ?? [];
-                              final isOwnTour = userTours.any((t) => t.id == tour.id) || tour.id.startsWith('manual-');
-                              
-                              final userRatings = ref.read(userRatingsProvider(currentUser.id)).valueOrNull ?? [];
-                              final hasRated = userRatings.any((r) => r.tour.id == tour.id);
-                              
-                              if (isOwnTour || hasRated) {
-                                context.pop(); // Si es su propio tour o ya lo calificó, simplemente salir
-                              } else {
-                                showDialog(
-                                  context: context,
-                                  barrierDismissible: false,
-                                  builder: (context) => TourRatingDialog(tour: tour),
-                                );
-                              }
-                            } else {
-                              setState(() {
-                                _activeStop =
-                                    ((_activeStop + 1) % tour.stops.length)
-                                        .toInt();
-                                _liveRoute = null;
-                                _liveRouteStopIndex = null;
-                                _isOffRoute = false;
-                                _noLandRouteAvailable = false;
-                              });
-                              _recalculateRoute(tour, force: true);
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: _navigatingToHotel
+                      ? _buildHotelNavigationPanel(context, tour)
+                      : _buildStandardNavigationPanel(context, tour, stop, progress, liveRoute, l10n),
                 ),
               ),
             ],
@@ -400,8 +277,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
       });
     }
     if (tour.stops.isEmpty) return;
-    final stopIndex = _activeStop;
-    final destination = tour.stops[stopIndex].location;
+    final stopIndex = _navigatingToHotel ? -1 : _activeStop;
+    final hotelStop = _findHotelStop(tour);
+    if (_navigatingToHotel && hotelStop == null) return;
+    final destination = _navigatingToHotel ? hotelStop!.location : tour.stops[_activeStop].location;
     setState(() {
       _isRouting = true;
       _isOffRoute = markOffRoute;
@@ -453,8 +332,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
 
   List<GeoPoint> _mapPointsFor(TourStop stop) {
     final origin = _currentPoint;
-    if (origin == null) return [stop.location];
-    return [origin, stop.location];
+    final destination = _navigatingToHotel
+        ? (_findHotelStop(_navigationTour!)?.location ?? stop.location)
+        : stop.location;
+    if (origin == null) return [destination];
+    return [origin, destination];
   }
 
   GeoPoint _pointFromPosition(Position position) {
@@ -466,12 +348,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
     if (meters > 0) {
       return '${(meters / 1000).toStringAsFixed(1)} km restantes';
     }
+    if (_navigatingToHotel) return 'Por calcular';
     return '${(tour.distanceKm * (1 - progress)).toStringAsFixed(1)} km restantes';
   }
 
   String _timeLabel(Tour tour, double progress, RoadRouteResult? route) {
     final seconds = route?.travelTimeSeconds;
     if (seconds != null && seconds > 0) return _formatDuration(seconds);
+    if (_navigatingToHotel) return 'Calculando...';
     final fallbackMinutes = ((tour.durationHours * 60) * (1 - progress))
         .round();
     return '$fallbackMinutes min';
@@ -515,6 +399,271 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
       if (distance < best) best = distance;
     }
     return best;
+  }
+
+  Widget _buildHotelNavigationPanel(BuildContext context, Tour tour) {
+    final hotelStop = _findHotelStop(tour);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Regresando al hotel',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ),
+            Icon(Icons.hotel_rounded, color: Theme.of(context).colorScheme.primary),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          hotelStop?.name ?? 'Hotel de alojamiento',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (!_noLandRouteAvailable)
+              _LiveChip(
+                icon: Icons.route_rounded,
+                label: _distanceLabel(tour, 0, _liveRoute),
+              ),
+            if (!_noLandRouteAvailable)
+              _LiveChip(
+                icon: Icons.schedule_rounded,
+                label: _timeLabel(tour, 0, _liveRoute),
+              ),
+            if (_isOffRoute || _isRouting)
+              _LiveChip(
+                icon: Icons.alt_route_rounded,
+                label: _isRouting ? 'Actualizando ruta' : 'Desvio detectado',
+              ),
+            if (_currentPoint != null)
+              const _LiveChip(
+                icon: Icons.gps_fixed_rounded,
+                label: 'GPS live',
+              )
+            else
+              const _LiveChip(
+                icon: Icons.gps_not_fixed_rounded,
+                label: 'Buscando GPS',
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: LiquidButton(
+                label: 'Reanudar Tour',
+                icon: Icons.play_arrow_rounded,
+                isPrimary: true,
+                onPressed: () {
+                  setState(() {
+                    _navigatingToHotel = false;
+                    _liveRoute = null;
+                    _liveRouteStopIndex = null;
+                  });
+                  _recalculateRoute(tour, force: true);
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton.filledTonal(
+              tooltip: 'Recalcular ruta al hotel',
+              onPressed: () => _recalculateRoute(tour, force: true),
+              icon: const Icon(Icons.sync_rounded),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStandardNavigationPanel(
+    BuildContext context,
+    Tour tour,
+    TourStop stop,
+    double progress,
+    RoadRouteResult? liveRoute,
+    AppLocalizations l10n,
+  ) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                stop.name,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            Text('${_activeStop + 1}/${tour.stops.length}'),
+          ],
+        ),
+        const SizedBox(height: 10),
+        LinearProgressIndicator(
+          value: progress,
+          minHeight: 8,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        const SizedBox(height: 12),
+        if (_noLandRouteAvailable)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.directions_off_rounded, color: Theme.of(context).colorScheme.onErrorContainer),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No se puede calcular la ruta debido a que no hay ruta terrestre disponible.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (!_noLandRouteAvailable)
+              _LiveChip(
+                icon: Icons.route_rounded,
+                label: _distanceLabel(tour, progress, liveRoute),
+              ),
+            if (!_noLandRouteAvailable)
+              _LiveChip(
+                icon: Icons.schedule_rounded,
+                label: _timeLabel(tour, progress, liveRoute),
+              ),
+            if (!_noLandRouteAvailable)
+              _LiveChip(
+                icon: Icons.traffic_rounded,
+                label: _trafficLabel(liveRoute),
+              ),
+            if (_isOffRoute || _isRouting)
+              _LiveChip(
+                icon: Icons.alt_route_rounded,
+                label: _isRouting
+                    ? 'Actualizando ruta'
+                    : 'Desvio detectado',
+              ),
+            if (_currentPoint != null)
+              const _LiveChip(
+                icon: Icons.gps_fixed_rounded,
+                label: 'GPS live',
+              )
+            else
+              const _LiveChip(
+                icon: Icons.gps_not_fixed_rounded,
+                label: 'Buscando GPS',
+              ),
+          ],
+        ),
+        if (!_noLandRouteAvailable)
+          const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: LiquidButton(
+                label: l10n.voiceGuide,
+                icon: Icons.record_voice_over_rounded,
+                onPressed: () async {
+                  await ref.read(voiceGuideProvider).narrateStop(stop);
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton.filledTonal(
+              tooltip: l10n.handsFree,
+              onPressed: () => setState(() {
+                _handsFree = !_handsFree;
+              }),
+              icon: Icon(
+                _handsFree
+                    ? Icons.hearing_rounded
+                    : Icons.hearing_disabled_rounded,
+              ),
+            ),
+            IconButton.filledTonal(
+              tooltip: l10n.recalculate,
+              onPressed: () =>
+                  _recalculateRoute(tour, force: true),
+              icon: const Icon(Icons.sync_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: LiquidButton(
+            label: _activeStop == tour.stops.length - 1 ? 'Terminar tour' : l10n.nextStop,
+            icon: _activeStop == tour.stops.length - 1 ? Icons.flag_rounded : Icons.arrow_forward_rounded,
+            isPrimary: _activeStop == tour.stops.length - 1,
+            onPressed: () {
+              if (_activeStop == tour.stops.length - 1) {
+                final currentUser = ref.read(authServiceProvider).currentUser;
+                
+                if (currentUser == null) {
+                  context.pop(); // Invitados no pueden calificar
+                  return;
+                }
+
+                final userTours = ref.read(userToursProvider).valueOrNull?.manualTours ?? [];
+                final isOwnTour = userTours.any((t) => t.id == tour.id) || tour.id.startsWith('manual-');
+                
+                final userRatings = ref.read(userRatingsProvider(currentUser.id)).valueOrNull ?? [];
+                final hasRated = userRatings.any((r) => r.tour.id == tour.id);
+                
+                if (isOwnTour || hasRated) {
+                  context.pop(); // Si es su propio tour o ya lo calificó, simplemente salir
+                } else {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => TourRatingDialog(tour: tour),
+                  );
+                }
+              } else {
+                setState(() {
+                  _activeStop =
+                      ((_activeStop + 1) % tour.stops.length)
+                          .toInt();
+                  _liveRoute = null;
+                  _liveRouteStopIndex = null;
+                  _isOffRoute = false;
+                  _noLandRouteAvailable = false;
+                });
+                _recalculateRoute(tour, force: true);
+              }
+            },
+          ),
+        ),
+      ],
+    );
   }
 }
 

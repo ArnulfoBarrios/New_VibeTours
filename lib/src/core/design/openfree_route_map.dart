@@ -82,13 +82,16 @@ class OpenFreeRouteMap extends StatefulWidget {
   State<OpenFreeRouteMap> createState() => _OpenFreeRouteMapState();
 }
 
-class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
+class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepAliveClientMixin {
   final RoadRouteService _routeService = RoadRouteService();
   MapLibreMapController? _controller;
   bool _styleLoaded = false;
   bool _hasFitRoute = false;
   int _drawRequest = 0;
   int _currentAnimationId = 0;
+
+  @override
+  bool get wantKeepAlive => true;
 
   bool _isIncrementalUpdate(List<GeoPoint> oldPoints, List<GeoPoint> newPoints) {
     if (oldPoints.isEmpty || newPoints.length <= oldPoints.length) {
@@ -112,6 +115,10 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
         oldWidget.routeOverride != widget.routeOverride;
     
     final isIncremental = _isIncrementalUpdate(oldWidget.points, widget.points);
+
+    if (oldWidget.styleUrl != widget.styleUrl) {
+      _styleLoaded = false;
+    }
 
     if (routeChanged) {
       if (!isIncremental) {
@@ -162,12 +169,12 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
   @override
   void dispose() {
     _currentAnimationId++;
-    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final center = widget.points.isEmpty
         ? const GeoPoint(latitude: 10.9878, longitude: -74.7889)
         : widget.points.first;
@@ -215,15 +222,23 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
       return;
     }
     if (!shouldResolveRoadRoute) return;
-    final resolvedRoute = await _routeService.resolveRoute(widget.points);
-    if (!mounted || requestId != _drawRequest) return;
-    await _paintRoute(
-      resolvedRoute,
-      focusActiveStop: focusActiveStop,
-      fitRoute: true,
-      isIncremental: isIncremental,
-    );
-    if (resolvedRoute.geometry.isEmpty) {
+    
+    try {
+      final resolvedRoute = await _routeService.resolveRoute(widget.points);
+      if (!mounted || requestId != _drawRequest) return;
+      
+      final routeToPaint = resolvedRoute.geometry.isNotEmpty
+          ? resolvedRoute
+          : RoadRouteResult(geometry: widget.points);
+
+      await _paintRoute(
+        routeToPaint,
+        focusActiveStop: focusActiveStop,
+        fitRoute: true,
+        isIncremental: isIncremental,
+      );
+    } catch (_) {
+      if (!mounted || requestId != _drawRequest) return;
       await _paintRoute(
         RoadRouteResult(geometry: widget.points),
         focusActiveStop: focusActiveStop,
@@ -252,6 +267,9 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
       for (final point in route.geometry)
         LatLng(point.latitude, point.longitude),
     ];
+    if (routePoints.isEmpty) {
+      routePoints = points;
+    }
     final portPoints = [
       for (final port in route.ports)
         LatLng(port.location.latitude, port.location.longitude),
@@ -313,6 +331,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
           splitIndex = i;
         }
       }
+      splitIndex = splitIndex.clamp(0, routePoints.length - 1);
 
       // Pre-draw previous stops immediately without pop animation
       for (int i = 0; i < points.length - 1; i++) {
@@ -427,7 +446,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
 
       if (widget.routeOverride == null) {
         if (isIncremental) {
-          final completedLinePoints = routePoints.sublist(0, splitIndex + 1);
+          final completedLinePoints = routePoints.sublist(0, (splitIndex + 1).clamp(1, routePoints.length));
           Line? mainLine;
           if (completedLinePoints.length > 1) {
             try {
@@ -478,7 +497,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
 
               final visibleGeometry = [
                 ...completedLinePoints,
-                ...newSegmentPoints.sublist(1, currentSegmentIndex),
+                ...newSegmentPoints.sublist(1, currentSegmentIndex.clamp(1, newSegmentPoints.length)),
               ];
 
               if (mainLine != null) {
@@ -544,10 +563,11 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
 
             if (line != null) {
               try {
+                final endIdx = currentPoints.clamp(1, routePoints.length);
                 await controller.updateLine(
                   line,
                   LineOptions(
-                    geometry: routePoints.sublist(0, currentPoints),
+                    geometry: routePoints.sublist(0, endIdx),
                     lineColor: _routeColor(route),
                     lineWidth: 6,
                     lineOpacity: 0.96,
@@ -663,44 +683,38 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> {
 
     Circle? circle;
     try {
+      // Start very small for pop-in birth
       circle = await controller.addCircle(
         CircleOptions(
           geometry: location,
-          circleRadius: 3.0,
+          circleRadius: finalRadius * 0.15,
           circleColor: circleColor,
           circleOpacity: 0.98,
           circleStrokeColor: '#007AFF',
-          circleStrokeWidth: 1.0,
+          circleStrokeWidth: finalStrokeWidth * 0.15,
         ),
       );
     } catch (_) {}
 
     if (circle == null || animId != _currentAnimationId || !mounted) return;
 
-    // Pop-in scale animation
-    await Future.delayed(const Duration(milliseconds: 60));
-    if (!mounted || animId != _currentAnimationId) return;
-    try {
-      await controller.updateCircle(
-        circle,
-        CircleOptions(
-          circleRadius: finalRadius * 1.3,
-          circleStrokeWidth: finalStrokeWidth * 1.2,
-        ),
-      );
-    } catch (_) {}
-
-    await Future.delayed(const Duration(milliseconds: 60));
-    if (!mounted || animId != _currentAnimationId) return;
-    try {
-      await controller.updateCircle(
-        circle,
-        CircleOptions(
-          circleRadius: finalRadius,
-          circleStrokeWidth: finalStrokeWidth,
-        ),
-      );
-    } catch (_) {}
+    // Fast elastic overshoot interpolation steps at 60fps (16ms delays)
+    final steps = [0.45, 0.85, 1.25, 1.35, 1.15, 1.0];
+    for (final scale in steps) {
+      await Future.delayed(const Duration(milliseconds: 16));
+      if (!mounted || animId != _currentAnimationId) return;
+      try {
+        if (controller.circles.contains(circle)) {
+          await controller.updateCircle(
+            circle,
+            CircleOptions(
+              circleRadius: finalRadius * scale,
+              circleStrokeWidth: finalStrokeWidth * (scale > 1.0 ? 1.1 : scale),
+            ),
+          );
+        }
+      } catch (_) {}
+    }
 
     if (animId != _currentAnimationId || !mounted) return;
     if (widget.showNumbers) {

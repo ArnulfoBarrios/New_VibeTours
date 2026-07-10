@@ -1017,6 +1017,36 @@ class TourRepository {
     final hash = seed.codeUnits.fold<int>(0, (sum, code) => sum + code);
     return images[hash.abs() % images.length];
   }
+
+  Future<List<dynamic>> fetchHotels({
+    required double latitude,
+    required double longitude,
+    required String budget,
+  }) async {
+    for (final apiBaseUrl in AppConfig.apiBaseUrls) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse('$apiBaseUrl/ai/tours/hotels'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'latitude': latitude,
+                'longitude': longitude,
+                'budget': budget == 'Económico' ? 'economic' : budget == 'Lujo' ? 'luxury' : 'moderate',
+              }),
+            )
+            .timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          return data['hotels'] as List<dynamic>? ?? [];
+        }
+      } catch (e) {
+        debugPrint('Error fetching hotels from $apiBaseUrl: $e');
+      }
+    }
+    return [];
+  }
 }
 
 extension _StringFallback on String {

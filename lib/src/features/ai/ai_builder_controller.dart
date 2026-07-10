@@ -324,7 +324,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           text: '¡Excelente elección! He diseñado este tour para ti:',
           type: ChatMessageType.ai,
           timestamp: DateTime.now(),
-          actionChips: ['Ver paradas sugeridas', 'Quiero cambiar lugares'],
+          actionChips: ['Quiero cambiar lugares'],
         );
 
         state = state.copyWith(
@@ -510,11 +510,91 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             tourData['isPublished'] = false;
             tourData['isAiGenerated'] = true;
             
+            final List<TourStop> stops = [];
+            final rawStops = (tourData['itinerario'] as List).asMap().entries.map((entry) {
+              final s = entry.value;
+              return TourStop(
+                id: 'stop_${entry.key}',
+                name: s['nombre'],
+                location: GeoPoint(
+                  latitude: s['ubicacion']['latitud'] ?? 0,
+                  longitude: s['ubicacion']['longitud'] ?? 0,
+                ),
+                imageUrl: (s['imagenes'] as List?)?.first ?? '',
+                description: s['descripcion'],
+                activities: List<String>.from(s['actividades'] ?? []),
+                tips: List<String>.from(s['consejos'] ?? []),
+                suggestedMinutes: int.tryParse(s['duracion_estimada'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 25,
+                order: state.selectedHotel != null ? entry.key + 1 : entry.key,
+                day: int.tryParse(s['dia']?.toString() ?? '1') ?? 1,
+                curiousFacts: List<String>.from(s['datos_curiosos'] ?? []),
+                isFallbackImage: s['isFallbackImage'] == true,
+              );
+            }).toList();
+
+            if (state.selectedHotel != null) {
+              final hotelName = state.selectedHotel!['name']?.toString() ?? 'Hotel';
+              final hotelLat = double.tryParse(state.selectedHotel!['latitude']?.toString() ?? '') ?? 0.0;
+              final hotelLon = double.tryParse(state.selectedHotel!['longitude']?.toString() ?? '') ?? 0.0;
+              final hotelAddress = state.selectedHotel!['address']?.toString() ?? state.selectedHotel!['direccion']?.toString() ?? '';
+
+              final hotelStart = TourStop(
+                id: 'hotel_start',
+                name: '$hotelName (Salida)',
+                location: GeoPoint(latitude: hotelLat, longitude: hotelLon),
+                imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500',
+                description: 'Punto de partida y alojamiento en $hotelName.',
+                activities: const ['Check-in', 'Salida del tour'],
+                tips: const ['Llevar agua y calzado cómodo'],
+                suggestedMinutes: 15,
+                order: 0,
+                day: 1,
+                locationInfo: TourLocationInfo(
+                  nombreLugar: hotelName,
+                  direccion: hotelAddress,
+                  ciudad: tourData['city']?.toString() ?? state.request?.city ?? '',
+                  region: '',
+                  pais: tourData['country']?.toString() ?? state.request?.country ?? '',
+                  placeId: state.selectedHotel!['id']?.toString() ?? 'hotel-start',
+                  urlMapa: 'https://maps.google.com/?q=$hotelLat,$hotelLon',
+                ),
+              );
+
+              final maxDay = rawStops.isEmpty ? 1 : rawStops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
+              final hotelEnd = TourStop(
+                id: 'hotel_end',
+                name: '$hotelName (Retorno)',
+                location: GeoPoint(latitude: hotelLat, longitude: hotelLon),
+                imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500',
+                description: 'Fin del recorrido y retorno a tu alojamiento en $hotelName.',
+                activities: const ['Retorno', 'Descanso'],
+                tips: const ['Planifica tu cena y descanso'],
+                suggestedMinutes: 15,
+                order: rawStops.length + 1,
+                day: maxDay,
+                locationInfo: TourLocationInfo(
+                  nombreLugar: hotelName,
+                  direccion: hotelAddress,
+                  ciudad: tourData['city']?.toString() ?? state.request?.city ?? '',
+                  region: '',
+                  pais: tourData['country']?.toString() ?? state.request?.country ?? '',
+                  placeId: state.selectedHotel!['id']?.toString() ?? 'hotel-end',
+                  urlMapa: 'https://maps.google.com/?q=$hotelLat,$hotelLon',
+                ),
+              );
+
+              stops.add(hotelStart);
+              stops.addAll(rawStops);
+              stops.add(hotelEnd);
+            } else {
+              stops.addAll(rawStops);
+            }
+
             final tour = Tour(
               id: tourData['id'],
               title: tourData['nombre_tour'],
-              country: '', // populate from somewhere
-              city: '',
+              country: tourData['country']?.toString() ?? state.request?.country ?? '',
+              city: tourData['city']?.toString() ?? state.request?.city ?? '',
               type: TourType.values.firstWhere(
                 (e) => e.name == tourData['tipo_tour'] || tourTypeLabel(e).toLowerCase() == tourData['tipo_tour'].toString().toLowerCase(),
                 orElse: () => TourType.custom,
@@ -530,26 +610,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
               difficulty: TourDifficulty.moderate,
               language: (tourData['idiomas_disponibles'] as List?)?.first ?? 'es',
               tags: List<String>.from(tourData['etiquetas'] ?? []),
-              stops: (tourData['itinerario'] as List).asMap().entries.map((entry) {
-                final s = entry.value;
-                return TourStop(
-                  id: 'stop_${entry.key}',
-                  name: s['nombre'],
-                  location: GeoPoint(
-                    latitude: s['ubicacion']['latitud'] ?? 0,
-                    longitude: s['ubicacion']['longitud'] ?? 0,
-                  ),
-                  imageUrl: (s['imagenes'] as List?)?.first ?? '',
-                  description: s['descripcion'],
-                  activities: List<String>.from(s['actividades'] ?? []),
-                  tips: List<String>.from(s['consejos'] ?? []),
-                  suggestedMinutes: int.tryParse(s['duracion_estimada'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 25,
-                  order: entry.key,
-                  day: int.tryParse(s['dia']?.toString() ?? '1') ?? 1,
-                  curiousFacts: List<String>.from(s['datos_curiosos'] ?? []),
-                  isFallbackImage: s['isFallbackImage'] == true,
-                );
-              }).toList(),
+              stops: stops,
             );
             final aiMsg = ChatMessage(
               id: DateTime.now().millisecondsSinceEpoch.toString(),

@@ -53,14 +53,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return 'Ocurrió un error inesperado. Intenta más tarde.';
   }
 
-  Future<void> _saveProfile() async {
-    await ref.read(authServiceProvider).updateUserProfile(
-      bio: _bioController.text,
-      avatarUrl: _avatarUrlController.text.isNotEmpty ? _avatarUrlController.text : null,
-    );
-    setState(() {
-      _isEditingBio = false;
-    });
+  Future<bool> _saveProfile() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(authServiceProvider).updateUserProfile(
+        bio: _bioController.text,
+        avatarUrl: _avatarUrlController.text.isNotEmpty ? _avatarUrlController.text : null,
+      );
+      if (mounted) {
+        setState(() {
+          _isEditingBio = false;
+        });
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(_getFriendlyError(e)),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+      }
+      return false;
+    }
   }
 
   void _pickFromGallery() async {
@@ -78,16 +96,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         final bytes = await File(image.path).readAsBytes();
         final base64String = base64Encode(bytes);
         _avatarUrlController.text = 'data:image/png;base64,$base64String';
-        await _saveProfile();
-        navigator.pop();
-        messenger
-          ..clearSnackBars()
-          ..showSnackBar(
-            const SnackBar(
-              content: Text('Foto de perfil actualizada con éxito.'),
-              backgroundColor: Colors.green,
-            ),
-          );
+        final success = await _saveProfile();
+        if (success) {
+          navigator.pop();
+          messenger
+            ..clearSnackBars()
+            ..showSnackBar(
+              const SnackBar(
+                content: Text('Foto de perfil actualizada con éxito.'),
+                backgroundColor: Colors.green,
+              ),
+            );
+        }
       } catch (e) {
         messenger
           ..clearSnackBars()
@@ -210,23 +230,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           final navigator = Navigator.of(context);
                           final messenger = ScaffoldMessenger.of(context);
                           navigator.pop();
-                          try {
-                            await _saveProfile();
+                          final success = await _saveProfile();
+                          if (success) {
                             messenger
                               ..clearSnackBars()
                               ..showSnackBar(
                                 const SnackBar(
                                   content: Text('Foto de perfil actualizada con éxito.'),
                                   backgroundColor: Colors.green,
-                                ),
-                              );
-                          } catch (e) {
-                            messenger
-                              ..clearSnackBars()
-                              ..showSnackBar(
-                                SnackBar(
-                                  content: Text(_getFriendlyError(e)),
-                                  backgroundColor: Colors.redAccent,
                                 ),
                               );
                           }
@@ -667,19 +678,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             const SizedBox(width: 8),
                             FilledButton(
                               onPressed: () async {
-                                final messenger = ScaffoldMessenger.of(context);
-                                try {
-                                  await _saveProfile();
-                                } catch (e) {
-                                  messenger
-                                    ..clearSnackBars()
-                                    ..showSnackBar(
-                                      SnackBar(
-                                        content: Text(_getFriendlyError(e)),
-                                        backgroundColor: Colors.redAccent,
-                                      ),
-                                    );
-                                }
+                                await _saveProfile();
                               },
                               style: FilledButton.styleFrom(
                                 backgroundColor: AppTheme.primary,

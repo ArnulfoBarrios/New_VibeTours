@@ -192,20 +192,7 @@ class TourDetailScreen extends ConsumerWidget {
                             child: LiquidButton(
                               label: l10n.startTour,
                               icon: Icons.navigation_rounded,
-                              onPressed: () async {
-                                final granted = await checkAndRequestLocationPermission(context, ref);
-                                if (!granted && context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Se requiere ubicación para iniciar el tour.')),
-                                  );
-                                  return;
-                                }
-                                ref.read(selectedTourProvider.notifier).state =
-                                    tour;
-                                if (context.mounted) {
-                                  context.push('/live/${tour.id}');
-                                }
-                              },
+                              onPressed: () => _startTourFlow(context, ref, tour),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -664,6 +651,292 @@ class TourDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _startTourFlow(BuildContext context, WidgetRef ref, Tour tour) async {
+    final granted = await checkAndRequestLocationPermission(context, ref);
+    if (!granted) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Se requiere ubicación para iniciar el tour.')),
+        );
+      }
+      return;
+    }
+
+    final hasHotel = tour.stops.any((s) => s.id == 'hotel_start' || s.id == 'hotel_end' || s.name.toLowerCase().contains('hotel'));
+
+    if (hasHotel || !context.mounted) {
+      ref.read(selectedTourProvider.notifier).state = tour;
+      if (context.mounted) {
+        context.push('/live/${tour.id}');
+      }
+      return;
+    }
+
+    // Show dialog: Do you want to add a hotel?
+    final wantHotel = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Deseas agregar tu hotel de alojamiento?'),
+        content: const Text(
+          'Podemos buscar y agregar tu hotel de alojamiento como punto de inicio y retorno del recorrido.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No, iniciar directamente'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sí, buscar hotel'),
+          ),
+        ],
+      ),
+    );
+
+    if (wantHotel != true || !context.mounted) {
+      ref.read(selectedTourProvider.notifier).state = tour;
+      if (context.mounted) {
+        context.push('/live/${tour.id}');
+      }
+      return;
+    }
+
+    // Show budget selection dialog
+    final selectedBudget = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Presupuesto de tu hotel'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'Económico'),
+            child: const Row(
+              children: [
+                Icon(Icons.monetization_on_outlined, color: Colors.green),
+                SizedBox(width: 12),
+                Text('Económico'),
+              ],
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'Moderado'),
+            child: const Row(
+              children: [
+                Icon(Icons.monetization_on_outlined, color: Colors.blue),
+                SizedBox(width: 12),
+                Text('Moderado'),
+              ],
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'Lujo'),
+            child: const Row(
+              children: [
+                Icon(Icons.monetization_on_outlined, color: Colors.purple),
+                SizedBox(width: 12),
+                Text('Lujo'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedBudget == null || !context.mounted) {
+      ref.read(selectedTourProvider.notifier).state = tour;
+      if (context.mounted) {
+        context.push('/live/${tour.id}');
+      }
+      return;
+    }
+
+    // Show loading and fetch hotels
+    final hotels = await showDialog<List<dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => FutureBuilder<List<dynamic>>(
+        future: ref.read(tourRepositoryProvider).fetchHotels(
+          latitude: tour.stops.first.location.latitude,
+          longitude: tour.stops.first.location.longitude,
+          budget: selectedBudget,
+        ),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const AlertDialog(
+              title: Text('Buscando hoteles cercanos...'),
+              content: SizedBox(
+                height: 80,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            );
+          }
+          if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+            return AlertDialog(
+              title: const Text('No se encontraron hoteles'),
+              content: const Text('No pudimos encontrar hoteles cercanos en este momento.'),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, <dynamic>[]),
+                  child: const Text('Continuar sin hotel'),
+                ),
+              ],
+            );
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.pop(context, snapshot.data);
+          });
+          return const SizedBox.shrink();
+        },
+      ),
+    );
+
+    if (hotels == null || hotels.isEmpty || !context.mounted) {
+      ref.read(selectedTourProvider.notifier).state = tour;
+      if (context.mounted) {
+        context.push('/live/${tour.id}');
+      }
+      return;
+    }
+
+    // Show hotel selection list
+    final selectedHotel = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Selecciona tu hotel'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: hotels.length,
+            itemBuilder: (context, index) {
+              final h = Map<String, dynamic>.from(hotels[index]);
+              return ListTile(
+                leading: const Icon(Icons.hotel_rounded),
+                title: Text(h['name'] ?? 'Hotel'),
+                subtitle: Text(h['address'] ?? h['direccion'] ?? 'Dirección no disponible'),
+                onTap: () => Navigator.pop(context, h),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    if (selectedHotel == null || !context.mounted) {
+      ref.read(selectedTourProvider.notifier).state = tour;
+      if (context.mounted) {
+        context.push('/live/${tour.id}');
+      }
+      return;
+    }
+
+    // Add hotel stops to tour and start
+    final modifiedTour = _addHotelToTour(tour, selectedHotel);
+    ref.read(selectedTourProvider.notifier).state = modifiedTour;
+    if (context.mounted) {
+      context.push('/live/${modifiedTour.id}');
+    }
+  }
+
+  Tour _addHotelToTour(Tour tour, Map<String, dynamic> hotel) {
+    final hotelName = hotel['name']?.toString() ?? 'Hotel';
+    final hotelLat = double.tryParse(hotel['latitude']?.toString() ?? '') ?? 0.0;
+    final hotelLon = double.tryParse(hotel['longitude']?.toString() ?? '') ?? 0.0;
+    final hotelAddress = hotel['address']?.toString() ?? hotel['direccion']?.toString() ?? '';
+
+    final hotelStart = TourStop(
+      id: 'hotel_start',
+      name: '$hotelName (Salida)',
+      location: GeoPoint(latitude: hotelLat, longitude: hotelLon),
+      imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500',
+      description: 'Punto de partida y alojamiento en $hotelName.',
+      activities: const ['Check-in', 'Salida del tour'],
+      tips: const ['Llevar agua y calzado cómodo'],
+      suggestedMinutes: 15,
+      order: 0,
+      day: 1,
+      locationInfo: TourLocationInfo(
+        nombreLugar: hotelName,
+        direccion: hotelAddress,
+        ciudad: tour.city,
+        region: '',
+        pais: tour.country,
+        placeId: hotel['id']?.toString() ?? 'hotel-start',
+        urlMapa: 'https://maps.google.com/?q=$hotelLat,$hotelLon',
+      ),
+    );
+
+    final rawStops = tour.stops.asMap().entries.map((entry) {
+      return entry.value.copyWith(order: entry.key + 1);
+    }).toList();
+
+    final maxDay = rawStops.isEmpty ? 1 : rawStops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
+    final hotelEnd = TourStop(
+      id: 'hotel_end',
+      name: '$hotelName (Retorno)',
+      location: GeoPoint(latitude: hotelLat, longitude: hotelLon),
+      imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500',
+      description: 'Fin del recorrido y retorno a tu alojamiento en $hotelName.',
+      activities: const ['Retorno', 'Descanso'],
+      tips: const ['Planifica tu cena y descanso'],
+      suggestedMinutes: 15,
+      order: rawStops.length + 1,
+      day: maxDay,
+      locationInfo: TourLocationInfo(
+        nombreLugar: hotelName,
+        direccion: hotelAddress,
+        ciudad: tour.city,
+        region: '',
+        pais: tour.country,
+        placeId: hotel['id']?.toString() ?? 'hotel-end',
+        urlMapa: 'https://maps.google.com/?q=$hotelLat,$hotelLon',
+      ),
+    );
+
+    final List<TourStop> nextStops = [hotelStart, ...rawStops, hotelEnd];
+
+    return Tour(
+      id: tour.id,
+      title: tour.title,
+      country: tour.country,
+      city: tour.city,
+      type: tour.type,
+      description: tour.description,
+      coverUrl: tour.coverUrl,
+      gallery: tour.gallery,
+      durationHours: tour.durationHours,
+      distanceKm: tour.distanceKm,
+      rating: tour.rating,
+      reviewCount: tour.reviewCount,
+      likes: tour.likes,
+      difficulty: tour.difficulty,
+      language: tour.language,
+      tags: tour.tags,
+      stops: nextStops,
+      isPublished: tour.isPublished,
+      isAiGenerated: tour.isAiGenerated,
+      shortSummary: tour.shortSummary,
+      subcategories: tour.subcategories,
+      featuredExperience: tour.featuredExperience,
+      placeHistory: tour.placeHistory,
+      culturalContext: tour.culturalContext,
+      availableLanguages: tour.availableLanguages,
+      recommendedAudience: tour.recommendedAudience,
+      bestSeason: tour.bestSeason,
+      recommendedSchedule: tour.recommendedSchedule,
+      meetingPoint: tour.meetingPoint,
+      meetingPointInfo: tour.meetingPointInfo,
+      includes: tour.includes,
+      excludes: tour.excludes,
+      recommendations: tour.recommendations,
+      whatToBring: tour.whatToBring,
+      tourRules: tour.tourRules,
+      keywords: tour.keywords,
+      mainCategory: tour.mainCategory,
+      budget: tour.budget,
+      additionalInfo: tour.additionalInfo,
     );
   }
 }
