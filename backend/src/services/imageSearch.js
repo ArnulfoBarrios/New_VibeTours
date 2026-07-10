@@ -27,7 +27,7 @@ async function wikimediaImage(query) {
     url.searchParams.set('generator', 'search')
     url.searchParams.set('gsrsearch', query)
     url.searchParams.set('gsrnamespace', '6')
-    url.searchParams.set('gsrlimit', '1')
+    url.searchParams.set('gsrlimit', '5')
     url.searchParams.set('prop', 'imageinfo')
     url.searchParams.set('iiprop', 'url')
     url.searchParams.set('format', 'json')
@@ -35,8 +35,15 @@ async function wikimediaImage(query) {
     const response = await fetch(url)
     if (!response.ok) return null
     const json = await response.json()
-    const page = Object.values(json.query?.pages ?? {})[0]
-    return page?.imageinfo?.[0]?.url ?? null
+    const pages = Object.values(json.query?.pages ?? {})
+    
+    // Buscar la primera página que tenga título relevante
+    const bestPage = pages.find((page) => {
+      const title = page.title ?? ''
+      return isImageTitleRelevant(title, query)
+    })
+    
+    return bestPage?.imageinfo?.[0]?.url ?? null
   } catch {
     return null
   }
@@ -46,15 +53,50 @@ async function openverseImage(query) {
   try {
     const url = new URL('https://api.openverse.engineering/v1/images/')
     url.searchParams.set('q', query)
-    url.searchParams.set('page_size', '1')
+    url.searchParams.set('page_size', '5')
     url.searchParams.set('license_type', 'commercial,modification')
     const response = await fetch(url)
     if (!response.ok) return null
     const json = await response.json()
-    return json.results?.[0]?.url ?? json.results?.[0]?.thumbnail ?? null
+    
+    // Buscar el primer resultado relevante
+    const bestMatch = (json.results ?? []).find((result) => {
+      const title = result.title ?? ''
+      return isImageTitleRelevant(title, query)
+    })
+    
+    return bestMatch ? (bestMatch.url ?? bestMatch.thumbnail) : null
   } catch {
     return null
   }
+}
+
+function isImageTitleRelevant(title, query) {
+  if (!title || !query) return false
+  
+  const titleLower = title.toLowerCase()
+  const queryWords = query.toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 2)
+    .filter(word => {
+      const stopWords = new Set([
+        'del', 'las', 'los', 'con', 'por', 'para', 'una', 'uno', 'the', 'and', 'for', 'with',
+        'bar', 'cafe', 'hotel', 'restaurante', 'restaurant', 'plaza', 'parque', 'museum', 'museo',
+        'iglesia', 'church', 'playa', 'beach', 'mirador', 'viewpoint', 'aeropuerto', 'airport',
+        'estacion', 'station', 'supermercado', 'supermarket', 'centro', 'mall', 'tienda', 'shop',
+        'tourism', 'attraction', 'turismo', 'atraccion', 'landmark', 'place', 'monumento', 'monument'
+      ])
+      return !stopWords.has(word)
+    })
+    
+  if (queryWords.length === 0) return true
+  
+  return queryWords.some(word => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp('\\b' + escaped + '\\b', 'i')
+    return regex.test(titleLower)
+  })
 }
 
 function curatedImage(seed) {
