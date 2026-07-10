@@ -166,6 +166,7 @@ Reglas centrales:
   "galeria_tour": [],
   "itinerario": [
     {
+      "dia": 1,
       "parada": 1,
       "nombre": "",
       "descripcion": "",
@@ -213,6 +214,7 @@ Reglas centrales:
 No inventes lugares fuera de la lista proporcionada.
 DEBES usar EXACTAMENTE la lista de lugares seleccionados (selectedPlaces) como el itinerario final y mantenerte estrictamente fiel al orden lógico sugerido.
 Cada parada de la lista proporcionada debe estar en tu respuesta, sin agregar ni quitar ninguna.
+Si el tour dura varios días (durationHours >= 24), distribuye las paradas de manera equilibrada asignándoles el campo "dia" (por ejemplo: 1, 2, 3...) según su orden.
 Input: ${JSON.stringify(routeBrief)}`,
             },
           ],

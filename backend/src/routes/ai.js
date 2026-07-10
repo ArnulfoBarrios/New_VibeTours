@@ -1022,9 +1022,12 @@ function formatTime(minutes) {
 function stopCountForDuration(durationHours) {
   if (durationHours <= 3.5) return 3
   if (durationHours <= 5.5) return 4
-  if (durationHours <= 7) return 6
-  if (durationHours <= 10) return 8
-  return 10
+  if (durationHours <= 7) return 5
+  if (durationHours <= 10) return 6
+  if (durationHours <= 24) return 8
+  if (durationHours <= 48) return 12
+  if (durationHours <= 72) return 16
+  return 20
 }
 
 function normalizeCategory(place) {
@@ -1722,7 +1725,7 @@ async function collectTourCandidates(input, location) {
   const city = location?.city || input.city || ''
   const country = location?.country || input.country || ''
   const query = `${input.destination} ${city} ${country}`.trim()
-  const photonPlaces = await photonSearch(query, 16)
+  const photonPlaces = await photonSearch(query, 30)
   const overpassPrimary = location ? await overpassAttractions(location.latitude, location.longitude, 4500) : []
   const overpassWide = location ? await overpassAttractions(location.latitude, location.longitude, 9000) : []
   const pool = [...overpassPrimary, ...overpassWide, ...photonPlaces]
