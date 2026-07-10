@@ -124,6 +124,12 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     if ((!input.destination || !input.durationHours) && input.prompt) {
       extracted = await extractLocation(input.prompt, input.latitude, input.longitude, userCountry)
       if (extracted) {
+        if (extracted.is_unrelated === true) {
+          return res.json({
+            isUnrelated: true,
+            message: 'Lo siento, soy un asistente diseñado exclusivamente para planificar tours y viajes. No estoy hecho para ese propósito.'
+          })
+        }
         if (extracted.explicit_destination && !input.destination) {
           input.destination = extracted.explicit_destination || extracted.city || extracted.country || ''
           input.city = extracted.city || ''

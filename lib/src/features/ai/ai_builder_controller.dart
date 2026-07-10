@@ -220,6 +220,20 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        if (data['isUnrelated'] == true) {
+          final aiMsg = ChatMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            text: data['message'] ?? 'Lo siento, soy un asistente diseñado exclusivamente para planificar tours y viajes. No estoy hecho para ese propósito.',
+            type: ChatMessageType.ai,
+            timestamp: DateTime.now(),
+          );
+          state = state.copyWith(
+            isLoading: false,
+            isTyping: false,
+            messages: [...state.messages, aiMsg],
+          );
+          return;
+        }
         if (data['needsDestination'] == true) {
           final suggs = data['suggestions'] as List? ?? [];
           final actionChips = suggs.map((e) => (e['city'] ?? '').toString()).where((e) => e.isNotEmpty).toList();
