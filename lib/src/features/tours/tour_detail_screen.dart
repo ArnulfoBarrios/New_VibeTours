@@ -92,8 +92,11 @@ class TourDetailScreen extends ConsumerWidget {
                         imageUrl: tour.coverUrl,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => const SkeletonBox(),
-                        errorWidget: (context, url, error) =>
-                            TravelImageFallback(title: tour.title),
+                        errorWidget: (context, url, error) => CachedNetworkImage(
+                          imageUrl: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80',
+                          fit: BoxFit.cover,
+                          errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
+                        ),
                       ),
                       DecoratedBox(
                         decoration: BoxDecoration(
@@ -249,8 +252,12 @@ class TourDetailScreen extends ConsumerWidget {
                               fit: BoxFit.cover,
                               placeholder: (context, url) =>
                                   const SkeletonBox(width: 132),
-                              errorWidget: (context, url, error) =>
-                                  TravelImageFallback(title: tour.title),
+                              errorWidget: (context, url, error) => CachedNetworkImage(
+                                imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=200&q=80',
+                                width: 132,
+                                fit: BoxFit.cover,
+                                errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
+                              ),
                             ),
                           ),
                         ),
@@ -706,9 +713,15 @@ class _StopTile extends StatelessWidget {
                   fit: BoxFit.cover,
                   placeholder: (context, url) =>
                       const SkeletonBox(width: 76, height: 76),
-                  errorWidget: (context, url, error) => TravelImageFallback(
-                    title: stop.name,
-                    icon: Icons.place_rounded,
+                  errorWidget: (context, url, error) => CachedNetworkImage(
+                    imageUrl: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=150&q=80',
+                    width: 76,
+                    height: 76,
+                    fit: BoxFit.cover,
+                    errorWidget: (c, u, e) => TravelImageFallback(
+                      title: stop.name,
+                      icon: Icons.place_rounded,
+                    ),
                   ),
                 ),
                 if (stop.isFallbackImage)

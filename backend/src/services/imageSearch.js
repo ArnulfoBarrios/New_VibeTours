@@ -59,7 +59,7 @@ async function wikimediaImage(query, requiredGroups = null, indexSeed = 0) {
     const relevantPages = pages.filter((page) => {
       const title = page.title ?? ''
       const imageUrl = page.imageinfo?.[0]?.url ?? ''
-      return isImageTitleRelevant(title, query, requiredGroups, imageUrl)
+      return imageUrl && isImageTitleRelevant(title, query, requiredGroups, imageUrl)
     })
     
     if (relevantPages.length === 0) return null
@@ -86,7 +86,7 @@ async function openverseImage(query, requiredGroups = null, indexSeed = 0) {
     const relevantMatches = (json.results ?? []).filter((result) => {
       const title = result.title ?? ''
       const imageUrl = result.url ?? result.thumbnail ?? ''
-      return isImageTitleRelevant(title, query, requiredGroups, imageUrl)
+      return imageUrl && isImageTitleRelevant(title, query, requiredGroups, imageUrl)
     })
     
     if (relevantMatches.length === 0) return null
