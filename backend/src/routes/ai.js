@@ -768,7 +768,11 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
 async function buildFallbackTour(planner, input) {
   const coverUrl = planner.selectedPlaces[0]?.imageUrl ?? fallbackCover(input.destination)
   const gallery = unique(planner.selectedPlaces.flatMap((place) => place.images)).slice(0, 8)
+  const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
+  const stopsPerDay = Math.ceil(planner.selectedPlaces.length / totalDays)
+
   const itinerary = planner.selectedPlaces.map((place, index) => ({
+    dia: Math.floor(index / stopsPerDay) + 1,
     parada: index + 1,
     nombre: place.name,
     descripcion: buildStopDescription(place, input),
@@ -1386,15 +1390,15 @@ function stopFocusFor(type, category) {
 
 function shouldUseOllama(input, planner) {
   if (process.env.DISABLE_OLLAMA === 'true') return false
-  if (input.durationHours > 120) return false
-  if (planner.selectedPlaces.length > 15) return false
+  if (input.durationHours > 168) return false
+  if (planner.selectedPlaces.length > 30) return false
   return true
 }
 
 function ollamaSkipReason(input, planner) {
   if (process.env.DISABLE_OLLAMA === 'true') return 'disabled_by_env'
-  if (input.durationHours > 6) return 'long_tour_uses_deterministic_planner'
-  if (planner.selectedPlaces.length > 5) return 'too_many_places_for_local_model'
+  if (input.durationHours > 168) return 'long_tour_uses_deterministic_planner'
+  if (planner.selectedPlaces.length > 30) return 'too_many_places_for_local_model'
   return 'not_skipped'
 }
 
