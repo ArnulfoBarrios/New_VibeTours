@@ -433,11 +433,13 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     
     // We reuse the assembly logic
     const stopsTarget = planner.selectedPlaces.length
+    const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
     const stops = await Promise.all(
       Array.from({ length: stopsTarget }, (_, index) => {
         const sourceStop = Array.isArray(sourceTour.itinerario) ? sourceTour.itinerario[index] : null
         const anchorPlace = planner.selectedPlaces[index]
-        return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces)
+        const calculatedDay = Math.floor((index * totalDays) / stopsTarget) + 1
+        return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
       })
     )
     
@@ -589,11 +591,13 @@ async function processTourGeneration(jobId, input) {
         ? sourceTour.itinerario
         : sourceTour.stops ?? []
       const stopTarget = Math.min(30, Math.max(3, plannedStops.length, planner.selectedPlaces.length))
+      const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
       const normalizedStops = await Promise.all(
         Array.from({ length: stopTarget }, (_, index) => {
           const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
           const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-          return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces)
+          const calculatedDay = Math.floor((index * totalDays) / stopTarget) + 1
+          return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
         }),
       )
       const stops = normalizedStops.map((stop) => stop.publicStop)
@@ -706,7 +710,9 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
   const city = input.city || input.destination || 'Destino'
   const country = input.country || 'Global'
   const templates = typeFallbackLabels(input.type, city)
+  const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
   const stops = templates.map((label, index) => ({
+    dia: Math.floor((index * totalDays) / templates.length) + 1,
     parada: index + 1,
     nombre: label.name,
     descripcion: `${label.name} funciona como parada de respaldo mientras se recupera la IA.`,
@@ -1454,7 +1460,7 @@ function validateTourQuality(tour, planner) {
   return tour
 }
 
-async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = []) {
+async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null) {
   const source = stop && typeof stop === 'object' ? stop : {}
   const ubicacion = source.ubicacion ?? source.locationInfo ?? {}
   const sourceName = [source.nombre, source.name, ubicacion.nombre_lugar]
@@ -1470,13 +1476,21 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   })
   const resolvedName = fallbackPlace?.name ?? sourceName
   const description = source.descripcion ?? source.description ?? `${resolvedName} es una parada relevante dentro de la ruta.`
-  const durationText = source.duracion_estimada ?? `${source.suggestedMinutes ?? 25} minutos`
+  
+  let durationText = source.duracion_estimada ?? `${source.suggestedMinutes ?? 25} minutos`
+  const minutes = minutesFromLabel(durationText)
+  // Evitar tiempos absurdos de 1-2 minutos en paradas que merecen más tiempo
+  if (minutes < 15) {
+    const fallbackMins = fallbackPlace?.minutes ?? source.suggestedMinutes ?? 25
+    durationText = `${fallbackMins} minutos`
+  }
+
   const images = normalizeList(source.imagenes ?? source.images, [])
   const imageStatus = await imageForPlaceWithStatus(resolvedName, input.city || input.destination).catch(() => ({ url: "", isFallback: true }))
   const image = images[0] ?? source.imageUrl ?? imageStatus.url
   const publicStop = {
     parada: index + 1,
-    dia: Number(source.dia ?? 1),
+    dia: calculatedDay !== null ? calculatedDay : Number(source.dia ?? 1),
     nombre: resolvedName,
     isFallbackImage: imageStatus.isFallback && !images[0] && !source.imageUrl,
     descripcion: description,
