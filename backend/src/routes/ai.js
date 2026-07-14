@@ -152,13 +152,29 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     }
     
     if (!input.destination) {
-      const suggestions = (extracted && Array.isArray(extracted.suggestions) && extracted.suggestions.length > 0)
+      const rawSuggestions = (extracted && Array.isArray(extracted.suggestions) && extracted.suggestions.length > 0)
         ? extracted.suggestions
         : [
             { city: "Santa Marta", country: "Colombia", reason: "Playas hermosas cerca del Parque Tayrona." },
             { city: "Cartagena", country: "Colombia", reason: "Ciudad histórica con hermosas playas caribeñas." },
             { city: "Medellín", country: "Colombia", reason: "La ciudad de la eterna primavera llena de cultura." }
           ]
+
+      const suggestions = await Promise.all(
+        rawSuggestions.map(async (sugg) => {
+          let imageUrl = ''
+          try {
+            imageUrl = await imageForPlace(sugg.city, sugg.country || '')
+          } catch (e) {
+            console.error('Error fetching image for suggestion:', e)
+          }
+          return {
+            ...sugg,
+            imageUrl: imageUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=500&q=80'
+          }
+        })
+      )
+
       return res.json({
         needsDestination: true,
         message: '¿A qué lugar te gustaría ir? Basado en lo que buscas, aquí tienes algunas recomendaciones:',

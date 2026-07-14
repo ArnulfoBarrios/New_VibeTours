@@ -605,7 +605,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             if (isUser) const SizedBox(width: 32),
           ],
         ).animate().fadeIn().slideY(begin: 0.05),
-        if (message.actionChips != null && message.actionChips!.isNotEmpty) ...[
+        if (message.destinationSuggestions != null && message.destinationSuggestions!.isNotEmpty) ...[
+          _buildDestinationSuggestionsCarousel(message, isBusy),
+        ] else if (message.actionChips != null && message.actionChips!.isNotEmpty) ...[
           const SizedBox(height: 12),
           Padding(
             padding: EdgeInsets.only(left: isUser ? 0 : 40),
@@ -1025,6 +1027,224 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     }
     if (code.contains('no_match')) return l10n.voicePromptNoMatch;
     return l10n.voicePromptError;
+  }
+
+  Widget _buildDestinationSuggestionsCarousel(ChatMessage message, bool isBusy) {
+    final suggestions = message.destinationSuggestions!;
+    return Padding(
+      padding: const EdgeInsets.only(left: 40, top: 12),
+      child: SizedBox(
+        height: 280,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: suggestions.length,
+          itemBuilder: (context, index) {
+            final suggestion = suggestions[index];
+            final city = suggestion.city;
+            final country = suggestion.country;
+            final reason = suggestion.reason;
+            final imageUrl = suggestion.imageUrl;
+            
+            final temp = _getDeterministicTemp(city);
+            final price = _getDeterministicPrice(city);
+            final days = _getDeterministicDays(city);
+            final flag = _getCountryFlag(country);
+
+            return Padding(
+              padding: const EdgeInsets.only(right: 12.0),
+              child: GestureDetector(
+                onTap: isBusy ? null : () => _sendChipMessage(displayPrompt: city, aiPrompt: city),
+                child: Container(
+                  width: 180,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Image.network(
+                                'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=500&q=80',
+                                fit: BoxFit.cover,
+                              );
+                            },
+                          ),
+                        ),
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 0.1),
+                                  Colors.black.withValues(alpha: 0.4),
+                                  Colors.black.withValues(alpha: 0.85),
+                                ],
+                                stops: const [0.0, 0.5, 1.0],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  alignment: Alignment.topLeft,
+                                  child: Text(
+                                    reason,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w400,
+                                      height: 1.3,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black45,
+                                          blurRadius: 4,
+                                        ),
+                                      ],
+                                    ),
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '$flag $city',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Outfit',
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black,
+                                      blurRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                country,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  _buildTag(Icons.calendar_month, '$days días'),
+                                  _buildTag(Icons.thermostat, '$temp°'),
+                                  _buildTag(Icons.flight, '\$$price'),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.05, duration: 400.ms);
+  }
+
+  Widget _buildTag(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.15),
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 9),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _getDeterministicTemp(String city) {
+    final name = city.toLowerCase();
+    if (name.contains('cartagena') || name.contains('santamarta') || name.contains('santa marta') || name.contains('san andres')) return 30;
+    if (name.contains('bogota') || name.contains('bogotá')) return 14;
+    if (name.contains('medellin') || name.contains('medellín') || name.contains('cali')) return 22;
+    final hash = name.codeUnits.fold(0, (prev, element) => prev + element);
+    return 15 + (hash % 18);
+  }
+
+  int _getDeterministicPrice(String city) {
+    final name = city.toLowerCase();
+    final hash = name.codeUnits.fold(0, (prev, element) => prev + element);
+    return 120 + (hash % 28) * 10;
+  }
+
+  int _getDeterministicDays(String city) {
+    final name = city.toLowerCase();
+    final hash = name.codeUnits.fold(0, (prev, element) => prev + element);
+    return 3 + (hash % 4);
+  }
+
+  String _getCountryFlag(String country) {
+    final name = country.toLowerCase().trim();
+    if (name.contains('colombia')) return '🇨🇴';
+    if (name.contains('costa rica')) return '🇨🇷';
+    if (name.contains('brasil') || name.contains('brazil')) return '🇧🇷';
+    if (name.contains('portugal')) return '🇵🇹';
+    if (name.contains('españa') || name.contains('spain')) return '🇪🇸';
+    if (name.contains('méxico') || name.contains('mexico')) return '🇲🇽';
+    if (name.contains('estados unidos') || name.contains('usa') || name.contains('united states')) return '🇺🇸';
+    if (name.contains('francia') || name.contains('france')) return '🇫🇷';
+    if (name.contains('italia') || name.contains('italy')) return '🇮🇹';
+    if (name.contains('japón') || name.contains('japan')) return '🇯🇵';
+    if (name.contains('argentina')) return '🇦🇷';
+    if (name.contains('perú') || name.contains('peru')) return '🇵🇪';
+    return '📍';
   }
 }
 

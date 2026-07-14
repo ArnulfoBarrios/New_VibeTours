@@ -679,6 +679,36 @@ String _minutesLabel(int minutes) {
 
 enum ChatMessageType { user, ai }
 
+class DestinationSuggestion {
+  final String city;
+  final String country;
+  final String reason;
+  final String imageUrl;
+
+  const DestinationSuggestion({
+    required this.city,
+    required this.country,
+    required this.reason,
+    required this.imageUrl,
+  });
+
+  factory DestinationSuggestion.fromJson(Map<String, dynamic> json) {
+    return DestinationSuggestion(
+      city: json['city'] as String? ?? '',
+      country: json['country'] as String? ?? '',
+      reason: json['reason'] as String? ?? '',
+      imageUrl: json['imageUrl'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'city': city,
+    'country': country,
+    'reason': reason,
+    'imageUrl': imageUrl,
+  };
+}
+
 class ChatMessage {
   final String id;
   final String text;
@@ -687,6 +717,7 @@ class ChatMessage {
   final Tour? embeddedTour;
   final List<String>? actionChips;
   final String? localImagePath;
+  final List<DestinationSuggestion>? destinationSuggestions;
 
   ChatMessage({
     required this.id,
@@ -696,6 +727,7 @@ class ChatMessage {
     this.embeddedTour,
     this.actionChips,
     this.localImagePath,
+    this.destinationSuggestions,
   });
 
   bool get isUser => type == ChatMessageType.user;

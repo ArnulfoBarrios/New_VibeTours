@@ -236,7 +236,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         }
         if (data['needsDestination'] == true) {
           final suggs = data['suggestions'] as List? ?? [];
-          final actionChips = suggs.map((e) => (e['city'] ?? '').toString()).where((e) => e.isNotEmpty).toList();
+          final suggestions = suggs.map((e) {
+            return DestinationSuggestion.fromJson(Map<String, dynamic>.from(e as Map));
+          }).toList();
+          final actionChips = suggestions.map((e) => e.city).where((e) => e.isNotEmpty).toList();
           
           final aiMsg = ChatMessage(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -244,6 +247,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             type: ChatMessageType.ai,
             timestamp: DateTime.now(),
             actionChips: actionChips.isNotEmpty ? actionChips : null,
+            destinationSuggestions: suggestions,
           );
           
           state = state.copyWith(
