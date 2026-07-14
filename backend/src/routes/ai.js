@@ -46,7 +46,7 @@ aiRouter.post('/tours/confirm', async (req, res, next) => {
     if (input.city && input.city.trim().length > 0) {
       input.destination = input.city.trim()
     }
-    const geocode = await geocodePlace(`${input.destination} ${input.city} ${input.country}`, input.latitude, input.longitude)
+    const geocode = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
     res.json({
       detected: {
         city: input.city || geocode?.name?.split(',')[0] || input.destination,
@@ -132,8 +132,12 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         }
         if (extracted.explicit_destination && !input.destination) {
           input.destination = extracted.explicit_destination || extracted.city || extracted.country || ''
-          input.city = extracted.city || ''
-          input.country = extracted.country || ''
+        }
+        if (!input.city && extracted.city) {
+          input.city = extracted.city
+        }
+        if (!input.country && extracted.country) {
+          input.country = extracted.country
         }
         if (extracted.duration_hours && !input.durationHours) {
           input.durationHours = Number(extracted.duration_hours)
@@ -178,7 +182,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     if (input.city && input.city.trim().length > 0) {
       input.destination = input.city.trim()
     }
-    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`, input.latitude, input.longitude)
+    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
     if (!location) {
       return res.status(400).json({ error: 'No pudimos identificar la ubicación ingresada.' })
     }
@@ -244,7 +248,7 @@ aiRouter.post('/tours/build', async (req, res, next) => {
     const { request: input, places, plannerContext } = buildSchema.parse(req.body)
     
     if ((!input.city || !input.country) && input.destination) {
-      const location = await geocodePlace(input.destination, input.latitude, input.longitude)
+      const location = await geocodePlace(input.destination)
       if (location) {
         input.city = location.city || ''
         input.country = location.country || ''
@@ -528,7 +532,7 @@ async function processTourGeneration(jobId, input) {
 
   try {
     console.info('[tour-ai] generate:start', { jobId, destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
-    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`, input.latitude, input.longitude)
+    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
     console.info('[tour-ai] geocode', location ? { name: location.name, latitude: location.latitude, longitude: location.longitude } : { ok: false })
     
     if (!location) {
