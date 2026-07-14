@@ -22,7 +22,9 @@ export async function reverseGeocodeUserCountry(lat, lon) {
 }
 
 export async function geocodePlace(query, lat = null, lon = null) {
-  if (lat && lon) {
+  // 1. Try Photon first as it has better search relevance for natural language
+  // and prioritizes larger regions/cities over small shops or POIs with the same name.
+  try {
     const photonResults = await photonSearch(query, 1, lat, lon)
     const [photon] = photonResults
     if (photon && Number.isFinite(photon.latitude) && Number.isFinite(photon.longitude)) {
@@ -34,8 +36,11 @@ export async function geocodePlace(query, lat = null, lon = null) {
         country: photon.country || ''
       }
     }
+  } catch (err) {
+    console.warn('[geocodePlace] Photon search failed:', err.message)
   }
 
+  // 2. Fallback to Nominatim if Photon fails or returns no results
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.searchParams.set('format', 'jsonv2')
   url.searchParams.set('limit', '3')
@@ -61,23 +66,10 @@ export async function geocodePlace(query, lat = null, lon = null) {
         }
       }
     }
-  } catch {
-    // Fall through
+  } catch (err) {
+    console.warn('[geocodePlace] Nominatim search failed:', err.message)
   }
 
-  if (!lat || !lon) {
-    const photonFallback = await photonSearch(query, 1)
-    const [photon] = photonFallback
-    if (photon && Number.isFinite(photon.latitude) && Number.isFinite(photon.longitude)) {
-      return {
-        name: photon.name,
-        latitude: Number(photon.latitude),
-        longitude: Number(photon.longitude),
-        city: photon.city || '',
-        country: photon.country || ''
-      }
-    }
-  }
   return null
 }
 

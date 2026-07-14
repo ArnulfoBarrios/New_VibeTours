@@ -498,10 +498,26 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _buildSuggestionChip('Explorar ciudades', 'Quiero explorar los puntos más icónicos y famosos de la ciudad, conocer su arquitectura urbana, caminar por sus calles principales y ver sus monumentos más reconocidos mundialmente.', Icons.public),
-              _buildSuggestionChip('Aventura y naturaleza', 'Busco una experiencia que me conecte con la naturaleza, como parques ecológicos, senderos suaves, áreas verdes, miradores o reservas naturales que ofrezcan un ambiente tranquilo.', Icons.landscape),
-              _buildSuggestionChip('Cultura e historia', 'Deseo sumergirme en el patrimonio histórico, visitar museos relevantes, galerías, plazas fundacionales, arquitectura patrimonial y sitios que narren la identidad del lugar.', Icons.account_balance),
-              _buildSuggestionChip('Playa y relax', 'Necesito un tour tranquilo y relajante cerca al agua, como playas principales, malecones, miradores con vista al mar, paseos peatonales, ideal para descansar.', Icons.beach_access),
+              _buildSuggestionChip(
+                'Explorar ciudades',
+                'Busco un recorrido de arquitectura y diseño urbano por joyas y monumentos icónicos. Deseo apreciar fachadas históricas, transitar por avenidas principales y acceder a miradores urbanos.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Prioriza monumentos reales con arquitectura imponente o valor histórico verificado. Evita paradas menores.\n2. Narración Premium: Describe cada parada de forma entusiasta, como un guía experto. Destaca detalles de diseño, historia y secretos locales.\n3. Formato Enriquecido: En la descripción de cada parada, utiliza listas con viñetas claras (-) para recomendar actividades concretas de contemplación o fotografía, y sugerencias de cafeterías tradicionales cercanas.',
+                Icons.public,
+              ),
+              _buildSuggestionChip(
+                'Aventura y naturaleza',
+                'Busco una ruta de naturaleza por parques ecológicos, senderos y miradores. Deseo tranquilidad, bosques y reservas que me conecten con el entorno natural.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Prioriza áreas naturales reales, parques amplios y miradores con vistas auténticas. Evita paradas en zonas muy urbanizadas.\n2. Narración Premium: Describe la flora, fauna, vistas y la atmósfera pacífica de cada parada.\n3. Formato Enriquecido: En la descripción de cada parada, incluye una lista con viñetas (-) indicando el equipo necesario (calzado, hidratación), nivel de dificultad y actividades al aire libre recomendadas.',
+                Icons.landscape,
+              ),
+              _buildSuggestionChip(
+                'Cultura e historia',
+                'Deseo sumergirme en el patrimonio histórico, recorriendo museos relevantes, galerías de arte, templos y sitios que narren la identidad local.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Enfócate en centros culturales reales, museos de renombre e iglesias o catedrales históricas de gran valor patrimonial.\n2. Narración Premium: Explica detalladamente el contexto histórico, anécdotas fundacionales y el legado artístico de cada parada.\n3. Formato Enriquecido: En la descripción de cada parada, incluye una lista con viñetas (-) recomendando exhibiciones específicas imperdibles, detalles artísticos ocultos a buscar, y opciones gastronómicas tradicionales para descansar.',
+                Icons.account_balance,
+              ),
+              _buildSuggestionChip(
+                'Playa y relax',
+                'Necesito un itinerario relajante cerca al agua, incluyendo playas, malecones, miradores costeros o rutas peatonales junto al mar.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Prioriza playas reales, malecones escénicos y miradores con vistas espectaculares al agua.\n2. Narración Premium: Describe la atmósfera marina, el sonido de las olas y las sensaciones de paz de cada parada.\n3. Formato Enriquecido: En la descripción de cada parada, incluye una lista con viñetas (-) con recomendaciones de seguridad solar, mejores horas para evitar multitudes, y lugares de gastronomía local o chiringuitos de comida marina cercanos.',
+                Icons.beach_access,
+              ),
             ],
           ),
         ).animate().fadeIn(delay: 200.ms),
