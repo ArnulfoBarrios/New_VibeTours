@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry } from '../services/osm.js'
-import { planWithOpenAI, extractLocation } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI } from '../services/openai.js'
 import { supabase } from '../services/supabase.js'
 
 export const aiRouter = Router()
@@ -2091,7 +2091,7 @@ function fallbackPlaces(input, location) {
   }]
 }
 
-async function collectTourCandidates(input, location) {
+export async function collectTourCandidates(input, location) {
   const city = location?.city || input.city || ''
   const country = location?.country || input.country || ''
   const query = `${input.destination} ${city} ${country}`.trim()
@@ -2104,12 +2104,51 @@ async function collectTourCandidates(input, location) {
     .filter((place) => hasUsableCoordinates(place.latitude, place.longitude) || place.city || place.country)
     .filter((place) => isCandidateNearDestination(place, input, location))
     .filter((place) => isValidTouristAttraction(place, input))
-  const selected = normalizedPool.length >= 3
-    ? normalizedPool
-    : buildSyntheticFallbackPlaces(input, location)
-  const source = normalizedPool.length >= 3
-    ? (location ? 'overpass+photon' : 'photon')
+
+  let selected = normalizedPool
+  let source = normalizedPool.length >= 3 
+    ? (location ? 'overpass+photon' : 'photon') 
     : 'synthetic-fallback'
+
+  if (normalizedPool.length < 3) {
+    console.info('[tour-ai] Lack of geodata candidates. Fetching real suggestions from OpenAI...', { destination: input.destination, city, country })
+    const aiFallbacks = await suggestFallbackPlacesWithOpenAI({
+      destination: input.destination,
+      city,
+      country,
+      type: input.type
+    })
+
+    if (aiFallbacks && aiFallbacks.length >= 3) {
+      const centerLat = location?.latitude ?? 0
+      const centerLon = location?.longitude ?? 0
+      const baseName = input.city || input.destination || 'Destino'
+      
+      selected = aiFallbacks.map((item, index) => {
+        // Small offsets around city center to prevent overlapping prior to geocoding
+        const latOffset = index === 0 ? 0.001 : (index === 1 ? -0.001 : 0.0015)
+        const lonOffset = index === 0 ? 0 : (index === 1 ? 0.001 : -0.001)
+        return {
+          name: item.name,
+          latitude: centerLat + latOffset,
+          longitude: centerLon + lonOffset,
+          type: item.type || 'tourism',
+          category: item.category || input.type || 'historic',
+          city: input.city,
+          country: input.country,
+          address: `${baseName}, ${item.name}`,
+          description: item.description || '',
+          tags: { ai_generated_fallback: 'true' }
+        }
+      })
+      source = 'ai-suggested-fallback'
+      console.info('[tour-ai] Successfully loaded AI-suggested POIs:', selected.map(p => p.name))
+    } else {
+      console.warn('[tour-ai] Failed to get fallback places from AI. Using synthetic fallbacks.')
+      selected = buildSyntheticFallbackPlaces(input, location)
+    }
+  }
+
   return { rawCount: pool.length, places: selected, source }
 }
 
@@ -2250,7 +2289,7 @@ function typeFallbackLabels(type, baseName) {
     case 'gastronomic':
       return [
         { name: `Mercado central de ${city}`, type: 'market', category: 'market', latOffset: 0.0012, lonOffset: 0 },
-        { name: `Cafeteria emblem�tica de ${city}`, type: 'cafe', category: 'cafe', latOffset: -0.001, lonOffset: 0.0014 },
+        { name: `Cafetería emblemática de ${city}`, type: 'cafe', category: 'cafe', latOffset: -0.001, lonOffset: 0.0014 },
         { name: `Ruta de sabores de ${city}`, type: 'restaurant', category: 'restaurant', latOffset: 0.0015, lonOffset: -0.001 },
       ]
     case 'ecological':
@@ -2263,7 +2302,7 @@ function typeFallbackLabels(type, baseName) {
       return [
         { name: `Centro nocturno de ${city}`, type: 'nightlife', category: 'nightlife', latOffset: 0.0008, lonOffset: 0 },
         { name: `Bar o terraza de ${city}`, type: 'bar', category: 'nightlife', latOffset: -0.001, lonOffset: 0.0012 },
-        { name: `Punto panor�mico de ${city}`, type: 'viewpoint', category: 'viewpoint', latOffset: 0.0012, lonOffset: -0.0008 },
+        { name: `Punto panorámico de ${city}`, type: 'viewpoint', category: 'viewpoint', latOffset: 0.0012, lonOffset: -0.0008 },
       ]
     case 'family':
       return [
@@ -2273,7 +2312,7 @@ function typeFallbackLabels(type, baseName) {
       ]
     default:
       return [
-        { name: `Centro hist�rico de ${city}`, type: 'historic', category: 'historic', latOffset: 0.001, lonOffset: 0 },
+        { name: `Centro histórico de ${city}`, type: 'historic', category: 'historic', latOffset: 0.001, lonOffset: 0 },
         { name: `Museo o monumento de ${city}`, type: 'museum', category: 'museum', latOffset: -0.001, lonOffset: 0.001 },
         { name: `Mirador o plaza de ${city}`, type: 'viewpoint', category: 'viewpoint', latOffset: 0.0015, lonOffset: -0.001 },
       ]
