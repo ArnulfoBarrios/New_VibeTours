@@ -266,7 +266,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   const SizedBox(height: 16),
                 ],
 
-                if (builderState.hotels.isNotEmpty && !builderState.isBuilding) ...[
+                if (builderState.hotels.isNotEmpty && !builderState.isBuilding && builderState.builtTour == null) ...[
                   _buildHotelsList(builderState.hotels, builderState.selectedHotel),
                   const SizedBox(height: 16),
                 ],
@@ -323,53 +323,51 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   }
 
   Widget _buildHotelsList(List<dynamic> hotels, Map<String, dynamic>? selectedHotel) {
+    final isNoneSelected = selectedHotel == null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: hotels.map((h) {
-        final isSelected = selectedHotel?['name'] == h['name'];
-        return Padding(
+      children: [
+        Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
           child: InkWell(
             onTap: () {
-              ref.read(aiBuilderProvider.notifier).selectHotel(Map<String, dynamic>.from(h));
+              ref.read(aiBuilderProvider.notifier).selectHotel(null);
             },
             borderRadius: BorderRadius.circular(12),
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isSelected 
+                color: isNoneSelected 
                     ? AppTheme.primary.withValues(alpha: 0.08)
                     : Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isSelected 
+                  color: isNoneSelected 
                       ? AppTheme.primary 
                       : Colors.grey.shade200,
-                  width: isSelected ? 2 : 1,
+                  width: isNoneSelected ? 2 : 1,
                 ),
               ),
               child: Row(
                 children: [
                   Icon(
-                    isSelected ? Icons.check_circle_rounded : Icons.hotel,
-                    color: isSelected ? AppTheme.primary : Colors.blue,
+                    isNoneSelected ? Icons.check_circle_rounded : Icons.block_rounded,
+                    color: isNoneSelected ? AppTheme.primary : Colors.grey,
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(h['name'] ?? 'Hotel', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        if (h['address'] != null || h['direccion'] != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            h['address']?.toString() ?? h['direccion']?.toString() ?? '',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
+                        Text('No hospedarme en hotel / Tengo otro alojamiento', style: TextStyle(fontWeight: FontWeight.bold)),
+                        SizedBox(height: 4),
+                        Text(
+                          'Tengo otro lugar para quedarme o iniciaré el recorrido directamente desde la primera parada.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
@@ -377,8 +375,62 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               ),
             ),
           ),
-        );
-      }).toList(),
+        ),
+        ...hotels.map((h) {
+          final isSelected = selectedHotel?['name'] == h['name'];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: InkWell(
+              onTap: () {
+                ref.read(aiBuilderProvider.notifier).selectHotel(Map<String, dynamic>.from(h));
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isSelected 
+                      ? AppTheme.primary.withValues(alpha: 0.08)
+                      : Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected 
+                        ? AppTheme.primary 
+                        : Colors.grey.shade200,
+                    width: isSelected ? 2 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isSelected ? Icons.check_circle_rounded : Icons.hotel,
+                      color: isSelected ? AppTheme.primary : Colors.blue,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(h['name'] ?? 'Hotel', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          if (h['address'] != null || h['direccion'] != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              h['address']?.toString() ?? h['direccion']?.toString() ?? '',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ],
     ).animate().fadeIn();
   }
 
@@ -1046,7 +1098,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             final imageUrl = suggestion.imageUrl;
             
             final temp = _getDeterministicTemp(city);
-            final price = _getDeterministicPrice(city);
             final days = _getDeterministicDays(city);
             final flag = _getCountryFlag(country);
 
@@ -1162,7 +1213,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                                 children: [
                                   _buildTag(Icons.calendar_month, '$days días'),
                                   _buildTag(Icons.thermostat, '$temp°'),
-                                  _buildTag(Icons.flight, '\$$price'),
                                 ],
                               ),
                             ],
@@ -1218,11 +1268,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     return 15 + (hash % 18);
   }
 
-  int _getDeterministicPrice(String city) {
-    final name = city.toLowerCase();
-    final hash = name.codeUnits.fold(0, (prev, element) => prev + element);
-    return 120 + (hash % 28) * 10;
-  }
 
   int _getDeterministicDays(String city) {
     final name = city.toLowerCase();

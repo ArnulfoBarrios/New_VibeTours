@@ -80,6 +80,27 @@ class AiBuilderState {
       selectedHotel: selectedHotel ?? this.selectedHotel,
     );
   }
+
+  AiBuilderState copyWithHotel(Map<String, dynamic>? hotel) {
+    return AiBuilderState(
+      isLoading: isLoading,
+      isTyping: isTyping,
+      error: error,
+      request: request,
+      recommendations: recommendations,
+      plannerContext: plannerContext,
+      isBuilding: isBuilding,
+      builtTour: builtTour,
+      needsDestination: needsDestination,
+      destinationMessage: destinationMessage,
+      destinationSuggestions: destinationSuggestions,
+      messages: messages,
+      hotels: hotels,
+      needsBudget: needsBudget,
+      needsDuration: needsDuration,
+      selectedHotel: hotel,
+    );
+  }
 }
 
 
@@ -456,8 +477,8 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     }
   }
 
-  void selectHotel(Map<String, dynamic> hotel) {
-    state = state.copyWith(selectedHotel: hotel);
+  void selectHotel(Map<String, dynamic>? hotel) {
+    state = state.copyWithHotel(hotel);
   }
 
   Future<void> buildTour() async {
