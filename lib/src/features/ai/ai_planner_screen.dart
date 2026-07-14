@@ -156,7 +156,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     }
   }
 
-  void _sendChipMessage(String label, String promptText) async {
+  void _sendChipMessage({
+    required String displayPrompt,
+    required String aiPrompt,
+  }) async {
     if (_isProcessingAction) return;
     final builderState = ref.read(aiBuilderProvider);
     if (builderState.isLoading || builderState.isBuilding) return;
@@ -183,10 +186,15 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         lon = position.longitude;
       }
     } catch (_) {
-      // Ignorar error de ubicación
+      // Ignore location error
     }
 
-    ref.read(aiBuilderProvider.notifier).sendMessage(promptText, lat: lat, lon: lon, displayLabel: label);
+    ref.read(aiBuilderProvider.notifier).sendMessage(
+      aiPrompt,
+      lat: lat,
+      lon: lon,
+      displayLabel: displayPrompt,
+    );
     if (mounted) {
       setState(() {
         _isProcessingAction = false;
@@ -499,24 +507,28 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           child: Row(
             children: [
               _buildSuggestionChip(
-                'Explorar ciudades',
-                'Busco un recorrido de arquitectura y diseño urbano por joyas y monumentos icónicos. Deseo apreciar fachadas históricas, transitar por avenidas principales y acceder a miradores urbanos.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Prioriza monumentos reales con arquitectura imponente o valor histórico verificado. Evita paradas menores.\n2. Narración Premium: Describe cada parada de forma entusiasta, como un guía experto. Destaca detalles de diseño, historia y secretos locales.\n3. Formato Enriquecido: En la descripción de cada parada, utiliza listas con viñetas claras (-) para recomendar actividades concretas de contemplación o fotografía, y sugerencias de cafeterías tradicionales cercanas.',
-                Icons.public,
+                label: 'Explorar ciudades',
+                displayPrompt: 'Busco un recorrido de arquitectura y diseño urbano por joyas y monumentos icónicos. Deseo apreciar fachadas históricas, transitar por avenidas principales y acceder a miradores urbanos.',
+                aiPrompt: 'Busco un recorrido de arquitectura y diseño urbano por joyas y monumentos icónicos. Deseo apreciar fachadas históricas, transitar por avenidas principales y acceder a miradores urbanos.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Prioriza monumentos reales con arquitectura imponente o valor histórico verificado. Evita paradas menores.\n2. Narración Premium: Describe cada parada de forma entusiasta, como un guía experto. Destaca detalles de diseño, historia y secretos locales.\n3. Formato Enriquecido: En la descripción de cada parada, utiliza listas con viñetas claras (-) para recomendar actividades concretas de contemplación o fotografía, y sugerencias de cafeterías tradicionales cercanas.',
+                icon: Icons.public,
               ),
               _buildSuggestionChip(
-                'Aventura y naturaleza',
-                'Busco una ruta de naturaleza por parques ecológicos, senderos y miradores. Deseo tranquilidad, bosques y reservas que me conecten con el entorno natural.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Prioriza áreas naturales reales, parques amplios y miradores con vistas auténticas. Evita paradas en zonas muy urbanizadas.\n2. Narración Premium: Describe la flora, fauna, vistas y la atmósfera pacífica de cada parada.\n3. Formato Enriquecido: En la descripción de cada parada, incluye una lista con viñetas (-) indicando el equipo necesario (calzado, hidratación), nivel de dificultad y actividades al aire libre recomendadas.',
-                Icons.landscape,
+                label: 'Aventura y naturaleza',
+                displayPrompt: 'Busco una ruta de naturaleza por parques ecológicos, senderos y miradores. Deseo tranquilidad, bosques y reservas que me conecten con el entorno natural.',
+                aiPrompt: 'Busco una ruta de naturaleza por parques ecológicos, senderos y miradores. Deseo tranquilidad, bosques y reservas que me conecten con el entorno natural.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Prioriza áreas naturales reales, parques amplios y miradores con vistas auténticas. Evita paradas en zonas muy urbanizadas.\n2. Narración Premium: Describe la flora, fauna, vistas y la atmósfera pacífica de cada parada.\n3. Formato Enriquecido: En la descripción de cada parada, incluye una lista con viñetas (-) indicando el equipo necesario (calzado, hidratación), nivel de dificultad y actividades al aire libre recomendadas.',
+                icon: Icons.landscape,
               ),
               _buildSuggestionChip(
-                'Cultura e historia',
-                'Deseo sumergirme en el patrimonio histórico, recorriendo museos relevantes, galerías de arte, templos y sitios que narren la identidad local.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Enfócate en centros culturales reales, museos de renombre e iglesias o catedrales históricas de gran valor patrimonial.\n2. Narración Premium: Explica detalladamente el contexto histórico, anécdotas fundacionales y el legado artístico de cada parada.\n3. Formato Enriquecido: En la descripción de cada parada, incluye una lista con viñetas (-) recomendando exhibiciones específicas imperdibles, detalles artísticos ocultos a buscar, y opciones gastronómicas tradicionales para descansar.',
-                Icons.account_balance,
+                label: 'Cultura e historia',
+                displayPrompt: 'Deseo sumergirme en el patrimonio histórico, recorriendo museos relevantes, galerías de arte, templos y sitios que narren la identidad local.',
+                aiPrompt: 'Deseo sumergirme en el patrimonio histórico, recorriendo museos relevantes, galerías de arte, templos y sitios que narren la identidad local.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Enfócate en centros culturales reales, museos de renombre e iglesias o catedrales históricas de gran valor patrimonial.\n2. Narración Premium: Explica detalladamente el contexto histórico, anécdotas fundacionales y el legado artístico de cada parada.\n3. Formato Enriquecido: En la descripción de cada parada, incluye una lista con viñetas (-) recomendando exhibiciones específicas imperdibles, detalles artísticos ocultos a buscar, y opciones gastronómicas tradicionales para descansar.',
+                icon: Icons.account_balance,
               ),
               _buildSuggestionChip(
-                'Playa y relax',
-                'Necesito un itinerario relajante cerca al agua, incluyendo playas, malecones, miradores costeros o rutas peatonales junto al mar.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Prioriza playas reales, malecones escénicos y miradores con vistas espectaculares al agua.\n2. Narración Premium: Describe la atmósfera marina, el sonido de las olas y las sensaciones de paz de cada parada.\n3. Formato Enriquecido: En la descripción de cada parada, incluye una lista con viñetas (-) con recomendaciones de seguridad solar, mejores horas para evitar multitudes, y lugares de gastronomía local o chiringuitos de comida marina cercanos.',
-                Icons.beach_access,
+                label: 'Playa y relax',
+                displayPrompt: 'Necesito un itinerario relajante cerca al agua, incluyendo playas, malecones, miradores costeros o rutas peatonales junto al mar.',
+                aiPrompt: 'Necesito un itinerario relajante cerca al agua, incluyendo playas, malecones, miradores costeros o rutas peatonales junto al mar.\n\n[INSTRUCCIONES CRÍTICAS PARA LA IA]:\n1. Selección de Lugares: Prioriza playas reales, malecones escénicos y miradores con vistas espectaculares al agua.\n2. Narración Premium: Describe la atmósfera marina, el sonido de las olas y las sensaciones de paz de cada parada.\n3. Formato Enriquecido: En la descripción de cada parada, incluye una lista con viñetas (-) con recomendaciones de seguridad solar, mejores horas para evitar multitudes, y lugares de gastronomía local o chiringuitos de comida marina cercanos.',
+                icon: Icons.beach_access,
               ),
             ],
           ),
@@ -525,11 +537,16 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     );
   }
 
-  Widget _buildSuggestionChip(String label, String promptText, IconData icon) {
+  Widget _buildSuggestionChip({
+    required String label,
+    required String displayPrompt,
+    required String aiPrompt,
+    required IconData icon,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(right: 8.0, left: 2.0),
       child: GestureDetector(
-        onTap: () => _sendChipMessage(label, promptText),
+        onTap: () => _sendChipMessage(displayPrompt: displayPrompt, aiPrompt: aiPrompt),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(

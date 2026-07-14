@@ -429,7 +429,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     let sourceTour
     let fallbackReason = null
     if (isValidTourPlan(ollama) && planner.selectedPlaces.length >= 2) {
-      sourceTour = validateTourQuality(ollama, planner)
+      sourceTour = validateTourQuality(ollama, planner, input)
     } else {
       fallbackReason = 'ollama_unavailable'
       sourceTour = await buildFallbackTour(planner, input)
@@ -574,7 +574,7 @@ async function processTourGeneration(jobId, input) {
     let sourceTour
     let fallbackReason = null
     if (isValidTourPlan(ollama) && planner.selectedPlaces.length >= 3) {
-      sourceTour = validateTourQuality(ollama, planner)
+      sourceTour = validateTourQuality(ollama, planner, input)
     } else {
       fallbackReason = !ollama
         ? 'ollama_unavailable'
@@ -911,6 +911,7 @@ function normalizeCandidate(place, index, input, origin) {
     category,
     broadGroup,
     tags,
+    rawTags: place.tags || {},
     city: place.city,
     country: place.country,
     region: place.region,
@@ -948,7 +949,8 @@ function scorePlace(place, input) {
   let finalScore = 0
   if (isGeneral) {
     // Si es un prompt general, la popularidad turística (wikidata/wikipedia/monumentos) es prioritaria
-    const wikiBoost = (place.tags && (place.tags.wikidata || place.tags.wikipedia)) ? 30 : 0
+    const tags = place.rawTags || place.tags
+    const wikiBoost = (tags && (tags.wikidata || tags.wikipedia)) ? 30 : 0
     finalScore = (typeScore * 6) + (cityScore * 6) + (popularityScore * 16) + (proximityScore * 2) + (diversityScore * 2) + wikiBoost - mismatchPenalty - genericPenalty
   } else {
     // Si es específico, el boost temático y la afinidad de categoría tienen el mayor peso, 
@@ -1176,7 +1178,9 @@ function keywordAffinityScore(promptText, place) {
   
   const name = String(place.name || '').toLowerCase()
   const category = String(place.category || '').toLowerCase()
-  const placeText = `${name} ${category} ${place.tags ? Object.values(place.tags).join(' ') : ''}`.toLowerCase()
+  const tags = place.rawTags || place.tags
+  const tagsText = Array.isArray(tags) ? tags.join(' ') : (tags ? Object.values(tags).join(' ') : '')
+  const placeText = `${name} ${category} ${tagsText}`.toLowerCase()
   
   let matches = 0
   for (const word of words) {
@@ -1225,20 +1229,21 @@ function popularityScoreFor(place, input = {}) {
   if (text.includes('nightclub') || text.includes('bar') || text.includes('pub')) score += 3
 
   // Mayor peso para etiquetas turísticas principales de OSM
-  if (place.tags) {
-    const tourism = String(place.tags.tourism || '').toLowerCase()
-    const historic = String(place.tags.historic || '').toLowerCase()
+  const tags = place.rawTags || place.tags
+  if (tags && typeof tags === 'object' && !Array.isArray(tags)) {
+    const tourism = String(tags.tourism || '').toLowerCase()
+    const historic = String(tags.historic || '').toLowerCase()
     if (['museum', 'gallery', 'theme_park', 'attraction', 'aquarium', 'zoo', 'viewpoint'].includes(tourism)) {
       score += 10
     }
     if (['monument', 'castle', 'fort', 'archaeological_site', 'ruins', 'city_gate'].includes(historic)) {
       score += 10
     }
-    if (place.tags.heritage) {
+    if (tags.heritage) {
       score += 8
     }
     // Boost masivo si tiene wikidata o wikipedia (indicador clave de POI icónico)
-    if (place.tags.wikidata || place.tags.wikipedia) {
+    if (tags.wikidata || tags.wikipedia) {
       score += 20
     }
   }
@@ -1429,10 +1434,33 @@ function buildStopDescription(place, input) {
   const city = input.city || input.destination
   const action = stopActionFor(input.type, category)
   const focus = stopFocusFor(input.type, category)
-  const why = importantPlaceScore(place, input) > 0
-    ? 'Ademas, es un punto reconocido dentro de la ciudad, por lo que funciona bien como referencia para orientarse y entender el caracter del destino.'
-    : 'Su valor dentro del recorrido esta en complementar la ruta principal sin romper la logica geografica del paseo.'
-  return place.name + ' es una parada pensada para ' + action + '. En esta parte del tour conviene dedicar tiempo a ' + focus + ', observar el movimiento del entorno y conectar el lugar con la identidad de ' + city + '. No se trata solo de llegar, tomar una foto y seguir: la parada esta incluida para que el viajero tenga una accion concreta, una lectura del espacio y una razon clara para permanecer unos minutos. ' + why + ' Si el lugar esta abierto al publico, vale la pena revisar horarios, recorrerlo con calma y usarlo como pausa antes de continuar hacia la siguiente parada.'
+  
+  // Obtener información real del lugar si está disponible en history, tags o descriptions
+  let realDetail = ''
+  if (place.history && place.history.trim().length > 10) {
+    realDetail = place.history.trim()
+  } else if (place.rawTags?.description && place.rawTags.description.trim().length > 10) {
+    realDetail = place.rawTags.description.trim()
+  } else {
+    realDetail = buildRecommendationReason(place, input.type)
+  }
+
+  // Asegurar que termine en punto si no lo tiene
+  if (realDetail && !/[.!?]$/.test(realDetail)) {
+    realDetail += '.'
+  }
+
+  // Construir consejos personalizados para esta parada
+  const stopTips = buildTips(place, input.type)
+  let tipsText = ''
+  if (stopTips && stopTips.length > 0) {
+    tipsText = ` Como consejo para tu parada: ${stopTips[0]}.`
+    if (stopTips[1]) {
+      tipsText += ` También te recomendamos ${stopTips[1].toLowerCase()}.`
+    }
+  }
+
+  return `${place.name} es un lugar ideal para ${action}. Durante tu visita, te sugerimos enfocar tu atención en ${focus}. ${realDetail}${tipsText}`
 }
 
 function buildActivities(place, type) {
@@ -1459,7 +1487,7 @@ function buildCuriousFacts(place, type) {
 
 function buildRecommendationReason(place, type) {
   const category = place.category || 'place'
-  const tags = place.tags || {}
+  const tags = place.rawTags || place.tags || {}
   
   if (tags.description) {
     return tags.description
@@ -1503,14 +1531,35 @@ function buildRecommendationReason(place, type) {
 }
 
 function buildTips(place, type) {
-  const tips = {
-    night: ['Confirma horarios y politica de acceso', 'Mantente en zonas bien iluminadas', 'Evita traslados largos a pie al final de la noche'],
-    ecological: ['Lleva agua y calzado comodo', 'Revisa el clima antes de salir', 'Respeta senderos, jardines y zonas restringidas'],
-    gastronomic: ['Reserva si el local es pequeno o popular', 'Pregunta por platos de temporada', 'Deja espacio para probar algo en mas de una parada'],
-    family: ['Verifica banos, sombra y zonas de descanso', 'Planifica pausas cortas para menores', 'Evita las horas de mayor sol si el recorrido es al aire libre'],
-    sports: ['Lleva agua y ropa comoda', 'No invadas canchas o zonas privadas', 'Consulta si hay eventos que puedan cambiar el acceso'],
+  const category = place.category || 'place'
+  
+  // Consejos específicos por categoría
+  if (category === 'museum') {
+    return ['Revisar los horarios de exhibiciones especiales', 'Aprovechar las guías interactivas o audioguías del recinto', 'Evitar usar flash al tomar fotografías']
   }
-  return tips[type] ?? ['Revisa horarios de apertura', 'Llega unos minutos antes', 'Lleva bateria suficiente para mapa y fotos']
+  if (category === 'historic' || category === 'religious') {
+    return ['Apreciar en silencio los detalles arquitectónicos e históricos', 'Llevar vestimenta adecuada y respetar las normas locales', 'Tomar fotos sin perturbar el ambiente de respeto']
+  }
+  if (category === 'viewpoint') {
+    return ['Preparar tu cámara para capturar las espectaculares vistas panorámicas', 'Visitar durante las horas doradas como el amanecer o atardecer', 'Llevar abrigo si visitas en horas de la tarde por el viento']
+  }
+  if (category === 'nature' || category === 'park') {
+    return ['Llevar agua para mantenerte hidratado y usar protector solar', 'Seguir los senderos señalizados para proteger el entorno natural', 'Llevar repelente para insectos']
+  }
+  if (category === 'restaurant' || category === 'cafe' || category === 'market') {
+    return ['Preguntar por la especialidad de la casa o plato del día', 'Llevar algo de efectivo por si algunos puestos no aceptan tarjeta', 'Consultar si requieren reserva previa si es muy concurrido']
+  }
+
+  // Consejos por tipo de tour
+  const tips = {
+    night: ['Confirmar los horarios de cierre y políticas de acceso', 'Mantenerse en zonas bien iluminadas y transitadas', 'Evitar traslados largos a pie al final de la noche'],
+    ecological: ['Llevar suficiente agua y calzado cómodo para caminar', 'Revisar el pronóstico del clima antes de iniciar la caminata', 'Respetar los senderos, jardines y zonas restringidas'],
+    gastronomic: ['Reservar si el local es pequeño o muy popular', 'Preguntar por ingredientes locales y platos de temporada', 'Dejar espacio para probar algo en las siguientes paradas de la ruta'],
+    family: ['Verificar la ubicación de baños, zonas de sombra y descanso', 'Planificar pausas cortas para los menores del grupo', 'Evitar las horas de mayor radiación solar si el recorrido es al aire libre'],
+    sports: ['Llevar hidratación y ropa deportiva cómoda', 'No invadir canchas o zonas de entrenamiento privadas', 'Consultar si hay eventos locales que puedan restringir el acceso'],
+  }
+
+  return tips[type] ?? ['Revisar los horarios de apertura del lugar', 'Llegar con anticipación para disfrutar sin prisas', 'Llevar suficiente batería en el móvil para fotos y navegación']
 }
 
 function stopActionFor(type, category) {
@@ -1551,7 +1600,7 @@ function isValidTourPlan(value) {
   return Boolean(value && typeof value === 'object' && Array.isArray(value.itinerario) && value.itinerario.length >= 3)
 }
 
-function validateTourQuality(tour, planner) {
+function validateTourQuality(tour, planner, input) {
   if (!tour || !Array.isArray(tour.itinerario)) return tour
 
   // Verificar frases genéricas prohibidas y descripciones cortas
@@ -1564,23 +1613,24 @@ function validateTourQuality(tour, planner) {
     let description = stop.descripcion || ''
     let isBadQuality = false
 
-    if (description.split(' ').length < 50) {
+    // Solo considerar baja calidad si está vacía o tiene menos de 15 palabras
+    if (!description || description.trim().split(/\s+/).length < 15) {
       isBadQuality = true
     }
 
     const lowerDesc = description.toLowerCase()
     for (const phrase of forbiddenPhrases) {
       if (lowerDesc.includes(phrase)) {
-        // Remover la frase si es posible, o marcar baja calidad
+        // Remover la frase si es posible
         description = description.replace(new RegExp(phrase, 'gi'), '')
       }
     }
 
     if (isBadQuality) {
-      // Reemplazar descripción con fallback determinista si Ollama falló en seguir instrucciones
+      // Reemplazar descripción con fallback dinámico específico si Ollama/OpenAI falló
       const fallbackPlace = planner.selectedPlaces[index] || planner.selectedPlaces[0]
       if (fallbackPlace) {
-        stop.descripcion = `${stop.nombre} es un punto fundamental del recorrido. Este lugar destaca por su relevancia local y ofrece una excelente oportunidad para explorar su entorno. Dedica unos minutos para observar los detalles y comprender su importancia dentro de la identidad de la ciudad, tal como fue seleccionado para esta ruta especial.`
+        stop.descripcion = buildStopDescription(fallbackPlace, input)
       }
     } else {
       stop.descripcion = description.trim()
