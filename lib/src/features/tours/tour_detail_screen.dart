@@ -704,54 +704,6 @@ class TourDetailScreen extends ConsumerWidget {
       return;
     }
 
-    // Show budget selection dialog
-    final selectedBudget = await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Presupuesto de tu hotel'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, 'Económico'),
-            child: const Row(
-              children: [
-                Icon(Icons.monetization_on_outlined, color: Colors.green),
-                SizedBox(width: 12),
-                Text('Económico'),
-              ],
-            ),
-          ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, 'Moderado'),
-            child: const Row(
-              children: [
-                Icon(Icons.monetization_on_outlined, color: Colors.blue),
-                SizedBox(width: 12),
-                Text('Moderado'),
-              ],
-            ),
-          ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, 'Lujo'),
-            child: const Row(
-              children: [
-                Icon(Icons.monetization_on_outlined, color: Colors.purple),
-                SizedBox(width: 12),
-                Text('Lujo'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (selectedBudget == null || !context.mounted) {
-      ref.read(selectedTourProvider.notifier).state = tour;
-      if (context.mounted) {
-        context.push('/live/${tour.id}');
-      }
-      return;
-    }
-
     // Show loading and fetch hotels
     final hotels = await showDialog<List<dynamic>>(
       context: context,
@@ -760,7 +712,7 @@ class TourDetailScreen extends ConsumerWidget {
         future: ref.read(tourRepositoryProvider).fetchHotels(
           latitude: tour.stops.first.location.latitude,
           longitude: tour.stops.first.location.longitude,
-          budget: selectedBudget,
+          budget: 'moderate',
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {

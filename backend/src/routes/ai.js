@@ -1429,11 +1429,22 @@ function buildCulturalContext(input, planner) {
   return `Ruta adaptada a ${planner.selectedPlaces.length} puntos de interes con narrativa local.`
 }
 
+function getDeterministicIndex(seed, length) {
+  if (!seed || length <= 0) return 0
+  const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  return Math.abs(hash) % length
+}
+
+function selectDeterministic(array, seed) {
+  if (!Array.isArray(array) || array.length === 0) return ''
+  const index = getDeterministicIndex(seed, array.length)
+  return array[index]
+}
+
 function buildStopDescription(place, input) {
-  const category = place.category || 'place'
-  const city = input.city || input.destination
-  const action = stopActionFor(input.type, category)
-  const focus = stopFocusFor(input.type, category)
+  const seed = place.name || ''
+  const action = stopActionFor(input.type, place.category, seed)
+  const focus = stopFocusFor(input.type, place.category, seed)
   
   // Obtener información real del lugar si está disponible en history, tags o descriptions
   let realDetail = ''
@@ -1460,7 +1471,15 @@ function buildStopDescription(place, input) {
     }
   }
 
-  return `${place.name} es un lugar ideal para ${action}. Durante tu visita, te sugerimos enfocar tu atención en ${focus}. ${realDetail}${tipsText}`
+  const templates = [
+    `${place.name} es un sitio ideal para ${action}. Durante el recorrido, te sugerimos enfocar tu atención en ${focus}. ${realDetail}${tipsText}`,
+    `Te recomendamos visitar ${place.name}, un espacio excelente para ${action}. En esta parada, te sugerimos centrarte en ${focus}. ${realDetail}${tipsText}`,
+    `${place.name} te ofrece la oportunidad perfecta para ${action}. Durante tu estancia, es ideal prestar atención a ${focus}. ${realDetail}${tipsText}`,
+    `Una parada clave en nuestro itinerario es ${place.name}, donde podrás ${action}. Te aconsejamos enfocar tu visita en ${focus}. ${realDetail}${tipsText}`,
+    `Explora ${place.name}, un lugar destacado para ${action}. Aprovecha para centrar tu atención en ${focus}. ${realDetail}${tipsText}`
+  ]
+
+  return selectDeterministic(templates, seed)
 }
 
 function buildActivities(place, type) {
@@ -1488,46 +1507,77 @@ function buildCuriousFacts(place, type) {
 function buildRecommendationReason(place, type) {
   const category = place.category || 'place'
   const tags = place.rawTags || place.tags || {}
+  const seed = place.name || ''
   
   if (tags.description) {
     return tags.description
   }
 
+  let options = []
   if (category === 'museum') {
-    return `Un espacio fascinante para sumergirse en la cultura local a través de sus piezas históricas y galerías.`
+    options = [
+      'Un espacio fascinante para sumergirse en la cultura local a través de sus piezas históricas y galerías.',
+      'Un templo del saber y la memoria donde cada objeto narra un capítulo crucial del desarrollo local.',
+      'Ideal para los amantes del arte y la historia que buscan una mirada profunda a las colecciones de la región.'
+    ]
+  } else if (category === 'historic' || tags.historic) {
+    options = [
+      'Una joya patrimonial que resguarda la memoria, arquitectura e identidad histórica del lugar.',
+      'Un testimonio vivo del pasado que conserva intactos sus detalles constructivos y su valor simbólico.',
+      'Un rincón cargado de leyendas y acontecimientos históricos que marcaron el devenir de la comunidad.'
+    ]
+  } else if (category === 'viewpoint' || tags.tourism === 'viewpoint') {
+    options = [
+      'Una parada obligatoria para capturar las vistas panorámicas más espectaculares y tomar fotografías increíbles.',
+      'El balcón perfecto de la ciudad para contemplar el horizonte y entender su distribución geográfica.',
+      'Un punto elevado estratégico que ofrece una perspectiva inigualable del paisaje circundante.'
+    ]
+  } else if (category === 'nature' || category === 'park' || tags.leisure === 'park') {
+    options = [
+      'Un rincón fresco y verde, ideal para caminar con tranquilidad y respirar el aire de la ciudad.',
+      'Un pulmón urbano que regala un respiro de tranquilidad frente al bullicio cotidiano.',
+      'Un remanso de paz perfecto para desconectar, caminar bajo la sombra de árboles centenarios y relajarse.'
+    ]
+  } else if (category === 'restaurant' || category === 'cafe' || tags.amenity === 'restaurant') {
+    options = [
+      'El punto perfecto para deleitarse con la cocina típica y los sabores locales de la región.',
+      'Un rincón culinario de gran reputación donde la tradición y los ingredientes de calidad se encuentran.',
+      'El lugar ideal para recargar energías disfrutando de recetas locales elaboradas con cariño y maestría.'
+    ]
+  } else if (category === 'religious' || tags.historic === 'church' || tags.historic === 'cathedral') {
+    options = [
+      'Un templo emblemático de gran valor espiritual, estético y arquitectónico para la comunidad.',
+      'Un monumento sacro que destaca por su solemnidad, obras de arte sacro e imponentes fachadas.',
+      'Un espacio de silencio y contemplación que refleja la fe, el arte y la historia constructiva de la región.'
+    ]
+  } else if (type === 'gastronomic') {
+    options = [
+      'Seleccionado especialmente por su ambiente gastronómico único y su oferta de sabores auténticos.',
+      'Un punto de referencia para los amantes del buen comer, reconocido por su sazón tradicional.',
+      'Una parada ideal para saborear bocados típicos que definen la identidad de esta tierra.'
+    ]
+  } else if (type === 'ecological') {
+    options = [
+      'Un entorno enriquecedor que te conecta directamente con la biodiversidad y el paisaje de la zona.',
+      'Un sendero ideal para la contemplación ecológica y el aprecio por la conservación ambiental.',
+      'Una inmersión verde que te permite admirar la flora y fauna características de este territorio.'
+    ]
+  } else if (type === 'cultural') {
+    options = [
+      'Un epicentro artístico o social ideal para comprender las expresiones cotidianas de los residentes.',
+      'Un espacio donde la identidad local cobra vida a través de eventos, arte urbano o interacciones.',
+      'Una parada perfecta para descifrar las costumbres locales y el espíritu comunitario de este sector.'
+    ]
+  } else {
+    options = [
+      'Un sitio de gran relevancia local seleccionado para complementar la temática del recorrido.',
+      'Ideal para comprender el estilo de vida de la zona y tomar fotos espectaculares de la arquitectura.',
+      'Una parada estratégica que aporta variedad visual y dinamismo al itinerario.',
+      'Un punto de interés bien valorado que añade un matiz de historia y autenticidad al recorrido.',
+      'Una localización singular que ilustra de manera perfecta la cotidianidad y el color local del destino.'
+    ]
   }
-  if (category === 'historic' || tags.historic) {
-    return `Una joya patrimonial que resguarda la memoria, arquitectura e identidad histórica del lugar.`
-  }
-  if (category === 'viewpoint' || tags.tourism === 'viewpoint') {
-    return `Una parada obligatoria para capturar las vistas panorámicas más espectaculares y tomar fotografías increíbles.`
-  }
-  if (category === 'nature' || category === 'park' || tags.leisure === 'park') {
-    return `Un rincón fresco y verde, ideal para caminar con tranquilidad y respirar el aire de la ciudad.`
-  }
-  if (category === 'restaurant' || category === 'cafe' || tags.amenity === 'restaurant') {
-    return `El punto perfecto para deleitarse con la cocina típica y los sabores locales de la región.`
-  }
-  if (category === 'religious' || tags.historic === 'church' || tags.historic === 'cathedral') {
-    return `Un templo emblemático de gran valor espiritual, estético y arquitectónico para la comunidad.`
-  }
-  if (type === 'gastronomic') {
-    return `Seleccionado especialmente por su ambiente gastronómico único y su oferta de de sabores auténticos.`
-  }
-  if (type === 'ecological') {
-    return `Un entorno enriquecedor que te conecta directamente con la biodiversidad y el paisaje de la zona.`
-  }
-  if (type === 'cultural') {
-    return `Un epicentro artístico o social ideal para comprender las expresiones cotidianas de los residentes.`
-  }
-  
-  const reasons = [
-    `Un sitio de gran relevancia local seleccionado para complementar la temática del recorrido.`,
-    `Ideal para comprender el estilo de vida de la zona y tomar fotos espectaculares de la arquitectura.`,
-    `Una parada estratégica que aporta variedad visual y dinamismo al itinerario.`
-  ]
-  const hash = [...(place.name || '')].reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  return reasons[Math.abs(hash) % reasons.length]
+  return selectDeterministic(options, seed)
 }
 
 function buildTips(place, type) {
@@ -1562,24 +1612,126 @@ function buildTips(place, type) {
   return tips[type] ?? ['Revisar los horarios de apertura del lugar', 'Llegar con anticipación para disfrutar sin prisas', 'Llevar suficiente batería en el móvil para fotos y navegación']
 }
 
-function stopActionFor(type, category) {
-  if (type === 'gastronomic') return category === 'market' ? 'probar sabores locales y ver como se mueve la cocina cotidiana' : 'hacer una pausa de sabor, comparar preparaciones y descubrir productos locales'
-  if (type === 'sports') return category === 'sports' ? 'conocer un escenario deportivo o un punto de actividad fisica local' : 'mantener una ruta activa con caminata, vista urbana y descanso breve'
-  if (type === 'ecological') return 'caminar, observar el paisaje y bajar el ritmo del recorrido'
-  if (type === 'night') return 'vivir el ambiente social del destino con una logica segura de movilidad'
-  if (type === 'family') return 'aprender y descansar sin exigir demasiado al grupo'
-  if (type === 'cultural') return 'leer la historia, la arquitectura y las costumbres visibles en el espacio'
-  return 'entender mejor el destino desde una experiencia concreta'
+function stopActionFor(type, category, seed) {
+  let options = []
+  if (type === 'gastronomic') {
+    options = category === 'market' 
+      ? [
+          'probar sabores locales y ver como se mueve la cocina cotidiana',
+          'explorar los puestos tradicionales de comida y degustar bocados autóctonos',
+          'sumergirte en los aromas locales y descubrir ingredientes frescos de la región'
+        ]
+      : [
+          'hacer una pausa de sabor, comparar preparaciones y descubrir productos locales',
+          'deleitar tu paladar con recetas locales y disfrutar de un ambiente gastronómico acogedor',
+          'degustar una especialidad de la zona y relajarte mientras saboreas la gastronomía local'
+        ]
+  } else if (type === 'sports') {
+    options = category === 'sports'
+      ? [
+          'conocer un escenario deportivo o un punto de actividad física local',
+          'apreciar las instalaciones deportivas y sentir la energía del movimiento local',
+          'visitar un punto de encuentro para el deporte y la recreación activa'
+        ]
+      : [
+          'mantener una ruta activa con caminata, vista urbana y descanso breve',
+          'estirar las piernas con una caminata ligera y disfrutar del dinamismo del entorno',
+          'disfrutar de un trayecto activo que combina ejercicio moderado y puntos de interés'
+        ]
+  } else if (type === 'ecological') {
+    options = [
+      'caminar, observar el paisaje y bajar el ritmo del recorrido',
+      'conectar con la naturaleza, respirar aire puro y apreciar la biodiversidad',
+      'disfrutar de senderos verdes y relajarte rodeado de un entorno natural único'
+    ]
+  } else if (type === 'night') {
+    options = [
+      'vivir el ambiente social del destino con una lógica segura de movilidad',
+      'disfrutar de la iluminación nocturna, el ocio local y la vida nocturna',
+      'explorar la vibrante atmósfera nocturna y descubrir el encanto de la ciudad tras el atardecer'
+    ]
+  } else if (type === 'family') {
+    options = [
+      'aprender y descansar sin exigir demasiado al grupo',
+      'disfrutar de actividades aptas para todas las edades y relajarse en familia',
+      'compartir un momento agradable con espacios amplios y entretenimiento educativo'
+    ]
+  } else if (type === 'cultural') {
+    options = [
+      'leer la historia, la arquitectura y las costumbres visibles en el espacio',
+      'apreciar el legado patrimonial, las expresiones artísticas y las tradiciones del barrio',
+      'descubrir la riqueza histórica y conectar con las raíces culturales de este rincón'
+    ]
+  } else {
+    options = [
+      'entender mejor el destino desde una experiencia concreta',
+      'descubrir un rincón auténtico de la ciudad y sumergirte en su día a día',
+      'explorar una parada representativa con una atmósfera singular y gran valor local',
+      'conectar con la esencia del lugar y contemplar sus detalles más interesantes'
+    ]
+  }
+  return selectDeterministic(options, seed)
 }
 
-function stopFocusFor(type, category) {
-  if (type === 'gastronomic') return category === 'market' ? 'identificar ingredientes, aromas, puestos tradicionales y platos que representan la ciudad' : 'elegir una preparacion local, preguntar por su origen y comparar sabores con otras paradas'
-  if (type === 'sports') return category === 'sports' ? 'observar el escenario, su relacion con equipos o practicas locales y el movimiento de los aficionados' : 'aprovechar el espacio para caminar, hidratarse y mantener el cuerpo activo'
-  if (type === 'ecological') return 'observar sombra, brisa, vegetacion, agua o panoramas y cuidar el entorno mientras se avanza'
-  if (type === 'night') return 'revisar horarios, seguridad, musica, iluminacion y opciones para quedarse sin perder el control de la ruta'
-  if (type === 'family') return 'buscar puntos de descanso, banos, sombra, explicaciones simples y actividades visuales'
-  if (type === 'cultural') return 'mirar detalles de fachada, plazas, arte urbano, vida cotidiana y simbolos del barrio'
-  return 'recorrer el lugar, fotografiarlo y entender por que aparece en la secuencia del tour'
+function stopFocusFor(type, category, seed) {
+  let options = []
+  if (type === 'gastronomic') {
+    options = category === 'market'
+      ? [
+          'identificar ingredientes, aromas, puestos tradicionales y platos que representan la ciudad',
+          'observar la dinámica de compra-venta, hablar con los mercaderes y probar frutas exóticas',
+          'descubrir las hierbas locales, los condimentos típicos y las recetas transmitidas de generación en generación'
+        ]
+      : [
+          'elegir una preparación local, preguntar por su origen y comparar sabores con otras paradas',
+          'disfrutar del menú o plato recomendado, apreciar la sazón local y descansar un momento',
+          'saborear bebidas tradicionales, conocer su método de elaboración y conversar sobre las tradiciones culinarias'
+        ]
+  } else if (type === 'sports') {
+    options = category === 'sports'
+      ? [
+          'observar el escenario, su relación con equipos o prácticas locales y el movimiento de los aficionados',
+          'apreciar el diseño del recinto deportivo, las actividades recreativas y la vitalidad del área',
+          'conocer los logros históricos asociados a este lugar y el entusiasmo de quienes lo visitan'
+        ]
+      : [
+          'aprovechar el espacio para caminar, hidratarse y mantener el cuerpo activo',
+          'observar el paso de los peatones, estirar las piernas y tomar aire fresco',
+          'disfrutar del dinamismo de la ruta a pie y registrar fotos del entorno activo'
+        ]
+  } else if (type === 'ecological') {
+    options = [
+      'observar sombra, brisa, vegetación, agua o panoramas y cuidar el entorno mientras se avanza',
+      'identificar especies de árboles, escuchar las aves y respetar las zonas de reserva ecológica',
+      'capturar fotos del paisaje verde, buscar miradores naturales y disfrutar del silencio'
+    ]
+  } else if (type === 'night') {
+    options = [
+      'revisar horarios, seguridad, música, iluminación y opciones para quedarse sin perder el control de la ruta',
+      'disfrutar del ambiente festivo, los cócteles locales y la música de fondo de forma responsable',
+      'apreciar las fachadas iluminadas, buscar calles concurridas y seguras, y sentir la vibra de la noche'
+    ]
+  } else if (type === 'family') {
+    options = [
+      'buscar puntos de descanso, baños, sombra, explicaciones simples y actividades visuales',
+      'aprovechar las áreas de juegos, organizar fotos grupales y caminar a un ritmo cómodo para todos',
+      'explicar curiosidades de forma divertida, buscar zonas seguras y evitar tumultos'
+    ]
+  } else if (type === 'cultural') {
+    options = [
+      'mirar detalles de fachada, plazas, arte urbano, vida cotidiana y símbolos del barrio',
+      'identificar placas conmemorativas, estilos arquitectónicos y la huella histórica del lugar',
+      'observar las interacciones de los residentes, el arte expuesto y sumergirte en la memoria del destino'
+    ]
+  } else {
+    options = [
+      'recorrer el lugar, fotografiarlo y entender por qué aparece en la secuencia del tour',
+      'apreciar las particularidades arquitectónicas, el ritmo cotidiano y tomar hermosas fotografías',
+      'buscar pequeños detalles que revelan la identidad local y contemplar el entorno relajadamente',
+      'observar el movimiento de la gente, respirar la atmósfera del sitio y capturar imágenes del paisaje'
+    ]
+  }
+  return selectDeterministic(options, seed)
 }
 
 function shouldUseOllama(input, planner) {

@@ -265,10 +265,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   _buildMapCard(builderState),
                   const SizedBox(height: 16),
                 ],
-                if (builderState.needsBudget) ...[
-                  _buildBudgetSelector(),
-                  const SizedBox(height: 16),
-                ],
+
                 if (builderState.hotels.isNotEmpty && !builderState.isBuilding) ...[
                   _buildHotelsList(builderState.hotels, builderState.selectedHotel),
                   const SizedBox(height: 16),
@@ -325,63 +322,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     ).animate().fadeIn().slideY(begin: 0.05);
   }
 
-  Widget _buildBudgetSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: Colors.blue.shade50,
-              radius: 16,
-              child: const Icon(Icons.smart_toy_rounded, color: Colors.blue, size: 20),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16).copyWith(topLeft: const Radius.circular(4)),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2))
-                  ],
-                ),
-                child: const Text('Para terminar, ¿cuál es tu presupuesto para hoteles? (Opcional)', style: TextStyle(fontSize: 15)),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.only(left: 40),
-          child: Row(
-            children: [
-              _buildBudgetChip('Económico', Icons.money_off),
-              const SizedBox(width: 8),
-              _buildBudgetChip('Moderado', Icons.attach_money),
-              const SizedBox(width: 8),
-              _buildBudgetChip('Lujo', Icons.diamond),
-            ],
-          ),
-        ),
-      ],
-    ).animate().fadeIn().slideY(begin: 0.05);
-  }
-
-  Widget _buildBudgetChip(String label, IconData icon) {
-    return ActionChip(
-      avatar: Icon(icon, size: 16, color: Colors.blue.shade700),
-      label: Text(label, style: TextStyle(color: Colors.blue.shade700, fontSize: 12)),
-      backgroundColor: Colors.blue.shade50,
-      side: BorderSide(color: Colors.blue.shade200),
-      onPressed: () {
-        ref.read(aiBuilderProvider.notifier).setBudgetAndFetchHotels(label);
-        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
-      },
-    );
-  }
-
   Widget _buildHotelsList(List<dynamic> hotels, Map<String, dynamic>? selectedHotel) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -420,9 +360,16 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(h['name'] ?? 'Hotel', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Row(
-                          children: List.generate(int.tryParse(h['stars'] ?? '0') ?? 3, (index) => const Icon(Icons.star, size: 12, color: Colors.amber)),
-                        )
+                        if (h['address'] != null || h['direccion'] != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            h['address']?.toString() ?? h['direccion']?.toString() ?? '',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

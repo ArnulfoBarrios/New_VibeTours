@@ -332,8 +332,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           isTyping: false,
           plannerContext: context,
           messages: [...state.messages, aiMsg],
-          needsBudget: true,
+          needsBudget: false,
         );
+
+        await fetchHotelsDirectly();
       } else {
         String errorMsg = 'Error: ${response.statusCode}';
         try {
@@ -349,27 +351,9 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     }
   }
   
-  Future<void> setBudgetAndFetchHotels(String budget) async {
+  Future<void> fetchHotelsDirectly() async {
     if (state.request == null || state.recommendations.isEmpty) return;
     state = state.copyWith(isLoading: true, needsBudget: false);
-    
-    // update request budget
-    final newRequest = AiTourRequest(
-      prompt: state.request!.prompt,
-      destination: state.request!.destination,
-      country: state.request!.country,
-      city: state.request!.city,
-      durationHours: state.request!.durationHours,
-      type: state.request!.type,
-      language: state.request!.language,
-      touristProfileSummary: state.request!.touristProfileSummary,
-      touristInterests: state.request!.touristInterests,
-      touristPace: state.request!.touristPace,
-      latitude: state.request!.latitude,
-      longitude: state.request!.longitude,
-      budget: budget,
-    );
-    state = state.copyWith(request: newRequest);
 
     try {
       final centerLat = state.recommendations.first.latitude;
@@ -378,7 +362,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       final response = await _postJson('/ai/tours/hotels', {
         'latitude': centerLat,
         'longitude': centerLon,
-        'budget': budget == 'Económico' ? 'economic' : budget == 'Lujo' ? 'luxury' : 'moderate',
+        'budget': 'moderate',
       });
 
       if (response.statusCode == 200) {
@@ -387,7 +371,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         
         final aiMsg = ChatMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          text: 'He encontrado estos hoteles ideales para tu presupuesto en la zona de tu tour. ¡Crearé el itinerario final con guía turístico!',
+          text: 'He encontrado estos hoteles ideales en la zona para tu alojamiento. ¡Selecciona uno y luego presiona "Generar Tour Final"!',
           type: ChatMessageType.ai,
           timestamp: DateTime.now(),
           actionChips: ['Generar Tour Final'],

@@ -90,7 +90,7 @@ export async function planWithOpenAI({
   timeProfile = {},
   selectedHotel = null,
 }) {
-  const timeoutMs = Number.parseInt(process.env.OPENAI_TIMEOUT_MS ?? '', 10) || 90000
+  const timeoutMs = Number.parseInt(process.env.OPENAI_TIMEOUT_MS ?? '', 10) || 120000
   const apiKey = process.env.OPENAI_API_KEY
   
   if (!apiKey) {
@@ -111,7 +111,7 @@ Reglas centrales:
 - No uses coordenadas geográficas en el JSON.
 - Escribe en ${language}.
 - CRÍTICO: La descripción general del tour ("descripcion_tour") debe atrapar al usuario desde la primera línea, tener 150 a 400 palabras, y explicar la vibra de la experiencia.
-- CRÍTICO: Cada descripción de parada ("descripcion") DEBE tener entre 150 y 350 palabras, escrita como un guía local experto y apasionado. Además de la historia vibrante, DEBE INCLUIR listas con guiones (-) para sugerir 'Qué hacer aquí' o 'Dónde comer cerca' de forma concisa.
+- CRÍTICO: Cada descripción de parada ("descripcion") DEBE tener entre 80 y 150 palabras, escrita como un guía local experto y apasionado. Además de la historia vibrante, DEBE INCLUIR listas con guiones (-) para sugerir 'Qué hacer aquí' o 'Dónde comer cerca' de forma concisa.
 - CRÍTICO: Prohibido usar frases genéricas de transición como "En esta parada...", "Aquí puedes observar...", "Ahora llegamos a...", "Continuamos nuestro tour hacia...". Usa un Storytelling dinámico.
 - Cada parada debe incluir actividades específicas reales, 2 a 5 datos curiosos históricos o culturales verificados y consejos prácticos útiles.
 - Ten en cuenta el perfil del viajero cuando exista: ${touristProfileSummary || 'sin perfil adicional'}.
