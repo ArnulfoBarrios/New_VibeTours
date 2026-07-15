@@ -104,10 +104,18 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
       node(around:${radius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
       node(around:${radius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
       node(around:${radius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
+      node(around:${radius},${latitude},${longitude})["natural"~"beach|water"];
+      node(around:${radius},${latitude},${longitude})["place"="island"];
+      node(around:${radius},${latitude},${longitude})["boundary"="national_park"];
       way(around:${radius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
       way(around:${radius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
       way(around:${radius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
       way(around:${radius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
+      way(around:${radius},${latitude},${longitude})["natural"~"beach|water"];
+      way(around:${radius},${latitude},${longitude})["place"="island"];
+      way(around:${radius},${latitude},${longitude})["boundary"="national_park"];
+      relation(around:${radius},${latitude},${longitude})["place"="island"];
+      relation(around:${radius},${latitude},${longitude})["boundary"="national_park"];
     );
     out center tags 80;
   `
@@ -127,7 +135,7 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
       const lat = element.lat ?? element.center?.lat
       const lon = element.lon ?? element.center?.lon
       const name = element.tags?.name
-      const type = element.tags?.tourism ?? element.tags?.historic ?? element.tags?.amenity ?? element.tags?.leisure ?? element.tags?.sport ?? element.tags?.natural ?? 'place'
+      const type = element.tags?.tourism ?? element.tags?.historic ?? element.tags?.amenity ?? element.tags?.leisure ?? element.tags?.sport ?? element.tags?.natural ?? element.tags?.place ?? element.tags?.boundary ?? 'place'
       if (lat == null || lon == null || !name) return null
       if (isAccommodation(type)) return null
       return {
@@ -190,16 +198,23 @@ function classifyAttraction(tags = {}) {
   const leisure = String(tags.leisure ?? '').toLowerCase()
   const natural = String(tags.natural ?? '').toLowerCase()
   const sport = String(tags.sport ?? '').toLowerCase()
+  const place = String(tags.place ?? '').toLowerCase()
+  const boundary = String(tags.boundary ?? '').toLowerCase()
 
   if (['museum', 'gallery', 'arts_centre'].includes(amenity) || tourism === 'museum') return 'museum'
   if (['monument', 'memorial', 'ruins', 'castle', 'archaeological_site'].includes(historic)) return 'historic'
   if (['attraction', 'viewpoint', 'theme_park', 'zoo', 'aquarium'].includes(tourism)) return tourism
   if (amenity === 'marketplace') return 'market'
   if (['sports_centre', 'stadium', 'pitch', 'track', 'fitness_centre'].includes(leisure) || sport) return 'sports'
-  if (['park', 'garden', 'nature_reserve', 'forest'].includes(leisure) || ['tree', 'wood', 'grassland', 'beach'].includes(natural)) return 'nature'
+  if (
+    ['park', 'garden', 'nature_reserve', 'forest'].includes(leisure) || 
+    ['tree', 'wood', 'grassland', 'beach', 'water'].includes(natural) ||
+    place === 'island' ||
+    boundary === 'national_park'
+  ) return 'nature'
   if (['restaurant', 'cafe', 'food_court', 'pub', 'bar', 'nightclub'].includes(amenity)) return amenity
   if (['cathedral', 'church', 'temple', 'mosque'].includes(historic)) return 'religious'
-  return tourism || historic || amenity || leisure || natural || 'place'
+  return tourism || historic || amenity || leisure || natural || place || boundary || 'place'
 }
 
 function isAccommodation(type) {

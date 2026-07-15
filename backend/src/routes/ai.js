@@ -2116,8 +2116,21 @@ export async function collectTourCandidates(input, location) {
   const country = location?.country || input.country || ''
   const query = `${input.destination} ${city} ${country}`.trim()
   const photonPlaces = await photonSearch(query, 30)
-  const overpassPrimary = location ? await overpassAttractions(location.latitude, location.longitude, 4500) : []
-  const overpassWide = location ? await overpassAttractions(location.latitude, location.longitude, 9000) : []
+
+  // Check if it is a regional or nature-oriented tour
+  const isRegionalOrNature = 
+    input.type === 'ecological' || 
+    input.type === 'sports' || 
+    (input.durationHours && input.durationHours >= 12) ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.prompt || '') ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(city);
+
+  const radiusPrimary = isRegionalOrNature ? 15000 : 4500
+  const radiusWide = isRegionalOrNature ? 45000 : 9000
+
+  const overpassPrimary = location ? await overpassAttractions(location.latitude, location.longitude, radiusPrimary) : []
+  const overpassWide = location ? await overpassAttractions(location.latitude, location.longitude, radiusWide) : []
   const pool = [...overpassPrimary, ...overpassWide, ...photonPlaces]
   const normalizedPool = uniqueByName(pool)
     .filter((place) => place && place.name)
@@ -2221,7 +2234,18 @@ function isCandidateNearDestination(place, input, location) {
   if (cityMatch || countryMatch) return true
   if (!hasCoordinates) return false
   const distanceKm = haversineMeters(location.latitude, location.longitude, latitude, longitude) / 1000
-  return distanceKm <= 45
+
+  // Detect if the tour is regional or nature-oriented to allow a wider radius filter
+  const isRegionalOrNature = 
+    input.type === 'ecological' || 
+    input.type === 'sports' || 
+    (input.durationHours && input.durationHours >= 12) ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.prompt || '') ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.city || '');
+
+  const maxDistance = isRegionalOrNature ? 50 : 45
+  return distanceKm <= maxDistance
 }
 
 function findCandidatePlace(name, candidatePlaces, anchorPlace) {
