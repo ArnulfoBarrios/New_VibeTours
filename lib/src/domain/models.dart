@@ -155,12 +155,16 @@ class TourStop {
   final int day;
   final bool isFallbackImage;
 
-  TourStop copyWith({int? order}) => TourStop(
+  TourStop copyWith({
+    String? name,
+    String? description,
+    int? order,
+  }) => TourStop(
     id: id,
-    name: name,
+    name: name ?? this.name,
     location: location,
     imageUrl: imageUrl,
-    description: description,
+    description: description ?? this.description,
     activities: activities,
     tips: tips,
     suggestedMinutes: suggestedMinutes,
@@ -331,6 +335,51 @@ class Tour {
       'url_mapa': '',
     };
   }
+
+  Tour copyWith({
+    List<TourStop>? stops,
+  }) => Tour(
+    id: id,
+    ownerId: ownerId,
+    title: title,
+    country: country,
+    city: city,
+    type: type,
+    description: description,
+    coverUrl: coverUrl,
+    gallery: gallery,
+    durationHours: durationHours,
+    distanceKm: distanceKm,
+    rating: rating,
+    reviewCount: reviewCount,
+    likes: likes,
+    difficulty: difficulty,
+    language: language,
+    tags: tags,
+    stops: stops ?? this.stops,
+    isPublished: isPublished,
+    isAiGenerated: isAiGenerated,
+    shortSummary: shortSummary,
+    subcategories: subcategories,
+    featuredExperience: featuredExperience,
+    placeHistory: placeHistory,
+    culturalContext: culturalContext,
+    availableLanguages: availableLanguages,
+    recommendedAudience: recommendedAudience,
+    bestSeason: bestSeason,
+    recommendedSchedule: recommendedSchedule,
+    meetingPoint: meetingPoint,
+    meetingPointInfo: meetingPointInfo,
+    includes: includes,
+    excludes: excludes,
+    recommendations: recommendations,
+    whatToBring: whatToBring,
+    tourRules: tourRules,
+    keywords: keywords,
+    mainCategory: mainCategory,
+    budget: budget,
+    additionalInfo: additionalInfo,
+  );
 }
 
 class NearbyPlace {

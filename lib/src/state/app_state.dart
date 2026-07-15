@@ -775,7 +775,7 @@ TourStop _stopFromJson(Map<String, dynamic> json) {
       longitude: _double(json['longitude'], 0),
     ),
     imageUrl: _string(json['imageUrl'], ''),
-    description: _string(json['description'], 'Parada turistica'),
+    description: _string(json['description'], ''),
     activities: _stringList(json['activities']).isEmpty
         ? const ['Explorar']
         : _stringList(json['activities']),

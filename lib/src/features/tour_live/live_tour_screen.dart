@@ -42,6 +42,57 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
   bool _isTrackingMode = false;
   bool _navigatingToHotel = false;
   double? _currentHeading;
+  bool _stopsEnriched = false;
+
+  void _enrichGenericStops(Tour tour) async {
+    if (_stopsEnriched) return;
+    _stopsEnriched = true;
+
+    final voiceGuide = ref.read(voiceGuideProvider);
+    List<TourStop> updatedStops = List.from(tour.stops);
+    bool changed = false;
+
+    for (int i = 0; i < tour.stops.length; i++) {
+      final stop = tour.stops[i];
+      final title = stop.name.trim();
+      final description = stop.description.trim();
+
+      final isGenericName = title.isEmpty ||
+                            title.toLowerCase() == 'parada' ||
+                            title.toLowerCase().startsWith('parada ') ||
+                            title.toLowerCase().startsWith('atracción del recorrido');
+
+      final isDescriptionEmpty = description.isEmpty ||
+                                 description.toLowerCase() == 'parada' ||
+                                 description.toLowerCase() == 'parada turistica';
+
+      if (isGenericName || isDescriptionEmpty) {
+        final details = await voiceGuide.fetchWikipediaAndGeocodingDetails(
+          stop.location.latitude,
+          stop.location.longitude,
+          lang: tour.language,
+        );
+
+        if (details != null) {
+          final newName = details['name'] ?? stop.name;
+          final newDesc = details['description'] ?? stop.description;
+          updatedStops[i] = stop.copyWith(
+            name: newName,
+            description: newDesc,
+          );
+          changed = true;
+        }
+      }
+    }
+
+    if (changed && mounted) {
+      final updatedTour = tour.copyWith(stops: updatedStops);
+      setState(() {
+        _navigationTour = updatedTour;
+      });
+      ref.read(selectedTourProvider.notifier).state = updatedTour;
+    }
+  }
 
   TourStop? _findHotelStop(Tour tour) {
     for (final stop in tour.stops) {
@@ -188,7 +239,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
     if (!_locationStreamRequested) {
       _locationStreamRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_startLiveNavigation());
+        if (mounted) {
+          unawaited(_startLiveNavigation());
+          _enrichGenericStops(tour);
+        }
       });
     }
     if (_liveRouteStopIndex != _activeStop && !_isRouting) {
@@ -592,7 +646,25 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                 label: l10n.voiceGuide,
                 icon: Icons.record_voice_over_rounded,
                 onPressed: () async {
-                  await ref.read(voiceGuideProvider).narrateStop(stop);
+                  await ref.read(voiceGuideProvider).narrateStop(
+                    stop,
+                    lang: tour.language,
+                    onResolved: (name, description) {
+                      if (mounted) {
+                        setState(() {
+                          final updatedStops = tour.stops.map((s) {
+                            if (s.id == stop.id) {
+                              return s.copyWith(name: name, description: description);
+                            }
+                            return s;
+                          }).toList();
+                          final updatedTour = tour.copyWith(stops: updatedStops);
+                          _navigationTour = updatedTour;
+                          ref.read(selectedTourProvider.notifier).state = updatedTour;
+                        });
+                      }
+                    },
+                  );
                 },
               ),
             ),

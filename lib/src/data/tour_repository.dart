@@ -554,7 +554,7 @@ class TourRepository {
       final name =
           item['nombre']?.toString() ??
           item['name']?.toString() ??
-          'Parada ${entry.key + 1}';
+          'Parada';
       final imageSeed = '$name ${request.city}';
       final images = _stringList(item['imagenes']).isEmpty
           ? [_imageUrl(item['imageUrl'], imageSeed)]
@@ -714,7 +714,7 @@ class TourRepository {
         name:
             item['name']?.toString() ??
             item['custom_name']?.toString() ??
-            'Parada ${entry.key + 1}',
+            'Parada',
         day: _intValue(metadata['dia'] ?? metadata['day'] ?? item['day'] ?? item['dia'], 1),
         location: GeoPoint(
           latitude: _doubleValue(item['latitude'], 0),

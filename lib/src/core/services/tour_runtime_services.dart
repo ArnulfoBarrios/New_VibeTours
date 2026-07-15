@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
@@ -77,10 +80,128 @@ class VoiceGuideService {
   final FlutterTts _tts = FlutterTts();
   final SpeechToText _speech = SpeechToText();
 
-  Future<void> narrateStop(TourStop stop) async {
-    final title = stop.name.trim();
-    final description = stop.description.trim();
-    await speak(description.isEmpty ? title : '$title. $description');
+  Future<Map<String, String>?> fetchWikipediaAndGeocodingDetails(
+    double lat,
+    double lon, {
+    String lang = 'es',
+  }) async {
+    try {
+      String? resolvedName;
+      String? resolvedDesc;
+
+      // 1. Nominatim Reverse Geocoding
+      final reverseUrl = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lon&zoom=18&accept-language=$lang'
+      );
+      final reverseRes = await http.get(reverseUrl, headers: {
+        'User-Agent': 'VIBETOURS/1.0 contact=ops@vibetours.app'
+      }).timeout(const Duration(seconds: 4));
+
+      if (reverseRes.statusCode == 200) {
+        final data = jsonDecode(reverseRes.body) as Map<String, dynamic>;
+        final address = data['address'] as Map<String, dynamic>?;
+        if (address != null) {
+          resolvedName = address['attraction']?.toString() ??
+                         address['museum']?.toString() ??
+                         address['monument']?.toString() ??
+                         address['castle']?.toString() ??
+                         address['heritage']?.toString() ??
+                         address['historic']?.toString() ??
+                         address['tourism']?.toString() ??
+                         address['amenity']?.toString() ??
+                         address['place']?.toString() ??
+                         address['shop']?.toString() ??
+                         address['hotel']?.toString() ??
+                         address['village']?.toString() ??
+                         address['suburb']?.toString() ??
+                         data['name']?.toString();
+        }
+        if (resolvedName == null || resolvedName.trim().isEmpty) {
+          final displayName = data['display_name']?.toString() ?? '';
+          if (displayName.isNotEmpty) {
+            resolvedName = displayName.split(',').first.trim();
+          }
+        }
+      }
+
+      // 2. Wikipedia Geosearch
+      final wikiUrl = Uri.parse(
+        'https://$lang.wikipedia.org/w/api.php?action=query&format=json&generator=geosearch'
+        '&prop=extracts&exintro=1&explaintext=1&ggscoord=$lat|$lon&ggsradius=1000&ggslimit=1&origin=*'
+      );
+      final wikiRes = await http.get(wikiUrl).timeout(const Duration(seconds: 4));
+
+      if (wikiRes.statusCode == 200) {
+        final wikiData = jsonDecode(wikiRes.body) as Map<String, dynamic>;
+        final query = wikiData['query'] as Map<String, dynamic>?;
+        final pages = query?['pages'] as Map<String, dynamic>?;
+        if (pages != null && pages.isNotEmpty) {
+          final page = pages.values.first as Map<String, dynamic>;
+          final wikiTitle = page['title']?.toString() ?? '';
+          final wikiExtract = page['extract']?.toString() ?? '';
+
+          if (wikiTitle.isNotEmpty) {
+            resolvedName = wikiTitle.trim();
+          }
+          if (wikiExtract.isNotEmpty) {
+            resolvedDesc = wikiExtract.trim();
+          }
+        }
+      }
+
+      if ((resolvedName != null && resolvedName.isNotEmpty) || (resolvedDesc != null && resolvedDesc.isNotEmpty)) {
+        return {
+          'name': resolvedName ?? 'Punto de interés',
+          'description': resolvedDesc ?? 'Disfruta de esta parada en tu recorrido.',
+        };
+      }
+    } catch (e) {
+      debugPrint('Error en fetchWikipediaAndGeocodingDetails: $e');
+    }
+    return null;
+  }
+
+  Future<void> narrateStop(
+    TourStop stop, {
+    String lang = 'es',
+    void Function(String name, String description)? onResolved,
+  }) async {
+    String title = stop.name.trim();
+    String description = stop.description.trim();
+
+    final isGenericName = title.isEmpty ||
+                          title.toLowerCase() == 'parada' ||
+                          title.toLowerCase().startsWith('parada ') ||
+                          title.toLowerCase().startsWith('atracción del recorrido');
+
+    final isDescriptionEmpty = description.isEmpty ||
+                               description.toLowerCase() == 'parada' ||
+                               description.toLowerCase() == 'parada turistica';
+
+    if (isGenericName || isDescriptionEmpty) {
+      final details = await fetchWikipediaAndGeocodingDetails(
+        stop.location.latitude,
+        stop.location.longitude,
+        lang: lang,
+      );
+
+      if (details != null) {
+        title = details['name'] ?? title;
+        description = details['description'] ?? description;
+        if (onResolved != null) {
+          onResolved(title, description);
+        }
+      }
+    }
+
+    if (title.isEmpty || title.toLowerCase() == 'parada') {
+      title = 'Atracción del recorrido ${stop.order + 1}';
+    }
+    if (description.isEmpty || description.toLowerCase() == 'parada') {
+      description = 'Hemos llegado a un punto de interés especial en nuestra ruta. Disfruta de esta parada en el camino.';
+    }
+
+    await speak('$title. $description');
   }
 
   Future<void> speak(String text) async {

@@ -105,17 +105,23 @@ export function buildSeedTours() {
         review_count: 42 + id * 9,
         likes_count: 120 + id * 17,
         tags: [labelType(profile.type), country, city, profile.focus],
-        stops: routeStops.map((name, order) => ({
-          name,
-          latitude: Number((lat + ((order - 2) * 0.006)).toFixed(6)),
-          longitude: Number((lng + ((order % 2 === 0 ? 1 : -1) * 0.006 * (order + 1))).toFixed(6)),
-          image_url: curatedImage(`${name} ${city} ${profile.type}`),
-          description: `${name} se integra a esta ruta ${labelType(profile.type).toLowerCase()} por su relacion con ${profile.focus} en ${city}.`,
-          activities: profile.activities,
-          tips: profile.tips,
-          suggested_minutes: 25 + order * 8,
-          stop_order: order
-        }))
+        stops: routeStops.map((name, order) => {
+          const stopName = name && name.trim() !== '' && name.toLowerCase() !== 'parada' 
+            ? name 
+            : `Atracción ${order + 1} del recorrido`;
+          const stopDescription = `${stopName} es un emblemático punto de interés en ${city}. Se integra a este recorrido ${labelType(profile.type).toLowerCase()} para enriquecer tu experiencia gracias a su valor cultural y su conexión con ${profile.focus}.`;
+          return {
+            name: stopName,
+            latitude: Number((lat + ((order - 2) * 0.006)).toFixed(6)),
+            longitude: Number((lng + ((order % 2 === 0 ? 1 : -1) * 0.006 * (order + 1))).toFixed(6)),
+            image_url: curatedImage(`${stopName} ${city} ${profile.type}`),
+            description: stopDescription,
+            activities: profile.activities,
+            tips: profile.tips,
+            suggested_minutes: 25 + order * 8,
+            stop_order: order
+          };
+        })
       })
       id += 1
     }
