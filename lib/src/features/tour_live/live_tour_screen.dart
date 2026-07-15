@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 
+import '../../core/config/app_config.dart';
 import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
 import '../../core/design/premium_components.dart';
@@ -14,6 +17,72 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import 'tour_rating_dialog.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Data model for a voice assistant response from the backend
+// ─────────────────────────────────────────────────────────────────────────────
+class _RouteAssistantResponse {
+  const _RouteAssistantResponse({
+    required this.isRelatedToTravel,
+    required this.responseText,
+    this.actionType,
+    this.nearbyPlaces = const [],
+  });
+
+  factory _RouteAssistantResponse.fromJson(Map<String, dynamic> json) {
+    final places = <_NearbyFoodPlace>[];
+    final rawPlaces = json['nearbyPlaces'];
+    if (rawPlaces is List) {
+      for (final item in rawPlaces) {
+        if (item is Map<String, dynamic>) {
+          places.add(_NearbyFoodPlace.fromJson(item));
+        }
+      }
+    }
+    return _RouteAssistantResponse(
+      isRelatedToTravel: json['isRelatedToTravel'] == true,
+      responseText: (json['responseText'] as String?) ?? '',
+      actionType: json['actionType'] as String?,
+      nearbyPlaces: places,
+    );
+  }
+
+  final bool isRelatedToTravel;
+  final String responseText;
+  final String? actionType;
+  final List<_NearbyFoodPlace> nearbyPlaces;
+}
+
+class _NearbyFoodPlace {
+  const _NearbyFoodPlace({
+    required this.name,
+    required this.latitude,
+    required this.longitude,
+    this.type,
+    this.cuisine,
+  });
+
+  factory _NearbyFoodPlace.fromJson(Map<String, dynamic> json) {
+    return _NearbyFoodPlace(
+      name: (json['name'] as String?) ?? 'Restaurante',
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      type: json['type'] as String?,
+      cuisine: json['cuisine'] as String?,
+    );
+  }
+
+  final String name;
+  final double latitude;
+  final double longitude;
+  final String? type;
+  final String? cuisine;
+
+  GeoPoint toGeoPoint() => GeoPoint(latitude: latitude, longitude: longitude);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LiveTourScreen
+// ─────────────────────────────────────────────────────────────────────────────
 class LiveTourScreen extends ConsumerStatefulWidget {
   const LiveTourScreen({super.key, required this.tourId});
 
@@ -23,7 +92,8 @@ class LiveTourScreen extends ConsumerStatefulWidget {
   ConsumerState<LiveTourScreen> createState() => _LiveTourScreenState();
 }
 
-class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
+class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
+    with TickerProviderStateMixin {
   final RoadRouteService _routeService = RoadRouteService();
 
   StreamSubscription<Position>? _positionSubscription;
@@ -34,7 +104,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
   DateTime? _lastTrafficRefreshAt;
   int? _liveRouteStopIndex;
   int _activeStop = 0;
-  bool _handsFree = false;
   bool _isRouting = false;
   bool _isOffRoute = false;
   bool _locationStreamRequested = false;
@@ -43,6 +112,33 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
   bool _navigatingToHotel = false;
   double? _currentHeading;
   bool _stopsEnriched = false;
+
+  // ── Voice assistant state ──────────────────────────────────────────────────
+  bool _isListening = false;
+  bool _isProcessingVoice = false;
+  List<_NearbyFoodPlace> _voiceFoodPlaces = [];
+
+  // ── Mic pulse animation ────────────────────────────────────────────────────
+  late final AnimationController _micPulseController;
+  late final Animation<double> _micPulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _micPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _micPulseController.reverse();
+        } else if (status == AnimationStatus.dismissed && _isListening) {
+          _micPulseController.forward();
+        }
+      });
+    _micPulseAnimation = Tween<double>(begin: 1.0, end: 1.35).animate(
+      CurvedAnimation(parent: _micPulseController, curve: Curves.easeInOut),
+    );
+  }
 
   void _enrichGenericStops(Tour tour) async {
     if (_stopsEnriched) return;
@@ -118,11 +214,167 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
     _recalculateRoute(tour, force: true);
   }
 
+  // ── Voice assistant ────────────────────────────────────────────────────────
+
+  /// Starts the mic listening cycle, sends transcript to backend,
+  /// speaks the response, and executes any structured action.
+  Future<void> _onMicPressed() async {
+    if (_isListening || _isProcessingVoice) return;
+
+    final voiceGuide = ref.read(voiceGuideProvider);
+    final tour = _navigationTour;
+
+    // Start listening with blue pulse animation
+    setState(() {
+      _isListening = true;
+      _voiceFoodPlaces = [];
+    });
+    _micPulseController.forward();
+
+    String? transcript;
+    try {
+      transcript = await voiceGuide.listenCommand();
+    } catch (_) {
+      transcript = null;
+    }
+
+    // Stop pulse animation
+    _micPulseController.stop();
+    _micPulseController.reset();
+
+    if (!mounted) return;
+    setState(() {
+      _isListening = false;
+    });
+
+    if (transcript == null || transcript.trim().isEmpty) return;
+
+    // Show processing state
+    setState(() {
+      _isProcessingVoice = true;
+    });
+
+    try {
+      final response = await _callRouteAssistant(
+        userQuery: transcript.trim(),
+        tour: tour,
+      );
+
+      if (!mounted) return;
+
+      // Speak the AI response
+      await voiceGuide.speak(response.responseText);
+
+      if (!mounted) return;
+
+      // Execute structured action
+      await _executeVoiceAction(response, tour);
+    } catch (e) {
+      debugPrint('[voice-assistant] Error: $e');
+      if (mounted) {
+        await voiceGuide.speak(
+          'Lo siento, no pude conectarme al asistente. Intenta de nuevo.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessingVoice = false;
+        });
+      }
+    }
+  }
+
+  /// Sends the transcript to POST /api/ai/chat/route-assistant
+  Future<_RouteAssistantResponse> _callRouteAssistant({
+    required String userQuery,
+    Tour? tour,
+  }) async {
+    final stop = tour != null && _activeStop < tour.stops.length
+        ? tour.stops[_activeStop]
+        : null;
+
+    final body = <String, dynamic>{
+      'userQuery': userQuery,
+      if (_currentPoint != null) 'latitude': _currentPoint!.latitude,
+      if (_currentPoint != null) 'longitude': _currentPoint!.longitude,
+      'tourContext': {
+        'currentStopName': stop?.name ?? '',
+        'city': tour?.city ?? '',
+        'country': tour?.country ?? '',
+      },
+    };
+
+    final baseUrls = AppConfig.apiBaseUrls;
+    Object? lastError;
+
+    for (final base in baseUrls) {
+      try {
+        final uri = Uri.parse('$base/ai/chat/route-assistant');
+        final res = await http
+            .post(
+              uri,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(body),
+            )
+            .timeout(const Duration(seconds: 20));
+
+        if (res.statusCode == 200) {
+          final json = jsonDecode(res.body) as Map<String, dynamic>;
+          return _RouteAssistantResponse.fromJson(json);
+        }
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    throw lastError ?? Exception('No se pudo conectar al asistente de voz.');
+  }
+
+  /// Executes the structured action returned by the backend
+  Future<void> _executeVoiceAction(
+    _RouteAssistantResponse response,
+    Tour? tour,
+  ) async {
+    switch (response.actionType) {
+      case 'SEARCH_RESTAURANTS':
+        if (response.nearbyPlaces.isNotEmpty) {
+          setState(() {
+            _voiceFoodPlaces = response.nearbyPlaces;
+          });
+          // Narrate the found options
+          final names = response.nearbyPlaces
+              .take(3)
+              .map((p) => p.name)
+              .join(', ');
+          final voiceGuide = ref.read(voiceGuideProvider);
+          await voiceGuide.speak(
+            'Encontré los siguientes lugares: $names. Los marqué en el mapa.',
+          );
+        }
+
+      case 'RETURN_TO_ACCOMMODATION':
+        if (tour != null && _findHotelStop(tour) != null) {
+          _startHotelNavigation();
+        }
+
+      // DESCRIBE_CURRENT_POI and CHANGE_DESTINATION are handled
+      // by the spoken response alone — no extra UI action needed.
+      default:
+        break;
+    }
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
   @override
   void dispose() {
     _positionSubscription?.cancel();
+    _micPulseController.dispose();
     super.dispose();
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -147,19 +399,30 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                             (!_navigatingToHotel && _liveRouteStopIndex == _activeStop)
               ? _liveRoute
               : null;
-          final mapPoints = _mapPointsFor(stop);
+
+          // Combine regular map points with temporary food markers
+          final basePoints = _mapPointsFor(stop);
+          final allPoints = _voiceFoodPlaces.isEmpty
+              ? basePoints
+              : [...basePoints, ..._voiceFoodPlaces.map((p) => p.toGeoPoint())];
+
+          final baseLabels = [
+            if (_currentPoint != null) 'Tu ubicacion',
+            _navigatingToHotel
+                ? (_findHotelStop(tour)?.name ?? 'Hotel')
+                : stop.name,
+          ];
+          final allLabels = _voiceFoodPlaces.isEmpty
+              ? baseLabels
+              : [...baseLabels, ..._voiceFoodPlaces.map((p) => p.name)];
+
           return Stack(
             children: [
               Positioned.fill(
                 child: OpenFreeRouteMap(
-                  key: ValueKey('${tour.id}-$mapStyle-${_navigatingToHotel ? "hotel" : "stop"}'),
-                  points: mapPoints,
-                  labels: [
-                    if (_currentPoint != null) 'Tu ubicacion',
-                    _navigatingToHotel
-                        ? (_findHotelStop(tour)?.name ?? 'Hotel')
-                        : stop.name,
-                  ],
+                  key: ValueKey('${tour.id}-$mapStyle-${_navigatingToHotel ? "hotel" : "stop"}-${_voiceFoodPlaces.length}'),
+                  points: allPoints,
+                  labels: allLabels,
                   activeIndex: _currentPoint == null ? 0 : 1,
                   styleUrl: mapStyle,
                   height: MediaQuery.of(context).size.height,
@@ -209,6 +472,23 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                     onPressed: _startHotelNavigation,
                     icon: const Icon(Icons.hotel_rounded),
                     label: const Text('Regresar al hotel'),
+                  ),
+                ),
+              // Clear voice markers button when food places are visible
+              if (_voiceFoodPlaces.isNotEmpty)
+                Positioned(
+                  right: 16,
+                  bottom: _findHotelStop(tour) != null && !_navigatingToHotel
+                      ? 330
+                      : 270,
+                  child: FloatingActionButton.small(
+                    heroTag: 'clear_voice_markers',
+                    backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                    onPressed: () => setState(() => _voiceFoodPlaces = []),
+                    child: Icon(
+                      Icons.clear_rounded,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
                   ),
                 ),
               Positioned(
@@ -669,17 +949,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            IconButton.filledTonal(
-              tooltip: l10n.handsFree,
-              onPressed: () => setState(() {
-                _handsFree = !_handsFree;
-              }),
-              icon: Icon(
-                _handsFree
-                    ? Icons.hearing_rounded
-                    : Icons.hearing_disabled_rounded,
-              ),
-            ),
+            // ── Voice assistant mic button (replaces hands-free) ────────────
+            _buildMicButton(context),
             IconButton.filledTonal(
               tooltip: l10n.recalculate,
               onPressed: () =>
@@ -700,7 +971,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                 final currentUser = ref.read(authServiceProvider).currentUser;
                 
                 if (currentUser == null) {
-                  context.pop(); // Invitados no pueden calificar
+                  context.pop(); // Guests cannot rate
                   return;
                 }
 
@@ -711,7 +982,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                 final hasRated = userRatings.any((r) => r.tour.id == tour.id);
                 
                 if (isOwnTour || hasRated) {
-                  context.pop(); // Si es su propio tour o ya lo calificó, simplemente salir
+                  context.pop();
                 } else {
                   showDialog(
                     context: context,
@@ -728,6 +999,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
                   _liveRouteStopIndex = null;
                   _isOffRoute = false;
                   _noLandRouteAvailable = false;
+                  _voiceFoodPlaces = []; // Clear food markers on stop change
                 });
                 _recalculateRoute(tour, force: true);
               }
@@ -735,6 +1007,66 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// The animated microphone button that replaces the hands-free button
+  Widget _buildMicButton(BuildContext context) {
+    final isActive = _isListening || _isProcessingVoice;
+    final theme = Theme.of(context);
+
+    final micIcon = _isProcessingVoice
+        ? const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        : Icon(
+            _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+            color: isActive ? Colors.white : null,
+          );
+
+    if (!_isListening) {
+      return IconButton.filledTonal(
+        tooltip: 'Asistente de voz',
+        onPressed: _isProcessingVoice ? null : _onMicPressed,
+        style: _isProcessingVoice
+            ? IconButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.6),
+              )
+            : null,
+        icon: micIcon,
+      );
+    }
+
+    // Pulsing blue animation while listening
+    return AnimatedBuilder(
+      animation: _micPulseAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _micPulseAnimation.value,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF007AFF),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF007AFF).withValues(alpha: 0.5),
+                  blurRadius: 12 * _micPulseAnimation.value,
+                  spreadRadius: 2 * _micPulseAnimation.value,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.mic_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, overpassNearbyFood } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI } from '../services/openai.js'
 import { supabase } from '../services/supabase.js'
 
@@ -2443,6 +2443,128 @@ function persistTour(tour, route, input, userId) {
 }
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Route Voice Assistant — POST /api/ai/chat/route-assistant
+// Classifies the user's voice query and returns a travel-scoped response
+// with a structured actionType for the Flutter client to execute.
+// ─────────────────────────────────────────────────────────────────────────────
+const routeAssistantSchema = z.object({
+  userQuery: z.string().min(1),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  tourContext: z.object({
+    currentStopName: z.string().optional().default(''),
+    city: z.string().optional().default(''),
+    country: z.string().optional().default('')
+  }).optional().default({})
+})
 
+const ROUTE_ASSISTANT_SYSTEM_PROMPT = `Eres VibeTours Voice, un asistente de voz especializado EXCLUSIVAMENTE en ayudar a turistas durante un recorrido turístico activo. Tu única función es responder preguntas relacionadas con el viaje, el turismo, el destino actual, restaurantes, puntos de interés y navegación.
 
+CLASIFICACIÓN OBLIGATORIA:
+- Si la pregunta es sobre viajes, turismo, gastronomía, puntos de interés, navegación, clima, moneda local, idioma, historia del lugar, cultura, transporte, hoteles o cualquier tema relacionado al destino turístico → isRelatedToTravel: true.
+- Si la pregunta es sobre matemáticas, programación, medicina, política, entretenimiento no relacionado al viaje, o cualquier tema ajeno al turismo → isRelatedToTravel: false.
 
+ACCIÓNES DISPONIBLES (actionType):
+- "SEARCH_RESTAURANTS": el usuario pregunta por comida, restaurantes, cafés, bares o lugares para comer.
+- "RETURN_TO_ACCOMMODATION": el usuario quiere regresar al hotel o alojamiento.
+- "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre el punto de interés actual.
+- "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro lugar del tour.
+- null: la acción es solo informativa (clima, moneda, tips, etc.) o la consulta no es válida.
+
+RESPUESTA: Siempre en español colombiano, amigable, conciso (máximo 2 oraciones). Si isRelatedToTravel es false, rechaza educadamente sin revelar detalles técnicos.
+
+Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
+{
+  "isRelatedToTravel": boolean,
+  "responseText": "string",
+  "actionType": "SEARCH_RESTAURANTS" | "RETURN_TO_ACCOMMODATION" | "DESCRIBE_CURRENT_POI" | "CHANGE_DESTINATION" | null
+}`
+
+aiRouter.post('/chat/route-assistant', async (req, res, next) => {
+  try {
+    const { userQuery, latitude, longitude, tourContext } = routeAssistantSchema.parse(req.body)
+    const apiKey = process.env.OPENAI_API_KEY
+
+    if (!apiKey) {
+      return res.status(503).json({
+        isRelatedToTravel: false,
+        responseText: 'El asistente de voz no está disponible en este momento.',
+        actionType: null
+      })
+    }
+
+    const contextInfo = [
+      tourContext?.currentStopName ? `Parada actual: ${tourContext.currentStopName}` : '',
+      tourContext?.city ? `Ciudad: ${tourContext.city}` : '',
+      tourContext?.country ? `País: ${tourContext.country}` : '',
+      latitude != null ? `Coordenadas del usuario: ${latitude}, ${longitude}` : ''
+    ].filter(Boolean).join('. ')
+
+    const userMessage = contextInfo
+      ? `Contexto del tour — ${contextInfo}.\n\nPregunta del usuario: "${userQuery}"`
+      : `Pregunta del usuario: "${userQuery}"`
+
+    let aiResult = null
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15000)
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: ROUTE_ASSISTANT_SYSTEM_PROMPT },
+            { role: 'user', content: userMessage }
+          ],
+          max_tokens: 300,
+          temperature: 0.4
+        }),
+        signal: controller.signal
+      })
+      clearTimeout(timeout)
+
+      if (response.ok) {
+        const json = await response.json()
+        const raw = json.choices?.[0]?.message?.content ?? '{}'
+        aiResult = JSON.parse(raw)
+      }
+    } catch (err) {
+      console.warn('[route-assistant] OpenAI call failed:', err.message)
+    }
+
+    // Fallback si la IA no respondió
+    if (!aiResult || typeof aiResult.isRelatedToTravel !== 'boolean') {
+      aiResult = {
+        isRelatedToTravel: false,
+        responseText: 'Lo siento, no pude procesar tu consulta en este momento. Intenta de nuevo.',
+        actionType: null
+      }
+    }
+
+    // If SEARCH_RESTAURANTS and we have coordinates, enrich the response with real places
+    let nearbyFood = []
+    if (
+      aiResult.isRelatedToTravel &&
+      aiResult.actionType === 'SEARCH_RESTAURANTS' &&
+      latitude != null &&
+      longitude != null
+    ) {
+      nearbyFood = await overpassNearbyFood(latitude, longitude, 1000)
+    }
+
+    return res.json({
+      isRelatedToTravel: aiResult.isRelatedToTravel,
+      responseText: aiResult.responseText,
+      actionType: aiResult.actionType ?? null,
+      nearbyPlaces: nearbyFood.length > 0 ? nearbyFood : undefined
+    })
+  } catch (error) {
+    next(error)
+  }
+})

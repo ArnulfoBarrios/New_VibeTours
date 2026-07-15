@@ -275,6 +275,54 @@ export async function overpassHotels(latitude, longitude, budget = 'moderate', r
   return photonHotelsFallback(latitude, longitude, budget)
 }
 
+/**
+ * Search for nearby food/restaurant places via Overpass API.
+ * Used by the voice route assistant for the SEARCH_RESTAURANTS action.
+ */
+export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
+  const query = `
+    [out:json][timeout:15];
+    (
+      node(around:${radius},${latitude},${longitude})["amenity"~"restaurant|cafe|fast_food|food_court|bar|pub"];
+      way(around:${radius},${latitude},${longitude})["amenity"~"restaurant|cafe|fast_food|food_court|bar|pub"];
+    );
+    out center tags 20;
+  `
+  try {
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': USER_AGENT
+      },
+      body: new URLSearchParams({ data: query }),
+      signal: AbortSignal.timeout(10000)
+    })
+    if (!response.ok) return []
+    const json = await response.json()
+    return (json.elements ?? [])
+      .map((element) => {
+        const lat = element.lat ?? element.center?.lat
+        const lon = element.lon ?? element.center?.lon
+        const name = element.tags?.name
+        if (lat == null || lon == null || !name) return null
+        return {
+          name,
+          latitude: lat,
+          longitude: lon,
+          type: element.tags?.amenity ?? 'restaurant',
+          cuisine: element.tags?.cuisine ?? null,
+          address: element.tags?.['addr:street'] ?? null
+        }
+      })
+      .filter(Boolean)
+      .slice(0, 8)
+  } catch (error) {
+    console.error('[osm] overpassNearbyFood error:', error.message)
+    return []
+  }
+}
+
 async function photonHotelsFallback(latitude, longitude, budget) {
   try {
     const url = new URL('https://photon.komoot.io/api/')
