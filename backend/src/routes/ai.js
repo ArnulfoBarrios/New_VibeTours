@@ -2472,7 +2472,7 @@ ACCIÓNES DISPONIBLES (actionType):
 - "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro lugar del tour.
 - null: la acción es solo informativa (clima, moneda, tips, etc.) o la consulta no es válida.
 
-RESPUESTA: Siempre en español colombiano, amigable, conciso (máximo 2 oraciones). Si isRelatedToTravel es false, rechaza educadamente sin revelar detalles técnicos.
+RESPUESTA: Siempre en español colombiano, amigable, conciso (máximo 2 oraciones). Si isRelatedToTravel es false, rechaza educadamente sin revelar detalles técnicos. CRÍTICO: Si la acción es "SEARCH_RESTAURANTS", indica en tu respuesta de voz que vas a buscar comida en su ubicación actual o zona actual (no menciones la siguiente parada, ya que la búsqueda se realiza alrededor de la posición del usuario).
 
 Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
 {

@@ -25,6 +25,7 @@ class OpenFreeRouteMap extends StatefulWidget {
     this.trackingHeading,
     this.focusOnLast = false,
     this.onMapCreated,
+    this.onPointSelected,
   });
 
   factory OpenFreeRouteMap.fromStops({
@@ -45,6 +46,7 @@ class OpenFreeRouteMap extends StatefulWidget {
     double? trackingHeading,
     bool focusOnLast = false,
     void Function(MapLibreMapController)? onMapCreated,
+    void Function(GeoPoint)? onPointSelected,
   }) {
     return OpenFreeRouteMap(
       key: key,
@@ -65,6 +67,7 @@ class OpenFreeRouteMap extends StatefulWidget {
       trackingHeading: trackingHeading,
       focusOnLast: focusOnLast,
       onMapCreated: onMapCreated,
+      onPointSelected: onPointSelected,
     );
   }
 
@@ -85,6 +88,7 @@ class OpenFreeRouteMap extends StatefulWidget {
   final double? trackingHeading;
   final bool focusOnLast;
   final void Function(MapLibreMapController)? onMapCreated;
+  final void Function(GeoPoint)? onPointSelected;
 
   @override
   State<OpenFreeRouteMap> createState() => _OpenFreeRouteMapState();
@@ -202,6 +206,15 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
           myLocationEnabled: widget.myLocationEnabled,
           onMapCreated: (controller) {
             _controller = controller;
+            controller.onCircleTapped.add((circle) {
+              final latLng = circle.options.geometry;
+              if (latLng != null && widget.onPointSelected != null) {
+                widget.onPointSelected!(GeoPoint(
+                  latitude: latLng.latitude,
+                  longitude: latLng.longitude,
+                ));
+              }
+            });
             if (widget.onMapCreated != null) {
               widget.onMapCreated!(controller);
             }
@@ -780,13 +793,6 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
   }
 
   String _routeColor(RoadRouteResult route) {
-    if (!route.usesLiveTraffic) return '#007AFF';
-    return switch (route.trafficSeverity) {
-      TrafficSeverity.clear => '#34C759',
-      TrafficSeverity.moderate => '#FFD60A',
-      TrafficSeverity.heavy => '#FF9F0A',
-      TrafficSeverity.severe => '#FF3B30',
-      TrafficSeverity.unavailable => '#007AFF',
-    };
+    return '#007AFF';
   }
 }

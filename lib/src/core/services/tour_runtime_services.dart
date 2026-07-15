@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -213,17 +214,72 @@ class VoiceGuideService {
 
   Future<void> stop() => _tts.stop();
 
-  Future<String?> listenCommand() async {
-    final ready = await _speech.initialize();
-    if (!ready) return null;
-    String? words;
-    await _speech.listen(
-      listenOptions: SpeechListenOptions(partialResults: false),
-      onResult: (result) => words = result.recognizedWords,
+  Future<String?> listenCommand({
+    void Function(String)? onPartialResult,
+    void Function(String)? onError,
+  }) async {
+    final completer = Completer<String?>();
+    String? recognizedWords;
+
+    final ready = await _speech.initialize(
+      onError: (errorNotification) {
+        debugPrint('Speech STT Error: ${errorNotification.errorMsg} - ${errorNotification.permanent}');
+        if (onError != null) onError(errorNotification.errorMsg);
+        if (!completer.isCompleted) {
+          completer.complete(recognizedWords);
+        }
+      },
+      onStatus: (status) {
+        debugPrint('Speech STT Status: $status');
+        if (status == 'notListening' || status == 'done') {
+          if (!completer.isCompleted) {
+            completer.complete(recognizedWords);
+          }
+        }
+      },
     );
-    await Future<void>.delayed(const Duration(seconds: 4));
-    await _speech.stop();
-    return words;
+
+    if (!ready) {
+      debugPrint('Speech STT could not be initialized.');
+      if (onError != null) onError('No se pudo inicializar el micrófono o falta permiso.');
+      return null;
+    }
+
+    try {
+      await _speech.listen(
+        onResult: (result) {
+          recognizedWords = result.recognizedWords;
+          debugPrint('Speech STT onResult: $recognizedWords (final: ${result.finalResult})');
+          if (onPartialResult != null) {
+            onPartialResult(result.recognizedWords);
+          }
+          if (result.finalResult && !completer.isCompleted) {
+            completer.complete(result.recognizedWords);
+          }
+        },
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: true,
+          listenFor: const Duration(seconds: 8),
+          pauseFor: const Duration(seconds: 3),
+          localeId: 'es-CO',
+        ),
+      );
+    } catch (e) {
+      debugPrint('Speech STT listen call failed: $e');
+      if (onError != null) onError('Error al iniciar la escucha.');
+      return null;
+    }
+
+    // Timeout fallback just in case
+    Future.delayed(const Duration(seconds: 9), () {
+      if (!completer.isCompleted) {
+        _speech.stop();
+        completer.complete(recognizedWords);
+      }
+    });
+
+    return completer.future;
   }
 }
 

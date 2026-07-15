@@ -117,6 +117,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _isListening = false;
   bool _isProcessingVoice = false;
   List<_NearbyFoodPlace> _voiceFoodPlaces = [];
+  _NearbyFoodPlace? _selectedVoicePlace;
 
   // ── Mic pulse animation ────────────────────────────────────────────────────
   late final AnimationController _micPulseController;
@@ -208,6 +209,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     if (tour == null) return;
     setState(() {
       _navigatingToHotel = true;
+      _selectedVoicePlace = null;
       _liveRoute = null;
       _liveRouteStopIndex = null;
     });
@@ -228,14 +230,19 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     setState(() {
       _isListening = true;
       _voiceFoodPlaces = [];
+      _selectedVoicePlace = null;
     });
     _micPulseController.forward();
 
+    String? sttError;
     String? transcript;
     try {
-      transcript = await voiceGuide.listenCommand();
-    } catch (_) {
+      transcript = await voiceGuide.listenCommand(
+        onError: (err) => sttError = err,
+      );
+    } catch (e) {
       transcript = null;
+      sttError = e.toString();
     }
 
     // Stop pulse animation
@@ -247,7 +254,17 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       _isListening = false;
     });
 
-    if (transcript == null || transcript.trim().isEmpty) return;
+    if (transcript == null || transcript.trim().isEmpty) {
+      final feedbackText = sttError ?? 'No logré escucharte. Por favor, intenta de nuevo.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(feedbackText),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await voiceGuide.speak(feedbackText);
+      return;
+    }
 
     // Show processing state
     setState(() {
@@ -395,7 +412,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           final progress = (_activeStop + 1) / tour.stops.length;
           _navigationTour = tour;
           _scheduleLiveNavigation(tour);
-          final liveRoute = (_navigatingToHotel && _liveRouteStopIndex == -1) ||
+          
+          final liveRoute = (_selectedVoicePlace != null && _liveRouteStopIndex == -2) ||
+                            (_navigatingToHotel && _liveRouteStopIndex == -1) ||
                             (!_navigatingToHotel && _liveRouteStopIndex == _activeStop)
               ? _liveRoute
               : null;
@@ -408,9 +427,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
           final baseLabels = [
             if (_currentPoint != null) 'Tu ubicacion',
-            _navigatingToHotel
-                ? (_findHotelStop(tour)?.name ?? 'Hotel')
-                : stop.name,
+            _selectedVoicePlace != null
+                ? _selectedVoicePlace!.name
+                : _navigatingToHotel
+                    ? (_findHotelStop(tour)?.name ?? 'Hotel')
+                    : stop.name,
           ];
           final allLabels = _voiceFoodPlaces.isEmpty
               ? baseLabels
@@ -420,7 +441,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             children: [
               Positioned.fill(
                 child: OpenFreeRouteMap(
-                  key: ValueKey('${tour.id}-$mapStyle-${_navigatingToHotel ? "hotel" : "stop"}-${_voiceFoodPlaces.length}'),
+                  key: ValueKey('${tour.id}-$mapStyle-${_selectedVoicePlace != null ? "voice" : _navigatingToHotel ? "hotel" : "stop"}-${_voiceFoodPlaces.length}'),
                   points: allPoints,
                   labels: allLabels,
                   activeIndex: _currentPoint == null ? 0 : 1,
@@ -435,6 +456,30 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   useRoadRouting: false,
                   trackingMode: _isTrackingMode,
                   trackingHeading: _currentHeading,
+                  onPointSelected: (point) {
+                    _NearbyFoodPlace? tappedPlace;
+                    for (final p in _voiceFoodPlaces) {
+                      final dist = Geolocator.distanceBetween(
+                        p.latitude,
+                        p.longitude,
+                        point.latitude,
+                        point.longitude,
+                      );
+                      if (dist < 25.0) {
+                        tappedPlace = p;
+                        break;
+                      }
+                    }
+                    if (tappedPlace != null) {
+                      setState(() {
+                        _selectedVoicePlace = tappedPlace;
+                        _navigatingToHotel = false;
+                        _liveRoute = null;
+                        _liveRouteStopIndex = null;
+                      });
+                      _recalculateRoute(tour, force: true);
+                    }
+                  },
                 ),
               ),
               Positioned(
@@ -454,6 +499,19 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   ),
                 ),
               ),
+              // ── Return to Accommodation (Placed top-right under tracking) ────
+              if (_findHotelStop(tour) != null && !_navigatingToHotel)
+                Positioned(
+                  right: 16,
+                  top: MediaQuery.of(context).padding.top + 60,
+                  child: FloatingActionButton.small(
+                    heroTag: 'return_hotel_fab',
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    onPressed: _startHotelNavigation,
+                    tooltip: 'Regresar al hotel',
+                    child: const Icon(Icons.hotel_rounded),
+                  ),
+                ),
               Positioned(
                 left: 16,
                 top: MediaQuery.of(context).padding.top + 8,
@@ -462,29 +520,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   icon: const Icon(Icons.close_rounded),
                 ),
               ),
-              if (_findHotelStop(tour) != null && !_navigatingToHotel)
-                Positioned(
-                  right: 16,
-                  bottom: 270,
-                  child: FloatingActionButton.extended(
-                    heroTag: 'return_hotel_fab',
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    onPressed: _startHotelNavigation,
-                    icon: const Icon(Icons.hotel_rounded),
-                    label: const Text('Regresar al hotel'),
-                  ),
-                ),
               // Clear voice markers button when food places are visible
               if (_voiceFoodPlaces.isNotEmpty)
                 Positioned(
                   right: 16,
-                  bottom: _findHotelStop(tour) != null && !_navigatingToHotel
-                      ? 330
-                      : 270,
+                  bottom: 270,
                   child: FloatingActionButton.small(
                     heroTag: 'clear_voice_markers',
                     backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                    onPressed: () => setState(() => _voiceFoodPlaces = []),
+                    onPressed: () => setState(() {
+                      _voiceFoodPlaces = [];
+                      _selectedVoicePlace = null;
+                    }),
                     child: Icon(
                       Icons.clear_rounded,
                       color: Theme.of(context).colorScheme.onErrorContainer,
@@ -497,9 +544,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 bottom: 18,
                 child: GlassPanel(
                   padding: const EdgeInsets.all(16),
-                  child: _navigatingToHotel
-                      ? _buildHotelNavigationPanel(context, tour)
-                      : _buildStandardNavigationPanel(context, tour, stop, progress, liveRoute, l10n),
+                  child: _selectedVoicePlace != null
+                      ? _buildRestaurantNavigationPanel(context, tour)
+                      : _navigatingToHotel
+                          ? _buildHotelNavigationPanel(context, tour)
+                          : _buildStandardNavigationPanel(context, tour, stop, progress, liveRoute, l10n),
                 ),
               ),
             ],
@@ -525,7 +574,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         }
       });
     }
-    if (_liveRouteStopIndex != _activeStop && !_isRouting) {
+    final targetStopIndex = _selectedVoicePlace != null
+        ? -2
+        : _navigatingToHotel
+            ? -1
+            : _activeStop;
+    if (_liveRouteStopIndex != targetStopIndex && !_isRouting) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_recalculateRoute(tour, force: true));
       });
@@ -562,7 +616,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     });
     final tour = _navigationTour;
     if (tour == null || tour.stops.isEmpty) return;
-    final route = _liveRouteStopIndex == _activeStop ? _liveRoute : null;
+    final targetStopIndex = _selectedVoicePlace != null
+        ? -2
+        : _navigatingToHotel
+            ? -1
+            : _activeStop;
+    final route = _liveRouteStopIndex == targetStopIndex ? _liveRoute : null;
     final distanceToRoute = route == null
         ? double.infinity
         : _distanceToRouteMeters(point, route.geometry);
@@ -611,10 +670,25 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       });
     }
     if (tour.stops.isEmpty) return;
-    final stopIndex = _navigatingToHotel ? -1 : _activeStop;
+    
+    final stopIndex = _selectedVoicePlace != null
+        ? -2
+        : _navigatingToHotel
+            ? -1
+            : _activeStop;
+            
     final hotelStop = _findHotelStop(tour);
     if (_navigatingToHotel && hotelStop == null) return;
-    final destination = _navigatingToHotel ? hotelStop!.location : tour.stops[_activeStop].location;
+    
+    final GeoPoint destination;
+    if (_selectedVoicePlace != null) {
+      destination = _selectedVoicePlace!.toGeoPoint();
+    } else if (_navigatingToHotel) {
+      destination = hotelStop!.location;
+    } else {
+      destination = tour.stops[_activeStop].location;
+    }
+
     setState(() {
       _isRouting = true;
       _isOffRoute = markOffRoute;
@@ -666,9 +740,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   List<GeoPoint> _mapPointsFor(TourStop stop) {
     final origin = _currentPoint;
-    final destination = _navigatingToHotel
-        ? (_findHotelStop(_navigationTour!)?.location ?? stop.location)
-        : stop.location;
+    final GeoPoint destination;
+    if (_selectedVoicePlace != null) {
+      destination = _selectedVoicePlace!.toGeoPoint();
+    } else if (_navigatingToHotel) {
+      destination = _findHotelStop(_navigationTour!)?.location ?? stop.location;
+    } else {
+      destination = stop.location;
+    }
     if (origin == null) return [destination];
     return [origin, destination];
   }
@@ -682,14 +761,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     if (meters > 0) {
       return '${(meters / 1000).toStringAsFixed(1)} km restantes';
     }
-    if (_navigatingToHotel) return 'Por calcular';
+    if (_selectedVoicePlace != null || _navigatingToHotel) return 'Por calcular';
     return '${(tour.distanceKm * (1 - progress)).toStringAsFixed(1)} km restantes';
   }
 
   String _timeLabel(Tour tour, double progress, RoadRouteResult? route) {
     final seconds = route?.travelTimeSeconds;
     if (seconds != null && seconds > 0) return _formatDuration(seconds);
-    if (_navigatingToHotel) return 'Calculando...';
+    if (_selectedVoicePlace != null || _navigatingToHotel) return 'Calculando...';
     final fallbackMinutes = ((tour.durationHours * 60) * (1 - progress))
         .round();
     return '$fallbackMinutes min';
@@ -733,6 +812,103 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       if (distance < best) best = distance;
     }
     return best;
+  }
+
+  Widget _buildRestaurantNavigationPanel(BuildContext context, Tour tour) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Ruta al restaurante',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ),
+            Icon(Icons.restaurant_rounded, color: Theme.of(context).colorScheme.primary),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _selectedVoicePlace?.name ?? 'Restaurante',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+        ),
+        if (_selectedVoicePlace?.cuisine != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Cocina: ${_selectedVoicePlace!.cuisine!}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (!_noLandRouteAvailable)
+              _LiveChip(
+                icon: Icons.route_rounded,
+                label: _distanceLabel(tour, 0, _liveRoute),
+              ),
+            if (!_noLandRouteAvailable)
+              _LiveChip(
+                icon: Icons.schedule_rounded,
+                label: _timeLabel(tour, 0, _liveRoute),
+              ),
+            if (_isOffRoute || _isRouting)
+              _LiveChip(
+                icon: Icons.alt_route_rounded,
+                label: _isRouting ? 'Actualizando ruta' : 'Desvio detectado',
+              ),
+            if (_currentPoint != null)
+              const _LiveChip(
+                icon: Icons.gps_fixed_rounded,
+                label: 'GPS live',
+              )
+            else
+              const _LiveChip(
+                icon: Icons.gps_not_fixed_rounded,
+                label: 'Buscando GPS',
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: LiquidButton(
+                label: 'Reanudar Tour',
+                icon: Icons.play_arrow_rounded,
+                isPrimary: true,
+                onPressed: () {
+                  setState(() {
+                    _selectedVoicePlace = null;
+                    _liveRoute = null;
+                    _liveRouteStopIndex = null;
+                  });
+                  _recalculateRoute(tour, force: true);
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton.filledTonal(
+              tooltip: 'Recalcular ruta al restaurante',
+              onPressed: () => _recalculateRoute(tour, force: true),
+              icon: const Icon(Icons.sync_rounded),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _buildHotelNavigationPanel(BuildContext context, Tour tour) {
@@ -949,7 +1125,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               ),
             ),
             const SizedBox(width: 10),
-            // ── Voice assistant mic button (replaces hands-free) ────────────
             _buildMicButton(context),
             IconButton.filledTonal(
               tooltip: l10n.recalculate,
@@ -1000,6 +1175,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   _isOffRoute = false;
                   _noLandRouteAvailable = false;
                   _voiceFoodPlaces = []; // Clear food markers on stop change
+                  _selectedVoicePlace = null; // Clear selected restaurant on stop change
                 });
                 _recalculateRoute(tour, force: true);
               }
