@@ -66,6 +66,16 @@ class TourDetailScreen extends ConsumerWidget {
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
                       onSelected: (value) {
+                        final isLogged = ref.read(isAuthenticatedProvider);
+                        if (!isLogged) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Debes iniciar sesión para realizar esta acción.'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                          return;
+                        }
                         if (value == 'report') {
                           _showReportDialog(context, ref, tour);
                         } else if (value == 'block') {
@@ -663,6 +673,25 @@ class TourDetailScreen extends ConsumerWidget {
         );
       }
       return;
+    }
+
+    final currentUser = ref.read(authServiceProvider).currentUser;
+    if (currentUser != null) {
+      try {
+        await ref.read(tourRepositoryProvider).joinTour(tour.id);
+        ref.invalidate(userStatsProvider);
+        ref.invalidate(tourParticipantsProvider);
+      } catch (e) {
+        debugPrint('Error auto-joining tour: $e');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al registrar participación: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
     }
 
     final hasHotel = tour.stops.any((s) => s.id == 'hotel_start' || s.id == 'hotel_end' || s.name.toLowerCase().contains('hotel'));

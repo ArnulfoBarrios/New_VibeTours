@@ -456,6 +456,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : <UserTourRating>[];
     
     final statsAsync = ref.watch(userStatsProvider);
+    ref.watch(tourParticipantsProvider);
     final currency = ref.watch(currencyProvider);
     final locale = ref.watch(localeProvider);
     final l10n = AppLocalizations.of(context);
@@ -730,6 +731,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         bgColor: AppTheme.violet.withValues(alpha: 0.1),
                         value: '${stats['participants']}',
                         label: l10n.participants,
+                        onTap: () => _showParticipantsSheet(context),
                       ),
                     ],
                   ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOutQuad),
@@ -1091,6 +1093,229 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           },
         );
       },
+    );
+  }
+
+  void _showParticipantsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return Consumer(
+              builder: (context, ref, child) {
+                final participantsAsync = ref.watch(tourParticipantsProvider);
+                return SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Participantes por Tour',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: participantsAsync.when(
+                            data: (data) {
+                              if (data.isEmpty) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.people_outline_rounded,
+                                        size: 48,
+                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'No hay participantes activos en tus tours.',
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              return ListView.builder(
+                                controller: scrollController,
+                                itemCount: data.length,
+                                itemBuilder: (context, index) {
+                                  final item = data[index];
+                                  return _TourParticipantsTile(
+                                    tourWithParticipants: item,
+                                  );
+                                },
+                              );
+                            },
+                            loading: () => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            error: (err, stack) => Center(
+                              child: Text(
+                                'Error al cargar: $err',
+                                style: const TextStyle(color: Colors.redAccent),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _TourParticipantsTile extends StatelessWidget {
+  const _TourParticipantsTile({required this.tourWithParticipants});
+  final TourWithParticipants tourWithParticipants;
+
+  @override
+  Widget build(BuildContext context) {
+    final tour = tourWithParticipants.tour;
+    final participants = tourWithParticipants.participants;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            title: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: CachedNetworkImage(
+                    imageUrl: tour.coverUrl,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const SkeletonBox(width: 50, height: 50),
+                    errorWidget: (context, url, error) => TravelImageFallback(
+                      title: tour.title,
+                      icon: Icons.map_rounded,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tour.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${participants.length} ${participants.length == 1 ? "participante" : "participantes"}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppTheme.violet,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            children: [
+              if (participants.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Text(
+                    'No hay participantes todavía.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                  ),
+                )
+              else
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: participants.length,
+                  itemBuilder: (context, index) {
+                    final user = participants[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                            backgroundImage: user.avatarUrl.isNotEmpty
+                                ? user.avatarUrl.startsWith('data:image')
+                                    ? MemoryImage(base64Decode(user.avatarUrl.split(',').last)) as ImageProvider
+                                    : NetworkImage(user.avatarUrl)
+                                : null,
+                            child: user.avatarUrl.isEmpty
+                                ? Text(
+                                    user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'U',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.primary),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              user.fullName,
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(duration: 200.ms, delay: (index * 50).ms);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

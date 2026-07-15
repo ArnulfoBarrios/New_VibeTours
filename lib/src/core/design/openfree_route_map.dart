@@ -23,6 +23,8 @@ class OpenFreeRouteMap extends StatefulWidget {
     this.currentLocation,
     this.trackingMode = false,
     this.trackingHeading,
+    this.focusOnLast = false,
+    this.onMapCreated,
   });
 
   factory OpenFreeRouteMap.fromStops({
@@ -41,6 +43,8 @@ class OpenFreeRouteMap extends StatefulWidget {
     GeoPoint? currentLocation,
     bool trackingMode = false,
     double? trackingHeading,
+    bool focusOnLast = false,
+    void Function(MapLibreMapController)? onMapCreated,
   }) {
     return OpenFreeRouteMap(
       key: key,
@@ -59,6 +63,8 @@ class OpenFreeRouteMap extends StatefulWidget {
       currentLocation: currentLocation,
       trackingMode: trackingMode,
       trackingHeading: trackingHeading,
+      focusOnLast: focusOnLast,
+      onMapCreated: onMapCreated,
     );
   }
 
@@ -77,6 +83,8 @@ class OpenFreeRouteMap extends StatefulWidget {
   final GeoPoint? currentLocation;
   final bool trackingMode;
   final double? trackingHeading;
+  final bool focusOnLast;
+  final void Function(MapLibreMapController)? onMapCreated;
 
   @override
   State<OpenFreeRouteMap> createState() => _OpenFreeRouteMapState();
@@ -177,7 +185,7 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
     super.build(context);
     final center = widget.points.isEmpty
         ? const GeoPoint(latitude: 10.9878, longitude: -74.7889)
-        : widget.points.first;
+        : (widget.focusOnLast ? widget.points.last : widget.points.first);
     return ClipRRect(
       borderRadius: BorderRadius.circular(widget.borderRadius),
       child: SizedBox(
@@ -187,13 +195,16 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
           styleString: widget.styleUrl,
           initialCameraPosition: CameraPosition(
             target: LatLng(center.latitude, center.longitude),
-            zoom: widget.points.length > 1 ? 13 : 15,
+            zoom: widget.focusOnLast ? 16 : (widget.points.length > 1 ? 13 : 15),
           ),
           compassEnabled: true,
           rotateGesturesEnabled: false,
           myLocationEnabled: widget.myLocationEnabled,
           onMapCreated: (controller) {
             _controller = controller;
+            if (widget.onMapCreated != null) {
+              widget.onMapCreated!(controller);
+            }
           },
           onStyleLoadedCallback: () {
             _styleLoaded = true;
@@ -628,40 +639,52 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
       } catch (_) {}
     } else if (fitRoute && !_hasFitRoute) {
       _hasFitRoute = true;
-      final boundsPoints = [
-        if (routePoints.isNotEmpty) ...routePoints else ...points,
-        ...points,
-        ...portPoints,
-        ?currentPoint,
-      ];
-      try {
-        final pos = await controller.queryCameraPosition();
-        if (pos != null && (pos.tilt > 0 || pos.bearing != 0)) {
+      if (widget.focusOnLast && widget.points.isNotEmpty) {
+        try {
           await controller.animateCamera(
-            CameraUpdate.newCameraPosition(
-              CameraPosition(
-                target: pos.target,
-                zoom: pos.zoom,
-                tilt: 0.0,
-                bearing: 0.0,
-              ),
+            CameraUpdate.newLatLngZoom(
+              LatLng(widget.points.last.latitude, widget.points.last.longitude),
+              16.0,
             ),
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 800),
           );
-        }
-        
-        final animDuration = isIncremental ? 1100 : 650;
-        await controller.animateCamera(
-          CameraUpdate.newLatLngBounds(
-            _boundsFor(boundsPoints),
-            left: widget.fitPadding.left,
-            top: widget.fitPadding.top,
-            right: widget.fitPadding.right,
-            bottom: widget.fitPadding.bottom,
-          ),
-          duration: Duration(milliseconds: animDuration),
-        );
-      } catch (_) {}
+        } catch (_) {}
+      } else {
+        final boundsPoints = [
+          if (routePoints.isNotEmpty) ...routePoints else ...points,
+          ...points,
+          ...portPoints,
+          ?currentPoint,
+        ];
+        try {
+          final pos = await controller.queryCameraPosition();
+          if (pos != null && (pos.tilt > 0 || pos.bearing != 0)) {
+            await controller.animateCamera(
+              CameraUpdate.newCameraPosition(
+                CameraPosition(
+                  target: pos.target,
+                  zoom: pos.zoom,
+                  tilt: 0.0,
+                  bearing: 0.0,
+                ),
+              ),
+              duration: const Duration(milliseconds: 300),
+            );
+          }
+          
+          final animDuration = isIncremental ? 1100 : 650;
+          await controller.animateCamera(
+            CameraUpdate.newLatLngBounds(
+              _boundsFor(boundsPoints),
+              left: widget.fitPadding.left,
+              top: widget.fitPadding.top,
+              right: widget.fitPadding.right,
+              bottom: widget.fitPadding.bottom,
+            ),
+            duration: Duration(milliseconds: animDuration),
+          );
+        } catch (_) {}
+      }
     } else if (focusActiveStop) {
       try {
         await controller.animateCamera(

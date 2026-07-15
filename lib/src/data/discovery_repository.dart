@@ -6,7 +6,149 @@ import 'package:http/http.dart' as http;
 import '../core/config/app_config.dart';
 import '../domain/models.dart';
 
+class _CorrectedPlace {
+  const _CorrectedPlace({
+    required this.latitude,
+    required this.longitude,
+    this.imageUrl,
+  });
+
+  final double latitude;
+  final double longitude;
+  final String? imageUrl;
+}
+
+class _ParsedLocation {
+  const _ParsedLocation({
+    required this.latitude,
+    required this.longitude,
+    required this.imageUrl,
+  });
+
+  final double latitude;
+  final double longitude;
+  final String imageUrl;
+}
+
 class DiscoveryRepository {
+  static const Map<String, _CorrectedPlace> _correctedPlaces = {
+    'joe arroyo': _CorrectedPlace(
+      latitude: 10.9948286,
+      longitude: -74.806177,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/b/be/EstatuaJoeArroyoBarranquilla.jpg',
+    ),
+    'isla salamanca': _CorrectedPlace(
+      latitude: 10.9782,
+      longitude: -74.7478,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/9c/Parque_Natural_Isla_Salamanca.jpg',
+    ),
+    'bocas de ceniza': _CorrectedPlace(
+      latitude: 11.1065,
+      longitude: -74.8511,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/5/5d/Barranquilla%2C_el_mar_desde_las_Bocas_de_Cenizas-20050625.jpg',
+    ),
+    'shakira': _CorrectedPlace(
+      latitude: 11.0279,
+      longitude: -74.7924,
+      imageUrl: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?auto=format&fit=crop&w=600&q=80',
+    ),
+    'ventana al mundo': _CorrectedPlace(
+      latitude: 11.03313,
+      longitude: -74.83142,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/f/f1/Ventanalmundo.jpg',
+    ),
+    'ventana de campeones': _CorrectedPlace(
+      latitude: 10.9842,
+      longitude: -74.7761,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/3/35/Ventana_de_Campeones.jpg',
+    ),
+    'aleta del tiburón': _CorrectedPlace(
+      latitude: 10.9842,
+      longitude: -74.7761,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/3/35/Ventana_de_Campeones.jpg',
+    ),
+    'museo del caribe': _CorrectedPlace(
+      latitude: 10.9822,
+      longitude: -74.7844,
+      imageUrl: 'https://images.unsplash.com/photo-1554816155-12df9643f363?auto=format&fit=crop&w=600&q=80',
+    ),
+    'catedral metropolitana': _CorrectedPlace(
+      latitude: 10.9888,
+      longitude: -74.7889,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Barranquilla_Catedral.jpg',
+    ),
+    'plaza de la paz': _CorrectedPlace(
+      latitude: 10.989,
+      longitude: -74.789,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Barranquilla_Catedral.jpg',
+    ),
+    'castillo de salgar': _CorrectedPlace(
+      latitude: 11.0223,
+      longitude: -74.9488,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/0/04/Castillo_de_Salgar.jpg',
+    ),
+    'gran malecon': _CorrectedPlace(
+      latitude: 11.0258,
+      longitude: -74.7986,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/1/11/GranMalecon1.jpg',
+    ),
+    'malecón del río': _CorrectedPlace(
+      latitude: 11.0258,
+      longitude: -74.7986,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/1/11/GranMalecon1.jpg',
+    ),
+    'zoologico': _CorrectedPlace(
+      latitude: 11.0102,
+      longitude: -74.7942,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/9b/Barranquilla_Zool%C3%B3gico_Flamencos.jpg',
+    ),
+    'zoológico': _CorrectedPlace(
+      latitude: 11.0102,
+      longitude: -74.7942,
+      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/9b/Barranquilla_Zool%C3%B3gico_Flamencos.jpg',
+    ),
+  };
+
+  _ParsedLocation _correctLocation(String name, double defaultLat, double defaultLon, String defaultImg) {
+    final lower = name.toLowerCase();
+    for (final entry in _correctedPlaces.entries) {
+      if (lower.contains(entry.key)) {
+        return _ParsedLocation(
+          latitude: entry.value.latitude,
+          longitude: entry.value.longitude,
+          imageUrl: entry.value.imageUrl ?? defaultImg,
+        );
+      }
+    }
+    return _ParsedLocation(
+      latitude: defaultLat,
+      longitude: defaultLon,
+      imageUrl: defaultImg,
+    );
+  }
+
+  bool _isBlacklisted(String name, String type) {
+    final lowerName = name.toLowerCase();
+    final lowerType = type.toLowerCase();
+    final blacklistNameKeywords = const [
+      'cementerio', 'cemetery', 'funeraria', 'jardines del recuerdo', 'jardín del recuerdo',
+      'universidad', 'university', 'colegio', 'school', 'hospital', 'clinica', 'clínica',
+      'condominio', 'conjunto residencial', 'edificio', 'torre', 'reserva residencial', 'aptos',
+      'apartamento', 'consultorio', 'dental', 'odontología', 'médico'
+    ];
+    for (final kw in blacklistNameKeywords) {
+      if (lowerName.contains(kw)) return true;
+    }
+    final blacklistTypeKeywords = const [
+      'cemetery', 'university', 'college', 'hospital', 'clinic', 'dentist', 'physiotherapist',
+      'doctor', 'residential', 'apartment', 'school'
+    ];
+    for (final kw in blacklistTypeKeywords) {
+      if (lowerType.contains(kw)) return true;
+    }
+    return false;
+  }
+
   Future<WeatherSnapshot?> weather({
     required double latitude,
     required double longitude,
@@ -73,11 +215,16 @@ class DiscoveryRepository {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final features = json['features'] as List<dynamic>? ?? const [];
-        return [
-          for (int i = 0; i < features.length; i++)
-            if (features[i] is Map)
-              _nearbyPlaceFromPhotonFeature(Map<String, dynamic>.from(features[i] as Map), i),
-        ];
+        final List<NearbyPlace> places = [];
+        for (int i = 0; i < features.length; i++) {
+          if (features[i] is Map) {
+            final place = _nearbyPlaceFromPhotonFeature(Map<String, dynamic>.from(features[i] as Map), i);
+            if (!_isBlacklisted(place.name, place.type)) {
+              places.add(place);
+            }
+          }
+        }
+        return places;
       }
     } catch (_) {
       // Fall through
@@ -130,19 +277,22 @@ class DiscoveryRepository {
     final coordinates = geometry['coordinates'] is List ? geometry['coordinates'] as List : const [];
     final name = properties['name']?.toString() ?? properties['city']?.toString() ?? 'Lugar';
     final typeStr = properties['osm_value']?.toString() ?? properties['type']?.toString() ?? 'place';
-    final lat = coordinates.length > 1 ? _double(coordinates[1]) : 0.0;
-    final lng = coordinates.isNotEmpty ? _double(coordinates[0]) : 0.0;
+    final defaultLat = coordinates.length > 1 ? _double(coordinates[1]) : 0.0;
+    final defaultLng = coordinates.isNotEmpty ? _double(coordinates[0]) : 0.0;
     final category = _classifyAttraction(properties);
-    final imageUrl = _getRandomImageUrlForCategory(category, name);
+    final defaultImg = _getRandomImageUrlForCategory(category, name);
+    
+    final corrected = _correctLocation(name, defaultLat, defaultLng, defaultImg);
+
     return NearbyPlace(
       id: 'search-$index',
       name: name,
       type: _typeLabel(typeStr),
       distanceMeters: 0,
-      location: GeoPoint(latitude: lat, longitude: lng),
+      location: GeoPoint(latitude: corrected.latitude, longitude: corrected.longitude),
       category: category,
-      imageUrl: imageUrl,
-      thumbnailUrl: imageUrl,
+      imageUrl: corrected.imageUrl,
+      thumbnailUrl: corrected.imageUrl,
       statusLabel: 'Disponible',
       isOpenNow: true,
     );
@@ -182,24 +332,28 @@ class DiscoveryRepository {
           if (element is Map) {
             final tags = element['tags'] is Map ? Map<String, dynamic>.from(element['tags'] as Map) : const <String, dynamic>{};
             final name = tags['name']?.toString();
-            final lat = _double(element['lat'] ?? (element['center'] as Map?)?['lat']);
-            final lon = _double(element['lon'] ?? (element['center'] as Map?)?['lon']);
+            final defaultLat = _double(element['lat'] ?? (element['center'] as Map?)?['lat']);
+            final defaultLon = _double(element['lon'] ?? (element['center'] as Map?)?['lon']);
             final typeStr = tags['tourism']?.toString() ?? tags['historic']?.toString() ?? tags['amenity']?.toString() ?? tags['leisure']?.toString() ?? tags['sport']?.toString() ?? tags['natural']?.toString() ?? 'place';
-            if (name == null || lat == 0.0 || lon == 0.0) continue;
+            if (name == null || defaultLat == 0.0 || defaultLon == 0.0) continue;
             if (_isAccommodation(typeStr)) continue;
+            if (_isBlacklisted(name, typeStr)) continue;
             
-            final distance = _distanceMeters(latitude, longitude, lat, lon);
             final category = _classifyAttraction(tags);
-            final imageUrl = _getRandomImageUrlForCategory(category, name);
+            final defaultImg = _getRandomImageUrlForCategory(category, name);
+            
+            final corrected = _correctLocation(name, defaultLat, defaultLon, defaultImg);
+
+            final distance = _distanceMeters(latitude, longitude, corrected.latitude, corrected.longitude);
             places.add(NearbyPlace(
               id: 'overpass-${element['id'] ?? idx++}',
               name: name,
               type: _typeLabel(typeStr),
               distanceMeters: distance.round(),
-              location: GeoPoint(latitude: lat, longitude: lon),
+              location: GeoPoint(latitude: corrected.latitude, longitude: corrected.longitude),
               category: category,
-              imageUrl: imageUrl,
-              thumbnailUrl: imageUrl,
+              imageUrl: corrected.imageUrl,
+              thumbnailUrl: corrected.imageUrl,
               statusLabel: 'Abierto',
               isOpenNow: true,
             ));
@@ -399,17 +553,26 @@ class DiscoveryRepository {
       }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final results = json['results'] as List<dynamic>? ?? const [];
-      return [
-        for (final item in results.take(8))
-          if (item is Map)
-            _tomTomPlaceFromJson(Map<String, dynamic>.from(item)),
-      ];
+      final List<NearbyPlace> places = [];
+      for (final item in results) {
+        if (item is Map) {
+          final place = _tomTomPlaceFromJson(Map<String, dynamic>.from(item));
+          if (!_isBlacklisted(place.name, place.type)) {
+            places.add(place);
+          }
+        }
+      }
+      return places.take(8).toList();
     } catch (_) {
       return const [];
     }
   }
 
-  NearbyPlace _tomTomPlaceFromJson(Map<String, dynamic> json) {
+  NearbyPlace _tomTomPlaceFromJson(
+    Map<String, dynamic> json, {
+    double? userLat,
+    double? userLon,
+  }) {
     final poi = json['poi'] is Map
         ? Map<String, dynamic>.from(json['poi'] as Map)
         : const <String, dynamic>{};
@@ -428,19 +591,29 @@ class DiscoveryRepository {
     final name = poi['name']?.toString() ??
         address['freeformAddress']?.toString() ??
         querySafe(address['municipality']);
-    final imageUrl = _getRandomImageUrlForCategory(category, name);
+    final defaultImg = _getRandomImageUrlForCategory(category, name);
+    
+    final defaultLat = _double(position['lat']);
+    final defaultLon = _double(position['lon']);
+    
+    final corrected = _correctLocation(name, defaultLat, defaultLon, defaultImg);
+    
+    final distance = (userLat != null && userLon != null)
+        ? _distanceMeters(userLat, userLon, corrected.latitude, corrected.longitude).round()
+        : _int(json['dist']);
+
     return NearbyPlace(
       id: json['id']?.toString() ?? '',
       name: name,
       type: categories.isEmpty ? 'Atraccion' : _typeLabel(categories.first),
-      distanceMeters: _int(json['dist']),
+      distanceMeters: distance,
       location: GeoPoint(
-        latitude: _double(position['lat']),
-        longitude: _double(position['lon']),
+        latitude: corrected.latitude,
+        longitude: corrected.longitude,
       ),
       category: category,
-      imageUrl: imageUrl,
-      thumbnailUrl: imageUrl,
+      imageUrl: corrected.imageUrl,
+      thumbnailUrl: corrected.imageUrl,
       statusLabel: 'Abierto',
       isOpenNow: true,
     );
@@ -470,7 +643,7 @@ class DiscoveryRepository {
           'radius': '5000',
           'limit': '12',
           'language': 'es-ES',
-          'categorySet': '7376,9362,9376,7318,7300,9379,9350,9382',
+          'categorySet': '7376,9362,7318',
         },
       );
       final response = await http
@@ -481,11 +654,20 @@ class DiscoveryRepository {
       }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final results = json['results'] as List<dynamic>? ?? const [];
-      return [
-        for (final item in results)
-          if (item is Map)
-            _tomTomPlaceFromJson(Map<String, dynamic>.from(item)),
-      ];
+      final List<NearbyPlace> places = [];
+      for (final item in results) {
+        if (item is Map) {
+          final place = _tomTomPlaceFromJson(
+            Map<String, dynamic>.from(item),
+            userLat: latitude,
+            userLon: longitude,
+          );
+          if (!_isBlacklisted(place.name, place.type)) {
+            places.add(place);
+          }
+        }
+      }
+      return places;
     } catch (_) {
       return const [];
     }

@@ -58,6 +58,7 @@ final moderationRepositoryProvider = Provider<ModerationRepository>((ref) {
 class BlockedUsersController extends AsyncNotifier<Set<String>> {
   @override
   FutureOr<Set<String>> build() async {
+    ref.watch(authUserProvider);
     return ref.watch(moderationRepositoryProvider).getBlockedUsers();
   }
 
@@ -891,5 +892,25 @@ final userStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref)
   if (user == null) return {'createdTours': 0, 'participants': 0, 'toursRated': 0};
   return ref.watch(tourRepositoryProvider).getUserStats(user.id);
 });
+
+class TourParticipantsController extends AsyncNotifier<List<TourWithParticipants>> {
+  @override
+  FutureOr<List<TourWithParticipants>> build() async {
+    ref.watch(authUserProvider);
+    final user = ref.read(authServiceProvider).currentUser;
+    if (user == null) return const [];
+    return ref.watch(tourRepositoryProvider).getToursWithParticipants();
+  }
+
+  Future<void> join(String tourId) async {
+    await ref.read(tourRepositoryProvider).joinTour(tourId);
+    ref.invalidate(userStatsProvider);
+    ref.invalidateSelf();
+  }
+}
+
+final tourParticipantsProvider = AsyncNotifierProvider<TourParticipantsController, List<TourWithParticipants>>(
+  TourParticipantsController.new,
+);
 
 

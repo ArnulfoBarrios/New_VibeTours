@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
@@ -10,11 +11,18 @@ import '../../domain/models.dart';
 import '../../state/app_state.dart';
 import '../shared/location_disclosure_dialog.dart';
 
-class PlaceRouteScreen extends ConsumerWidget {
+class PlaceRouteScreen extends ConsumerStatefulWidget {
   const PlaceRouteScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlaceRouteScreen> createState() => _PlaceRouteScreenState();
+}
+
+class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
+  MapLibreMapController? _mapController;
+
+  @override
+  Widget build(BuildContext context) {
     final place = ref.watch(selectedNearbyPlaceProvider);
     final positionAsync = ref.watch(currentPositionProvider);
     final styleUrl = ref.watch(mapStyleProvider);
@@ -45,18 +53,36 @@ class PlaceRouteScreen extends ConsumerWidget {
                 borderRadius: 0,
                 fitPadding: const EdgeInsets.fromLTRB(40, 120, 40, 280),
                 myLocationEnabled: position != null,
+                focusOnLast: true,
+                onMapCreated: (controller) {
+                  setState(() {
+                    _mapController = controller;
+                  });
+                },
               ),
               loading: () => OpenFreeRouteMap(
                 points: [place.location],
                 styleUrl: styleUrl,
                 height: MediaQuery.of(context).size.height,
                 borderRadius: 0,
+                focusOnLast: true,
+                onMapCreated: (controller) {
+                  setState(() {
+                    _mapController = controller;
+                  });
+                },
               ),
               error: (error, stackTrace) => OpenFreeRouteMap(
                 points: [place.location],
                 styleUrl: styleUrl,
                 height: MediaQuery.of(context).size.height,
                 borderRadius: 0,
+                focusOnLast: true,
+                onMapCreated: (controller) {
+                  setState(() {
+                    _mapController = controller;
+                  });
+                },
               ),
             ),
           ),
@@ -67,6 +93,33 @@ class PlaceRouteScreen extends ConsumerWidget {
               onPressed: () =>
                   context.canPop() ? context.pop() : context.go('/home'),
               icon: const Icon(Icons.arrow_back_rounded),
+            ),
+          ),
+          Positioned(
+            right: 16,
+            bottom: 236,
+            child: FloatingActionButton.extended(
+              heroTag: 'focus_destination_fab',
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              onPressed: () {
+                if (_mapController != null) {
+                  _mapController!.animateCamera(
+                    CameraUpdate.newLatLngZoom(
+                      LatLng(place.location.latitude, place.location.longitude),
+                      16.0,
+                    ),
+                    duration: const Duration(milliseconds: 800),
+                  );
+                }
+              },
+              icon: const Icon(Icons.center_focus_strong_rounded, color: AppTheme.primary),
+              label: const Text(
+                'Enfocar Destino',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primary,
+                ),
+              ),
             ),
           ),
           Positioned(

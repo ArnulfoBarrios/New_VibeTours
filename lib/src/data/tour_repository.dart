@@ -193,20 +193,25 @@ class TourRepository {
     try {
       // 1. Tours creados (ya los tenemos en UserToursState, pero podemos contar aquí)
       final createdToursResponse = await client.from('tours').select('id').eq('owner_id', userId);
-      final createdCount = (createdToursResponse as List).length;
+      final createdTours = createdToursResponse as List;
+      final createdCount = createdTours.length;
 
-      // 2. Participantes en tours creados (Suma de likes)
+      // 2. Conteo real de filas únicas de participantes en los tours del usuario
       int totalParticipants = 0;
-      int ratedCount = 0;
-      
-      try {
-        final toursStats = await client.from('tours').select('likes_count').eq('owner_id', userId);
-        for (final row in (toursStats as List)) {
-          final map = row as Map<String, dynamic>;
-          totalParticipants += (map['likes_count'] as num?)?.toInt() ?? 0;
-        }
-      } catch (_) {}
+      if (createdTours.isNotEmpty) {
+        final tourIds = createdTours.map((t) => (t as Map)['id'] as String).toList();
+        final participantsResponse = await client
+            .from('tour_participants')
+            .select('user_id')
+            .inFilter('tour_id', tourIds);
+        
+        final uniqueUserIds = (participantsResponse as List)
+            .map((p) => (p as Map)['user_id'] as String)
+            .toSet();
+        totalParticipants = uniqueUserIds.length;
+      }
 
+      int ratedCount = 0;
       try {
         // Consultamos la cantidad real de comentarios hechos por el usuario
         final ratedToursResponse = await client.from('tour_comments').select('id').eq('user_id', userId);
@@ -215,7 +220,7 @@ class TourRepository {
 
       return {
         'createdTours': createdCount,
-        'participants': totalParticipants, // Aproximación usando likes
+        'participants': totalParticipants, // Valor real exacto
         'toursRated': ratedCount, // Valor real exacto
       };
     } catch (e) {
@@ -225,6 +230,72 @@ class TourRepository {
         'participants': 0,
         'toursRated': 0,
       };
+    }
+  }
+
+  Future<void> joinTour(String tourId) async {
+    final client = _requireClient();
+    final user = client.auth.currentUser;
+    if (user == null) {
+      throw StateError('Debes iniciar sesion para participar en un tour.');
+    }
+    try {
+      await client.from('tour_participants').insert({
+        'tour_id': tourId,
+        'user_id': user.id,
+      });
+    } catch (e) {
+      debugPrint('Error joining tour: $e');
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('23505') || errStr.contains('duplicate')) {
+        // Ignorar duplicados de forma silenciosa ya que significa que el usuario ya participa
+        return;
+      }
+      throw Exception('No se pudo registrar tu participación en el tour: $e');
+    }
+  }
+
+  Future<List<TourWithParticipants>> getToursWithParticipants() async {
+    final client = _requireClient();
+    final user = client.auth.currentUser;
+    if (user == null) {
+      throw StateError('Debes iniciar sesion para ver participantes.');
+    }
+    
+    try {
+      final rows = await client
+          .from('tours')
+          .select('*, tour_stops(*), tour_participants(joined_at, users(id, full_name, avatar_url))')
+          .eq('owner_id', user.id)
+          .eq('is_published', true)
+          .eq('moderation_status', 'approved')
+          .order('created_at', ascending: false);
+
+      final results = <TourWithParticipants>[];
+      for (final row in (rows as List)) {
+        final tourMap = Map<String, dynamic>.from(row as Map);
+        final tour = _tourFromDatabaseJson(tourMap);
+        
+        final participantsRaw = tourMap['tour_participants'] as List<dynamic>? ?? const [];
+        final participants = <ParticipantUser>[];
+        for (final p in participantsRaw) {
+          if (p is Map) {
+            final userMap = p['users'] is Map ? Map<String, dynamic>.from(p['users'] as Map) : null;
+            if (userMap != null) {
+              participants.add(ParticipantUser(
+                id: userMap['id']?.toString() ?? '',
+                fullName: userMap['full_name']?.toString() ?? 'Viajero',
+                avatarUrl: userMap['avatar_url']?.toString() ?? '',
+              ));
+            }
+          }
+        }
+        results.add(TourWithParticipants(tour: tour, participants: participants));
+      }
+      return results;
+    } catch (e) {
+      debugPrint('Error fetching tours with participants: $e');
+      throw Exception('No se pudieron obtener los participantes de tus tours.');
     }
   }
 

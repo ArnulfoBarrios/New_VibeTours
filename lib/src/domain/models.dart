@@ -764,3 +764,25 @@ class UserTourRating {
   final TourComment comment;
   final Tour tour;
 }
+
+class ParticipantUser {
+  const ParticipantUser({
+    required this.id,
+    required this.fullName,
+    required this.avatarUrl,
+  });
+
+  final String id;
+  final String fullName;
+  final String avatarUrl;
+}
+
+class TourWithParticipants {
+  const TourWithParticipants({
+    required this.tour,
+    required this.participants,
+  });
+
+  final Tour tour;
+  final List<ParticipantUser> participants;
+}
