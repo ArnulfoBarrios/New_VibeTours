@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../domain/models.dart';
+import 'sqlite-service.dart';
 
 class LocationService {
   LocationService(this._prefs);
@@ -73,11 +74,12 @@ class LocationService {
 }
 
 class VoiceGuideService {
-  VoiceGuideService() {
+  VoiceGuideService(this._sqliteService) {
     _tts.setSpeechRate(0.46);
     _tts.setPitch(1.0);
   }
 
+  final SqliteService _sqliteService;
   final FlutterTts _tts = FlutterTts();
   final SpeechToText _speech = SpeechToText();
 
@@ -86,6 +88,13 @@ class VoiceGuideService {
     double lon, {
     String lang = 'es',
   }) async {
+    // 1. Intentar obtener desde la caché local de SQLite
+    final cached = await _sqliteService.getWikipediaCache(lat, lon);
+    if (cached != null) {
+      debugPrint('Retrieved Wikipedia & Nominatim details from local SQLite cache for ($lat, $lon)');
+      return cached;
+    }
+
     try {
       String? resolvedName;
       String? resolvedDesc;
@@ -151,9 +160,15 @@ class VoiceGuideService {
       }
 
       if ((resolvedName != null && resolvedName.isNotEmpty) || (resolvedDesc != null && resolvedDesc.isNotEmpty)) {
+        final name = resolvedName ?? 'Punto de interés';
+        final description = resolvedDesc ?? 'Disfruta de esta parada en tu recorrido.';
+
+        // Guardar en la caché de SQLite para futuras consultas
+        await _sqliteService.saveWikipediaCache(lat, lon, name, description);
+
         return {
-          'name': resolvedName ?? 'Punto de interés',
-          'description': resolvedDesc ?? 'Disfruta de esta parada en tu recorrido.',
+          'name': name,
+          'description': description,
         };
       }
     } catch (e) {

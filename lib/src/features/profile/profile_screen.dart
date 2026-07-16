@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
@@ -27,14 +28,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final TextEditingController _bioController = TextEditingController();
   final TextEditingController _avatarUrlController = TextEditingController();
   bool _isEditingBio = false;
+  String _appVersion = '';
 
   @override
   void initState() {
     super.initState();
+    _loadAppVersion();
     final user = ref.read(authUserProvider).valueOrNull;
     if (user != null) {
       _bioController.text = user.userMetadata?['bio']?.toString() ?? '';
       _avatarUrlController.text = user.userMetadata?['custom_avatar_url']?.toString() ?? user.userMetadata?['avatar_url']?.toString() ?? '';
+    }
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _appVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading app version: $e');
     }
   }
 
@@ -921,6 +937,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         minimumSize: const Size(220, 48),
                       ),
                     ).animate().fadeIn(delay: 500.ms, duration: 400.ms),
+                    if (_appVersion.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Text(
+                        'Versión $_appVersion',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
+                    ],
                   ],
                 ),
               ]),
@@ -930,6 +957,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
   }
+
+
+
 
   void _showCreatedToursSheet(BuildContext context, List<Tour> tours) {
     showModalBottomSheet(

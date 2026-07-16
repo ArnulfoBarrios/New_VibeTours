@@ -130,41 +130,33 @@ class _HeaderSection extends StatelessWidget {
           weatherAsync.when(
             data: (weather) {
               if (weather == null) return const SizedBox.shrink();
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      weather.isDay ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
-                      color: weather.isDay ? Colors.orange.shade400 : Colors.indigo,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${weather.temperatureC}°C',
-                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
-                        ),
-                        Text(
-                          weather.condition,
-                          style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-                        ),
-                      ],
-                    ),
-                  ],
+              return DynamicGlowBackground(
+                child: GlassPanel(
+                  radius: 16,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        weather.isDay ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
+                        color: weather.isDay ? Colors.orange.shade400 : Colors.indigo,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${weather.temperatureC}°C',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
+                          ),
+                          Text(
+                            weather.condition,
+                            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -313,51 +305,53 @@ class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
             bottom: 0,
             left: 16,
             right: 16,
-            child: GlassPanel(
-              radius: 24,
-              padding: const EdgeInsets.all(8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10, left: 10),
-                    child: Icon(Icons.auto_awesome, color: Colors.grey.shade600, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: TextField(
-                        controller: _promptController,
-                        minLines: 1,
-                        maxLines: 4,
-                        style: const TextStyle(fontSize: 15),
-                        decoration: InputDecoration(
-                          hintText: l10n.whereToNext,
-                          hintStyle: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 4),
+            child: DynamicGlowBackground(
+              child: GlassPanel(
+                radius: 24,
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10, left: 10),
+                      child: Icon(Icons.auto_awesome, color: Colors.grey.shade600, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: TextField(
+                          controller: _promptController,
+                          minLines: 1,
+                          maxLines: 4,
+                          style: const TextStyle(fontSize: 15),
+                          decoration: InputDecoration(
+                            hintText: l10n.whereToNext,
+                            hintStyle: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                          ),
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _submitPrompt(),
                         ),
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _submitPrompt(),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _submitPrompt,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        color: AppTheme.primary,
-                        shape: BoxShape.circle,
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _submitPrompt,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: AppTheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
                       ),
-                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

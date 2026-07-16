@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:shimmer/shimmer.dart';
-
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -656,25 +654,65 @@ class _MetaPill extends StatelessWidget {
   }
 }
 
-class SkeletonBox extends StatelessWidget {
+class SkeletonBox extends StatefulWidget {
   const SkeletonBox({super.key, this.height, this.width});
 
   final double? height;
   final double? width;
 
   @override
+  State<SkeletonBox> createState() => _SkeletonBoxState();
+}
+
+class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      highlightColor: Theme.of(context).colorScheme.surface,
-      child: Container(
-        height: height,
-        width: width,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-      ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Colores premium metálicos basados en el modo (Claro/Oscuro) usando HSL feeling
+    final baseColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0); // Slate 800 / Slate 200
+    final highlightColor = isDark ? const Color(0xFF334155) : const Color(0xFFF8FAFC); // Slate 700 / Slate 50
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        // Oscila de izquierda a derecha. -2.0 a 2.0 asegura que el gradiente pase por completo.
+        final slideValue = -2.0 + (_controller.value * 4.0);
+
+        return Container(
+          height: widget.height,
+          width: widget.width,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment(slideValue - 1.0, 0.0),
+              end: Alignment(slideValue + 1.0, 0.0),
+              colors: [
+                baseColor,
+                highlightColor,
+                baseColor,
+              ],
+              stops: const [0.1, 0.5, 0.9],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -748,3 +786,220 @@ class EmptyState extends StatelessWidget {
     );
   }
 }
+
+class DynamicGlowBackground extends StatefulWidget {
+  final Widget child;
+  const DynamicGlowBackground({super.key, required this.child});
+
+  @override
+  State<DynamicGlowBackground> createState() => _DynamicGlowBackgroundState();
+}
+
+class _DynamicGlowBackgroundState extends State<DynamicGlowBackground> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  (Color, Color) _getTimeColors() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 9) {
+      // Amanecer (Tonos cálidos)
+      return (const Color(0xFFF97316), const Color(0xFFF43F5E)); // Orange 500, Rose 500
+    } else if (hour >= 9 && hour < 17) {
+      // Día (Tonos brillantes)
+      return (const Color(0xFF0EA5E9), const Color(0xFF10B981)); // Sky 500, Emerald 500
+    } else if (hour >= 17 && hour < 20) {
+      // Atardecer (Tonos índigo/violeta)
+      return (const Color(0xFF8B5CF6), const Color(0xFFD946EF)); // Violet 500, Fuchsia 500
+    } else {
+      // Noche (Tonos oscuros)
+      return (const Color(0xFF1E3A8A), const Color(0xFF4C1D95)); // Blue 900, Violet 900
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _getTimeColors();
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              // Movimiento fluido usando la animación
+              final v = _controller.value;
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    top: -5 + (v * 10),
+                    left: -10 + (v * 15),
+                    right: 15 - (v * 5),
+                    bottom: 10 - (v * 15),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.$1.withValues(alpha: 0.15),
+                            blurRadius: 60,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 10 - (v * 15),
+                    left: 20 - (v * 10),
+                    right: -5 + (v * 15),
+                    bottom: -5 + (v * 10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.$2.withValues(alpha: 0.15),
+                            blurRadius: 60,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        widget.child,
+      ],
+    );
+  }
+}
+
+class NavigationTransitionOverlay extends StatefulWidget {
+  const NavigationTransitionOverlay({super.key});
+
+  static Future<void> show(BuildContext context) async {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Theme.of(context).scaffoldBackgroundColor,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return FadeTransition(
+          opacity: animation,
+          child: const NavigationTransitionOverlay(),
+        );
+      },
+    );
+    await Future.delayed(const Duration(milliseconds: 1800));
+    if (context.mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  State<NavigationTransitionOverlay> createState() => _NavigationTransitionOverlayState();
+}
+
+class _NavigationTransitionOverlayState extends State<NavigationTransitionOverlay> with TickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late AnimationController _rotateController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
+    _rotateController = AnimationController(vsync: this, duration: const Duration(milliseconds: 3000))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _rotateController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 140,
+              width: 140,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  for (int i = 0; i < 3; i++)
+                    AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) {
+                        final progress = (_pulseController.value + i / 3.0) % 1.0;
+                        return Container(
+                          width: 50 + progress * 90,
+                          height: 50 + progress * 90,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppTheme.primary.withValues(alpha: 0.16 * (1.0 - progress)),
+                            border: Border.all(
+                              color: AppTheme.primary.withValues(alpha: 0.35 * (1.0 - progress)),
+                              width: 1.5,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.primary,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
+                      ],
+                    ),
+                    child: RotationTransition(
+                      turns: _rotateController,
+                      child: const Icon(Icons.explore_rounded, size: 36, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'Preparando tu ruta...',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

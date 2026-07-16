@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
 import '../core/services/auth_service.dart';
+import '../core/services/sqlite-service.dart';
 import '../core/services/tour_runtime_services.dart';
 import '../data/demo_tours.dart';
 import '../data/discovery_repository.dart';
@@ -78,7 +79,35 @@ final discoveryRepositoryProvider = Provider<DiscoveryRepository>((ref) {
 
 final toursProvider = FutureProvider<List<Tour>>((ref) async {
   final blockedUsers = await ref.watch(blockedUsersProvider.future);
-  return ref.watch(tourRepositoryProvider).getTours(blockedUsers: blockedUsers);
+  final prefs = ref.watch(sharedPreferencesProvider);
+  const cacheKey = 'vibetours_cached_catalog';
+
+  try {
+    final tours = await ref.watch(tourRepositoryProvider).getTours(blockedUsers: blockedUsers);
+    final jsonList = tours.map((t) => _tourToJson(t)).toList();
+    await prefs.setString(cacheKey, jsonEncode(jsonList));
+    return tours;
+  } catch (e) {
+    debugPrint('Error fetching tours from Supabase, attempting to load local cache: $e');
+    final cachedRaw = prefs.getString(cacheKey);
+    if (cachedRaw != null && cachedRaw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(cachedRaw);
+        if (decoded is List) {
+          final List<Tour> cachedTours = [];
+          for (final item in decoded) {
+            if (item is Map) {
+              cachedTours.add(_tourFromJson(Map<String, dynamic>.from(item)));
+            }
+          }
+          return cachedTours;
+        }
+      } catch (jsonError) {
+        debugPrint('Error decoding cached tours: $jsonError');
+      }
+    }
+    rethrow;
+  }
 });
 
 final recommendedToursProvider = FutureProvider<List<Tour>>((ref) async {
@@ -93,21 +122,31 @@ final recommendedToursProvider = FutureProvider<List<Tour>>((ref) async {
 
   final interestTypes = <TourType>{};
   for (final interest in profile.interests) {
-    final lower = interest.toLowerCase();
-    if (lower.contains('playa') || lower.contains('relajación') || lower.contains('compras')) {
-      interestTypes.add(TourType.romantic); // relaxing mapping
-    }
-    if (lower.contains('naturaleza') || lower.contains('aventura')) {
-      interestTypes.add(TourType.ecological);
-      interestTypes.add(TourType.sports);
-    }
-    if (lower.contains('museo') || lower.contains('monumento') || lower.contains('historia')) {
-      interestTypes.add(TourType.cultural);
-      interestTypes.add(TourType.historical);
-    }
-    if (lower.contains('gastronomía') || lower.contains('comida') || lower.contains('nocturna')) {
-      interestTypes.add(TourType.gastronomic);
-      interestTypes.add(TourType.night);
+    switch (interest) {
+      case TouristInterest.beaches:
+        interestTypes.add(TourType.romantic);
+        break;
+      case TouristInterest.nature:
+      case TouristInterest.adventures:
+        interestTypes.add(TourType.ecological);
+        interestTypes.add(TourType.sports);
+        break;
+      case TouristInterest.museums:
+      case TouristInterest.monuments:
+        interestTypes.add(TourType.cultural);
+        interestTypes.add(TourType.historical);
+        break;
+      case TouristInterest.gastronomy:
+      case TouristInterest.nightlife:
+        interestTypes.add(TourType.gastronomic);
+        interestTypes.add(TourType.night);
+        break;
+      case TouristInterest.familyActivities:
+        interestTypes.add(TourType.family);
+        break;
+      case TouristInterest.shopping:
+        interestTypes.add(TourType.custom);
+        break;
     }
   }
 
@@ -304,8 +343,12 @@ final touristProfileProvider =
       () => TouristProfileController(),
     );
 
+final sqliteServiceProvider = Provider<SqliteService>((ref) {
+  return SqliteService();
+});
+
 final voiceGuideProvider = Provider<VoiceGuideService>(
-  (ref) => VoiceGuideService(),
+  (ref) => VoiceGuideService(ref.watch(sqliteServiceProvider)),
 );
 
 final locationServiceProvider = Provider<LocationService>(
@@ -335,7 +378,7 @@ class TouristProfileController extends AsyncNotifier<TouristProfileV2> {
     String? budget,
     String? companionType,
     bool? hasChildren,
-    List<String>? interests,
+    List<TouristInterest>? interests,
     String? preferredPace,
     String? transportPreference,
     String? preferredTimeOfDay,

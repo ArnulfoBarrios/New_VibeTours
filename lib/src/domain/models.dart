@@ -452,6 +452,43 @@ class LocalEvent {
   final GeoPoint location;
 }
 
+enum TouristInterest {
+  beaches,
+  nature,
+  museums,
+  monuments,
+  gastronomy,
+  shopping,
+  nightlife,
+  adventures,
+  familyActivities,
+}
+
+extension TouristInterestExtension on TouristInterest {
+  String get translationKey {
+    switch (this) {
+      case TouristInterest.beaches:
+        return 'Playas';
+      case TouristInterest.nature:
+        return 'Naturaleza';
+      case TouristInterest.museums:
+        return 'Museos';
+      case TouristInterest.monuments:
+        return 'Monumentos históricos';
+      case TouristInterest.gastronomy:
+        return 'Gastronomía';
+      case TouristInterest.shopping:
+        return 'Compras';
+      case TouristInterest.nightlife:
+        return 'Vida nocturna';
+      case TouristInterest.adventures:
+        return 'Aventuras';
+      case TouristInterest.familyActivities:
+        return 'Actividades familiares';
+    }
+  }
+}
+
 class TouristProfileV2 {
   const TouristProfileV2({
     required this.travelerType,
@@ -469,7 +506,7 @@ class TouristProfileV2 {
   final String budget;
   final String companionType;
   final bool hasChildren;
-  final List<String> interests;
+  final List<TouristInterest> interests;
   final String preferredPace;
   final String transportPreference;
   final String preferredTimeOfDay;
@@ -482,7 +519,7 @@ class TouristProfileV2 {
     String? budget,
     String? companionType,
     bool? hasChildren,
-    List<String>? interests,
+    List<TouristInterest>? interests,
     String? preferredPace,
     String? transportPreference,
     String? preferredTimeOfDay,
@@ -516,7 +553,7 @@ class TouristProfileV2 {
     'budget': budget,
     'companionType': companionType,
     'hasChildren': hasChildren,
-    'interests': interests,
+    'interests': interests.map((e) => e.name).toList(),
     'preferredPace': preferredPace,
     'transportPreference': transportPreference,
     'preferredTimeOfDay': preferredTimeOfDay,
@@ -524,12 +561,36 @@ class TouristProfileV2 {
   };
 
   factory TouristProfileV2.fromJson(Map<String, dynamic> json) {
+    final rawInterests = json['interests'] as List<dynamic>? ?? [];
+    final List<TouristInterest> parsedInterests = [];
+    for (final item in rawInterests) {
+      final str = item.toString().trim();
+      if (str.isEmpty) continue;
+      
+      final matched = TouristInterest.values.firstWhere(
+        (v) => v.name == str || v.translationKey == str,
+        orElse: () {
+          if (str == 'Playas') return TouristInterest.beaches;
+          if (str == 'Naturaleza') return TouristInterest.nature;
+          if (str == 'Museos') return TouristInterest.museums;
+          if (str == 'Monumentos históricos') return TouristInterest.monuments;
+          if (str == 'Gastronomía') return TouristInterest.gastronomy;
+          if (str == 'Compras') return TouristInterest.shopping;
+          if (str == 'Vida nocturna') return TouristInterest.nightlife;
+          if (str == 'Aventuras') return TouristInterest.adventures;
+          if (str == 'Actividades familiares') return TouristInterest.familyActivities;
+          return TouristInterest.nature;
+        },
+      );
+      parsedInterests.add(matched);
+    }
+
     return TouristProfileV2(
       travelerType: json['travelerType'] as String? ?? '',
       budget: json['budget'] as String? ?? '',
       companionType: json['companionType'] as String? ?? '',
       hasChildren: json['hasChildren'] as bool? ?? false,
-      interests: (json['interests'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      interests: parsedInterests,
       preferredPace: json['preferredPace'] as String? ?? 'balanced',
       transportPreference: json['transportPreference'] as String? ?? '',
       preferredTimeOfDay: json['preferredTimeOfDay'] as String? ?? '',
@@ -543,14 +604,15 @@ class TouristProfileV2 {
     required String budget,
     required String companionType,
     required bool hasChildren,
-    required List<String> interests,
+    required List<TouristInterest> interests,
     required String preferredPace,
   }) {
     if (interests.isEmpty) return '';
     final kids = hasChildren ? 'viaja con niños' : 'sin niños';
+    final interestStrings = interests.map((e) => e.translationKey).join(', ');
     return 'Viajero de tipo $travelerType, con presupuesto $budget, en compañía de $companionType ($kids). '
         'Ritmo $preferredPace. '
-        'Intereses principales: ${interests.join(', ')}. '
+        'Intereses principales: $interestStrings. '
         'VIBETOURS priorizará rutas lógicas, experiencias afines a estos intereses y recomendaciones que se ajusten a su perfil.';
   }
 }

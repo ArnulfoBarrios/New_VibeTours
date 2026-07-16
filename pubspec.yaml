@@ -1,7 +1,7 @@
 name: vibetoursapp
 description: VIBETOURS, a premium AI-powered tourism guide for Android and iOS.
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.1
 
 environment:
   sdk: '>=3.11.0 <4.0.0'
@@ -27,7 +27,8 @@ dependencies:
   maplibre_gl: ^0.23.0
   share_plus: ^12.0.1
   shared_preferences: ^2.5.4
-  shimmer: ^3.0.0
+  sqflite: ^2.3.0
+  path: ^1.9.0
   speech_to_text: ^7.3.0
   supabase_flutter: ^2.10.3
   url_launcher: ^6.3.2
@@ -38,6 +39,7 @@ dependencies:
   firebase_messaging: ^16.4.1
   firebase_analytics: ^12.4.3
   firebase_crashlytics: ^5.2.4
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:

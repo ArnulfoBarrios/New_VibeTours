@@ -215,7 +215,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         durationHours: null, // default to null to trigger prompt if absent
         language: 'es',
         touristProfileSummary: summary,
-        touristInterests: profile.interests,
+        touristInterests: profile.interests.map((e) => e.translationKey).toList(),
         touristPace: profile.preferredPace,
         latitude: lat,
         longitude: lon,

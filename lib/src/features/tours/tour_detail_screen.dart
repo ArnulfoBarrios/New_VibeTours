@@ -59,6 +59,7 @@ class TourDetailScreen extends ConsumerWidget {
               SliverAppBar(
                 expandedHeight: 330,
                 pinned: true,
+                stretch: true,
                 backgroundColor: Colors.transparent,
                 leading: IconButton.filledTonal(
                   onPressed: () => context.pop(),
@@ -98,56 +99,86 @@ class TourDetailScreen extends ConsumerWidget {
                     ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
-                  background: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CachedNetworkImage(
-                        imageUrl: tour.coverUrl,
-                        fit: BoxFit.cover,
-                        httpHeaders: const {
-                          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                        },
-                        placeholder: (context, url) => const SkeletonBox(),
-                        errorWidget: (context, url, error) => CachedNetworkImage(
-                          imageUrl: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80',
-                          fit: BoxFit.cover,
-                          errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
-                        ),
-                      ),
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.10),
-                              Colors.black.withValues(alpha: 0.76),
-                            ],
+                  stretchModes: const [
+                    StretchMode.zoomBackground,
+                  ],
+                  background: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final double currentHeight = constraints.maxHeight;
+                      double scale = 1.0;
+                      double translation = 0.0;
+                      double fadeProgress = 1.0;
+
+                      if (currentHeight > 330.0) {
+                        scale = currentHeight / 330.0;
+                      } else {
+                        final double scrollProgress = ((330.0 - currentHeight) / (330.0 - kToolbarHeight)).clamp(0.0, 1.0);
+                        translation = scrollProgress * 60.0;
+                        fadeProgress = (1.0 - scrollProgress * 1.5).clamp(0.0, 1.0);
+                      }
+
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Transform.translate(
+                            offset: Offset(0, -translation),
+                            child: Transform.scale(
+                              scale: scale,
+                              alignment: Alignment.center,
+                              child: CachedNetworkImage(
+                                imageUrl: tour.coverUrl,
+                                fit: BoxFit.cover,
+                                httpHeaders: const {
+                                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                                },
+                                placeholder: (context, url) => const SkeletonBox(),
+                                errorWidget: (context, url, error) => CachedNetworkImage(
+                                  imageUrl: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80',
+                                  fit: BoxFit.cover,
+                                  errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 20,
-                        right: 20,
-                        bottom: 24,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              tour.title,
-                              style: Theme.of(context).textTheme.headlineMedium
-                                  ?.copyWith(color: Colors.white),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 0.10),
+                                  Colors.black.withValues(alpha: 0.76),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${tour.city}, ${tour.country}',
-                              style: Theme.of(context).textTheme.bodyLarge
-                                  ?.copyWith(color: Colors.white70),
+                          ),
+                          Positioned(
+                            left: 20,
+                            right: 20,
+                            bottom: 24,
+                            child: Opacity(
+                              opacity: fadeProgress,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    tour.title,
+                                    style: Theme.of(context).textTheme.headlineMedium
+                                        ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${tour.city}, ${tour.country}',
+                                    style: Theme.of(context).textTheme.bodyLarge
+                                        ?.copyWith(color: Colors.white70),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -656,7 +687,10 @@ class TourDetailScreen extends ConsumerWidget {
     if (hasHotel || !context.mounted) {
       ref.read(selectedTourProvider.notifier).state = tour;
       if (context.mounted) {
-        context.push('/live/${tour.id}');
+        await NavigationTransitionOverlay.show(context);
+        if (context.mounted) {
+          context.push('/live/${tour.id}');
+        }
       }
       return;
     }
@@ -685,7 +719,10 @@ class TourDetailScreen extends ConsumerWidget {
     if (wantHotel != true || !context.mounted) {
       ref.read(selectedTourProvider.notifier).state = tour;
       if (context.mounted) {
-        context.push('/live/${tour.id}');
+        await NavigationTransitionOverlay.show(context);
+        if (context.mounted) {
+          context.push('/live/${tour.id}');
+        }
       }
       return;
     }
@@ -733,7 +770,10 @@ class TourDetailScreen extends ConsumerWidget {
     if (hotels == null || hotels.isEmpty || !context.mounted) {
       ref.read(selectedTourProvider.notifier).state = tour;
       if (context.mounted) {
-        context.push('/live/${tour.id}');
+        await NavigationTransitionOverlay.show(context);
+        if (context.mounted) {
+          context.push('/live/${tour.id}');
+        }
       }
       return;
     }
@@ -765,7 +805,10 @@ class TourDetailScreen extends ConsumerWidget {
     if (selectedHotel == null || !context.mounted) {
       ref.read(selectedTourProvider.notifier).state = tour;
       if (context.mounted) {
-        context.push('/live/${tour.id}');
+        await NavigationTransitionOverlay.show(context);
+        if (context.mounted) {
+          context.push('/live/${tour.id}');
+        }
       }
       return;
     }
@@ -774,7 +817,10 @@ class TourDetailScreen extends ConsumerWidget {
     final modifiedTour = _addHotelToTour(tour, selectedHotel);
     ref.read(selectedTourProvider.notifier).state = modifiedTour;
     if (context.mounted) {
-      context.push('/live/${modifiedTour.id}');
+      await NavigationTransitionOverlay.show(context);
+      if (context.mounted) {
+        context.push('/live/${modifiedTour.id}');
+      }
     }
   }
 

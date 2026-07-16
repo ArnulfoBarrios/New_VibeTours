@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
 import '../../state/app_state.dart';
+import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../shared/location_disclosure_dialog.dart';
 
@@ -28,16 +29,13 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
   String _preferredPace = '';
   String _transportPreference = '';
   String _preferredTimeOfDay = '';
-  final Set<String> _interests = {};
+  final Set<TouristInterest> _interests = {};
 
   final List<String> _travelerTypes = ['Solo', 'Pareja', 'Amigos', 'Familia'];
   final List<String> _budgets = ['Económico', 'Moderado', 'Lujo'];
   final List<String> _transportTypes = ['Caminando', 'Transporte Público', 'Auto Rentado', 'Taxis/Apps'];
   final List<String> _timeOfDays = ['Mañanas', 'Tardes', 'Noches'];
-  final List<String> _availableInterests = [
-    'Playas', 'Naturaleza', 'Museos', 'Monumentos históricos',
-    'Gastronomía', 'Compras', 'Vida nocturna', 'Aventuras', 'Actividades familiares'
-  ];
+  final List<TouristInterest> _availableInterests = TouristInterest.values;
 
   @override
   void initState() {
@@ -151,7 +149,7 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
         _tx(_preferredPace).toLowerCase(),
         _tx(_transportPreference).toLowerCase(),
         _tx(_preferredTimeOfDay).toLowerCase(),
-        _interests.map((i) => _tx(i)).join(', ')
+        _interests.map((i) => _tx(i.translationKey)).join(', ')
       );
       ref.read(aiPromptProvider.notifier).state = prompt;
       ref.read(aiPromptAutoStartProvider.notifier).state = true;
@@ -447,10 +445,10 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
       child: Wrap(
         spacing: 12,
         runSpacing: 12,
-        children: _availableInterests.map((interest) {
+        children: _availableInterests.map<Widget>((interest) {
           final isSelected = _interests.contains(interest);
           return FilterChip(
-            label: Text(_tx(interest)),
+            label: Text(_tx(interest.translationKey)),
             selected: isSelected,
             onSelected: (selected) {
               setState(() {
