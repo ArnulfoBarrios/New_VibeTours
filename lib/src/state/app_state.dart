@@ -202,9 +202,75 @@ final currencyProvider = StateNotifierProvider<CurrencyController, AppCurrency>(
   return CurrencyController(prefs);
 });
 
-final mapStyleProvider = StateProvider<String>(
-  (ref) => 'https://tiles.openfreemap.org/styles/liberty',
-);
+enum MapStyleOption { auto, day, night, satellite }
+
+class MapStyleOptionController extends StateNotifier<MapStyleOption> {
+  MapStyleOptionController(this.prefs) : super(_init(prefs));
+  final SharedPreferences prefs;
+
+  static MapStyleOption _init(SharedPreferences prefs) {
+    final val = prefs.getString('vibetours_map_style_option');
+    if (val != null) {
+      return MapStyleOption.values.firstWhere((e) => e.name == val, orElse: () => MapStyleOption.auto);
+    }
+    return MapStyleOption.auto;
+  }
+
+  Future<void> setOption(MapStyleOption option) async {
+    state = option;
+    await prefs.setString('vibetours_map_style_option', option.name);
+  }
+}
+
+final mapStyleOptionProvider = StateNotifierProvider<MapStyleOptionController, MapStyleOption>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return MapStyleOptionController(prefs);
+});
+
+const satelliteStyleJson = '''
+{
+  "version": 8,
+  "sources": {
+    "esri-satellite": {
+      "type": "raster",
+      "tiles": [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      ],
+      "tileSize": 256,
+      "attribution": "Esri"
+    }
+  },
+  "layers": [
+    {
+      "id": "esri-satellite-layer",
+      "type": "raster",
+      "source": "esri-satellite",
+      "minzoom": 0,
+      "maxzoom": 18
+    }
+  ]
+}
+''';
+
+final mapStyleProvider = Provider<String>((ref) {
+  final option = ref.watch(mapStyleOptionProvider);
+  switch (option) {
+    case MapStyleOption.day:
+      return 'https://tiles.openfreemap.org/styles/liberty';
+    case MapStyleOption.night:
+      return 'https://tiles.openfreemap.org/styles/dark';
+    case MapStyleOption.satellite:
+      return satelliteStyleJson;
+    case MapStyleOption.auto:
+      final themeMode = ref.watch(themeModeProvider);
+      final isDark = themeMode == ThemeMode.dark ||
+          (themeMode == ThemeMode.system &&
+              WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark);
+      return isDark
+          ? 'https://tiles.openfreemap.org/styles/dark'
+          : 'https://tiles.openfreemap.org/styles/liberty';
+  }
+});
 
 final highRefreshRateProvider = StateProvider<bool>((ref) => true);
 

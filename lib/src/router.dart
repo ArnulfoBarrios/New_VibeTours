@@ -79,13 +79,45 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/tours/:id',
-        builder: (context, state) =>
-            TourDetailScreen(tourId: state.pathParameters['id']!),
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: TourDetailScreen(tourId: state.pathParameters['id']!),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(1.0, 0.0),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: child,
+              );
+            },
+          );
+        },
       ),
       GoRoute(
         path: '/live/:id',
-        builder: (context, state) =>
-            LiveTourScreen(tourId: state.pathParameters['id']!),
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: LiveTourScreen(tourId: state.pathParameters['id']!),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.96, end: 1.0).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  )),
+                  child: child,
+                ),
+              );
+            },
+          );
+        },
       ),
       GoRoute(path: '/pqrs', builder: (context, state) => const PqrsScreen()),
       GoRoute(

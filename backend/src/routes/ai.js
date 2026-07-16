@@ -952,7 +952,7 @@ function scorePlace(place, input) {
   const diversityScore = diversityBoostFor(input.type, place.category, place.name)
   const profileScore = profileScoreFor(input, place)
   const cityScore = importantPlaceScore(place, input)
-  const mismatchPenalty = typeMismatchPenalty(input.type, place.category, place.name)
+  const mismatchPenalty = typeMismatchPenalty(input.type, place.category, place.name, input.prompt)
   
   // Penalizar fuertemente lugares genéricos (ej. "Lugar", "Punto turístico")
   let genericPenalty = 0
@@ -1017,11 +1017,28 @@ function contextualScoreFor(candidate, selected, input) {
   const sameGroup = lastGroup === candidate.broadGroup
   const distanceFromLastKm = haversineMeters(last.latitude, last.longitude, candidate.latitude, candidate.longitude) / 1000
 
+  // Detect if the tour is regional or nature-oriented
+  const isRegionalOrNature = 
+    input.type === 'ecological' || 
+    input.type === 'sports' || 
+    (input.durationHours && input.durationHours >= 12) ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.prompt || '') ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.city || '');
+
   if (sameCategory) score -= 30
   if (sameGroup) score -= 14
-  if (distanceFromLastKm < 0.7) score += 14
-  else if (distanceFromLastKm < 1.8) score += 8
-  else if (distanceFromLastKm > 6) score -= 12
+  
+  if (isRegionalOrNature) {
+    // For regional or nature tours, larger distances are normal and expected
+    if (distanceFromLastKm < 3) score += 14
+    else if (distanceFromLastKm < 8) score += 8
+    else if (distanceFromLastKm > 30) score -= 10
+  } else {
+    if (distanceFromLastKm < 0.7) score += 14
+    else if (distanceFromLastKm < 1.8) score += 8
+    else if (distanceFromLastKm > 6) score -= 12
+  }
 
   if (input.durationHours <= 3.5) {
     score -= distanceFromLastKm * 4
@@ -1313,11 +1330,23 @@ function isAlignedWithTourType(type, category, name) {
   return (aligned[type] ?? /museum|historic|market|park|viewpoint/).test(text)
 }
 
-function typeMismatchPenalty(type, category, name) {
+function typeMismatchPenalty(type, category, name, promptText = '') {
   const text = (category + ' ' + name).toLowerCase()
+  const cleanPrompt = String(promptText || '').toLowerCase()
+  
   if (type === 'gastronomic' && /historic|monument|memorial|religious|museum/.test(text)) return 180
   if (type === 'sports' && /historic|monument|memorial|religious|museum/.test(text)) return 180
-  if (type === 'ecological' && /restaurant|cafe|bar|nightlife|monument/.test(text)) return 140
+  if (type === 'ecological' && /restaurant|cafe|bar|nightlife|monument/.test(text)) {
+    // If the user explicitly asks for food/gastronomy in their prompt, do not penalize food options
+    if (/comida|comer|gastronom|restaurante|cafe|cena|almuerzo|plato|probar/i.test(cleanPrompt) && /restaurant|cafe/.test(text)) {
+      return 0
+    }
+    // If it's a coastal/island spot that happens to be tagged as restaurant/bar, reduce penalty
+    if (/playa|beach|isla|island|cayo|mucura|múcura|tintipan|tintipán|palma|punta|faro/i.test(text)) {
+      return 20
+    }
+    return 140
+  }
   if (type === 'night' && /museum|religious|trail/.test(text)) return 140
   return 0
 }
@@ -2225,13 +2254,6 @@ function isCandidateNearDestination(place, input, location) {
   const latitude = numberValue(place.latitude, NaN)
   const longitude = numberValue(place.longitude, NaN)
   const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
-  const cityKey = normalizeKey(place.city)
-  const countryKey = normalizeKey(place.country)
-  const inputCityKey = normalizeKey(input.city)
-  const inputCountryKey = normalizeKey(input.country)
-  const cityMatch = Boolean(inputCityKey && cityKey && (cityKey === inputCityKey || cityKey.includes(inputCityKey) || inputCityKey.includes(cityKey)))
-  const countryMatch = Boolean(inputCountryKey && countryKey && (countryKey === inputCountryKey || countryKey.includes(inputCountryKey) || inputCountryKey.includes(countryKey)))
-  if (cityMatch || countryMatch) return true
   if (!hasCoordinates) return false
   const distanceKm = haversineMeters(location.latitude, location.longitude, latitude, longitude) / 1000
 
@@ -2245,7 +2267,26 @@ function isCandidateNearDestination(place, input, location) {
     /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.city || '');
 
   const maxDistance = isRegionalOrNature ? 50 : 45
-  return distanceKm <= maxDistance
+  if (distanceKm > maxDistance) return false
+
+  // If it's far from the center (>12 km), only allow nature, coastal, islands, viewpoints or beaches
+  if (distanceKm > 12) {
+    const category = String(place.category || '').toLowerCase()
+    const type = String(place.type || '').toLowerCase()
+    const name = String(place.name || '').toLowerCase()
+    
+    const isEcoOrCoastal = 
+      ['nature', 'viewpoint'].includes(category) || 
+      ['beach', 'water', 'island', 'national_park', 'nature_reserve', 'park', 'forest', 'sea'].includes(type) ||
+      /playa|beach|isla|island|cayo|archipielago|archipiélago|bahia|bahía|ciénaga|cienaga|reserva|parque|mirador|viewpoint|punta|faro|cabo|morrosquillo|san-bernardo|mucura|múcura|tintipan|tintipán|palma|boqueron|boquerón|isleta|coveñas/i.test(name) ||
+      (place.tags && (place.tags.natural || place.tags.water || place.tags.place === 'island' || place.tags.boundary === 'national_park'))
+      
+    if (!isEcoOrCoastal) {
+      return false
+    }
+  }
+
+  return true
 }
 
 function findCandidatePlace(name, candidatePlaces, anchorPlace) {

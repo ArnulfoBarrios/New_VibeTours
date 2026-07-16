@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -16,7 +17,7 @@ class SettingsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final highRefresh = ref.watch(highRefreshRateProvider);
     final notifications = ref.watch(notificationsEnabledProvider);
-    final mapStyle = ref.watch(mapStyleProvider);
+    final mapStyleOption = ref.watch(mapStyleOptionProvider);
     final isAdmin = ref.watch(isAdminProvider);
     
     final content = ListView(
@@ -81,7 +82,7 @@ class SettingsScreen extends ConsumerWidget {
                 icon: Icons.map_rounded,
                 iconColor: Colors.green,
                 title: l10n.mapPreference,
-                subtitle: _mapStyleLabel(mapStyle),
+                subtitle: _mapStyleLabel(mapStyleOption),
                 trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                 onTap: () => _showMapStyleSheet(context, ref),
               ),
@@ -106,9 +107,13 @@ class SettingsScreen extends ConsumerWidget {
     return PremiumScaffold(safeBottom: true, child: content);
   }
 
-  String _mapStyleLabel(String value) {
-    if (value.contains('openfreemap')) return 'OpenFreeMap';
-    return 'Estándar';
+  String _mapStyleLabel(MapStyleOption value) {
+    switch (value) {
+      case MapStyleOption.auto: return 'Automático (Tema)';
+      case MapStyleOption.day: return 'Día (Claro)';
+      case MapStyleOption.night: return 'Noche (Oscuro)';
+      case MapStyleOption.satellite: return 'Satélite (Híbrido)';
+    }
   }
 
   void _showMapStyleSheet(BuildContext context, WidgetRef ref) {
@@ -140,27 +145,46 @@ class SettingsScreen extends ConsumerWidget {
                     ),
               ),
               const SizedBox(height: 16),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.map_rounded, color: Colors.green),
-                ),
-                title: const Text('OpenFreeMap Liberty', style: TextStyle(fontWeight: FontWeight.bold)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                onTap: () {
-                  ref.read(mapStyleProvider.notifier).state =
-                      'https://tiles.openfreemap.org/styles/liberty';
-                  Navigator.of(context).pop();
-                },
-              ),
+              _buildStyleTile(context, ref, MapStyleOption.auto, 'Automático', 'Sincronizado con el brillo de la app', Icons.hdr_auto_rounded, Colors.blue),
+              _buildStyleTile(context, ref, MapStyleOption.day, 'Día', 'Mapa claro y nítido', Icons.light_mode_rounded, Colors.orange),
+              _buildStyleTile(context, ref, MapStyleOption.night, 'Noche', 'Diseño oscuro premium', Icons.dark_mode_rounded, Colors.indigo),
+              _buildStyleTile(context, ref, MapStyleOption.satellite, 'Satélite', 'Fotografía aérea ESRI', Icons.satellite_alt_rounded, Colors.teal),
+              const SizedBox(height: 12),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStyleTile(
+    BuildContext context,
+    WidgetRef ref,
+    MapStyleOption option,
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+  ) {
+    final current = ref.watch(mapStyleOptionProvider);
+    final isSelected = current == option;
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+      trailing: isSelected ? Icon(Icons.check_circle_rounded, color: AppTheme.primary) : null,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onTap: () {
+        ref.read(mapStyleOptionProvider.notifier).setOption(option);
+        Navigator.of(context).pop();
+      },
     );
   }
 }

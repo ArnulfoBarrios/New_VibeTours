@@ -1,15 +1,20 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../services/road_route_service.dart';
 import '../../domain/models.dart';
+import '../../state/app_state.dart';
+import 'premium_components.dart';
+import 'app_theme.dart';
 
-class OpenFreeRouteMap extends StatefulWidget {
+class OpenFreeRouteMap extends ConsumerStatefulWidget {
   const OpenFreeRouteMap({
     super.key,
     required this.points,
     required this.styleUrl,
+    this.stops,
     this.labels = const [],
     this.activeIndex = 0,
     this.height = 220,
@@ -52,6 +57,7 @@ class OpenFreeRouteMap extends StatefulWidget {
       key: key,
       points: [for (final stop in stops) stop.location],
       labels: [for (final stop in stops) stop.name],
+      stops: stops,
       styleUrl: styleUrl,
       activeIndex: activeIndex,
       height: height,
@@ -73,6 +79,7 @@ class OpenFreeRouteMap extends StatefulWidget {
 
   final List<GeoPoint> points;
   final List<String> labels;
+  final List<TourStop>? stops;
   final String styleUrl;
   final int activeIndex;
   final double height;
@@ -91,10 +98,10 @@ class OpenFreeRouteMap extends StatefulWidget {
   final void Function(GeoPoint)? onPointSelected;
 
   @override
-  State<OpenFreeRouteMap> createState() => _OpenFreeRouteMapState();
+  ConsumerState<OpenFreeRouteMap> createState() => _OpenFreeRouteMapState();
 }
 
-class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepAliveClientMixin {
+class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with AutomaticKeepAliveClientMixin {
   final RoadRouteService _routeService = RoadRouteService();
   MapLibreMapController? _controller;
   bool _styleLoaded = false;
@@ -130,6 +137,9 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
 
     if (oldWidget.styleUrl != widget.styleUrl) {
       _styleLoaded = false;
+      if (_controller != null) {
+        _controller!.setStyle(widget.styleUrl);
+      }
     }
 
     if (routeChanged) {
@@ -184,6 +194,68 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
     super.dispose();
   }
 
+  Widget _buildStyleSelector() {
+    final styleOption = ref.watch(mapStyleOptionProvider);
+    IconData icon;
+    switch (styleOption) {
+      case MapStyleOption.auto:
+        icon = Icons.hdr_auto_rounded;
+        break;
+      case MapStyleOption.day:
+        icon = Icons.light_mode_rounded;
+        break;
+      case MapStyleOption.night:
+        icon = Icons.dark_mode_rounded;
+        break;
+      case MapStyleOption.satellite:
+        icon = Icons.satellite_alt_rounded;
+        break;
+    }
+
+    return MenuAnchor(
+      builder: (context, controller, child) => InteractiveBounce(
+        onTap: () => controller.isOpen ? controller.close() : controller.open(),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.black.withValues(alpha: 0.6)
+                : Colors.white.withValues(alpha: 0.75),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : Colors.black.withValues(alpha: 0.08),
+            ),
+          ),
+          child: Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+        ),
+      ),
+      menuChildren: [
+        _buildStyleMenuItem(MapStyleOption.auto, 'Auto (Sincronizado)', Icons.hdr_auto_rounded),
+        _buildStyleMenuItem(MapStyleOption.day, 'Claro (Día)', Icons.light_mode_rounded),
+        _buildStyleMenuItem(MapStyleOption.night, 'Oscuro (Noche)', Icons.dark_mode_rounded),
+        _buildStyleMenuItem(MapStyleOption.satellite, 'Satélite', Icons.satellite_alt_rounded),
+      ],
+    );
+  }
+
+  Widget _buildStyleMenuItem(MapStyleOption option, String label, IconData icon) {
+    final current = ref.watch(mapStyleOptionProvider);
+    final isSelected = current == option;
+    return MenuItemButton(
+      onPressed: () => ref.read(mapStyleOptionProvider.notifier).setOption(option),
+      leadingIcon: Icon(icon, size: 18, color: isSelected ? AppTheme.primary : null),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? AppTheme.primary : null,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -195,34 +267,43 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
       child: SizedBox(
         height: widget.height,
         width: double.infinity,
-        child: MapLibreMap(
-          styleString: widget.styleUrl,
-          initialCameraPosition: CameraPosition(
-            target: LatLng(center.latitude, center.longitude),
-            zoom: widget.focusOnLast ? 16 : (widget.points.length > 1 ? 13 : 15),
-          ),
-          compassEnabled: true,
-          rotateGesturesEnabled: false,
-          myLocationEnabled: widget.myLocationEnabled,
-          onMapCreated: (controller) {
-            _controller = controller;
-            controller.onCircleTapped.add((circle) {
-              final latLng = circle.options.geometry;
-              if (latLng != null && widget.onPointSelected != null) {
-                widget.onPointSelected!(GeoPoint(
-                  latitude: latLng.latitude,
-                  longitude: latLng.longitude,
-                ));
-              }
-            });
-            if (widget.onMapCreated != null) {
-              widget.onMapCreated!(controller);
-            }
-          },
-          onStyleLoadedCallback: () {
-            _styleLoaded = true;
-            _drawRoute();
-          },
+        child: Stack(
+          children: [
+            MapLibreMap(
+              styleString: widget.styleUrl,
+              initialCameraPosition: CameraPosition(
+                target: LatLng(center.latitude, center.longitude),
+                zoom: widget.focusOnLast ? 16 : (widget.points.length > 1 ? 13 : 15),
+              ),
+              compassEnabled: true,
+              rotateGesturesEnabled: false,
+              myLocationEnabled: widget.myLocationEnabled,
+              onMapCreated: (controller) {
+                _controller = controller;
+                controller.onCircleTapped.add((circle) {
+                  final latLng = circle.options.geometry;
+                  if (latLng != null && widget.onPointSelected != null) {
+                    widget.onPointSelected!(GeoPoint(
+                      latitude: latLng.latitude,
+                      longitude: latLng.longitude,
+                    ));
+                  }
+                });
+                if (widget.onMapCreated != null) {
+                  widget.onMapCreated!(controller);
+                }
+              },
+              onStyleLoadedCallback: () {
+                _styleLoaded = true;
+                _drawRoute();
+              },
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: _buildStyleSelector(),
+            ),
+          ],
         ),
       ),
     );
@@ -753,12 +834,20 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
     }
 
     if (animId != _currentAnimationId || !mounted) return;
-    if (widget.showNumbers) {
+    
+    final emoji = (widget.stops != null && index < widget.stops!.length)
+        ? _getStopEmoji(widget.stops![index])
+        : '';
+    final label = widget.showNumbers
+        ? (emoji.isNotEmpty ? '$emoji ${index + 1}' : '${index + 1}')
+        : emoji;
+
+    if (label.isNotEmpty) {
       try {
         await controller.addSymbol(
           SymbolOptions(
             geometry: location,
-            textField: '${index + 1}',
+            textField: label,
             textSize: isActive ? 13.0 : 11.0,
             textColor: isActive ? '#FFFFFF' : '#007AFF',
             textHaloColor: isActive ? '#007AFF' : '#FFFFFF',
@@ -767,6 +856,33 @@ class _OpenFreeRouteMapState extends State<OpenFreeRouteMap> with AutomaticKeepA
         );
       } catch (_) {}
     }
+  }
+
+  String _getStopEmoji(TourStop stop) {
+    final name = stop.name.toLowerCase();
+    final desc = stop.description.toLowerCase();
+    final activities = stop.activities.map((a) => a.toLowerCase()).join(' ');
+    final text = '$name $desc $activities';
+
+    if (text.contains('playa') || text.contains('mar ') || text.contains('ola') || text.contains('beach') || text.contains('coast') || text.contains('bahía') || text.contains('bay') || text.contains('isla') || text.contains('island')) {
+      return '🌊';
+    }
+    if (text.contains('templo') || text.contains('monumento') || text.contains('históri') || text.contains('museo') || text.contains('catedral') || text.contains('iglesia') || text.contains('castle') || text.contains('temple') || text.contains('museum') || text.contains('ruina') || text.contains('ruins')) {
+      return '🏛️';
+    }
+    if (text.contains('restaurante') || text.contains('comida') || text.contains('cena') || text.contains('almuerzo') || text.contains('gastronom') || text.contains('restaurant') || text.contains('food') || text.contains('café') || text.contains('cafe') || text.contains('bar ') || text.contains('pub')) {
+      return '🍴';
+    }
+    if (text.contains('naturaleza') || text.contains('bosque') || text.contains('reserva') || text.contains('parque') || text.contains('eco') || text.contains('sender') || text.contains('hiking') || text.contains('forest') || text.contains('park') || text.contains('jardín') || text.contains('garden')) {
+      return '🌳';
+    }
+    if (text.contains('compras') || text.contains('centro comercial') || text.contains('shopping') || text.contains('mall') || text.contains('mercado') || text.contains('market') || text.contains('tienda') || text.contains('store')) {
+      return '🛍️';
+    }
+    if (text.contains('teatro') || text.contains('concierto') || text.contains('show') || text.contains('música') || text.contains('arte') || text.contains('art ') || text.contains('cultur')) {
+      return '🎭';
+    }
+    return '';
   }
 
   LatLngBounds _boundsFor(List<LatLng> points) {

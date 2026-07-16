@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -50,6 +51,8 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
           }).toList();
 
           return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            cacheExtent: 1500,
             slivers: [
               SliverAppBar(
                 pinned: true,
@@ -143,7 +146,10 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
                           child: TourCard(
                             tour: tour,
                             onTap: () => context.push('/tours/${tour.id}'),
-                          ),
+                          )
+                              .animate(delay: (index.clamp(0, 4) * 80).ms)
+                              .fadeIn(duration: 350.ms)
+                              .slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
                         );
                       },
                       childCount: tours.length,

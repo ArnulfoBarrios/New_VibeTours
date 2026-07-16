@@ -465,6 +465,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
+        cacheExtent: 1500,
         slivers: [
           SliverAppBar(
             expandedHeight: 280,

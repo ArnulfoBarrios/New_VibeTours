@@ -63,6 +63,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               : firstName;
 
           return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            cacheExtent: 1500,
             slivers: [
               SliverToBoxAdapter(
                 child: _HeaderSection(
@@ -193,8 +195,10 @@ class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
   }
 
   void _submitPrompt() {
-    if (_promptController.text.trim().isNotEmpty) {
-      ref.read(aiPromptProvider.notifier).state = _promptController.text.trim();
+    final text = _promptController.text.trim();
+    if (text.isNotEmpty) {
+      _promptController.clear();
+      ref.read(aiPromptProvider.notifier).state = text;
       context.go('/creator');
     }
   }
@@ -310,34 +314,47 @@ class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
             left: 16,
             right: 16,
             child: GlassPanel(
-              radius: 999,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              radius: 24,
+              padding: const EdgeInsets.all(8),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const SizedBox(width: 16),
-                  Icon(Icons.auto_awesome, color: Colors.grey.shade600, size: 20),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10, left: 10),
+                    child: Icon(Icons.auto_awesome, color: Colors.grey.shade600, size: 20),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: TextField(
-                      controller: _promptController,
-                      decoration: InputDecoration(
-                        hintText: l10n.whereToNext,
-                        hintStyle: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500),
-                        border: InputBorder.none,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: TextField(
+                        controller: _promptController,
+                        minLines: 1,
+                        maxLines: 4,
+                        style: const TextStyle(fontSize: 15),
+                        decoration: InputDecoration(
+                          hintText: l10n.whereToNext,
+                          hintStyle: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                        ),
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _submitPrompt(),
                       ),
-                      onSubmitted: (_) => _submitPrompt(),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: _submitPrompt,
                     child: Container(
-                      width: 44,
-                      height: 44,
+                      width: 40,
+                      height: 40,
                       decoration: const BoxDecoration(
                         color: AppTheme.primary,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
                     ),
                   ),
                 ],
@@ -531,6 +548,8 @@ class _NearbyPlacesSection extends ConsumerWidget {
               SizedBox(
                 height: 180,
                 child: ListView.separated(
+                  physics: const BouncingScrollPhysics(),
+                  cacheExtent: 800,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   scrollDirection: Axis.horizontal,
                   itemCount: places.length,

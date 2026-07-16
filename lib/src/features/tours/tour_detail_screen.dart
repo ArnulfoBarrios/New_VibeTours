@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
@@ -52,6 +53,8 @@ class TourDetailScreen extends ConsumerWidget {
               : 'S/C';
           final displayCommentsCount = comments.isNotEmpty ? comments.length : tour.reviewCount;
           return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            cacheExtent: 1500,
             slivers: [
               SliverAppBar(
                 expandedHeight: 330,
@@ -240,6 +243,8 @@ class TourDetailScreen extends ConsumerWidget {
                       SizedBox(
                         height: 96,
                         child: ListView.separated(
+                          physics: const BouncingScrollPhysics(),
+                          cacheExtent: 800,
                           scrollDirection: Axis.horizontal,
                           itemCount: tour.gallery.length,
                           separatorBuilder: (context, index) =>
@@ -272,56 +277,8 @@ class TourDetailScreen extends ConsumerWidget {
                           title: 'Sin paradas',
                           body: 'Este tour aun no tiene paradas cargadas.',
                         )
-                      else ...[
-                        ...() {
-                          final Map<int, List<TourStop>> stopsByDay = {};
-                          for (final stop in tour.stops) {
-                            stopsByDay.putIfAbsent(stop.day, () => []).add(stop);
-                          }
-                          
-                          final sortedDays = stopsByDay.keys.toList()..sort();
-                          final showDays = sortedDays.length > 1 || tour.durationHours >= 24;
-                          
-                          return [
-                            for (final day in sortedDays) ...[
-                              if (showDays) ...[
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 14, bottom: 8),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primary.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
-                                        ),
-                                        child: Text(
-                                          'Día $day',
-                                          style: const TextStyle(
-                                            color: AppTheme.primary,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Divider(
-                                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
-                                          thickness: 1,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              for (final stop in stopsByDay[day]!)
-                                _StopTile(stop: stop),
-                            ],
-                          ];
-                        }(),
-                      ],
+                      else
+                        _StopsTimelineList(tour: tour),
                       const SizedBox(height: 24),
                       GlassPanel(
                         child: Row(
@@ -957,7 +914,6 @@ class _StopTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       radius: 22,
       child: Row(
@@ -1027,6 +983,264 @@ class _StopTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AnimatedPathPainter extends CustomPainter {
+  _AnimatedPathPainter({
+    required this.progress,
+    required this.color,
+  });
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.4)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+
+    final dashHeight = 8.0;
+    final dashSpace = 6.0;
+    final totalSpacing = dashHeight + dashSpace;
+    
+    double startY = (progress * totalSpacing) - totalSpacing;
+    
+    while (startY < size.height) {
+      if (startY + dashHeight > 0) {
+        canvas.drawLine(
+          Offset(size.width / 2, startY.clamp(0, size.height)),
+          Offset(size.width / 2, (startY + dashHeight).clamp(0, size.height)),
+          paint,
+        );
+      }
+      startY += totalSpacing;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AnimatedPathPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
+  }
+}
+
+class _MovingDashedLine extends StatefulWidget {
+  const _MovingDashedLine();
+
+  @override
+  State<_MovingDashedLine> createState() => _MovingDashedLineState();
+}
+
+class _MovingDashedLineState extends State<_MovingDashedLine> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return CustomPaint(
+          size: const Size(2, double.infinity),
+          painter: _AnimatedPathPainter(
+            progress: _controller.value,
+            color: AppTheme.primary,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TimelineConnector extends StatelessWidget {
+  const _TimelineConnector({
+    required this.index,
+    required this.isFirst,
+    required this.isLast,
+    required this.emoji,
+  });
+
+  final int index;
+  final bool isFirst;
+  final bool isLast;
+  final String emoji;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 2,
+          height: 12,
+          color: isFirst ? Colors.transparent : AppTheme.primary.withValues(alpha: 0.3),
+        ),
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.primary,
+                AppTheme.violet,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primary.withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Center(
+            child: emoji.isNotEmpty
+                ? Text(emoji, style: const TextStyle(fontSize: 16))
+                : Text(
+                    '${index + 1}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+          ),
+        ),
+        if (!isLast)
+          const Expanded(
+            child: _MovingDashedLine(),
+          ),
+      ],
+    );
+  }
+}
+
+class _StopsTimelineList extends StatelessWidget {
+  const _StopsTimelineList({required this.tour});
+  final Tour tour;
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<int, List<TourStop>> stopsByDay = {};
+    for (final stop in tour.stops) {
+      stopsByDay.putIfAbsent(stop.day, () => []).add(stop);
+    }
+    
+    final sortedDays = stopsByDay.keys.toList()..sort();
+    int absoluteIndex = 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final day in sortedDays) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 14, bottom: 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    'Día $day',
+                    style: const TextStyle(
+                      color: AppTheme.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Divider(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
+                    thickness: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ...stopsByDay[day]!.map((stop) {
+            final currIndex = absoluteIndex++;
+            final isLast = currIndex == tour.stops.length - 1;
+            final isFirst = currIndex == 0;
+            final emoji = _getStopEmoji(stop);
+
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _TimelineConnector(
+                    index: currIndex,
+                    isFirst: isFirst,
+                    isLast: isLast,
+                    emoji: emoji,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _StopTile(stop: stop)
+                          .animate(delay: (currIndex.clamp(0, 4) * 80).ms)
+                          .fadeIn(duration: 350.ms)
+                          .slideX(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
+    );
+  }
+}
+
+String _getStopEmoji(TourStop stop) {
+  final name = stop.name.toLowerCase();
+  final desc = stop.description.toLowerCase();
+  final activities = stop.activities.map((a) => a.toLowerCase()).join(' ');
+  final text = '$name $desc $activities';
+
+  if (text.contains('playa') || text.contains('mar ') || text.contains('ola') || text.contains('beach') || text.contains('coast') || text.contains('bahía') || text.contains('bay') || text.contains('isla') || text.contains('island')) {
+    return '🌊';
+  }
+  if (text.contains('templo') || text.contains('monumento') || text.contains('históri') || text.contains('museo') || text.contains('catedral') || text.contains('iglesia') || text.contains('castle') || text.contains('temple') || text.contains('museum') || text.contains('ruina') || text.contains('ruins')) {
+    return '🏛️';
+  }
+  if (text.contains('restaurante') || text.contains('comida') || text.contains('cena') || text.contains('almuerzo') || text.contains('gastronom') || text.contains('restaurant') || text.contains('food') || text.contains('café') || text.contains('cafe') || text.contains('bar ') || text.contains('pub')) {
+    return '🍴';
+  }
+  if (text.contains('naturaleza') || text.contains('bosque') || text.contains('reserva') || text.contains('parque') || text.contains('eco') || text.contains('sender') || text.contains('hiking') || text.contains('forest') || text.contains('park') || text.contains('jardín') || text.contains('garden')) {
+    return '🌳';
+  }
+  if (text.contains('compras') || text.contains('centro comercial') || text.contains('shopping') || text.contains('mall') || text.contains('mercado') || text.contains('market') || text.contains('tienda') || text.contains('store')) {
+    return '🛍️';
+  }
+  if (text.contains('teatro') || text.contains('concierto') || text.contains('show') || text.contains('música') || text.contains('arte') || text.contains('art ') || text.contains('cultur')) {
+    return '🎭';
+  }
+  return '';
 }
 
 class _ReviewTile extends StatelessWidget {

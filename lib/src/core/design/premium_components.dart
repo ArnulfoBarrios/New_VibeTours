@@ -3,11 +3,13 @@ import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:shimmer/shimmer.dart';
 
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../state/app_state.dart';
 import 'app_theme.dart';
 
 String tourTypeL10n(BuildContext context, TourType type) {
@@ -88,29 +90,199 @@ class GlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final panel = Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return Consumer(
+      builder: (context, ref, _) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final highPerformance = ref.watch(highRefreshRateProvider);
+
+        final border = Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.black.withValues(alpha: 0.08),
+          width: 1.2,
+        );
+
+        final container = Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? const Color(0xFF1C1C1E).withValues(alpha: highPerformance ? 0.65 : 0.95)
+                : const Color(0xFFFFFFFF).withValues(alpha: highPerformance ? 0.70 : 0.98),
+            borderRadius: BorderRadius.circular(radius),
+            border: border,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: (isDark ? Colors.black : AppTheme.indigo).withValues(alpha: isDark ? 0.12 : 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Padding(padding: padding, child: child),
+        );
+
+        final panel = highPerformance
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(radius),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: container,
+                ),
+              )
+            : container;
+
+        return Padding(
+          padding: margin ?? EdgeInsets.zero,
+          child: onTap == null
+              ? panel
+              : InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(radius),
+                  child: panel,
+                ),
+        );
+      },
+    );
+  }
+}
+
+class InteractiveBounce extends StatefulWidget {
+  const InteractiveBounce({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.scaleFactor = 0.94,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final double scaleFactor;
+
+  @override
+  State<InteractiveBounce> createState() => _InteractiveBounceState();
+}
+
+class _InteractiveBounceState extends State<InteractiveBounce>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scale = Tween<double>(begin: 1.0, end: widget.scaleFactor).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) {
+        if (widget.onTap != null) _controller.forward();
+      },
+      onTapUp: (_) {
+        if (widget.onTap != null) {
+          _controller.reverse();
+          widget.onTap!();
+        }
+      },
+      onTapCancel: () {
+        if (widget.onTap != null) _controller.reverse();
+      },
+      child: ScaleTransition(
+        scale: _scale,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class AnimatedRadar extends StatefulWidget {
+  const AnimatedRadar({super.key, required this.icon});
+  final IconData icon;
+
+  @override
+  State<AnimatedRadar> createState() => _AnimatedRadarState();
+}
+
+class _AnimatedRadarState extends State<AnimatedRadar> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 100,
+      width: 100,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          for (int i = 0; i < 3; i++)
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                final progress = (_controller.value + i / 3.0) % 1.0;
+                return Container(
+                  width: 32 + progress * 68,
+                  height: 32 + progress * 68,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppTheme.primary.withValues(alpha: 0.16 * (1.0 - progress)),
+                    border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.35 * (1.0 - progress)),
+                      width: 1.5,
+                    ),
+                  ),
+                );
+              },
+            ),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppTheme.primary,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Icon(widget.icon, size: 28, color: Colors.white),
           ),
         ],
       ),
-      child: Padding(padding: padding, child: child),
-    );
-    return Padding(
-      padding: margin ?? EdgeInsets.zero,
-      child: onTap == null
-          ? panel
-          : InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(radius),
-              child: panel,
-            ),
     );
   }
 }
@@ -208,7 +380,7 @@ class LiquidButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = Row(
+    final childWidget = Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -217,9 +389,11 @@ class LiquidButton extends StatelessWidget {
         Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
       ],
     );
+
+    final Widget button;
     if (isPrimary) {
-      return FilledButton(
-        onPressed: onPressed,
+      button = FilledButton(
+        onPressed: onPressed != null ? () {} : null,
         style: FilledButton.styleFrom(
           minimumSize: const Size(0, 50),
           shape: RoundedRectangleBorder(
@@ -227,16 +401,24 @@ class LiquidButton extends StatelessWidget {
           ),
           backgroundColor: AppTheme.primary,
         ),
-        child: child,
+        child: childWidget,
       ).animate(target: onPressed == null ? 0 : 1).fadeIn();
+    } else {
+      button = OutlinedButton(
+        onPressed: onPressed != null ? () {} : null,
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 50),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        ),
+        child: childWidget,
+      );
     }
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 50),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+
+    return InteractiveBounce(
+      onTap: onPressed,
+      child: IgnorePointer(
+        child: button,
       ),
-      child: child,
     );
   }
 }
@@ -552,8 +734,8 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 38, color: AppTheme.primary),
-          const SizedBox(height: 12),
+          AnimatedRadar(icon: icon),
+          const SizedBox(height: 16),
           Text(title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
           Text(
