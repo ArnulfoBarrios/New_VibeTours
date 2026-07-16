@@ -1240,6 +1240,14 @@ function keywordAffinityScore(promptText, place) {
         (category === 'nature' || category === 'viewpoint')) {
       matches += 1.5
     }
+    if ((word === 'isla' || word === 'islas' || word === 'island' || word === 'islands' || word === 'archipielago' || word === 'archipiélago' || word === 'cayo' || word === 'cayos') && 
+        (place.tags?.place === 'island' || place.type === 'island' || place.category === 'nature' || /isla|island|mucura|múcura|tintipan|tintipán|palma|san-bernardo|boqueron|boquerón|isleta|faro/i.test(name))) {
+      matches += 3.0
+    }
+    if ((word === 'playa' || word === 'playas' || word === 'beach' || word === 'beaches' || word === 'mar' || word === 'sea' || word === 'costa' || word === 'coast') && 
+        (place.tags?.natural === 'beach' || place.type === 'beach' || /playa|beach|coveñas|morrosquillo|punta|bello/i.test(name))) {
+      matches += 2.0
+    }
   }
   
   return matches * 30
