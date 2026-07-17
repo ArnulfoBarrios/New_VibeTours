@@ -1913,7 +1913,20 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     fallbackPlace,
   })
   const resolvedName = fallbackPlace?.name ?? sourceName
-  const description = source.descripcion ?? source.description ?? `${resolvedName} es una parada relevante dentro de la ruta.`
+  let description = source.descripcion ?? source.description
+  if (!description || description.trim().length === 0) {
+    const category = fallbackPlace?.category || 'lugar'
+    const cleanName = resolvedName.replace(/_/g, ' ')
+    if (category === 'nature') {
+      description = `Disfruta del increíble entorno natural y la belleza escénica de ${cleanName}, un punto destacado por su ecología y paisajes en la región.`
+    } else if (category === 'historic' || category === 'religious' || category === 'museum') {
+      description = `Explora la riqueza histórica y el gran valor patrimonial de ${cleanName}, un lugar emblemático ideal para conocer la cultura local.`
+    } else if (category === 'restaurant' || category === 'cafe' || category === 'market') {
+      description = `Prueba la maravillosa oferta culinaria de ${cleanName}, ideal para deleitarse con sabores típicos y la gastronomía local.`
+    } else {
+      description = `Visita ${cleanName}, un punto de gran interés recomendado para enriquecer tu experiencia y descubrir los atractivos locales.`
+    }
+  }
   
   let durationText = source.duracion_estimada ?? `${source.suggestedMinutes ?? 25} minutos`
   const minutes = minutesFromLabel(durationText)
@@ -2267,14 +2280,15 @@ function isValidTouristAttraction(place, input) {
   
   const name = place.name.trim()
   const nameKey = normalizeKey(name)
+  const nameLower = name.toLowerCase()
   const cityKey = normalizeKey(input.city)
   const destKey = normalizeKey(input.destination)
   const countryKey = normalizeKey(input.country)
   
-  // 1. Excluir si el nombre es exactamente el de la ciudad, destino o país
+  // 1. Exclude if name matches city, destination or country exactly
   if (nameKey === cityKey || nameKey === destKey || nameKey === countryKey) return false
   
-  // 2. Excluir nombres genéricos que no representan una atracción única
+  // 2. Exclude generic words that do not represent a unique attraction
   const genericNames = new Set([
     'restaurante', 'restaurant', 'cafe', 'bar', 'hotel', 'hostal', 'plaza', 'parque', 'museum', 'museo',
     'iglesia', 'church', 'playa', 'beach', 'mirador', 'viewpoint', 'aeropuerto', 'airport',
@@ -2283,16 +2297,45 @@ function isValidTouristAttraction(place, input) {
   ])
   if (genericNames.has(nameKey)) return false
   
-  // 3. Excluir combinaciones genéricas de "centro"
+  // 3. Exclude generic combinations of "center"
   if (nameKey === `centro-de-${cityKey}` || nameKey === `centro-${cityKey}` || nameKey === `${cityKey}-centro`) return false
   
-  // 4. Excluir límites administrativos, distritos o barrios
+  // 4. Exclude administrative boundaries, suburbs or regions
   const osmKey = place.tags?.osm_key || ''
   const osmVal = place.tags?.osm_value || place.type || ''
   if (osmKey === 'boundary' || osmKey === 'place' && ['city', 'town', 'village', 'suburb', 'neighbourhood', 'state', 'country', 'continent', 'locality', 'isolated_dwelling'].includes(osmVal)) {
     return false
   }
   if (osmVal === 'administrative') return false
+
+  // 5. Exclude transport infrastructure, roads, highways or streets
+  if (
+    /via |vía |calle |carrera |avenida |diagonal |transversal |variante |puente |autopista |road |street |highway /i.test(nameLower) ||
+    /^via |^vía |^calle |^carrera |^avenida |^diagonal |^transversal |^variante |^puente |^autopista |^road |^street |^highway /i.test(nameLower) ||
+    /via$|vía$|calle$|carrera$|avenida$|diagonal$|transversal$|variante$|puente$|autopista$|road$|street$|highway$/i.test(nameLower)
+  ) {
+    return false
+  }
+
+  // 6. Exclude administrative, municipality, courts or police offices
+  if (/alcaldia|alcaldía|municipalidad|gobernacion|gobernación|juzgado|fiscalia|fiscalía|notaria|notaría|policia|policía|bomberos|defensa civil|ejercito|ejército|armada/i.test(nameLower)) {
+    return false
+  }
+
+  // 7. Exclude educational centers (schools, universities, kindergartens)
+  if (/colegio|escuela|school|institucion educativa|institución educativa|universidad|university|sena|jardin infantil|jardín infantil/i.test(nameLower)) {
+    return false
+  }
+
+  // 8. Exclude healthcare centers (hospitals, clinics, dentist, pharmacies)
+  if (/hospital|clinica|clínica|salud|eps|ips|consultorio|odontologia|odontología|drogueria|droguería|farmacia/i.test(nameLower)) {
+    return false
+  }
+
+  // 9. Exclude utilities, trash or telecommunication offices
+  if (/aseo|limpieza|acueducto|alcantarillado|electricaribe|afinia|gas|claro|tigo|movistar/i.test(nameLower)) {
+    return false
+  }
   
   return true
 }
