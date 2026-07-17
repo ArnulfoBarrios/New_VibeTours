@@ -978,6 +978,20 @@ function scorePlace(place, input) {
     finalScore = (typeScore * 8) + (cityScore * 6) + (popularityScore * 8) + (proximityScore * 3) + (diversityScore * 3) + (profileScore * 4) + themeBoost - mismatchPenalty - genericPenalty
   }
 
+  // Special regional boost for the San Bernardo Archipelago islands when the destination is Tolú or Coveñas
+  const destClean = normalizeKey(input.destination || input.city || '')
+  if (destClean.includes('tolu') || destClean.includes('covenas') || destClean.includes('coveñas')) {
+    const placeName = String(place.name || '').toLowerCase()
+    const isIslandStop = 
+      place.tags?.place === 'island' || 
+      place.type === 'island' || 
+      /isla|island|mucura|múcura|tintipan|tintipán|palma|san-bernardo|boqueron|boquerón|isleta|faro/i.test(placeName)
+      
+    if (isIslandStop) {
+      finalScore += 45 // Substantial boost to prioritize islands over minor mainland stops
+    }
+  }
+
   return finalScore
 }
 
@@ -2164,7 +2178,7 @@ export async function collectTourCandidates(input, location) {
     /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(city);
 
   const radiusPrimary = isRegionalOrNature ? 15000 : 4500
-  const radiusWide = isRegionalOrNature ? 45000 : 9000
+  const radiusWide = isRegionalOrNature ? 55000 : 9000
 
   const overpassPrimary = location ? await overpassAttractions(location.latitude, location.longitude, radiusPrimary) : []
   const overpassWide = location ? await overpassAttractions(location.latitude, location.longitude, radiusWide) : []
@@ -2274,7 +2288,7 @@ function isCandidateNearDestination(place, input, location) {
     /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
     /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.city || '');
 
-  const maxDistance = isRegionalOrNature ? 50 : 45
+  const maxDistance = isRegionalOrNature ? 55 : 45
   if (distanceKm > maxDistance) return false
 
   // If it's far from the center (>12 km), only allow nature, coastal, islands, viewpoints or beaches
