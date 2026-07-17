@@ -47,12 +47,12 @@ class SettingsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _SectionTitle('Administración'),
+                _SectionTitle(l10n.adminSectionAdministration),
                 _SettingsListTile(
                   icon: Icons.admin_panel_settings_rounded,
                   iconColor: Colors.redAccent,
-                  title: 'Panel de Control Administrador',
-                  subtitle: 'Gestionar tours pendientes y soporte',
+                  title: l10n.adminControlPanelTitle,
+                  subtitle: l10n.adminControlPanelSubtitle,
                   trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                   onTap: () => context.push('/admin'),
                 ),
@@ -66,12 +66,12 @@ class SettingsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _SectionTitle('Rendimiento y visualización'),
+              _SectionTitle(l10n.adminSectionPerformance),
               _SettingsListTile(
                 icon: Icons.speed_rounded,
                 iconColor: Colors.deepOrange,
                 title: '60Hz / 120Hz',
-                subtitle: highRefresh ? '120Hz preferido' : '60Hz ahorro',
+                subtitle: highRefresh ? l10n.admin120HzPreferred : l10n.admin60HzSaving,
                 trailing: Switch(
                   value: highRefresh,
                   onChanged: (value) => ref.read(highRefreshRateProvider.notifier).state = value,
@@ -82,7 +82,7 @@ class SettingsScreen extends ConsumerWidget {
                 icon: Icons.map_rounded,
                 iconColor: Colors.green,
                 title: l10n.mapPreference,
-                subtitle: _mapStyleLabel(mapStyleOption),
+                subtitle: _mapStyleLabel(context, mapStyleOption),
                 trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                 onTap: () => _showMapStyleSheet(context, ref),
               ),
@@ -90,7 +90,7 @@ class SettingsScreen extends ConsumerWidget {
                 icon: Icons.notifications_active_rounded,
                 iconColor: Colors.blueAccent,
                 title: l10n.notifications,
-                subtitle: 'Tours, eventos, recomendaciones',
+                subtitle: l10n.adminToursEventsRecs,
                 trailing: Switch(
                   value: notifications,
                   onChanged: (value) => ref.read(notificationsEnabledProvider.notifier).state = value,
@@ -107,12 +107,13 @@ class SettingsScreen extends ConsumerWidget {
     return PremiumScaffold(safeBottom: true, child: content);
   }
 
-  String _mapStyleLabel(MapStyleOption value) {
+  String _mapStyleLabel(BuildContext context, MapStyleOption value) {
+    final l10n = AppLocalizations.of(context);
     switch (value) {
-      case MapStyleOption.auto: return 'Automático (Tema)';
-      case MapStyleOption.day: return 'Día (Claro)';
-      case MapStyleOption.night: return 'Noche (Oscuro)';
-      case MapStyleOption.satellite: return 'Satélite (Híbrido)';
+      case MapStyleOption.auto: return l10n.adminMapAuto;
+      case MapStyleOption.day: return l10n.adminMapDay;
+      case MapStyleOption.night: return l10n.adminMapNight;
+      case MapStyleOption.satellite: return l10n.adminMapSatellite;
     }
   }
 
@@ -123,37 +124,40 @@ class SettingsScreen extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 5,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+      builder: (context) {
+        final l10n = AppLocalizations.of(context);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-              ),
-              Text(
-                'Preferencia de mapa',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 16),
-              _buildStyleTile(context, ref, MapStyleOption.auto, 'Automático', 'Sincronizado con el brillo de la app', Icons.hdr_auto_rounded, Colors.blue),
-              _buildStyleTile(context, ref, MapStyleOption.day, 'Día', 'Mapa claro y nítido', Icons.light_mode_rounded, Colors.orange),
-              _buildStyleTile(context, ref, MapStyleOption.night, 'Noche', 'Diseño oscuro premium', Icons.dark_mode_rounded, Colors.indigo),
-              _buildStyleTile(context, ref, MapStyleOption.satellite, 'Satélite', 'Fotografía aérea ESRI', Icons.satellite_alt_rounded, Colors.teal),
-              const SizedBox(height: 12),
-            ],
+                Text(
+                  l10n.adminMapPrefTitle,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                _buildStyleTile(context, ref, MapStyleOption.auto, l10n.adminMapAuto2, l10n.adminMapAutoSubtitle, Icons.hdr_auto_rounded, Colors.blue),
+                _buildStyleTile(context, ref, MapStyleOption.day, l10n.adminMapDay2, l10n.adminMapDaySubtitle, Icons.light_mode_rounded, Colors.orange),
+                _buildStyleTile(context, ref, MapStyleOption.night, l10n.adminMapNight2, l10n.adminMapNightSubtitle, Icons.dark_mode_rounded, Colors.indigo),
+                _buildStyleTile(context, ref, MapStyleOption.satellite, l10n.adminMapSatellite2, l10n.adminMapSatelliteSubtitle, Icons.satellite_alt_rounded, Colors.teal),
+                const SizedBox(height: 12),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

@@ -386,5 +386,158 @@
   "prefPleaseGrant": "Please grant permission to have the best experience.",
   "prefGrantPermission": "Grant Permission",
   "prefPermissionGranted": "Permission granted!",
-  "prefPermissionDenied": "Permission denied. You can enable it later."
+  "prefPermissionDenied": "Permission denied. You can enable it later.",
+
+  "adminAccessRestricted": "Restricted access",
+  "adminAccessRestrictedBody": "The VIBETOURS administrator uses a unique account.",
+  "adminBackToSettings": "Back to settings",
+  "adminNotifications": "Notifications",
+  "adminRefreshTours": "Refresh tours",
+  "adminClosePanel": "Close administrator",
+  "adminLoadingPending": "Loading pending tours",
+  "adminLoadingPendingBody": "We are checking the requests saved in Supabase.",
+  "adminCouldNotLoad": "Could not load",
+  "adminNoPendingTours": "No pending tours",
+  "adminNoPendingToursBody": "New manual and AI tours will appear here to approve or reject them.",
+  "adminControlCenter": "Control Center with VibeTours",
+  "adminControlCenterBody": "Manage approvals, PQRS and metrics with administrator permissions.",
+  "adminNewReports": "New reports",
+  "adminPqrsManagement": "PQRS Management",
+  "adminActiveTickets": "{count} Active Tickets",
+  "@adminActiveTickets": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
+  "adminToursToApprove": "Tours to approve",
+  "adminPqrsTitle": "PQRS Management",
+  "adminPqrsSubtitle": "Monitor and respond to your users' requests in real time.",
+  "adminSearchPqrs": "Search PQRS...",
+  "adminNoPqrs": "No PQRS",
+  "adminNoPqrsBody": "When users write, their cases will appear here.",
+  "adminSystemRole": "Systems Administrator - Global Operations",
+  "adminAdministrativeActions": "Administrative Actions",
+  "adminModeratedToursHistory": "Moderated Tours History",
+  "adminModeratedToursHistorySubtitle": "Review and manage accepted or rejected tours",
+  "adminPaymentHistory": "Payment History",
+  "adminPaymentHistorySubtitle": "Financial transactions and monetization payments",
+  "adminPqrsHistory": "PQRS History",
+  "adminPqrsHistorySubtitle": "Responded cases and support resolutions",
+  "adminPlatformPulseSubtitle": "System status and active users this week.",
+  "adminLoadingActiveUsers": "Loading active users...",
+  "adminConnectedUsersThisWeek": "Connected users this week: {count}",
+  "@adminConnectedUsersThisWeek": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "adminSystemIntegrity": "SYSTEM INTEGRITY",
+  "adminSelectCase": "Select a case",
+  "adminSelectCaseBody": "The response panel appears when you choose a PQRS.",
+  "adminResponseTitle": "Administrator response",
+  "adminDraftSaved": "Draft saved",
+  "adminResponseHint": "Write the official response for the user here...",
+  "adminSaveResponse": "Save response",
+  "adminPostpone": "Postpone",
+  "adminStatusAnswered": "ANSWERED",
+  "adminStatusPending": "PENDING",
+  "adminPopularTopics": "PQRS Distribution",
+  "adminTopicRefunds": "Refunds",
+  "adminTopicSchedules": "Schedules",
+  "adminTopicBilling": "Billing",
+  "adminTourStops": "{count} stops",
+  "@adminTourStops": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "adminCreatedWithAI": "Created with AI",
+  "adminCreatedManually": "Created manually",
+  "adminApprove": "Approve",
+  "adminReject": "Reject",
+  "adminWriteOfficialResponse": "Write an official response for the user.",
+  "adminResponseSaved": "Response saved for the user.",
+  "adminSupabaseNotConfigured": "Supabase is not configured.",
+  "adminCouldNotLoadPending": "Could not load pending tours. Check permissions or migrations.",
+  "adminTourApproved": "{title} approved for publication.",
+  "@adminTourApproved": {
+    "placeholders": {
+      "title": { "type": "String" }
+    }
+  },
+  "adminTourRejected": "{title} rejected.",
+  "@adminTourRejected": {
+    "placeholders": {
+      "title": { "type": "String" }
+    }
+  },
+  "adminCouldNotApproveTour": "Could not approve the tour. Check permissions or connection.",
+  "adminCouldNotRejectTour": "Could not reject the tour. Check permissions or connection.",
+  "adminSectionAdministration": "Administration",
+  "adminControlPanelTitle": "Administrator Control Panel",
+  "adminControlPanelSubtitle": "Manage pending tours and support",
+  "adminSectionPerformance": "Performance and display",
+  "admin120HzPreferred": "120Hz preferred",
+  "admin60HzSaving": "60Hz saving",
+  "adminToursEventsRecs": "Tours, events, recommendations",
+  "adminMapAuto": "Automatic (Theme)",
+  "adminMapDay": "Day (Light)",
+  "adminMapNight": "Night (Dark)",
+  "adminMapSatellite": "Satellite (Hybrid)",
+  "adminMapPrefTitle": "Map preference",
+  "adminMapAuto2": "Automatic",
+  "adminMapAutoSubtitle": "Synced with the app brightness",
+  "adminMapDay2": "Day",
+  "adminMapDaySubtitle": "Clear and crisp map",
+  "adminMapNight2": "Night",
+  "adminMapNightSubtitle": "Premium dark design",
+  "adminMapSatellite2": "Satellite",
+  "adminMapSatelliteSubtitle": "ESRI aerial photography",
+  "adminHistoryScreenTitle": "Moderated Tours History",
+  "adminHistoryEmpty": "Empty history",
+  "adminHistoryEmptyBody": "No tour has been accepted or rejected yet.",
+  "adminHistoryReviewed": "Reviewed: {date}",
+  "@adminHistoryReviewed": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
+  "adminHistoryApproved": "APPROVED",
+  "adminHistoryRejected": "REJECTED",
+  "adminHistoryErrorLoading": "Error loading history: {error}",
+  "@adminHistoryErrorLoading": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "adminPaymentTitle": "Payment History",
+  "adminPaymentComingSoon": "Monetization Coming Soon",
+  "adminPaymentComingSoonBody": "This section will show financial transactions and provider payments in a future update, once monetization is implemented on the VIBETOURS platform.",
+  "adminPqrsHistoryScreenTitle": "Answered PQRS History",
+  "adminPqrsHistoryEmpty": "No answered PQRS",
+  "adminPqrsHistoryEmptyBody": "History will be available when you respond to your users' support queries.",
+  "adminPqrsUser": "User: {id}... • Created: {date}",
+  "@adminPqrsUser": {
+    "placeholders": {
+      "id": { "type": "String" },
+      "date": { "type": "String" }
+    }
+  },
+  "adminOriginalQuery": "Original query:",
+  "adminOfficialResponse": "Official Administrator Response:",
+  "adminPqrsErrorLoading": "Error loading answered PQRS: {error}",
+  "@adminPqrsErrorLoading": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "adminKindPetition": "Petition",
+  "adminKindComplaint": "Complaint",
+  "adminKindClaim": "Claim",
+  "adminKindSuggestion": "Suggestion",
+  "adminNoSubject": "No subject",
+  "adminDemoTicket1Subject": "Question about schedules in Medellin",
+  "adminDemoTicket1Body": "What time exactly does the transport leave from the meeting point?",
+  "adminDemoTicket2Subject": "Repeated tour image",
+  "adminDemoTicket2Body": "A tour appears with an image that does not match the destination."
 }

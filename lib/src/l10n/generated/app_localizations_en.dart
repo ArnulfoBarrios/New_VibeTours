@@ -1163,4 +1163,361 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get prefPermissionDenied =>
       'Permission denied. You can enable it later.';
+
+  @override
+  String get adminAccessRestricted => 'Restricted access';
+
+  @override
+  String get adminAccessRestrictedBody =>
+      'The VIBETOURS administrator uses a unique account.';
+
+  @override
+  String get adminBackToSettings => 'Back to settings';
+
+  @override
+  String get adminNotifications => 'Notifications';
+
+  @override
+  String get adminRefreshTours => 'Refresh tours';
+
+  @override
+  String get adminClosePanel => 'Close administrator';
+
+  @override
+  String get adminLoadingPending => 'Loading pending tours';
+
+  @override
+  String get adminLoadingPendingBody =>
+      'We are checking the requests saved in Supabase.';
+
+  @override
+  String get adminCouldNotLoad => 'Could not load';
+
+  @override
+  String get adminNoPendingTours => 'No pending tours';
+
+  @override
+  String get adminNoPendingToursBody =>
+      'New manual and AI tours will appear here to approve or reject them.';
+
+  @override
+  String get adminControlCenter => 'Control Center with VibeTours';
+
+  @override
+  String get adminControlCenterBody =>
+      'Manage approvals, PQRS and metrics with administrator permissions.';
+
+  @override
+  String get adminNewReports => 'New reports';
+
+  @override
+  String get adminPqrsManagement => 'PQRS Management';
+
+  @override
+  String adminActiveTickets(String count) {
+    return '$count Active Tickets';
+  }
+
+  @override
+  String get adminToursToApprove => 'Tours to approve';
+
+  @override
+  String get adminPqrsTitle => 'PQRS Management';
+
+  @override
+  String get adminPqrsSubtitle =>
+      'Monitor and respond to your users\' requests in real time.';
+
+  @override
+  String get adminSearchPqrs => 'Search PQRS...';
+
+  @override
+  String get adminNoPqrs => 'No PQRS';
+
+  @override
+  String get adminNoPqrsBody =>
+      'When users write, their cases will appear here.';
+
+  @override
+  String get adminSystemRole => 'Systems Administrator - Global Operations';
+
+  @override
+  String get adminAdministrativeActions => 'Administrative Actions';
+
+  @override
+  String get adminModeratedToursHistory => 'Moderated Tours History';
+
+  @override
+  String get adminModeratedToursHistorySubtitle =>
+      'Review and manage accepted or rejected tours';
+
+  @override
+  String get adminPaymentHistory => 'Payment History';
+
+  @override
+  String get adminPaymentHistorySubtitle =>
+      'Financial transactions and monetization payments';
+
+  @override
+  String get adminPqrsHistory => 'PQRS History';
+
+  @override
+  String get adminPqrsHistorySubtitle =>
+      'Responded cases and support resolutions';
+
+  @override
+  String get adminPlatformPulseSubtitle =>
+      'System status and active users this week.';
+
+  @override
+  String get adminLoadingActiveUsers => 'Loading active users...';
+
+  @override
+  String adminConnectedUsersThisWeek(int count) {
+    return 'Connected users this week: $count';
+  }
+
+  @override
+  String get adminSystemIntegrity => 'SYSTEM INTEGRITY';
+
+  @override
+  String get adminSelectCase => 'Select a case';
+
+  @override
+  String get adminSelectCaseBody =>
+      'The response panel appears when you choose a PQRS.';
+
+  @override
+  String get adminResponseTitle => 'Administrator response';
+
+  @override
+  String get adminDraftSaved => 'Draft saved';
+
+  @override
+  String get adminResponseHint =>
+      'Write the official response for the user here...';
+
+  @override
+  String get adminSaveResponse => 'Save response';
+
+  @override
+  String get adminPostpone => 'Postpone';
+
+  @override
+  String get adminStatusAnswered => 'ANSWERED';
+
+  @override
+  String get adminStatusPending => 'PENDING';
+
+  @override
+  String get adminPopularTopics => 'PQRS Distribution';
+
+  @override
+  String get adminTopicRefunds => 'Refunds';
+
+  @override
+  String get adminTopicSchedules => 'Schedules';
+
+  @override
+  String get adminTopicBilling => 'Billing';
+
+  @override
+  String adminTourStops(int count) {
+    return '$count stops';
+  }
+
+  @override
+  String get adminCreatedWithAI => 'Created with AI';
+
+  @override
+  String get adminCreatedManually => 'Created manually';
+
+  @override
+  String get adminApprove => 'Approve';
+
+  @override
+  String get adminReject => 'Reject';
+
+  @override
+  String get adminWriteOfficialResponse =>
+      'Write an official response for the user.';
+
+  @override
+  String get adminResponseSaved => 'Response saved for the user.';
+
+  @override
+  String get adminSupabaseNotConfigured => 'Supabase is not configured.';
+
+  @override
+  String get adminCouldNotLoadPending =>
+      'Could not load pending tours. Check permissions or migrations.';
+
+  @override
+  String adminTourApproved(String title) {
+    return '$title approved for publication.';
+  }
+
+  @override
+  String adminTourRejected(String title) {
+    return '$title rejected.';
+  }
+
+  @override
+  String get adminCouldNotApproveTour =>
+      'Could not approve the tour. Check permissions or connection.';
+
+  @override
+  String get adminCouldNotRejectTour =>
+      'Could not reject the tour. Check permissions or connection.';
+
+  @override
+  String get adminSectionAdministration => 'Administration';
+
+  @override
+  String get adminControlPanelTitle => 'Administrator Control Panel';
+
+  @override
+  String get adminControlPanelSubtitle => 'Manage pending tours and support';
+
+  @override
+  String get adminSectionPerformance => 'Performance and display';
+
+  @override
+  String get admin120HzPreferred => '120Hz preferred';
+
+  @override
+  String get admin60HzSaving => '60Hz saving';
+
+  @override
+  String get adminToursEventsRecs => 'Tours, events, recommendations';
+
+  @override
+  String get adminMapAuto => 'Automatic (Theme)';
+
+  @override
+  String get adminMapDay => 'Day (Light)';
+
+  @override
+  String get adminMapNight => 'Night (Dark)';
+
+  @override
+  String get adminMapSatellite => 'Satellite (Hybrid)';
+
+  @override
+  String get adminMapPrefTitle => 'Map preference';
+
+  @override
+  String get adminMapAuto2 => 'Automatic';
+
+  @override
+  String get adminMapAutoSubtitle => 'Synced with the app brightness';
+
+  @override
+  String get adminMapDay2 => 'Day';
+
+  @override
+  String get adminMapDaySubtitle => 'Clear and crisp map';
+
+  @override
+  String get adminMapNight2 => 'Night';
+
+  @override
+  String get adminMapNightSubtitle => 'Premium dark design';
+
+  @override
+  String get adminMapSatellite2 => 'Satellite';
+
+  @override
+  String get adminMapSatelliteSubtitle => 'ESRI aerial photography';
+
+  @override
+  String get adminHistoryScreenTitle => 'Moderated Tours History';
+
+  @override
+  String get adminHistoryEmpty => 'Empty history';
+
+  @override
+  String get adminHistoryEmptyBody =>
+      'No tour has been accepted or rejected yet.';
+
+  @override
+  String adminHistoryReviewed(String date) {
+    return 'Reviewed: $date';
+  }
+
+  @override
+  String get adminHistoryApproved => 'APPROVED';
+
+  @override
+  String get adminHistoryRejected => 'REJECTED';
+
+  @override
+  String adminHistoryErrorLoading(String error) {
+    return 'Error loading history: $error';
+  }
+
+  @override
+  String get adminPaymentTitle => 'Payment History';
+
+  @override
+  String get adminPaymentComingSoon => 'Monetization Coming Soon';
+
+  @override
+  String get adminPaymentComingSoonBody =>
+      'This section will show financial transactions and provider payments in a future update, once monetization is implemented on the VIBETOURS platform.';
+
+  @override
+  String get adminPqrsHistoryScreenTitle => 'Answered PQRS History';
+
+  @override
+  String get adminPqrsHistoryEmpty => 'No answered PQRS';
+
+  @override
+  String get adminPqrsHistoryEmptyBody =>
+      'History will be available when you respond to your users\' support queries.';
+
+  @override
+  String adminPqrsUser(String id, String date) {
+    return 'User: $id... • Created: $date';
+  }
+
+  @override
+  String get adminOriginalQuery => 'Original query:';
+
+  @override
+  String get adminOfficialResponse => 'Official Administrator Response:';
+
+  @override
+  String adminPqrsErrorLoading(String error) {
+    return 'Error loading answered PQRS: $error';
+  }
+
+  @override
+  String get adminKindPetition => 'Petition';
+
+  @override
+  String get adminKindComplaint => 'Complaint';
+
+  @override
+  String get adminKindClaim => 'Claim';
+
+  @override
+  String get adminKindSuggestion => 'Suggestion';
+
+  @override
+  String get adminNoSubject => 'No subject';
+
+  @override
+  String get adminDemoTicket1Subject => 'Question about schedules in Medellin';
+
+  @override
+  String get adminDemoTicket1Body =>
+      'What time exactly does the transport leave from the meeting point?';
+
+  @override
+  String get adminDemoTicket2Subject => 'Repeated tour image';
+
+  @override
+  String get adminDemoTicket2Body =>
+      'A tour appears with an image that does not match the destination.';
 }

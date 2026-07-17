@@ -386,5 +386,158 @@
   "prefPleaseGrant": "Por favor concede el permiso para tener la mejor experiencia.",
   "prefGrantPermission": "Conceder Permiso",
   "prefPermissionGranted": "¡Permiso concedido!",
-  "prefPermissionDenied": "Permiso denegado. Podrás activarlo después."
+  "prefPermissionDenied": "Permiso denegado. Podrás activarlo después.",
+
+  "adminAccessRestricted": "Acceso restringido",
+  "adminAccessRestrictedBody": "El administrador de VIBETOURS usa una cuenta única.",
+  "adminBackToSettings": "Volver a ajustes",
+  "adminNotifications": "Notificaciones",
+  "adminRefreshTours": "Actualizar tours",
+  "adminClosePanel": "Cerrar administrador",
+  "adminLoadingPending": "Cargando tours pendientes",
+  "adminLoadingPendingBody": "Estamos consultando las solicitudes guardadas en Supabase.",
+  "adminCouldNotLoad": "No se pudieron cargar",
+  "adminNoPendingTours": "Sin tours pendientes",
+  "adminNoPendingToursBody": "Los tours manuales e IA nuevos apareceran aqui para aprobarlos o rechazarlos.",
+  "adminControlCenter": "Centro de control con VibeTours",
+  "adminControlCenterBody": "Gestiona aprobaciones, PQRS y metricas con permisos de administrador.",
+  "adminNewReports": "Nuevos reportes",
+  "adminPqrsManagement": "Gestion de PQRS",
+  "adminActiveTickets": "{count} Tickets Activos",
+  "@adminActiveTickets": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
+  "adminToursToApprove": "Tours por aprobar",
+  "adminPqrsTitle": "Gestion de PQRS",
+  "adminPqrsSubtitle": "Supervisa y responde las solicitudes de tus usuarios en tiempo real.",
+  "adminSearchPqrs": "Buscar PQRS...",
+  "adminNoPqrs": "Sin PQRS",
+  "adminNoPqrsBody": "Cuando los usuarios escriban, sus casos apareceran aqui.",
+  "adminSystemRole": "Administrador de Sistemas - Operaciones Globales",
+  "adminAdministrativeActions": "Acciones Administrativas",
+  "adminModeratedToursHistory": "Historial de Tours Moderados",
+  "adminModeratedToursHistorySubtitle": "Revisar y gestionar tours aceptados o rechazados",
+  "adminPaymentHistory": "Historial de Pagos",
+  "adminPaymentHistorySubtitle": "Transacciones financieras y pagos de monetización",
+  "adminPqrsHistory": "Historial de PQRS",
+  "adminPqrsHistorySubtitle": "Casos respondidos y resoluciones de soporte",
+  "adminPlatformPulseSubtitle": "Estado del sistema y usuarios activos de la semana.",
+  "adminLoadingActiveUsers": "Cargando usuarios activos...",
+  "adminConnectedUsersThisWeek": "Usuarios conectados esta semana: {count}",
+  "@adminConnectedUsersThisWeek": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "adminSystemIntegrity": "INTEGRIDAD DEL SISTEMA",
+  "adminSelectCase": "Selecciona un caso",
+  "adminSelectCaseBody": "El panel de respuesta aparece cuando eliges un PQRS.",
+  "adminResponseTitle": "Respuesta del administrador",
+  "adminDraftSaved": "Borrador guardado",
+  "adminResponseHint": "Escribe aqui la respuesta oficial para el usuario...",
+  "adminSaveResponse": "Guardar respuesta",
+  "adminPostpone": "Posponer",
+  "adminStatusAnswered": "RESPONDIDO",
+  "adminStatusPending": "PENDIENTE",
+  "adminPopularTopics": "Distribución de PQRS",
+  "adminTopicRefunds": "Reembolsos",
+  "adminTopicSchedules": "Horarios",
+  "adminTopicBilling": "Facturacion",
+  "adminTourStops": "{count} paradas",
+  "@adminTourStops": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "adminCreatedWithAI": "Creado con IA",
+  "adminCreatedManually": "Creado manualmente",
+  "adminApprove": "Aprobar",
+  "adminReject": "Rechazar",
+  "adminWriteOfficialResponse": "Escribe una respuesta oficial para el usuario.",
+  "adminResponseSaved": "Respuesta guardada para el usuario.",
+  "adminSupabaseNotConfigured": "Supabase no esta configurado.",
+  "adminCouldNotLoadPending": "No se pudieron cargar los tours pendientes. Revisa permisos o migraciones.",
+  "adminTourApproved": "{title} aprobado para publicacion.",
+  "@adminTourApproved": {
+    "placeholders": {
+      "title": { "type": "String" }
+    }
+  },
+  "adminTourRejected": "{title} rechazado.",
+  "@adminTourRejected": {
+    "placeholders": {
+      "title": { "type": "String" }
+    }
+  },
+  "adminCouldNotApproveTour": "No se pudo aprobar el tour. Revisa permisos o conexion.",
+  "adminCouldNotRejectTour": "No se pudo rechazar el tour. Revisa permisos o conexion.",
+  "adminSectionAdministration": "Administración",
+  "adminControlPanelTitle": "Panel de Control Administrador",
+  "adminControlPanelSubtitle": "Gestionar tours pendientes y soporte",
+  "adminSectionPerformance": "Rendimiento y visualización",
+  "admin120HzPreferred": "120Hz preferido",
+  "admin60HzSaving": "60Hz ahorro",
+  "adminToursEventsRecs": "Tours, eventos, recomendaciones",
+  "adminMapAuto": "Automático (Tema)",
+  "adminMapDay": "Día (Claro)",
+  "adminMapNight": "Noche (Oscuro)",
+  "adminMapSatellite": "Satélite (Híbrido)",
+  "adminMapPrefTitle": "Preferencia de mapa",
+  "adminMapAuto2": "Automático",
+  "adminMapAutoSubtitle": "Sincronizado con el brillo de la app",
+  "adminMapDay2": "Día",
+  "adminMapDaySubtitle": "Mapa claro y nítido",
+  "adminMapNight2": "Noche",
+  "adminMapNightSubtitle": "Diseño oscuro premium",
+  "adminMapSatellite2": "Satélite",
+  "adminMapSatelliteSubtitle": "Fotografía aérea ESRI",
+  "adminHistoryScreenTitle": "Historial de Tours Moderados",
+  "adminHistoryEmpty": "Historial vacío",
+  "adminHistoryEmptyBody": "Aún no se ha aceptado ni rechazado ningún tour.",
+  "adminHistoryReviewed": "Revisado: {date}",
+  "@adminHistoryReviewed": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
+  "adminHistoryApproved": "ACEPTADO",
+  "adminHistoryRejected": "RECHAZADO",
+  "adminHistoryErrorLoading": "Error al cargar el historial: {error}",
+  "@adminHistoryErrorLoading": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "adminPaymentTitle": "Historial de Pagos",
+  "adminPaymentComingSoon": "Monetización Próximamente",
+  "adminPaymentComingSoonBody": "Esta sección mostrará las transacciones financieras y pagos a proveedores en una futura actualización, una vez que se implemente la monetización en la plataforma VIBETOURS.",
+  "adminPqrsHistoryScreenTitle": "Historial de PQRS Respondidos",
+  "adminPqrsHistoryEmpty": "Sin PQRS respondidos",
+  "adminPqrsHistoryEmptyBody": "El historial estará disponible cuando respondas las consultas de soporte de tus usuarios.",
+  "adminPqrsUser": "Usuario: {id}... • Creado: {date}",
+  "@adminPqrsUser": {
+    "placeholders": {
+      "id": { "type": "String" },
+      "date": { "type": "String" }
+    }
+  },
+  "adminOriginalQuery": "Consulta original:",
+  "adminOfficialResponse": "Respuesta oficial del Administrador:",
+  "adminPqrsErrorLoading": "Error al cargar PQRS respondidos: {error}",
+  "@adminPqrsErrorLoading": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "adminKindPetition": "Peticion",
+  "adminKindComplaint": "Queja",
+  "adminKindClaim": "Reclamo",
+  "adminKindSuggestion": "Sugerencia",
+  "adminNoSubject": "Sin asunto",
+  "adminDemoTicket1Subject": "Duda sobre horarios en Medellin",
+  "adminDemoTicket1Body": "A que hora exactamente sale el transporte desde el punto de encuentro?",
+  "adminDemoTicket2Subject": "Imagen de tour repetida",
+  "adminDemoTicket2Body": "Un tour aparece con una imagen que no corresponde al destino."
 }

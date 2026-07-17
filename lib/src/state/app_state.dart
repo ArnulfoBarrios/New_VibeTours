@@ -454,6 +454,12 @@ class OnboardingCompleteController extends AsyncNotifier<bool> {
 
   @override
   Future<bool> build() async {
+    final user = ref.watch(authUserProvider).valueOrNull;
+    if (user != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_key, true);
+      return true;
+    }
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_key) ?? false;
   }
@@ -651,6 +657,7 @@ class UserToursController extends AsyncNotifier<UserToursState> {
     final storedTour = await ref.read(tourRepositoryProvider).saveUserTour(tour);
     ref.invalidate(toursProvider);
     ref.invalidate(adminPendingToursProvider);
+    ref.invalidate(userStatsProvider);
     final nextTours = [
       for (final item in current.manualTours)
         if (item.id != storedTour.id && item.id != tour.id) item,
@@ -667,6 +674,7 @@ class UserToursController extends AsyncNotifier<UserToursState> {
       await ref.read(tourRepositoryProvider).deleteUserTour(tour.id);
       ref.invalidate(toursProvider);
       ref.invalidate(adminPendingToursProvider);
+      ref.invalidate(userStatsProvider);
     }
     if (tour.id.startsWith('manual-')) {
       await _persist(
@@ -677,6 +685,7 @@ class UserToursController extends AsyncNotifier<UserToursState> {
           ],
         ),
       );
+      ref.invalidate(userStatsProvider);
       return;
     }
     await _persist(
@@ -688,6 +697,7 @@ class UserToursController extends AsyncNotifier<UserToursState> {
         hiddenDefaultTourIds: {...current.hiddenDefaultTourIds, tour.id},
       ),
     );
+    ref.invalidate(userStatsProvider);
   }
 
   Future<void> approveTour(String tourId, {bool published = true}) async {

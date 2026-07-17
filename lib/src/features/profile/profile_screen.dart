@@ -458,6 +458,78 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  void _confirmDeleteTour(BuildContext context, WidgetRef ref, Tour tour) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+            SizedBox(width: 8),
+            Expanded(child: Text('¿Eliminar tour?')),
+          ],
+        ),
+        content: Text(
+          '¿Estás seguro de que deseas eliminar "${tour.title}"? Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              BuildContext? loadingCtx;
+              try {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (lCtx) {
+                    loadingCtx = lCtx;
+                    return const Center(child: CircularProgressIndicator());
+                  },
+                );
+                
+                await ref.read(userToursProvider.notifier).deleteTour(tour);
+                
+                if (loadingCtx != null && loadingCtx!.mounted) {
+                  Navigator.pop(loadingCtx!);
+                }
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Tour "${tour.title}" eliminado con éxito.'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (loadingCtx != null && loadingCtx!.mounted) {
+                  Navigator.pop(loadingCtx!);
+                }
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error al eliminar el tour: $e'),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authUserProvider).valueOrNull;
@@ -1064,6 +1136,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       Navigator.pop(context);
                                       context.push('/tours/${tour.id}');
                                     },
+                                    onDelete: () => _confirmDeleteTour(context, ref, tour),
                                   );
                                 },
                               );
@@ -1390,10 +1463,15 @@ class _TourParticipantsTile extends StatelessWidget {
 }
 
 class _CreatedTourTile extends StatelessWidget {
-  const _CreatedTourTile({required this.tour, required this.onTap});
+  const _CreatedTourTile({
+    required this.tour,
+    required this.onTap,
+    this.onDelete,
+  });
 
   final Tour tour;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1482,6 +1560,12 @@ class _CreatedTourTile extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (onDelete != null)
+                  IconButton(
+                    tooltip: 'Eliminar tour',
+                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                    onPressed: onDelete,
+                  ),
                 Icon(
                   Icons.chevron_right_rounded,
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),

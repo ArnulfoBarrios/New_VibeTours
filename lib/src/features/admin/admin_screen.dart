@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/design/vibe_logo.dart';
 import '../../domain/models.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
@@ -51,6 +54,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isAdmin = ref.watch(isAdminProvider);
     if (!isAdmin) {
       _didBootstrapAdminData = false;
@@ -60,15 +64,15 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const EmptyState(
+              EmptyState(
                 icon: Icons.lock_rounded,
-                title: 'Acceso restringido',
-                body: 'El administrador de VIBETOURS usa una cuenta unica.',
+                title: l10n.adminAccessRestricted,
+                body: l10n.adminAccessRestrictedBody,
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 36),
                 child: LiquidButton(
-                  label: 'Volver a ajustes',
+                  label: l10n.adminBackToSettings,
                   icon: Icons.arrow_back_rounded,
                   onPressed: () => context.go('/settings'),
                 ),
@@ -172,9 +176,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     setState(() => _loadingTickets = true);
     final client = ref.read(supabaseClientProvider);
     if (client == null) {
+      final demoTickets = _buildDemoTickets(context);
       setState(() {
-        _tickets = _demoTickets;
-        _selectedTicket = _demoTickets.first;
+        _tickets = demoTickets;
+        _selectedTicket = demoTickets.first;
         _loadingTickets = false;
       });
       return;
@@ -190,22 +195,25 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
           _AdminTicket.fromJson(Map<String, dynamic>.from(row)),
       ];
       if (!mounted) return;
+      final demoTickets = _buildDemoTickets(context);
       setState(() {
-        _tickets = tickets.isEmpty ? _demoTickets : tickets;
+        _tickets = tickets.isEmpty ? demoTickets : tickets;
         _selectedTicket = _tickets.isEmpty ? null : _tickets.first;
         _loadingTickets = false;
       });
     } catch (_) {
       if (!mounted) return;
+      final demoTickets = _buildDemoTickets(context);
       setState(() {
-        _tickets = _demoTickets;
-        _selectedTicket = _demoTickets.first;
+        _tickets = demoTickets;
+        _selectedTicket = demoTickets.first;
         _loadingTickets = false;
       });
     }
   }
 
   Future<void> _loadTours() async {
+    final l10n = AppLocalizations.of(context);
     if (!ref.read(isAdminProvider)) {
       if (!mounted) return;
       setState(() {
@@ -219,7 +227,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       if (!mounted) return;
       setState(() {
         _pendingTours = const [];
-        _toursError = 'Supabase no esta configurado.';
+        _toursError = l10n.adminSupabaseNotConfigured;
       });
       return;
     }
@@ -249,18 +257,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         if (!mounted) return;
         setState(() {
           _pendingTours = const [];
-          _toursError =
-              'No se pudieron cargar los tours pendientes. Revisa permisos o migraciones.';
+          _toursError = l10n.adminCouldNotLoadPending;
         });
       }
     }
   }
 
   Future<void> _saveResponse() async {
+    final l10n = AppLocalizations.of(context);
     final ticket = _selectedTicket;
     final response = _response.text.trim();
     if (ticket == null || response.length < 8) {
-      _snack('Escribe una respuesta oficial para el usuario.');
+      _snack(l10n.adminWriteOfficialResponse);
       return;
     }
     final client = ref.read(supabaseClientProvider);
@@ -293,31 +301,33 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         adminResponse: response,
       );
     });
-    _snack('Respuesta guardada para el usuario.');
+    _snack(l10n.adminResponseSaved);
   }
 
   Future<void> _approveTour(Tour tour) async {
+    final l10n = AppLocalizations.of(context);
     try {
       await ref
           .read(tourRepositoryProvider)
           .moderateTour(tour.id, approved: true);
       await _loadTours();
       ref.invalidate(toursProvider);
-      _snack('${tour.title} aprobado para publicacion.');
+      _snack(l10n.adminTourApproved(tour.title));
     } catch (_) {
-      _snack('No se pudo aprobar el tour. Revisa permisos o conexion.');
+      _snack(l10n.adminCouldNotApproveTour);
     }
   }
 
   Future<void> _rejectTour(Tour tour) async {
+    final l10n = AppLocalizations.of(context);
     try {
       await ref
           .read(tourRepositoryProvider)
           .moderateTour(tour.id, approved: false);
       await _loadTours();
-      _snack('${tour.title} rechazado.');
+      _snack(l10n.adminTourRejected(tour.title));
     } catch (_) {
-      _snack('No se pudo rechazar el tour. Revisa permisos o conexion.');
+      _snack(l10n.adminCouldNotRejectTour);
     }
   }
 
@@ -329,6 +339,38 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Helper: build demo tickets with localized strings
+// ---------------------------------------------------------------------------
+
+List<_AdminTicket> _buildDemoTickets(BuildContext context) {
+  final l10n = AppLocalizations.of(context);
+  return [
+    _AdminTicket(
+      id: 'demo-1',
+      kind: 'petition',
+      subject: l10n.adminDemoTicket1Subject,
+      body: l10n.adminDemoTicket1Body,
+      status: 'open',
+      createdAt: DateTime(2026, 6, 10),
+      isDemo: true,
+    ),
+    _AdminTicket(
+      id: 'demo-2',
+      kind: 'claim',
+      subject: l10n.adminDemoTicket2Subject,
+      body: l10n.adminDemoTicket2Body,
+      status: 'open',
+      createdAt: DateTime(2026, 6, 10),
+      isDemo: true,
+    ),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Top bar
+// ---------------------------------------------------------------------------
+
 class _AdminTopBar extends StatelessWidget {
   const _AdminTopBar({required this.onClose, required this.onRefresh});
 
@@ -337,6 +379,7 @@ class _AdminTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -360,17 +403,17 @@ class _AdminTopBar extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Notificaciones',
+            tooltip: l10n.adminNotifications,
             onPressed: () {},
             icon: const Icon(Icons.notifications_none_rounded),
           ),
           IconButton(
-            tooltip: 'Actualizar tours',
+            tooltip: l10n.adminRefreshTours,
             onPressed: onRefresh,
             icon: const Icon(Icons.refresh_rounded),
           ),
           IconButton(
-            tooltip: 'Cerrar administrador',
+            tooltip: l10n.adminClosePanel,
             onPressed: onClose,
             icon: const Icon(Icons.close_rounded),
           ),
@@ -379,6 +422,10 @@ class _AdminTopBar extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard tab
+// ---------------------------------------------------------------------------
 
 class _DashboardTab extends StatelessWidget {
   const _DashboardTab({
@@ -399,16 +446,17 @@ class _DashboardTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final tourCards = pendingToursAsync.when(
       loading: () {
         if (localPendingTours.isNotEmpty) {
           return _tourCards(localPendingTours);
         }
-        return const <Widget>[
+        return <Widget>[
           _AdminEmptyCard(
             icon: Icons.hourglass_empty_rounded,
-            title: 'Cargando tours pendientes',
-            body: 'Estamos consultando las solicitudes guardadas en Supabase.',
+            title: l10n.adminLoadingPending,
+            body: l10n.adminLoadingPendingBody,
           ),
         ];
       },
@@ -419,7 +467,7 @@ class _DashboardTab extends StatelessWidget {
         return <Widget>[
           _AdminEmptyCard(
             icon: Icons.error_outline_rounded,
-            title: 'No se pudieron cargar',
+            title: l10n.adminCouldNotLoad,
             body: localToursError ?? error.toString(),
           ),
         ];
@@ -431,12 +479,11 @@ class _DashboardTab extends StatelessWidget {
         if (localPendingTours.isNotEmpty) {
           return _tourCards(localPendingTours);
         }
-        return const <Widget>[
+        return <Widget>[
           _AdminEmptyCard(
             icon: Icons.verified_rounded,
-            title: 'Sin tours pendientes',
-            body:
-                'Los tours manuales e IA nuevos apareceran aqui para aprobarlos o rechazarlos.',
+            title: l10n.adminNoPendingTours,
+            body: l10n.adminNoPendingToursBody,
           ),
         ];
       },
@@ -445,30 +492,29 @@ class _DashboardTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
       children: [
         _AdminHeroCard(
-          title: 'Centro de control con VibeTours',
-          body:
-              'Gestiona aprobaciones, PQRS y metricas con permisos de administrador.',
-          action: 'Nuevos reportes',
+          title: l10n.adminControlCenter,
+          body: l10n.adminControlCenterBody,
+          action: l10n.adminNewReports,
           icon: Icons.shield_outlined,
         ),
         const SizedBox(height: 24),
         _AdminSectionTitle(
           icon: Icons.support_agent_rounded,
-          title: 'Gestion de PQRS',
+          title: l10n.adminPqrsManagement,
         ),
         const SizedBox(height: 12),
-        _AdminMetricPill(label: '12 Tickets Activos'),
+        _AdminMetricPill(label: l10n.adminActiveTickets('12')),
         const SizedBox(height: 24),
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: _AdminSectionTitle(
                 icon: Icons.fact_check_rounded,
-                title: 'Tours por aprobar',
+                title: l10n.adminToursToApprove,
               ),
             ),
             IconButton.filledTonal(
-              tooltip: 'Actualizar tours',
+              tooltip: l10n.adminRefreshTours,
               onPressed: onRefreshTours,
               icon: const Icon(Icons.refresh_rounded),
             ),
@@ -493,6 +539,10 @@ class _DashboardTab extends StatelessWidget {
     ];
   }
 }
+
+// ---------------------------------------------------------------------------
+// PQRS tab
+// ---------------------------------------------------------------------------
 
 class _PqrsTab extends StatelessWidget {
   const _PqrsTab({
@@ -521,6 +571,7 @@ class _PqrsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
       children: [
@@ -528,7 +579,7 @@ class _PqrsTab extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Gestion de PQRS',
+                l10n.adminPqrsTitle,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
@@ -543,7 +594,7 @@ class _PqrsTab extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Supervisa y responde las solicitudes de tus usuarios en tiempo real.',
+          l10n.adminPqrsSubtitle,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Colors.white.withValues(alpha: 0.72),
           ),
@@ -552,19 +603,19 @@ class _PqrsTab extends StatelessWidget {
         TextField(
           controller: searchController,
           onChanged: onSearchChanged,
-          decoration: const InputDecoration(
-            hintText: 'Buscar PQRS...',
-            prefixIcon: Icon(Icons.search_rounded),
+          decoration: InputDecoration(
+            hintText: l10n.adminSearchPqrs,
+            prefixIcon: const Icon(Icons.search_rounded),
           ),
         ),
         const SizedBox(height: 18),
         if (loading)
           const SkeletonBox(height: 180)
         else if (tickets.isEmpty)
-          const _AdminEmptyCard(
+          _AdminEmptyCard(
             icon: Icons.inbox_rounded,
-            title: 'Sin PQRS',
-            body: 'Cuando los usuarios escriban, sus casos apareceran aqui.',
+            title: l10n.adminNoPqrs,
+            body: l10n.adminNoPqrsBody,
           )
         else
           for (final ticket in tickets) ...[
@@ -583,17 +634,27 @@ class _PqrsTab extends StatelessWidget {
           onPostpone: onPostpone,
         ),
         const SizedBox(height: 18),
-        const _AdminInsightCard(),
+        _AdminInsightCard(tickets: tickets),
       ],
     );
   }
 }
 
-class _AdminSettingsTab extends StatelessWidget {
+// ---------------------------------------------------------------------------
+// Admin Settings tab
+// ---------------------------------------------------------------------------
+
+class _AdminSettingsTab extends ConsumerWidget {
   const _AdminSettingsTab();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final user = ref.watch(authUserProvider).valueOrNull;
+    final metadata = user?.userMetadata ?? {};
+    final avatarUrl = metadata['custom_avatar_url']?.toString() ?? metadata['avatar_url']?.toString();
+    final name = metadata['full_name']?.toString() ?? metadata['name']?.toString() ?? 'Administrator';
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
       children: [
@@ -615,16 +676,21 @@ class _AdminSettingsTab extends StatelessWidget {
                       width: 4,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.admin_panel_settings_rounded,
-                    color: Color(0xFFAFCBFF),
-                    size: 48,
-                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: avatarUrl != null && avatarUrl.isNotEmpty
+                      ? (avatarUrl.startsWith('data:image')
+                          ? Image.memory(base64Decode(avatarUrl.split(',').last), fit: BoxFit.cover)
+                          : Image.network(avatarUrl, fit: BoxFit.cover))
+                      : const Icon(
+                          Icons.admin_panel_settings_rounded,
+                          color: Color(0xFFAFCBFF),
+                          size: 48,
+                        ),
                 ),
               ),
               const SizedBox(height: 22),
               Text(
-                'Marcus Thorne',
+                name,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
@@ -632,29 +698,19 @@ class _AdminSettingsTab extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Systems Administrator - Global Operations',
+                l10n.adminSystemRole,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Colors.white.withValues(alpha: 0.62),
                 ),
               ),
               const SizedBox(height: 18),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: const [
-                  _AdminBadge(label: 'Active Session'),
-                  _AdminBadge(label: 'Tier: Executive'),
-                ],
-              ),
-              const SizedBox(height: 24),
-              FilledButton(onPressed: () {}, child: const Text('Edit Profile')),
             ],
           ),
         ),
         const SizedBox(height: 24),
         Text(
-          'Administrative Actions',
+          l10n.adminAdministrativeActions,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w900,
@@ -663,31 +719,53 @@ class _AdminSettingsTab extends StatelessWidget {
         const SizedBox(height: 14),
         GlassPanel(
           child: Column(
-            children: const [
+            children: [
               _AdminActionRow(
                 icon: Icons.map_outlined,
-                title: 'Accepted Tours History',
-                subtitle: 'Review and manage verified excursion logs',
+                title: l10n.adminModeratedToursHistory,
+                subtitle: l10n.adminModeratedToursHistorySubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const _AcceptedToursHistoryScreen()),
+                  );
+                },
               ),
               _AdminActionRow(
                 icon: Icons.payments_outlined,
-                title: 'Payment History',
-                subtitle: 'Financial transactions and provider payouts',
+                title: l10n.adminPaymentHistory,
+                subtitle: l10n.adminPaymentHistorySubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const _PaymentHistoryScreen()),
+                  );
+                },
               ),
               _AdminActionRow(
                 icon: Icons.support_agent_rounded,
-                title: 'PQRS History',
-                subtitle: 'Customer inquiries, claims, and resolutions',
+                title: l10n.adminPqrsHistory,
+                subtitle: l10n.adminPqrsHistorySubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const _PqrsHistoryScreen()),
+                  );
+                },
               ),
             ],
           ),
         ),
         const SizedBox(height: 18),
-        _PlatformPulseCard(),
+        const _PlatformPulseCard(),
       ],
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Hero card
+// ---------------------------------------------------------------------------
 
 class _AdminHeroCard extends StatelessWidget {
   const _AdminHeroCard({
@@ -740,6 +818,10 @@ class _AdminHeroCard extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Section title
+// ---------------------------------------------------------------------------
+
 class _AdminSectionTitle extends StatelessWidget {
   const _AdminSectionTitle({required this.icon, required this.title});
 
@@ -763,6 +845,10 @@ class _AdminSectionTitle extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Metric pill
+// ---------------------------------------------------------------------------
 
 class _AdminMetricPill extends StatelessWidget {
   const _AdminMetricPill({required this.label});
@@ -793,6 +879,10 @@ class _AdminMetricPill extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Pending tour card
+// ---------------------------------------------------------------------------
+
 class _PendingTourCard extends StatelessWidget {
   const _PendingTourCard({
     required this.tour,
@@ -806,6 +896,7 @@ class _PendingTourCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return GlassPanel(
       padding: const EdgeInsets.all(16),
       radius: 16,
@@ -826,14 +917,14 @@ class _PendingTourCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${tour.city}, ${tour.country} - ${tour.durationHours.toStringAsFixed(1)}h - ${tour.stops.length} paradas',
+                  '${tour.city}, ${tour.country} - ${tour.durationHours.toStringAsFixed(1)}h - ${tour.stops.length} ${l10n.stops}',
                   style: Theme.of(
                     context,
                   ).textTheme.bodyMedium?.copyWith(color: Colors.white60),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  tour.isAiGenerated ? 'Creado con IA' : 'Creado manualmente',
+                  tour.isAiGenerated ? l10n.adminCreatedWithAI : l10n.adminCreatedManually,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: const Color(0xFFAFCBFF),
                     fontWeight: FontWeight.w800,
@@ -843,12 +934,12 @@ class _PendingTourCard extends StatelessWidget {
             ),
           ),
           IconButton.filledTonal(
-            tooltip: 'Aprobar',
+            tooltip: l10n.adminApprove,
             onPressed: onApprove,
             icon: const Icon(Icons.check_rounded),
           ),
           IconButton(
-            tooltip: 'Rechazar',
+            tooltip: l10n.adminReject,
             onPressed: onReject,
             icon: const Icon(Icons.close_rounded),
           ),
@@ -857,6 +948,10 @@ class _PendingTourCard extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Ticket card
+// ---------------------------------------------------------------------------
 
 class _TicketCard extends StatelessWidget {
   const _TicketCard({
@@ -909,7 +1004,7 @@ class _TicketCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '${ticket.kindLabel} - ${ticket.createdAt.day.toString().padLeft(2, '0')}/${ticket.createdAt.month.toString().padLeft(2, '0')}',
+                    '${ticket.kindLabel(context)} - ${ticket.createdAt.day.toString().padLeft(2, '0')}/${ticket.createdAt.month.toString().padLeft(2, '0')}',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: const Color(0xFFAFCBFF),
                       fontWeight: FontWeight.w800,
@@ -934,6 +1029,10 @@ class _TicketCard extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Response panel
+// ---------------------------------------------------------------------------
+
 class _ResponsePanel extends StatelessWidget {
   const _ResponsePanel({
     required this.ticket,
@@ -949,11 +1048,12 @@ class _ResponsePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     if (ticket == null) {
-      return const _AdminEmptyCard(
+      return _AdminEmptyCard(
         icon: Icons.reply_rounded,
-        title: 'Selecciona un caso',
-        body: 'El panel de respuesta aparece cuando eliges un PQRS.',
+        title: l10n.adminSelectCase,
+        body: l10n.adminSelectCaseBody,
       );
     }
     return GlassPanel(
@@ -968,7 +1068,7 @@ class _ResponsePanel extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Respuesta del administrador',
+                  l10n.adminResponseTitle,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: const Color(0xFFAFCBFF),
                     fontWeight: FontWeight.w900,
@@ -976,7 +1076,7 @@ class _ResponsePanel extends StatelessWidget {
                 ),
               ),
               Text(
-                'Borrador guardado',
+                l10n.adminDraftSaved,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.52),
                 ),
@@ -990,7 +1090,7 @@ class _ResponsePanel extends StatelessWidget {
             maxLines: 7,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              hintText: 'Escribe aqui la respuesta oficial para el usuario...',
+              hintText: l10n.adminResponseHint,
               suffixIcon: const Icon(Icons.sentiment_satisfied_alt_rounded),
               filled: true,
               fillColor: const Color(0xFF090E18),
@@ -1006,7 +1106,7 @@ class _ResponsePanel extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: LiquidButton(
-              label: 'Guardar respuesta',
+              label: l10n.adminSaveResponse,
               icon: Icons.send_rounded,
               onPressed: onSave,
             ),
@@ -1016,7 +1116,7 @@ class _ResponsePanel extends StatelessWidget {
             width: double.infinity,
             child: OutlinedButton(
               onPressed: onPostpone,
-              child: const Text('Posponer'),
+              child: Text(l10n.adminPostpone),
             ),
           ),
         ],
@@ -1025,6 +1125,10 @@ class _ResponsePanel extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Status tag
+// ---------------------------------------------------------------------------
+
 class _StatusTag extends StatelessWidget {
   const _StatusTag({required this.status});
 
@@ -1032,6 +1136,7 @@ class _StatusTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final answered = status == 'answered' || status == 'closed';
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1043,7 +1148,7 @@ class _StatusTag extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         child: Text(
-          answered ? 'RESPONDIDO' : 'PENDIENTE',
+          answered ? l10n.adminStatusAnswered : l10n.adminStatusPending,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: answered ? const Color(0xFFAFCBFF) : const Color(0xFFFFC875),
             fontWeight: FontWeight.w900,
@@ -1054,32 +1159,81 @@ class _StatusTag extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Insight card
+// ---------------------------------------------------------------------------
+
 class _AdminInsightCard extends StatelessWidget {
-  const _AdminInsightCard();
+  const _AdminInsightCard({required this.tickets});
+  final List<_AdminTicket> tickets;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    
+    int petitions = 0;
+    int complaints = 0;
+    int claims = 0;
+    int suggestions = 0;
+    
+    for (final t in tickets) {
+      switch (t.kind) {
+        case 'petition':
+          petitions++;
+          break;
+        case 'complaint':
+          complaints++;
+          break;
+        case 'claim':
+          claims++;
+          break;
+        default:
+          suggestions++;
+          break;
+      }
+    }
+    
+    final total = tickets.length;
+    final double pctPetition = total > 0 ? petitions / total : 0.0;
+    final double pctComplaint = total > 0 ? complaints / total : 0.0;
+    final double pctClaim = total > 0 ? claims / total : 0.0;
+    final double pctSuggestion = total > 0 ? suggestions / total : 0.0;
+
+    final items = [
+      (label: l10n.adminKindPetition, value: pctPetition, count: petitions),
+      (label: l10n.adminKindComplaint, value: pctComplaint, count: complaints),
+      (label: l10n.adminKindClaim, value: pctClaim, count: claims),
+      (label: l10n.adminKindSuggestion, value: pctSuggestion, count: suggestions),
+    ]..sort((a, b) => b.value.compareTo(a.value));
+
     return GlassPanel(
       radius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Temas Populares',
+            l10n.adminPopularTopics,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 12),
-          const _TopicBar(label: 'Reembolsos', value: 0.42),
-          const _TopicBar(label: 'Horarios', value: 0.28),
-          const _TopicBar(label: 'Facturacion', value: 0.15),
+          for (final item in items)
+            if (item.count > 0 || total == 0)
+              _TopicBar(
+                label: item.label,
+                value: item.value,
+              ),
         ],
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Topic bar
+// ---------------------------------------------------------------------------
 
 class _TopicBar extends StatelessWidget {
   const _TopicBar({required this.label, required this.value});
@@ -1105,6 +1259,10 @@ class _TopicBar extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Empty card
+// ---------------------------------------------------------------------------
 
 class _AdminEmptyCard extends StatelessWidget {
   const _AdminEmptyCard({
@@ -1143,20 +1301,27 @@ class _AdminEmptyCard extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Action row
+// ---------------------------------------------------------------------------
+
 class _AdminActionRow extends StatelessWidget {
   const _AdminActionRow({
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      onTap: onTap,
       leading: CircleAvatar(
         backgroundColor: Colors.white.withValues(alpha: 0.08),
         child: Icon(icon, color: const Color(0xFFAFCBFF)),
@@ -1168,38 +1333,77 @@ class _AdminActionRow extends StatelessWidget {
   }
 }
 
-class _AdminBadge extends StatelessWidget {
-  const _AdminBadge({required this.label});
+// ---------------------------------------------------------------------------
+// Platform Pulse card
+// ---------------------------------------------------------------------------
 
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppTheme.primary.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.28)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFFAFCBFF),
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PlatformPulseCard extends StatelessWidget {
+class _PlatformPulseCard extends ConsumerStatefulWidget {
   const _PlatformPulseCard();
 
   @override
+  ConsumerState<_PlatformPulseCard> createState() => _PlatformPulseCardState();
+}
+
+class _PlatformPulseCardState extends ConsumerState<_PlatformPulseCard> {
+  int? _weeklyUserCount;
+  bool _loading = true;
+  List<double> _weeklyActivityChart = [0, 0, 0, 0, 0, 0, 0];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWeeklyUserCount();
+  }
+
+  Future<void> _loadWeeklyUserCount() async {
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    try {
+      final now = DateTime.now();
+      final sevenDaysAgo = now.subtract(const Duration(days: 7));
+      final response = await client
+          .from('users')
+          .select('updated_at')
+          .gte('updated_at', sevenDaysAgo.toIso8601String());
+
+      final List<dynamic> data = response as List;
+      final List<int> counts = List.filled(7, 0);
+
+      for (final row in data) {
+        final date = DateTime.tryParse(row['updated_at']?.toString() ?? '');
+        if (date != null) {
+          final diff = now.difference(date).inDays;
+          if (diff >= 0 && diff < 7) {
+            counts[6 - diff]++;
+          }
+        }
+      }
+
+      int maxCount = 0;
+      for (final c in counts) {
+        if (c > maxCount) maxCount = c;
+      }
+      
+      final chart = counts.map((c) => maxCount == 0 ? 0.05 : (c / maxCount).clamp(0.05, 1.0)).toList();
+
+      if (mounted) {
+        setState(() {
+          _weeklyUserCount = data.length;
+          _weeklyActivityChart = chart;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return GlassPanel(
       radius: 24,
       child: Column(
@@ -1214,16 +1418,27 @@ class _PlatformPulseCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Real-time system health and tour bookings.',
+            l10n.adminPlatformPulseSubtitle,
             style: TextStyle(color: Colors.white.withValues(alpha: 0.62)),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 16),
+          Text(
+            _loading
+                ? l10n.adminLoadingActiveUsers
+                : l10n.adminConnectedUsersThisWeek(_weeklyUserCount ?? 0),
+            style: const TextStyle(
+              color: Color(0xFFAFCBFF),
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 20),
           SizedBox(
             height: 92,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                for (final value in const [0.55, 0.72, 0.92, 0.36, 0.64, 0.51])
+                for (final value in _weeklyActivityChart)
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 5),
@@ -1234,7 +1449,7 @@ class _PlatformPulseCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: const Color(
                               0xFFAFCBFF,
-                            ).withValues(alpha: value),
+                            ).withValues(alpha: value.clamp(0.2, 1.0)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
@@ -1245,9 +1460,9 @@ class _PlatformPulseCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 22),
-          const Text(
-            'SYSTEM INTEGRITY',
-            style: TextStyle(
+          Text(
+            l10n.adminSystemIntegrity,
+            style: const TextStyle(
               color: Colors.white60,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.2,
@@ -1269,6 +1484,10 @@ class _PlatformPulseCard extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Bottom nav
+// ---------------------------------------------------------------------------
+
 class _AdminBottomNav extends StatelessWidget {
   const _AdminBottomNav({required this.currentIndex, required this.onChanged});
 
@@ -1277,7 +1496,8 @@ class _AdminBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = const [
+    // Labels stay as-is (Admin / PQRS / Settings are proper names)
+    const items = [
       (icon: Icons.admin_panel_settings_outlined, label: 'Admin'),
       (icon: Icons.support_agent_rounded, label: 'PQRS'),
       (icon: Icons.settings_rounded, label: 'Settings'),
@@ -1336,6 +1556,10 @@ class _AdminBottomNav extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Data model
+// ---------------------------------------------------------------------------
+
 class _AdminTicket {
   const _AdminTicket({
     required this.id,
@@ -1352,7 +1576,7 @@ class _AdminTicket {
     return _AdminTicket(
       id: json['id']?.toString() ?? 'pqrs-demo',
       kind: json['kind']?.toString() ?? 'suggestion',
-      subject: json['subject']?.toString() ?? 'Sin asunto',
+      subject: json['subject']?.toString() ?? '',
       body: json['body']?.toString() ?? '',
       status: json['status']?.toString() ?? 'open',
       adminResponse: json['admin_response']?.toString() ?? '',
@@ -1371,12 +1595,14 @@ class _AdminTicket {
   final DateTime createdAt;
   final bool isDemo;
 
-  String get kindLabel {
+  // Uses context to return a localized kind label
+  String kindLabel(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return switch (kind) {
-      'petition' => 'Peticion',
-      'complaint' => 'Queja',
-      'claim' => 'Reclamo',
-      _ => 'Sugerencia',
+      'petition' => l10n.adminKindPetition,
+      'complaint' => l10n.adminKindComplaint,
+      'claim' => l10n.adminKindClaim,
+      _ => l10n.adminKindSuggestion,
     };
   }
 
@@ -1394,24 +1620,436 @@ class _AdminTicket {
   }
 }
 
-final _demoTickets = [
-  _AdminTicket(
-    id: 'demo-1',
-    kind: 'petition',
-    subject: 'Duda sobre horarios en Medellin',
-    body:
-        'A que hora exactamente sale el transporte desde el punto de encuentro?',
-    status: 'open',
-    createdAt: DateTime(2026, 6, 10),
-    isDemo: true,
-  ),
-  _AdminTicket(
-    id: 'demo-2',
-    kind: 'claim',
-    subject: 'Imagen de tour repetida',
-    body: 'Un tour aparece con una imagen que no corresponde al destino.',
-    status: 'open',
-    createdAt: DateTime(2026, 6, 10),
-    isDemo: true,
-  ),
-];
+// ---------------------------------------------------------------------------
+// History screens
+// ---------------------------------------------------------------------------
+
+class _AcceptedToursHistoryScreen extends ConsumerStatefulWidget {
+  const _AcceptedToursHistoryScreen();
+
+  @override
+  ConsumerState<_AcceptedToursHistoryScreen> createState() => _AcceptedToursHistoryScreenState();
+}
+
+class _AcceptedToursHistoryScreenState extends ConsumerState<_AcceptedToursHistoryScreen> {
+  List<Map<String, dynamic>> _historyItems = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => _loadHistory());
+  }
+
+  Future<void> _loadHistory() async {
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'supabase_not_configured';
+        });
+      }
+      return;
+    }
+    try {
+      final data = await client
+          .from('tours')
+          .select('*, tour_stops(*)')
+          .inFilter('moderation_status', ['approved', 'rejected'])
+          .order('reviewed_at', ascending: false);
+
+      final List<Map<String, dynamic>> items = [];
+      for (final row in data) {
+        final parsedTour = ref.read(tourRepositoryProvider).parseDatabaseJson(Map<String, dynamic>.from(row as Map));
+        items.add({
+          'tour': parsedTour,
+          'status': row['moderation_status']?.toString() ?? 'unknown',
+          'reviewedAt': DateTime.tryParse(row['reviewed_at']?.toString() ?? '') ?? DateTime.now(),
+        });
+      }
+
+      if (mounted) {
+        setState(() {
+          _historyItems = items;
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return PremiumScaffold(
+      safeBottom: true,
+      appBar: AppBar(
+        title: Text(l10n.adminHistoryScreenTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF090E18),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      child: Container(
+        color: const Color(0xFF090E18),
+        child: _buildBody(context, l10n),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, AppLocalizations l10n) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      final errorMessage = _error == 'supabase_not_configured'
+          ? l10n.adminSupabaseNotConfigured
+          : l10n.adminHistoryErrorLoading(_error!);
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+              const SizedBox(height: 16),
+              Text(errorMessage, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_historyItems.isEmpty) {
+      return Center(
+        child: EmptyState(
+          icon: Icons.map_outlined,
+          title: l10n.adminHistoryEmpty,
+          body: l10n.adminHistoryEmptyBody,
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _historyItems.length,
+      itemBuilder: (context, index) {
+        final item = _historyItems[index];
+        final Tour tour = item['tour'] as Tour;
+        final String status = item['status'] as String;
+        final DateTime reviewedAt = item['reviewedAt'] as DateTime;
+        final isApproved = status == 'approved';
+        final reviewedDate =
+            '${reviewedAt.day.toString().padLeft(2, '0')}/${reviewedAt.month.toString().padLeft(2, '0')}/${reviewedAt.year}';
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: GlassPanel(
+            radius: 18,
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CachedNetworkImage(
+                    imageUrl: tour.coverUrl,
+                    width: 60,
+                    height: 60,
+                    fit: BoxFit.cover,
+                    placeholder: (_, _) => const SkeletonBox(width: 60, height: 60),
+                    errorWidget: (_, _, _) => TravelImageFallback(title: tour.title),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tour.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${tour.city}, ${tour.country}',
+                        style: const TextStyle(color: Colors.white60, fontSize: 13),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.adminHistoryReviewed(reviewedDate),
+                        style: const TextStyle(color: Colors.white38, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isApproved ? Colors.green.withValues(alpha: 0.16) : Colors.redAccent.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isApproved ? l10n.adminHistoryApproved : l10n.adminHistoryRejected,
+                    style: TextStyle(
+                      color: isApproved ? Colors.greenAccent : Colors.redAccent,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+class _PaymentHistoryScreen extends StatelessWidget {
+  const _PaymentHistoryScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return PremiumScaffold(
+      safeBottom: true,
+      appBar: AppBar(
+        title: Text(l10n.adminPaymentTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF090E18),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      child: Container(
+        color: const Color(0xFF090E18),
+        alignment: Alignment.center,
+        child: EmptyState(
+          icon: Icons.payments_outlined,
+          title: l10n.adminPaymentComingSoon,
+          body: l10n.adminPaymentComingSoonBody,
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+class _PqrsHistoryScreen extends ConsumerStatefulWidget {
+  const _PqrsHistoryScreen();
+
+  @override
+  ConsumerState<_PqrsHistoryScreen> createState() => _PqrsHistoryScreenState();
+}
+
+class _PqrsHistoryScreenState extends ConsumerState<_PqrsHistoryScreen> {
+  List<_AdminTicket> _tickets = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => _loadPqrsHistory());
+  }
+
+  Future<void> _loadPqrsHistory() async {
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'supabase_not_configured';
+        });
+      }
+      return;
+    }
+    try {
+      final response = await client
+          .from('pqrs')
+          .select()
+          .eq('status', 'answered')
+          .order('created_at', ascending: false);
+
+      final data = response as List;
+      final tickets = [
+        for (final row in data)
+          _AdminTicket.fromJson(Map<String, dynamic>.from(row as Map)),
+      ];
+
+      if (mounted) {
+        setState(() {
+          _tickets = tickets;
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return PremiumScaffold(
+      safeBottom: true,
+      appBar: AppBar(
+        title: Text(l10n.adminPqrsHistoryScreenTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF090E18),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      child: Container(
+        color: const Color(0xFF090E18),
+        child: _buildBody(context, l10n),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, AppLocalizations l10n) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      final errorMessage = _error == 'supabase_not_configured'
+          ? l10n.adminSupabaseNotConfigured
+          : l10n.adminPqrsErrorLoading(_error!);
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
+              const SizedBox(height: 16),
+              Text(errorMessage, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_tickets.isEmpty) {
+      return Center(
+        child: EmptyState(
+          icon: Icons.support_agent_rounded,
+          title: l10n.adminPqrsHistoryEmpty,
+          body: l10n.adminPqrsHistoryEmptyBody,
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _tickets.length,
+      itemBuilder: (context, index) {
+        final ticket = _tickets[index];
+        final createdDate =
+            '${ticket.createdAt.day.toString().padLeft(2, '0')}/${ticket.createdAt.month.toString().padLeft(2, '0')}/${ticket.createdAt.year}';
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: GlassPanel(
+            radius: 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        ticket.subject,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        ticket.kindLabel(context).toUpperCase(),
+                        style: const TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.adminPqrsUser(ticket.id.substring(0, ticket.id.length.clamp(0, 8)), createdDate),
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  l10n.adminOriginalQuery,
+                  style: const TextStyle(color: Color(0xFFAFCBFF), fontWeight: FontWeight.w700, fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  ticket.body,
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                if (ticket.adminResponse.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.reply_rounded, color: Colors.greenAccent, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              l10n.adminOfficialResponse,
+                              style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          ticket.adminResponse,
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

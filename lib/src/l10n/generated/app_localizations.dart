@@ -2258,6 +2258,642 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Permiso denegado. Podrás activarlo después.'**
   String get prefPermissionDenied;
+
+  /// No description provided for @adminAccessRestricted.
+  ///
+  /// In es, this message translates to:
+  /// **'Acceso restringido'**
+  String get adminAccessRestricted;
+
+  /// No description provided for @adminAccessRestrictedBody.
+  ///
+  /// In es, this message translates to:
+  /// **'El administrador de VIBETOURS usa una cuenta única.'**
+  String get adminAccessRestrictedBody;
+
+  /// No description provided for @adminBackToSettings.
+  ///
+  /// In es, this message translates to:
+  /// **'Volver a ajustes'**
+  String get adminBackToSettings;
+
+  /// No description provided for @adminNotifications.
+  ///
+  /// In es, this message translates to:
+  /// **'Notificaciones'**
+  String get adminNotifications;
+
+  /// No description provided for @adminRefreshTours.
+  ///
+  /// In es, this message translates to:
+  /// **'Actualizar tours'**
+  String get adminRefreshTours;
+
+  /// No description provided for @adminClosePanel.
+  ///
+  /// In es, this message translates to:
+  /// **'Cerrar administrador'**
+  String get adminClosePanel;
+
+  /// No description provided for @adminLoadingPending.
+  ///
+  /// In es, this message translates to:
+  /// **'Cargando tours pendientes'**
+  String get adminLoadingPending;
+
+  /// No description provided for @adminLoadingPendingBody.
+  ///
+  /// In es, this message translates to:
+  /// **'Estamos consultando las solicitudes guardadas en Supabase.'**
+  String get adminLoadingPendingBody;
+
+  /// No description provided for @adminCouldNotLoad.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudieron cargar'**
+  String get adminCouldNotLoad;
+
+  /// No description provided for @adminNoPendingTours.
+  ///
+  /// In es, this message translates to:
+  /// **'Sin tours pendientes'**
+  String get adminNoPendingTours;
+
+  /// No description provided for @adminNoPendingToursBody.
+  ///
+  /// In es, this message translates to:
+  /// **'Los tours manuales e IA nuevos apareceran aqui para aprobarlos o rechazarlos.'**
+  String get adminNoPendingToursBody;
+
+  /// No description provided for @adminControlCenter.
+  ///
+  /// In es, this message translates to:
+  /// **'Centro de control con VibeTours'**
+  String get adminControlCenter;
+
+  /// No description provided for @adminControlCenterBody.
+  ///
+  /// In es, this message translates to:
+  /// **'Gestiona aprobaciones, PQRS y metricas con permisos de administrador.'**
+  String get adminControlCenterBody;
+
+  /// No description provided for @adminNewReports.
+  ///
+  /// In es, this message translates to:
+  /// **'Nuevos reportes'**
+  String get adminNewReports;
+
+  /// No description provided for @adminPqrsManagement.
+  ///
+  /// In es, this message translates to:
+  /// **'Gestion de PQRS'**
+  String get adminPqrsManagement;
+
+  /// No description provided for @adminActiveTickets.
+  ///
+  /// In es, this message translates to:
+  /// **'{count} Tickets Activos'**
+  String adminActiveTickets(String count);
+
+  /// No description provided for @adminToursToApprove.
+  ///
+  /// In es, this message translates to:
+  /// **'Tours por aprobar'**
+  String get adminToursToApprove;
+
+  /// No description provided for @adminPqrsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Gestion de PQRS'**
+  String get adminPqrsTitle;
+
+  /// No description provided for @adminPqrsSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Supervisa y responde las solicitudes de tus usuarios en tiempo real.'**
+  String get adminPqrsSubtitle;
+
+  /// No description provided for @adminSearchPqrs.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar PQRS...'**
+  String get adminSearchPqrs;
+
+  /// No description provided for @adminNoPqrs.
+  ///
+  /// In es, this message translates to:
+  /// **'Sin PQRS'**
+  String get adminNoPqrs;
+
+  /// No description provided for @adminNoPqrsBody.
+  ///
+  /// In es, this message translates to:
+  /// **'Cuando los usuarios escriban, sus casos apareceran aqui.'**
+  String get adminNoPqrsBody;
+
+  /// No description provided for @adminSystemRole.
+  ///
+  /// In es, this message translates to:
+  /// **'Administrador de Sistemas - Operaciones Globales'**
+  String get adminSystemRole;
+
+  /// No description provided for @adminAdministrativeActions.
+  ///
+  /// In es, this message translates to:
+  /// **'Acciones Administrativas'**
+  String get adminAdministrativeActions;
+
+  /// No description provided for @adminModeratedToursHistory.
+  ///
+  /// In es, this message translates to:
+  /// **'Historial de Tours Moderados'**
+  String get adminModeratedToursHistory;
+
+  /// No description provided for @adminModeratedToursHistorySubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Revisar y gestionar tours aceptados o rechazados'**
+  String get adminModeratedToursHistorySubtitle;
+
+  /// No description provided for @adminPaymentHistory.
+  ///
+  /// In es, this message translates to:
+  /// **'Historial de Pagos'**
+  String get adminPaymentHistory;
+
+  /// No description provided for @adminPaymentHistorySubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Transacciones financieras y pagos de monetización'**
+  String get adminPaymentHistorySubtitle;
+
+  /// No description provided for @adminPqrsHistory.
+  ///
+  /// In es, this message translates to:
+  /// **'Historial de PQRS'**
+  String get adminPqrsHistory;
+
+  /// No description provided for @adminPqrsHistorySubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Casos respondidos y resoluciones de soporte'**
+  String get adminPqrsHistorySubtitle;
+
+  /// No description provided for @adminPlatformPulseSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Estado del sistema y usuarios activos de la semana.'**
+  String get adminPlatformPulseSubtitle;
+
+  /// No description provided for @adminLoadingActiveUsers.
+  ///
+  /// In es, this message translates to:
+  /// **'Cargando usuarios activos...'**
+  String get adminLoadingActiveUsers;
+
+  /// No description provided for @adminConnectedUsersThisWeek.
+  ///
+  /// In es, this message translates to:
+  /// **'Usuarios conectados esta semana: {count}'**
+  String adminConnectedUsersThisWeek(int count);
+
+  /// No description provided for @adminSystemIntegrity.
+  ///
+  /// In es, this message translates to:
+  /// **'INTEGRIDAD DEL SISTEMA'**
+  String get adminSystemIntegrity;
+
+  /// No description provided for @adminSelectCase.
+  ///
+  /// In es, this message translates to:
+  /// **'Selecciona un caso'**
+  String get adminSelectCase;
+
+  /// No description provided for @adminSelectCaseBody.
+  ///
+  /// In es, this message translates to:
+  /// **'El panel de respuesta aparece cuando eliges un PQRS.'**
+  String get adminSelectCaseBody;
+
+  /// No description provided for @adminResponseTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Respuesta del administrador'**
+  String get adminResponseTitle;
+
+  /// No description provided for @adminDraftSaved.
+  ///
+  /// In es, this message translates to:
+  /// **'Borrador guardado'**
+  String get adminDraftSaved;
+
+  /// No description provided for @adminResponseHint.
+  ///
+  /// In es, this message translates to:
+  /// **'Escribe aqui la respuesta oficial para el usuario...'**
+  String get adminResponseHint;
+
+  /// No description provided for @adminSaveResponse.
+  ///
+  /// In es, this message translates to:
+  /// **'Guardar respuesta'**
+  String get adminSaveResponse;
+
+  /// No description provided for @adminPostpone.
+  ///
+  /// In es, this message translates to:
+  /// **'Posponer'**
+  String get adminPostpone;
+
+  /// No description provided for @adminStatusAnswered.
+  ///
+  /// In es, this message translates to:
+  /// **'RESPONDIDO'**
+  String get adminStatusAnswered;
+
+  /// No description provided for @adminStatusPending.
+  ///
+  /// In es, this message translates to:
+  /// **'PENDIENTE'**
+  String get adminStatusPending;
+
+  /// No description provided for @adminPopularTopics.
+  ///
+  /// In es, this message translates to:
+  /// **'Distribución de PQRS'**
+  String get adminPopularTopics;
+
+  /// No description provided for @adminTopicRefunds.
+  ///
+  /// In es, this message translates to:
+  /// **'Reembolsos'**
+  String get adminTopicRefunds;
+
+  /// No description provided for @adminTopicSchedules.
+  ///
+  /// In es, this message translates to:
+  /// **'Horarios'**
+  String get adminTopicSchedules;
+
+  /// No description provided for @adminTopicBilling.
+  ///
+  /// In es, this message translates to:
+  /// **'Facturacion'**
+  String get adminTopicBilling;
+
+  /// No description provided for @adminTourStops.
+  ///
+  /// In es, this message translates to:
+  /// **'{count} paradas'**
+  String adminTourStops(int count);
+
+  /// No description provided for @adminCreatedWithAI.
+  ///
+  /// In es, this message translates to:
+  /// **'Creado con IA'**
+  String get adminCreatedWithAI;
+
+  /// No description provided for @adminCreatedManually.
+  ///
+  /// In es, this message translates to:
+  /// **'Creado manualmente'**
+  String get adminCreatedManually;
+
+  /// No description provided for @adminApprove.
+  ///
+  /// In es, this message translates to:
+  /// **'Aprobar'**
+  String get adminApprove;
+
+  /// No description provided for @adminReject.
+  ///
+  /// In es, this message translates to:
+  /// **'Rechazar'**
+  String get adminReject;
+
+  /// No description provided for @adminWriteOfficialResponse.
+  ///
+  /// In es, this message translates to:
+  /// **'Escribe una respuesta oficial para el usuario.'**
+  String get adminWriteOfficialResponse;
+
+  /// No description provided for @adminResponseSaved.
+  ///
+  /// In es, this message translates to:
+  /// **'Respuesta guardada para el usuario.'**
+  String get adminResponseSaved;
+
+  /// No description provided for @adminSupabaseNotConfigured.
+  ///
+  /// In es, this message translates to:
+  /// **'Supabase no esta configurado.'**
+  String get adminSupabaseNotConfigured;
+
+  /// No description provided for @adminCouldNotLoadPending.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudieron cargar los tours pendientes. Revisa permisos o migraciones.'**
+  String get adminCouldNotLoadPending;
+
+  /// No description provided for @adminTourApproved.
+  ///
+  /// In es, this message translates to:
+  /// **'{title} aprobado para publicacion.'**
+  String adminTourApproved(String title);
+
+  /// No description provided for @adminTourRejected.
+  ///
+  /// In es, this message translates to:
+  /// **'{title} rechazado.'**
+  String adminTourRejected(String title);
+
+  /// No description provided for @adminCouldNotApproveTour.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo aprobar el tour. Revisa permisos o conexion.'**
+  String get adminCouldNotApproveTour;
+
+  /// No description provided for @adminCouldNotRejectTour.
+  ///
+  /// In es, this message translates to:
+  /// **'No se pudo rechazar el tour. Revisa permisos o conexion.'**
+  String get adminCouldNotRejectTour;
+
+  /// No description provided for @adminSectionAdministration.
+  ///
+  /// In es, this message translates to:
+  /// **'Administración'**
+  String get adminSectionAdministration;
+
+  /// No description provided for @adminControlPanelTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Panel de Control Administrador'**
+  String get adminControlPanelTitle;
+
+  /// No description provided for @adminControlPanelSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Gestionar tours pendientes y soporte'**
+  String get adminControlPanelSubtitle;
+
+  /// No description provided for @adminSectionPerformance.
+  ///
+  /// In es, this message translates to:
+  /// **'Rendimiento y visualización'**
+  String get adminSectionPerformance;
+
+  /// No description provided for @admin120HzPreferred.
+  ///
+  /// In es, this message translates to:
+  /// **'120Hz preferido'**
+  String get admin120HzPreferred;
+
+  /// No description provided for @admin60HzSaving.
+  ///
+  /// In es, this message translates to:
+  /// **'60Hz ahorro'**
+  String get admin60HzSaving;
+
+  /// No description provided for @adminToursEventsRecs.
+  ///
+  /// In es, this message translates to:
+  /// **'Tours, eventos, recomendaciones'**
+  String get adminToursEventsRecs;
+
+  /// No description provided for @adminMapAuto.
+  ///
+  /// In es, this message translates to:
+  /// **'Automático (Tema)'**
+  String get adminMapAuto;
+
+  /// No description provided for @adminMapDay.
+  ///
+  /// In es, this message translates to:
+  /// **'Día (Claro)'**
+  String get adminMapDay;
+
+  /// No description provided for @adminMapNight.
+  ///
+  /// In es, this message translates to:
+  /// **'Noche (Oscuro)'**
+  String get adminMapNight;
+
+  /// No description provided for @adminMapSatellite.
+  ///
+  /// In es, this message translates to:
+  /// **'Satélite (Híbrido)'**
+  String get adminMapSatellite;
+
+  /// No description provided for @adminMapPrefTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Preferencia de mapa'**
+  String get adminMapPrefTitle;
+
+  /// No description provided for @adminMapAuto2.
+  ///
+  /// In es, this message translates to:
+  /// **'Automático'**
+  String get adminMapAuto2;
+
+  /// No description provided for @adminMapAutoSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Sincronizado con el brillo de la app'**
+  String get adminMapAutoSubtitle;
+
+  /// No description provided for @adminMapDay2.
+  ///
+  /// In es, this message translates to:
+  /// **'Día'**
+  String get adminMapDay2;
+
+  /// No description provided for @adminMapDaySubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Mapa claro y nítido'**
+  String get adminMapDaySubtitle;
+
+  /// No description provided for @adminMapNight2.
+  ///
+  /// In es, this message translates to:
+  /// **'Noche'**
+  String get adminMapNight2;
+
+  /// No description provided for @adminMapNightSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Diseño oscuro premium'**
+  String get adminMapNightSubtitle;
+
+  /// No description provided for @adminMapSatellite2.
+  ///
+  /// In es, this message translates to:
+  /// **'Satélite'**
+  String get adminMapSatellite2;
+
+  /// No description provided for @adminMapSatelliteSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Fotografía aérea ESRI'**
+  String get adminMapSatelliteSubtitle;
+
+  /// No description provided for @adminHistoryScreenTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Historial de Tours Moderados'**
+  String get adminHistoryScreenTitle;
+
+  /// No description provided for @adminHistoryEmpty.
+  ///
+  /// In es, this message translates to:
+  /// **'Historial vacío'**
+  String get adminHistoryEmpty;
+
+  /// No description provided for @adminHistoryEmptyBody.
+  ///
+  /// In es, this message translates to:
+  /// **'Aún no se ha aceptado ni rechazado ningún tour.'**
+  String get adminHistoryEmptyBody;
+
+  /// No description provided for @adminHistoryReviewed.
+  ///
+  /// In es, this message translates to:
+  /// **'Revisado: {date}'**
+  String adminHistoryReviewed(String date);
+
+  /// No description provided for @adminHistoryApproved.
+  ///
+  /// In es, this message translates to:
+  /// **'ACEPTADO'**
+  String get adminHistoryApproved;
+
+  /// No description provided for @adminHistoryRejected.
+  ///
+  /// In es, this message translates to:
+  /// **'RECHAZADO'**
+  String get adminHistoryRejected;
+
+  /// No description provided for @adminHistoryErrorLoading.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al cargar el historial: {error}'**
+  String adminHistoryErrorLoading(String error);
+
+  /// No description provided for @adminPaymentTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Historial de Pagos'**
+  String get adminPaymentTitle;
+
+  /// No description provided for @adminPaymentComingSoon.
+  ///
+  /// In es, this message translates to:
+  /// **'Monetización Próximamente'**
+  String get adminPaymentComingSoon;
+
+  /// No description provided for @adminPaymentComingSoonBody.
+  ///
+  /// In es, this message translates to:
+  /// **'Esta sección mostrará las transacciones financieras y pagos a proveedores en una futura actualización, una vez que se implemente la monetización en la plataforma VIBETOURS.'**
+  String get adminPaymentComingSoonBody;
+
+  /// No description provided for @adminPqrsHistoryScreenTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Historial de PQRS Respondidos'**
+  String get adminPqrsHistoryScreenTitle;
+
+  /// No description provided for @adminPqrsHistoryEmpty.
+  ///
+  /// In es, this message translates to:
+  /// **'Sin PQRS respondidos'**
+  String get adminPqrsHistoryEmpty;
+
+  /// No description provided for @adminPqrsHistoryEmptyBody.
+  ///
+  /// In es, this message translates to:
+  /// **'El historial estará disponible cuando respondas las consultas de soporte de tus usuarios.'**
+  String get adminPqrsHistoryEmptyBody;
+
+  /// No description provided for @adminPqrsUser.
+  ///
+  /// In es, this message translates to:
+  /// **'Usuario: {id}... • Creado: {date}'**
+  String adminPqrsUser(String id, String date);
+
+  /// No description provided for @adminOriginalQuery.
+  ///
+  /// In es, this message translates to:
+  /// **'Consulta original:'**
+  String get adminOriginalQuery;
+
+  /// No description provided for @adminOfficialResponse.
+  ///
+  /// In es, this message translates to:
+  /// **'Respuesta oficial del Administrador:'**
+  String get adminOfficialResponse;
+
+  /// No description provided for @adminPqrsErrorLoading.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al cargar PQRS respondidos: {error}'**
+  String adminPqrsErrorLoading(String error);
+
+  /// No description provided for @adminKindPetition.
+  ///
+  /// In es, this message translates to:
+  /// **'Peticion'**
+  String get adminKindPetition;
+
+  /// No description provided for @adminKindComplaint.
+  ///
+  /// In es, this message translates to:
+  /// **'Queja'**
+  String get adminKindComplaint;
+
+  /// No description provided for @adminKindClaim.
+  ///
+  /// In es, this message translates to:
+  /// **'Reclamo'**
+  String get adminKindClaim;
+
+  /// No description provided for @adminKindSuggestion.
+  ///
+  /// In es, this message translates to:
+  /// **'Sugerencia'**
+  String get adminKindSuggestion;
+
+  /// No description provided for @adminNoSubject.
+  ///
+  /// In es, this message translates to:
+  /// **'Sin asunto'**
+  String get adminNoSubject;
+
+  /// No description provided for @adminDemoTicket1Subject.
+  ///
+  /// In es, this message translates to:
+  /// **'Duda sobre horarios en Medellin'**
+  String get adminDemoTicket1Subject;
+
+  /// No description provided for @adminDemoTicket1Body.
+  ///
+  /// In es, this message translates to:
+  /// **'A que hora exactamente sale el transporte desde el punto de encuentro?'**
+  String get adminDemoTicket1Body;
+
+  /// No description provided for @adminDemoTicket2Subject.
+  ///
+  /// In es, this message translates to:
+  /// **'Imagen de tour repetida'**
+  String get adminDemoTicket2Subject;
+
+  /// No description provided for @adminDemoTicket2Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Un tour aparece con una imagen que no corresponde al destino.'**
+  String get adminDemoTicket2Body;
 }
 
 class _AppLocalizationsDelegate
