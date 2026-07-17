@@ -44,8 +44,8 @@ Future<void> main() async {
 
   if (isFirebaseInitialized) {
     // Setup Crashlytics error recorders for Flutter UI errors.
-    // We filter out common network and image loading exceptions to prevent
-    // bloating the Crashlytics dashboard with non-actionable connection errors.
+    // We filter out common network, image loading, and maplibre platform exceptions to prevent
+    // bloating the Crashlytics dashboard with non-actionable connection or SDK-internal errors.
     FlutterError.onError = (FlutterErrorDetails details) {
       final exception = details.exception;
       final exceptionStr = exception.toString();
@@ -56,15 +56,17 @@ Future<void> main() async {
           exceptionStr.contains('SocketException') ||
           exceptionStr.contains('HandshakeException') ||
           exceptionStr.contains('NetworkImage') ||
+          exceptionStr.contains('org.maplibre') ||
+          exceptionStr.contains('maplibre') ||
           details.silent) {
-        debugPrint('Ignored network/image error for Crashlytics: $exception');
+        debugPrint('Ignored network/image/maplibre error for Crashlytics: $exception');
         return;
       }
       FirebaseCrashlytics.instance.recordFlutterFatalError(details);
     };
 
     // Setup Crashlytics error recorders for platform/async errors.
-    // Similarly, filter out common network and image exceptions.
+    // Similarly, filter out common network, image, and maplibre exceptions.
     final originalOnError = PlatformDispatcher.instance.onError;
     PlatformDispatcher.instance.onError = (error, stack) {
       final errorStr = error.toString();
@@ -74,8 +76,10 @@ Future<void> main() async {
           errorStr.contains('HttpException') ||
           errorStr.contains('SocketException') ||
           errorStr.contains('HandshakeException') ||
-          errorStr.contains('NetworkImage')) {
-        debugPrint('Ignored network/image async error for Crashlytics: $error');
+          errorStr.contains('NetworkImage') ||
+          errorStr.contains('org.maplibre') ||
+          errorStr.contains('maplibre')) {
+        debugPrint('Ignored network/image/maplibre async error for Crashlytics: $error');
         return true;
       }
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);

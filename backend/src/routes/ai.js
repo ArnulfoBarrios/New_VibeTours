@@ -2573,28 +2573,52 @@ function persistTour(tour, route, input, userId) {
     .single()
     .then(async ({ data, error }) => {
       if (error) throw error
-      const stops = tour.itinerario.map((stop, index) => {
-        const routeStop = route.stops[index] ?? {}
-        return {
-          tour_id: data.id,
-          position: index + 1,
-          name: stop.nombre,
-          latitude: routeStop.latitude ?? 0,
-          longitude: routeStop.longitude ?? 0,
-          image_url: stop.imagenes[0],
-          description: stop.descripcion,
-          activities: stop.actividades,
-          tips: stop.consejos,
-          curious_facts: stop.datos_curiosos,
-          location_info: stop.ubicacion,
-          images: stop.imagenes,
-          suggested_minutes: minutesFromLabel(stop.duracion_estimada),
-          stop_order: index,
-          is_fallback_image: stop.isFallbackImage || false,
-        }
-      })
-      const { error: stopError } = await supabase.from('tour_stops').insert(stops)
-      if (stopError) throw stopError
+      const filteredStops = tour.itinerario
+        .map((stop, index) => {
+          const routeStop = route.stops[index] ?? {}
+          const stopNameLower = (stop.nombre || "").toLowerCase()
+          // Exclude hotel stops from the start or the end of the tour
+          const isHotel = stopNameLower.includes('hotel') && (index === 0 || index === tour.itinerario.length - 1)
+          if (isHotel) return null
+
+          return {
+            name: stop.nombre,
+            latitude: routeStop.latitude ?? 0,
+            longitude: routeStop.longitude ?? 0,
+            image_url: stop.imagenes?.[0] ?? '',
+            description: stop.descripcion,
+            activities: stop.actividades,
+            tips: stop.consejos,
+            curious_facts: stop.datos_curiosos,
+            location_info: stop.ubicacion,
+            images: stop.imagenes,
+            suggested_minutes: minutesFromLabel(stop.duracion_estimada),
+            is_fallback_image: stop.isFallbackImage || false,
+            // Include image_metadata containing day details so the UI loads day groups correctly
+            image_metadata: {
+              dia: stop.dia ?? 1,
+              day: stop.dia ?? 1,
+              activities: stop.actividades,
+              datos_curiosos: stop.datos_curiosos,
+              consejos: stop.consejos,
+              location_info: stop.ubicacion
+            }
+          }
+        })
+        .filter(stop => stop !== null)
+
+      // Recalculate index and orders to prevent gaps
+      const finalStops = filteredStops.map((stop, index) => ({
+        tour_id: data.id,
+        position: index + 1,
+        stop_order: index,
+        ...stop
+      }))
+
+      if (finalStops.length > 0) {
+        const { error: stopError } = await supabase.from('tour_stops').insert(finalStops)
+        if (stopError) throw stopError
+      }
     })
 }
 

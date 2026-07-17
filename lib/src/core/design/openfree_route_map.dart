@@ -318,12 +318,16 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
         widget.useRoadRouting &&
         widget.points.length > 1;
     if (widget.routeOverride != null) {
-      await _paintRoute(
-        widget.routeOverride!,
-        focusActiveStop: focusActiveStop,
-        fitRoute: true,
-        isIncremental: isIncremental,
-      );
+      try {
+        await _paintRoute(
+          widget.routeOverride!,
+          focusActiveStop: focusActiveStop,
+          fitRoute: true,
+          isIncremental: isIncremental,
+        );
+      } catch (e) {
+        debugPrint('Error painting route override: $e');
+      }
       return;
     }
     if (!shouldResolveRoadRoute) return;
@@ -336,20 +340,28 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
           ? resolvedRoute
           : RoadRouteResult(geometry: widget.points);
 
-      await _paintRoute(
-        routeToPaint,
-        focusActiveStop: focusActiveStop,
-        fitRoute: true,
-        isIncremental: isIncremental,
-      );
+      try {
+        await _paintRoute(
+          routeToPaint,
+          focusActiveStop: focusActiveStop,
+          fitRoute: true,
+          isIncremental: isIncremental,
+        );
+      } catch (e) {
+        debugPrint('Error painting resolved route: $e');
+      }
     } catch (_) {
       if (!mounted || requestId != _drawRequest) return;
-      await _paintRoute(
-        RoadRouteResult(geometry: widget.points),
-        focusActiveStop: focusActiveStop,
-        fitRoute: true,
-        isIncremental: isIncremental,
-      );
+      try {
+        await _paintRoute(
+          RoadRouteResult(geometry: widget.points),
+          focusActiveStop: focusActiveStop,
+          fitRoute: true,
+          isIncremental: isIncremental,
+        );
+      } catch (e) {
+        debugPrint('Error painting fallback route: $e');
+      }
     }
   }
 

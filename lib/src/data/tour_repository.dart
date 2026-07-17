@@ -164,9 +164,27 @@ class TourRepository {
     final tourId = savedTour['id'].toString();
     await client.from('tour_stops').delete().eq('tour_id', tourId);
     if (tour.stops.isNotEmpty) {
-      await client.from('tour_stops').insert([
-        for (final stop in tour.stops) _stopPayload(stop, tourId),
-      ]);
+      // Filter out temporary/persistent hotel stops from being permanently saved to the database
+      final nonHotelStops = tour.stops.where((stop) {
+        final idLower = stop.id.toLowerCase();
+        final nameLower = stop.name.toLowerCase();
+        final isHotel = idLower == 'hotel_start' || 
+                        idLower == 'hotel_end' || 
+                        ((idLower.contains('hotel') || nameLower.contains('hotel')) && 
+                         (stop.order == 0 || stop.order == tour.stops.length - 1));
+        return !isHotel;
+      }).toList();
+
+      // Recalculate order index (stop_order) for the saved stops to prevent gaps
+      final reorderedStops = nonHotelStops.asMap().entries.map((entry) {
+        return entry.value.copyWith(order: entry.key);
+      }).toList();
+
+      if (reorderedStops.isNotEmpty) {
+        await client.from('tour_stops').insert([
+          for (final stop in reorderedStops) _stopPayload(stop, tourId),
+        ]);
+      }
     }
 
     final rows = await client
@@ -234,6 +252,12 @@ class TourRepository {
   }
 
   Future<void> joinTour(String tourId) async {
+    // If the ID is a temporary AI-generated local ID, skip joining on the database
+    if (!_looksLikeUuid(tourId)) {
+      debugPrint('Skipping joinTour database registration for temporary AI tour ID: $tourId');
+      return;
+    }
+
     final client = _requireClient();
     final user = client.auth.currentUser;
     if (user == null) {
@@ -908,6 +932,14 @@ class TourRepository {
       'location_info': stop.locationInfo.toCreationJson(),
       'images': stop.images,
       'is_fallback_image': stop.isFallbackImage,
+      'image_metadata': {
+        'dia': stop.day,
+        'day': stop.day,
+        'activities': stop.activities,
+        'datos_curiosos': stop.curiousFacts,
+        'consejos': stop.tips,
+        'location_info': stop.locationInfo.toCreationJson(),
+      },
     };
   }
 
