@@ -608,8 +608,18 @@ class UserToursController extends AsyncNotifier<UserToursState> {
           manualTours: dbTours,
           hiddenDefaultTourIds: hidden.toSet(),
         );
-      } catch (_) {
-        // Fallback to local only if DB fetch fails
+      } catch (e, stack) {
+        debugPrint('Error loading user tours from Supabase: $e \n $stack');
+        final errStr = e.toString();
+        if (errStr.contains('SocketException') || 
+            errStr.contains('Failed host lookup') || 
+            errStr.contains('HttpException') || 
+            errStr.contains('NetworkImage') ||
+            errStr.contains('connection')) {
+          // Fallback to local only if network/connection fails
+        } else {
+          rethrow;
+        }
       }
     }
 

@@ -466,7 +466,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final email = user?.email ?? 'correo@ejemplo.com';
     final bio = metadata['bio']?.toString() ?? 'Añade una biografía y tus gustos aquí...';
     final avatarUrl = metadata['custom_avatar_url']?.toString() ?? metadata['avatar_url']?.toString();
-    final createdTours = ref.watch(userToursProvider).valueOrNull?.manualTours ?? [];
     final userRatings = user != null
         ? ref.watch(userRatingsProvider(user.id)).valueOrNull ?? []
         : <UserTourRating>[];
@@ -730,7 +729,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         bgColor: AppTheme.primary.withValues(alpha: 0.1),
                         value: '${stats['createdTours']}',
                         label: l10n.createdTours,
-                        onTap: () => _showCreatedToursSheet(context, createdTours),
+                        onTap: () => _showCreatedToursSheet(context),
                       ),
                       const SizedBox(width: 12),
                       _StatCard(
@@ -961,7 +960,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
 
 
-  void _showCreatedToursSheet(BuildContext context, List<Tour> tours) {
+  void _showCreatedToursSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -979,62 +978,101 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             return SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 16),
-                    Container(
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Tours Creados',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
+                child: Consumer(
+                  builder: (context, ref, child) {
+                    final userToursAsync = ref.watch(userToursProvider);
+                    return Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: tours.isEmpty
-                          ? Center(
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Tours Creados',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: userToursAsync.when(
+                            loading: () => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            error: (err, stack) => Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
-                                    Icons.map_outlined,
+                                    Icons.error_outline,
+                                    color: Theme.of(context).colorScheme.error,
                                     size: 48,
-                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    'Aún no has creado ningún tour.',
-                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                    'Error al cargar tours:\n$err',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          color: Theme.of(context).colorScheme.error,
                                         ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: () => ref.invalidate(userToursProvider),
+                                    child: const Text('Reintentar'),
                                   ),
                                 ],
                               ),
-                            )
-                          : ListView.builder(
-                              controller: scrollController,
-                              itemCount: tours.length,
-                              itemBuilder: (context, index) {
-                                final tour = tours[index];
-                                return _CreatedTourTile(
-                                  tour: tour,
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    context.push('/tours/${tour.id}');
-                                  },
-                                );
-                              },
                             ),
-                    ),
-                  ],
+                            data: (state) {
+                              final tours = state.manualTours;
+                              if (tours.isEmpty) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.map_outlined,
+                                        size: 48,
+                                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Aún no has creado ningún tour.',
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              return ListView.builder(
+                                controller: scrollController,
+                                itemCount: tours.length,
+                                itemBuilder: (context, index) {
+                                  final tour = tours[index];
+                                  return _CreatedTourTile(
+                                    tour: tour,
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      context.push('/tours/${tour.id}');
+                                    },
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             );

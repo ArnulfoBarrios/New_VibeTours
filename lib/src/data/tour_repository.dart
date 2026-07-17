@@ -216,17 +216,21 @@ class TourRepository {
 
       // 2. Conteo real de filas únicas de participantes en los tours del usuario
       int totalParticipants = 0;
-      if (createdTours.isNotEmpty) {
-        final tourIds = createdTours.map((t) => (t as Map)['id'] as String).toList();
-        final participantsResponse = await client
-            .from('tour_participants')
-            .select('user_id')
-            .inFilter('tour_id', tourIds);
-        
-        final uniqueUserIds = (participantsResponse as List)
-            .map((p) => (p as Map)['user_id'] as String)
-            .toSet();
-        totalParticipants = uniqueUserIds.length;
+      try {
+        if (createdTours.isNotEmpty) {
+          final tourIds = createdTours.map((t) => (t as Map)['id'] as String).toList();
+          final participantsResponse = await client
+              .from('tour_participants')
+              .select('user_id')
+              .inFilter('tour_id', tourIds);
+          
+          final uniqueUserIds = (participantsResponse as List)
+              .map((p) => (p as Map)['user_id'] as String)
+              .toSet();
+          totalParticipants = uniqueUserIds.length;
+        }
+      } catch (e) {
+        debugPrint('Error fetching participants stats: $e');
       }
 
       int ratedCount = 0;
