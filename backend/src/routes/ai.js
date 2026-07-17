@@ -67,8 +67,25 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
     if (input.city && input.city.trim().length > 0) {
       input.destination = input.city.trim()
     }
+
+    // Serverless environments like Vercel: process synchronously to avoid 404 polling errors
+    if (process.env.VERCEL) {
+      console.info('[tour-ai] Serverless runtime detected (Vercel). Processing tour generation synchronously.')
+      try {
+        const result = await processTourGeneration(null, input)
+        return res.json({
+          status: 'completed',
+          message: 'Tour generado con éxito',
+          tour: result.tour,
+          route: result.route
+        })
+      } catch (err) {
+        console.error('[tour-ai] Synchronous generation failed:', err.message)
+        return res.status(500).json({ error: err.message || 'Error al generar el tour.' })
+      }
+    }
+
     const jobId = crypto.randomUUID()
-    
     tourJobs.set(jobId, {
       id: jobId,
       status: 'geocoding',
@@ -79,7 +96,7 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
       error: null
     })
 
-    // Procesamiento en background
+    // Background processing for persistent node environments
     processTourGeneration(jobId, input).catch((err) => {
       console.error(`[tour-ai] Job ${jobId} failed completely:`, err)
       const job = tourJobs.get(jobId)
@@ -541,18 +558,22 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
 }
 
 async function processTourGeneration(jobId, input) {
+  const isSync = !jobId
   const updateJob = (updates) => {
+    if (isSync) return
     const job = tourJobs.get(jobId)
     if (job) Object.assign(job, updates)
   }
 
   try {
-    console.info('[tour-ai] generate:start', { jobId, destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
+    console.info('[tour-ai] generate:start', { jobId: jobId || 'sync', destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
     const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
     console.info('[tour-ai] geocode', location ? { name: location.name, latitude: location.latitude, longitude: location.longitude } : { ok: false })
     
     if (!location) {
-      updateJob({ status: 'failed', message: 'No pudimos identificar la ubicación ingresada. Intenta con un nombre más específico o conocido.' })
+      const msg = 'No pudimos identificar la ubicación ingresada. Intenta con un nombre más específico o conocido.'
+      updateJob({ status: 'failed', message: msg })
+      if (isSync) throw new Error(msg)
       return
     }
 
@@ -561,7 +582,9 @@ async function processTourGeneration(jobId, input) {
     console.info('[tour-ai] candidates', { raw: candidatePack.rawCount, normalized: candidatePack.places.length, source: candidatePack.source, selectedHint: candidatePack.places.slice(0, 5).map((place) => place.name) })
     
     if (!candidatePack.places || candidatePack.places.length === 0) {
-      updateJob({ status: 'failed', message: 'No encontramos suficientes lugares de interés en este destino para generar un tour válido.' })
+      const msg = 'No encontramos suficientes lugares de interés en este destino para generar un tour válido.'
+      updateJob({ status: 'failed', message: msg })
+      if (isSync) throw new Error(msg)
       return
     }
 
@@ -707,6 +730,7 @@ async function processTourGeneration(jobId, input) {
         await persistTour(tour, route, input, input.userId)
       }
       updateJob({ status: 'completed', message: 'Tour generado con éxito', tour, route })
+      if (isSync) return { tour, route }
     } catch (assemblyError) {
       console.error('[tour-ai] assembly-failed', { message: assemblyError?.message ?? String(assemblyError), fallbackReason, ollamaError: ollamaError ? (ollamaError.message ?? String(ollamaError)) : null })
       const emergencyTour = buildEmergencyTour(input, planner, fallbackReason)
@@ -725,10 +749,12 @@ async function processTourGeneration(jobId, input) {
         })),
       }
       updateJob({ status: 'completed', message: 'Tour recuperado parcialmente (modo offline)', tour: emergencyTour, route: emergencyRoute })
+      if (isSync) return { tour: emergencyTour, route: emergencyRoute }
     }
   } catch (error) {
     console.error('[tour-ai] fatal process error', error)
     updateJob({ status: 'failed', message: 'Error fatal durante la generación.', error: String(error) })
+    if (isSync) throw error
   }
 }
 
