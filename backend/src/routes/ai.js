@@ -401,26 +401,44 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
           const item = aiSuggestions[i]
           const nameLower = (item.name || '').toLowerCase().trim()
           if (nameLower && !currentNamesAndIds.has(nameLower)) {
-            const latOffset = (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1)
-            const lonOffset = (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1)
+            // Geocode the exact physical landmark to place marker accurately on the map
+            const geo = await geocodePlace(`${item.name} ${city} ${country}`, centerLat, centerLon).catch(() => null)
+            const realLat = geo?.latitude ?? (centerLat + (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1))
+            const realLon = geo?.longitude ?? (centerLon + (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1))
+
             available.push({
               placeId: `ai-real-${Date.now()}-${i}`,
               name: item.name,
-              latitude: centerLat + latOffset,
-              longitude: centerLon + lonOffset,
+              latitude: realLat,
+              longitude: realLon,
+              address: geo?.name || `${city}, ${country}`,
+              city: geo?.city || city,
+              country: geo?.country || country,
               category: item.category || item.type || input.type || 'tourism',
-              description: item.description || `Lugar de interés destacado en ${city}.`,
+              description: item.description || `Bienvenido a ${item.name}, uno de los puntos imperdibles de ${city}. Disfruta de su riqueza histórica, valor cultural y entorno vibrante.`,
               reason: item.description || `Atractivo imperdible recomendado para visitar en ${city}.`,
-              minutes: 30
+              minutes: 35
             })
           }
         }
       }
     }
 
-    // 5. Build rich alternative DTOs with REAL images for each place
+    // 5. Build rich alternative DTOs with REAL geocoded coordinates & images for each place
     const alternatives = await Promise.all(
       available.slice(0, 6).map(async (place) => {
+        let realLat = place.latitude
+        let realLon = place.longitude
+
+        // Ensure exact geocoding if coordinates are missing or default
+        if (!hasUsableCoordinates(realLat, realLon) || realLat === location?.latitude) {
+          const geo = await geocodePlace(`${place.name} ${city} ${country}`, location?.latitude, location?.longitude).catch(() => null)
+          if (geo && hasUsableCoordinates(geo.latitude, geo.longitude)) {
+            realLat = geo.latitude
+            realLon = geo.longitude
+          }
+        }
+
         let imageUrl = place.imageUrl || place.images?.[0] || ''
         if (!imageUrl) {
           try {
@@ -433,21 +451,21 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
         return {
           id: place.placeId || place.id || place.name,
           name: place.name,
-          latitude: place.latitude,
-          longitude: place.longitude,
+          latitude: realLat,
+          longitude: realLon,
           category: place.category || 'turismo',
           imageUrl: imageUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500',
-          description: place.description || place.history || '',
-          reason: place.reason || `Excelente opción para complementar la ruta en ${city}.`,
-          durationMinutes: place.minutes || 25,
+          description: place.description || place.history || `Explora ${place.name}, una parada imprescindible en ${city} llena de cultura e historia local.`,
+          reason: place.reason || `Excelente opción recomendada para enriquecer tu ruta en ${city}.`,
+          durationMinutes: place.minutes || 30,
           locationInfo: {
             nombre_lugar: place.name,
-            direccion: place.address || `Centro de ${city}`,
+            direccion: place.address || `${city}, ${country}`,
             ciudad: city,
             region: city,
             pais: country,
             place_id: place.placeId || place.id || '',
-            url_mapa: mapUrlFor(place.latitude, place.longitude)
+            url_mapa: mapUrlFor(realLat, realLon)
           }
         }
       })
