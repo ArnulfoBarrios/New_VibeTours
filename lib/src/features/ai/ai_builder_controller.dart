@@ -416,25 +416,24 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
   }
 
   Future<List<AiRecommendation>> getAlternatives() async {
-    final request = state.request ?? (state.recommendations.isNotEmpty
-        ? AiTourRequest(
-            destination: state.recommendations.first.locationInfo.ciudad.isNotEmpty
-                ? state.recommendations.first.locationInfo.ciudad
-                : 'Destino',
-            country: state.recommendations.first.locationInfo.pais,
-            city: state.recommendations.first.locationInfo.ciudad,
-            type: TourType.cultural,
-            language: 'es',
-            prompt: 'Alternativas de tour',
-            touristProfileSummary: '',
-            touristInterests: const [],
-            touristPace: 'balanced',
-            latitude: state.recommendations.first.latitude,
-            longitude: state.recommendations.first.longitude,
-          )
-        : null);
+    final firstRec = state.recommendations.isNotEmpty ? state.recommendations.first : null;
+    final cityFromRec = (firstRec?.locationInfo.ciudad.isNotEmpty == true)
+        ? firstRec!.locationInfo.ciudad
+        : ((firstRec?.name.isNotEmpty == true) ? firstRec!.name : 'Barranquilla');
 
-    if (request == null) return [];
+    final request = state.request ?? AiTourRequest(
+      destination: cityFromRec,
+      country: firstRec?.locationInfo.pais.isNotEmpty == true ? firstRec!.locationInfo.pais : 'Colombia',
+      city: cityFromRec,
+      type: TourType.cultural,
+      language: 'es',
+      prompt: 'Alternativas de tour',
+      touristProfileSummary: '',
+      touristInterests: const [],
+      touristPace: 'balanced',
+      latitude: firstRec?.latitude ?? 10.9878,
+      longitude: firstRec?.longitude ?? -74.7889,
+    );
     try {
       final currentIds = state.recommendations.map((e) => e.id).toList();
       
@@ -462,6 +461,12 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       newRecs[index] = newRec;
       state = state.copyWith(recommendations: newRecs);
     }
+  }
+
+  void addStopWithRecommendation(AiRecommendation newRec) {
+    final newRecs = List<AiRecommendation>.from(state.recommendations);
+    newRecs.add(newRec);
+    state = state.copyWith(recommendations: newRecs);
   }
 
   Future<void> removeStop(int index) async {

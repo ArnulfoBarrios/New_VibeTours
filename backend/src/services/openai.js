@@ -387,8 +387,8 @@ CRITICAL: Do NOT invent or hallucinate places that do not exist in real life. En
     if (response.ok) {
       const json = await response.json()
       const content = JSON.parse(json.choices?.[0]?.message?.content ?? '{}')
-      if (Array.isArray(content.places) && content.places.length >= 3) {
-        return content.places.slice(0, 3)
+      if (Array.isArray(content.places) && content.places.length > 0) {
+        return content.places.slice(0, 5)
       }
     } else {
       console.warn('[suggestFallbackPlacesWithOpenAI] OpenAI responded with non-ok status:', response.status)

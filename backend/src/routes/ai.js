@@ -323,26 +323,41 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       excludeIds: z.array(z.string()).optional()
     })
     const { request: input, currentPlaces, excludeIds = [] } = altSchema.parse(req.body)
-    
-    const searchQuery = (input.city && input.country) 
-      ? `${input.city} ${input.country}` 
-      : `${input.destination} ${input.city} ${input.country}`.trim()
 
-    let location = await geocodePlace(searchQuery, input.latitude, input.longitude).catch(() => null)
-    if (!location && (input.latitude && input.longitude)) {
+    // Fallback city/destination extraction from currentPlaces if input destination is generic
+    const firstPlace = currentPlaces.length > 0 ? currentPlaces[0] : null
+    const inferredCity = input.city || firstPlace?.locationInfo?.ciudad || firstPlace?.locationInfo?.nombre_lugar || ''
+    const inferredDest = (input.destination && input.destination !== 'Destino')
+      ? input.destination 
+      : (inferredCity || firstPlace?.name || 'Barranquilla')
+    const inferredLat = input.latitude || firstPlace?.latitude || 10.9878
+    const inferredLon = input.longitude || firstPlace?.longitude || -74.7889
+
+    const searchQuery = (inferredCity && input.country) 
+      ? `${inferredCity} ${input.country}` 
+      : `${inferredDest} ${inferredCity} ${input.country || 'Colombia'}`.trim()
+
+    let location = await geocodePlace(searchQuery, inferredLat, inferredLon).catch(() => null)
+    if (!location) {
       location = {
-        name: input.city || input.destination || 'Ubicación',
-        latitude: input.latitude,
-        longitude: input.longitude,
-        city: input.city || '',
-        country: input.country || ''
+        name: inferredDest,
+        latitude: inferredLat,
+        longitude: inferredLon,
+        city: inferredCity,
+        country: input.country || 'Colombia'
       }
     }
 
     let candidatePack = { places: [] }
     if (location) {
       try {
-        candidatePack = await collectTourCandidates(input, location)
+        candidatePack = await collectTourCandidates({
+          ...input,
+          destination: inferredDest,
+          city: inferredCity,
+          latitude: inferredLat,
+          longitude: inferredLon
+        }, location)
       } catch (e) {
         console.warn('[alternatives] collectTourCandidates failed:', e.message)
       }
@@ -362,37 +377,70 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
 
     // If Overpass/Photon didn't return enough unique alternatives, ask OpenAI for real local suggestions!
     if (available.length < 3) {
-      console.info('[alternatives] Fetching extra suggestions via OpenAI for:', input.city || input.destination)
+      console.info('[alternatives] Fetching extra suggestions via OpenAI for:', inferredCity || inferredDest)
       const aiSuggestions = await suggestFallbackPlacesWithOpenAI({
-        destination: input.destination || input.city || 'Destino',
-        city: input.city || input.destination || '',
-        country: input.country || '',
+        destination: inferredDest,
+        city: inferredCity,
+        country: input.country || 'Colombia',
         type: input.type || 'cultural'
       }).catch(() => [])
 
       if (Array.isArray(aiSuggestions)) {
-        const centerLat = location?.latitude ?? input.latitude ?? 10.9878
-        const centerLon = location?.longitude ?? input.longitude ?? -74.7889
+        const centerLat = location?.latitude ?? inferredLat
+        const centerLon = location?.longitude ?? inferredLon
 
         for (let i = 0; i < aiSuggestions.length; i++) {
           const item = aiSuggestions[i]
           const nameLower = (item.name || '').toLowerCase().trim()
           if (nameLower && !currentNamesAndIds.has(nameLower)) {
-            const latOffset = (i + 1) * 0.002 * (i % 2 === 0 ? 1 : -1)
-            const lonOffset = (i + 1) * 0.002 * (i % 2 === 0 ? -1 : 1)
+            const latOffset = (i + 1) * 0.0025 * (i % 2 === 0 ? 1 : -1)
+            const lonOffset = (i + 1) * 0.0025 * (i % 2 === 0 ? -1 : 1)
             available.push({
               placeId: `ai-alt-${Date.now()}-${i}`,
               name: item.name,
               latitude: centerLat + latOffset,
               longitude: centerLon + lonOffset,
               category: item.category || input.type || 'tourism',
-              description: item.description || item.reason || `Atractivo turístico recomendado en ${input.city || input.destination}.`,
-              reason: item.reason || `Excelente opción para complementar tu recorrido en ${input.city || input.destination}.`,
+              description: item.description || item.reason || `Atractivo turístico recomendado en ${inferredDest}.`,
+              reason: item.reason || `Excelente opción para complementar tu recorrido en ${inferredDest}.`,
               minutes: 30
             })
           }
         }
       }
+    }
+
+    // Guaranteed Fallback if available is still empty
+    if (available.length === 0) {
+      const cityName = inferredCity || inferredDest || 'la ciudad'
+      const baseLat = location?.latitude ?? inferredLat
+      const baseLon = location?.longitude ?? inferredLon
+
+      const fallbackTemplates = [
+        { name: `Mirador y Punto Panorámico de ${cityName}`, category: 'viewpoint', reason: `Excelente mirador para apreciar vistas panorámicas de ${cityName}.` },
+        { name: `Plaza Principal e Histórica de ${cityName}`, category: 'historic', reason: `Lugar de encuentro con rica historia, patrimonio y ambiente local.` },
+        { name: `Mercado Cultural y Gastronómico de ${cityName}`, category: 'market', reason: `Punto imperdible para degustar platos típicos y artesanías.` },
+        { name: `Parque Ecológico y Jardín de ${cityName}`, category: 'nature', reason: `Área verde ideal para recorrer a pie y relajarse.` },
+        { name: `Museo de Arte e Historia de ${cityName}`, category: 'museum', reason: `Exposición destacada de la historia y cultura regional.` }
+      ]
+
+      fallbackTemplates.forEach((tpl, i) => {
+        const nameLower = tpl.name.toLowerCase().trim()
+        if (!currentNamesAndIds.has(nameLower)) {
+          const latOffset = (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1)
+          const lonOffset = (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1)
+          available.push({
+            placeId: `fallback-alt-${Date.now()}-${i}`,
+            name: tpl.name,
+            latitude: baseLat + latOffset,
+            longitude: baseLon + lonOffset,
+            category: tpl.category,
+            description: tpl.reason,
+            reason: tpl.reason,
+            minutes: 30
+          })
+        }
+      })
     }
 
     const alternatives = available.slice(0, 5).map(place => ({
