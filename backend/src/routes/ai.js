@@ -323,44 +323,103 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       excludeIds: z.array(z.string()).optional()
     })
     const { request: input, currentPlaces, excludeIds = [] } = altSchema.parse(req.body)
-    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`, input.latitude, input.longitude)
-    if (!location) {
-      return res.status(400).json({ error: 'Ubicación no encontrada' })
+    
+    const searchQuery = (input.city && input.country) 
+      ? `${input.city} ${input.country}` 
+      : `${input.destination} ${input.city} ${input.country}`.trim()
+
+    let location = await geocodePlace(searchQuery, input.latitude, input.longitude).catch(() => null)
+    if (!location && (input.latitude && input.longitude)) {
+      location = {
+        name: input.city || input.destination || 'Ubicación',
+        latitude: input.latitude,
+        longitude: input.longitude,
+        city: input.city || '',
+        country: input.country || ''
+      }
     }
-    const candidatePack = await collectTourCandidates(input, location)
-    const planner = buildTourPlanner(input, location, candidatePack.places)
-    
-    const currentIds = new Set(currentPlaces.map(p => p.id || p.placeId))
-    const exclusions = new Set(excludeIds)
-    
-    const sortedCandidates = candidatePack.places.sort((a, b) => (b.score || 0) - (a.score || 0))
-    const alternatives = sortedCandidates
-      .filter(place => !currentIds.has(place.placeId) && !exclusions.has(place.placeId))
-      .slice(0, 5)
-      .map(place => ({
-        id: place.placeId,
-        name: place.name,
-        latitude: place.latitude,
-        longitude: place.longitude,
-        category: place.category,
-        imageUrl: place.imageUrl || place.images?.[0] || '',
-        description: place.description || place.history || '',
-        reason: 'Excelente alternativa que mantiene la coherencia de la ruta.',
-        durationMinutes: place.minutes || 25,
-        locationInfo: {
-          nombre_lugar: place.name,
-          direccion: place.address || '',
-          ciudad: place.city || input.city || '',
-          region: place.region || '',
-          pais: place.country || input.country || '',
-          place_id: place.placeId,
-          url_mapa: mapUrlFor(place.latitude, place.longitude)
+
+    let candidatePack = { places: [] }
+    if (location) {
+      try {
+        candidatePack = await collectTourCandidates(input, location)
+      } catch (e) {
+        console.warn('[alternatives] collectTourCandidates failed:', e.message)
+      }
+    }
+
+    const currentNamesAndIds = new Set([
+      ...currentPlaces.map(p => (p.name || '').toLowerCase().trim()),
+      ...currentPlaces.map(p => (p.id || p.placeId || '').toLowerCase().trim()),
+      ...excludeIds.map(id => (id || '').toLowerCase().trim())
+    ])
+
+    let available = (candidatePack.places || []).filter(place => {
+      const name = (place.name || '').toLowerCase().trim()
+      const pId = (place.placeId || place.id || '').toLowerCase().trim()
+      return name && !currentNamesAndIds.has(name) && (!pId || !currentNamesAndIds.has(pId))
+    })
+
+    // If Overpass/Photon didn't return enough unique alternatives, ask OpenAI for real local suggestions!
+    if (available.length < 3) {
+      console.info('[alternatives] Fetching extra suggestions via OpenAI for:', input.city || input.destination)
+      const aiSuggestions = await suggestFallbackPlacesWithOpenAI({
+        destination: input.destination || input.city || 'Destino',
+        city: input.city || input.destination || '',
+        country: input.country || '',
+        type: input.type || 'cultural'
+      }).catch(() => [])
+
+      if (Array.isArray(aiSuggestions)) {
+        const centerLat = location?.latitude ?? input.latitude ?? 10.9878
+        const centerLon = location?.longitude ?? input.longitude ?? -74.7889
+
+        for (let i = 0; i < aiSuggestions.length; i++) {
+          const item = aiSuggestions[i]
+          const nameLower = (item.name || '').toLowerCase().trim()
+          if (nameLower && !currentNamesAndIds.has(nameLower)) {
+            const latOffset = (i + 1) * 0.002 * (i % 2 === 0 ? 1 : -1)
+            const lonOffset = (i + 1) * 0.002 * (i % 2 === 0 ? -1 : 1)
+            available.push({
+              placeId: `ai-alt-${Date.now()}-${i}`,
+              name: item.name,
+              latitude: centerLat + latOffset,
+              longitude: centerLon + lonOffset,
+              category: item.category || input.type || 'tourism',
+              description: item.description || item.reason || `Atractivo turístico recomendado en ${input.city || input.destination}.`,
+              reason: item.reason || `Excelente opción para complementar tu recorrido en ${input.city || input.destination}.`,
+              minutes: 30
+            })
+          }
         }
-      }))
-      
+      }
+    }
+
+    const alternatives = available.slice(0, 5).map(place => ({
+      id: place.placeId || place.id || place.name,
+      name: place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      category: place.category || 'turismo',
+      imageUrl: place.imageUrl || place.images?.[0] || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500',
+      description: place.description || place.history || '',
+      reason: place.reason || 'Excelente alternativa que mantiene la coherencia de la ruta.',
+      durationMinutes: place.minutes || 25,
+      locationInfo: {
+        nombre_lugar: place.name,
+        direccion: place.address || '',
+        ciudad: place.city || input.city || '',
+        region: place.region || '',
+        pais: place.country || input.country || '',
+        place_id: place.placeId || place.id || '',
+        url_mapa: mapUrlFor(place.latitude, place.longitude)
+      }
+    }))
+
     res.json({ alternatives })
   } catch (error) {
-    next(error)
+    console.error('[alternatives] error:', error)
+    res.json({ alternatives: [] })
   }
 })
 

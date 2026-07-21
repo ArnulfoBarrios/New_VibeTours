@@ -184,12 +184,12 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                           children: [
                             TextButton.icon(
                               onPressed: () {
-                                ref.read(aiBuilderProvider.notifier).replaceStop(index);
+                                _showChangeStopSheet(context, index);
                               },
-                              icon: const Icon(Icons.refresh_rounded, size: 18),
+                              icon: const Icon(Icons.swap_horiz_rounded, size: 18),
                               label: const Text('Cambiar'),
                             ),
-                            if (state.recommendations.length > 3)
+                            if (state.recommendations.length > 2)
                               TextButton.icon(
                                 onPressed: () {
                                   ref.read(aiBuilderProvider.notifier).removeStop(index);
@@ -236,6 +236,164 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  void _showChangeStopSheet(BuildContext context, int index) {
+    final controller = ref.read(aiBuilderProvider.notifier);
+    final currentStop = ref.read(aiBuilderProvider).recommendations[index];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.65,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: FutureBuilder<List<AiRecommendation>>(
+          future: controller.getAlternatives(),
+          builder: (context, snapshot) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Cambiar: ${currentStop.name}',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Opción para eliminar la parada sin reemplazarla
+                InkWell(
+                  onTap: () {
+                    controller.removeStop(index);
+                    Navigator.pop(context);
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                    ),
+                    child: const Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: Colors.redAccent,
+                          radius: 16,
+                          child: Icon(Icons.delete_outline_rounded, color: Colors.white, size: 18),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Quitar parada sin reemplazar',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Conservar el tour sin añadir otra parada de reemplazo.',
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Sugerencias de reemplazo por IA',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: snapshot.connectionState == ConnectionState.waiting
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 14),
+                              Text(
+                                'Buscando alternativas por IA para esta zona...',
+                                style: TextStyle(color: Colors.grey, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        )
+                      : (snapshot.data == null || snapshot.data!.isEmpty)
+                          ? const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.location_off_rounded, size: 36, color: Colors.grey),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'No se encontraron otras alternativas cercanas.',
+                                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: snapshot.data!.length,
+                              itemBuilder: (context, altIndex) {
+                                final alt = snapshot.data![altIndex];
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.all(8),
+                                    leading: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: alt.imageUrl.isNotEmpty
+                                          ? Image.network(alt.imageUrl, width: 54, height: 54, fit: BoxFit.cover)
+                                          : Container(width: 54, height: 54, color: Colors.grey.shade200, child: const Icon(Icons.place)),
+                                    ),
+                                    title: Text(alt.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    subtitle: Text(
+                                      alt.reason.isNotEmpty ? alt.reason : alt.category,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    trailing: FilledButton.tonal(
+                                      onPressed: () {
+                                        controller.replaceStopWithRecommendation(index, alt);
+                                        Navigator.pop(context);
+                                      },
+                                      child: const Text('Elegir'),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

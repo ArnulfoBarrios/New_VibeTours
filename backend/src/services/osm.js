@@ -126,7 +126,8 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': USER_AGENT
       },
-      body: new URLSearchParams({ data: query })
+      body: new URLSearchParams({ data: query }),
+      signal: AbortSignal.timeout(8000)
     })
     if (!response.ok) return []
     const json = await response.json()

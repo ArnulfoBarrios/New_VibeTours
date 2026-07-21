@@ -415,65 +415,76 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     }
   }
 
-  Future<void> removeStop(int index) async {
-    final newRecs = List<AiRecommendation>.from(state.recommendations);
-    newRecs.removeAt(index);
-    state = state.copyWith(recommendations: newRecs);
-  }
+  Future<List<AiRecommendation>> getAlternatives() async {
+    final request = state.request ?? (state.recommendations.isNotEmpty
+        ? AiTourRequest(
+            destination: state.recommendations.first.locationInfo.ciudad.isNotEmpty
+                ? state.recommendations.first.locationInfo.ciudad
+                : 'Destino',
+            country: state.recommendations.first.locationInfo.pais,
+            city: state.recommendations.first.locationInfo.ciudad,
+            type: TourType.cultural,
+            language: 'es',
+            prompt: 'Alternativas de tour',
+            touristProfileSummary: '',
+            touristInterests: const [],
+            touristPace: 'balanced',
+            latitude: state.recommendations.first.latitude,
+            longitude: state.recommendations.first.longitude,
+          )
+        : null);
 
-  Future<void> replaceStop(int index) async {
-    if (state.request == null) return;
+    if (request == null) return [];
     try {
       final currentIds = state.recommendations.map((e) => e.id).toList();
       
       final response = await _postJson('/ai/tours/alternatives', {
-        'request': state.request!.toJson(),
+        'request': request.toJson(),
         'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
         'excludeIds': currentIds,
-      });
+      }).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final alts = (data['alternatives'] as List)
+        return (data['alternatives'] as List)
             .map((e) => AiRecommendation.fromJson(e))
             .toList();
-        
-        if (alts.isNotEmpty) {
-          final newRecs = List<AiRecommendation>.from(state.recommendations);
-          newRecs[index] = alts.first; // Simply take the best alternative for now
-          state = state.copyWith(recommendations: newRecs);
-        }
       }
     } catch (e) {
-      debugPrint('Error finding alternative: $e');
+      debugPrint('Error finding alternatives: $e');
+    }
+    return [];
+  }
+
+  void replaceStopWithRecommendation(int index, AiRecommendation newRec) {
+    final newRecs = List<AiRecommendation>.from(state.recommendations);
+    if (index >= 0 && index < newRecs.length) {
+      newRecs[index] = newRec;
+      state = state.copyWith(recommendations: newRecs);
+    }
+  }
+
+  Future<void> removeStop(int index) async {
+    final newRecs = List<AiRecommendation>.from(state.recommendations);
+    if (index >= 0 && index < newRecs.length) {
+      newRecs.removeAt(index);
+      state = state.copyWith(recommendations: newRecs);
+    }
+  }
+
+  Future<void> replaceStop(int index) async {
+    final alts = await getAlternatives();
+    if (alts.isNotEmpty) {
+      replaceStopWithRecommendation(index, alts.first);
     }
   }
 
   Future<void> addStop() async {
-    if (state.request == null) return;
-    try {
-      final currentIds = state.recommendations.map((e) => e.id).toList();
-      
-      final response = await _postJson('/ai/tours/alternatives', {
-        'request': state.request!.toJson(),
-        'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
-        'excludeIds': currentIds,
-      });
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final alts = (data['alternatives'] as List)
-            .map((e) => AiRecommendation.fromJson(e))
-            .toList();
-        
-        if (alts.isNotEmpty) {
-          final newRecs = List<AiRecommendation>.from(state.recommendations);
-          newRecs.add(alts.first);
-          state = state.copyWith(recommendations: newRecs);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error adding stop: $e');
+    final alts = await getAlternatives();
+    if (alts.isNotEmpty) {
+      final newRecs = List<AiRecommendation>.from(state.recommendations);
+      newRecs.add(alts.first);
+      state = state.copyWith(recommendations: newRecs);
     }
   }
 
@@ -600,16 +611,16 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             }
 
             final tour = Tour(
-              id: tourData['id'],
-              title: tourData['nombre_tour'],
+              id: tourData['id'] ?? 'ai-${DateTime.now().millisecondsSinceEpoch}',
+              title: tourData['nombre_tour'] ?? 'Tour VibeTours',
               country: tourData['country']?.toString() ?? state.request?.country ?? '',
               city: tourData['city']?.toString() ?? state.request?.city ?? '',
               type: TourType.values.firstWhere(
                 (e) => e.name == tourData['tipo_tour'] || tourTypeLabel(e).toLowerCase() == tourData['tipo_tour'].toString().toLowerCase(),
                 orElse: () => TourType.custom,
               ),
-              description: tourData['descripcion_tour'],
-              coverUrl: tourData['imagen_portada'],
+              description: tourData['descripcion_tour'] ?? '',
+              coverUrl: tourData['imagen_portada'] ?? '',
               gallery: List<String>.from(tourData['galeria_tour'] ?? []),
               durationHours: double.tryParse(tourData['duracion_estimada'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 4,
               distanceKm: double.tryParse(tourData['distancia_total'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0,
@@ -620,6 +631,33 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
               language: (tourData['idiomas_disponibles'] as List?)?.first ?? 'es',
               tags: List<String>.from(tourData['etiquetas'] ?? []),
               stops: stops,
+              shortSummary: tourData['resumen_corto']?.toString() ?? '',
+              subcategories: List<String>.from(tourData['subcategorias'] ?? []),
+              featuredExperience: tourData['experiencia_destacada']?.toString() ?? '',
+              placeHistory: tourData['historia_del_lugar']?.toString() ?? '',
+              culturalContext: tourData['contexto_cultural']?.toString() ?? '',
+              availableLanguages: List<String>.from(tourData['idiomas_disponibles'] ?? []),
+              recommendedAudience: List<String>.from(tourData['publico_recomendado'] ?? []),
+              bestSeason: tourData['mejor_epoca']?.toString() ?? '',
+              recommendedSchedule: tourData['horario_recomendado']?.toString() ?? '',
+              meetingPoint: tourData['punto_encuentro'] is Map
+                  ? (tourData['punto_encuentro']['nombre_lugar']?.toString() ?? '')
+                  : (tourData['punto_encuentro']?.toString() ?? ''),
+              includes: List<String>.from(tourData['incluye'] ?? []),
+              excludes: List<String>.from(tourData['no_incluye'] ?? []),
+              recommendations: List<String>.from(tourData['recomendaciones'] ?? []),
+              whatToBring: List<String>.from(tourData['que_llevar'] ?? []),
+              tourRules: List<String>.from(tourData['normas_del_tour'] ?? []),
+              keywords: List<String>.from(tourData['palabras_clave'] ?? []),
+              mainCategory: tourData['categoria_principal']?.toString() ?? '',
+              additionalInfo: tourData['informacion_adicional'] != null && tourData['informacion_adicional'] is Map
+                  ? TourAdditionalInfo(
+                      accesibilidad: tourData['informacion_adicional']['accesibilidad']?.toString() ?? 'Consultar condiciones de accesibilidad.',
+                      mascotasPermitidas: tourData['informacion_adicional']['mascotas_permitidas'] == true,
+                      aptoParaNinos: tourData['informacion_adicional']['apto_para_ninos'] == true,
+                      aptoParaAdultosMayores: tourData['informacion_adicional']['apto_para_adultos_mayores'] == true,
+                    )
+                  : TourAdditionalInfo.standard,
             );
             final aiMsg = ChatMessage(
               id: DateTime.now().millisecondsSinceEpoch.toString(),

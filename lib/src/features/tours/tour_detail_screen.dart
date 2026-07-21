@@ -219,6 +219,12 @@ class TourDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 18),
+                      // Metadatos clave: Época, Horario y Punto de encuentro
+                      _buildQuickSpecsCard(context, tour),
+                      const SizedBox(height: 18),
+                      // Público recomendado e Idiomas disponibles
+                      _buildAudienceAndLanguagesSection(context, tour),
+                      const SizedBox(height: 18),
                       GlassPanel(
                         padding: const EdgeInsets.all(10),
                         radius: 28,
@@ -270,6 +276,18 @@ class TourDetailScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 18),
+                      // ¿Qué incluye y qué NO incluye?
+                      _buildIncludesExcludesSection(context, tour),
+                      const SizedBox(height: 18),
+                      // Accesibilidad y Aptitudes (Mascotas, Niños, Adultos Mayores)
+                      _buildAccessibilityAndSuitabilitySection(context, tour),
+                      const SizedBox(height: 18),
+                      // Recomendaciones y Consejos
+                      if (tour.recommendations.isNotEmpty || tour.whatToBring.isNotEmpty || tour.tourRules.isNotEmpty) ...[
+                        _buildRecommendationsSection(context, tour),
+                        const SizedBox(height: 18),
+                      ],
                       SectionHeader(title: l10n.gallery),
                       SizedBox(
                         height: 96,
@@ -923,6 +941,252 @@ class TourDetailScreen extends ConsumerWidget {
       additionalInfo: tour.additionalInfo,
     );
   }
+
+  Widget _buildQuickSpecsCard(BuildContext context, Tour tour) {
+    final bestSeasonText = tour.bestSeason.isNotEmpty ? tour.bestSeason : 'Todo el año';
+    final recommendedScheduleText = tour.recommendedSchedule.isNotEmpty ? tour.recommendedSchedule : 'Mañana o tarde con buena luz natural';
+    final meetingPointText = tour.meetingPoint.isNotEmpty
+        ? tour.meetingPoint
+        : (tour.meetingPointInfo.nombreLugar.isNotEmpty
+            ? tour.meetingPointInfo.nombreLugar
+            : (tour.stops.isNotEmpty ? tour.stops.first.name : 'Punto inicial del recorrido'));
+
+    return GlassPanel(
+      child: Column(
+        children: [
+          _SpecRow(
+            icon: Icons.wb_sunny_outlined,
+            iconColor: Colors.amber,
+            title: 'Mejor época para ir',
+            value: bestSeasonText,
+          ),
+          const Divider(height: 20, thickness: 0.5),
+          _SpecRow(
+            icon: Icons.access_time_rounded,
+            iconColor: Colors.blueAccent,
+            title: 'Horario recomendado',
+            value: recommendedScheduleText,
+          ),
+          const Divider(height: 20, thickness: 0.5),
+          _SpecRow(
+            icon: Icons.flag_rounded,
+            iconColor: AppTheme.violet,
+            title: 'Punto de encuentro',
+            value: meetingPointText,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAudienceAndLanguagesSection(BuildContext context, Tour tour) {
+    final audiences = tour.recommendedAudience.isNotEmpty
+        ? tour.recommendedAudience
+        : ['Familias', 'Parejas', 'Viajeros curiosos'];
+    final languages = tour.availableLanguages.isNotEmpty
+        ? tour.availableLanguages
+        : [tour.language.toUpperCase()];
+
+    return GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.people_outline_rounded, size: 20, color: AppTheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Público Recomendado',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: audiences.map((aud) {
+              return Chip(
+                label: Text(aud, style: const TextStyle(fontSize: 12)),
+                backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                side: BorderSide.none,
+                visualDensity: VisualDensity.compact,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              const Icon(Icons.translate_rounded, size: 20, color: AppTheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Idiomas Disponibles',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: languages.map((lang) {
+              return Chip(
+                label: Text(lang, style: const TextStyle(fontSize: 12)),
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                side: BorderSide.none,
+                visualDensity: VisualDensity.compact,
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIncludesExcludesSection(BuildContext context, Tour tour) {
+    final includes = tour.includes.isNotEmpty
+        ? tour.includes
+        : ['Guía digital interactiva', 'Ruta en mapa interactivo', 'Recomendaciones por parada'];
+    final excludes = tour.excludes.isNotEmpty
+        ? tour.excludes
+        : ['Transporte privado', 'Entradas a recintos pagos no especificados', 'Gastos personales'];
+
+    return GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '¿Qué incluye el tour?',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          ...includes.map((inc) => Padding(
+                padding: const EdgeInsets.only(bottom: 6.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(inc, style: Theme.of(context).textTheme.bodyMedium)),
+                  ],
+                ),
+              )),
+          const SizedBox(height: 16),
+          Text(
+            'No incluye',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          ...excludes.map((exc) => Padding(
+                padding: const EdgeInsets.only(bottom: 6.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.remove_circle_outline_rounded, color: Colors.redAccent, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(exc, style: Theme.of(context).textTheme.bodyMedium)),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccessibilityAndSuitabilitySection(BuildContext context, Tour tour) {
+    final info = tour.additionalInfo;
+    final accesibilidad = info.accesibilidad.isNotEmpty
+        ? info.accesibilidad
+        : 'Consultar condiciones de accesibilidad en cada parada.';
+
+    return GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.accessible_rounded, size: 20, color: AppTheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Accesibilidad e Información Adicional',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            accesibilidad,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              _FeatureBadge(
+                icon: Icons.pets_rounded,
+                label: info.mascotasPermitidas ? 'Mascotas permitidas' : 'Sin mascotas',
+                isPositive: info.mascotasPermitidas,
+              ),
+              _FeatureBadge(
+                icon: Icons.child_care_rounded,
+                label: info.aptoParaNinos ? 'Apto para niños' : 'No recomendado niños',
+                isPositive: info.aptoParaNinos,
+              ),
+              _FeatureBadge(
+                icon: Icons.elderly_rounded,
+                label: info.aptoParaAdultosMayores ? 'Apto adultos mayores' : 'Requiere alto esfuerzo físico',
+                isPositive: info.aptoParaAdultosMayores,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecommendationsSection(BuildContext context, Tour tour) {
+    return GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.lightbulb_outline_rounded, size: 20, color: Colors.amber),
+              const SizedBox(width: 8),
+              Text(
+                'Recomendaciones Generales',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...tour.recommendations.map((rec) => Padding(
+                padding: const EdgeInsets.only(bottom: 6.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Expanded(child: Text(rec, style: Theme.of(context).textTheme.bodyMedium)),
+                  ],
+                ),
+              )),
+          if (tour.whatToBring.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Qué llevar',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              tour.whatToBring.join(', '),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _Metric extends StatelessWidget {
@@ -1384,6 +1648,83 @@ class _ReviewTile extends StatelessWidget {
 
   String _formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+}
+
+class _SpecRow extends StatelessWidget {
+  const _SpecRow({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.value,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: iconColor, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Colors.grey.shade400),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FeatureBadge extends StatelessWidget {
+  const _FeatureBadge({
+    required this.icon,
+    required this.label,
+    required this.isPositive,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isPositive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isPositive ? Colors.green : Colors.grey;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
+      ),
+    );
   }
 }
 
