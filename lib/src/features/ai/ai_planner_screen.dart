@@ -247,6 +247,13 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Crear Tour Manual',
+            onPressed: () => context.push('/creator/manual'),
+            icon: const Icon(Icons.add_circle_outline_rounded),
+          ),
+        ],
       ),
       body: Column(
         children: [

@@ -86,7 +86,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final filteredTickets = _filteredTickets();
     final pendingToursAsync = ref.watch(adminPendingToursProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFF090E18),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -380,13 +380,14 @@ class _AdminTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF111821),
+        color: context.vibe.glassStrong,
         border: Border(
-          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          bottom: BorderSide(color: context.vibe.luminousBorder),
         ),
       ),
       child: Row(
@@ -396,8 +397,8 @@ class _AdminTopBar extends StatelessWidget {
           Expanded(
             child: Text(
               'VibeTours Admin',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: const Color(0xFFC8DAFF),
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -572,6 +573,7 @@ class _PqrsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
       children: [
@@ -580,8 +582,8 @@ class _PqrsTab extends StatelessWidget {
             Expanded(
               child: Text(
                 l10n.adminPqrsTitle,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: theme.colorScheme.onSurface,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -595,8 +597,8 @@ class _PqrsTab extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           l10n.adminPqrsSubtitle,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Colors.white.withValues(alpha: 0.72),
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
           ),
         ),
         const SizedBox(height: 14),
@@ -655,6 +657,7 @@ class _AdminSettingsTab extends ConsumerWidget {
     final avatarUrl = metadata['custom_avatar_url']?.toString() ?? metadata['avatar_url']?.toString();
     final name = metadata['full_name']?.toString() ?? metadata['name']?.toString() ?? 'Administrator';
 
+    final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
       children: [
@@ -669,10 +672,10 @@ class _AdminSettingsTab extends ConsumerWidget {
                   width: 116,
                   height: 116,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.20),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.20),
                       width: 4,
                     ),
                   ),
@@ -681,9 +684,9 @@ class _AdminSettingsTab extends ConsumerWidget {
                       ? (avatarUrl.startsWith('data:image')
                           ? Image.memory(base64Decode(avatarUrl.split(',').last), fit: BoxFit.cover)
                           : Image.network(avatarUrl, fit: BoxFit.cover))
-                      : const Icon(
+                      : Icon(
                           Icons.admin_panel_settings_rounded,
-                          color: Color(0xFFAFCBFF),
+                          color: theme.colorScheme.secondary,
                           size: 48,
                         ),
                 ),
@@ -691,8 +694,8 @@ class _AdminSettingsTab extends ConsumerWidget {
               const SizedBox(height: 22),
               Text(
                 name,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: theme.colorScheme.onSurface,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -700,8 +703,8 @@ class _AdminSettingsTab extends ConsumerWidget {
               Text(
                 l10n.adminSystemRole,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.62),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
                 ),
               ),
               const SizedBox(height: 18),
@@ -711,8 +714,8 @@ class _AdminSettingsTab extends ConsumerWidget {
         const SizedBox(height: 24),
         Text(
           l10n.adminAdministrativeActions,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            color: theme.colorScheme.onSurface,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -782,6 +785,7 @@ class _AdminHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return GlassPanel(
       padding: const EdgeInsets.all(28),
       radius: 24,
@@ -797,16 +801,16 @@ class _AdminHeroCard extends StatelessWidget {
             const SizedBox(height: 18),
             Text(
               title,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                color: Colors.white,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 10),
             Text(
               body,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Colors.white.withValues(alpha: 0.72),
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
               ),
             ),
             const SizedBox(height: 28),
@@ -830,14 +834,15 @@ class _AdminSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Row(
       children: [
-        Icon(icon, color: const Color(0xFFAFCBFF), size: 20),
+        Icon(icon, color: theme.colorScheme.secondary, size: 20),
         const SizedBox(width: 10),
         Text(
           title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: Colors.white,
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: theme.colorScheme.onSurface,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -857,21 +862,20 @@ class _AdminMetricPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Align(
       alignment: Alignment.centerLeft,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          border: Border.all(color: theme.colorScheme.onSurface.withValues(alpha: 0.12)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Text(
             label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: AppTheme.primary),
+            style: theme.textTheme.labelLarge?.copyWith(color: AppTheme.primary),
           ),
         ),
       ),
@@ -897,6 +901,7 @@ class _PendingTourCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return GlassPanel(
       padding: const EdgeInsets.all(16),
       radius: 16,
@@ -910,23 +915,23 @@ class _PendingTourCard extends StatelessWidget {
                   tour.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onSurface,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${tour.city}, ${tour.country} - ${tour.durationHours.toStringAsFixed(1)}h - ${tour.stops.length} ${l10n.stops}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: Colors.white60),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   tour.isAiGenerated ? l10n.adminCreatedWithAI : l10n.adminCreatedManually,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: const Color(0xFFAFCBFF),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.secondary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -966,6 +971,7 @@ class _TicketCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
@@ -977,7 +983,7 @@ class _TicketCard extends StatelessWidget {
             CircleAvatar(
               backgroundColor: selected
                   ? AppTheme.primary
-                  : Colors.white.withValues(alpha: 0.08),
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.08),
               child: const Icon(Icons.question_mark_rounded),
             ),
             const SizedBox(width: 12),
@@ -992,9 +998,8 @@ class _TicketCard extends StatelessWidget {
                           ticket.subject,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                color: Colors.white,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                                color: theme.colorScheme.onSurface,
                                 fontWeight: FontWeight.w900,
                               ),
                         ),
@@ -1005,8 +1010,8 @@ class _TicketCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     '${ticket.kindLabel(context)} - ${ticket.createdAt.day.toString().padLeft(2, '0')}/${ticket.createdAt.month.toString().padLeft(2, '0')}',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: const Color(0xFFAFCBFF),
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.secondary,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1015,8 +1020,8 @@ class _TicketCard extends StatelessWidget {
                     ticket.body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.62),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
                     ),
                   ),
                 ],
@@ -1049,6 +1054,7 @@ class _ResponsePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     if (ticket == null) {
       return _AdminEmptyCard(
         icon: Icons.reply_rounded,
@@ -1064,21 +1070,21 @@ class _ResponsePanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.reply_rounded, color: Color(0xFFAFCBFF)),
+              Icon(Icons.reply_rounded, color: theme.colorScheme.secondary),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   l10n.adminResponseTitle,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFFAFCBFF),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.secondary,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
               Text(
                 l10n.adminDraftSaved,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.52),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
                 ),
               ),
             ],
@@ -1088,16 +1094,16 @@ class _ResponsePanel extends StatelessWidget {
             controller: controller,
             minLines: 4,
             maxLines: 7,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: theme.colorScheme.onSurface),
             decoration: InputDecoration(
               hintText: l10n.adminResponseHint,
               suffixIcon: const Icon(Icons.sentiment_satisfied_alt_rounded),
               filled: true,
-              fillColor: const Color(0xFF090E18),
+              fillColor: theme.scaffoldBackgroundColor,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.14),
+                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
                 ),
               ),
             ),
@@ -1138,10 +1144,11 @@ class _StatusTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final answered = status == 'answered' || status == 'closed';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: answered
-            ? AppTheme.primary.withValues(alpha: 0.16)
+            ? AppTheme.primary.withValues(alpha: isDark ? 0.16 : 0.12)
             : const Color(0xFFFFB020).withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
       ),
@@ -1150,7 +1157,9 @@ class _StatusTag extends StatelessWidget {
         child: Text(
           answered ? l10n.adminStatusAnswered : l10n.adminStatusPending,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: answered ? const Color(0xFFAFCBFF) : const Color(0xFFFFC875),
+            color: answered 
+                ? (isDark ? const Color(0xFFAFCBFF) : AppTheme.primaryDeep)
+                : (isDark ? const Color(0xFFFFC875) : const Color(0xFFC76A00)),
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -1206,6 +1215,7 @@ class _AdminInsightCard extends StatelessWidget {
       (label: l10n.adminKindSuggestion, value: pctSuggestion, count: suggestions),
     ]..sort((a, b) => b.value.compareTo(a.value));
 
+    final theme = Theme.of(context);
     return GlassPanel(
       radius: 18,
       child: Column(
@@ -1213,8 +1223,8 @@ class _AdminInsightCard extends StatelessWidget {
         children: [
           Text(
             l10n.adminPopularTopics,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -1243,16 +1253,17 @@ class _TopicBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
           Expanded(
-            child: Text(label, style: const TextStyle(color: Colors.white)),
+            child: Text(label, style: TextStyle(color: theme.colorScheme.onSurface)),
           ),
           Text(
             '${(value * 100).round()}%',
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: theme.colorScheme.onSurface),
           ),
         ],
       ),
@@ -1277,20 +1288,21 @@ class _AdminEmptyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return GlassPanel(
       radius: 18,
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFFAFCBFF)),
+          Icon(icon, color: theme.colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white)),
+                Text(title, style: TextStyle(color: theme.colorScheme.onSurface)),
                 Text(
                   body,
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.62)),
+                  style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.62)),
                 ),
               ],
             ),
@@ -1320,13 +1332,14 @@ class _AdminActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return ListTile(
       onTap: onTap,
       leading: CircleAvatar(
-        backgroundColor: Colors.white.withValues(alpha: 0.08),
-        child: Icon(icon, color: const Color(0xFFAFCBFF)),
+        backgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+        child: Icon(icon, color: theme.colorScheme.secondary),
       ),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
+      title: Text(title, style: TextStyle(color: theme.colorScheme.onSurface)),
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right_rounded),
     );
@@ -1404,6 +1417,7 @@ class _PlatformPulseCardState extends ConsumerState<_PlatformPulseCard> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return GlassPanel(
       radius: 24,
       child: Column(
@@ -1411,23 +1425,23 @@ class _PlatformPulseCardState extends ConsumerState<_PlatformPulseCard> {
         children: [
           Text(
             'Platform Pulse',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             l10n.adminPlatformPulseSubtitle,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.62)),
+            style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.62)),
           ),
           const SizedBox(height: 16),
           Text(
             _loading
                 ? l10n.adminLoadingActiveUsers
                 : l10n.adminConnectedUsersThisWeek(_weeklyUserCount ?? 0),
-            style: const TextStyle(
-              color: Color(0xFFAFCBFF),
+            style: TextStyle(
+              color: theme.colorScheme.primary,
               fontWeight: FontWeight.w800,
               fontSize: 16,
             ),
@@ -1447,9 +1461,7 @@ class _PlatformPulseCardState extends ConsumerState<_PlatformPulseCard> {
                         alignment: Alignment.bottomCenter,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: const Color(
-                              0xFFAFCBFF,
-                            ).withValues(alpha: value.clamp(0.2, 1.0)),
+                            color: theme.colorScheme.primary.withValues(alpha: value.clamp(0.2, 1.0)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
@@ -1462,17 +1474,16 @@ class _PlatformPulseCardState extends ConsumerState<_PlatformPulseCard> {
           const SizedBox(height: 22),
           Text(
             l10n.adminSystemIntegrity,
-            style: const TextStyle(
-              color: Colors.white60,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               fontWeight: FontWeight.w800,
               letterSpacing: 1.2,
             ),
           ),
-          const Text(
+          Text(
             '99.98%',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 30,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -1496,6 +1507,7 @@ class _AdminBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     // Labels stay as-is (Admin / PQRS / Settings are proper names)
     const items = [
       (icon: Icons.admin_panel_settings_outlined, label: 'Admin'),
@@ -1505,9 +1517,9 @@ class _AdminBottomNav extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF151A23),
+        color: context.vibe.glassStrong,
         border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          top: BorderSide(color: context.vibe.luminousBorder),
         ),
       ),
       child: Row(
@@ -1532,16 +1544,16 @@ class _AdminBottomNav extends StatelessWidget {
                       Icon(
                         items[index].icon,
                         color: currentIndex == index
-                            ? const Color(0xFF06172C)
-                            : Colors.white54,
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         items[index].label,
                         style: TextStyle(
                           color: currentIndex == index
-                              ? const Color(0xFF06172C)
-                              : Colors.white54,
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurface.withValues(alpha: 0.5),
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -1690,24 +1702,26 @@ class _AcceptedToursHistoryScreenState extends ConsumerState<_AcceptedToursHisto
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return PremiumScaffold(
       safeBottom: true,
       appBar: AppBar(
-        title: Text(l10n.adminHistoryScreenTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF090E18),
+        title: Text(
+          l10n.adminHistoryScreenTitle,
+          style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: Icon(Icons.arrow_back_rounded, color: theme.colorScheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      child: Container(
-        color: const Color(0xFF090E18),
-        child: _buildBody(context, l10n),
-      ),
+      child: _buildBody(context, l10n),
     );
   }
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -1723,7 +1737,7 @@ class _AcceptedToursHistoryScreenState extends ConsumerState<_AcceptedToursHisto
             children: [
               const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
               const SizedBox(height: 16),
-              Text(errorMessage, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+              Text(errorMessage, style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)), textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -1776,17 +1790,17 @@ class _AcceptedToursHistoryScreenState extends ConsumerState<_AcceptedToursHisto
                         tour.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${tour.city}, ${tour.country}',
-                        style: const TextStyle(color: Colors.white60, fontSize: 13),
+                        style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.60), fontSize: 13),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         l10n.adminHistoryReviewed(reviewedDate),
-                        style: const TextStyle(color: Colors.white38, fontSize: 11),
+                        style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.38), fontSize: 11),
                       ),
                     ],
                   ),
@@ -1801,7 +1815,9 @@ class _AcceptedToursHistoryScreenState extends ConsumerState<_AcceptedToursHisto
                   child: Text(
                     isApproved ? l10n.adminHistoryApproved : l10n.adminHistoryRejected,
                     style: TextStyle(
-                      color: isApproved ? Colors.greenAccent : Colors.redAccent,
+                      color: isApproved 
+                          ? (isDark ? Colors.greenAccent : Colors.green[800]) 
+                          : (isDark ? Colors.redAccent : Colors.red[800]),
                       fontSize: 10,
                       fontWeight: FontWeight.w900,
                     ),
@@ -1824,18 +1840,20 @@ class _PaymentHistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return PremiumScaffold(
       safeBottom: true,
       appBar: AppBar(
-        title: Text(l10n.adminPaymentTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF090E18),
+        title: Text(
+          l10n.adminPaymentTitle,
+          style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: Icon(Icons.arrow_back_rounded, color: theme.colorScheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      child: Container(
-        color: const Color(0xFF090E18),
+      child: Align(
         alignment: Alignment.center,
         child: EmptyState(
           icon: Icons.payments_outlined,
@@ -1911,24 +1929,26 @@ class _PqrsHistoryScreenState extends ConsumerState<_PqrsHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return PremiumScaffold(
       safeBottom: true,
       appBar: AppBar(
-        title: Text(l10n.adminPqrsHistoryScreenTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF090E18),
+        title: Text(
+          l10n.adminPqrsHistoryScreenTitle,
+          style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: Icon(Icons.arrow_back_rounded, color: theme.colorScheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      child: Container(
-        color: const Color(0xFF090E18),
-        child: _buildBody(context, l10n),
-      ),
+      child: _buildBody(context, l10n),
     );
   }
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -1944,7 +1964,7 @@ class _PqrsHistoryScreenState extends ConsumerState<_PqrsHistoryScreen> {
             children: [
               const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
               const SizedBox(height: 16),
-              Text(errorMessage, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+              Text(errorMessage, style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)), textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -1981,7 +2001,7 @@ class _PqrsHistoryScreenState extends ConsumerState<_PqrsHistoryScreen> {
                         ticket.subject,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -2001,17 +2021,17 @@ class _PqrsHistoryScreenState extends ConsumerState<_PqrsHistoryScreen> {
                 const SizedBox(height: 8),
                 Text(
                   l10n.adminPqrsUser(ticket.id.substring(0, ticket.id.length.clamp(0, 8)), createdDate),
-                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.38), fontSize: 12),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   l10n.adminOriginalQuery,
-                  style: const TextStyle(color: Color(0xFFAFCBFF), fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(color: theme.colorScheme.secondary, fontWeight: FontWeight.w700, fontSize: 12),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   ticket.body,
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.7), fontSize: 14),
                 ),
                 if (ticket.adminResponse.isNotEmpty) ...[
                   const SizedBox(height: 14),
@@ -2019,27 +2039,35 @@ class _PqrsHistoryScreenState extends ConsumerState<_PqrsHistoryScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+                      border: Border.all(color: theme.colorScheme.onSurface.withValues(alpha: 0.08)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.reply_rounded, color: Colors.greenAccent, size: 16),
+                            Icon(Icons.reply_rounded, color: isDark ? Colors.greenAccent : Colors.green[800], size: 16),
                             const SizedBox(width: 6),
                             Text(
                               l10n.adminOfficialResponse,
-                              style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                              style: TextStyle(
+                                color: isDark ? Colors.greenAccent : Colors.green[800],
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
                         Text(
                           ticket.adminResponse,
-                          style: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface,
+                            fontSize: 14,
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       ],
                     ),

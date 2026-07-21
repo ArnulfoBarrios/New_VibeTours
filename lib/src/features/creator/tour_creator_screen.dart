@@ -604,130 +604,63 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
     });
   }
 
-  void _showCoverImageSheet() {
-    _showImageSheet(
+  void _showCoverImageSheet() async {
+    final url = await _showImageSheet(
       title: 'Imagen de portada',
       actionLabel: 'Usar como portada',
-      onApply: (url) => setState(() => _coverImage = url),
     );
+    if (url != null && mounted) {
+      setState(() => _coverImage = url);
+      _message('Imagen agregada.');
+    }
   }
 
-  void _showGalleryImageSheet() {
-    _showImageSheet(
+  void _showGalleryImageSheet() async {
+    final url = await _showImageSheet(
       title: 'Galeria del tour',
       actionLabel: 'Agregar a galeria',
-      onApply: (url) {
-        if (_galleryImages.length >= 8) {
-          _message('La galeria permite maximo 8 imagenes.');
-          return;
-        }
-        setState(() {
-          if (!_galleryImages.contains(url)) _galleryImages.add(url);
-        });
-      },
     );
+    if (url != null && mounted) {
+      if (_galleryImages.length >= 8) {
+        _message('La galeria permite maximo 8 imagenes.');
+        return;
+      }
+      setState(() {
+        if (!_galleryImages.contains(url)) _galleryImages.add(url);
+      });
+      _message('Imagen agregada.');
+    }
   }
 
-  void _showImageSheet({
+  Future<String?> _showImageSheet({
     required String title,
     required String actionLabel,
-    required ValueChanged<String> onApply,
   }) {
-    final controller = TextEditingController();
-    showModalBottomSheet<void>(
+    return showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            18,
-            0,
-            18,
-            18 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.url,
-                decoration: const InputDecoration(
-                  labelText: 'URL de imagen',
-                  hintText: 'https://...',
-                  prefixIcon: Icon(Icons.link_rounded),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text('Sugeridas', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 88,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _suggestedImages.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: 10),
-                  itemBuilder: (context, index) {
-                    final image = _suggestedImages[index];
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () {
-                        onApply(image);
-                        context.pop();
-                        _message('Imagen agregada.');
-                      },
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: CachedNetworkImage(
-                          imageUrl: image,
-                          width: 120,
-                          height: 88,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) =>
-                              const SkeletonBox(width: 120, height: 88),
-                          errorWidget: (context, url, error) =>
-                              const TravelImageFallback(title: 'Imagen'),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: LiquidButton(
-                  label: actionLabel,
-                  icon: Icons.add_photo_alternate_outlined,
-                  onPressed: () {
-                    final url = controller.text.trim();
-                    if (!_isImageUrl(url)) {
-                      _message('Pega una URL de imagen valida.');
-                      return;
-                    }
-                    onApply(url);
-                    context.pop();
-                    _message('Imagen agregada.');
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
+      builder: (sheetContext) => _ImageSheetContent(
+        title: title,
+        actionLabel: actionLabel,
+        isImageUrl: _isImageUrl,
+        suggestedImages: _suggestedImages,
+        message: _message,
       ),
-    ).whenComplete(controller.dispose);
+    );
   }
 
   bool _isImageUrl(String value) {
-    final uri = Uri.tryParse(value);
-    return uri != null &&
-        uri.hasScheme &&
-        (uri.scheme == 'http' || uri.scheme == 'https') &&
-        uri.host.isNotEmpty;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+    try {
+      final uri = Uri.parse(trimmed);
+      return uri.hasScheme &&
+          (uri.scheme == 'http' || uri.scheme == 'https') &&
+          uri.host.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   int _galleryCount() => _galleryImages.length.clamp(0, 8).toInt();
@@ -1909,3 +1842,120 @@ const _suggestedImages = [
   'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=80',
   'https://images.unsplash.com/photo-1533929736458-ca588d08c8be?auto=format&fit=crop&w=1200&q=80',
 ];
+
+class _ImageSheetContent extends StatefulWidget {
+  const _ImageSheetContent({
+    required this.title,
+    required this.actionLabel,
+    required this.isImageUrl,
+    required this.suggestedImages,
+    required this.message,
+  });
+
+  final String title;
+  final String actionLabel;
+  final bool Function(String) isImageUrl;
+  final List<String> suggestedImages;
+  final void Function(String) message;
+
+  @override
+  State<_ImageSheetContent> createState() => _ImageSheetContentState();
+}
+
+class _ImageSheetContentState extends State<_ImageSheetContent> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          0,
+          18,
+          18 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'URL de imagen',
+                hintText: 'https://...',
+                prefixIcon: Icon(Icons.link_rounded),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text('Sugeridas', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 88,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.suggestedImages.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final image = widget.suggestedImages[index];
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      Navigator.pop(context, image);
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: CachedNetworkImage(
+                        imageUrl: image,
+                        width: 120,
+                        height: 88,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) =>
+                            const SkeletonBox(width: 120, height: 88),
+                        errorWidget: (context, url, error) =>
+                            const TravelImageFallback(title: 'Imagen'),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: LiquidButton(
+                label: widget.actionLabel,
+                icon: Icons.add_photo_alternate_outlined,
+                onPressed: () {
+                  final url = _controller.text.trim();
+                  if (!widget.isImageUrl(url)) {
+                    widget.message('Pega una URL de imagen valida.');
+                    return;
+                  }
+                  Navigator.pop(context, url);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
