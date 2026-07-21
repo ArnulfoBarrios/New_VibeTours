@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, overpassNearbyFood } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI } from '../services/openai.js'
 import { supabase } from '../services/supabase.js'
 
@@ -324,39 +324,47 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
     })
     const { request: input, currentPlaces, excludeIds = [] } = altSchema.parse(req.body)
 
-    // Fallback city/destination extraction from currentPlaces if input destination is generic
     const firstPlace = currentPlaces.length > 0 ? currentPlaces[0] : null
-    const inferredCity = input.city || firstPlace?.locationInfo?.ciudad || firstPlace?.locationInfo?.nombre_lugar || ''
-    const inferredDest = (input.destination && input.destination !== 'Destino')
-      ? input.destination 
-      : (inferredCity || firstPlace?.name || 'Barranquilla')
-    const inferredLat = input.latitude || firstPlace?.latitude || 10.9878
-    const inferredLon = input.longitude || firstPlace?.longitude || -74.7889
+    const lat = input.latitude || firstPlace?.latitude
+    const lon = input.longitude || firstPlace?.longitude
 
-    const searchQuery = (inferredCity && input.country) 
-      ? `${inferredCity} ${input.country}` 
-      : `${inferredDest} ${inferredCity} ${input.country || 'Colombia'}`.trim()
+    // 1. Reverse Geocode exact location from coordinates if available
+    let revLocation = null
+    if (lat && lon) {
+      revLocation = await reverseGeocodeLocation(lat, lon).catch(() => null)
+    }
 
-    let location = await geocodePlace(searchQuery, inferredLat, inferredLon).catch(() => null)
-    if (!location) {
+    const city = input.city || revLocation?.city || firstPlace?.locationInfo?.ciudad || 'Santa Marta'
+    const country = input.country || revLocation?.country || firstPlace?.locationInfo?.pais || 'Colombia'
+    const destination = (input.destination && input.destination.length < 30 && input.destination !== 'Destino')
+      ? input.destination
+      : city
+
+    console.info('[alternatives] Identified destination city:', { city, country, destination, lat, lon })
+
+    // 2. Geocode exact city location
+    let location = await geocodePlace(`${city} ${country}`, lat, lon).catch(() => null)
+    if (!location && lat && lon) {
       location = {
-        name: inferredDest,
-        latitude: inferredLat,
-        longitude: inferredLon,
-        city: inferredCity,
-        country: input.country || 'Colombia'
+        name: city,
+        latitude: lat,
+        longitude: lon,
+        city,
+        country
       }
     }
 
+    // 3. Collect REAL POI candidates from OpenStreetMap (Overpass & Photon)
     let candidatePack = { places: [] }
     if (location) {
       try {
         candidatePack = await collectTourCandidates({
           ...input,
-          destination: inferredDest,
-          city: inferredCity,
-          latitude: inferredLat,
-          longitude: inferredLon
+          destination,
+          city,
+          country,
+          latitude: location.latitude,
+          longitude: location.longitude
         }, location)
       } catch (e) {
         console.warn('[alternatives] collectTourCandidates failed:', e.message)
@@ -375,34 +383,34 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       return name && !currentNamesAndIds.has(name) && (!pId || !currentNamesAndIds.has(pId))
     })
 
-    // If Overpass/Photon didn't return enough unique alternatives, ask OpenAI for real local suggestions!
-    if (available.length < 3) {
-      console.info('[alternatives] Fetching extra suggestions via OpenAI for:', inferredCity || inferredDest)
+    // 4. If OSM doesn't return enough unique real places, query OpenAI for REAL physical attractions in this exact city!
+    if (available.length < 5) {
+      console.info('[alternatives] Querying OpenAI for REAL places in:', city)
       const aiSuggestions = await suggestFallbackPlacesWithOpenAI({
-        destination: inferredDest,
-        city: inferredCity,
-        country: input.country || 'Colombia',
+        destination,
+        city,
+        country,
         type: input.type || 'cultural'
       }).catch(() => [])
 
       if (Array.isArray(aiSuggestions)) {
-        const centerLat = location?.latitude ?? inferredLat
-        const centerLon = location?.longitude ?? inferredLon
+        const centerLat = location?.latitude ?? lat ?? 11.2408
+        const centerLon = location?.longitude ?? lon ?? -74.2110
 
         for (let i = 0; i < aiSuggestions.length; i++) {
           const item = aiSuggestions[i]
           const nameLower = (item.name || '').toLowerCase().trim()
           if (nameLower && !currentNamesAndIds.has(nameLower)) {
-            const latOffset = (i + 1) * 0.0025 * (i % 2 === 0 ? 1 : -1)
-            const lonOffset = (i + 1) * 0.0025 * (i % 2 === 0 ? -1 : 1)
+            const latOffset = (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1)
+            const lonOffset = (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1)
             available.push({
-              placeId: `ai-alt-${Date.now()}-${i}`,
+              placeId: `ai-real-${Date.now()}-${i}`,
               name: item.name,
               latitude: centerLat + latOffset,
               longitude: centerLon + lonOffset,
-              category: item.category || input.type || 'tourism',
-              description: item.description || item.reason || `Atractivo turístico recomendado en ${inferredDest}.`,
-              reason: item.reason || `Excelente opción para complementar tu recorrido en ${inferredDest}.`,
+              category: item.category || item.type || input.type || 'tourism',
+              description: item.description || `Lugar de interés destacado en ${city}.`,
+              reason: item.description || `Atractivo imperdible recomendado para visitar en ${city}.`,
               minutes: 30
             })
           }
@@ -410,59 +418,40 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       }
     }
 
-    // Guaranteed Fallback if available is still empty
-    if (available.length === 0) {
-      const cityName = inferredCity || inferredDest || 'la ciudad'
-      const baseLat = location?.latitude ?? inferredLat
-      const baseLon = location?.longitude ?? inferredLon
+    // 5. Build rich alternative DTOs with REAL images for each place
+    const alternatives = await Promise.all(
+      available.slice(0, 6).map(async (place) => {
+        let imageUrl = place.imageUrl || place.images?.[0] || ''
+        if (!imageUrl) {
+          try {
+            imageUrl = await imageForPlace(place.name, city)
+          } catch (e) {
+            console.warn('[alternatives] Image fetch error for place:', place.name)
+          }
+        }
 
-      const fallbackTemplates = [
-        { name: `Mirador y Punto Panorámico de ${cityName}`, category: 'viewpoint', reason: `Excelente mirador para apreciar vistas panorámicas de ${cityName}.` },
-        { name: `Plaza Principal e Histórica de ${cityName}`, category: 'historic', reason: `Lugar de encuentro con rica historia, patrimonio y ambiente local.` },
-        { name: `Mercado Cultural y Gastronómico de ${cityName}`, category: 'market', reason: `Punto imperdible para degustar platos típicos y artesanías.` },
-        { name: `Parque Ecológico y Jardín de ${cityName}`, category: 'nature', reason: `Área verde ideal para recorrer a pie y relajarse.` },
-        { name: `Museo de Arte e Historia de ${cityName}`, category: 'museum', reason: `Exposición destacada de la historia y cultura regional.` }
-      ]
-
-      fallbackTemplates.forEach((tpl, i) => {
-        const nameLower = tpl.name.toLowerCase().trim()
-        if (!currentNamesAndIds.has(nameLower)) {
-          const latOffset = (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1)
-          const lonOffset = (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1)
-          available.push({
-            placeId: `fallback-alt-${Date.now()}-${i}`,
-            name: tpl.name,
-            latitude: baseLat + latOffset,
-            longitude: baseLon + lonOffset,
-            category: tpl.category,
-            description: tpl.reason,
-            reason: tpl.reason,
-            minutes: 30
-          })
+        return {
+          id: place.placeId || place.id || place.name,
+          name: place.name,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          category: place.category || 'turismo',
+          imageUrl: imageUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500',
+          description: place.description || place.history || '',
+          reason: place.reason || `Excelente opción para complementar la ruta en ${city}.`,
+          durationMinutes: place.minutes || 25,
+          locationInfo: {
+            nombre_lugar: place.name,
+            direccion: place.address || `Centro de ${city}`,
+            ciudad: city,
+            region: city,
+            pais: country,
+            place_id: place.placeId || place.id || '',
+            url_mapa: mapUrlFor(place.latitude, place.longitude)
+          }
         }
       })
-    }
-
-    const alternatives = available.slice(0, 5).map(place => ({
-      id: place.placeId || place.id || place.name,
-      name: place.name,
-      latitude: place.latitude,
-      longitude: place.longitude,
-      category: place.category || 'turismo',
-      imageUrl: place.imageUrl || place.images?.[0] || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500',
-      description: place.description || place.history || '',
-      reason: place.reason || 'Excelente alternativa que mantiene la coherencia de la ruta.',
-      durationMinutes: place.minutes || 25,
-      locationInfo: {
-        nombre_lugar: place.name,
-        direccion: place.address || '',
-        ciudad: place.city || input.city || '',
-        region: place.region || '',
-        pais: place.country || input.country || '',
-        place_id: place.placeId || place.id || '',
-        url_mapa: mapUrlFor(place.latitude, place.longitude)
-      }
-    }))
+    )
 
     res.json({ alternatives })
   } catch (error) {

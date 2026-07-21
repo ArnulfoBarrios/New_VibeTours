@@ -417,41 +417,51 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
   Future<List<AiRecommendation>> getAlternatives() async {
     final firstRec = state.recommendations.isNotEmpty ? state.recommendations.first : null;
-    final cityFromRec = (firstRec?.locationInfo.ciudad.isNotEmpty == true)
+    final city = (firstRec?.locationInfo.ciudad.isNotEmpty == true)
         ? firstRec!.locationInfo.ciudad
         : ((firstRec?.name.isNotEmpty == true) ? firstRec!.name : 'Barranquilla');
+    final country = firstRec?.locationInfo.pais.isNotEmpty == true ? firstRec!.locationInfo.pais : 'Colombia';
+    final baseLat = firstRec?.latitude ?? 10.9878;
+    final baseLon = firstRec?.longitude ?? -74.7889;
 
     final request = state.request ?? AiTourRequest(
-      destination: cityFromRec,
-      country: firstRec?.locationInfo.pais.isNotEmpty == true ? firstRec!.locationInfo.pais : 'Colombia',
-      city: cityFromRec,
+      destination: city,
+      country: country,
+      city: city,
       type: TourType.cultural,
       language: 'es',
       prompt: 'Alternativas de tour',
       touristProfileSummary: '',
       touristInterests: const [],
       touristPace: 'balanced',
-      latitude: firstRec?.latitude ?? 10.9878,
-      longitude: firstRec?.longitude ?? -74.7889,
+      latitude: baseLat,
+      longitude: baseLon,
     );
+
+    final currentNamesAndIds = state.recommendations.map((e) => e.name.toLowerCase().trim()).toSet();
+    for (var e in state.recommendations) {
+      currentNamesAndIds.add(e.id.toLowerCase().trim());
+    }
+
     try {
-      final currentIds = state.recommendations.map((e) => e.id).toList();
-      
       final response = await _postJson('/ai/tours/alternatives', {
         'request': request.toJson(),
         'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
-        'excludeIds': currentIds,
-      }).timeout(const Duration(seconds: 12));
+        'excludeIds': state.recommendations.map((e) => e.id).toList(),
+      }).timeout(const Duration(seconds: 25));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return (data['alternatives'] as List)
+        final list = (data['alternatives'] as List)
             .map((e) => AiRecommendation.fromJson(e))
+            .where((rec) => !currentNamesAndIds.contains(rec.name.toLowerCase().trim()))
             .toList();
+        if (list.isNotEmpty) return list;
       }
     } catch (e) {
-      debugPrint('Error finding alternatives: $e');
+      debugPrint('Error finding alternatives from API: $e');
     }
+
     return [];
   }
 

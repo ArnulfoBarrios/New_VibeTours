@@ -17,6 +17,32 @@ export async function reverseGeocodeUserCountry(lat, lon) {
     }
   } catch (err) {
     console.error('Reverse geocode error:', err)
+  return null
+}
+
+export async function reverseGeocodeLocation(lat, lon) {
+  if (!lat || !lon) return null
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse')
+    url.searchParams.set('format', 'jsonv2')
+    url.searchParams.set('lat', String(lat))
+    url.searchParams.set('lon', String(lon))
+    url.searchParams.set('zoom', '12')
+    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
+    if (response.ok) {
+      const data = await response.json()
+      if (data && data.address) {
+        const city = data.address.city || data.address.town || data.address.village || data.address.municipality || data.address.county || data.address.state || ''
+        const country = data.address.country || ''
+        return {
+          city,
+          country,
+          name: data.display_name || city
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[osm] Reverse geocode location error:', err)
   }
   return null
 }
