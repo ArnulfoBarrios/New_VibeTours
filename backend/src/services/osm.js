@@ -17,6 +17,7 @@ export async function reverseGeocodeUserCountry(lat, lon) {
     }
   } catch (err) {
     console.error('Reverse geocode error:', err)
+  }
   return null
 }
 
