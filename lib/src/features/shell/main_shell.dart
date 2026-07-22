@@ -6,6 +6,8 @@ import '../../state/app_state.dart';
 
 import 'package:go_router/go_router.dart';
 
+import 'audio_mini_player.dart';
+
 class MainShell extends ConsumerWidget {
   const MainShell({super.key, required this.navigationShell});
 
@@ -14,17 +16,24 @@ class MainShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return PremiumScaffold(
-      bottomNavigationBar: VibeBottomNav(
-        currentIndex: navigationShell.currentIndex,
-        onChanged: (index) {
-          ref.read(selectedTabProvider.notifier).state = index;
-          navigationShell.goBranch(
-            index,
-            initialLocation: index == navigationShell.currentIndex,
-          );
-        },
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AudioMiniPlayerWidget(),
+          VibeBottomNav(
+            currentIndex: navigationShell.currentIndex,
+            onChanged: (index) {
+              ref.read(selectedTabProvider.notifier).state = index;
+              navigationShell.goBranch(
+                index,
+                initialLocation: index == navigationShell.currentIndex,
+              );
+            },
+          ),
+        ],
       ),
       child: navigationShell,
     );
   }
 }
+

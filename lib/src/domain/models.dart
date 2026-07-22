@@ -854,6 +854,7 @@ class TourComment {
     required this.createdAt,
     this.userName = '',
     this.userAvatarUrl = '',
+    this.photos = const [],
   });
 
   final String id;
@@ -864,6 +865,7 @@ class TourComment {
   final DateTime createdAt;
   final String userName;
   final String userAvatarUrl;
+  final List<String> photos;
 }
 
 class UserTourRating {

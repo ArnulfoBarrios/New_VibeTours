@@ -13,7 +13,9 @@ import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../../state/live_tour_state.dart';
 import '../../domain/models.dart';
+import '../ai/ai_builder_controller.dart';
 import '../tour_live/tour_rating_dialog.dart';
 
 
@@ -972,6 +974,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     OutlinedButton.icon(
                       onPressed: () async {
                         await ref.read(authServiceProvider).signOut();
+                        ref.read(aiBuilderProvider.notifier).resetChat();
+                        ref.read(liveTourPlaybackProvider.notifier).stopTour();
+                        ref.read(voiceGuideProvider).stop();
                         if (context.mounted) context.go('/login');
                       },
                       icon: const Icon(Icons.logout_rounded, color: Colors.orange, size: 18),

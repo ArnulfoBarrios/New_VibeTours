@@ -331,6 +331,7 @@ class TourRepository {
     required String tourId,
     required int rating,
     required String body,
+    List<String> photos = const [],
   }) async {
     final client = _requireClient();
     final user = client.auth.currentUser;
@@ -345,12 +346,32 @@ class TourRepository {
         .eq('tour_id', tourId)
         .eq('user_id', user.id);
 
-    await client.from('tour_comments').insert({
+    final insertPayload = <String, dynamic>{
       'tour_id': tourId,
       'user_id': user.id,
       'rating': rating,
       'body': body,
-    });
+    };
+    if (photos.isNotEmpty) {
+      insertPayload['photos'] = photos;
+    }
+
+    try {
+      await client.from('tour_comments').insert(insertPayload);
+    } catch (e) {
+      if (photos.isNotEmpty && e.toString().contains('photos')) {
+        debugPrint('Postgres column "photos" missing in tour_comments. Falling back to insert without photos.');
+        final fallbackPayload = <String, dynamic>{
+          'tour_id': tourId,
+          'user_id': user.id,
+          'rating': rating,
+          'body': body,
+        };
+        await client.from('tour_comments').insert(fallbackPayload);
+      } else {
+        rethrow;
+      }
+    }
 
     // Intentamos actualizar la tabla tours utilizando la función RPC (security definer)
     try {
@@ -358,27 +379,6 @@ class TourRepository {
       debugPrint('Tour rating updated via RPC successfully.');
     } catch (e) {
       debugPrint('RPC update_tour_rating failed: $e. Falling back to direct client-side update.');
-      // Fallback: Actualización directa del cliente (puede fallar por RLS si no es el dueño)
-      try {
-        final commentsResponse = await client
-            .from('tour_comments')
-            .select('rating')
-            .eq('tour_id', tourId);
-        final commentsList = commentsResponse as List;
-        if (commentsList.isNotEmpty) {
-          double sum = 0;
-          for (final row in commentsList) {
-            sum += (row['rating'] as num?)?.toDouble() ?? 0;
-          }
-          final newRating = sum / commentsList.length;
-          await client.from('tours').update({
-            'rating': newRating,
-            'review_count': commentsList.length,
-          }).eq('id', tourId);
-        }
-      } catch (err) {
-        debugPrint('Fallback tour update failed: $err');
-      }
     }
   }
 
@@ -418,6 +418,16 @@ class TourRepository {
             debugPrint('Error getting user profile for comment: $e');
           }
         }
+
+        final rawPhotos = commentMap['photos'];
+        final photoList = <String>[];
+        if (rawPhotos is List) {
+          for (final p in rawPhotos) {
+            if (p != null && p.toString().isNotEmpty) {
+              photoList.add(p.toString());
+            }
+          }
+        }
         
         comments.add(TourComment(
           id: commentMap['id']?.toString() ?? '',
@@ -428,6 +438,7 @@ class TourRepository {
           createdAt: DateTime.tryParse(commentMap['created_at']?.toString() ?? '') ?? DateTime.now(),
           userName: fullName,
           userAvatarUrl: avatarUrl,
+          photos: photoList,
         ));
       }
       return comments;
@@ -436,6 +447,7 @@ class TourRepository {
       return const [];
     }
   }
+
 
 
   Future<List<UserTourRating>> getUserRatings(String userId) async {
@@ -807,12 +819,20 @@ class TourRepository {
       gallery: gallery.isEmpty
           ? _stringList(json['gallery_image_urls'])
           : gallery.map((item) => _imageUrl(item, 'gallery')).toList(),
-      durationHours: _hoursFromValue(
-        source['duracion_estimada'] ??
-            json['durationHours'] ??
-            json['estimated_minutes'],
-        3,
-      ),
+      durationHours: () {
+        final parsed = _hoursFromValue(
+          source['duracion_estimada'] ??
+              json['durationHours'] ??
+              json['duration_minutes'] ??
+              json['estimated_minutes'],
+          0,
+        );
+        if (parsed > 0 && (parsed != 1.5 || stops.isEmpty)) {
+          return parsed;
+        }
+        final stopCount = stops.isEmpty ? 5 : stops.length;
+        return (stopCount * 0.35).clamp(0.5, 12.0);
+      }(),
       distanceKm: _kilometersFromValue(
         source['distancia_total'] ?? json['distanceKm'],
         0,

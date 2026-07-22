@@ -1641,6 +1641,41 @@ class _ReviewTile extends StatelessWidget {
                   ),
             ),
           ],
+          if (comment.photos.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 80,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: comment.photos.length,
+                itemBuilder: (context, photoIndex) {
+                  final photoUrl = comment.photos[photoIndex];
+                  final isBase64 = photoUrl.startsWith('data:image');
+                  return Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: isBase64
+                          ? Image.memory(
+                              base64Decode(photoUrl.split(',').last),
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            )
+                          : CachedNetworkImage(
+                              imageUrl: photoUrl,
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                              errorWidget: (context, url, error) =>
+                                  const Icon(Icons.broken_image_rounded),
+                            ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );

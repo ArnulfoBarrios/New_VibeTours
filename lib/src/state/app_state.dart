@@ -15,6 +15,7 @@ import '../data/discovery_repository.dart';
 import '../data/moderation_repository.dart';
 import 'package:vibetoursapp/src/data/tour_repository.dart';
 import '../domain/models.dart';
+import 'live_tour_state.dart';
 
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError());
 
@@ -35,6 +36,10 @@ final authUserProvider = StreamProvider<User?>((ref) async* {
   }
   yield client.auth.currentUser;
   await for (final state in client.auth.onAuthStateChange) {
+    if (state.event == AuthChangeEvent.signedOut || state.session?.user == null) {
+      ref.read(liveTourPlaybackProvider.notifier).stopTour();
+      ref.read(voiceGuideProvider).stop();
+    }
     yield state.session?.user;
   }
 });

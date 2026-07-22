@@ -15,6 +15,7 @@ import '../../core/services/road_route_service.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../../state/live_tour_state.dart';
 import 'tour_rating_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -565,6 +566,19 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   void _scheduleLiveNavigation(Tour tour) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final playback = ref.read(liveTourPlaybackProvider);
+        final currentUser = ref.read(authServiceProvider).currentUser;
+        if (playback.tour?.id != tour.id || playback.currentStopIndex != _activeStop) {
+          ref.read(liveTourPlaybackProvider.notifier).startTour(
+                tour,
+                initialStopIndex: _activeStop,
+                userId: currentUser?.id ?? 'guest',
+              );
+        }
+      }
+    });
     if (!_locationStreamRequested) {
       _locationStreamRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1059,6 +1073,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           spacing: 8,
           runSpacing: 8,
           children: [
+            if (_currentPoint != null &&
+                Geolocator.distanceBetween(
+                      _currentPoint!.latitude,
+                      _currentPoint!.longitude,
+                      stop.location.latitude,
+                      stop.location.longitude,
+                    ) <=
+                    50.0)
+              const _LiveChip(
+                icon: Icons.radar_rounded,
+                label: '¡Cerca de parada! (Radar active)',
+              ),
             if (!_noLandRouteAvailable)
               _LiveChip(
                 icon: Icons.route_rounded,
@@ -1150,13 +1176,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   return;
                 }
 
-                final userTours = ref.read(userToursProvider).valueOrNull?.manualTours ?? [];
-                final isOwnTour = userTours.any((t) => t.id == tour.id) || tour.id.startsWith('manual-');
+                final isOwner = tour.ownerId != null && currentUser.id.isNotEmpty && tour.ownerId == currentUser.id;
+                final isUnpublished = !tour.isPublished;
+
+                final shouldSkipRating = isOwner || isUnpublished;
                 
-                final userRatings = ref.read(userRatingsProvider(currentUser.id)).valueOrNull ?? [];
-                final hasRated = userRatings.any((r) => r.tour.id == tour.id);
-                
-                if (isOwnTour || hasRated) {
+                if (shouldSkipRating) {
                   context.pop();
                 } else {
                   showDialog(

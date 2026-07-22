@@ -723,6 +723,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     }
     return '😕 Algo salió mal. Por favor intenta de nuevo.';
   }
+
+  void resetChat() {
+    state = const AiBuilderState();
+  }
 }
 
 final aiBuilderProvider = StateNotifierProvider<AiBuilderController, AiBuilderState>((ref) {
