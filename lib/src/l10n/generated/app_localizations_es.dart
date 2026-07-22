@@ -1529,4 +1529,61 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get adminDemoTicket2Body =>
       'Un tour aparece con una imagen que no corresponde al destino.';
+
+  @override
+  String get heatmapTitle => 'Mapa de Calor & Densidad';
+
+  @override
+  String get heatmapSubtitle =>
+      'Monitoreo en tiempo real de afluencia turística';
+
+  @override
+  String get heatmapToursToday => 'Recorridos Hoy';
+
+  @override
+  String get heatmapAvgTime => 'Tiempo Promedio';
+
+  @override
+  String get heatmapPerStop => 'Por cada parada';
+
+  @override
+  String get heatmapHottestZone => 'Zona Más Caliente';
+
+  @override
+  String get heatmapFilterZone => 'Filtrar por Zona';
+
+  @override
+  String get heatmapTimeRange => 'Franja Horaria';
+
+  @override
+  String get heatmapLiveHeat => 'LIVE HEAT';
+
+  @override
+  String get heatmapPeakHoursTitle => 'Afluencia por Horario (Horas Pico)';
+
+  @override
+  String get heatmapPeakHoursSubtitle =>
+      'Distribución de caminantes durante el día';
+
+  @override
+  String get heatmapTopZones => 'Zonas de Mayor Densidad';
+
+  @override
+  String heatmapVisits(int count) {
+    return '$count visitas';
+  }
+
+  @override
+  String get aiNewChat => 'Nuevo Chat';
+
+  @override
+  String get attachPhotos => 'Adjuntar fotos';
+
+  @override
+  String photosSelected(int count) {
+    return '$count foto(s) seleccionada(s)';
+  }
+
+  @override
+  String get submitReview => 'Publicar Reseña';
 }

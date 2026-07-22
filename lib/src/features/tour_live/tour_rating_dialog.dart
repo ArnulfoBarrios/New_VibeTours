@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
 import '../../domain/models.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
 class TourRatingDialog extends ConsumerStatefulWidget {
@@ -142,7 +143,7 @@ class _TourRatingDialogState extends ConsumerState<TourRatingDialog> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Fotos de tu recorrido',
+                    AppLocalizations.of(context).attachPhotos,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -207,7 +208,7 @@ class _TourRatingDialogState extends ConsumerState<TourRatingDialog> {
                 children: [
                   Expanded(
                     child: LiquidButton(
-                      label: 'Cancelar',
+                      label: AppLocalizations.of(context).cancel,
                       icon: Icons.close_rounded,
                       isPrimary: false,
                       onPressed: _submitting
@@ -221,7 +222,7 @@ class _TourRatingDialogState extends ConsumerState<TourRatingDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: LiquidButton(
-                      label: _submitting ? 'Enviando...' : 'Enviar',
+                      label: _submitting ? '...' : AppLocalizations.of(context).submitReview,
                       icon: Icons.send_rounded,
                       isPrimary: true,
                       onPressed: _submitting

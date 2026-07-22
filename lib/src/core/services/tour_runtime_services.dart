@@ -10,6 +10,12 @@ import 'package:speech_to_text/speech_to_text.dart';
 import '../../domain/models.dart';
 import 'sqlite-service.dart';
 
+enum LocationSamplingMode {
+  walking,
+  stationary,
+  batterySaver,
+}
+
 class LocationService {
   LocationService(this._prefs);
   final SharedPreferences _prefs;
@@ -34,15 +40,34 @@ class LocationService {
 
   Future<Stream<Position>?> positionStream({
     int distanceFilterMeters = 12,
+    LocationSamplingMode mode = LocationSamplingMode.walking,
   }) async {
     final ready = await _ensureLocationReady();
     if (!ready) return null;
-    return Geolocator.getPositionStream(
-      locationSettings: LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: distanceFilterMeters,
-      ),
-    );
+
+    final LocationSettings settings;
+    switch (mode) {
+      case LocationSamplingMode.walking:
+        settings = LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: distanceFilterMeters,
+        );
+        break;
+      case LocationSamplingMode.stationary:
+        settings = const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          distanceFilter: 35,
+        );
+        break;
+      case LocationSamplingMode.batterySaver:
+        settings = const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          distanceFilter: 75,
+        );
+        break;
+    }
+
+    return Geolocator.getPositionStream(locationSettings: settings);
   }
 
   double distanceBetween(GeoPoint a, GeoPoint b) => Geolocator.distanceBetween(

@@ -539,5 +539,32 @@
   "adminDemoTicket1Subject": "Duda sobre horarios en Medellin",
   "adminDemoTicket1Body": "A que hora exactamente sale el transporte desde el punto de encuentro?",
   "adminDemoTicket2Subject": "Imagen de tour repetida",
-  "adminDemoTicket2Body": "Un tour aparece con una imagen que no corresponde al destino."
+  "adminDemoTicket2Body": "Un tour aparece con una imagen que no corresponde al destino.",
+  "heatmapTitle": "Mapa de Calor & Densidad",
+  "heatmapSubtitle": "Monitoreo en tiempo real de afluencia turística",
+  "heatmapToursToday": "Recorridos Hoy",
+  "heatmapAvgTime": "Tiempo Promedio",
+  "heatmapPerStop": "Por cada parada",
+  "heatmapHottestZone": "Zona Más Caliente",
+  "heatmapFilterZone": "Filtrar por Zona",
+  "heatmapTimeRange": "Franja Horaria",
+  "heatmapLiveHeat": "LIVE HEAT",
+  "heatmapPeakHoursTitle": "Afluencia por Horario (Horas Pico)",
+  "heatmapPeakHoursSubtitle": "Distribución de caminantes durante el día",
+  "heatmapTopZones": "Zonas de Mayor Densidad",
+  "heatmapVisits": "{count} visitas",
+  "@heatmapVisits": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "aiNewChat": "Nuevo Chat",
+  "attachPhotos": "Adjuntar fotos",
+  "photosSelected": "{count} foto(s) seleccionada(s)",
+  "@photosSelected": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "submitReview": "Publicar Reseña"
 }

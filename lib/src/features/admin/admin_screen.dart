@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
+import '../../core/design/openfree_route_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/design/vibe_logo.dart';
 import '../../domain/models.dart';
@@ -121,6 +122,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     onPostpone: () => setState(() => _selectedTicket = null),
                     onRefresh: _loadTickets,
                   ),
+                  const _AnalyticsHeatmapTab(),
                   const _AdminSettingsTab(),
                 ],
               ),
@@ -1512,6 +1514,7 @@ class _AdminBottomNav extends StatelessWidget {
     const items = [
       (icon: Icons.admin_panel_settings_outlined, label: 'Admin'),
       (icon: Icons.support_agent_rounded, label: 'PQRS'),
+      (icon: Icons.local_fire_department_rounded, label: 'Heatmap'),
       (icon: Icons.settings_rounded, label: 'Settings'),
     ];
     return Container(
@@ -2078,6 +2081,464 @@ class _PqrsHistoryScreenState extends ConsumerState<_PqrsHistoryScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TAB: ANALÍTICAS Y MAPA DE CALOR (HEATMAPS)
+// ---------------------------------------------------------------------------
+
+class _AnalyticsHeatmapTab extends ConsumerStatefulWidget {
+  const _AnalyticsHeatmapTab();
+
+  @override
+  ConsumerState<_AnalyticsHeatmapTab> createState() => _AnalyticsHeatmapTabState();
+}
+
+class _AnalyticsHeatmapTabState extends ConsumerState<_AnalyticsHeatmapTab> {
+  String _selectedCity = 'Todas';
+  String _selectedTimeRange = 'Todo el día';
+
+  final List<String> _cities = const ['Todas', 'Barranquilla', 'Bogotá', 'Medellín', 'Cartagena', 'Internacional'];
+  final List<String> _timeRanges = const ['Todo el día', 'Mañana (6-12h)', 'Tarde (12-18h)', 'Noche (18-24h)'];
+
+  final List<Map<String, dynamic>> _heatPoints = const [
+    {
+      'name': 'Gran Malecón del Río',
+      'city': 'Barranquilla',
+      'lat': 11.0085,
+      'lon': -74.7925,
+      'density': 94,
+      'visits': 1240,
+      'timePeak': '17:00 - 20:00',
+    },
+    {
+      'name': 'Barrio El Prado',
+      'city': 'Barranquilla',
+      'lat': 10.9950,
+      'lon': -74.7980,
+      'density': 82,
+      'visits': 890,
+      'timePeak': '09:00 - 12:00',
+    },
+    {
+      'name': 'La Candelaria & Centro Histórico',
+      'city': 'Bogotá',
+      'lat': 4.5969,
+      'lon': -74.0734,
+      'density': 98,
+      'visits': 2150,
+      'timePeak': '10:00 - 15:00',
+    },
+    {
+      'name': 'Comuna 13 & Graffitour',
+      'city': 'Medellín',
+      'lat': 6.2520,
+      'lon': -75.6170,
+      'density': 91,
+      'visits': 1870,
+      'timePeak': '14:00 - 18:00',
+    },
+    {
+      'name': 'Ciudad Amurallada',
+      'city': 'Cartagena',
+      'lat': 10.4236,
+      'lon': -75.5510,
+      'density': 96,
+      'visits': 1980,
+      'timePeak': '16:00 - 21:00',
+    },
+    {
+      'name': 'Eiffel Tower Zone',
+      'city': 'Internacional',
+      'lat': 48.8584,
+      'lon': 2.2945,
+      'density': 88,
+      'visits': 1650,
+      'timePeak': '11:00 - 16:00',
+    },
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final mapStyle = ref.watch(mapStyleProvider);
+    final filteredPoints = _heatPoints.where((p) {
+      if (_selectedCity != 'Todas' && p['city'] != _selectedCity) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.local_fire_department_rounded, color: Colors.orange, size: 28),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.heatmapTitle,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  Text(
+                    l10n.heatmapSubtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _HeatmapMetricCard(
+                  title: l10n.heatmapToursToday,
+                  value: '3,420',
+                  subtitle: '+18%',
+                  icon: Icons.directions_walk_rounded,
+                  color: Colors.deepOrange,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _HeatmapMetricCard(
+                  title: l10n.heatmapAvgTime,
+                  value: '26 min',
+                  subtitle: l10n.heatmapPerStop,
+                  icon: Icons.timer_outlined,
+                  color: Colors.amber,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _HeatmapMetricCard(
+                  title: l10n.heatmapHottestZone,
+                  value: '98%',
+                  subtitle: 'La Candelaria',
+                  icon: Icons.local_fire_department_rounded,
+                  color: Colors.redAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(l10n.heatmapFilterZone, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _cities.map((city) {
+                final isSelected = _selectedCity == city;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text(city),
+                    selected: isSelected,
+                    onSelected: (val) {
+                      setState(() {
+                        _selectedCity = city;
+                      });
+                    },
+                    selectedColor: AppTheme.primary,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(l10n.heatmapTimeRange, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _timeRanges.map((range) {
+                final isSelected = _selectedTimeRange == range;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(range),
+                    selected: isSelected,
+                    onSelected: (val) {
+                      setState(() {
+                        _selectedTimeRange = range;
+                      });
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 20),
+          GlassPanel(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.map_rounded, size: 20, color: AppTheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          l10n.heatmapTitle,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.circle, size: 8, color: Colors.redAccent),
+                          const SizedBox(width: 4),
+                          Text(l10n.heatmapLiveHeat, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 260,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: OpenFreeRouteMap(
+                      styleUrl: mapStyle,
+                      height: 260,
+                      points: filteredPoints.map((p) => GeoPoint(latitude: p['lat'] as double, longitude: p['lon'] as double)).toList(),
+                      labels: filteredPoints.map((p) => '${p['name']} (${p['density']}%)').toList(),
+                      showNumbers: false,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          GlassPanel(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.heatmapPeakHoursTitle,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.heatmapPeakHoursSubtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                const _PeakHoursBarChart(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            l10n.heatmapTopZones,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filteredPoints.length,
+            itemBuilder: (context, index) {
+              final item = filteredPoints[index];
+              return _HeatZoneTile(data: item);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeatmapMetricCard extends StatelessWidget {
+  const _HeatmapMetricCard({
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 8),
+          Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          Text(title, style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PeakHoursBarChart extends StatelessWidget {
+  const _PeakHoursBarChart();
+
+  final List<Map<String, dynamic>> _bars = const [
+    {'hour': '6am', 'height': 0.2},
+    {'hour': '8am', 'height': 0.5},
+    {'hour': '10am', 'height': 0.85},
+    {'hour': '12pm', 'height': 0.65},
+    {'hour': '2pm', 'height': 0.75},
+    {'hour': '4pm', 'height': 0.95},
+    {'hour': '6pm', 'height': 1.0},
+    {'hour': '8pm', 'height': 0.7},
+    {'hour': '10pm', 'height': 0.3},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 120,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: _bars.map((bar) {
+          final isPeak = (bar['height'] as double) >= 0.9;
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                width: 18,
+                height: 80 * (bar['height'] as double),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: isPeak
+                        ? const [Colors.orange, Colors.redAccent]
+                        : const [AppTheme.primary, Color(0xFF60A5FA)],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                bar['hour'].toString(),
+                style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _HeatZoneTile extends StatelessWidget {
+  const _HeatZoneTile({required this.data});
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    final density = data['density'] as int;
+    final color = density > 90
+        ? Colors.redAccent
+        : density > 80
+            ? Colors.orange
+            : AppTheme.primary;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.local_fire_department_rounded, color: color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(data['name'].toString(), style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text('${data['city']} • Pico: ${data['timePeak']}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$density%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+              const SizedBox(height: 4),
+              Text(AppLocalizations.of(context).heatmapVisits(data['visits'] as int), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

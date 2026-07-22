@@ -15,6 +15,7 @@ import '../data/discovery_repository.dart';
 import '../data/moderation_repository.dart';
 import 'package:vibetoursapp/src/data/tour_repository.dart';
 import '../domain/models.dart';
+import '../features/ai/ai_builder_controller.dart';
 import 'live_tour_state.dart';
 
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError());
@@ -34,13 +35,18 @@ final authUserProvider = StreamProvider<User?>((ref) async* {
     yield null;
     return;
   }
+  String? currentUserId = client.auth.currentUser?.id;
   yield client.auth.currentUser;
   await for (final state in client.auth.onAuthStateChange) {
-    if (state.event == AuthChangeEvent.signedOut || state.session?.user == null) {
+    final user = state.session?.user;
+    final newUserId = user?.id;
+    if (newUserId != currentUserId) {
+      currentUserId = newUserId;
+      ref.read(aiBuilderProvider.notifier).resetChat();
       ref.read(liveTourPlaybackProvider.notifier).stopTour();
       ref.read(voiceGuideProvider).stop();
     }
-    yield state.session?.user;
+    yield user;
   }
 });
 

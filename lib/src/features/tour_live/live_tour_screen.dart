@@ -12,6 +12,7 @@ import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/services/road_route_service.dart';
+import '../../core/services/tour_runtime_services.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -113,6 +114,38 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _navigatingToHotel = false;
   double? _currentHeading;
   bool _stopsEnriched = false;
+  LocationSamplingMode _currentSamplingMode = LocationSamplingMode.walking;
+  DateTime? _stoppedSince;
+
+  Future<void> _updateBatterySamplingMode(double speed, double distanceToStop) async {
+    final isStopped = speed < 0.5 || distanceToStop < 30.0;
+    final now = DateTime.now();
+
+    if (isStopped) {
+      _stoppedSince ??= now;
+    } else {
+      _stoppedSince = null;
+    }
+
+    final stoppedDuration = _stoppedSince != null ? now.difference(_stoppedSince!) : Duration.zero;
+    final shouldBeStationary = isStopped && (stoppedDuration.inSeconds >= 10 || distanceToStop < 25.0);
+    final targetMode = shouldBeStationary ? LocationSamplingMode.stationary : LocationSamplingMode.walking;
+
+    if (_currentSamplingMode != targetMode) {
+      _currentSamplingMode = targetMode;
+      if (mounted) {
+        setState(() {});
+      }
+      final service = ref.read(locationServiceProvider);
+      final stream = await service.positionStream(
+        distanceFilterMeters: targetMode == LocationSamplingMode.stationary ? 35 : 10,
+        mode: targetMode,
+      );
+      if (!mounted || stream == null) return;
+      await _positionSubscription?.cancel();
+      _positionSubscription = stream.listen(_handlePositionUpdate);
+    }
+  }
 
   // ── Voice assistant state ──────────────────────────────────────────────────
   bool _isListening = false;
@@ -630,6 +663,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     });
     final tour = _navigationTour;
     if (tour == null || tour.stops.isEmpty) return;
+
+    final activeStopPoint = _activeStop < tour.stops.length ? tour.stops[_activeStop].location : null;
+    final distanceToActiveStop = activeStopPoint != null
+        ? Geolocator.distanceBetween(point.latitude, point.longitude, activeStopPoint.latitude, activeStopPoint.longitude)
+        : double.infinity;
+    _updateBatterySamplingMode(position.speed, distanceToActiveStop);
     final targetStopIndex = _selectedVoicePlace != null
         ? -2
         : _navigatingToHotel
@@ -1073,6 +1112,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           spacing: 8,
           runSpacing: 8,
           children: [
+            if (_currentSamplingMode == LocationSamplingMode.stationary)
+              const _LiveChip(
+                icon: Icons.battery_saver_rounded,
+                label: 'Ahorro GPS (Estático)',
+              ),
             if (_currentPoint != null &&
                 Geolocator.distanceBetween(
                       _currentPoint!.latitude,

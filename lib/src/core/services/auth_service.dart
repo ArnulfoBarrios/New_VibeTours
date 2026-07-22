@@ -43,13 +43,6 @@ class AuthService {
     await _client.auth.signUp(email: email, password: password);
   }
 
-  Future<void> sendPasswordReset(String email) async {
-    if (_client == null) {
-      throw StateError('Supabase no esta configurado.');
-    }
-    await _client.auth.resetPasswordForEmail(email);
-  }
-
   Future<void> signInWithGoogle() async {
     if (_client == null) {
       throw StateError('Supabase no esta configurado.');

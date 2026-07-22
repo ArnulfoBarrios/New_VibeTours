@@ -203,8 +203,22 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
   }
 
+  String? _lastUserId;
+
   @override
   Widget build(BuildContext context) {
+    final currentUser = ref.watch(authUserProvider).valueOrNull;
+    final currentUserId = currentUser?.id ?? 'guest';
+
+    if (_lastUserId != null && _lastUserId != currentUserId) {
+      _lastUserId = currentUserId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(aiBuilderProvider.notifier).resetChat();
+      });
+    } else {
+      _lastUserId = currentUserId;
+    }
+
     final builderState = ref.watch(aiBuilderProvider);
     
     ref.listen<AiBuilderState>(
@@ -248,6 +262,13 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: AppLocalizations.of(context).aiNewChat,
+            onPressed: () {
+              ref.read(aiBuilderProvider.notifier).resetChat();
+            },
+            icon: const Icon(Icons.refresh_rounded),
+          ),
           IconButton(
             tooltip: 'Crear Tour Manual',
             onPressed: () => context.push('/creator/manual'),

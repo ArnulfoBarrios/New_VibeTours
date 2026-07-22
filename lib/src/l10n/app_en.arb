@@ -539,5 +539,32 @@
   "adminDemoTicket1Subject": "Question about schedules in Medellin",
   "adminDemoTicket1Body": "What time exactly does the transport leave from the meeting point?",
   "adminDemoTicket2Subject": "Repeated tour image",
-  "adminDemoTicket2Body": "A tour appears with an image that does not match the destination."
+  "adminDemoTicket2Body": "A tour appears with an image that does not match the destination.",
+  "heatmapTitle": "Heatmap & Density Map",
+  "heatmapSubtitle": "Real-time monitoring of tourist foot traffic",
+  "heatmapToursToday": "Tours Today",
+  "heatmapAvgTime": "Average Time",
+  "heatmapPerStop": "Per stop",
+  "heatmapHottestZone": "Hottest Zone",
+  "heatmapFilterZone": "Filter by Zone",
+  "heatmapTimeRange": "Time Range",
+  "heatmapLiveHeat": "LIVE HEAT",
+  "heatmapPeakHoursTitle": "Foot Traffic by Schedule (Peak Hours)",
+  "heatmapPeakHoursSubtitle": "Distribution of walkers throughout the day",
+  "heatmapTopZones": "Highest Density Zones",
+  "heatmapVisits": "{count} visits",
+  "@heatmapVisits": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "aiNewChat": "New Chat",
+  "attachPhotos": "Attach photos",
+  "photosSelected": "{count} photo(s) selected",
+  "@photosSelected": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "submitReview": "Submit Review"
 }

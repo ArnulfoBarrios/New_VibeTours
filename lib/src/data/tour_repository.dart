@@ -51,21 +51,6 @@ class TourRepository {
     }
   }
 
-  Future<List<Tour>> searchTours({
-    String? country,
-    String? city,
-    TourType? type,
-  }) async {
-    final tours = await getTours();
-    return tours.where((tour) {
-      final countryOk =
-          country == null || country.isEmpty || tour.country == country;
-      final cityOk = city == null || city.isEmpty || tour.city == city;
-      final typeOk = type == null || tour.type == type;
-      return countryOk && cityOk && typeOk;
-    }).toList();
-  }
-
   Future<List<Tour>> getPendingModerationTours() async {
     final client = _requireClient();
     try {

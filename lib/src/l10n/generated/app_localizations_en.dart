@@ -1520,4 +1520,60 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adminDemoTicket2Body =>
       'A tour appears with an image that does not match the destination.';
+
+  @override
+  String get heatmapTitle => 'Heatmap & Density Map';
+
+  @override
+  String get heatmapSubtitle => 'Real-time monitoring of tourist foot traffic';
+
+  @override
+  String get heatmapToursToday => 'Tours Today';
+
+  @override
+  String get heatmapAvgTime => 'Average Time';
+
+  @override
+  String get heatmapPerStop => 'Per stop';
+
+  @override
+  String get heatmapHottestZone => 'Hottest Zone';
+
+  @override
+  String get heatmapFilterZone => 'Filter by Zone';
+
+  @override
+  String get heatmapTimeRange => 'Time Range';
+
+  @override
+  String get heatmapLiveHeat => 'LIVE HEAT';
+
+  @override
+  String get heatmapPeakHoursTitle => 'Foot Traffic by Schedule (Peak Hours)';
+
+  @override
+  String get heatmapPeakHoursSubtitle =>
+      'Distribution of walkers throughout the day';
+
+  @override
+  String get heatmapTopZones => 'Highest Density Zones';
+
+  @override
+  String heatmapVisits(int count) {
+    return '$count visits';
+  }
+
+  @override
+  String get aiNewChat => 'New Chat';
+
+  @override
+  String get attachPhotos => 'Attach photos';
+
+  @override
+  String photosSelected(int count) {
+    return '$count photo(s) selected';
+  }
+
+  @override
+  String get submitReview => 'Submit Review';
 }

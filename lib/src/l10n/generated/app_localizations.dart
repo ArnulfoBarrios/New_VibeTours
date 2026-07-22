@@ -2894,6 +2894,108 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Un tour aparece con una imagen que no corresponde al destino.'**
   String get adminDemoTicket2Body;
+
+  /// No description provided for @heatmapTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Mapa de Calor & Densidad'**
+  String get heatmapTitle;
+
+  /// No description provided for @heatmapSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Monitoreo en tiempo real de afluencia turística'**
+  String get heatmapSubtitle;
+
+  /// No description provided for @heatmapToursToday.
+  ///
+  /// In es, this message translates to:
+  /// **'Recorridos Hoy'**
+  String get heatmapToursToday;
+
+  /// No description provided for @heatmapAvgTime.
+  ///
+  /// In es, this message translates to:
+  /// **'Tiempo Promedio'**
+  String get heatmapAvgTime;
+
+  /// No description provided for @heatmapPerStop.
+  ///
+  /// In es, this message translates to:
+  /// **'Por cada parada'**
+  String get heatmapPerStop;
+
+  /// No description provided for @heatmapHottestZone.
+  ///
+  /// In es, this message translates to:
+  /// **'Zona Más Caliente'**
+  String get heatmapHottestZone;
+
+  /// No description provided for @heatmapFilterZone.
+  ///
+  /// In es, this message translates to:
+  /// **'Filtrar por Zona'**
+  String get heatmapFilterZone;
+
+  /// No description provided for @heatmapTimeRange.
+  ///
+  /// In es, this message translates to:
+  /// **'Franja Horaria'**
+  String get heatmapTimeRange;
+
+  /// No description provided for @heatmapLiveHeat.
+  ///
+  /// In es, this message translates to:
+  /// **'LIVE HEAT'**
+  String get heatmapLiveHeat;
+
+  /// No description provided for @heatmapPeakHoursTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Afluencia por Horario (Horas Pico)'**
+  String get heatmapPeakHoursTitle;
+
+  /// No description provided for @heatmapPeakHoursSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Distribución de caminantes durante el día'**
+  String get heatmapPeakHoursSubtitle;
+
+  /// No description provided for @heatmapTopZones.
+  ///
+  /// In es, this message translates to:
+  /// **'Zonas de Mayor Densidad'**
+  String get heatmapTopZones;
+
+  /// No description provided for @heatmapVisits.
+  ///
+  /// In es, this message translates to:
+  /// **'{count} visitas'**
+  String heatmapVisits(int count);
+
+  /// No description provided for @aiNewChat.
+  ///
+  /// In es, this message translates to:
+  /// **'Nuevo Chat'**
+  String get aiNewChat;
+
+  /// No description provided for @attachPhotos.
+  ///
+  /// In es, this message translates to:
+  /// **'Adjuntar fotos'**
+  String get attachPhotos;
+
+  /// No description provided for @photosSelected.
+  ///
+  /// In es, this message translates to:
+  /// **'{count} foto(s) seleccionada(s)'**
+  String photosSelected(int count);
+
+  /// No description provided for @submitReview.
+  ///
+  /// In es, this message translates to:
+  /// **'Publicar Reseña'**
+  String get submitReview;
 }
 
 class _AppLocalizationsDelegate
