@@ -127,7 +127,13 @@ final recommendedToursProvider = FutureProvider<List<Tour>>((ref) async {
 
   if (profile == null || profile.interests.isEmpty) {
     final copy = List.of(allTours);
-    copy.shuffle();
+    copy.sort((a, b) {
+      final ratingCompare = b.rating.compareTo(a.rating);
+      if (ratingCompare != 0) return ratingCompare;
+      final reviewCompare = b.reviewCount.compareTo(a.reviewCount);
+      if (reviewCompare != 0) return reviewCompare;
+      return a.id.compareTo(b.id);
+    });
     return copy.take(10).toList();
   }
 
@@ -193,7 +199,15 @@ final recommendedToursProvider = FutureProvider<List<Tour>>((ref) async {
     return MapEntry(tour, score);
   }).toList();
 
-  scoredTours.sort((a, b) => b.value.compareTo(a.value));
+  scoredTours.sort((a, b) {
+    final scoreCompare = b.value.compareTo(a.value);
+    if (scoreCompare != 0) return scoreCompare;
+    final ratingCompare = b.key.rating.compareTo(a.key.rating);
+    if (ratingCompare != 0) return ratingCompare;
+    final reviewCompare = b.key.reviewCount.compareTo(a.key.reviewCount);
+    if (reviewCompare != 0) return reviewCompare;
+    return a.key.id.compareTo(b.key.id);
+  });
 
   return scoredTours.map((e) => e.key).take(10).toList();
 });
