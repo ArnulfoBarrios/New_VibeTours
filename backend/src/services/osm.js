@@ -123,7 +123,44 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
   }))
 }
 
+const OVERPASS_SERVERS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter'
+]
+
+const attractionsCache = new Map()
+const CACHE_TTL_MS = 30 * 60 * 1000
+
+async function fetchOverpassWithMirrors(query, timeoutMs = 14000) {
+  for (const serverUrl of OVERPASS_SERVERS) {
+    try {
+      const response = await fetch(serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': USER_AGENT
+        },
+        body: new URLSearchParams({ data: query }),
+        signal: AbortSignal.timeout(timeoutMs)
+      })
+      if (response.ok) {
+        return await response.json()
+      }
+    } catch (err) {
+      console.warn(`[osm] Overpass mirror (${serverUrl}) timed out or failed:`, err.message)
+    }
+  }
+  return null
+}
+
 export async function overpassAttractions(latitude, longitude, radius = 4500) {
+  const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${radius}`
+  const cached = attractionsCache.get(cacheKey)
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data
+  }
+
   const query = `
     [out:json][timeout:25];
     (
@@ -147,36 +184,48 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
     out center tags 80;
   `
   try {
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': USER_AGENT
-      },
-      body: new URLSearchParams({ data: query }),
-      signal: AbortSignal.timeout(8000)
-    })
-    if (!response.ok) return []
-    const json = await response.json()
-    return (json.elements ?? [])
-      .map((element) => {
-      const lat = element.lat ?? element.center?.lat
-      const lon = element.lon ?? element.center?.lon
-      const name = element.tags?.name
-      const type = element.tags?.tourism ?? element.tags?.historic ?? element.tags?.amenity ?? element.tags?.leisure ?? element.tags?.sport ?? element.tags?.natural ?? element.tags?.place ?? element.tags?.boundary ?? 'place'
-      if (lat == null || lon == null || !name) return null
-      if (isAccommodation(type)) return null
-      return {
-        name,
-        latitude: lat,
-        longitude: lon,
-        type,
-        category: classifyAttraction(element.tags),
-        tags: element.tags
-      }
-    })
-      .filter(Boolean)
-      .slice(0, 60)
+    const json = await fetchOverpassWithMirrors(query, 14000)
+    let results = []
+    if (json && json.elements) {
+      results = json.elements
+        .map((element) => {
+          const lat = element.lat ?? element.center?.lat
+          const lon = element.lon ?? element.center?.lon
+          const name = element.tags?.name
+          const type = element.tags?.tourism ?? element.tags?.historic ?? element.tags?.amenity ?? element.tags?.leisure ?? element.tags?.sport ?? element.tags?.natural ?? element.tags?.place ?? element.tags?.boundary ?? 'place'
+          if (lat == null || lon == null || !name) return null
+          if (isAccommodation(type)) return null
+          return {
+            name,
+            latitude: lat,
+            longitude: lon,
+            type,
+            category: classifyAttraction(element.tags),
+            tags: element.tags
+          }
+        })
+        .filter(Boolean)
+        .slice(0, 60)
+    }
+
+    if (results.length === 0) {
+      console.warn('[osm] overpassAttractions returned empty or timed out, using Photon fallback...')
+      const photonItems = await photonSearch('turismo', 15, latitude, longitude)
+      results = photonItems.map((item) => ({
+        name: item.name,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        type: item.type ?? 'attraction',
+        category: 'attraction',
+        tags: {}
+      }))
+    }
+
+    if (results.length > 0) {
+      attractionsCache.set(cacheKey, { data: results, expiresAt: Date.now() + CACHE_TTL_MS })
+    }
+
+    return results
   } catch (error) {
     console.error('[osm] overpassAttractions error:', error.message)
     return []
