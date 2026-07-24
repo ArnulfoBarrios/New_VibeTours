@@ -2333,8 +2333,12 @@ export async function collectTourCandidates(input, location) {
   const radiusPrimary = isRegionalOrNature ? 15000 : 4500
   const radiusWide = isRegionalOrNature ? 55000 : 9000
 
-  const overpassPrimary = location ? await overpassAttractions(location.latitude, location.longitude, radiusPrimary) : []
-  const overpassWide = location ? await overpassAttractions(location.latitude, location.longitude, radiusWide) : []
+  const [overpassPrimary, overpassWide] = location 
+    ? await Promise.all([
+        overpassAttractions(location.latitude, location.longitude, radiusPrimary),
+        overpassAttractions(location.latitude, location.longitude, radiusWide)
+      ])
+    : [[], []]
   const pool = [...overpassPrimary, ...overpassWide, ...photonPlaces]
   const normalizedPool = uniqueByName(pool)
     .filter((place) => place && place.name)

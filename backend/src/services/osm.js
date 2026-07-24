@@ -132,7 +132,7 @@ const OVERPASS_SERVERS = [
 const attractionsCache = new Map()
 const CACHE_TTL_MS = 30 * 60 * 1000
 
-async function fetchOverpassWithMirrors(query, timeoutMs = 14000) {
+async function fetchOverpassWithMirrors(query, timeoutMs = 3500) {
   for (const serverUrl of OVERPASS_SERVERS) {
     try {
       const response = await fetch(serverUrl, {
@@ -155,36 +155,37 @@ async function fetchOverpassWithMirrors(query, timeoutMs = 14000) {
 }
 
 export async function overpassAttractions(latitude, longitude, radius = 4500) {
-  const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${radius}`
+  const effectiveRadius = Math.min(radius, 12000)
+  const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${effectiveRadius}`
   const cached = attractionsCache.get(cacheKey)
   if (cached && Date.now() < cached.expiresAt) {
     return cached.data
   }
 
   const query = `
-    [out:json][timeout:25];
+    [out:json][timeout:10];
     (
-      node(around:${radius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
-      node(around:${radius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
-      node(around:${radius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
-      node(around:${radius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
-      node(around:${radius},${latitude},${longitude})["natural"~"beach|water"];
-      node(around:${radius},${latitude},${longitude})["place"="island"];
-      node(around:${radius},${latitude},${longitude})["boundary"="national_park"];
-      way(around:${radius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
-      way(around:${radius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
-      way(around:${radius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
-      way(around:${radius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
-      way(around:${radius},${latitude},${longitude})["natural"~"beach|water"];
-      way(around:${radius},${latitude},${longitude})["place"="island"];
-      way(around:${radius},${latitude},${longitude})["boundary"="national_park"];
-      relation(around:${radius},${latitude},${longitude})["place"="island"];
-      relation(around:${radius},${latitude},${longitude})["boundary"="national_park"];
+      node(around:${effectiveRadius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
+      node(around:${effectiveRadius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
+      node(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
+      node(around:${effectiveRadius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
+      node(around:${effectiveRadius},${latitude},${longitude})["natural"~"beach|water"];
+      node(around:${effectiveRadius},${latitude},${longitude})["place"="island"];
+      node(around:${effectiveRadius},${latitude},${longitude})["boundary"="national_park"];
+      way(around:${effectiveRadius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
+      way(around:${effectiveRadius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
+      way(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
+      way(around:${effectiveRadius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
+      way(around:${effectiveRadius},${latitude},${longitude})["natural"~"beach|water"];
+      way(around:${effectiveRadius},${latitude},${longitude})["place"="island"];
+      way(around:${effectiveRadius},${latitude},${longitude})["boundary"="national_park"];
+      relation(around:${effectiveRadius},${latitude},${longitude})["place"="island"];
+      relation(around:${effectiveRadius},${latitude},${longitude})["boundary"="national_park"];
     );
     out center tags 80;
   `
   try {
-    const json = await fetchOverpassWithMirrors(query, 14000)
+    const json = await fetchOverpassWithMirrors(query, 3500)
     let results = []
     if (json && json.elements) {
       results = json.elements
