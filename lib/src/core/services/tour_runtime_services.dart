@@ -100,13 +100,23 @@ class LocationService {
 
 class VoiceGuideService {
   VoiceGuideService(this._sqliteService) {
-    _tts.setSpeechRate(0.46);
+    setSpeedMultiplier(1.0);
     _tts.setPitch(1.0);
   }
 
   final SqliteService _sqliteService;
   final FlutterTts _tts = FlutterTts();
   final SpeechToText _speech = SpeechToText();
+  double _currentMultiplier = 1.0;
+
+  double get currentMultiplier => _currentMultiplier;
+
+  Future<void> setSpeedMultiplier(double multiplier) async {
+    _currentMultiplier = multiplier;
+    // Baseline speech rate for 1.0x is 0.46 on mobile FlutterTts
+    final rawRate = (0.46 * multiplier).clamp(0.2, 1.0);
+    await _tts.setSpeechRate(rawRate);
+  }
 
   Future<Map<String, String>?> fetchWikipediaAndGeocodingDetails(
     double lat,

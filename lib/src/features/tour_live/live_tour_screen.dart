@@ -117,6 +117,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   LocationSamplingMode _currentSamplingMode = LocationSamplingMode.walking;
   DateTime? _stoppedSince;
   DateTime? _lastModeSwitchAt;
+  double _ttsSpeedMultiplier = 1.0;
 
   Future<void> _updateBatterySamplingMode(double speed, double distanceToStop) async {
     final isStopped = speed < 0.5 || distanceToStop < 30.0;
@@ -1220,7 +1221,42 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 },
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
+            PopupMenuButton<double>(
+              tooltip: 'Velocidad de voz',
+              initialValue: _ttsSpeedMultiplier,
+              onSelected: (speed) async {
+                setState(() {
+                  _ttsSpeedMultiplier = speed;
+                });
+                await ref.read(voiceGuideProvider).setSpeedMultiplier(speed);
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 0.75, child: Text('0.75x (Lento)')),
+                PopupMenuItem(value: 1.0, child: Text('1.0x (Normal)')),
+                PopupMenuItem(value: 1.25, child: Text('1.25x (Rápido)')),
+                PopupMenuItem(value: 1.5, child: Text('1.5x (Muy rápido)')),
+              ],
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.speed_rounded, size: 18, color: AppTheme.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_ttsSpeedMultiplier}x',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
             _buildMicButton(context),
             IconButton.filledTonal(
               tooltip: l10n.recalculate,

@@ -105,12 +105,41 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
   final RoadRouteService _routeService = RoadRouteService();
   MapLibreMapController? _controller;
   bool _styleLoaded = false;
+  bool _hasMapError = false;
   bool _hasFitRoute = false;
   int _drawRequest = 0;
   int _currentAnimationId = 0;
+  int _retryKey = 0;
+  Timer? _loadTimeoutTimer;
 
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _startMapLoadTimeout();
+  }
+
+  void _startMapLoadTimeout() {
+    _loadTimeoutTimer?.cancel();
+    _loadTimeoutTimer = Timer(const Duration(seconds: 12), () {
+      if (mounted && !_styleLoaded) {
+        setState(() {
+          _hasMapError = true;
+        });
+      }
+    });
+  }
+
+  void _retryMapLoad() {
+    setState(() {
+      _hasMapError = false;
+      _styleLoaded = false;
+      _retryKey++;
+    });
+    _startMapLoadTimeout();
+  }
 
   bool _isIncrementalUpdate(List<GeoPoint> oldPoints, List<GeoPoint> newPoints) {
     if (oldPoints.isEmpty || newPoints.length <= oldPoints.length) {
@@ -190,6 +219,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
 
   @override
   void dispose() {
+    _loadTimeoutTimer?.cancel();
     _currentAnimationId++;
     super.dispose();
   }
@@ -269,39 +299,132 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
         width: double.infinity,
         child: Stack(
           children: [
-            MapLibreMap(
-              styleString: widget.styleUrl,
-              initialCameraPosition: CameraPosition(
-                target: LatLng(center.latitude, center.longitude),
-                zoom: widget.focusOnLast ? 16 : (widget.points.length > 1 ? 13 : 15),
-              ),
-              compassEnabled: true,
-              rotateGesturesEnabled: false,
-              myLocationEnabled: widget.myLocationEnabled,
-              onMapCreated: (controller) {
-                _controller = controller;
-                controller.onCircleTapped.add((circle) {
-                  final latLng = circle.options.geometry;
-                  if (latLng != null && widget.onPointSelected != null) {
-                    widget.onPointSelected!(GeoPoint(
-                      latitude: latLng.latitude,
-                      longitude: latLng.longitude,
-                    ));
+            KeyedSubtree(
+              key: ValueKey('map_$_retryKey'),
+              child: MapLibreMap(
+                styleString: widget.styleUrl,
+                initialCameraPosition: CameraPosition(
+                  target: LatLng(center.latitude, center.longitude),
+                  zoom: widget.focusOnLast ? 16 : (widget.points.length > 1 ? 13 : 15),
+                ),
+                compassEnabled: true,
+                rotateGesturesEnabled: false,
+                myLocationEnabled: widget.myLocationEnabled,
+                onMapCreated: (controller) {
+                  _controller = controller;
+                  controller.onCircleTapped.add((circle) {
+                    final latLng = circle.options.geometry;
+                    if (latLng != null && widget.onPointSelected != null) {
+                      widget.onPointSelected!(GeoPoint(
+                        latitude: latLng.latitude,
+                        longitude: latLng.longitude,
+                      ));
+                    }
+                  });
+                  if (widget.onMapCreated != null) {
+                    widget.onMapCreated!(controller);
                   }
-                });
-                if (widget.onMapCreated != null) {
-                  widget.onMapCreated!(controller);
-                }
-              },
-              onStyleLoadedCallback: () {
-                _styleLoaded = true;
-                _drawRoute();
-              },
+                },
+                onStyleLoadedCallback: () {
+                  _loadTimeoutTimer?.cancel();
+                  if (mounted) {
+                    setState(() {
+                      _styleLoaded = true;
+                      _hasMapError = false;
+                    });
+                  }
+                  _drawRoute();
+                },
+              ),
             ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: _buildStyleSelector(),
+            IgnorePointer(
+              ignoring: _styleLoaded || _hasMapError,
+              child: AnimatedOpacity(
+                opacity: _styleLoaded ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 350),
+                child: _buildMapSkeleton(),
+              ),
+            ),
+            if (_hasMapError) _buildMapErrorOverlay(),
+            if (_styleLoaded)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: _buildStyleSelector(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapSkeleton() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Cargando mapa...',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapErrorOverlay() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.map_outlined,
+              size: 32,
+              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.8),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No se pudo cargar el estilo del mapa',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: _retryMapLoad,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Reintentar mapa', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
           ],
         ),

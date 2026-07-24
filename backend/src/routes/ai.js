@@ -177,7 +177,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
             { city: "Medellín", country: "Colombia", reason: "La ciudad de la eterna primavera llena de cultura." }
           ]
 
-      const suggestions = await Promise.all(
+      const settledSuggestions = await Promise.allSettled(
         rawSuggestions.map(async (sugg) => {
           let imageUrl = ''
           try {
@@ -190,6 +190,12 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
             imageUrl: imageUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=500&q=80'
           }
         })
+      )
+      const suggestions = settledSuggestions.map((res, i) => 
+        res.status === 'fulfilled' ? res.value : {
+          ...rawSuggestions[i],
+          imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=500&q=80'
+        }
       )
 
       return res.json({
@@ -591,7 +597,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     // We reuse the assembly logic
     const stopsTarget = planner.selectedPlaces.length
     const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
-    const stops = await Promise.all(
+    const settledStops = await Promise.allSettled(
       Array.from({ length: stopsTarget }, (_, index) => {
         const sourceStop = Array.isArray(sourceTour.itinerario) ? sourceTour.itinerario[index] : null
         const anchorPlace = planner.selectedPlaces[index]
@@ -599,6 +605,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
       })
     )
+    const stops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
     
     const publicStops = stops.map(s => s.publicStop)
     const routeStops = stops.map(s => s.routeStop)
@@ -755,7 +762,7 @@ async function processTourGeneration(jobId, input) {
         : sourceTour.stops ?? []
       const stopTarget = Math.min(30, Math.max(3, plannedStops.length, planner.selectedPlaces.length))
       const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
-      const normalizedStops = await Promise.all(
+      const settledStops = await Promise.allSettled(
         Array.from({ length: stopTarget }, (_, index) => {
           const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
           const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
@@ -763,6 +770,7 @@ async function processTourGeneration(jobId, input) {
           return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
         }),
       )
+      const normalizedStops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
       const stops = normalizedStops.map((stop) => stop.publicStop)
       const routeStops = normalizedStops.map((stop) => stop.routeStop)
       const coverUrl = await imageForPlace(input.city || input.destination, input.country || "").catch(() => fallbackCover(input.destination))

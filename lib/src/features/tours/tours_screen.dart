@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/premium_components.dart';
+import '../../core/utils/debouncer.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -17,12 +18,14 @@ class ToursScreen extends ConsumerStatefulWidget {
 
 class _ToursScreenState extends ConsumerState<ToursScreen> {
   final _search = TextEditingController();
+  final _debouncer = Debouncer(milliseconds: 300);
   String _country = '';
   String _city = '';
   TourType? _type;
 
   @override
   void dispose() {
+    _debouncer.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -71,7 +74,9 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
                     ),
                     child: TextField(
                       controller: _search,
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (_) => _debouncer.run(() {
+                        if (mounted) setState(() {});
+                      }),
                       style: const TextStyle(fontSize: 16),
                       decoration: InputDecoration(
                         hintText: l10n.searchDestination,
