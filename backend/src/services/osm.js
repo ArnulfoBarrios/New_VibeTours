@@ -1,7 +1,20 @@
+import { GeoCache } from './geoCache.js'
+
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
+
+const geocodeCache = new GeoCache(24 * 60 * 60 * 1000, 500)
+const photonCache = new GeoCache(60 * 60 * 1000, 500)
+const reverseCache = new GeoCache(24 * 60 * 60 * 1000, 500)
+const hotelsCache = new GeoCache(60 * 60 * 1000, 200)
+const foodCache = new GeoCache(60 * 60 * 1000, 200)
+const citiesCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 
 export async function reverseGeocodeUserCountry(lat, lon) {
   if (!lat || !lon) return null
+  const key = `user_country_${Number(lat).toFixed(2)}_${Number(lon).toFixed(2)}`
+  const cached = reverseCache.get(key)
+  if (cached) return cached
+
   try {
     const url = new URL('https://nominatim.openstreetmap.org/reverse')
     url.searchParams.set('format', 'jsonv2')
@@ -12,7 +25,9 @@ export async function reverseGeocodeUserCountry(lat, lon) {
     if (response.ok) {
       const data = await response.json()
       if (data && data.address && data.address.country) {
-        return data.address.country
+        const country = data.address.country
+        reverseCache.set(key, country)
+        return country
       }
     }
   } catch (err) {
@@ -23,6 +38,10 @@ export async function reverseGeocodeUserCountry(lat, lon) {
 
 export async function reverseGeocodeLocation(lat, lon) {
   if (!lat || !lon) return null
+  const key = `location_${Number(lat).toFixed(2)}_${Number(lon).toFixed(2)}`
+  const cached = reverseCache.get(key)
+  if (cached) return cached
+
   try {
     const url = new URL('https://nominatim.openstreetmap.org/reverse')
     url.searchParams.set('format', 'jsonv2')
@@ -35,11 +54,13 @@ export async function reverseGeocodeLocation(lat, lon) {
       if (data && data.address) {
         const city = data.address.city || data.address.town || data.address.village || data.address.municipality || data.address.county || data.address.state || ''
         const country = data.address.country || ''
-        return {
+        const res = {
           city,
           country,
           name: data.display_name || city
         }
+        reverseCache.set(key, res)
+        return res
       }
     }
   } catch (err) {
@@ -49,19 +70,26 @@ export async function reverseGeocodeLocation(lat, lon) {
 }
 
 export async function geocodePlace(query, lat = null, lon = null) {
+  if (!query || typeof query !== 'string') return null
+  const key = `geocode_${query.toLowerCase().trim()}_${lat ?? ''}_${lon ?? ''}`
+  const cached = geocodeCache.get(key)
+  if (cached) return cached
+
   // 1. Try Photon first as it has better search relevance for natural language
   // and prioritizes larger regions/cities over small shops or POIs with the same name.
   try {
     const photonResults = await photonSearch(query, 1, lat, lon)
     const [photon] = photonResults
     if (photon && Number.isFinite(photon.latitude) && Number.isFinite(photon.longitude)) {
-      return {
+      const res = {
         name: photon.name,
         latitude: Number(photon.latitude),
         longitude: Number(photon.longitude),
         city: photon.city || '',
         country: photon.country || ''
       }
+      geocodeCache.set(key, res)
+      return res
     }
   } catch (err) {
     console.warn('[geocodePlace] Photon search failed:', err.message)
@@ -84,13 +112,15 @@ export async function geocodePlace(query, lat = null, lon = null) {
         const address = result.address || {}
         const city = address.city || address.town || address.village || address.municipality || address.county || ''
         const country = address.country || ''
-        return {
+        const res = {
           name: result.display_name,
           latitude: Number(result.lat),
           longitude: Number(result.lon),
           city,
           country
         }
+        geocodeCache.set(key, res)
+        return res
       }
     }
   } catch (err) {
@@ -100,8 +130,12 @@ export async function geocodePlace(query, lat = null, lon = null) {
   return null
 }
 
-
 export async function photonSearch(query, limit = 8, lat = null, lon = null) {
+  if (!query) return []
+  const key = `photon_${query.toLowerCase().trim()}_${limit}_${lat ?? ''}_${lon ?? ''}`
+  const cached = photonCache.get(key)
+  if (cached) return cached
+
   const url = new URL('https://photon.komoot.io/api/')
   url.searchParams.set('q', query)
   url.searchParams.set('limit', String(limit))
@@ -112,7 +146,7 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
   const response = await fetch(url)
   if (!response.ok) return []
   const json = await response.json()
-  return (json.features ?? []).map((feature) => ({
+  const results = (json.features ?? []).map((feature) => ({
     name: feature.properties.name ?? feature.properties.city ?? query,
     city: feature.properties.city,
     country: feature.properties.country,
@@ -121,6 +155,10 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     type: feature.properties.osm_value ?? feature.properties.type ?? 'place',
     tags: feature.properties
   }))
+  if (results.length > 0) {
+    photonCache.set(key, results)
+  }
+  return results
 }
 
 const OVERPASS_SERVERS = [
