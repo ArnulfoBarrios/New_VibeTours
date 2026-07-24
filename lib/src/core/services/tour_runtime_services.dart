@@ -124,37 +124,22 @@ class VoiceGuideService {
       String? resolvedName;
       String? resolvedDesc;
 
-      // 1. Nominatim Reverse Geocoding
+      // 1. Photon Reverse Geocoding (Sustituye a Nominatim para evitar 429 Rate Limit)
       final reverseUrl = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lon&zoom=18&accept-language=$lang'
+        'https://photon.komoot.io/reverse?lat=$lat&lon=$lon&lang=$lang'
       );
-      final reverseRes = await http.get(reverseUrl, headers: {
-        'User-Agent': 'VIBETOURS/1.0 contact=ops@vibetours.app'
-      }).timeout(const Duration(seconds: 4));
+      final reverseRes = await http.get(reverseUrl).timeout(const Duration(seconds: 4));
 
       if (reverseRes.statusCode == 200) {
         final data = jsonDecode(reverseRes.body) as Map<String, dynamic>;
-        final address = data['address'] as Map<String, dynamic>?;
-        if (address != null) {
-          resolvedName = address['attraction']?.toString() ??
-                         address['museum']?.toString() ??
-                         address['monument']?.toString() ??
-                         address['castle']?.toString() ??
-                         address['heritage']?.toString() ??
-                         address['historic']?.toString() ??
-                         address['tourism']?.toString() ??
-                         address['amenity']?.toString() ??
-                         address['place']?.toString() ??
-                         address['shop']?.toString() ??
-                         address['hotel']?.toString() ??
-                         address['village']?.toString() ??
-                         address['suburb']?.toString() ??
-                         data['name']?.toString();
-        }
-        if (resolvedName == null || resolvedName.trim().isEmpty) {
-          final displayName = data['display_name']?.toString() ?? '';
-          if (displayName.isNotEmpty) {
-            resolvedName = displayName.split(',').first.trim();
+        final features = data['features'] as List<dynamic>?;
+        if (features != null && features.isNotEmpty) {
+          final props = (features.first as Map<String, dynamic>)['properties'] as Map<String, dynamic>?;
+          if (props != null) {
+            resolvedName = props['name']?.toString() ??
+                           props['street']?.toString() ??
+                           props['district']?.toString() ??
+                           props['city']?.toString();
           }
         }
       }
