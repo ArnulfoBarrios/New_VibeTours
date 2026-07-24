@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../utils/image_utils.dart';
 import 'app_theme.dart';
 
 String tourTypeL10n(BuildContext context, TourType type) {
@@ -495,8 +496,10 @@ class TourCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             CachedNetworkImage(
-              imageUrl: tour.coverUrl,
+              imageUrl: optimizeImageUrl(tour.coverUrl),
               fit: BoxFit.cover,
+              memCacheWidth: 600,
+              maxWidthDiskCache: 800,
               placeholder: (context, url) => const SkeletonBox(),
               errorWidget: (context, url, error) =>
                   TravelImageFallback(title: tour.title),

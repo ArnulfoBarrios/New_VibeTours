@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
+import '../../core/utils/image_utils.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -213,7 +214,7 @@ class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(32),
                 image: DecorationImage(
-                  image: CachedNetworkImageProvider(widget.tour.coverUrl),
+                  image: CachedNetworkImageProvider(optimizeImageUrl(widget.tour.coverUrl), maxWidth: 600),
                   fit: BoxFit.cover,
                 ),
                 boxShadow: [
@@ -443,7 +444,7 @@ class _StaggeredTourCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
           image: DecorationImage(
-            image: CachedNetworkImageProvider(tour.coverUrl),
+            image: CachedNetworkImageProvider(optimizeImageUrl(tour.coverUrl), maxWidth: 600),
             fit: BoxFit.cover,
           ),
           boxShadow: [
@@ -567,7 +568,7 @@ class _NearbyPlacesSection extends ConsumerWidget {
                                   borderRadius: BorderRadius.circular(20),
                                   image: place.imageUrl.isNotEmpty
                                       ? DecorationImage(
-                                          image: CachedNetworkImageProvider(place.imageUrl),
+                                          image: CachedNetworkImageProvider(optimizeImageUrl(place.imageUrl), maxWidth: 600),
                                           fit: BoxFit.cover,
                                         )
                                       : null,

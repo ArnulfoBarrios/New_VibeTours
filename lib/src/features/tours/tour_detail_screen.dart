@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
 import '../../core/design/premium_components.dart';
+import '../../core/utils/image_utils.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -126,8 +127,10 @@ class TourDetailScreen extends ConsumerWidget {
                               scale: scale,
                               alignment: Alignment.center,
                               child: CachedNetworkImage(
-                                imageUrl: tour.coverUrl,
+                                imageUrl: optimizeImageUrl(tour.coverUrl),
                                 fit: BoxFit.cover,
+                                memCacheWidth: 600,
+                                maxWidthDiskCache: 800,
                                 httpHeaders: const {
                                   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                                 },
