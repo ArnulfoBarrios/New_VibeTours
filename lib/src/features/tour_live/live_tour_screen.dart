@@ -116,6 +116,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _stopsEnriched = false;
   LocationSamplingMode _currentSamplingMode = LocationSamplingMode.walking;
   DateTime? _stoppedSince;
+  DateTime? _lastModeSwitchAt;
 
   Future<void> _updateBatterySamplingMode(double speed, double distanceToStop) async {
     final isStopped = speed < 0.5 || distanceToStop < 30.0;
@@ -128,17 +129,20 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
 
     final stoppedDuration = _stoppedSince != null ? now.difference(_stoppedSince!) : Duration.zero;
-    final shouldBeStationary = isStopped && (stoppedDuration.inSeconds >= 10 || distanceToStop < 25.0);
+    final shouldBeStationary = isStopped && (stoppedDuration.inSeconds >= 15 || distanceToStop < 20.0);
     final targetMode = shouldBeStationary ? LocationSamplingMode.stationary : LocationSamplingMode.walking;
 
-    if (_currentSamplingMode != targetMode) {
+    final canSwitch = _lastModeSwitchAt == null || now.difference(_lastModeSwitchAt!).inSeconds >= 15;
+
+    if (_currentSamplingMode != targetMode && canSwitch) {
       _currentSamplingMode = targetMode;
+      _lastModeSwitchAt = now;
       if (mounted) {
         setState(() {});
       }
       final service = ref.read(locationServiceProvider);
       final stream = await service.positionStream(
-        distanceFilterMeters: targetMode == LocationSamplingMode.stationary ? 35 : 10,
+        distanceFilterMeters: targetMode == LocationSamplingMode.stationary ? 35 : 12,
         mode: targetMode,
       );
       if (!mounted || stream == null) return;
@@ -655,12 +659,34 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   void _handlePositionUpdate(Position position) {
     final point = _pointFromPosition(position);
     if (!mounted) return;
-    setState(() {
-      _currentPoint = point;
-      if (position.heading > 0) {
-        _currentHeading = position.heading;
+
+    final previousPoint = _currentPoint;
+    final previousHeading = _currentHeading ?? 0.0;
+    bool needsRebuild = previousPoint == null;
+
+    if (previousPoint != null) {
+      final shiftMeters = Geolocator.distanceBetween(
+        previousPoint.latitude,
+        previousPoint.longitude,
+        point.latitude,
+        point.longitude,
+      );
+      final headingDiff = (position.heading - previousHeading).abs();
+      if (shiftMeters >= 2.0 || headingDiff >= 10.0) {
+        needsRebuild = true;
       }
-    });
+    }
+
+    _currentPoint = point;
+    if (position.heading > 0) {
+      _currentHeading = position.heading;
+    }
+
+    if (needsRebuild) {
+      setState(() {});
+    } else {
+      debugPrint('[GPS-Throttle] Omitiendo rebuild UI: desplazamiento < 2.0m y giro < 10°');
+    }
     final tour = _navigationTour;
     if (tour == null || tour.stops.isEmpty) return;
 
