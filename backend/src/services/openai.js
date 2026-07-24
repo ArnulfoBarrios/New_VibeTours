@@ -1,3 +1,8 @@
+import { GeoCache } from './geoCache.js'
+
+const locationExtractCache = new GeoCache(12 * 60 * 60 * 1000, 300)
+const planCache = new GeoCache(6 * 60 * 60 * 1000, 200)
+
 export function summarizePlaces(places = []) {
   return places.map((place, index) => ({
     order: index + 1,
@@ -12,6 +17,10 @@ export function summarizePlaces(places = []) {
 
 export async function extractLocation(prompt, lat, lon, userCountry = null) {
   if (!prompt || typeof prompt !== 'string') return null
+  const cacheKey = `extract_${prompt.toLowerCase().trim()}_${lat ?? ''}_${lon ?? ''}_${userCountry ?? ''}`
+  const cached = locationExtractCache.get(cacheKey)
+  if (cached) return cached
+
   const timeoutMs = 40000
   const apiKey = process.env.OPENAI_API_KEY
   
@@ -42,7 +51,7 @@ Si "is_unrelated" es false:
 - Extrae también la duración (ej: "viaje de 3 días" = 72, "tour de 4 horas" = 4) en "duration_hours" (number o null).
 - Extrae el presupuesto en "budget" (string: "bajo", "medio", "alto", o null).
 - Extrae el tipo de acompañamiento en "companion_type" (string: "solo", "pareja", "familia", "amigos", o null).
-${lat && lon ? `IMPORTANTE: El usuario se encuentra en las coordenadas geográficas latitud ${lat}, longitud ${lon}${userCountry ? ` ubicadas en el país de ${userCountry}` : ''}. Si el usuario pide lugares genéricos, DEBEN estar en el mismo país o región cercana. CRÍTICO: Si el usuario menciona una ciudad con homónimos (como "Cartagena" o "Córdoba"), ASUME ESTRICTAMENTE que se refiere a la ciudad ubicada en ${userCountry || 'su país correspondiente a sus coordenadas actuales'}, y rellena el campo "country" con el nombre de ese país. ` : ''}
+${lat && lon ? `IMPORTANTE: El usuario se encuentra en las coordenadas geográficas latitud ${lat}, longitud ${lon}${userCountry ? ` ubicadas en el país de ${userCountry}` : ''}. Si el usuario pide lugares genéricos, DEBEN estar en el mismo país o región cercana. CRÍTICO: Si el usuario menciona una ciudad con homónimos (como "Cartagena" o "Córdoba"), ASUME ESTRICAMENTE que se refiere a la ciudad ubicada en ${userCountry || 'su país correspondiente a sus coordenadas actuales'}, y rellena el campo "country" con el nombre de ese país. ` : ''}
 
 Devuelve ÚNICAMENTE JSON válido con este esquema:
 {
@@ -67,7 +76,9 @@ Devuelve ÚNICAMENTE JSON válido con este esquema:
     }
     const json = await response.json()
     let content = json.choices?.[0]?.message?.content ?? '{}'
-    return JSON.parse(content)
+    const result = JSON.parse(content)
+    if (result) locationExtractCache.set(cacheKey, result)
+    return result
   } catch (err) {
     console.error('[extractLocation] error:', err.message)
     return null
@@ -90,6 +101,13 @@ export async function planWithOpenAI({
   timeProfile = {},
   selectedHotel = null,
 }) {
+  const cacheKey = `plan_${destination}_${city}_${country}_${type}_${durationHours}_${language}_${selectedHotel?.name ?? ''}`
+  const cached = planCache.get(cacheKey)
+  if (cached) {
+    console.info('[openai] Returning cached tour plan from GeoCache')
+    return cached
+  }
+
   const timeoutMs = Number.parseInt(process.env.OPENAI_TIMEOUT_MS ?? '', 10) || 120000
   const apiKey = process.env.OPENAI_API_KEY
   
@@ -98,7 +116,7 @@ export async function planWithOpenAI({
     return null
   }
 
-  const selectedPlaces = summarizePlaces(places).slice(0, 30)
+  const selectedPlaces = summarizePlaces(places).slice(0, 12)
   let system = `Eres TourSync AI, una inteligencia artificial de lujo especializada exclusivamente en crear tours turisticos vibrantes, atractivos y altamente personalizados.
 
 Tu respuesta debe ser siempre un unico objeto JSON valido. No agregues markdown, comentarios, etiquetas, explicaciones ni texto fuera del JSON.
@@ -110,12 +128,12 @@ Reglas centrales:
 - PROHIBIDO INVENTAR: No alucines, no inventes monumentos, museos, restaurantes ni direcciones que no existan en la vida real. Si no conoces una dirección exacta, deja el campo vacío en vez de inventar.
 - No uses coordenadas geográficas en el JSON.
 - Escribe en ${language}.
-- CRÍTICO: La descripción general del tour ("descripcion_tour") debe atrapar al usuario desde la primera línea, tener 150 a 400 palabras, y explicar la vibra de la experiencia.
-- CRÍTICO GUÍA DE VOZ INMERSIVA: Cada descripción de parada ("descripcion") DEBE ser una guía de voz completa, rica y profunda de 120 a 180 palabras. Escribe como si fueras un guía local experto hablando en vivo al oído del turista. Narra la historia fascinante del sitio, los detalles arquitectónicos o naturales que tiene enfrente, anécdotas culturales únicas y sugerencias de 'Qué hacer o qué probar aquí'. PROHIBIDO descripciones cortas o resumidas.
+- CRÍTICO: La descripción general del tour ("descripcion_tour") debe atrapar al usuario desde la primera línea, tener 150 a 300 palabras, y explicar la vibra de la experiencia.
+- CRÍTICO GUÍA DE VOZ INMERSIVA: Cada descripción de parada ("descripcion") DEBE ser una guía de voz completa y envolvente de 80 a 120 palabras. Escribe como si fueras un guía local experto hablando en vivo al oído del turista. Narra la historia fascinante del sitio, los detalles arquitectónicos o naturales que tiene enfrente, anécdotas culturales únicas y sugerencias de 'Qué hacer o qué probar aquí'.
 - CRÍTICO: El array de salida "itinerario" debe tener EXACTAMENTE la misma longitud que la lista de lugares seleccionados (selectedPlaces) que recibes. Debes procesar y describir una por una todas las paradas provistas, sin omitir absolutamente ninguna. Si el array selectedPlaces contiene 6 elementos, tu array "itinerario" de salida debe contener exactamente 6 elementos correspondientes, en el mismo orden. No agrupas ni omites nada.
-- COBERTURA REGIONAL: No te limites únicamente al centro urbano geocodificado de la ciudad principal. Cuando los lugares seleccionados estén ubicados en los alrededores, debes tejer una ruta regional coherente y atractiva que los integre (por ejemplo, conectar el centro histórico de Santa Marta con el Parque Tayrona o el Rodadero; o Tolú con el archipiélago de San Bernardo y playas de Coveñas).
-- DETALLE DE TRANSPORTE ESPECIAL: Para aquellas paradas que se encuentren alejadas del centro de la ciudad o requieran un traslado no convencional, DEBES detallar de manera obligatoria y explícita en su descripción el método de transporte necesario y sugerido para llegar allí (por ejemplo, especificar claramente frases como "tomar una lancha desde el muelle de Tolú para ir a Isla Palma", "viajar en autobús intermunicipal", o "realizar una caminata guiada por senderos ecológicos").
-- CRÍTICO: Prohibido usar frases genéricas de transición como "En esta parada...", "Aquí puedes observar...", "Ahora llegamos a...", "Continuamos nuestro tour hacia...". Usa un Storytelling dinámico.
+- COBERTURA REGIONAL: No te limites únicamente al centro urbano geocodificado de la ciudad principal. Cuando los lugares seleccionados estén ubicados en los alrededores, debes tejer una ruta regional coherente y atractiva que los integre.
+- DETALLE DE TRANSPORTE ESPECIAL: Para aquellas paradas que se encuentren alejadas del centro de la ciudad o requieran un traslado no convencional, DEBES detallar de manera obligatoria y explícita en su descripción el método de transporte necesario y sugerido para llegar allí.
+- CRÍTICO: Prohibido usar frases genéricas de transición como "En esta parada...", "Aquí puedes observar...", "Ahora llegamos a...". Usa un Storytelling dinámico.
 - Cada parada debe incluir actividades específicas reales, 2 a 5 datos curiosos históricos o culturales verificados y consejos prácticos útiles.
 - Ten en cuenta el perfil del viajero cuando exista: ${touristProfileSummary || 'sin perfil adicional'}.
 - Intereses del viajero: ${touristInterests.length ? touristInterests.join(', ') : 'no especificados'}.
@@ -272,11 +290,17 @@ Input: ${JSON.stringify(routeBrief)}`,
   }
 
   let result = await makeRequest(1)
-  if (result.ok && result.data) return result.data
+  if (result.ok && result.data) {
+    planCache.set(cacheKey, result.data)
+    return result.data
+  }
 
   console.info('[openai] Retrying generation after failure...')
   result = await makeRequest(2)
-  if (result.ok && result.data) return result.data
+  if (result.ok && result.data) {
+    planCache.set(cacheKey, result.data)
+    return result.data
+  }
 
   return null
 }
