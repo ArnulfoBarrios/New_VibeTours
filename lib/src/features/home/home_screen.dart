@@ -65,7 +65,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
-            cacheExtent: 1500,
             slivers: [
               SliverToBoxAdapter(
                 child: _HeaderSection(
@@ -544,7 +543,6 @@ class _NearbyPlacesSection extends ConsumerWidget {
                 height: 180,
                 child: ListView.separated(
                   physics: const BouncingScrollPhysics(),
-                  cacheExtent: 800,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   scrollDirection: Axis.horizontal,
                   itemCount: places.length,

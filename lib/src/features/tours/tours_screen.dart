@@ -55,7 +55,6 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
 
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
-            cacheExtent: 1500,
             slivers: [
               SliverAppBar(
                 pinned: true,

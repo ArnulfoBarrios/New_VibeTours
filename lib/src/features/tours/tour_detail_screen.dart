@@ -55,7 +55,6 @@ class TourDetailScreen extends ConsumerWidget {
           final displayCommentsCount = comments.isNotEmpty ? comments.length : tour.reviewCount;
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
-            cacheExtent: 1500,
             slivers: [
               SliverAppBar(
                 expandedHeight: 330,
@@ -296,7 +295,6 @@ class TourDetailScreen extends ConsumerWidget {
                         height: 96,
                         child: ListView.separated(
                           physics: const BouncingScrollPhysics(),
-                          cacheExtent: 800,
                           scrollDirection: Axis.horizontal,
                           itemCount: tour.gallery.length,
                           separatorBuilder: (context, index) =>
