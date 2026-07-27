@@ -465,7 +465,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               : [...basePoints, ..._voiceFoodPlaces.map((p) => p.toGeoPoint())];
 
           final baseLabels = [
-            if (_currentPoint != null) 'Tu ubicacion',
             _selectedVoicePlace != null
                 ? _selectedVoicePlace!.name
                 : _navigatingToHotel
@@ -483,12 +482,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   key: ValueKey('${tour.id}-$mapStyle-${_selectedVoicePlace != null ? "voice" : _navigatingToHotel ? "hotel" : "stop"}-${_voiceFoodPlaces.length}'),
                   points: allPoints,
                   labels: allLabels,
-                  activeIndex: _currentPoint == null ? 0 : 1,
+                  activeIndex: 0,
                   styleUrl: mapStyle,
                   height: MediaQuery.of(context).size.height,
                   borderRadius: 0,
                   fitPadding: const EdgeInsets.fromLTRB(36, 108, 36, 360),
-                  showNumbers: _currentPoint == null,
+                  showNumbers: false,
                   myLocationEnabled: true,
                   routeOverride: _noLandRouteAvailable || liveRoute == null ? const RoadRouteResult(geometry: []) : liveRoute,
                   currentLocation: _currentPoint,
@@ -819,7 +818,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   List<GeoPoint> _mapPointsFor(TourStop stop) {
-    final origin = _currentPoint;
     final GeoPoint destination;
     if (_selectedVoicePlace != null) {
       destination = _selectedVoicePlace!.toGeoPoint();
@@ -828,8 +826,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     } else {
       destination = stop.location;
     }
-    if (origin == null) return [destination];
-    return [origin, destination];
+    return [destination];
   }
 
   GeoPoint _pointFromPosition(Position position) {

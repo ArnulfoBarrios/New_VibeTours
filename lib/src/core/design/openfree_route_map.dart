@@ -111,6 +111,8 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
   int _currentAnimationId = 0;
   int _retryKey = 0;
   Timer? _loadTimeoutTimer;
+  Line? _mainRouteLine;
+  List<LatLng> _fullRouteGeometry = [];
 
   @override
   bool get wantKeepAlive => true;
@@ -154,6 +156,61 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
     return true;
   }
 
+  LatLng _projectPointOntoSegment(LatLng p, LatLng a, LatLng b) {
+    final dx = b.longitude - a.longitude;
+    final dy = b.latitude - a.latitude;
+
+    if (dx == 0 && dy == 0) return a;
+
+    final t = ((p.longitude - a.longitude) * dx + (p.latitude - a.latitude) * dy) /
+        (dx * dx + dy * dy);
+
+    final clampedT = t.clamp(0.0, 1.0);
+    return LatLng(a.latitude + clampedT * dy, a.longitude + clampedT * dx);
+  }
+
+  List<LatLng> _trimRouteGeometry(List<LatLng> geometry, LatLng currentPos) {
+    if (geometry.length < 2) return geometry;
+
+    int bestSegmentIndex = 0;
+    double minSqDistance = double.infinity;
+
+    for (int i = 0; i < geometry.length - 1; i++) {
+      final p1 = geometry[i];
+      final p2 = geometry[i + 1];
+
+      final proj = _projectPointOntoSegment(currentPos, p1, p2);
+      final distSq = _distanceSquared(currentPos, proj);
+
+      if (distSq < minSqDistance) {
+        minSqDistance = distSq;
+        bestSegmentIndex = i;
+      }
+    }
+
+    final remaining = geometry.sublist(bestSegmentIndex + 1);
+    return [currentPos, ...remaining];
+  }
+
+  void _updateTrimmedRouteLine(LatLng currentPos) {
+    final controller = _controller;
+    if (controller == null || _mainRouteLine == null || _fullRouteGeometry.isEmpty) return;
+
+    final trimmed = _trimRouteGeometry(_fullRouteGeometry, currentPos);
+    if (trimmed.length >= 2) {
+      try {
+        controller.updateLine(
+          _mainRouteLine!,
+          LineOptions(
+            geometry: trimmed,
+          ),
+        );
+      } catch (e) {
+        debugPrint('Error updating trimmed route line: $e');
+      }
+    }
+  }
+
   @override
   void didUpdateWidget(covariant OpenFreeRouteMap oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -162,6 +219,8 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
         oldWidget.styleUrl != widget.styleUrl ||
         oldWidget.routeOverride != widget.routeOverride;
     
+    final locationChanged = oldWidget.currentLocation != widget.currentLocation;
+    final headingChanged = oldWidget.trackingHeading != widget.trackingHeading;
     final isIncremental = _isIncrementalUpdate(oldWidget.points, widget.points);
 
     if (oldWidget.styleUrl != widget.styleUrl) {
@@ -175,15 +234,23 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
       if (!isIncremental) {
         _hasFitRoute = false;
       }
-    }
-    if (routeChanged || oldWidget.activeIndex != widget.activeIndex) {
       _drawRoute(
-        focusActiveStop:
-            oldWidget.activeIndex != widget.activeIndex && !routeChanged,
+        focusActiveStop: oldWidget.activeIndex != widget.activeIndex && !routeChanged,
         isIncremental: isIncremental,
       );
-    } 
-    
+    } else if (oldWidget.activeIndex != widget.activeIndex) {
+      _drawRoute(
+        focusActiveStop: true,
+        isIncremental: isIncremental,
+      );
+    } else if (locationChanged && widget.currentLocation != null) {
+      final currentPos = LatLng(
+        widget.currentLocation!.latitude,
+        widget.currentLocation!.longitude,
+      );
+      _updateTrimmedRouteLine(currentPos);
+    }
+
     final trackingChanged = oldWidget.trackingMode != widget.trackingMode;
     if (trackingChanged) {
       if (widget.trackingMode && widget.currentLocation != null) {
@@ -196,13 +263,13 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
               bearing: widget.trackingHeading ?? 0.0,
             ),
           ),
-          duration: const Duration(milliseconds: 1000),
+          duration: const Duration(milliseconds: 500),
         );
       } else if (!widget.trackingMode) {
         _hasFitRoute = false;
         _drawRoute();
       }
-    } else if (widget.trackingMode && widget.currentLocation != null && widget.currentLocation != oldWidget.currentLocation) {
+    } else if (widget.trackingMode && widget.currentLocation != null && (locationChanged || headingChanged)) {
       _controller?.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
@@ -212,7 +279,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
             bearing: widget.trackingHeading ?? 0.0,
           ),
         ),
-        duration: const Duration(milliseconds: 1000),
+        duration: const Duration(milliseconds: 500),
       );
     }
   }
@@ -498,42 +565,36 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
     if (controller == null || !_styleLoaded || widget.points.isEmpty) return;
     
     final animId = ++_currentAnimationId;
+    _mainRouteLine = null;
 
     final points = [
       for (final point in widget.points)
         LatLng(point.latitude, point.longitude),
     ];
-    List<LatLng> routePoints = [
+    
+    _fullRouteGeometry = [
       for (final point in route.geometry)
         LatLng(point.latitude, point.longitude),
     ];
-    if (routePoints.isEmpty) {
-      routePoints = points;
+    if (_fullRouteGeometry.isEmpty) {
+      _fullRouteGeometry = points;
     }
+
+    final currentLocation = widget.currentLocation;
+    final currentPoint = currentLocation == null
+        ? null
+        : LatLng(currentLocation.latitude, currentLocation.longitude);
+
+    List<LatLng> routePoints = _fullRouteGeometry;
+    if (currentPoint != null && _fullRouteGeometry.length >= 2) {
+      routePoints = _trimRouteGeometry(_fullRouteGeometry, currentPoint);
+    }
+
     final portPoints = [
       for (final port in route.ports)
         LatLng(port.location.latitude, port.location.longitude),
     ];
     final activeIndex = widget.activeIndex.clamp(0, points.length - 1).toInt();
-    final currentLocation = widget.currentLocation;
-    final currentPoint = currentLocation == null
-        ? null
-        : LatLng(currentLocation.latitude, currentLocation.longitude);
-        
-    if (widget.routeOverride != null && routePoints.isNotEmpty && currentPoint != null) {
-      int closestIndex = 0;
-      double minDist = double.infinity;
-      for (int i = 0; i < routePoints.length; i++) {
-        final d = _distanceSquared(currentPoint, routePoints[i]);
-        if (d < minDist) {
-          minDist = d;
-          closestIndex = i;
-        }
-      }
-      if (closestIndex > 0) {
-        routePoints = [currentPoint, ...routePoints.skip(closestIndex)];
-      }
-    }
 
     try {
       await controller.clearLines();
@@ -652,7 +713,8 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
       } catch (_) {}
     }
 
-    if (currentPoint != null) {
+    // Draw manual location indicator ONLY when native MapLibre location puck is disabled
+    if (currentPoint != null && !widget.myLocationEnabled) {
       try {
         await controller.addCircles([
           CircleOptions(
@@ -757,8 +819,10 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
 
               await Future.delayed(const Duration(milliseconds: 16));
             }
+            _mainRouteLine = mainLine;
           } else {
             _drawNewStopWithEffect(points.last, points.length - 1, activeIndex, animId);
+            _mainRouteLine = mainLine;
           }
         } else {
           // Normal full tracing animation starting from stop 0
@@ -826,10 +890,11 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
 
             await Future.delayed(const Duration(milliseconds: 16));
           }
+          _mainRouteLine = line;
         }
       } else {
         try {
-          await controller.addLine(lineOptions);
+          _mainRouteLine = await controller.addLine(lineOptions);
         } catch (_) {}
         for (int i = 0; i < points.length; i++) {
           _drawNewStopWithEffect(points[i], i, activeIndex, animId);
