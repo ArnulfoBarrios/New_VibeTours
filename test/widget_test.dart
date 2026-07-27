@@ -28,8 +28,7 @@ void main() {
       ],
       child: const VibeToursApp(),
     ));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
   });

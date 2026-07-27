@@ -151,7 +151,7 @@ Reglas centrales:
   }
 
   system += `\n- CRÍTICO RUTA CON INICIO Y FIN: Si el usuario especificó un punto de partida y un punto de llegada, la Parada 1 del itinerario DEBE ser el punto de partida especificado y la última Parada DEBE ser el destino final especificado. Las paradas intermedias deben integrarse de forma fluida de camino hacia la meta final.`
-  system += `\n- CRÍTICO TOUR MULTICIUDAD / MULTIDÍA: Si el tour abarca más de una ciudad, organiza el itinerario dividiendo las paradas de manera equilibrada por días (ej: Día 1 para la primera ciudad, Día 2 para la segunda ciudad). En las descripciones del cambio de ciudad, detalla obligatoriamente las instrucciones del viaje intermunicipal (distancia estimada, método de transporte sugerido como bus, vehículo o lancha).`
+  system += `\n- CRÍTICO TOUR MULTICIUDAD / MULTIDÍA: Si el tour abarca más de una ciudad o recorrido de carretera interurbana, las paradas seleccionadas están ordenadas estrictamente desde la ciudad de origen hacia la ciudad de destino. Narra el itinerario respetando esta secuencia progresiva sin hacer retrocesos geográficos ni saltos anacrónicos. Organiza el itinerario dividiendo las paradas de manera equilibrada por días y en los trayectos entre ciudades, detalla las instrucciones del viaje intermunicipal.`
 
   const routeBrief = {
     destination,

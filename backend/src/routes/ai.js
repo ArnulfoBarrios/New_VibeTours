@@ -1039,11 +1039,36 @@ function buildTourPlanner(input, location, places) {
     }))
     .sort((a, b) => b.score - a.score)
   const stopTarget = stopCountForDuration(input.durationHours)
-  const selectedPlaces = selectPlaces(scored, stopTarget, input)
+  let selectedPlaces = selectPlaces(scored, stopTarget, input)
   if (selectedPlaces.length < Math.min(3, scored.length) && scored.length >= 3) {
     const expanded = scored.filter((place) => !selectedPlaces.some((picked) => normalizeKey(picked.name) === normalizeKey(place.name)))
     selectedPlaces.push(...expanded.slice(0, Math.max(0, Math.min(stopTarget, 3) - selectedPlaces.length)))
   }
+
+  // Ensure inter-city / multi-city tours are ordered monotonically along the travel direction (City A -> En Route -> City B)
+  const isMultiCityRoute = input.isMultiCity || (Array.isArray(input.cities) && input.cities.length > 1) || (input.originPlace && input.destinationPlace)
+  if (isMultiCityRoute && selectedPlaces.length > 1) {
+    const firstPlace = selectedPlaces[0]
+    const lastPlace = selectedPlaces[selectedPlaces.length - 1]
+    let startLoc = location ? { latitude: location.latitude, longitude: location.longitude } : { latitude: firstPlace.latitude, longitude: firstPlace.longitude }
+    let endLoc = { latitude: lastPlace.latitude, longitude: lastPlace.longitude }
+
+    if (Array.isArray(input.cities) && input.cities.length > 1) {
+      const startCity = input.cities[0]
+      const endCity = input.cities[input.cities.length - 1]
+      const cityAPlaces = selectedPlaces.filter(p => p.city && normalizeKey(p.city).includes(normalizeKey(startCity)))
+      const cityBPlaces = selectedPlaces.filter(p => p.city && normalizeKey(p.city).includes(normalizeKey(endCity)))
+      if (cityAPlaces.length > 0) {
+        startLoc = { latitude: cityAPlaces[0].latitude, longitude: cityAPlaces[0].longitude }
+      }
+      if (cityBPlaces.length > 0) {
+        endLoc = { latitude: cityBPlaces[cityBPlaces.length - 1].latitude, longitude: cityBPlaces[cityBPlaces.length - 1].longitude }
+      }
+    }
+
+    selectedPlaces = orderPlacesAlongRoute(selectedPlaces, startLoc, endLoc)
+  }
+
   const distanceKm = estimateRouteDistance(selectedPlaces, origin)
   const recommendedSchedule = recommendedScheduleFor(input, selectedPlaces.length)
   const difficulty = input.durationHours <= 3.5
@@ -2339,9 +2364,35 @@ function fallbackPlaces(input, location) {
   }]
 }
 
+export function orderPlacesAlongRoute(places, startLoc, endLoc) {
+  if (!places || places.length <= 1 || !startLoc || !endLoc) return places
+
+  const latA = Number(startLoc.latitude ?? startLoc.lat ?? 0)
+  const lonA = Number(startLoc.longitude ?? startLoc.lon ?? 0)
+  const latB = Number(endLoc.latitude ?? endLoc.lat ?? 0)
+  const lonB = Number(endLoc.longitude ?? endLoc.lon ?? 0)
+
+  const dLat = latB - latA
+  const dLon = lonB - lonA
+  const lenSq = dLat * dLat + dLon * dLon
+
+  if (lenSq < 1e-7) return places
+
+  const mapped = places.map((place) => {
+    const pLat = Number(place.latitude ?? 0)
+    const pLon = Number(place.longitude ?? 0)
+    const t = ((pLat - latA) * dLat + (pLon - lonA) * dLon) / lenSq
+    return { place, t }
+  })
+
+  mapped.sort((a, b) => a.t - b.t)
+  return mapped.map((item) => item.place)
+}
+
 async function collectMultiCityCandidates(input) {
   const cities = input.cities && input.cities.length > 0 ? input.cities : [input.city].filter(Boolean)
   let allPlaces = []
+  const cityGeos = []
   
   for (const cityName of cities) {
     // 1. Fetch top iconic landmarks from OpenAI global geography knowledge for THIS city
@@ -2384,6 +2435,8 @@ async function collectMultiCityCandidates(input) {
     }
 
     const cityGeo = await geocodePlace(`${cityName} ${input.country || ''}`)
+    if (cityGeo) cityGeos.push({ city: cityName, geo: cityGeo })
+
     let overpass = []
     let photon = []
     if (cityGeo) {
@@ -2400,6 +2453,37 @@ async function collectMultiCityCandidates(input) {
     
     allPlaces.push(...valid)
   }
+
+  // 2. Search for en-route POIs in the highway corridor between City 1 and City N
+  if (cityGeos.length >= 2) {
+    const startGeo = cityGeos[0].geo
+    const endGeo = cityGeos[cityGeos.length - 1].geo
+    const midPoints = [
+      {
+        latitude: startGeo.latitude + (endGeo.latitude - startGeo.latitude) * 0.33,
+        longitude: startGeo.longitude + (endGeo.longitude - startGeo.longitude) * 0.33,
+      },
+      {
+        latitude: startGeo.latitude + (endGeo.latitude - startGeo.latitude) * 0.66,
+        longitude: startGeo.longitude + (endGeo.longitude - startGeo.longitude) * 0.66,
+      }
+    ]
+
+    for (const midPoint of midPoints) {
+      try {
+        const enRouteOverpass = await overpassAttractions(midPoint.latitude, midPoint.longitude, 18000)
+        const validEnRoute = uniqueByName(enRouteOverpass)
+          .filter((place) => place && place.name)
+          .filter((place) => isValidTouristAttraction(place, input))
+          .slice(0, 3)
+          .map(p => ({ ...p, isEnRoute: true, city: `${cityGeos[0].city} - ${cityGeos[cityGeos.length - 1].city} (Carretera)` }))
+        allPlaces.push(...validEnRoute)
+      } catch (e) {
+        console.warn('[multi-city] En-route POI fetch failed:', e.message)
+      }
+    }
+  }
+
   return uniqueByName(allPlaces)
 }
 
