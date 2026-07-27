@@ -46,10 +46,10 @@ export async function extractLocation(prompt, lat, lon, userCountry = null) {
 Determina primero si el mensaje del usuario no tiene sentido, es una secuencia aleatoria de letras/caracteres (ej: "yfyzGgstfuvu", "asdffd"), o si es un tema completamente ajeno a planificar viajes, turismo, tours, hoteles, rutas o geografía (por ejemplo, preguntas de programación, cocina, matemáticas, etc.). Si se da este caso, establece obligatoriamente "is_unrelated" en true. Si es un mensaje coherente relacionado con viajes, turismo o un saludo inicial, establece "is_unrelated" en false.
 
 Si "is_unrelated" es false:
-- Si menciona claramente a dónde quiere ir, ponlo en "explicit_destination" y "suggestions" vacío.
+- Si menciona claramente a dónde quiere ir (una o varias ciudades, o una ruta como "Barranquilla a Santa Marta"), PON OBLIGATORIAMENTE ese destino/ruta en "explicit_destination" y deja "suggestions" VACÍO.
 - Si el usuario menciona una ruta dentro de una ciudad con un punto de inicio específico (ej. "empieza en el Malecón", "desde el parque X") y/o un punto final específico (ej. "hasta el Estadio", "termine en el Museo Y"), extrae "origin_place" y "destination_place".
-- Si el usuario menciona varias ciudades para recorrer (ej. "ir a Santa Marta y luego a Cartagena"), extrae un array de nombres de ciudades en "cities" y marca "is_multi_city" como true. Si es una sola ciudad, "is_multi_city" es false y "cities" contiene esa ciudad.
-- Si NO menciona a dónde quiere ir, pon "explicit_destination" vacío y recomienda 3 destinos increíbles (ciudades) adaptados a sus gustos en "suggestions".
+- Si el usuario menciona varias ciudades para recorrer (ej. "empieze en Barranquilla y termine en Santa Marta"), extrae un array con todas las ciudades en "cities" (ej: ["Barranquilla", "Santa Marta"]) y marca "is_multi_city" como true. Si es una sola ciudad, "is_multi_city" es false y "cities" contiene esa ciudad.
+- ÚNICAMENTE si el usuario NO menciona ninguna ciudad ni lugar a dónde ir, pon "explicit_destination" vacío y recomienda 3 destinos increíbles (ciudades) adaptados a sus gustos en "suggestions".
 - Extrae también la duración (ej: "viaje de 3 días" = 72, "tour de 4 horas" = 4) en "duration_hours" (number o null). Nota: Para tours entre múltiples ciudades (is_multi_city = true), si no especifica duración, asigna al menos 48 horas. Para tours de una sola ciudad con origen y fin especificados, si no se indica duración, asigna 8 horas.
 - Extrae el presupuesto en "budget" (string: "bajo", "medio", "alto", o null).
 - Extrae el tipo de acompañamiento en "companion_type" (string: "solo", "pareja", "familia", "amigos", o null).

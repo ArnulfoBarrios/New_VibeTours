@@ -2344,19 +2344,61 @@ async function collectMultiCityCandidates(input) {
   let allPlaces = []
   
   for (const cityName of cities) {
-    const cityGeo = await geocodePlace(`${cityName} ${input.country || ''}`)
-    if (cityGeo) {
-      const overpass = await overpassAttractions(cityGeo.latitude, cityGeo.longitude, 12000)
-      const photon = await photonSearch(`${cityName} ${input.country || ''}`, 15)
-      const pool = [...overpass, ...photon]
-      const valid = uniqueByName(pool)
-        .filter((place) => place && place.name)
-        .filter((place) => isValidTouristAttraction(place, { ...input, city: cityName }))
-        .slice(0, 5)
-        .map(p => ({ ...p, city: cityName }))
-      
-      allPlaces.push(...valid)
+    // 1. Fetch top iconic landmarks from OpenAI global geography knowledge for THIS city
+    const iconicLandmarks = await fetchCityIconicLandmarks({
+      destination: cityName,
+      city: cityName,
+      country: input.country,
+      type: input.type,
+      interests: input.touristInterests,
+      prompt: input.prompt
+    })
+
+    let geocodedIconics = []
+    if (Array.isArray(iconicLandmarks) && iconicLandmarks.length > 0) {
+      const geocodedSettled = await Promise.allSettled(
+        iconicLandmarks.map(async (item) => {
+          const searchQuery = `${item.name} ${cityName} ${input.country || ''}`.trim()
+          const geo = await geocodePlace(searchQuery)
+          if (geo && (geo.latitude || geo.longitude)) {
+            return {
+              name: item.name,
+              latitude: geo.latitude,
+              longitude: geo.longitude,
+              type: item.type || 'tourism',
+              category: item.category || 'historic',
+              city: cityName,
+              country: input.country,
+              address: geo.name || `${cityName}, ${item.name}`,
+              description: item.description || '',
+              tags: { iconic_landmark: 'true' }
+            }
+          }
+          return null
+        })
+      )
+      geocodedIconics = geocodedSettled
+        .map(r => r.status === 'fulfilled' ? r.value : null)
+        .filter(Boolean)
+        .filter(place => isValidTouristAttraction(place, { ...input, city: cityName }))
     }
+
+    const cityGeo = await geocodePlace(`${cityName} ${input.country || ''}`)
+    let overpass = []
+    let photon = []
+    if (cityGeo) {
+      overpass = await overpassAttractions(cityGeo.latitude, cityGeo.longitude, 12000)
+      photon = await photonSearch(`${cityName} ${input.country || ''}`, 15)
+    }
+    
+    const pool = [...geocodedIconics, ...overpass, ...photon]
+    const valid = uniqueByName(pool)
+      .filter((place) => place && place.name)
+      .filter((place) => isValidTouristAttraction(place, { ...input, city: cityName }))
+      .slice(0, 5)
+      .map(p => ({ ...p, city: cityName }))
+    
+    allPlaces.push(...valid)
   }
   return uniqueByName(allPlaces)
 }
