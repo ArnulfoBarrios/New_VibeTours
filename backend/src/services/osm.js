@@ -233,7 +233,7 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
           const name = element.tags?.name
           const type = element.tags?.tourism ?? element.tags?.historic ?? element.tags?.amenity ?? element.tags?.leisure ?? element.tags?.sport ?? element.tags?.natural ?? element.tags?.place ?? element.tags?.boundary ?? 'place'
           if (lat == null || lon == null || !name) return null
-          if (isAccommodation(type)) return null
+          if (isAccommodation(type) || isNonTouristFacility(element.tags)) return null
           return {
             name,
             latitude: lat,
@@ -344,6 +344,23 @@ function isAccommodation(type) {
     'caravan_site',
     'chalet'
   ].includes(type)
+}
+
+function isNonTouristFacility(tags = {}) {
+  if (!tags) return false
+  if (tags.office) return true
+  const amenity = String(tags.amenity ?? '').toLowerCase()
+  if ([
+    'university', 'school', 'college', 'kindergarten',
+    'bank', 'atm', 'pharmacy', 'dentist', 'doctors', 'hospital', 'clinic',
+    'police', 'post_office', 'townhall', 'courthouse', 'embassy',
+    'fuel', 'car_wash', 'parking', 'bus_station'
+  ].includes(amenity)) {
+    return true
+  }
+  const building = String(tags.building ?? '').toLowerCase()
+  if (['office', 'industrial', 'commercial'].includes(building)) return true
+  return false
 }
 
 export async function overpassHotels(latitude, longitude, budget = 'moderate', radius = 4500) {

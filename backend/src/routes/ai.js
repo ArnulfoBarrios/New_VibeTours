@@ -26,6 +26,10 @@ const requestSchema = z.object({
   destination: z.string().optional().default(''),
   country: z.string().optional().default(''),
   city: z.string().optional().default(''),
+  originPlace: z.string().optional(),
+  destinationPlace: z.string().optional(),
+  cities: z.array(z.string()).optional().default([]),
+  isMultiCity: z.boolean().optional().default(false),
   durationHours: z.number().min(1).max(120).optional(),
   type: z.string().optional().default('cultural'),
   language: z.string().optional().default('es'),
@@ -155,6 +159,18 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         }
         if (!input.country && extracted.country) {
           input.country = extracted.country
+        }
+        if (extracted.origin_place && !input.originPlace) {
+          input.originPlace = extracted.origin_place
+        }
+        if (extracted.destination_place && !input.destinationPlace) {
+          input.destinationPlace = extracted.destination_place
+        }
+        if (extracted.cities && extracted.cities.length > 0 && (!input.cities || input.cities.length === 0)) {
+          input.cities = extracted.cities
+        }
+        if (extracted.is_multi_city && !input.isMultiCity) {
+          input.isMultiCity = Boolean(extracted.is_multi_city)
         }
         if (extracted.duration_hours && !input.durationHours) {
           input.durationHours = Number(extracted.duration_hours)
@@ -2323,7 +2339,113 @@ function fallbackPlaces(input, location) {
   }]
 }
 
+async function collectMultiCityCandidates(input) {
+  const cities = input.cities && input.cities.length > 0 ? input.cities : [input.city].filter(Boolean)
+  let allPlaces = []
+  
+  for (const cityName of cities) {
+    const cityGeo = await geocodePlace(`${cityName} ${input.country || ''}`)
+    if (cityGeo) {
+      const overpass = await overpassAttractions(cityGeo.latitude, cityGeo.longitude, 12000)
+      const photon = await photonSearch(`${cityName} ${input.country || ''}`, 15)
+      const pool = [...overpass, ...photon]
+      const valid = uniqueByName(pool)
+        .filter((place) => place && place.name)
+        .filter((place) => isValidTouristAttraction(place, { ...input, city: cityName }))
+        .slice(0, 5)
+        .map(p => ({ ...p, city: cityName }))
+      
+      allPlaces.push(...valid)
+    }
+  }
+  return uniqueByName(allPlaces)
+}
+
+async function collectCorridorCandidates(input, location) {
+  const city = location?.city || input.city || ''
+  const country = location?.country || input.country || ''
+  
+  let startPlace = null
+  let endPlace = null
+  
+  if (input.originPlace) {
+    const originGeo = await geocodePlace(`${input.originPlace} ${city} ${country}`)
+    if (originGeo) {
+      startPlace = {
+        name: input.originPlace,
+        latitude: originGeo.latitude,
+        longitude: originGeo.longitude,
+        category: 'attraction',
+        type: 'start_point',
+        city,
+        country
+      }
+    }
+  }
+  
+  if (input.destinationPlace) {
+    const destGeo = await geocodePlace(`${input.destinationPlace} ${city} ${country}`)
+    if (destGeo) {
+      endPlace = {
+        name: input.destinationPlace,
+        latitude: destGeo.latitude,
+        longitude: destGeo.longitude,
+        category: 'attraction',
+        type: 'end_point',
+        city,
+        country
+      }
+    }
+  }
+
+  const query = `${input.destination} ${city} ${country}`.trim()
+  const photonPlaces = await photonSearch(query, 25)
+  const overpassPlaces = location ? await overpassAttractions(location.latitude, location.longitude, 10000) : []
+  
+  const pool = [...overpassPlaces, ...photonPlaces]
+  let intermediates = uniqueByName(pool)
+    .filter((place) => place && place.name)
+    .filter((place) => isValidTouristAttraction(place, input))
+  
+  if (startPlace) {
+    intermediates = intermediates.filter(p => normalizeKey(p.name) !== normalizeKey(startPlace.name))
+  }
+  if (endPlace) {
+    intermediates = intermediates.filter(p => normalizeKey(p.name) !== normalizeKey(endPlace.name))
+  }
+
+  const selected = []
+  if (startPlace) selected.push(startPlace)
+  selected.push(...intermediates.slice(0, 6))
+  if (endPlace) selected.push(endPlace)
+
+  return selected
+}
+
 export async function collectTourCandidates(input, location) {
+  // Case A: Multi-city tour (e.g. Santa Marta -> Cartagena)
+  if (input.isMultiCity || (Array.isArray(input.cities) && input.cities.length > 1)) {
+    if (!input.durationHours || input.durationHours < 24) {
+      input.durationHours = Math.max(48, (input.cities?.length || 2) * 24)
+    }
+    const multiCityPlaces = await collectMultiCityCandidates(input)
+    if (multiCityPlaces.length >= 3) {
+      return { rawCount: multiCityPlaces.length, places: multiCityPlaces, source: 'multi-city-geodata' }
+    }
+  }
+
+  // Case B: Origin and/or Destination specified route within city
+  if (input.originPlace || input.destinationPlace) {
+    if (!input.durationHours) {
+      input.durationHours = 8 // Default 1 day (8h)
+    }
+    const corridorPlaces = await collectCorridorCandidates(input, location)
+    if (corridorPlaces.length >= 2) {
+      return { rawCount: corridorPlaces.length, places: corridorPlaces, source: 'corridor-route-geodata' }
+    }
+  }
+
+  // Case C: Standard single-city tour
   const city = location?.city || input.city || ''
   const country = location?.country || input.country || ''
   const query = `${input.destination} ${city} ${country}`.trim()
@@ -2374,7 +2496,6 @@ export async function collectTourCandidates(input, location) {
       const baseName = input.city || input.destination || 'Destino'
       
       selected = aiFallbacks.map((item, index) => {
-        // Small offsets around city center to prevent overlapping prior to geocoding
         const latOffset = index === 0 ? 0.001 : (index === 1 ? -0.001 : 0.0015)
         const lonOffset = index === 0 ? 0 : (index === 1 ? 0.001 : -0.001)
         return {
@@ -2448,8 +2569,10 @@ function isValidTouristAttraction(place, input) {
     return false
   }
 
-  // 7. Exclude educational centers (schools, universities, kindergartens)
-  if (/colegio|escuela|school|institucion educativa|institución educativa|universidad|university|sena|jardin infantil|jardín infantil/i.test(nameLower)) {
+  // 7. Exclude educational centers (schools, universities, kindergartens, campus, institutes)
+  // unless explicitly classified as a historic site or museum
+  const isHistoricOrMuseum = place.category === 'museum' || place.category === 'historic' || place.tags?.historic || place.tags?.tourism === 'museum'
+  if (!isHistoricOrMuseum && /colegio|escuela|school|institucion educativa|institución educativa|universidad|university|sena|jardin infantil|jardín infantil|campus|facultad|instituto/i.test(nameLower)) {
     return false
   }
 
@@ -2460,6 +2583,18 @@ function isValidTouristAttraction(place, input) {
 
   // 9. Exclude utilities, trash or telecommunication offices
   if (/aseo|limpieza|acueducto|alcantarillado|electricaribe|afinia|gas|claro|tigo|movistar/i.test(nameLower)) {
+    return false
+  }
+
+  // 10. Exclude corporate companies, private businesses, law firms, real estate, tech/consulting offices
+  if (
+    /\bs\.a\b|\bs\.a\.s\b|\bltda\b|\binc\b|\bcorp\b|\bllc\b|empresa|consultora|consultoria|inmobiliaria|asesores|comercializadora|distribuidora|oficina|despacho|tecnologia|software|logistica|servicios integrales|grupo empresarial/i.test(nameLower)
+  ) {
+    return false
+  }
+
+  // 11. Exclude banks, ATMs, financial entities, gas stations, parking lots
+  if (/\bbanco\b|bancolombia|davivienda|bbva|cajero|atm|fiduciaria|financiera|gasolinera|estacionamiento|parqueadero/i.test(nameLower)) {
     return false
   }
   

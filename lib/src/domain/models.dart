@@ -622,6 +622,10 @@ class AiTourRequest {
     required this.destination,
     required this.country,
     required this.city,
+    this.originPlace,
+    this.destinationPlace,
+    this.cities = const [],
+    this.isMultiCity = false,
     this.durationHours,
     required this.type,
     required this.language,
@@ -637,6 +641,10 @@ class AiTourRequest {
   final String destination;
   final String country;
   final String city;
+  final String? originPlace;
+  final String? destinationPlace;
+  final List<String> cities;
+  final bool isMultiCity;
   final double? durationHours;
   final TourType type;
   final String language;
@@ -652,6 +660,10 @@ class AiTourRequest {
     'destination': destination,
     'country': country,
     'city': city,
+    if (originPlace != null) 'originPlace': originPlace,
+    if (destinationPlace != null) 'destinationPlace': destinationPlace,
+    if (cities.isNotEmpty) 'cities': cities,
+    'isMultiCity': isMultiCity,
     if (durationHours != null) 'durationHours': durationHours,
     'type': type.name,
     'language': language,
@@ -663,6 +675,46 @@ class AiTourRequest {
     if (longitude != null) 'longitude': longitude,
     if (budget != null) 'budget': budget,
   };
+
+  AiTourRequest copyWith({
+    String? destination,
+    String? country,
+    String? city,
+    String? originPlace,
+    String? destinationPlace,
+    List<String>? cities,
+    bool? isMultiCity,
+    double? durationHours,
+    TourType? type,
+    String? language,
+    String? prompt,
+    String? touristProfileSummary,
+    List<String>? touristInterests,
+    String? touristPace,
+    double? latitude,
+    double? longitude,
+    String? budget,
+  }) {
+    return AiTourRequest(
+      destination: destination ?? this.destination,
+      country: country ?? this.country,
+      city: city ?? this.city,
+      originPlace: originPlace ?? this.originPlace,
+      destinationPlace: destinationPlace ?? this.destinationPlace,
+      cities: cities ?? this.cities,
+      isMultiCity: isMultiCity ?? this.isMultiCity,
+      durationHours: durationHours ?? this.durationHours,
+      type: type ?? this.type,
+      language: language ?? this.language,
+      prompt: prompt ?? this.prompt,
+      touristProfileSummary: touristProfileSummary ?? this.touristProfileSummary,
+      touristInterests: touristInterests ?? this.touristInterests,
+      touristPace: touristPace ?? this.touristPace,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      budget: budget ?? this.budget,
+    );
+  }
 }
 
 class AiRecommendation {

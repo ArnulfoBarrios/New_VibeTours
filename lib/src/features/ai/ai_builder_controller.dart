@@ -308,19 +308,15 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
         AiTourRequest finalRequest = state.request!;
         if (data['durationHours'] != null) {
-          finalRequest = AiTourRequest(
-            prompt: finalRequest.prompt,
+          finalRequest = finalRequest.copyWith(
             destination: data['destination'] as String? ?? finalRequest.destination,
             country: data['country'] as String? ?? finalRequest.country,
             city: data['city'] as String? ?? finalRequest.city,
-            type: finalRequest.type,
+            originPlace: data['originPlace'] as String? ?? finalRequest.originPlace,
+            destinationPlace: data['destinationPlace'] as String? ?? finalRequest.destinationPlace,
+            cities: (data['cities'] as List?)?.map((e) => e.toString()).toList() ?? finalRequest.cities,
+            isMultiCity: data['isMultiCity'] as bool? ?? finalRequest.isMultiCity,
             durationHours: (data['durationHours'] as num).toDouble(),
-            language: finalRequest.language,
-            touristProfileSummary: finalRequest.touristProfileSummary,
-            touristInterests: finalRequest.touristInterests,
-            touristPace: finalRequest.touristPace,
-            latitude: finalRequest.latitude,
-            longitude: finalRequest.longitude,
             budget: data['budget'] as String? ?? finalRequest.budget,
           );
         }

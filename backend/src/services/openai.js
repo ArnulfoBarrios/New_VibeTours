@@ -47,11 +47,13 @@ Determina primero si el mensaje del usuario no tiene sentido, es una secuencia a
 
 Si "is_unrelated" es false:
 - Si menciona claramente a dónde quiere ir, ponlo en "explicit_destination" y "suggestions" vacío.
+- Si el usuario menciona una ruta dentro de una ciudad con un punto de inicio específico (ej. "empieza en el Malecón", "desde el parque X") y/o un punto final específico (ej. "hasta el Estadio", "termine en el Museo Y"), extrae "origin_place" y "destination_place".
+- Si el usuario menciona varias ciudades para recorrer (ej. "ir a Santa Marta y luego a Cartagena"), extrae un array de nombres de ciudades en "cities" y marca "is_multi_city" como true. Si es una sola ciudad, "is_multi_city" es false y "cities" contiene esa ciudad.
 - Si NO menciona a dónde quiere ir, pon "explicit_destination" vacío y recomienda 3 destinos increíbles (ciudades) adaptados a sus gustos en "suggestions".
-- Extrae también la duración (ej: "viaje de 3 días" = 72, "tour de 4 horas" = 4) en "duration_hours" (number o null).
+- Extrae también la duración (ej: "viaje de 3 días" = 72, "tour de 4 horas" = 4) en "duration_hours" (number o null). Nota: Para tours entre múltiples ciudades (is_multi_city = true), si no especifica duración, asigna al menos 48 horas. Para tours de una sola ciudad con origen y fin especificados, si no se indica duración, asigna 8 horas.
 - Extrae el presupuesto en "budget" (string: "bajo", "medio", "alto", o null).
 - Extrae el tipo de acompañamiento en "companion_type" (string: "solo", "pareja", "familia", "amigos", o null).
-${lat && lon ? `IMPORTANTE: El usuario se encuentra en las coordenadas geográficas latitud ${lat}, longitud ${lon}${userCountry ? ` ubicadas en el país de ${userCountry}` : ''}. Si el usuario pide lugares genéricos, DEBEN estar en el mismo país o región cercana. CRÍTICO: Si el usuario menciona una ciudad con homónimos (como "Cartagena" o "Córdoba"), ASUME ESTRICAMENTE que se refiere a la ciudad ubicada en ${userCountry || 'su país correspondiente a sus coordenadas actuales'}, y rellena el campo "country" con el nombre de ese país. ` : ''}
+${lat && lon ? `IMPORTANTE: El usuario se encuentra en las coordenadas geográficas latitud ${lat}, longitud ${lon}${userCountry ? ` ubicadas en el país de ${userCountry}` : ''}. Si el usuario pide lugares genéricos, DEBEN estar en el mismo país o región cercana. CRÍTICO: Si el usuario menciona una ciudad con homónimos (como "Cartagena" o "Córdoba"), ASUME ESTRICTAMENTE que se refiere a la ciudad ubicada en ${userCountry || 'su país correspondiente a sus coordenadas actuales'}, y rellena el campo "country" con el nombre de ese país. ` : ''}
 
 Devuelve ÚNICAMENTE JSON válido con este esquema:
 {
@@ -59,6 +61,10 @@ Devuelve ÚNICAMENTE JSON válido con este esquema:
   "explicit_destination": string,
   "city": string,
   "country": string,
+  "origin_place": string o null,
+  "destination_place": string o null,
+  "cities": [string],
+  "is_multi_city": boolean,
   "duration_hours": number o null,
   "budget": string o null,
   "companion_type": string o null,
@@ -143,6 +149,9 @@ Reglas centrales:
   if (selectedHotel && selectedHotel.name) {
     system += `\n- CRÍTICO: El turista se hospedará o iniciará en el hotel: "${selectedHotel.name}". El "punto_encuentro" (meetingPoint) del tour DEBE ser obligatoriamente este hotel y debes integrarlo de manera relevante al inicio del itinerario.`
   }
+
+  system += `\n- CRÍTICO RUTA CON INICIO Y FIN: Si el usuario especificó un punto de partida y un punto de llegada, la Parada 1 del itinerario DEBE ser el punto de partida especificado y la última Parada DEBE ser el destino final especificado. Las paradas intermedias deben integrarse de forma fluida de camino hacia la meta final.`
+  system += `\n- CRÍTICO TOUR MULTICIUDAD / MULTIDÍA: Si el tour abarca más de una ciudad, organiza el itinerario dividiendo las paradas de manera equilibrada por días (ej: Día 1 para la primera ciudad, Día 2 para la segunda ciudad). En las descripciones del cambio de ciudad, detalla obligatoriamente las instrucciones del viaje intermunicipal (distancia estimada, método de transporte sugerido como bus, vehículo o lancha).`
 
   const routeBrief = {
     destination,

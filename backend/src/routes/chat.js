@@ -5,6 +5,7 @@ import { extractChatInformation, generateChatResponse, planWithOpenAI } from '..
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels } from '../services/osm.js'
 import { getWikipediaContext } from '../services/wikipedia.js'
 import { optimizeRoute } from '../services/tomtom.js'
+import { collectTourCandidates } from './ai.js'
 
 export const chatRouter = Router()
 
@@ -122,10 +123,9 @@ chatRouter.post('/message', async (req, res, next) => {
           break
         }
         
-        // Obtener lugares reales
-        const places = await overpassAttractions(geocode.latitude, geocode.longitude, 10000)
-        // TODO: Filtrar por intereses. Por ahora, pasamos todos a la IA.
-        state.places = places.slice(0, 10) // Guardamos en el estado temporalmente
+        // Obtener lugares reales filtrados turísticamente
+        const candidatePack = await collectTourCandidates(state.collectedData, geocode)
+        state.places = (candidatePack.places || []).slice(0, 10)
         
         // Enriquecer con Wikipedia
         for (const place of state.places) {
