@@ -432,4 +432,78 @@ CRITICAL: Do NOT invent or hallucinate places that do not exist in real life. En
   return null
 }
 
+const landmarkCache = new GeoCache(24 * 60 * 60 * 1000, 300)
+
+export async function fetchCityIconicLandmarks({ destination, city, country, type = 'cultural', interests = [], prompt = '' }) {
+  const targetCity = city || destination || ''
+  const targetCountry = country || ''
+  if (!targetCity) return []
+
+  const cacheKey = `landmarks_${targetCity.toLowerCase().trim()}_${targetCountry.toLowerCase().trim()}_${type}`
+  const cached = landmarkCache.get(cacheKey)
+  if (cached) return cached
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    console.warn('[fetchCityIconicLandmarks] OPENAI_API_KEY is not configured')
+    return []
+  }
+
+  const systemPrompt = `Eres un experto mundial en geografía, viajes y turismo.
+El usuario quiere conocer la ciudad o destino "${targetCity}"${targetCountry ? ` ubicado en "${targetCountry}"` : ''}.
+Tu objetivo es listar los 10 a 15 atracciones e hitos turísticos MÁS FAMOSOS, EMBLEMÁTICOS, ICÓNICOS, CULTURALES, RECREATIVOS Y DE ENTRETENIMIENTO que existen físicamente en "${targetCity}" y sus inmediaciones inmediatas.
+
+REGLAS CRÍTICAS DE CALIDAD TURÍSTICA:
+1. Incluye únicamente verdaderos puntos de interés turístico: monumentos célebres, malecones, plazas icónicas, miradores, museos principales, ecoparques, estadios deportivos destacados, teatros, centros comerciales emblemáticos de entretenimiento y paseos peatonales famosos.
+2. PROHIBIDO ABSOLUTAMENTE incluir: plantas industriales, zonas francas, puertos de carga, empresas o marcas corporativas, centros de bodegas, fábricas, conjuntos residenciales, urbanizaciones o corregimientos/límites vagos sin un local turístico específico.
+3. Si el usuario especificó intereses o un tema (${interests.join(', ') || prompt || type}), incluye lugares destacados relacionados a ese tema, pero siempre asegurando que sean lugares emblemáticos y turísticos reales.
+
+Devuelve ÚNICAMENTE un objeto JSON válido con este esquema:
+{
+  "landmarks": [
+    {
+      "name": "Nombre real y exacto del hito o lugar turístico",
+      "type": "tipo (ej. monument, viewpoint, park, museum, stadium, mall, historic, beach, market)",
+      "category": "categoría (ej. historic, nature, viewpoint, sports, museum, entertainment, market)",
+      "description": "Una breve frase explicando por qué es emblemático e imperdible en esta ciudad."
+    }
+  ]
+}`
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 25000)
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `List 12 iconic tourist landmarks for "${targetCity}, ${targetCountry}"` }
+        ]
+      }),
+      signal: controller.signal
+    })
+    clearTimeout(timeout)
+
+    if (response.ok) {
+      const json = await response.json()
+      const content = JSON.parse(json.choices?.[0]?.message?.content ?? '{}')
+      if (Array.isArray(content.landmarks) && content.landmarks.length > 0) {
+        landmarkCache.set(cacheKey, content.landmarks)
+        return content.landmarks
+      }
+    }
+  } catch (err) {
+    console.error('[fetchCityIconicLandmarks] Error fetching landmarks:', err.message)
+  }
+
+  return []
+}
+
 

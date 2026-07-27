@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks } from '../services/openai.js'
 import { supabase } from '../services/supabase.js'
 
 export const aiRouter = Router()
@@ -2448,6 +2448,46 @@ export async function collectTourCandidates(input, location) {
   // Case C: Standard single-city tour
   const city = location?.city || input.city || ''
   const country = location?.country || input.country || ''
+
+  // 1. Fetch top iconic landmarks from OpenAI global geography knowledge
+  const iconicLandmarks = await fetchCityIconicLandmarks({
+    destination: input.destination,
+    city,
+    country,
+    type: input.type,
+    interests: input.touristInterests,
+    prompt: input.prompt
+  })
+
+  let geocodedIconics = []
+  if (Array.isArray(iconicLandmarks) && iconicLandmarks.length > 0) {
+    const geocodedSettled = await Promise.allSettled(
+      iconicLandmarks.map(async (item) => {
+        const searchQuery = `${item.name} ${city} ${country}`.trim()
+        const geo = await geocodePlace(searchQuery)
+        if (geo && (geo.latitude || geo.longitude)) {
+          return {
+            name: item.name,
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            type: item.type || 'tourism',
+            category: item.category || 'historic',
+            city,
+            country,
+            address: geo.name || `${city}, ${item.name}`,
+            description: item.description || '',
+            tags: { iconic_landmark: 'true' }
+          }
+        }
+        return null
+      })
+    )
+    geocodedIconics = geocodedSettled
+      .map(r => r.status === 'fulfilled' ? r.value : null)
+      .filter(Boolean)
+      .filter(place => isValidTouristAttraction(place, input))
+  }
+
   const query = `${input.destination} ${city} ${country}`.trim()
   const photonPlaces = await photonSearch(query, 30)
 
@@ -2469,7 +2509,9 @@ export async function collectTourCandidates(input, location) {
         overpassAttractions(location.latitude, location.longitude, radiusWide)
       ])
     : [[], []]
-  const pool = [...overpassPrimary, ...overpassWide, ...photonPlaces]
+  
+  // Prioritize geocoded iconic landmarks first in the pool
+  const pool = [...geocodedIconics, ...overpassPrimary, ...overpassWide, ...photonPlaces]
   const normalizedPool = uniqueByName(pool)
     .filter((place) => place && place.name)
     .filter((place) => hasUsableCoordinates(place.latitude, place.longitude) || place.city || place.country)
@@ -2586,14 +2628,28 @@ function isValidTouristAttraction(place, input) {
     return false
   }
 
-  // 10. Exclude corporate companies, private businesses, law firms, real estate, tech/consulting offices
+  // 10. Exclude corporate companies, private businesses, law firms, real estate, tech/consulting offices, factories, industrial plants
   if (
-    /\bs\.a\b|\bs\.a\.s\b|\bltda\b|\binc\b|\bcorp\b|\bllc\b|empresa|consultora|consultoria|inmobiliaria|asesores|comercializadora|distribuidora|oficina|despacho|tecnologia|software|logistica|servicios integrales|grupo empresarial/i.test(nameLower)
+    /\bs\.a\b|\bs\.a\.s\b|\bltda\b|\binc\b|\bcorp\b|\bllc\b|empresa|consultora|consultoria|inmobiliaria|asesores|comercializadora|distribuidora|oficina|despacho|tecnologia|software|logistica|servicios integrales|grupo empresarial|planta|fabrica|fábrica|corrugado|zona franca|sociedad portuaria|terminal de carga|termoelectrica|termoeléctrica|cantera|taller|bodega|industria|industrial|plant|factory|warehouse|freight|corporate center/i.test(nameLower)
   ) {
     return false
   }
 
-  // 11. Exclude banks, ATMs, financial entities, gas stations, parking lots
+  // 11. Exclude residential complexes, housing developments, housing areas
+  if (
+    /conjunto|residencial|urbanizacion|urbanización|barrio|condominio|edificio residencial|residential complex|housing complex|residential area/i.test(nameLower)
+  ) {
+    return false
+  }
+
+  // 12. Exclude specific non-tourist industrial brands and maritime/port operators
+  if (
+    /holcim|smurfit|vopak|compas|dimar|argos|tecnoglass|termobarranquilla|ecopetrol/i.test(nameLower)
+  ) {
+    return false
+  }
+
+  // 13. Exclude banks, ATMs, financial entities, gas stations, parking lots
   if (/\bbanco\b|bancolombia|davivienda|bbva|cajero|atm|fiduciaria|financiera|gasolinera|estacionamiento|parqueadero/i.test(nameLower)) {
     return false
   }

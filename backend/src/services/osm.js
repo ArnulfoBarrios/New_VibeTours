@@ -348,7 +348,13 @@ function isAccommodation(type) {
 
 function isNonTouristFacility(tags = {}) {
   if (!tags) return false
-  if (tags.office) return true
+  if (tags.office || tags.industrial) return true
+
+  const landuse = String(tags.landuse ?? '').toLowerCase()
+  if (['industrial', 'residential', 'commercial', 'construction', 'quarry'].includes(landuse)) {
+    return true
+  }
+
   const amenity = String(tags.amenity ?? '').toLowerCase()
   if ([
     'university', 'school', 'college', 'kindergarten',
@@ -359,7 +365,7 @@ function isNonTouristFacility(tags = {}) {
     return true
   }
   const building = String(tags.building ?? '').toLowerCase()
-  if (['office', 'industrial', 'commercial'].includes(building)) return true
+  if (['office', 'industrial', 'commercial', 'residential', 'warehouse'].includes(building)) return true
   return false
 }
 
