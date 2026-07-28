@@ -15,6 +15,7 @@ import '../../core/utils/image_utils.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../../core/services/sqlite-service.dart';
 import '../shared/location_disclosure_dialog.dart';
 
 class TourDetailScreen extends ConsumerWidget {
@@ -68,6 +69,8 @@ class TourDetailScreen extends ConsumerWidget {
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 actions: [
+                  _OfflineDownloadButton(tour: tour),
+                  const SizedBox(width: 4),
                   IconButton.filledTonal(
                     onPressed: () => _showExportOptionsModal(context, tour),
                     icon: const Icon(Icons.ios_share_rounded, color: Colors.white),
@@ -1879,12 +1882,7 @@ void _showExportOptionsModal(BuildContext context, Tour tour) {
 }
 
 Future<void> _exportToGoogleMaps(BuildContext context, Tour tour) async {
-  if (tour.stops.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Este tour no contiene paradas para exportar.')),
-    );
-    return;
-  }
+  if (tour.stops.isEmpty) return;
 
   final origin = '${tour.stops.first.location.latitude},${tour.stops.first.location.longitude}';
   final destination = '${tour.stops.last.location.latitude},${tour.stops.last.location.longitude}';
@@ -1898,17 +1896,26 @@ Future<void> _exportToGoogleMaps(BuildContext context, Tour tour) async {
         .join('|');
   }
 
-  final urlString = waypoints.isNotEmpty
-      ? 'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&waypoints=$waypoints&travelmode=walking'
-      : 'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&travelmode=walking';
+  final queryParameters = <String, String>{
+    'api': '1',
+    'origin': origin,
+    'destination': destination,
+    'travelmode': 'walking',
+    if (waypoints.isNotEmpty) 'waypoints': waypoints,
+  };
 
-  final uri = Uri.parse(urlString);
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  } else {
+  final uri = Uri.https('www.google.com', '/maps/dir/', queryParameters);
+
+  try {
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    }
+  } catch (e) {
+    debugPrint('[export-maps] Error: $e');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir la aplicación de mapas.')),
+        const SnackBar(content: Text('No se pudo abrir Google Maps.')),
       );
     }
   }
@@ -1929,16 +1936,26 @@ void _shareTourItinerary(Tour tour) {
 }
 
 Future<void> _playTeaserAudio(BuildContext context, Tour tour) async {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.hideCurrentSnackBar();
+
   final tts = FlutterTts();
   await tts.setLanguage('es-ES');
   await tts.setPitch(1.0);
   await tts.setSpeechRate(0.5);
 
+  tts.setCompletionHandler(() {
+    messenger.hideCurrentSnackBar();
+  });
+  tts.setCancelHandler(() {
+    messenger.hideCurrentSnackBar();
+  });
+
   final firstStop = tour.stops.isNotEmpty ? tour.stops.first.name : tour.city;
   final sampleText = 'Bienvenido a ${tour.title} en ${tour.city}. Este recorrido te llevará a conocer fascinantes sitios como $firstStop. ${tour.description}';
 
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
         content: Row(
           children: [
@@ -1947,14 +1964,77 @@ Future<void> _playTeaserAudio(BuildContext context, Tour tour) async {
             Expanded(child: Text('Reproduciendo muestra de audio para ${tour.title}...')),
           ],
         ),
-        duration: const Duration(seconds: 8),
+        duration: const Duration(seconds: 4),
         action: SnackBarAction(
           label: 'Detener',
-          onPressed: () => tts.stop(),
+          onPressed: () {
+            tts.stop();
+            messenger.hideCurrentSnackBar();
+          },
         ),
       ),
     );
   }
 
   await tts.speak(sampleText);
+}
+
+class _OfflineDownloadButton extends StatefulWidget {
+  final Tour tour;
+  const _OfflineDownloadButton({required this.tour});
+
+  @override
+  State<_OfflineDownloadButton> createState() => _OfflineDownloadButtonState();
+}
+
+class _OfflineDownloadButtonState extends State<_OfflineDownloadButton> {
+  bool _isSaved = false;
+  final _sqlite = SqliteService();
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+  }
+
+  Future<void> _checkStatus() async {
+    final saved = await _sqlite.isTourSavedOffline(widget.tour.id);
+    if (mounted) setState(() => _isSaved = saved);
+  }
+
+  Future<void> _toggleDownload() async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (_isSaved) {
+      await _sqlite.removeOfflineTour(widget.tour.id);
+      if (mounted) {
+        setState(() => _isSaved = false);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Tour eliminado de la memoria offline.')),
+        );
+      }
+    } else {
+      await _sqlite.saveOfflineTour(widget.tour);
+      if (mounted) {
+        setState(() => _isSaved = true);
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('¡Tour descargado exitosamente para uso offline!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton.filledTonal(
+      onPressed: _toggleDownload,
+      icon: Icon(
+        _isSaved ? Icons.download_done_rounded : Icons.download_for_offline_rounded,
+        color: _isSaved ? Colors.greenAccent : Colors.white,
+      ),
+      tooltip: _isSaved ? 'Guardado Offline' : 'Descargar Offline',
+    );
+  }
 }

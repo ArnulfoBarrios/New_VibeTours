@@ -280,26 +280,18 @@ export async function overpassNearbyCities(latitude, longitude, radius = 100000)
     out center tags 15;
   `
   try {
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': USER_AGENT
-      },
-      body: new URLSearchParams({ data: query })
-    })
-    if (!response.ok) return []
-    const json = await response.json()
+    const json = await fetchOverpassWithMirrors(query, 3500)
+    if (!json) return []
     return (json.elements ?? [])
       .map((element) => {
-      const name = element.tags?.name
-      if (!name) return null
-      return {
-        name,
-        latitude: element.lat,
-        longitude: element.lon
-      }
-    })
+        const name = element.tags?.name
+        if (!name) return null
+        return {
+          name,
+          latitude: element.lat,
+          longitude: element.lon
+        }
+      })
       .filter(Boolean)
   } catch (error) {
     console.error('[osm] overpassNearbyCities error:', error.message)
@@ -379,17 +371,8 @@ export async function overpassHotels(latitude, longitude, budget = 'moderate', r
     out center tags 25;
   `
   try {
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': USER_AGENT
-      },
-      body: new URLSearchParams({ data: query }),
-      signal: AbortSignal.timeout(4000)
-    })
-    if (response.ok) {
-      const json = await response.json()
+    const json = await fetchOverpassWithMirrors(query, 3500)
+    if (json) {
       const elements = (json.elements ?? [])
         .map((element) => {
           const lat = element.lat ?? element.center?.lat
@@ -443,38 +426,32 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
     out center tags 20;
   `
   try {
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': USER_AGENT
-      },
-      body: new URLSearchParams({ data: query }),
-      signal: AbortSignal.timeout(10000)
-    })
-    if (!response.ok) return []
-    const json = await response.json()
-    return (json.elements ?? [])
-      .map((element) => {
-        const lat = element.lat ?? element.center?.lat
-        const lon = element.lon ?? element.center?.lon
-        const name = element.tags?.name
-        if (lat == null || lon == null || !name) return null
-        return {
-          name,
-          latitude: lat,
-          longitude: lon,
-          type: element.tags?.amenity ?? 'restaurant',
-          cuisine: element.tags?.cuisine ?? null,
-          address: element.tags?.['addr:street'] ?? null
-        }
-      })
-      .filter(Boolean)
-      .slice(0, 8)
+    const json = await fetchOverpassWithMirrors(query, 3000)
+    if (json) {
+      return (json.elements ?? [])
+        .map((element) => {
+          const lat = element.lat ?? element.center?.lat
+          const lon = element.lon ?? element.center?.lon
+          const name = element.tags?.name
+          if (lat == null || lon == null || !name) return null
+          return {
+            id: element.id,
+            name,
+            latitude: lat,
+            longitude: lon,
+            type: element.tags?.amenity ?? 'restaurant',
+            cuisine: element.tags?.cuisine ?? null,
+            address: element.tags?.['addr:street'] ?? null,
+            tags: element.tags
+          }
+        })
+        .filter(Boolean)
+        .slice(0, 10)
+    }
   } catch (error) {
-    console.error('[osm] overpassNearbyFood error:', error.message)
-    return []
+    console.warn('[osm] overpassNearbyFood query failed:', error.message)
   }
+  return []
 }
 
 async function photonHotelsFallback(latitude, longitude, budget) {

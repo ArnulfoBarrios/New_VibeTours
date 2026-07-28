@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -885,9 +886,23 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
     );
   }
 
+  Future<bool> _checkInternetConnectivity() async {
+    try {
+      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 4));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _saveDraft() async {
     if (_name.text.trim().isEmpty || _stops.isEmpty) {
       _message('Agrega nombre y al menos una parada.');
+      return;
+    }
+    final hasConnection = await _checkInternetConnectivity();
+    if (!hasConnection) {
+      _message('No tienes conexión a internet. Para publicar o enviar un tour a revisión debes estar en línea.');
       return;
     }
     final tour = _buildTour();

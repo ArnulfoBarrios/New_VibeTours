@@ -441,6 +441,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final l10n = AppLocalizations.of(context);
     final toursAsync = ref.watch(toursProvider);
     final mapStyle = ref.watch(mapStyleProvider);
+    final mapStyleOption = ref.watch(mapStyleOptionProvider);
     return PremiumScaffold(
       child: toursAsync.when(
         data: (tours) {
@@ -527,7 +528,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               // ── Single Hamburger Menu FAB (Top Right) ───────────────────────────
               Positioned(
                 right: 16,
-                top: MediaQuery.of(context).padding.top + 8,
+                top: MediaQuery.of(context).padding.top + 2,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -573,6 +574,30 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                 });
                               },
                             ),
+                            const SizedBox(height: 4),
+                            _MapMenuItem(
+                              icon: mapStyleOption == MapStyleOption.satellite
+                                  ? Icons.satellite_alt_rounded
+                                  : mapStyleOption == MapStyleOption.night
+                                      ? Icons.nights_stay_rounded
+                                      : Icons.map_rounded,
+                              label: mapStyleOption == MapStyleOption.satellite
+                                  ? 'Mapa Satélite'
+                                  : mapStyleOption == MapStyleOption.night
+                                      ? 'Mapa Oscuro'
+                                      : 'Mapa Calles',
+                              isActive: false,
+                              onTap: () {
+                                final current = ref.read(mapStyleOptionProvider);
+                                final next = current == MapStyleOption.day
+                                    ? MapStyleOption.satellite
+                                    : current == MapStyleOption.satellite
+                                        ? MapStyleOption.night
+                                        : MapStyleOption.day;
+                                ref.read(mapStyleOptionProvider.notifier).setOption(next);
+                                setState(() => _isMapMenuExpanded = false);
+                              },
+                            ),
                             if (_findHotelStop(tour) != null && !_navigatingToHotel) ...[
                               const SizedBox(height: 4),
                               _MapMenuItem(
@@ -616,7 +641,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               ),
               Positioned(
                 left: 16,
-                top: MediaQuery.of(context).padding.top + 8,
+                top: MediaQuery.of(context).padding.top + 2,
                 child: IconButton.filledTonal(
                   onPressed: () => context.pop(),
                   icon: const Icon(Icons.close_rounded),

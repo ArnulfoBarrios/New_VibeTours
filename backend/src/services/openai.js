@@ -15,6 +15,45 @@ export function summarizePlaces(places = []) {
   }))
 }
 
+function sanitizeExtractedLocation(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      is_unrelated: false,
+      explicit_destination: '',
+      city: '',
+      country: '',
+      origin_place: null,
+      destination_place: null,
+      cities: [],
+      is_multi_city: false,
+      duration_hours: null,
+      budget: null,
+      companion_type: null,
+      suggestions: []
+    }
+  }
+  return {
+    is_unrelated: Boolean(raw.is_unrelated),
+    explicit_destination: String(raw.explicit_destination ?? '').trim(),
+    city: String(raw.city ?? '').trim(),
+    country: String(raw.country ?? '').trim(),
+    origin_place: raw.origin_place ? String(raw.origin_place).trim() : null,
+    destination_place: raw.destination_place ? String(raw.destination_place).trim() : null,
+    cities: Array.isArray(raw.cities) ? raw.cities.map(c => String(c).trim()).filter(Boolean) : [],
+    is_multi_city: Boolean(raw.is_multi_city),
+    duration_hours: typeof raw.duration_hours === 'number' && Number.isFinite(raw.duration_hours) ? raw.duration_hours : null,
+    budget: raw.budget ? String(raw.budget).trim() : null,
+    companion_type: raw.companion_type ? String(raw.companion_type).trim() : null,
+    suggestions: Array.isArray(raw.suggestions)
+      ? raw.suggestions.map(s => ({
+          city: String(s?.city ?? '').trim(),
+          country: String(s?.country ?? '').trim(),
+          reason: String(s?.reason ?? '').trim()
+        }))
+      : []
+  }
+}
+
 export async function extractLocation(prompt, lat, lon, userCountry = null) {
   if (!prompt || typeof prompt !== 'string') return null
   const cacheKey = `extract_${prompt.toLowerCase().trim()}_${lat ?? ''}_${lon ?? ''}_${userCountry ?? ''}`
@@ -82,7 +121,8 @@ Devuelve ÚNICAMENTE JSON válido con este esquema:
     }
     const json = await response.json()
     let content = json.choices?.[0]?.message?.content ?? '{}'
-    const result = JSON.parse(content)
+    const parsed = JSON.parse(content)
+    const result = sanitizeExtractedLocation(parsed)
     if (result) locationExtractCache.set(cacheKey, result)
     return result
   } catch (err) {

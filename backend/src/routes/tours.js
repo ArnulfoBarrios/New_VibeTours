@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import { supabase } from '../services/supabase.js'
+import { requireAdminRole } from '../middleware/authMiddleware.js'
 
 export const toursRouter = Router()
 
@@ -26,7 +27,7 @@ toursRouter.get('/', async (req, res, next) => {
   }
 })
 
-toursRouter.get('/pending', async (req, res, next) => {
+toursRouter.get('/pending', requireAdminRole, async (req, res, next) => {
   try {
     if (!supabase) {
       res.json({ tours: [] })
@@ -67,17 +68,22 @@ function matchesTourFilter(tour, query) {
   return true
 }
 
+function sanitizeText(input) {
+  if (typeof input !== 'string') return ''
+  return input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').trim()
+}
+
 toursRouter.post('/', async (req, res, next) => {
   try {
     const schema = z.object({
-      title: z.string().min(3),
-      city: z.string().min(1),
-      country: z.string().min(1),
-      type: z.string().min(1),
-      description: z.string().min(10),
+      title: z.string().min(3).transform(sanitizeText),
+      city: z.string().min(1).transform(sanitizeText),
+      country: z.string().min(1).transform(sanitizeText),
+      type: z.string().min(1).transform(sanitizeText),
+      description: z.string().min(10).transform(sanitizeText),
       cover_url: z.string().url(),
       stops: z.array(z.object({
-        name: z.string(),
+        name: z.string().transform(sanitizeText),
         latitude: z.number(),
         longitude: z.number()
       })).min(1)
@@ -104,7 +110,7 @@ toursRouter.post('/', async (req, res, next) => {
   }
 })
 
-toursRouter.patch('/:id/moderate', async (req, res, next) => {
+toursRouter.patch('/:id/moderate', requireAdminRole, async (req, res, next) => {
   try {
     const schema = z.object({
       approved: z.boolean(),

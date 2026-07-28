@@ -163,7 +163,7 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const _ToursSkeletonLoader(),
         error: (error, stackTrace) => const EmptyState(
               icon: Icons.wifi_off_rounded,
               title: 'Sin conexión',
@@ -232,6 +232,21 @@ class _MenuFilter extends StatelessWidget {
         for (final item in values)
           MenuItemButton(onPressed: () => onChanged(item), child: Text(item)),
       ],
+    );
+  }
+}
+
+class _ToursSkeletonLoader extends StatelessWidget {
+  const _ToursSkeletonLoader();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 48, 20, 20),
+      itemCount: 4,
+      separatorBuilder: (context, index) => const SizedBox(height: 16),
+      itemBuilder: (context, index) => const SkeletonBox(height: 220, width: double.infinity),
     );
   }
 }

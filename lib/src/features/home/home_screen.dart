@@ -92,7 +92,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const _HomeSkeletonLoader(),
         error: (e, _) => const EmptyState(
               icon: Icons.wifi_off_rounded,
               title: 'Sin conexión',
@@ -726,8 +726,31 @@ class _NearbyPlacesSection extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const SizedBox.shrink(),
-      error: (_, _) => const SizedBox.shrink(),
+      loading: () => Padding(
+        padding: const EdgeInsets.only(top: 16, bottom: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: SkeletonBox(height: 24, width: 180),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 180,
+              child: ListView.separated(
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                scrollDirection: Axis.horizontal,
+                itemCount: 3,
+                separatorBuilder: (context, index) => const SizedBox(width: 16),
+                itemBuilder: (context, index) => const SkeletonBox(height: 180, width: 220),
+              ),
+            ),
+          ],
+        ),
+      ),
+      error: (error, stackTrace) => const SizedBox.shrink(),
     );
   }
 }
@@ -758,7 +781,7 @@ class _UpcomingEventsSection extends StatelessWidget {
         );
       },
       loading: () => const SizedBox.shrink(),
-      error: (_, _) => const SizedBox.shrink(),
+      error: (error, stackTrace) => const SizedBox.shrink(),
     );
   }
 }
@@ -832,5 +855,44 @@ class _EventTile extends StatelessWidget {
   String _monthName(int m) {
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     return months[m - 1];
+  }
+}
+
+class _HomeSkeletonLoader extends StatelessWidget {
+  const _HomeSkeletonLoader();
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 48, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              SkeletonBox(height: 36, width: 200),
+              SkeletonBox(height: 44, width: 44),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const SkeletonBox(height: 280, width: double.infinity),
+          const SizedBox(height: 24),
+          const SkeletonBox(height: 24, width: 140),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 220,
+            child: ListView.separated(
+              physics: const NeverScrollableScrollPhysics(),
+              scrollDirection: Axis.horizontal,
+              itemCount: 3,
+              separatorBuilder: (context, index) => const SizedBox(width: 16),
+              itemBuilder: (context, index) => const SkeletonBox(height: 220, width: 160),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
