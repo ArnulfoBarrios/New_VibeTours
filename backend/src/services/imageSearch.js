@@ -119,6 +119,8 @@ async function wikimediaGeoImage(lat, lon, radiusMeters = 1000, indexSeed = 0) {
   } catch {
     return null
   }
+}
+
 async function pexelsImage(query, indexSeed = 0) {
   const apiKey = process.env.PEXELS_API_KEY
   if (!apiKey) return null
