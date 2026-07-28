@@ -399,20 +399,46 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       ...excludeIds.map(id => (id || '').toLowerCase().trim())
     ])
 
+    const isDuplicatePlace = (name, pId) => {
+      const normName = (name || '').toLowerCase().trim().replace(/^(el|la|los|las|del)\s+/, '')
+      const normId = (pId || '').toLowerCase().trim()
+
+      if (!normName && !normId) return true
+      if (normId && currentNamesAndIds.has(normId)) return true
+      if (normName && currentNamesAndIds.has(normName)) return true
+
+      const words = normName.split(/\s+/).filter(w => w.length > 3)
+      for (const existing of currentNamesAndIds) {
+        const normExisting = existing.replace(/^(el|la|los|las|del)\s+/, '')
+        if (normExisting.length > 3 && normName.length > 3) {
+          if (normExisting === normName || normExisting.includes(normName) || normName.includes(normExisting)) {
+            return true
+          }
+          if (words.length >= 2) {
+            const matchingWords = words.filter(w => normExisting.includes(w))
+            if (matchingWords.length >= 2) {
+              return true
+            }
+          }
+        }
+      }
+      return false
+    }
+
     let available = (candidatePack.places || []).filter(place => {
-      const name = (place.name || '').toLowerCase().trim()
-      const pId = (place.placeId || place.id || '').toLowerCase().trim()
-      return name && !currentNamesAndIds.has(name) && (!pId || !currentNamesAndIds.has(pId))
+      return !isDuplicatePlace(place.name, place.placeId || place.id)
     })
 
     // 4. If OSM doesn't return enough unique real places, query OpenAI for REAL physical attractions in this exact city!
     if (available.length < 5) {
       console.info('[alternatives] Querying OpenAI for REAL places in:', city)
+      const excludeNameList = Array.from(currentNamesAndIds).filter(n => n.length > 2)
       const aiSuggestions = await suggestFallbackPlacesWithOpenAI({
         destination,
         city,
         country,
-        type: input.type || 'cultural'
+        type: input.type || 'cultural',
+        excludeNames: excludeNameList
       }).catch(() => [])
 
       if (Array.isArray(aiSuggestions)) {
@@ -421,8 +447,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
 
         for (let i = 0; i < aiSuggestions.length; i++) {
           const item = aiSuggestions[i]
-          const nameLower = (item.name || '').toLowerCase().trim()
-          if (nameLower && !currentNamesAndIds.has(nameLower)) {
+          if (item.name && !isDuplicatePlace(item.name, null)) {
             // Geocode the exact physical landmark to place marker accurately on the map
             const geo = await geocodePlace(`${item.name} ${city} ${country}`, centerLat, centerLon).catch(() => null)
             const realLat = geo?.latitude ?? (centerLat + (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1))

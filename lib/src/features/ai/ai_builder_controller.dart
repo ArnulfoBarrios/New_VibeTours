@@ -13,6 +13,7 @@ class AiBuilderState {
     this.error,
     this.request,
     this.recommendations = const [],
+    this.removedRecommendations = const [],
     this.plannerContext,
     this.isBuilding = false,
     this.builtTour,
@@ -31,6 +32,7 @@ class AiBuilderState {
   final String? error;
   final AiTourRequest? request;
   final List<AiRecommendation> recommendations;
+  final List<AiRecommendation> removedRecommendations;
   final Map<String, dynamic>? plannerContext;
   final bool isBuilding;
   final Tour? builtTour;
@@ -49,6 +51,7 @@ class AiBuilderState {
     String? error,
     AiTourRequest? request,
     List<AiRecommendation>? recommendations,
+    List<AiRecommendation>? removedRecommendations,
     Map<String, dynamic>? plannerContext,
     bool? isBuilding,
     Tour? builtTour,
@@ -67,6 +70,7 @@ class AiBuilderState {
       error: error,
       request: request ?? this.request,
       recommendations: recommendations ?? this.recommendations,
+      removedRecommendations: removedRecommendations ?? this.removedRecommendations,
       plannerContext: plannerContext ?? this.plannerContext,
       isBuilding: isBuilding ?? this.isBuilding,
       builtTour: builtTour ?? this.builtTour,
@@ -88,6 +92,7 @@ class AiBuilderState {
       error: error,
       request: request,
       recommendations: recommendations,
+      removedRecommendations: removedRecommendations,
       plannerContext: plannerContext,
       isBuilding: isBuilding,
       builtTour: builtTour,
@@ -434,23 +439,61 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       longitude: baseLon,
     );
 
-    final currentNamesAndIds = state.recommendations.map((e) => e.name.toLowerCase().trim()).toSet();
-    for (var e in state.recommendations) {
+    final currentNamesAndIds = <String>{};
+    for (final e in state.recommendations) {
+      currentNamesAndIds.add(e.name.toLowerCase().trim());
       currentNamesAndIds.add(e.id.toLowerCase().trim());
+    }
+    for (final e in state.removedRecommendations) {
+      currentNamesAndIds.add(e.name.toLowerCase().trim());
+      currentNamesAndIds.add(e.id.toLowerCase().trim());
+    }
+
+    final excludeIds = <String>[
+      ...state.recommendations.map((e) => e.id),
+      ...state.recommendations.map((e) => e.name),
+      ...state.removedRecommendations.map((e) => e.id),
+      ...state.removedRecommendations.map((e) => e.name),
+    ];
+
+    bool isDuplicatePlace(String name, String id, Set<String> currentNamesAndIds) {
+      final normName = name.toLowerCase().trim().replaceAll(RegExp(r'^(el|la|los|las|del)\s+'), '');
+      final normId = id.toLowerCase().trim();
+
+      if (normName.isEmpty && normId.isEmpty) return true;
+      if (normId.isNotEmpty && currentNamesAndIds.contains(normId)) return true;
+      if (normName.isNotEmpty && currentNamesAndIds.contains(normName)) return true;
+
+      final words = normName.split(RegExp(r'\s+')).where((w) => w.length > 3).toList();
+      for (final existing in currentNamesAndIds) {
+        final normExisting = existing.replaceAll(RegExp(r'^(el|la|los|las|del)\s+'), '');
+        if (normExisting.length > 3 && normName.length > 3) {
+          if (normExisting == normName || normExisting.contains(normName) || normName.contains(normExisting)) {
+            return true;
+          }
+          if (words.length >= 2) {
+            final matchingWords = words.where((w) => normExisting.contains(w)).toList();
+            if (matchingWords.length >= 2) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
     }
 
     try {
       final response = await _postJson('/ai/tours/alternatives', {
         'request': request.toJson(),
         'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
-        'excludeIds': state.recommendations.map((e) => e.id).toList(),
+        'excludeIds': excludeIds,
       }).timeout(const Duration(seconds: 25));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final list = (data['alternatives'] as List)
             .map((e) => AiRecommendation.fromJson(e))
-            .where((rec) => !currentNamesAndIds.contains(rec.name.toLowerCase().trim()))
+            .where((rec) => !isDuplicatePlace(rec.name, rec.id, currentNamesAndIds))
             .toList();
         if (list.isNotEmpty) return list;
       }
@@ -464,22 +507,37 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
   void replaceStopWithRecommendation(int index, AiRecommendation newRec) {
     final newRecs = List<AiRecommendation>.from(state.recommendations);
     if (index >= 0 && index < newRecs.length) {
+      final replaced = newRecs[index];
       newRecs[index] = newRec;
-      state = state.copyWith(recommendations: newRecs);
+      final newRemovedRecs = List<AiRecommendation>.from(state.removedRecommendations)..add(replaced);
+      state = state.copyWith(
+        recommendations: newRecs,
+        removedRecommendations: newRemovedRecs,
+      );
     }
   }
 
   void addStopWithRecommendation(AiRecommendation newRec) {
     final newRecs = List<AiRecommendation>.from(state.recommendations);
     newRecs.add(newRec);
-    state = state.copyWith(recommendations: newRecs);
+    final newRemovedRecs = state.removedRecommendations
+        .where((r) => r.id != newRec.id && r.name.toLowerCase().trim() != newRec.name.toLowerCase().trim())
+        .toList();
+    state = state.copyWith(
+      recommendations: newRecs,
+      removedRecommendations: newRemovedRecs,
+    );
   }
 
   Future<void> removeStop(int index) async {
     final newRecs = List<AiRecommendation>.from(state.recommendations);
     if (index >= 0 && index < newRecs.length) {
-      newRecs.removeAt(index);
-      state = state.copyWith(recommendations: newRecs);
+      final removed = newRecs.removeAt(index);
+      final newRemovedRecs = List<AiRecommendation>.from(state.removedRecommendations)..add(removed);
+      state = state.copyWith(
+        recommendations: newRecs,
+        removedRecommendations: newRemovedRecs,
+      );
     }
   }
 
@@ -621,8 +679,12 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
               stops.addAll(rawStops);
             }
 
+            final currentUser = ref.read(authServiceProvider).currentUser;
             final tour = Tour(
               id: tourData['id'] ?? 'ai-${DateTime.now().millisecondsSinceEpoch}',
+              ownerId: currentUser?.id,
+              isPublished: false,
+              isAiGenerated: true,
               title: tourData['nombre_tour'] ?? 'Tour VibeTours',
               country: tourData['country']?.toString() ?? state.request?.country ?? '',
               city: tourData['city']?.toString() ?? state.request?.city ?? '',

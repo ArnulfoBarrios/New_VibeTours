@@ -1281,8 +1281,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
                 final isOwner = tour.ownerId != null && currentUser.id.isNotEmpty && tour.ownerId == currentUser.id;
                 final isUnpublished = !tour.isPublished;
+                final isAiGenerated = tour.isAiGenerated;
 
-                final shouldSkipRating = isOwner || isUnpublished;
+                final shouldSkipRating = isOwner || isUnpublished || isAiGenerated;
                 
                 if (shouldSkipRating) {
                   context.pop();

@@ -375,7 +375,7 @@ INSTRUCCIÓN DEL SISTEMA (CRÍTICA): ${backendInstruction}`
  * Suggest 3 real, physical tourist attractions/POIs for destinations where
  * traditional maps (Overpass/Photon) do not yield enough candidates.
  */
-export async function suggestFallbackPlacesWithOpenAI({ destination, city, country, type }) {
+export async function suggestFallbackPlacesWithOpenAI({ destination, city, country, type, excludeNames = [] }) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     console.warn('[suggestFallbackPlacesWithOpenAI] OPENAI_API_KEY is not configured')
@@ -383,7 +383,8 @@ export async function suggestFallbackPlacesWithOpenAI({ destination, city, count
   }
 
   const targetLocation = `${destination || ''} ${city || ''} ${country || ''}`.trim()
-  
+  const excludedText = excludeNames.length > 0 ? `\nCRITICAL: Do NOT suggest any of these places as they are already included or excluded: ${excludeNames.join(', ')}.` : ''
+
   const systemPrompt = `You are a world-class travel and geography expert. The user wants to plan a "${type}" tour in "${targetLocation}".
 Unfortunately, the local geographic database does not return enough landmarks or places for this location.
 You must suggest exactly 3 real, physically existing points of interest (POIs), tourist attractions, viewpoints, museums, monuments, plazas, parks, or iconic local spots that actually exist in or very close to "${targetLocation}".
@@ -398,7 +399,7 @@ Return ONLY a valid JSON object matching this exact schema:
     }
   ]
 }
-CRITICAL: Do NOT invent or hallucinate places that do not exist in real life. Ensure they are physically located in or immediately adjacent to the specified destination.`
+CRITICAL: Do NOT invent or hallucinate places that do not exist in real life. Ensure they are physically located in or immediately adjacent to the specified destination.${excludedText}`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
