@@ -152,8 +152,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
   }
 
-  // ── Pocket Mode (Energy Saver) ─────────────────────────────────────────────
+  // ── Pocket Mode & Map Menu State ───────────────────────────────────────────
   bool _isPocketModeEnabled = false;
+  bool _isMapMenuExpanded = false;
 
   // ── Voice assistant state ──────────────────────────────────────────────────
   bool _isListening = false;
@@ -523,63 +524,94 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   },
                 ),
               ),
+              // ── Single Hamburger Menu FAB (Top Right) ───────────────────────────
               Positioned(
                 right: 16,
                 top: MediaQuery.of(context).padding.top + 8,
-                child: FloatingActionButton.small(
-                  heroTag: 'tracking_btn',
-                  backgroundColor: Theme.of(context).colorScheme.surface,
-                  onPressed: () {
-                    setState(() {
-                      _isTrackingMode = !_isTrackingMode;
-                    });
-                  },
-                  child: Icon(
-                    _isTrackingMode ? Icons.map_rounded : Icons.explore_rounded,
-                    color: AppTheme.primary,
-                  ),
-                ),
-              ),
-              // ── Return to Accommodation (Placed top-right under tracking) ────
-              if (_findHotelStop(tour) != null && !_navigatingToHotel)
-                Positioned(
-                  right: 16,
-                  top: MediaQuery.of(context).padding.top + 60,
-                  child: FloatingActionButton.small(
-                    heroTag: 'return_hotel_fab',
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    onPressed: _startHotelNavigation,
-                    tooltip: 'Regresar al hotel',
-                    child: const Icon(Icons.hotel_rounded),
-                  ),
-                ),
-              // ── Pocket Mode (Energy Saver) ────
-              Positioned(
-                right: 16,
-                top: MediaQuery.of(context).padding.top + 112,
-                child: FloatingActionButton.small(
-                  heroTag: 'pocket_mode_fab',
-                  backgroundColor: _isPocketModeEnabled ? Colors.amber : Theme.of(context).colorScheme.surface,
-                  onPressed: () {
-                    setState(() {
-                      _isPocketModeEnabled = !_isPocketModeEnabled;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          _isPocketModeEnabled
-                              ? '🔋 Modo Bolsillo activado: Audio y geocerca activos en bajo consumo.'
-                              : '📱 Modo Bolsillo desactivado.',
-                        ),
-                        duration: const Duration(seconds: 3),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    FloatingActionButton.small(
+                      heroTag: 'map_menu_hamburger_fab',
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      onPressed: () {
+                        setState(() {
+                          _isMapMenuExpanded = !_isMapMenuExpanded;
+                        });
+                      },
+                      child: Icon(
+                        _isMapMenuExpanded ? Icons.close_rounded : Icons.menu_rounded,
+                        color: AppTheme.primary,
                       ),
-                    );
-                  },
-                  tooltip: 'Modo Bolsillo (Ahorro de batería)',
-                  child: Icon(
-                    _isPocketModeEnabled ? Icons.power_settings_new_rounded : Icons.smartphone_rounded,
-                    color: _isPocketModeEnabled ? Colors.black : Theme.of(context).colorScheme.onSurface,
-                  ),
+                    ),
+                    if (_isMapMenuExpanded) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 170,
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            _MapMenuItem(
+                              icon: _isTrackingMode ? Icons.my_location_rounded : Icons.explore_rounded,
+                              label: _isTrackingMode ? 'Fijar mapa' : 'Seguimiento',
+                              isActive: _isTrackingMode,
+                              onTap: () {
+                                setState(() {
+                                  _isTrackingMode = !_isTrackingMode;
+                                  _isMapMenuExpanded = false;
+                                });
+                              },
+                            ),
+                            if (_findHotelStop(tour) != null && !_navigatingToHotel) ...[
+                              const SizedBox(height: 4),
+                              _MapMenuItem(
+                                icon: Icons.hotel_rounded,
+                                label: 'Ir al Hotel',
+                                isActive: _navigatingToHotel,
+                                onTap: () {
+                                  setState(() => _isMapMenuExpanded = false);
+                                  _startHotelNavigation();
+                                },
+                              ),
+                            ],
+                            const SizedBox(height: 4),
+                            _MapMenuItem(
+                              icon: Icons.power_settings_new_rounded,
+                              label: 'Modo Bolsillo',
+                              isActive: _isPocketModeEnabled,
+                              onTap: () {
+                                setState(() {
+                                  _isPocketModeEnabled = !_isPocketModeEnabled;
+                                  _isMapMenuExpanded = false;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      _isPocketModeEnabled
+                                          ? '🔋 Modo Bolsillo activado: Audio y geocerca activos en bajo consumo.'
+                                          : '📱 Modo Bolsillo desactivado.',
+                                    ),
+                                    duration: const Duration(seconds: 3),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               Positioned(
@@ -590,101 +622,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   icon: const Icon(Icons.close_rounded),
                 ),
               ),
-              if (_isPocketModeEnabled)
-                Positioned.fill(
-                  child: Container(
-                    color: const Color(0xFF030712),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-                    child: SafeArea(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.bolt_rounded,
-                            color: Colors.amber,
-                            size: 48,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Modo Bolsillo Activo 🔋',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Puedes guardar tu smartphone en el bolsillo. La voz del guía y el GPS siguen activos en tiempo real.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: Colors.white10,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.white12),
-                            ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Siguiente parada:',
-                                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  stop.name,
-                                  style: const TextStyle(
-                                    color: Colors.amberAccent,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Spacer(),
-                          FilledButton.icon(
-                            onPressed: () => setState(() => _isPocketModeEnabled = false),
-                            icon: const Icon(Icons.touch_app_rounded),
-                            label: const Text('Toca para salir del Modo Bolsillo'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.white24,
-                              foregroundColor: Colors.white,
-                              minimumSize: const Size(double.infinity, 54),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              // Clear voice markers button when food places are visible
-              if (_voiceFoodPlaces.isNotEmpty)
-                Positioned(
-                  right: 16,
-                  bottom: 270,
-                  child: FloatingActionButton.small(
-                    heroTag: 'clear_voice_markers',
-                    backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                    onPressed: () => setState(() {
-                      _voiceFoodPlaces = [];
-                      _selectedVoicePlace = null;
-                    }),
-                    child: Icon(
-                      Icons.clear_rounded,
-                      color: Theme.of(context).colorScheme.onErrorContainer,
-                    ),
-                  ),
-                ),
               Positioned(
                 left: 16,
                 right: 16,
@@ -698,6 +635,98 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                           : _buildStandardNavigationPanel(context, tour, stop, progress, liveRoute, l10n),
                 ),
               ),
+              if (_isPocketModeEnabled)
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _isPocketModeEnabled = false),
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      color: const Color(0xFF030712),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+                      child: SafeArea(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                IconButton.filledTonal(
+                                  onPressed: () => setState(() => _isPocketModeEnabled = false),
+                                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                                  style: IconButton.styleFrom(backgroundColor: Colors.white24),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            const Icon(
+                              Icons.bolt_rounded,
+                              color: Colors.amber,
+                              size: 52,
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Modo Bolsillo Activo 🔋',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Puedes guardar tu smartphone en el bolsillo. La voz del guía y el GPS siguen activos en tiempo real.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.grey.shade400,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.white10,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.white12),
+                              ),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    'Siguiente parada:',
+                                    style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    stop.name,
+                                    style: const TextStyle(
+                                      color: Colors.amberAccent,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            FilledButton.icon(
+                              onPressed: () => setState(() => _isPocketModeEnabled = false),
+                              icon: const Icon(Icons.touch_app_rounded),
+                              label: const Text('Toca en cualquier lugar para salir'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppTheme.primary,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(double.infinity, 54),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           );
         },
@@ -1497,6 +1526,61 @@ class _LiveChip extends StatelessWidget {
       avatar: Icon(icon, size: 16, color: AppTheme.primary),
       label: Text(label),
       visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _MapMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _MapMenuItem({
+    required this.icon,
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      width: double.infinity,
+      child: Material(
+        color: isActive
+            ? AppTheme.primary.withValues(alpha: 0.15)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: isActive ? AppTheme.primary : Theme.of(context).colorScheme.onSurface,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+                      color: isActive ? AppTheme.primary : Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

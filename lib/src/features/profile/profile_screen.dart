@@ -2015,8 +2015,42 @@ class _DigitalPassportSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final createdCount = (stats['createdTours'] as num?)?.toInt() ?? 0;
     final ratedCount = (stats['toursRated'] as num?)?.toInt() ?? 0;
+    final participantsCount = (stats['participants'] as num?)?.toInt() ?? 0;
     final totalStopsExplored = (createdCount * 4) + (ratedCount * 3) + 5;
     final totalKmWalked = (totalStopsExplored * 0.8).toStringAsFixed(1);
+
+    final badges = [
+      _BadgeData(
+        icon: Icons.map_rounded,
+        title: 'Creador de Rutas',
+        subtitle: '$createdCount tours creados',
+        isUnlocked: createdCount > 0,
+        reason: 'Otorgado por crear $createdCount tours en la comunidad.',
+      ),
+      _BadgeData(
+        icon: Icons.star_rate_rounded,
+        title: 'Crítico Turístico',
+        subtitle: '$ratedCount reseñas dadas',
+        isUnlocked: ratedCount > 0,
+        reason: 'Otorgado por calificar $ratedCount tours explorados.',
+      ),
+      _BadgeData(
+        icon: Icons.groups_rounded,
+        title: 'Guía Comunitario',
+        subtitle: '$participantsCount participantes',
+        isUnlocked: participantsCount > 0,
+        reason: 'Otorgado por inspirar a $participantsCount viajeros a unirse a tus tours.',
+      ),
+      _BadgeData(
+        icon: Icons.verified_user_rounded,
+        title: 'Explorador VIBE',
+        subtitle: 'Perfil activo',
+        isUnlocked: true,
+        reason: 'Otorgado a los miembros activos de VIBETOURS.',
+      ),
+    ];
+
+    final unlockedCount = badges.where((b) => b.isUnlocked).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2024,30 +2058,29 @@ class _DigitalPassportSection extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               '🛂 Pasaporte Digital de Viajes',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.amber.withValues(alpha: 0.15),
+                color: AppTheme.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.verified_rounded, size: 14, color: Colors.amber),
+                  Icon(Icons.verified_rounded, size: 14, color: AppTheme.primary),
                   SizedBox(width: 4),
                   Text(
                     'Nivel Explorador',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: Colors.amber,
+                      color: AppTheme.primary,
                     ),
                   ),
                 ],
@@ -2056,28 +2089,9 @@ class _DigitalPassportSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
+        GlassPanel(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [
-                Color(0xFF0F172A),
-                Color(0xFF1E293B),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.25)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+          radius: 24,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2086,41 +2100,41 @@ class _DigitalPassportSection extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.flight_takeoff_rounded, color: Colors.lightBlueAccent, size: 24),
+                      const Icon(Icons.flight_takeoff_rounded, color: AppTheme.primary, size: 22),
                       const SizedBox(width: 8),
                       Text(
                         'VIBETOURS PASSPORT',
                         style: TextStyle(
-                          color: Colors.grey.shade400,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                           fontSize: 11,
                           letterSpacing: 1.5,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ],
                   ),
-                  const Text(
+                  Text(
                     '#VT-2026',
                     style: TextStyle(
-                      color: Colors.grey,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Text(
                 userName.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.5,
                 ),
               ),
-              const SizedBox(height: 16),
-              const Divider(color: Colors.white12),
+              const SizedBox(height: 14),
+              Divider(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -2135,62 +2149,54 @@ class _DigitalPassportSection extends StatelessWidget {
                     value: '$totalStopsExplored',
                     label: 'Paradas',
                   ),
-                  const _PassportStat(
+                  _PassportStat(
                     icon: Icons.workspace_premium_rounded,
-                    value: '4 Badges',
-                    label: 'Desbloqueados',
+                    value: '$unlockedCount / ${badges.length}',
+                    label: 'Badges',
                   ),
                 ],
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        const Text(
+        const SizedBox(height: 18),
+        Text(
           '🏅 Medallas de Logros',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
         ),
         const SizedBox(height: 10),
-        const SingleChildScrollView(
+        SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _BadgeChip(
-                icon: Icons.account_balance_rounded,
-                title: 'Conquistador Histórico',
-                color: Colors.amber,
-                isUnlocked: true,
-              ),
-              SizedBox(width: 10),
-              _BadgeChip(
-                icon: Icons.restaurant_rounded,
-                title: 'Master Gastronómico',
-                color: Colors.orange,
-                isUnlocked: true,
-              ),
-              SizedBox(width: 10),
-              _BadgeChip(
-                icon: Icons.camera_alt_rounded,
-                title: 'Cazador de Fotos',
-                color: Colors.purpleAccent,
-                isUnlocked: true,
-              ),
-              SizedBox(width: 10),
-              _BadgeChip(
-                icon: Icons.directions_walk_rounded,
-                title: 'Caminante Urbano',
-                color: Colors.greenAccent,
-                isUnlocked: true,
-              ),
+              for (int i = 0; i < badges.length; i++) ...[
+                if (i > 0) const SizedBox(width: 10),
+                _BadgeChip(badge: badges[i]),
+              ],
             ],
           ),
         ),
       ],
     );
   }
+}
+
+class _BadgeData {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool isUnlocked;
+  final String reason;
+
+  const _BadgeData({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.isUnlocked,
+    required this.reason,
+  });
 }
 
 class _PassportStat extends StatelessWidget {
@@ -2208,12 +2214,12 @@ class _PassportStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(icon, color: Colors.lightBlueAccent, size: 20),
+        Icon(icon, color: AppTheme.primary, size: 20),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.bold,
             fontSize: 14,
           ),
@@ -2221,7 +2227,7 @@ class _PassportStat extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: Colors.grey.shade400,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
             fontSize: 11,
           ),
         ),
@@ -2231,40 +2237,66 @@ class _PassportStat extends StatelessWidget {
 }
 
 class _BadgeChip extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Color color;
-  final bool isUnlocked;
+  final _BadgeData badge;
 
-  const _BadgeChip({
-    required this.icon,
-    required this.title,
-    required this.color,
-    required this.isUnlocked,
-  });
+  const _BadgeChip({required this.badge});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
+    final activeColor = AppTheme.primary;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(badge.icon, color: Colors.lightBlueAccent),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('${badge.title}: ${badge.reason}'),
+                ),
+              ],
             ),
+            duration: const Duration(seconds: 4),
           ),
-        ],
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: activeColor.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: activeColor.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(badge.icon, color: activeColor, size: 18),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  badge.title,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  badge.subtitle,
+                  style: TextStyle(
+                    color: activeColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
