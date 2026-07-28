@@ -72,6 +72,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   weatherAsync: weatherAsync,
                 ),
               ),
+              if (weatherAsync.asData?.value != null)
+                SliverToBoxAdapter(
+                  child: _WeatherAlertBanner(weather: weatherAsync.asData!.value!),
+                ),
               SliverToBoxAdapter(
                 child: _HeroTourSection(tour: heroTour),
               ),
@@ -94,6 +98,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               title: 'Sin conexión',
               body: '¡Vaya! Parece que no podemos conectar con los servidores ahora mismo. Verifica tu conexión a internet y vuelve a intentarlo.',
             ),
+      ),
+    );
+  }
+}
+
+class _WeatherAlertBanner extends StatelessWidget {
+  final WeatherSnapshot weather;
+
+  const _WeatherAlertBanner({required this.weather});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!weather.isRainyOrStormy) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.blueAccent.withValues(alpha: 0.15),
+              Colors.indigo.withValues(alpha: 0.25),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.blueAccent.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.blueAccent.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.thunderstorm_rounded,
+                color: Colors.lightBlueAccent,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '🌦️ Recomendación Climática',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Colors.lightBlueAccent,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    weather.indoorAdvice,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

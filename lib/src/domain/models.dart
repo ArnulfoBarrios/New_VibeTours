@@ -430,6 +430,31 @@ class WeatherSnapshot {
   final int code;
   final bool isDay;
   final String locationName;
+
+  /// Retorna true si hay condiciones de lluvia, nieve o tormenta.
+  bool get isRainyOrStormy {
+    final lowerCond = condition.toLowerCase();
+    final isRainyCode = (code >= 50 && code <= 99);
+    final isRainyText = lowerCond.contains('lluvia') ||
+        lowerCond.contains('rain') ||
+        lowerCond.contains('storm') ||
+        lowerCond.contains('tormenta') ||
+        lowerCond.contains('chubasco') ||
+        lowerCond.contains('drizzle') ||
+        lowerCond.contains('llovizna');
+    return isRainyCode || isRainyText;
+  }
+
+  /// Retorna una sugerencia en español sobre tours bajo techo.
+  String get indoorAdvice {
+    if (isRainyOrStormy) {
+      return 'Lluvia o precipitación detectada. Te recomendamos explorar itinerarios bajo techo (museos, galerías y cafés).';
+    }
+    if (temperatureC > 32) {
+      return 'Día caluroso. Considera visitas con aire acondicionado o itinerarios bajo sombra.';
+    }
+    return '¡Excelente clima para explorar al aire libre!';
+  }
 }
 
 class LocalEvent {

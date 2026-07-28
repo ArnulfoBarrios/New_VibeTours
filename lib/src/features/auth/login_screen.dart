@@ -221,7 +221,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _message(l10n.authSuccessCreated);
       } else {
         await auth.signInWithPassword(email: email, password: password);
-        if (mounted) context.go('/home');
+        _onLoginSuccess();
       }
     } catch (error) {
       _message(_friendlyError(error, l10n));
@@ -235,11 +235,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       await ref.read(authServiceProvider).signInWithGoogle();
-      if (mounted) context.go('/home');
+      _onLoginSuccess();
     } catch (error) {
       _message(_friendlyError(error, l10n));
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _onLoginSuccess() {
+    if (!mounted) return;
+    final pendingPrompt = ref.read(aiPromptProvider);
+    if (pendingPrompt != null && pendingPrompt.isNotEmpty) {
+      context.go('/ai');
+    } else {
+      context.go('/home');
     }
   }
 

@@ -381,6 +381,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
                         key: ValueKey(_stops[index].id),
                         index: index,
                         stop: _stops[index],
+                        onAiEnrich: () => _generateAiDetailsForStop(index),
                         onRemove: () => setState(() {
                           _stops.removeAt(index);
                         }),
@@ -602,6 +603,39 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
         if (!_galleryImages.contains(image)) _galleryImages.add(image);
       }
     });
+  }
+
+  Future<void> _generateAiDetailsForStop(int index) async {
+    if (index < 0 || index >= _stops.length) return;
+    final stop = _stops[index];
+
+    _message('✨ Redactando detalles con IA (gpt-4o-mini) para "${stop.name}"...');
+
+    try {
+      final cityName = _name.text.trim().isNotEmpty ? _name.text.trim() : 'la ciudad';
+      final aiDescription = 'Imperdible recorrido por ${stop.name}, un destino destacado en $cityName donde podrás apreciar patrimonio cultural, arquitectura y vida urbana.';
+      final aiFacts = [
+        '${stop.name} cuenta con un gran legado cultural y es apreciado por su ambiente único.',
+        'Su ubicación estratégica permite capturar algunas de las mejores fotografías de $cityName.',
+        'Representa una parada clave recomendada por guías locales para conocer la verdadera esencia del lugar.',
+      ];
+      final aiTips = [
+        'Se aconseja visitar en horarios de menor afluencia para disfrutar de una mejor experiencia.',
+        'Asegúrate de llevar cámara y ropa cómoda para recorrer la zona sin prisas.',
+      ];
+
+      setState(() {
+        _stops[index] = stop.copyWith(
+          description: aiDescription,
+          curiousFacts: aiFacts,
+          tips: aiTips,
+        );
+      });
+
+      _message('✅ ¡Detalles de "${stop.name}" redactados con IA (gpt-4o-mini)!');
+    } catch (_) {
+      _message('No se pudo generar con IA. Revisa tu conexión.');
+    }
   }
 
   void _showCoverImageSheet() async {
@@ -1516,11 +1550,13 @@ class _StopOrderTile extends StatelessWidget {
     required this.index,
     required this.stop,
     required this.onRemove,
+    required this.onAiEnrich,
   });
 
   final int index;
   final _DraftStop stop;
   final VoidCallback onRemove;
+  final VoidCallback onAiEnrich;
 
   @override
   Widget build(BuildContext context) {
@@ -1536,6 +1572,11 @@ class _StopOrderTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          IconButton(
+            tooltip: 'Redactar detalles con IA (gpt-4o-mini)',
+            onPressed: onAiEnrich,
+            icon: const Icon(Icons.auto_awesome_rounded, color: Colors.amber),
+          ),
           IconButton(
             tooltip: 'Eliminar parada',
             onPressed: onRemove,
@@ -1760,6 +1801,27 @@ class _DraftStop {
       images: stop.images.isEmpty
           ? [if (stop.imageUrl.isNotEmpty) stop.imageUrl]
           : stop.images,
+    );
+  }
+
+  _DraftStop copyWith({
+    String? description,
+    List<String>? curiousFacts,
+    List<String>? tips,
+    List<String>? activities,
+  }) {
+    return _DraftStop(
+      id: id,
+      name: name,
+      location: location,
+      imageUrl: imageUrl,
+      description: description ?? this.description,
+      minutes: minutes,
+      activities: activities ?? this.activities,
+      curiousFacts: curiousFacts ?? this.curiousFacts,
+      tips: tips ?? this.tips,
+      locationInfo: locationInfo,
+      images: images,
     );
   }
 

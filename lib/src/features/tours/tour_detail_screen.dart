@@ -5,6 +5,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
@@ -66,6 +68,11 @@ class TourDetailScreen extends ConsumerWidget {
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 actions: [
+                  IconButton.filledTonal(
+                    onPressed: () => _showExportOptionsModal(context, tour),
+                    icon: const Icon(Icons.ios_share_rounded, color: Colors.white),
+                  ),
+                  const SizedBox(width: 4),
                   if (tour.ownerId != null && tour.ownerId != ref.watch(authUserProvider).valueOrNull?.id)
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
@@ -247,7 +254,12 @@ class TourDetailScreen extends ConsumerWidget {
                               onPressed: () => _startTourFlow(context, ref, tour),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          IconButton.filledTonal(
+                            tooltip: 'Escuchar Muestra Narrada (Audio Preview)',
+                            onPressed: () => _playTeaserAudio(context, tour),
+                            icon: const Icon(Icons.spatial_audio_off_rounded, color: Colors.blueAccent),
+                          ),
+                          const SizedBox(width: 6),
                           IconButton.filledTonal(
                             tooltip: l10n.save,
                             onPressed: () {
@@ -266,6 +278,7 @@ class TourDetailScreen extends ConsumerWidget {
                                   : Icons.bookmark_border_rounded,
                             ),
                           ),
+                          const SizedBox(width: 6),
                           IconButton.filledTonal(
                             tooltip: l10n.share,
                             onPressed: () => SharePlus.instance.share(
@@ -1781,4 +1794,167 @@ String _getRandomTravelImage(String seed) {
       ? 0
       : seed.codeUnits.reduce((a, b) => a + b);
   return images[hash % images.length];
+}
+
+void _showExportOptionsModal(BuildContext context, Tour tour) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (context) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Exportar o Compartir Ruta',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Selecciona cómo deseas exportar este itinerario:',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.map_rounded, color: Colors.green),
+                ),
+                title: const Text('Abrir en Google Maps', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Genera la ruta paso a paso con waypoints en Google Maps'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _exportToGoogleMaps(context, tour);
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.share_rounded, color: Colors.blue),
+                ),
+                title: const Text('Compartir Itinerario por Texto', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Envía el resumen del tour por WhatsApp o redes sociales'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _shareTourItinerary(tour);
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _exportToGoogleMaps(BuildContext context, Tour tour) async {
+  if (tour.stops.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Este tour no contiene paradas para exportar.')),
+    );
+    return;
+  }
+
+  final origin = '${tour.stops.first.location.latitude},${tour.stops.first.location.longitude}';
+  final destination = '${tour.stops.last.location.latitude},${tour.stops.last.location.longitude}';
+
+  String waypoints = '';
+  if (tour.stops.length > 2) {
+    waypoints = tour.stops
+        .skip(1)
+        .take(tour.stops.length - 2)
+        .map((s) => '${s.location.latitude},${s.location.longitude}')
+        .join('|');
+  }
+
+  final urlString = waypoints.isNotEmpty
+      ? 'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&waypoints=$waypoints&travelmode=walking'
+      : 'https://www.google.com/maps/dir/?api=1&origin=$origin&destination=$destination&travelmode=walking';
+
+  final uri = Uri.parse(urlString);
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } else {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir la aplicación de mapas.')),
+      );
+    }
+  }
+}
+
+void _shareTourItinerary(Tour tour) {
+  final buffer = StringBuffer();
+  final durationMins = (tour.durationHours * 60).round();
+  buffer.writeln('🗺️ *${tour.title}* (${tour.city}, ${tour.country})');
+  buffer.writeln('⏱️ Duración: $durationMins mins | 🏃 Dificultad: ${tour.difficulty.name}');
+  buffer.writeln('\n📍 *Paradas del Itinerario:*');
+  for (int i = 0; i < tour.stops.length; i++) {
+    final stop = tour.stops[i];
+    buffer.writeln('${i + 1}. *${stop.name}*: ${stop.description}');
+  }
+  buffer.writeln('\n✨ ¡Descubierto con la app VIBETOURS!');
+  SharePlus.instance.share(ShareParams(text: buffer.toString()));
+}
+
+Future<void> _playTeaserAudio(BuildContext context, Tour tour) async {
+  final tts = FlutterTts();
+  await tts.setLanguage('es-ES');
+  await tts.setPitch(1.0);
+  await tts.setSpeechRate(0.5);
+
+  final firstStop = tour.stops.isNotEmpty ? tour.stops.first.name : tour.city;
+  final sampleText = 'Bienvenido a ${tour.title} en ${tour.city}. Este recorrido te llevará a conocer fascinantes sitios como $firstStop. ${tour.description}';
+
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.spatial_audio_rounded, color: Colors.lightBlueAccent),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Reproduciendo muestra de audio para ${tour.title}...')),
+          ],
+        ),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: 'Detener',
+          onPressed: () => tts.stop(),
+        ),
+      ),
+    );
+  }
+
+  await tts.speak(sampleText);
 }
