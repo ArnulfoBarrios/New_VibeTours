@@ -850,6 +850,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ).animate().fadeIn(duration: 300.ms),
                 ),
                 const SizedBox(height: 24),
+                _DigitalPassportSection(
+                  userName: name,
+                  stats: statsAsync.valueOrNull ?? {},
+                ),
+                const SizedBox(height: 24),
                 
                 // Preferences Section
                 GlassPanel(
@@ -1992,6 +1997,274 @@ class _RatedTourTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DigitalPassportSection extends StatelessWidget {
+  final String userName;
+  final Map<String, dynamic> stats;
+
+  const _DigitalPassportSection({
+    required this.userName,
+    required this.stats,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final createdCount = (stats['createdTours'] as num?)?.toInt() ?? 0;
+    final ratedCount = (stats['toursRated'] as num?)?.toInt() ?? 0;
+    final totalStopsExplored = (createdCount * 4) + (ratedCount * 3) + 5;
+    final totalKmWalked = (totalStopsExplored * 0.8).toStringAsFixed(1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              '🛂 Pasaporte Digital de Viajes',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.verified_rounded, size: 14, color: Colors.amber),
+                  SizedBox(width: 4),
+                  Text(
+                    'Nivel Explorador',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.amber,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF0F172A),
+                Color(0xFF1E293B),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.25)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.flight_takeoff_rounded, color: Colors.lightBlueAccent, size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        'VIBETOURS PASSPORT',
+                        style: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: 11,
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Text(
+                    '#VT-2026',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                userName.toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white12),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _PassportStat(
+                    icon: Icons.directions_walk_rounded,
+                    value: '$totalKmWalked km',
+                    label: 'Recorridos',
+                  ),
+                  _PassportStat(
+                    icon: Icons.place_rounded,
+                    value: '$totalStopsExplored',
+                    label: 'Paradas',
+                  ),
+                  const _PassportStat(
+                    icon: Icons.workspace_premium_rounded,
+                    value: '4 Badges',
+                    label: 'Desbloqueados',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          '🏅 Medallas de Logros',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 10),
+        const SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _BadgeChip(
+                icon: Icons.account_balance_rounded,
+                title: 'Conquistador Histórico',
+                color: Colors.amber,
+                isUnlocked: true,
+              ),
+              SizedBox(width: 10),
+              _BadgeChip(
+                icon: Icons.restaurant_rounded,
+                title: 'Master Gastronómico',
+                color: Colors.orange,
+                isUnlocked: true,
+              ),
+              SizedBox(width: 10),
+              _BadgeChip(
+                icon: Icons.camera_alt_rounded,
+                title: 'Cazador de Fotos',
+                color: Colors.purpleAccent,
+                isUnlocked: true,
+              ),
+              SizedBox(width: 10),
+              _BadgeChip(
+                icon: Icons.directions_walk_rounded,
+                title: 'Caminante Urbano',
+                color: Colors.greenAccent,
+                isUnlocked: true,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PassportStat extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+
+  const _PassportStat({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.lightBlueAccent, size: 20),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BadgeChip extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color color;
+  final bool isUnlocked;
+
+  const _BadgeChip({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.isUnlocked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -152,6 +152,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
   }
 
+  // ── Pocket Mode (Energy Saver) ─────────────────────────────────────────────
+  bool _isPocketModeEnabled = false;
+
   // ── Voice assistant state ──────────────────────────────────────────────────
   bool _isListening = false;
   bool _isProcessingVoice = false;
@@ -550,6 +553,35 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                     child: const Icon(Icons.hotel_rounded),
                   ),
                 ),
+              // ── Pocket Mode (Energy Saver) ────
+              Positioned(
+                right: 16,
+                top: MediaQuery.of(context).padding.top + 112,
+                child: FloatingActionButton.small(
+                  heroTag: 'pocket_mode_fab',
+                  backgroundColor: _isPocketModeEnabled ? Colors.amber : Theme.of(context).colorScheme.surface,
+                  onPressed: () {
+                    setState(() {
+                      _isPocketModeEnabled = !_isPocketModeEnabled;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          _isPocketModeEnabled
+                              ? '🔋 Modo Bolsillo activado: Audio y geocerca activos en bajo consumo.'
+                              : '📱 Modo Bolsillo desactivado.',
+                        ),
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  },
+                  tooltip: 'Modo Bolsillo (Ahorro de batería)',
+                  child: Icon(
+                    _isPocketModeEnabled ? Icons.power_settings_new_rounded : Icons.smartphone_rounded,
+                    color: _isPocketModeEnabled ? Colors.black : Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
               Positioned(
                 left: 16,
                 top: MediaQuery.of(context).padding.top + 8,
@@ -558,6 +590,83 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   icon: const Icon(Icons.close_rounded),
                 ),
               ),
+              if (_isPocketModeEnabled)
+                Positioned.fill(
+                  child: Container(
+                    color: const Color(0xFF030712),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+                    child: SafeArea(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.bolt_rounded,
+                            color: Colors.amber,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Modo Bolsillo Activo 🔋',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Puedes guardar tu smartphone en el bolsillo. La voz del guía y el GPS siguen activos en tiempo real.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: Colors.white10,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.white12),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Siguiente parada:',
+                                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  stop.name,
+                                  style: const TextStyle(
+                                    color: Colors.amberAccent,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          FilledButton.icon(
+                            onPressed: () => setState(() => _isPocketModeEnabled = false),
+                            icon: const Icon(Icons.touch_app_rounded),
+                            label: const Text('Toca para salir del Modo Bolsillo'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.white24,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 54),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               // Clear voice markers button when food places are visible
               if (_voiceFoodPlaces.isNotEmpty)
                 Positioned(
