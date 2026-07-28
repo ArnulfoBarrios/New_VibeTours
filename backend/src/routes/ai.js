@@ -2135,8 +2135,11 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     tags: source.etiquetas || source.tags || []
   })
   
-  // Pasar 'index' como semilla para evitar imágenes idénticas en paradas de la misma categoría
-  const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index).catch(() => ({ url: "", isFallback: true }))
+  // Pasar 'index' como semilla y las coordenadas del lugar para la búsqueda prioritaria por lat/lon
+  const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index, {
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude
+  }).catch(() => ({ url: "", isFallback: true }))
   const image = images[0] ?? source.imageUrl ?? imageStatus.url
   const publicStop = {
     parada: index + 1,

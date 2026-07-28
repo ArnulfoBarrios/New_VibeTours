@@ -1,15 +1,35 @@
-export async function imageForPlace(placeName, city, category = '', indexSeed = 0) {
-  const result = await imageForPlaceWithStatus(placeName, city, category, indexSeed)
+export async function imageForPlace(placeName, city, category = '', indexSeed = 0, options = {}) {
+  const result = await imageForPlaceWithStatus(placeName, city, category, indexSeed, options)
   return result.url
 }
 
-export async function imageForPlaceWithStatus(placeName, city, category = '', indexSeed = 0) {
+export async function imageForPlaceWithStatus(placeName, city, category = '', indexSeed = 0, options = {}) {
   const normalizedCategory = String(category || '').toLowerCase()
   const seed = Number(indexSeed || 0)
+  const latitude = options?.latitude ?? options?.lat ?? null
+  const longitude = options?.longitude ?? options?.lon ?? null
 
-  // 1. Búsqueda estricta del lugar específico
+  // 1A. Consulta prioritaria a Wikipedia Summary API (Foto principal oficial del monumento/lugar)
+  const wikiSummary = await wikipediaSummaryImage(placeName)
+  if (wikiSummary) return { url: wikiSummary, isFallback: false }
+
+  // 1B. Consulta por geolocalización (GeoSearch) en Wikimedia Commons si se tienen coordenadas Lat/Lon
+  if (latitude && longitude && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))) {
+    const wikiGeo = await wikimediaGeoImage(Number(latitude), Number(longitude), 1000, seed)
+    if (wikiGeo) return { url: wikiGeo, isFallback: false }
+  }
+
+  // 1C. Consulta a Pexels API (si existe PEXELS_API_KEY configurada en .env)
+  if (process.env.PEXELS_API_KEY) {
+    const pexels = await pexelsImage(`${placeName} ${city}`, seed)
+    if (pexels) return { url: pexels, isFallback: false }
+  }
+
+  // 1D. Búsqueda estricta por texto del lugar en Wikimedia Commons
   const wiki = await wikimediaImage(placeName, null, seed)
   if (wiki) return { url: wiki, isFallback: false }
+
+  // 1E. Búsqueda estricta en Openverse
   const openverse = await openverseImage(`${placeName} ${city}`, null, seed)
   if (openverse) return { url: openverse, isFallback: false }
   
@@ -36,6 +56,94 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
 
   // 3. Último recurso: Imagen curada según la categoría (rotada con la semilla)
   return { url: curatedImage(`${placeName} ${city} travel`, normalizedCategory, seed), isFallback: true }
+}
+
+async function wikipediaSummaryImage(placeName) {
+  if (!placeName || typeof placeName !== 'string') return null
+  const cleanName = placeName.trim()
+  if (cleanName.length < 3) return null
+
+  const languages = ['es', 'en']
+  for (const lang of languages) {
+    try {
+      const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName.replace(/\s+/g, '_'))}`
+      const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+      if (!response.ok) continue
+      const json = await response.json()
+      if (json.type === 'standard' || json.type === 'normal') {
+        const imageUrl = json.originalimage?.source || json.thumbnail?.source
+        if (imageUrl && isImageTitleRelevant(imageUrl, placeName)) {
+          return imageUrl
+        }
+      }
+    } catch {
+      // Intentar con el siguiente idioma sin romper la ejecución
+    }
+  }
+  return null
+}
+
+async function wikimediaGeoImage(lat, lon, radiusMeters = 1000, indexSeed = 0) {
+  try {
+    const url = new URL('https://commons.wikimedia.org/w/api.php')
+    url.searchParams.set('action', 'query')
+    url.searchParams.set('generator', 'geosearch')
+    url.searchParams.set('ggscoord', `${lat}|${lon}`)
+    url.searchParams.set('ggsradius', String(radiusMeters))
+    url.searchParams.set('ggslimit', '10')
+    url.searchParams.set('prop', 'imageinfo')
+    url.searchParams.set('iiprop', 'url')
+    url.searchParams.set('format', 'json')
+    url.searchParams.set('origin', '*')
+
+    const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+    if (!response.ok) return null
+    const json = await response.json()
+    const pages = Object.values(json.query?.pages ?? {})
+
+    const validPages = pages.filter((page) => {
+      const title = page.title ?? ''
+      const imageUrl = page.imageinfo?.[0]?.url ?? ''
+      if (!imageUrl) return false
+      
+      const titleLower = title.toLowerCase()
+      const isInvalidType = ['map', 'flag', 'bandera', 'logo', 'icon', 'symbol', 'location', 'mapa', 'coat_of_arms'].some(term => titleLower.includes(term))
+      if (isInvalidType) return false
+
+      return isImageTitleRelevant(title, '', null, imageUrl)
+    })
+
+    if (validPages.length === 0) return null
+    const chosenPage = validPages[Math.abs(indexSeed) % validPages.length]
+    return chosenPage?.imageinfo?.[0]?.url ?? null
+  } catch {
+    return null
+  }
+async function pexelsImage(query, indexSeed = 0) {
+  const apiKey = process.env.PEXELS_API_KEY
+  if (!apiKey) return null
+  try {
+    const url = new URL('https://api.pexels.com/v1/search')
+    url.searchParams.set('query', query)
+    url.searchParams.set('per_page', '5')
+    url.searchParams.set('orientation', 'landscape')
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': apiKey,
+        'User-Agent': 'VIBETOURS/1.0'
+      }
+    })
+    if (!response.ok) return null
+    const json = await response.json()
+    const photos = json.photos ?? []
+    if (photos.length === 0) return null
+
+    const chosen = photos[Math.abs(indexSeed) % photos.length]
+    return chosen?.src?.large2x || chosen?.src?.large || chosen?.src?.medium || null
+  } catch {
+    return null
+  }
 }
 
 async function wikimediaImage(query, requiredGroups = null, indexSeed = 0) {
