@@ -1022,7 +1022,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       Text(
                         'Versión $_appVersion',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.4),
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),

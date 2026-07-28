@@ -946,6 +946,12 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           decoration: const InputDecoration(
                             hintText: 'Describe tu tour ideal...',
                             border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            filled: false,
+                            fillColor: Colors.transparent,
                             contentPadding: EdgeInsets.symmetric(vertical: 12),
                             isDense: true,
                           ),
