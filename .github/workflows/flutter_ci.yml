@@ -104,20 +104,36 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
         run: |
           flutter build apk --release \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" \
+            --dart-define=GOOGLE_IOS_CLIENT_ID="$GOOGLE_IOS_CLIENT_ID" \
+            --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --dart-define=TOMTOM_API_KEY="$TOMTOM_API_KEY"
 
       - name: Build Android App Bundle (AAB Release)
         if: ${{ inputs.build_aab == true || inputs.build_aab == 'true' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
         run: |
           flutter build appbundle --release \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" \
+            --dart-define=GOOGLE_IOS_CLIENT_ID="$GOOGLE_IOS_CLIENT_ID" \
+            --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --dart-define=TOMTOM_API_KEY="$TOMTOM_API_KEY"
 
       - name: Upload APK Release Artifact
         uses: actions/upload-artifact@v4

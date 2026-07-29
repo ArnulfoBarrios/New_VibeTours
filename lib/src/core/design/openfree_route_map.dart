@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -113,6 +114,36 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
   Timer? _loadTimeoutTimer;
   Line? _mainRouteLine;
   List<LatLng> _fullRouteGeometry = [];
+  GeoPoint? _lastLocation;
+  double? _lastCalculatedHeading;
+
+  double _getEffectiveHeading() {
+    if (widget.trackingHeading != null && widget.trackingHeading! > 0) {
+      return widget.trackingHeading!;
+    }
+    return _lastCalculatedHeading ?? 0.0;
+  }
+
+  void _updateCalculatedHeading(GeoPoint newLocation) {
+    if (_lastLocation != null) {
+      final distSq = _distanceSquared(
+        LatLng(_lastLocation!.latitude, _lastLocation!.longitude),
+        LatLng(newLocation.latitude, newLocation.longitude),
+      );
+      if (distSq > 0.0000001) {
+        final startLat = _lastLocation!.latitude * (math.pi / 180.0);
+        final startLng = _lastLocation!.longitude * (math.pi / 180.0);
+        final endLat = newLocation.latitude * (math.pi / 180.0);
+        final endLng = newLocation.longitude * (math.pi / 180.0);
+        final dLng = endLng - startLng;
+        final y = math.sin(dLng) * math.cos(endLat);
+        final x = math.cos(startLat) * math.sin(endLat) - math.sin(startLat) * math.cos(endLat) * math.cos(dLng);
+        final bearing = math.atan2(y, x) * (180.0 / math.pi);
+        _lastCalculatedHeading = (bearing + 360.0) % 360.0;
+      }
+    }
+    _lastLocation = newLocation;
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -243,7 +274,10 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
         focusActiveStop: true,
         isIncremental: isIncremental,
       );
-    } else if (locationChanged && widget.currentLocation != null) {
+    }
+
+    if (locationChanged && widget.currentLocation != null) {
+      _updateCalculatedHeading(widget.currentLocation!);
       final currentPos = LatLng(
         widget.currentLocation!.latitude,
         widget.currentLocation!.longitude,
@@ -260,7 +294,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
               target: LatLng(widget.currentLocation!.latitude, widget.currentLocation!.longitude),
               zoom: 18.0,
               tilt: 60.0,
-              bearing: widget.trackingHeading ?? 0.0,
+              bearing: _getEffectiveHeading(),
             ),
           ),
           duration: const Duration(milliseconds: 500),
@@ -276,11 +310,14 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
             target: LatLng(widget.currentLocation!.latitude, widget.currentLocation!.longitude),
             zoom: 18.0,
             tilt: 60.0,
-            bearing: widget.trackingHeading ?? 0.0,
+            bearing: _getEffectiveHeading(),
           ),
         ),
         duration: const Duration(milliseconds: 500),
       );
+    } else if (!widget.trackingMode && locationChanged && widget.currentLocation != null) {
+      _hasFitRoute = false;
+      _drawRoute();
     }
   }
 
@@ -905,17 +942,6 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
         _drawNewStopWithEffect(points.first, 0, activeIndex, animId);
       }
     }
-
-    if (points.length == 1) {
-      try {
-        await controller.animateCamera(
-          CameraUpdate.newLatLngZoom(points.first, 16),
-          duration: const Duration(milliseconds: 450),
-        );
-      } catch (_) {}
-      return;
-    }
-    
     if (widget.trackingMode && currentPoint != null) {
       _hasFitRoute = true;
       try {
@@ -925,7 +951,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
               target: currentPoint,
               zoom: 18.0,
               tilt: 60.0,
-              bearing: widget.trackingHeading ?? 0.0,
+              bearing: _getEffectiveHeading(),
             ),
           ),
           duration: const Duration(milliseconds: 650),
@@ -979,6 +1005,13 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
           );
         } catch (_) {}
       }
+    } else if (points.length == 1 && currentPoint == null) {
+      try {
+        await controller.animateCamera(
+          CameraUpdate.newLatLngZoom(points.first, 16),
+          duration: const Duration(milliseconds: 450),
+        );
+      } catch (_) {}
     } else if (focusActiveStop) {
       try {
         await controller.animateCamera(
@@ -1086,6 +1119,12 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
   }
 
   LatLngBounds _boundsFor(List<LatLng> points) {
+    if (points.isEmpty) {
+      return LatLngBounds(
+        southwest: const LatLng(0, 0),
+        northeast: const LatLng(0, 0),
+      );
+    }
     var minLat = points.first.latitude;
     var maxLat = points.first.latitude;
     var minLng = points.first.longitude;
@@ -1095,6 +1134,12 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
       if (point.latitude > maxLat) maxLat = point.latitude;
       if (point.longitude < minLng) minLng = point.longitude;
       if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+    if ((maxLat - minLat).abs() < 0.0001 && (maxLng - minLng).abs() < 0.0001) {
+      minLat -= 0.001;
+      maxLat += 0.001;
+      minLng -= 0.001;
+      maxLng += 0.001;
     }
     return LatLngBounds(
       southwest: LatLng(minLat, minLng),
