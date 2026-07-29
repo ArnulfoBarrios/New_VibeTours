@@ -260,27 +260,37 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     }
     const planner = buildTourPlanner(input, location, candidatePack.places)
     
-    // We send back the selected places as recommendations
-    const recommendations = planner.selectedPlaces.map(place => ({
-      id: place.placeId,
-      name: place.name,
-      latitude: place.latitude,
-      longitude: place.longitude,
-      category: place.category,
-      imageUrl: place.imageUrl || place.images?.[0] || '',
-      description: place.description || place.history || '',
-      reason: buildRecommendationReason(place, input.type),
-      durationMinutes: place.minutes || 25,
-      locationInfo: {
-        nombre_lugar: place.name,
-        direccion: place.address || '',
-        ciudad: place.city || input.city || '',
-        region: place.region || '',
-        pais: place.country || input.country || '',
-        place_id: place.placeId,
-        url_mapa: mapUrlFor(place.latitude, place.longitude)
-      }
-    }))
+    // We send back the selected places as recommendations with real images & smart reasons
+    const recommendations = await Promise.all(
+      planner.selectedPlaces.map(async (place, index) => {
+        let imageUrl = place.imageUrl || place.images?.[0] || ''
+        if (!imageUrl) {
+          try {
+            imageUrl = await imageForPlace(place.name, input.city || input.destination || '')
+          } catch (_) {}
+        }
+        return {
+          id: place.placeId || place.id || `rec-${index}`,
+          name: place.name,
+          latitude: place.latitude,
+          longitude: place.longitude,
+          category: place.category || 'turismo',
+          imageUrl: imageUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500',
+          description: place.description || place.history || '',
+          reason: buildRecommendationReason(place, input),
+          durationMinutes: place.minutes || 25,
+          locationInfo: {
+            nombre_lugar: place.name,
+            direccion: place.address || '',
+            ciudad: place.city || input.city || '',
+            region: place.region || '',
+            pais: place.country || input.country || '',
+            place_id: place.placeId,
+            url_mapa: mapUrlFor(place.latitude, place.longitude)
+          }
+        }
+      })
+    )
     
     res.json({
       durationHours: input.durationHours,
@@ -1835,80 +1845,68 @@ function buildCuriousFacts(place, type) {
   ]).slice(0, 3)
 }
 
-function buildRecommendationReason(place, type) {
-  const category = place.category || 'place'
+export function buildRecommendationReason(place, input = {}) {
+  const category = place.category || place.type || 'place'
   const tags = place.rawTags || place.tags || {}
-  const seed = place.name || ''
-  
-  if (tags.description) {
-    return tags.description
+  const placeName = place.name || ''
+
+  const city = input.city || input.destination || ''
+  const destinationPlace = input.destinationPlace || input.destination || ''
+  const isStart = place.rawTags?.start_point === 'true' || place.type === 'start_point' || (input.originPlace && normalizeKey(placeName) === normalizeKey(input.originPlace))
+  const isEnd = place.rawTags?.end_point === 'true' || place.type === 'end_point' || (input.destinationPlace && normalizeKey(placeName) === normalizeKey(input.destinationPlace))
+
+  if (isStart) {
+    return `Elegido como el punto de partida inicial de tu recorrido en ${city || 'la ciudad'}.`
   }
 
-  let options = []
-  if (category === 'museum') {
-    options = [
-      'Un espacio fascinante para sumergirse en la cultura local a través de sus piezas históricas y galerías.',
-      'Un templo del saber y la memoria donde cada objeto narra un capítulo crucial del desarrollo local.',
-      'Ideal para los amantes del arte y la historia que buscan una mirada profunda a las colecciones de la región.'
-    ]
-  } else if (category === 'historic' || tags.historic) {
-    options = [
-      'Una joya patrimonial que resguarda la memoria, arquitectura e identidad histórica del lugar.',
-      'Un testimonio vivo del pasado que conserva intactos sus detalles constructivos y su valor simbólico.',
-      'Un rincón cargado de leyendas y acontecimientos históricos que marcaron el devenir de la comunidad.'
-    ]
-  } else if (category === 'viewpoint' || tags.tourism === 'viewpoint') {
-    options = [
-      'Una parada obligatoria para capturar las vistas panorámicas más espectaculares y tomar fotografías increíbles.',
-      'El balcón perfecto de la ciudad para contemplar el horizonte y entender su distribución geográfica.',
-      'Un punto elevado estratégico que ofrece una perspectiva inigualable del paisaje circundante.'
-    ]
-  } else if (category === 'nature' || category === 'park' || tags.leisure === 'park') {
-    options = [
-      'Un rincón fresco y verde, ideal para caminar con tranquilidad y respirar el aire de la ciudad.',
-      'Un pulmón urbano que regala un respiro de tranquilidad frente al bullicio cotidiano.',
-      'Un remanso de paz perfecto para desconectar, caminar bajo la sombra de árboles centenarios y relajarse.'
-    ]
-  } else if (category === 'restaurant' || category === 'cafe' || tags.amenity === 'restaurant') {
-    options = [
-      'El punto perfecto para deleitarse con la cocina típica y los sabores locales de la región.',
-      'Un rincón culinario de gran reputación donde la tradición y los ingredientes de calidad se encuentran.',
-      'El lugar ideal para recargar energías disfrutando de recetas locales elaboradas con cariño y maestría.'
-    ]
-  } else if (category === 'religious' || tags.historic === 'church' || tags.historic === 'cathedral') {
-    options = [
-      'Un templo emblemático de gran valor espiritual, estético y arquitectónico para la comunidad.',
-      'Un monumento sacro que destaca por su solemnidad, obras de arte sacro e imponentes fachadas.',
-      'Un espacio de silencio y contemplación que refleja la fe, el arte y la historia constructiva de la región.'
-    ]
-  } else if (type === 'gastronomic') {
-    options = [
-      'Seleccionado especialmente por su ambiente gastronómico único y su oferta de sabores auténticos.',
-      'Un punto de referencia para los amantes del buen comer, reconocido por su sazón tradicional.',
-      'Una parada ideal para saborear bocados típicos que definen la identidad de esta tierra.'
-    ]
-  } else if (type === 'ecological') {
-    options = [
-      'Un entorno enriquecedor que te conecta directamente con la biodiversidad y el paisaje de la zona.',
-      'Un sendero ideal para la contemplación ecológica y el aprecio por la conservación ambiental.',
-      'Una inmersión verde que te permite admirar la flora y fauna características de este territorio.'
-    ]
-  } else if (type === 'cultural') {
-    options = [
-      'Un epicentro artístico o social ideal para comprender las expresiones cotidianas de los residentes.',
-      'Un espacio donde la identidad local cobra vida a través de eventos, arte urbano o interacciones.',
-      'Una parada perfecta para descifrar las costumbres locales y el espíritu comunitario de este sector.'
-    ]
-  } else {
-    options = [
-      'Un sitio de gran relevancia local seleccionado para complementar la temática del recorrido.',
-      'Ideal para comprender el estilo de vida de la zona y tomar fotos espectaculares de la arquitectura.',
-      'Una parada estratégica que aporta variedad visual y dinamismo al itinerario.',
-      'Un punto de interés bien valorado que añade un matiz de historia y autenticidad al recorrido.',
-      'Una localización singular que ilustra de manera perfecta la cotidianidad y el color local del destino.'
-    ]
+  if (isEnd) {
+    return `Seleccionado como el destino principal y punto culminante de tu tour hacia ${destinationPlace || city}.`
   }
-  return selectDeterministic(options, seed)
+
+  // Intermediates in corridor route
+  if (input.originPlace || input.destinationPlace) {
+    if (category === 'museum') {
+      return `Seleccionado por ser uno de los museos más destacados en tu trayecto hacia ${destinationPlace}, perfecto para conocer la historia local.`
+    }
+    if (category === 'historic' || tags.historic) {
+      return `Elegido por su alto valor histórico y su excelente ubicación en la ruta directa hacia ${destinationPlace}.`
+    }
+    if (category === 'viewpoint' || tags.tourism === 'viewpoint') {
+      return `Una parada panorámica recomendada en tu trayecto para admirar el paisaje antes de llegar a ${destinationPlace}.`
+    }
+    if (category === 'nature' || category === 'park' || tags.leisure === 'park') {
+      return `Elegido como un respiro natural en tu ruta hacia ${destinationPlace}, ideal para descansar y tomar fotos.`
+    }
+    if (category === 'restaurant' || category === 'cafe' || tags.amenity === 'restaurant') {
+      return `Una parada gastronómica recomendada en la ruta hacia ${destinationPlace} para disfrutar de la cocina típica.`
+    }
+    if (category === 'religious' || tags.historic === 'church') {
+      return `Un templo emblemático seleccionado por su arquitectura y su posición idónea en el trayecto hacia ${destinationPlace}.`
+    }
+    return `Seleccionado como parada estratégica en tu trayecto hacia ${destinationPlace} por su relevante interés local.`
+  }
+
+  // General recommendation reasons
+  if (category === 'museum') {
+    return `Un espacio emblemático en ${city} ideal para descubrir el arte, la memoria y la cultura local.`
+  }
+  if (category === 'historic' || tags.historic) {
+    return `Una joya patrimonial recomendada en ${city} que conserva la arquitectura e historia de la región.`
+  }
+  if (category === 'viewpoint' || tags.tourism === 'viewpoint') {
+    return `Un mirador destacado en ${city} para contemplar las mejores vistas panorámicas de la ciudad.`
+  }
+  if (category === 'nature' || category === 'park' || tags.leisure === 'park') {
+    return `Un espacio verde emblemático en ${city}, perfecto para conectar con la naturaleza y relajarse.`
+  }
+  if (category === 'restaurant' || category === 'cafe' || tags.amenity === 'restaurant') {
+    return `Un rincón culinario de gran sazón recomendado para saborear la gastronomía típica de ${city}.`
+  }
+  if (category === 'religious' || tags.historic === 'church') {
+    return `Un templo imponente recomendado en ${city} por su riqueza artística, arquitectónica y espiritual.`
+  }
+
+  return `Seleccionado por ser uno de los puntos turísticos e históricos más valorados para visitar en ${city}.`
 }
 
 function buildTips(place, type) {

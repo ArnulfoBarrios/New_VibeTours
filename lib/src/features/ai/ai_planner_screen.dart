@@ -12,7 +12,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 import 'package:geolocator/geolocator.dart';
 
-import '../../core/design/app_theme.dart';
+
 import '../../core/design/openfree_route_map.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -294,10 +294,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   const SizedBox(height: 16),
                 ],
 
-                if (builderState.hotels.isNotEmpty && !builderState.isBuilding && builderState.builtTour == null) ...[
-                  _buildHotelsList(builderState.hotels, builderState.selectedHotel),
-                  const SizedBox(height: 16),
-                ],
+
                 if (builderState.error != null) ...[
                   _buildErrorBanner(builderState.error!),
                   const SizedBox(height: 16),
@@ -350,117 +347,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     ).animate().fadeIn().slideY(begin: 0.05);
   }
 
-  Widget _buildHotelsList(List<dynamic> hotels, Map<String, dynamic>? selectedHotel) {
-    final isNoneSelected = selectedHotel == null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: InkWell(
-            onTap: () {
-              ref.read(aiBuilderProvider.notifier).selectHotel(null);
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isNoneSelected 
-                    ? AppTheme.primary.withValues(alpha: 0.08)
-                    : Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isNoneSelected 
-                      ? AppTheme.primary 
-                      : Colors.grey.shade200,
-                  width: isNoneSelected ? 2 : 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isNoneSelected ? Icons.check_circle_rounded : Icons.block_rounded,
-                    color: isNoneSelected ? AppTheme.primary : Colors.grey,
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('No hospedarme en hotel / Tengo otro alojamiento', style: TextStyle(fontWeight: FontWeight.bold)),
-                        SizedBox(height: 4),
-                        Text(
-                          'Tengo otro lugar para quedarme o iniciaré el recorrido directamente desde la primera parada.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        ...hotels.map((h) {
-          final isSelected = selectedHotel?['name'] == h['name'];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: InkWell(
-              onTap: () {
-                ref.read(aiBuilderProvider.notifier).selectHotel(Map<String, dynamic>.from(h));
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isSelected 
-                      ? AppTheme.primary.withValues(alpha: 0.08)
-                      : Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected 
-                        ? AppTheme.primary 
-                        : Colors.grey.shade200,
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      isSelected ? Icons.check_circle_rounded : Icons.hotel,
-                      color: isSelected ? AppTheme.primary : Colors.blue,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(h['name'] ?? 'Hotel', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          if (h['address'] != null || h['direccion'] != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              h['address']?.toString() ?? h['direccion']?.toString() ?? '',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }),
-      ],
-    ).animate().fadeIn();
-  }
+
 
   Widget _buildErrorBanner(String errorMsg) {
     return Container(

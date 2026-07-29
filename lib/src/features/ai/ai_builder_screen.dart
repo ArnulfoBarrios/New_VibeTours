@@ -181,6 +181,15 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                                   width: 64,
                                   height: 64,
                                   fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    width: 64,
+                                    height: 64,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primary.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(Icons.place_rounded, color: AppTheme.primary),
+                                  ),
                                 ),
                               )
                             else
@@ -188,10 +197,10 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                                 width: 64,
                                 height: 64,
                                 decoration: BoxDecoration(
-                                  color: AppTheme.primary.withValues(alpha: 0.2),
+                                  color: AppTheme.primary.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Icon(Icons.place_rounded),
+                                child: const Icon(Icons.place_rounded, color: AppTheme.primary),
                               ),
                             const SizedBox(width: 16),
                             Expanded(

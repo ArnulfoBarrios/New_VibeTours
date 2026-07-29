@@ -360,8 +360,6 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           messages: [...state.messages, aiMsg],
           needsBudget: false,
         );
-
-        await fetchHotelsDirectly();
       } else {
         String errorMsg = 'Error: ${response.statusCode}';
         try {
