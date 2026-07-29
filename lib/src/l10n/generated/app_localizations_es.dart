@@ -544,61 +544,218 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get helpDetailedSub =>
-      'Para explorar, crear, editar, guardar y disfrutar tours.';
+      'Aprende a dominar todas las herramientas, la Inteligencia Artificial y los recorridos en vivo.';
 
   @override
-  String get helpSec1 => '1. Cuenta';
+  String get helpSearchPlaceholder => 'Buscar en las guías...';
 
   @override
-  String get helpSec2 => '2. Descubrir';
+  String get helpChipAll => 'Todas';
 
   @override
-  String get helpSec3 => '3. Tours';
+  String get helpChipAI => 'IA VibeTour';
 
   @override
-  String get helpSec4 => '4. Mapa';
+  String get helpChipLive => 'Tour en Vivo';
 
   @override
-  String get helpSec5 => '5. Crear';
+  String get helpChipExplore => 'Descubrir & Mapa';
 
   @override
-  String get helpSec6 => '6. AI';
+  String get helpChipCreator => 'Crear Tours';
 
   @override
-  String get helpSec7 => '7. Editar';
+  String get helpChipProfile => 'Perfil & Ajustes';
 
   @override
-  String get helpSec8 => '8. Perfil';
+  String get helpChipSupport => 'Soporte & PQRS';
 
   @override
-  String get helpSec9 => '9. PQRS';
+  String get helpNoResults => 'No se encontraron guías para tu búsqueda.';
 
   @override
-  String get helpTitle1 => '1. Cuenta, invitado e inicio de sesión';
+  String get helpTipTitle => '💡 Consejos de uso óptimo';
 
   @override
-  String get helpTitle2 => '2. Descubrir lugares cerca de ti';
+  String get helpSectionAITitle => '🤖 Guía Maestra del Planificador con IA';
 
   @override
-  String get helpTitle3 => '3. Pantalla Tours';
+  String get helpSectionAISub =>
+      'Cómo usar la Inteligencia Artificial para crear tours personalizados de alto nivel.';
 
   @override
-  String get helpTitle4 => '4. Mapa y navegación';
+  String get helpAI1Title => '1. Configura tus Parámetros';
 
   @override
-  String get helpTitle5 => '5. Creación manual de Tours';
+  String get helpAI1Body =>
+      'Antes de escribir tu solicitud, selecciona el destino (ciudad o país), la duración (horas o días), el medio de transporte (caminando, auto, bicicleta) y tu nivel de presupuesto (Económico, Moderado o Lujo).';
 
   @override
-  String get helpTitle6 => '6. IA VibeTour (Planificador)';
+  String get helpAI2Title => '2. Redacción de Prompts Efectivos';
 
   @override
-  String get helpTitle7 => '7. Edición y guardado';
+  String get helpAI2Body =>
+      'Sé claro y detallado en lo que buscas. En lugar de decir \'Quiero ver la ciudad\', escribe: \'Ruta fotográfica de 4 horas por la arquitectura histórica de Medellín, con paradas en cafés tradicionales y miradores urbanos\'.';
 
   @override
-  String get helpTitle8 => '8. Perfil y personalización';
+  String get helpAI2Tip =>
+      'Tip Pro: Incluye condiciones especiales como \'apto para niños\', \'opciones vegetarianas\' o \'evitar caminatas empinadas\'.';
 
   @override
-  String get helpTitle9 => '9. PQRS y Soporte';
+  String get helpAI3Title => '3. Generación y Optimización de Rutas';
+
+  @override
+  String get helpAI3Body =>
+      'La IA analiza la base de datos de lugares verificados, ordena la secuencia de paradas minimizando el tiempo de traslape y genera descripciones enriquecidas con historia, tips locales y recomendaciones específicas por parada.';
+
+  @override
+  String get helpAI4Title => '4. Edición de Itinerario Generado';
+
+  @override
+  String get helpAI4Body =>
+      'No estás limitado al resultado inicial. Puedes reordenar paradas, agregar nuevos puntos desde el mapa, cambiar la imagen de portada y personalizar descripciones antes de guardar el tour en tu cuenta.';
+
+  @override
+  String get helpSectionLiveTitle => '🧭 Tours en Vivo & Audioguía por GPS';
+
+  @override
+  String get helpSectionLiveSub =>
+      'Navega con guía por voz en tiempo real sin tener que mirar la pantalla constantemente.';
+
+  @override
+  String get helpLive1Title => '1. Iniciar la Navegación en Vivo';
+
+  @override
+  String get helpLive1Body =>
+      'Abre cualquier tour en tu biblioteca o explora los tours públicos de la comunidad y toca \'Iniciar Tour en Vivo\'.';
+
+  @override
+  String get helpLive2Title => '2. Audioguía Automática por Proximidad';
+
+  @override
+  String get helpLive2Body =>
+      'Con tu GPS activo, al aproximarte a cualquier parada la app reproducirá automáticamente la narración narrada por voz (TTS), contándote la historia y curiosidades del lugar.';
+
+  @override
+  String get helpLive2Tip =>
+      'Tip Pro: Puedes guardar tu smartphone en el bolsillo o usar audífonos. El servicio seguirá activo en segundo plano.';
+
+  @override
+  String get helpLive3Title => '3. Control de Progreso y Siguiente Parada';
+
+  @override
+  String get helpLive3Body =>
+      'La pantalla muestra la distancia exacta a la siguiente parada, el tiempo estimado de llegada y te permite marcar manualmente cuando hayas completado una visita.';
+
+  @override
+  String get helpSectionExploreTitle =>
+      '🗺️ Descubrir, Filtros y Mapa Interactivo';
+
+  @override
+  String get helpSectionExploreSub =>
+      'Encuentra experiencias, eventos y puntos turísticos recomendados.';
+
+  @override
+  String get helpExplore1Title => '1. Búsqueda y Categorías';
+
+  @override
+  String get helpExplore1Body =>
+      'Usa la barra de búsqueda para encontrar lugares específicos o filtra por categorías (Urbano, Histórico, Gastronómico, Ecológico, Nocturno, Romántico).';
+
+  @override
+  String get helpExplore1Tip =>
+      'Tip Pro: Si no realizas una búsqueda, verás automáticamente recomendaciones populares en tu zona.';
+
+  @override
+  String get helpExplore2Title => '2. Tarjetas y Detalles del Lugar';
+
+  @override
+  String get helpExplore2Body =>
+      'Toca un pin en el mapa o una tarjeta en Descubrir para consultar fotos, horarios, valoraciones y enviar solicitudes de disponibilidad a establecimientos.';
+
+  @override
+  String get helpExplore3Title => '3. Mapa Interactivo y Capas';
+
+  @override
+  String get helpExplore3Body =>
+      'El mapa interactivo te permite alternar entre estilos de mapa, ver pines clasificados por colores y centrar la cámara en tu posición GPS actual.';
+
+  @override
+  String get helpSectionCreatorTitle => '🎨 Creador Manual de Tours';
+
+  @override
+  String get helpSectionCreatorSub =>
+      'Crea tus propios itinerarios turísticos y compártelos con la comunidad.';
+
+  @override
+  String get helpCreator1Title => '1. Información General del Tour';
+
+  @override
+  String get helpCreator1Body =>
+      'Define un título llamativo, una descripción explicativa, la categoría turística principal y sube una imagen de portada vibrante.';
+
+  @override
+  String get helpCreator2Title => '2. Añadir y Ordenar Paradas';
+
+  @override
+  String get helpCreator2Body =>
+      'Busca ubicaciones por nombre o toca directamente en el mapa para marcar paradas. Arrastra las paradas para ajustar el orden secuencial ideal del recorrido.';
+
+  @override
+  String get helpCreator3Title => '3. Privacidad y Publicación';
+
+  @override
+  String get helpCreator3Body =>
+      'Decide si mantendrás el tour en modo privado para tus viajes o lo publicarás para que otros exploradores lo califiquen y disfruten.';
+
+  @override
+  String get helpSectionProfileTitle => '👤 Cuenta, Perfil e Interfaz';
+
+  @override
+  String get helpSectionProfileSub =>
+      'Sincronización en la nube, personalización viajera y modos visuales.';
+
+  @override
+  String get helpProfile1Title => '1. Modo Invitado vs Cuenta Registrada';
+
+  @override
+  String get helpProfile1Body =>
+      'Como invitado puedes explorar la app. Al iniciar sesión con correo o Google, podrás sincronizar tus tours creados, favoritos y calificaciones en la nube.';
+
+  @override
+  String get helpProfile2Title => '2. Personalizar Perfil Viajero';
+
+  @override
+  String get helpProfile2Body =>
+      'Configura tu avatar, biografía y preferencias turísticas para que la app y la IA adapten las sugerencias a tu perfil único.';
+
+  @override
+  String get helpProfile3Title => '3. Tema Visual Claro / Oscuro';
+
+  @override
+  String get helpProfile3Body =>
+      'Cambia entre Modo Claro y Modo Oscuro en Ajustes para una visualización cómoda tanto de día como de noche.';
+
+  @override
+  String get helpSectionSupportTitle => '🛠️ Soporte, PQRS y Comunidad';
+
+  @override
+  String get helpSectionSupportSub =>
+      'Canales de ayuda, envío de sugerencias y comentarios.';
+
+  @override
+  String get helpSupport1Title => '1. Gestión de PQRS';
+
+  @override
+  String get helpSupport1Body =>
+      'Envía Peticiones, Quejas, Reclamos o Sugerencias directamente desde la pantalla de Soporte y consulta las respuestas del administrador en tiempo real.';
+
+  @override
+  String get helpSupport2Title => '2. Calificación y Feedback';
+
+  @override
+  String get helpSupport2Body =>
+      'Valora la aplicación o déjanos tus sugerencias para seguir mejorando las herramientas de VIBETOURS.';
 
   @override
   String get goodMorning => 'Buenos días';

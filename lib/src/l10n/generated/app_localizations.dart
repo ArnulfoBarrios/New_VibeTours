@@ -1133,116 +1133,374 @@ abstract class AppLocalizations {
   /// No description provided for @helpDetailedSub.
   ///
   /// In es, this message translates to:
-  /// **'Para explorar, crear, editar, guardar y disfrutar tours.'**
+  /// **'Aprende a dominar todas las herramientas, la Inteligencia Artificial y los recorridos en vivo.'**
   String get helpDetailedSub;
 
-  /// No description provided for @helpSec1.
+  /// No description provided for @helpSearchPlaceholder.
   ///
   /// In es, this message translates to:
-  /// **'1. Cuenta'**
-  String get helpSec1;
+  /// **'Buscar en las guías...'**
+  String get helpSearchPlaceholder;
 
-  /// No description provided for @helpSec2.
+  /// No description provided for @helpChipAll.
   ///
   /// In es, this message translates to:
-  /// **'2. Descubrir'**
-  String get helpSec2;
+  /// **'Todas'**
+  String get helpChipAll;
 
-  /// No description provided for @helpSec3.
+  /// No description provided for @helpChipAI.
   ///
   /// In es, this message translates to:
-  /// **'3. Tours'**
-  String get helpSec3;
+  /// **'IA VibeTour'**
+  String get helpChipAI;
 
-  /// No description provided for @helpSec4.
+  /// No description provided for @helpChipLive.
   ///
   /// In es, this message translates to:
-  /// **'4. Mapa'**
-  String get helpSec4;
+  /// **'Tour en Vivo'**
+  String get helpChipLive;
 
-  /// No description provided for @helpSec5.
+  /// No description provided for @helpChipExplore.
   ///
   /// In es, this message translates to:
-  /// **'5. Crear'**
-  String get helpSec5;
+  /// **'Descubrir & Mapa'**
+  String get helpChipExplore;
 
-  /// No description provided for @helpSec6.
+  /// No description provided for @helpChipCreator.
   ///
   /// In es, this message translates to:
-  /// **'6. AI'**
-  String get helpSec6;
+  /// **'Crear Tours'**
+  String get helpChipCreator;
 
-  /// No description provided for @helpSec7.
+  /// No description provided for @helpChipProfile.
   ///
   /// In es, this message translates to:
-  /// **'7. Editar'**
-  String get helpSec7;
+  /// **'Perfil & Ajustes'**
+  String get helpChipProfile;
 
-  /// No description provided for @helpSec8.
+  /// No description provided for @helpChipSupport.
   ///
   /// In es, this message translates to:
-  /// **'8. Perfil'**
-  String get helpSec8;
+  /// **'Soporte & PQRS'**
+  String get helpChipSupport;
 
-  /// No description provided for @helpSec9.
+  /// No description provided for @helpNoResults.
   ///
   /// In es, this message translates to:
-  /// **'9. PQRS'**
-  String get helpSec9;
+  /// **'No se encontraron guías para tu búsqueda.'**
+  String get helpNoResults;
 
-  /// No description provided for @helpTitle1.
+  /// No description provided for @helpTipTitle.
   ///
   /// In es, this message translates to:
-  /// **'1. Cuenta, invitado e inicio de sesión'**
-  String get helpTitle1;
+  /// **'💡 Consejos de uso óptimo'**
+  String get helpTipTitle;
 
-  /// No description provided for @helpTitle2.
+  /// No description provided for @helpSectionAITitle.
   ///
   /// In es, this message translates to:
-  /// **'2. Descubrir lugares cerca de ti'**
-  String get helpTitle2;
+  /// **'🤖 Guía Maestra del Planificador con IA'**
+  String get helpSectionAITitle;
 
-  /// No description provided for @helpTitle3.
+  /// No description provided for @helpSectionAISub.
   ///
   /// In es, this message translates to:
-  /// **'3. Pantalla Tours'**
-  String get helpTitle3;
+  /// **'Cómo usar la Inteligencia Artificial para crear tours personalizados de alto nivel.'**
+  String get helpSectionAISub;
 
-  /// No description provided for @helpTitle4.
+  /// No description provided for @helpAI1Title.
   ///
   /// In es, this message translates to:
-  /// **'4. Mapa y navegación'**
-  String get helpTitle4;
+  /// **'1. Configura tus Parámetros'**
+  String get helpAI1Title;
 
-  /// No description provided for @helpTitle5.
+  /// No description provided for @helpAI1Body.
   ///
   /// In es, this message translates to:
-  /// **'5. Creación manual de Tours'**
-  String get helpTitle5;
+  /// **'Antes de escribir tu solicitud, selecciona el destino (ciudad o país), la duración (horas o días), el medio de transporte (caminando, auto, bicicleta) y tu nivel de presupuesto (Económico, Moderado o Lujo).'**
+  String get helpAI1Body;
 
-  /// No description provided for @helpTitle6.
+  /// No description provided for @helpAI2Title.
   ///
   /// In es, this message translates to:
-  /// **'6. IA VibeTour (Planificador)'**
-  String get helpTitle6;
+  /// **'2. Redacción de Prompts Efectivos'**
+  String get helpAI2Title;
 
-  /// No description provided for @helpTitle7.
+  /// No description provided for @helpAI2Body.
   ///
   /// In es, this message translates to:
-  /// **'7. Edición y guardado'**
-  String get helpTitle7;
+  /// **'Sé claro y detallado en lo que buscas. En lugar de decir \'Quiero ver la ciudad\', escribe: \'Ruta fotográfica de 4 horas por la arquitectura histórica de Medellín, con paradas en cafés tradicionales y miradores urbanos\'.'**
+  String get helpAI2Body;
 
-  /// No description provided for @helpTitle8.
+  /// No description provided for @helpAI2Tip.
   ///
   /// In es, this message translates to:
-  /// **'8. Perfil y personalización'**
-  String get helpTitle8;
+  /// **'Tip Pro: Incluye condiciones especiales como \'apto para niños\', \'opciones vegetarianas\' o \'evitar caminatas empinadas\'.'**
+  String get helpAI2Tip;
 
-  /// No description provided for @helpTitle9.
+  /// No description provided for @helpAI3Title.
   ///
   /// In es, this message translates to:
-  /// **'9. PQRS y Soporte'**
-  String get helpTitle9;
+  /// **'3. Generación y Optimización de Rutas'**
+  String get helpAI3Title;
+
+  /// No description provided for @helpAI3Body.
+  ///
+  /// In es, this message translates to:
+  /// **'La IA analiza la base de datos de lugares verificados, ordena la secuencia de paradas minimizando el tiempo de traslape y genera descripciones enriquecidas con historia, tips locales y recomendaciones específicas por parada.'**
+  String get helpAI3Body;
+
+  /// No description provided for @helpAI4Title.
+  ///
+  /// In es, this message translates to:
+  /// **'4. Edición de Itinerario Generado'**
+  String get helpAI4Title;
+
+  /// No description provided for @helpAI4Body.
+  ///
+  /// In es, this message translates to:
+  /// **'No estás limitado al resultado inicial. Puedes reordenar paradas, agregar nuevos puntos desde el mapa, cambiar la imagen de portada y personalizar descripciones antes de guardar el tour en tu cuenta.'**
+  String get helpAI4Body;
+
+  /// No description provided for @helpSectionLiveTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'🧭 Tours en Vivo & Audioguía por GPS'**
+  String get helpSectionLiveTitle;
+
+  /// No description provided for @helpSectionLiveSub.
+  ///
+  /// In es, this message translates to:
+  /// **'Navega con guía por voz en tiempo real sin tener que mirar la pantalla constantemente.'**
+  String get helpSectionLiveSub;
+
+  /// No description provided for @helpLive1Title.
+  ///
+  /// In es, this message translates to:
+  /// **'1. Iniciar la Navegación en Vivo'**
+  String get helpLive1Title;
+
+  /// No description provided for @helpLive1Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Abre cualquier tour en tu biblioteca o explora los tours públicos de la comunidad y toca \'Iniciar Tour en Vivo\'.'**
+  String get helpLive1Body;
+
+  /// No description provided for @helpLive2Title.
+  ///
+  /// In es, this message translates to:
+  /// **'2. Audioguía Automática por Proximidad'**
+  String get helpLive2Title;
+
+  /// No description provided for @helpLive2Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Con tu GPS activo, al aproximarte a cualquier parada la app reproducirá automáticamente la narración narrada por voz (TTS), contándote la historia y curiosidades del lugar.'**
+  String get helpLive2Body;
+
+  /// No description provided for @helpLive2Tip.
+  ///
+  /// In es, this message translates to:
+  /// **'Tip Pro: Puedes guardar tu smartphone en el bolsillo o usar audífonos. El servicio seguirá activo en segundo plano.'**
+  String get helpLive2Tip;
+
+  /// No description provided for @helpLive3Title.
+  ///
+  /// In es, this message translates to:
+  /// **'3. Control de Progreso y Siguiente Parada'**
+  String get helpLive3Title;
+
+  /// No description provided for @helpLive3Body.
+  ///
+  /// In es, this message translates to:
+  /// **'La pantalla muestra la distancia exacta a la siguiente parada, el tiempo estimado de llegada y te permite marcar manualmente cuando hayas completado una visita.'**
+  String get helpLive3Body;
+
+  /// No description provided for @helpSectionExploreTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'🗺️ Descubrir, Filtros y Mapa Interactivo'**
+  String get helpSectionExploreTitle;
+
+  /// No description provided for @helpSectionExploreSub.
+  ///
+  /// In es, this message translates to:
+  /// **'Encuentra experiencias, eventos y puntos turísticos recomendados.'**
+  String get helpSectionExploreSub;
+
+  /// No description provided for @helpExplore1Title.
+  ///
+  /// In es, this message translates to:
+  /// **'1. Búsqueda y Categorías'**
+  String get helpExplore1Title;
+
+  /// No description provided for @helpExplore1Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Usa la barra de búsqueda para encontrar lugares específicos o filtra por categorías (Urbano, Histórico, Gastronómico, Ecológico, Nocturno, Romántico).'**
+  String get helpExplore1Body;
+
+  /// No description provided for @helpExplore1Tip.
+  ///
+  /// In es, this message translates to:
+  /// **'Tip Pro: Si no realizas una búsqueda, verás automáticamente recomendaciones populares en tu zona.'**
+  String get helpExplore1Tip;
+
+  /// No description provided for @helpExplore2Title.
+  ///
+  /// In es, this message translates to:
+  /// **'2. Tarjetas y Detalles del Lugar'**
+  String get helpExplore2Title;
+
+  /// No description provided for @helpExplore2Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Toca un pin en el mapa o una tarjeta en Descubrir para consultar fotos, horarios, valoraciones y enviar solicitudes de disponibilidad a establecimientos.'**
+  String get helpExplore2Body;
+
+  /// No description provided for @helpExplore3Title.
+  ///
+  /// In es, this message translates to:
+  /// **'3. Mapa Interactivo y Capas'**
+  String get helpExplore3Title;
+
+  /// No description provided for @helpExplore3Body.
+  ///
+  /// In es, this message translates to:
+  /// **'El mapa interactivo te permite alternar entre estilos de mapa, ver pines clasificados por colores y centrar la cámara en tu posición GPS actual.'**
+  String get helpExplore3Body;
+
+  /// No description provided for @helpSectionCreatorTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'🎨 Creador Manual de Tours'**
+  String get helpSectionCreatorTitle;
+
+  /// No description provided for @helpSectionCreatorSub.
+  ///
+  /// In es, this message translates to:
+  /// **'Crea tus propios itinerarios turísticos y compártelos con la comunidad.'**
+  String get helpSectionCreatorSub;
+
+  /// No description provided for @helpCreator1Title.
+  ///
+  /// In es, this message translates to:
+  /// **'1. Información General del Tour'**
+  String get helpCreator1Title;
+
+  /// No description provided for @helpCreator1Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Define un título llamativo, una descripción explicativa, la categoría turística principal y sube una imagen de portada vibrante.'**
+  String get helpCreator1Body;
+
+  /// No description provided for @helpCreator2Title.
+  ///
+  /// In es, this message translates to:
+  /// **'2. Añadir y Ordenar Paradas'**
+  String get helpCreator2Title;
+
+  /// No description provided for @helpCreator2Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Busca ubicaciones por nombre o toca directamente en el mapa para marcar paradas. Arrastra las paradas para ajustar el orden secuencial ideal del recorrido.'**
+  String get helpCreator2Body;
+
+  /// No description provided for @helpCreator3Title.
+  ///
+  /// In es, this message translates to:
+  /// **'3. Privacidad y Publicación'**
+  String get helpCreator3Title;
+
+  /// No description provided for @helpCreator3Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Decide si mantendrás el tour en modo privado para tus viajes o lo publicarás para que otros exploradores lo califiquen y disfruten.'**
+  String get helpCreator3Body;
+
+  /// No description provided for @helpSectionProfileTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'👤 Cuenta, Perfil e Interfaz'**
+  String get helpSectionProfileTitle;
+
+  /// No description provided for @helpSectionProfileSub.
+  ///
+  /// In es, this message translates to:
+  /// **'Sincronización en la nube, personalización viajera y modos visuales.'**
+  String get helpSectionProfileSub;
+
+  /// No description provided for @helpProfile1Title.
+  ///
+  /// In es, this message translates to:
+  /// **'1. Modo Invitado vs Cuenta Registrada'**
+  String get helpProfile1Title;
+
+  /// No description provided for @helpProfile1Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Como invitado puedes explorar la app. Al iniciar sesión con correo o Google, podrás sincronizar tus tours creados, favoritos y calificaciones en la nube.'**
+  String get helpProfile1Body;
+
+  /// No description provided for @helpProfile2Title.
+  ///
+  /// In es, this message translates to:
+  /// **'2. Personalizar Perfil Viajero'**
+  String get helpProfile2Title;
+
+  /// No description provided for @helpProfile2Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Configura tu avatar, biografía y preferencias turísticas para que la app y la IA adapten las sugerencias a tu perfil único.'**
+  String get helpProfile2Body;
+
+  /// No description provided for @helpProfile3Title.
+  ///
+  /// In es, this message translates to:
+  /// **'3. Tema Visual Claro / Oscuro'**
+  String get helpProfile3Title;
+
+  /// No description provided for @helpProfile3Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Cambia entre Modo Claro y Modo Oscuro en Ajustes para una visualización cómoda tanto de día como de noche.'**
+  String get helpProfile3Body;
+
+  /// No description provided for @helpSectionSupportTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'🛠️ Soporte, PQRS y Comunidad'**
+  String get helpSectionSupportTitle;
+
+  /// No description provided for @helpSectionSupportSub.
+  ///
+  /// In es, this message translates to:
+  /// **'Canales de ayuda, envío de sugerencias y comentarios.'**
+  String get helpSectionSupportSub;
+
+  /// No description provided for @helpSupport1Title.
+  ///
+  /// In es, this message translates to:
+  /// **'1. Gestión de PQRS'**
+  String get helpSupport1Title;
+
+  /// No description provided for @helpSupport1Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Envía Peticiones, Quejas, Reclamos o Sugerencias directamente desde la pantalla de Soporte y consulta las respuestas del administrador en tiempo real.'**
+  String get helpSupport1Body;
+
+  /// No description provided for @helpSupport2Title.
+  ///
+  /// In es, this message translates to:
+  /// **'2. Calificación y Feedback'**
+  String get helpSupport2Title;
+
+  /// No description provided for @helpSupport2Body.
+  ///
+  /// In es, this message translates to:
+  /// **'Valora la aplicación o déjanos tus sugerencias para seguir mejorando las herramientas de VIBETOURS.'**
+  String get helpSupport2Body;
 
   /// No description provided for @goodMorning.
   ///
