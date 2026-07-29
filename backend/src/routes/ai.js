@@ -1081,7 +1081,8 @@ function buildTourPlanner(input, location, places) {
 
     const intermediates = normalized.filter(p => 
       (!startPlaceCandidate || normalizeKey(p.name) !== normalizeKey(startPlaceCandidate.name)) &&
-      (!endPlaceCandidate || normalizeKey(p.name) !== normalizeKey(endPlaceCandidate.name))
+      (!endPlaceCandidate || normalizeKey(p.name) !== normalizeKey(endPlaceCandidate.name)) &&
+      isWithinCorridor(p, startPlaceCandidate, endPlaceCandidate)
     )
 
     const scoredIntermediates = intermediates
@@ -2437,6 +2438,44 @@ function fallbackPlaces(input, location) {
   }]
 }
 
+export function isWithinCorridor(place, startPlace, endPlace) {
+  if (!place || (!startPlace && !endPlace)) return true
+  const pLat = Number(place.latitude ?? place.lat ?? 0)
+  const pLon = Number(place.longitude ?? place.lon ?? 0)
+  if (!pLat || !pLon) return false
+
+  const startLat = startPlace ? Number(startPlace.latitude ?? startPlace.lat ?? 0) : null
+  const startLon = startPlace ? Number(startPlace.longitude ?? startPlace.lon ?? 0) : null
+  const endLat = endPlace ? Number(endPlace.latitude ?? endPlace.lat ?? 0) : null
+  const endLon = endPlace ? Number(endPlace.longitude ?? endPlace.lon ?? 0) : null
+
+  if (startLat !== null && startLon !== null && endLat !== null && endLon !== null) {
+    const routeDistMeters = haversineMeters(startLat, startLon, endLat, endLon)
+    const routeDistKm = routeDistMeters / 1000
+
+    const distFromStartKm = haversineMeters(pLat, pLon, startLat, startLon) / 1000
+    const distFromEndKm = haversineMeters(pLat, pLon, endLat, endLon) / 1000
+
+    const maxKm = routeDistKm <= 35 ? Math.max(10, routeDistKm + 10) : routeDistKm + 30
+
+    if (distFromStartKm > maxKm || distFromEndKm > maxKm) {
+      return false
+    }
+
+    const pCity = place.city ? normalizeKey(place.city) : ''
+    const sCity = startPlace.city ? normalizeKey(startPlace.city) : ''
+    const eCity = endPlace.city ? normalizeKey(endPlace.city) : ''
+
+    if (pCity && sCity && eCity && sCity === eCity) {
+      if (!pCity.includes(sCity) && !sCity.includes(pCity)) {
+        return false
+      }
+    }
+  }
+
+  return true
+}
+
 export function orderPlacesAlongRoute(places, startLoc, endLoc) {
   if (!places || places.length <= 1 || !startLoc || !endLoc) return places
 
@@ -2686,6 +2725,7 @@ async function collectCorridorCandidates(input, location) {
   let intermediates = uniqueByName(pool)
     .filter((place) => place && place.name)
     .filter((place) => isValidTouristAttraction(place, input))
+    .filter((place) => isWithinCorridor(place, startPlace, endPlace))
   
   if (startPlace) {
     intermediates = intermediates.filter(p => normalizeKey(p.name) !== normalizeKey(startPlace.name))
