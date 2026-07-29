@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
 import '../domain/models.dart';
+import 'discovery_repository.dart';
 
 class TourRepository {
   TourRepository({SupabaseClient? client}) : _client = client;
@@ -295,9 +296,16 @@ class TourRepository {
           if (p is Map) {
             final userMap = p['users'] is Map ? Map<String, dynamic>.from(p['users'] as Map) : null;
             if (userMap != null) {
+              final fullName = userMap['full_name']?.toString() ?? 'Viajero';
+              final role = userMap['role']?.toString().toLowerCase() ?? '';
+              final isAdmin = userMap['is_admin'] == true ||
+                  role == 'admin' ||
+                  fullName.toLowerCase().contains('administrador');
+              if (isAdmin) continue;
+
               participants.add(ParticipantUser(
                 id: userMap['id']?.toString() ?? '',
-                fullName: userMap['full_name']?.toString() ?? 'Viajero',
+                fullName: fullName,
                 avatarUrl: userMap['avatar_url']?.toString() ?? '',
               ));
             }
@@ -769,16 +777,45 @@ class TourRepository {
     }).toList();
     final gallery = _stringList(
       source['galeria_tour'] ?? json['gallery'] ?? json['gallery_image_urls'],
-    );
+    ).map((item) => _imageUrl(item, 'gallery')).toList();
+
+    final enrichedStops = stops.asMap().entries.map((entry) {
+      final stop = entry.value;
+      String img = stop.imageUrl;
+      final isGeneric = img.isEmpty ||
+          img.contains('images.unsplash.com/photo-1500530855697') ||
+          img.contains('images.unsplash.com/photo-1498307833015') ||
+          img.contains('images.unsplash.com/photo-1519501025264') ||
+          img.contains('images.unsplash.com/photo-1528127269322') ||
+          img.contains('images.unsplash.com/photo-1533105079780') ||
+          img.contains('images.unsplash.com/photo-1512453979798') ||
+          img.contains('images.unsplash.com/photo-1526772662000') ||
+          img.contains('images.unsplash.com/photo-1548013146-72479768bada');
+
+      if (isGeneric) {
+        if (gallery.isNotEmpty && entry.key < gallery.length && gallery[entry.key].isNotEmpty) {
+          img = gallery[entry.key];
+        } else {
+          final curated = DiscoveryRepository.findCuratedImageForPlace(stop.name);
+          if (curated != null && curated.isNotEmpty) {
+            img = curated;
+          } else if (gallery.isNotEmpty) {
+            img = gallery[entry.key % gallery.length];
+          }
+        }
+      }
+      return stop.copyWith(imageUrl: img);
+    }).toList();
+
     final meetingInfo = _locationInfo(source['punto_encuentro'], _emptyRequest);
     final city =
         json['city']?.toString() ??
         meetingInfo.ciudad.ifEmpty(
-          stops.firstOrNull?.locationInfo.ciudad ?? '',
+          enrichedStops.firstOrNull?.locationInfo.ciudad ?? '',
         );
     final country =
         json['country']?.toString() ??
-        meetingInfo.pais.ifEmpty(stops.firstOrNull?.locationInfo.pais ?? '');
+        meetingInfo.pais.ifEmpty(enrichedStops.firstOrNull?.locationInfo.pais ?? '');
     return Tour(
       id:
           json['id']?.toString() ??
@@ -801,9 +838,8 @@ class TourRepository {
             json['cover_image_url'],
         json['title']?.toString() ?? 'tour',
       ),
-      gallery: gallery.isEmpty
-          ? _stringList(json['gallery_image_urls'])
-          : gallery.map((item) => _imageUrl(item, 'gallery')).toList(),
+      gallery: gallery,
+      stops: enrichedStops,
       durationHours: () {
         final parsed = _hoursFromValue(
           source['duracion_estimada'] ??
@@ -850,7 +886,6 @@ class TourRepository {
       mainCategory: source['categoria_principal']?.toString() ?? '',
       budget: _budget(source['presupuesto_estimado_usd']),
       additionalInfo: _additionalInfo(source['informacion_adicional']),
-      stops: stops,
       isAiGenerated: true,
       isPublished: json['is_published'] == true || json['status'] == 'approved',
     );

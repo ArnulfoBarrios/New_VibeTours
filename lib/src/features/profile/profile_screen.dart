@@ -1353,7 +1353,10 @@ class _TourParticipantsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tour = tourWithParticipants.tour;
-    final participants = tourWithParticipants.participants;
+    final participants = tourWithParticipants.participants.where((u) {
+      final name = u.fullName.toLowerCase();
+      return !name.contains('administrador') && !name.contains('admin vibe');
+    }).toList();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

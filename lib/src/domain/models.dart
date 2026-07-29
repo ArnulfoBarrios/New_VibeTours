@@ -157,13 +157,14 @@ class TourStop {
 
   TourStop copyWith({
     String? name,
+    String? imageUrl,
     String? description,
     int? order,
   }) => TourStop(
     id: id,
     name: name ?? this.name,
     location: location,
-    imageUrl: imageUrl,
+    imageUrl: imageUrl ?? this.imageUrl,
     description: description ?? this.description,
     activities: activities,
     tips: tips,

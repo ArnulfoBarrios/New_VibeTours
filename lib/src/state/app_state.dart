@@ -604,7 +604,6 @@ class UserToursState {
 class UserToursController extends AsyncNotifier<UserToursState> {
   static String _manualToursKey(String? userId) => 'vibetours_manual_tours_${userId ?? 'guest'}';
   static String _hiddenDefaultsKey(String? userId) => 'vibetours_hidden_default_tours_${userId ?? 'guest'}';
-  static const _clearAllToursKey = 'vibetours_clear_all_tours_20260610_1530';
 
   @override
   Future<UserToursState> build() async {
@@ -613,14 +612,32 @@ class UserToursController extends AsyncNotifier<UserToursState> {
     final client = ref.read(supabaseClientProvider);
     final userId = user?.id;
 
-    if (prefs.getBool(_clearAllToursKey) != true) {
-      await prefs.remove('vibetours_manual_tours');
-      await prefs.remove('vibetours_hidden_default_tours');
-      await prefs.setBool(_clearAllToursKey, true);
-      return UserToursState.empty;
+    final hidden = prefs.getStringList(_hiddenDefaultsKey(userId)) ?? const <String>[];
+
+    // 1. Cargar tours guardados localmente
+    final localTours = <Tour>[];
+    final keysToTry = [_manualToursKey(userId), 'vibetours_manual_tours'];
+    for (final key in keysToTry) {
+      final raw = prefs.getString(key);
+      if (raw != null && raw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            for (final item in decoded) {
+              if (item is Map) {
+                final tour = _tourFromJson(Map<String, dynamic>.from(item));
+                if (!localTours.any((t) => t.id == tour.id)) {
+                  localTours.add(tour);
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
     }
 
-    final hidden = prefs.getStringList(_hiddenDefaultsKey(userId)) ?? const <String>[];
+    // 2. Cargar tours desde Supabase
+    final dbTours = <Tour>[];
     if (client != null && user != null) {
       try {
         final rows = await client
@@ -629,46 +646,30 @@ class UserToursController extends AsyncNotifier<UserToursState> {
             .or('owner_id.eq.${user.id},created_by.eq.${user.id}')
             .order('created_at', ascending: false);
 
-        final dbTours = [
-          for (final row in rows)
-            ref
-                .read(tourRepositoryProvider)
-                .parseDatabaseJson(Map<String, dynamic>.from(row)),
-        ];
-        return UserToursState(
-          manualTours: dbTours,
-          hiddenDefaultTourIds: hidden.toSet(),
-        );
+        for (final row in (rows as List)) {
+          try {
+            dbTours.add(
+              ref
+                  .read(tourRepositoryProvider)
+                  .parseDatabaseJson(Map<String, dynamic>.from(row as Map)),
+            );
+          } catch (_) {}
+        }
       } catch (e, stack) {
         debugPrint('Error loading user tours from Supabase: $e \n $stack');
-        final errStr = e.toString();
-        if (errStr.contains('SocketException') || 
-            errStr.contains('Failed host lookup') || 
-            errStr.contains('HttpException') || 
-            errStr.contains('NetworkImage') ||
-            errStr.contains('connection')) {
-          // Fallback to local only if network/connection fails
-        } else {
-          rethrow;
-        }
       }
     }
 
-    final manualRaw = prefs.getString(_manualToursKey(userId));
-    final manualTours = <Tour>[];
-    if (manualRaw != null && manualRaw.isNotEmpty) {
-      final decoded = jsonDecode(manualRaw);
-      if (decoded is List) {
-        for (final item in decoded) {
-          if (item is Map) {
-            manualTours.add(_tourFromJson(Map<String, dynamic>.from(item)));
-          }
-        }
+    // 3. Fusionar evitando duplicados por ID
+    final combined = <Tour>[...dbTours];
+    for (final lt in localTours) {
+      if (!combined.any((t) => t.id == lt.id)) {
+        combined.add(lt);
       }
     }
 
     return UserToursState(
-      manualTours: manualTours,
+      manualTours: combined,
       hiddenDefaultTourIds: hidden.toSet(),
     );
   }

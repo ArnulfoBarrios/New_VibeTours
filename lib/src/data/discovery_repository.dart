@@ -107,7 +107,77 @@ class DiscoveryRepository {
       longitude: -74.7942,
       imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/9b/Barranquilla_Zool%C3%B3gico_Flamencos.jpg',
     ),
+    'aeropuerto': _CorrectedPlace(
+      latitude: 11.1196,
+      longitude: -74.2306,
+      imageUrl: 'https://images.unsplash.com/photo-1542296332-2e4473faf563?auto=format&fit=crop&w=800&q=80',
+    ),
+    'rodadero': _CorrectedPlace(
+      latitude: 11.2056,
+      longitude: -74.2253,
+      imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+    ),
+    'bahía': _CorrectedPlace(
+      latitude: 11.2447,
+      longitude: -74.2155,
+      imageUrl: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&w=800&q=80',
+    ),
+    'bahia': _CorrectedPlace(
+      latitude: 11.2447,
+      longitude: -74.2155,
+      imageUrl: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&w=800&q=80',
+    ),
+    'basílica': _CorrectedPlace(
+      latitude: 11.2436,
+      longitude: -74.2117,
+      imageUrl: 'https://images.unsplash.com/photo-1548625361-18568c07802b?auto=format&fit=crop&w=800&q=80',
+    ),
+    'basilica': _CorrectedPlace(
+      latitude: 11.2436,
+      longitude: -74.2117,
+      imageUrl: 'https://images.unsplash.com/photo-1548625361-18568c07802b?auto=format&fit=crop&w=800&q=80',
+    ),
+    'sierra nevada': _CorrectedPlace(
+      latitude: 10.8753,
+      longitude: -73.6908,
+      imageUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
+    ),
+    'tayrona': _CorrectedPlace(
+      latitude: 11.3060,
+      longitude: -74.0539,
+      imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+    ),
+    'taganga': _CorrectedPlace(
+      latitude: 11.2672,
+      longitude: -74.1906,
+      imageUrl: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=800&q=80',
+    ),
+    'ziruma': _CorrectedPlace(
+      latitude: 11.2225,
+      longitude: -74.2150,
+      imageUrl: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80',
+    ),
+    'playa blanca': _CorrectedPlace(
+      latitude: 11.2186,
+      longitude: -74.2341,
+      imageUrl: 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=800&q=80',
+    ),
+    'novios': _CorrectedPlace(
+      latitude: 11.2425,
+      longitude: -74.2106,
+      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
+    ),
   };
+
+  static String? findCuratedImageForPlace(String name) {
+    final lower = name.toLowerCase();
+    for (final entry in _correctedPlaces.entries) {
+      if (lower.contains(entry.key)) {
+        return entry.value.imageUrl;
+      }
+    }
+    return null;
+  }
 
   _ParsedLocation _correctLocation(String name, double defaultLat, double defaultLon, String defaultImg) {
     final lower = name.toLowerCase();
