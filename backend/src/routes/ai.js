@@ -2140,15 +2140,19 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
       .find((value) => value.length > 0) ?? `${input.destination} parada ${index + 1}`
   const matchedPlace = findCandidatePlace(sourceName, candidatePlaces, anchorPlace)
   const fallbackPlace = matchedPlace ?? anchorPlace ?? null
+  const startPlace = candidatePlaces[0] ?? null
+  const endPlace = candidatePlaces[candidatePlaces.length - 1] ?? null
   const coordinates = await resolveStopCoordinates({
     source,
     input,
     name: sourceName,
     fallbackPlace,
+    startPlace,
+    endPlace,
   })
-  const resolvedName = fallbackPlace?.name ?? sourceName
+  const resolvedName = (coordinates.wasFallback || !matchedPlace) ? (fallbackPlace?.name ?? sourceName) : sourceName
   let description = source.descripcion ?? source.description
-  if (!description || description.trim().length === 0) {
+  if (!description || description.trim().length === 0 || coordinates.wasFallback) {
     const category = fallbackPlace?.category || 'lugar'
     const cleanName = resolvedName.replace(/_/g, ' ')
     if (category === 'nature') {
@@ -2221,6 +2225,52 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     suggestedMinutes: minutesFromLabel(publicStop.duracion_estimada),
   }
   return { publicStop, routeStop }
+}
+
+async function resolveStopCoordinates({ source, input, name, fallbackPlace, startPlace = null, endPlace = null }) {
+  const sourceLatitude = numberValue(source.latitude ?? source.ubicacion?.latitud, NaN)
+  const sourceLongitude = numberValue(source.longitude ?? source.ubicacion?.longitud, NaN)
+
+  const isCorridor = Boolean(startPlace && endPlace)
+
+  if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
+    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude }
+    if (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace)) {
+      return candidateCoord
+    }
+    console.warn('[resolveStopCoordinates] Source coordinates rejected by geofence:', { name, candidateCoord })
+  }
+
+  if (fallbackPlace && hasUsableCoordinates(fallbackPlace.latitude, fallbackPlace.longitude)) {
+    const geocoded = await geocodePlace(`${name} ${input.city} ${input.country}`.trim(), input.latitude, input.longitude)
+    if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
+      if (!isCorridor || isWithinCorridor(geocoded, startPlace, endPlace)) {
+        return { latitude: geocoded.latitude, longitude: geocoded.longitude }
+      }
+      console.warn('[resolveStopCoordinates] Geocoded name rejected by geofence, using fallbackPlace:', { name, geocoded, fallbackName: fallbackPlace.name })
+    }
+    return {
+      latitude: fallbackPlace.latitude,
+      longitude: fallbackPlace.longitude,
+      wasFallback: true
+    }
+  }
+
+  const geocoded = await geocodePlace(`${name} ${input.city} ${input.country}`.trim(), input.latitude, input.longitude)
+  if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
+    if (!isCorridor || isWithinCorridor(geocoded, startPlace, endPlace)) {
+      return {
+        latitude: geocoded.latitude,
+        longitude: geocoded.longitude,
+      }
+    }
+  }
+
+  return {
+    latitude: fallbackPlace?.latitude ?? (hasUsableCoordinates(sourceLatitude, sourceLongitude) ? sourceLatitude : 0),
+    longitude: fallbackPlace?.longitude ?? (hasUsableCoordinates(sourceLatitude, sourceLongitude) ? sourceLongitude : 0),
+    wasFallback: true
+  }
 }
 
 function normalizeLocationInfo(value, firstStop, input) {
@@ -3049,36 +3099,7 @@ function findCandidatePlace(name, candidatePlaces, anchorPlace) {
   return anchorPlace
 }
 
-async function resolveStopCoordinates({ source, input, name, fallbackPlace }) {
-  const sourceLatitude = numberValue(source.latitude ?? source.ubicacion?.latitud, NaN)
-  const sourceLongitude = numberValue(source.longitude ?? source.ubicacion?.longitud, NaN)
-  if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
-    return {
-      latitude: sourceLatitude,
-      longitude: sourceLongitude,
-    }
-  }
 
-  if (hasUsableCoordinates(fallbackPlace?.latitude, fallbackPlace?.longitude)) {
-    return {
-      latitude: fallbackPlace.latitude,
-      longitude: fallbackPlace.longitude,
-    }
-  }
-
-  const geocoded = await geocodePlace(`${name} ${input.city} ${input.country}`.trim(), input.latitude, input.longitude)
-  if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
-    return {
-      latitude: geocoded.latitude,
-      longitude: geocoded.longitude,
-    }
-  }
-
-  return {
-    latitude: fallbackPlace?.latitude ?? sourceLatitude ?? 0,
-    longitude: fallbackPlace?.longitude ?? sourceLongitude ?? 0,
-  }
-}
 
 function hasUsableCoordinates(latitude, longitude) {
   return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
