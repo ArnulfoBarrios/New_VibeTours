@@ -12,7 +12,10 @@ class AppConfig {
   static const _definedSupabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
   );
-  static const _definedApiBaseUrl = String.fromEnvironment('API_BASE_URL');
+  static const _definedApiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://new-vibe-tours.vercel.app/api',
+  );
   static const _localNetworkApiBaseUrl = String.fromEnvironment(
     'LOCAL_NETWORK_API_BASE_URL',
     defaultValue: 'http://192.168.1.221:3000/api',
@@ -84,6 +87,7 @@ class AppConfig {
     final candidates = <String>[
       if (_definedApiBaseUrl.isNotEmpty) _definedApiBaseUrl,
       _asset('API_BASE_URL'),
+      'https://new-vibe-tours.vercel.app/api',
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         _localNetworkApiBaseUrl,
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)

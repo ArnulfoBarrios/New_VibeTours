@@ -46,7 +46,7 @@ class TourDetailScreen extends ConsumerWidget {
               ? selected!
               : availableTours.firstWhere(
                   (item) => item.id == tourId,
-                  orElse: () => availableTours.first,
+                  orElse: () => selected ?? availableTours.first,
                 );
           final favorites = ref.watch(favoriteTourIdsProvider);
           final isFavorite = favorites.contains(tour.id);
@@ -509,7 +509,7 @@ class TourDetailScreen extends ConsumerWidget {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Enviado a revisión para el catálogo público.'),
+                            content: Text('El tour se ha publicado exitosamente.'),
                             backgroundColor: AppTheme.primary,
                           ),
                         );
