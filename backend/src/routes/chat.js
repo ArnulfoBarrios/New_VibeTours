@@ -67,9 +67,10 @@ chatRouter.post('/message', async (req, res, next) => {
         if (extracted) {
           // Merge datos
           Object.assign(state.collectedData, extracted)
-          if (state.collectedData.travelers === 'Familia' && state.collectedData.hasMinors === null) {
-            // Necesitamos saber si hay menores
-          }
+        }
+        if (location?.latitude && location?.longitude) {
+          state.collectedData.latitude = location.latitude
+          state.collectedData.longitude = location.longitude
         }
 
         // Si no hay ciudad, pero tenemos ubicación del dispositivo

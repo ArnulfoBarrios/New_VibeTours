@@ -86,7 +86,7 @@ Determina primero si el mensaje del usuario no tiene sentido, es una secuencia a
 
 Si "is_unrelated" es false:
 - Si menciona claramente a dónde quiere ir (una o varias ciudades, o una ruta como "Barranquilla a Santa Marta"), PON OBLIGATORIAMENTE ese destino/ruta en "explicit_destination" y deja "suggestions" VACÍO.
-- Si el usuario menciona una ruta dentro de una ciudad con un punto de inicio específico (ej. "empieza en el Malecón", "desde el parque X") y/o un punto final específico (ej. "hasta el Estadio", "termine en el Museo Y"), extrae "origin_place" y "destination_place".
+- Si el usuario menciona una ruta dentro de una ciudad con un punto de inicio específico (ej. "empieza en el Malecón", "desde el parque X") y/o un punto final específico (ej. "hasta el Estadio", "termine en el Museo Y"), extrae "origin_place" y "destination_place". Si el usuario indica que desea empezar desde su ubicación actual (ej. "desde mi ubicación", "donde estoy", "desde mi posición", "empieza aquí"), establece "origin_place" obligatoriamente como "user_current_location" y "is_user_location_origin" en true.
 - Si el usuario menciona varias ciudades para recorrer (ej. "empieze en Barranquilla y termine en Santa Marta"), extrae un array con todas las ciudades en "cities" (ej: ["Barranquilla", "Santa Marta"]) y marca "is_multi_city" como true. Si es una sola ciudad, "is_multi_city" es false y "cities" contiene esa ciudad.
 - ÚNICAMENTE si el usuario NO menciona ninguna ciudad ni lugar a dónde ir, pon "explicit_destination" vacío y recomienda 3 destinos increíbles (ciudades) adaptados a sus gustos en "suggestions".
 - Extrae también la duración (ej: "viaje de 3 días" = 72, "tour de 4 horas" = 4) en "duration_hours" (number o null). Nota: Para tours entre múltiples ciudades (is_multi_city = true), si no especifica duración, asigna al menos 48 horas. Para tours de una sola ciudad con origen y fin especificados, si no se indica duración, asigna 8 horas.
@@ -102,6 +102,7 @@ Devuelve ÚNICAMENTE JSON válido con este esquema:
   "country": string,
   "origin_place": string o null,
   "destination_place": string o null,
+  "is_user_location_origin": boolean,
   "cities": [string],
   "is_multi_city": boolean,
   "duration_hours": number o null,
@@ -360,7 +361,7 @@ export async function extractChatInformation(userMessage, currentData) {
 
   const prompt = `Analiza el mensaje del usuario y extrae la información turística.
 Devuelve ÚNICAMENTE un objeto JSON válido con los campos que puedas identificar.
-Campos posibles: city, budget (Económico, Moderado, Lujo), travelers (Solo, Pareja, Amigos, Familia), hasMinors (boolean), duration (1 a 7 días), pace (Relajado, Equilibrado, Acelerado), schedule (Mañana, Tarde, Noche, Dinámico), transportation (Caminando, Auto rentado, Taxi, Transporte público), interests (array de strings), wantsHotel (boolean), originPlace (string o null, ej: punto o lugar específico de inicio de la ruta), destinationPlace (string o null, ej: punto o lugar específico final de la ruta).
+Campos posibles: city, budget (Económico, Moderado, Lujo), travelers (Solo, Pareja, Amigos, Familia), hasMinors (boolean), duration (1 a 7 días), pace (Relajado, Equilibrado, Acelerado), schedule (Mañana, Tarde, Noche, Dinámico), transportation (Caminando, Auto rentado, Taxi, Transporte público), interests (array de strings), wantsHotel (boolean), originPlace (string o null, ej: punto o lugar específico de inicio de la ruta, o "user_current_location" si pide empezar desde su ubicación), destinationPlace (string o null, ej: punto o lugar específico final de la ruta), isUserLocationOrigin (boolean, true si pide iniciar desde su ubicación actual/donde está).
 Mensaje: "${userMessage}"`
 
   try {

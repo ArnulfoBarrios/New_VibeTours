@@ -28,6 +28,7 @@ const requestSchema = z.object({
   city: z.string().optional().default(''),
   originPlace: z.string().optional(),
   destinationPlace: z.string().optional(),
+  isUserLocationOrigin: z.boolean().optional(),
   cities: z.array(z.string()).optional().default([]),
   isMultiCity: z.boolean().optional().default(false),
   durationHours: z.number().min(1).max(120).optional(),
@@ -162,6 +163,10 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         }
         if (extracted.origin_place && !input.originPlace) {
           input.originPlace = extracted.origin_place
+        }
+        if (extracted.is_user_location_origin) {
+          input.isUserLocationOrigin = true
+          if (!input.originPlace) input.originPlace = 'user_current_location'
         }
         if (extracted.destination_place && !input.destinationPlace) {
           input.destinationPlace = extracted.destination_place
@@ -2554,7 +2559,26 @@ async function collectCorridorCandidates(input, location) {
   let startPlace = null
   let endPlace = null
   
-  if (input.originPlace) {
+  if (input.originPlace === 'user_current_location' || input.isUserLocationOrigin) {
+    let userLat = Number(input.latitude ?? location?.latitude ?? 0)
+    let userLon = Number(input.longitude ?? location?.longitude ?? 0)
+    if (userLat && userLon) {
+      const revGeo = await reverseGeocodeLocation(userLat, userLon).catch(() => null)
+      const userCity = revGeo?.city || city
+      const userCountry = revGeo?.country || country
+      const placeName = revGeo?.name ? `Tu ubicación actual (${revGeo.name})` : (userCity ? `Tu ubicación actual (${userCity})` : 'Tu ubicación actual')
+      startPlace = {
+        name: placeName,
+        latitude: userLat,
+        longitude: userLon,
+        category: 'attraction',
+        type: 'start_point',
+        city: userCity,
+        country: userCountry,
+        tags: { start_point: 'true', user_current_location: 'true' }
+      }
+    }
+  } else if (input.originPlace) {
     const originGeo = await geocodePlace(`${input.originPlace} ${city} ${country}`)
     if (originGeo) {
       startPlace = {
