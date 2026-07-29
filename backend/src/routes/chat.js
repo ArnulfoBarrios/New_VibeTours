@@ -71,15 +71,13 @@ chatRouter.post('/message', async (req, res, next) => {
         if (location?.latitude && location?.longitude) {
           state.collectedData.latitude = location.latitude
           state.collectedData.longitude = location.longitude
-        }
-
-        // Si no hay ciudad, pero tenemos ubicación del dispositivo
-        if (!state.collectedData.city && location?.latitude && location?.longitude) {
-          state.currentState = 'SUGGEST_CITY'
-          responseText = "He recibido tu ubicación. Buscando destinos cercanos recomendados..."
-          // Aquí podríamos generar 3 ciudades cercanas usando Photon o Nominatim (Reverse Geocoding)
-          // y pasarlas a OpenAI para que sugiera.
-          // Para simplificar, saltamos a pedirle a OpenAI que genere sugerencias.
+          if (!state.collectedData.city) {
+            const revGeo = await reverseGeocodeLocation(location.latitude, location.longitude).catch(() => null)
+            if (revGeo?.city) {
+              state.collectedData.city = revGeo.city
+              if (revGeo.country) state.collectedData.country = revGeo.country
+            }
+          }
         }
 
         // Verificar campos faltantes

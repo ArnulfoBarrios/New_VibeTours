@@ -52,7 +52,10 @@ export async function reverseGeocodeLocation(lat, lon) {
     if (response.ok) {
       const data = await response.json()
       if (data && data.address) {
-        const city = data.address.city || data.address.town || data.address.village || data.address.municipality || data.address.county || data.address.state || ''
+        let city = data.address.city || data.address.town || data.address.village || data.address.municipality || data.address.county || data.address.state || ''
+        if (city.toLowerCase().includes('perímetro urbano')) {
+          city = city.replace(/perímetro urbano\s*/i, '').trim()
+        }
         const country = data.address.country || ''
         const res = {
           city,

@@ -138,8 +138,10 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     const input = requestSchema.parse(req.body)
     
     let userCountry = null;
+    let revLocation = null;
     if (input.latitude && input.longitude) {
-      userCountry = await reverseGeocodeUserCountry(input.latitude, input.longitude)
+      revLocation = await reverseGeocodeLocation(input.latitude, input.longitude).catch(() => null)
+      userCountry = revLocation?.country || await reverseGeocodeUserCountry(input.latitude, input.longitude)
     }
     
     let extracted = null
@@ -155,11 +157,11 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         if (extracted.explicit_destination && !input.destination) {
           input.destination = extracted.explicit_destination || extracted.city || extracted.country || ''
         }
-        if (!input.city && extracted.city) {
-          input.city = extracted.city
+        if (!input.city && (extracted.city || revLocation?.city)) {
+          input.city = extracted.city || revLocation?.city || ''
         }
-        if (!input.country && extracted.country) {
-          input.country = extracted.country
+        if (!input.country && (extracted.country || revLocation?.country)) {
+          input.country = extracted.country || revLocation?.country || ''
         }
         if (extracted.origin_place && !input.originPlace) {
           input.originPlace = extracted.origin_place
@@ -170,6 +172,12 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         }
         if (extracted.destination_place && !input.destinationPlace) {
           input.destinationPlace = extracted.destination_place
+        }
+        if (!input.destination && (input.destinationPlace || extracted?.destination_place || extracted?.explicit_destination)) {
+          input.destination = input.destinationPlace || extracted?.destination_place || extracted?.explicit_destination || input.city || revLocation?.city || ''
+        }
+        if (!input.destination && input.isUserLocationOrigin && (revLocation?.city || input.city)) {
+          input.destination = revLocation?.city || input.city
         }
         if (extracted.cities && extracted.cities.length > 0 && (!input.cities || input.cities.length === 0)) {
           input.cities = extracted.cities
