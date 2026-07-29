@@ -132,33 +132,8 @@ chatRouter.post('/message', async (req, res, next) => {
           if (wiki) place.history = wiki.extract
         }
 
-        state.currentState = 'HOTEL_SELECTION'
-        responseText = "He encontrado excelentes lugares para tu tour. ¿Te gustaría que te recomiende algún hotel basado en tu presupuesto, o ya tienes alojamiento?"
-        break
-      }
-
-      case 'HOTEL_SELECTION': {
-        // Buscar hoteles con OpenStreetMap (Overpass API)
-        const extracted = await extractChatInformation(message, state.collectedData)
-        if (extracted?.wantsHotel !== false) {
-          // Necesitamos las coordenadas de la ciudad
-          const geocode = await geocodePlace(state.collectedData.city)
-          if (geocode) {
-            const hotels = await overpassHotels(geocode.latitude, geocode.longitude, state.collectedData.budget, 10000)
-            state.hotels = hotels.slice(0, 3)
-            if (hotels.length > 0) {
-              responseText = `He encontrado estos hoteles utilizando la base de datos libre: ${hotels.slice(0, 3).map(h => h.name).join(', ')}. ¿Te parece bien alguno, o continuamos con el tour?`
-            } else {
-              responseText = "No encontré hoteles específicos en mi base de datos libre, pero puedes reservar en tu plataforma favorita. ¿Continuamos con la generación de la ruta?"
-            }
-          } else {
-            responseText = "No pude ubicar la ciudad para buscar hoteles. ¿Continuamos con el tour?"
-          }
-          state.currentState = 'GENERATE_ROUTE' // Asumimos continuar
-        } else {
-          state.currentState = 'GENERATE_ROUTE'
-          responseText = "Entendido. Procederé a generar la ruta óptima del tour."
-        }
+        state.currentState = 'GENERATE_ROUTE'
+        responseText = "He encontrado excelentes lugares para tu tour. Procediendo a generar la ruta óptima..."
         break
       }
 

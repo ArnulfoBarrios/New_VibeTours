@@ -2456,9 +2456,15 @@ export function isWithinCorridor(place, startPlace, endPlace) {
     const distFromStartKm = haversineMeters(pLat, pLon, startLat, startLon) / 1000
     const distFromEndKm = haversineMeters(pLat, pLon, endLat, endLon) / 1000
 
-    const maxKm = routeDistKm <= 35 ? Math.max(10, routeDistKm + 10) : routeDistKm + 30
+    // Additional detour distance added by visiting P: (distA_P + distP_B) - distA_B
+    const detourKm = (distFromStartKm + distFromEndKm) - routeDistKm
 
-    if (distFromStartKm > maxKm || distFromEndKm > maxKm) {
+    // Proportional detour limit: allow reasonable minor detours, reject drastic detours across town
+    const maxDetourKm = routeDistKm <= 35 
+      ? Math.min(2.5, Math.max(1.0, routeDistKm * 0.35))
+      : Math.min(25.0, routeDistKm * 0.35)
+
+    if (detourKm > maxDetourKm) {
       return false
     }
 
