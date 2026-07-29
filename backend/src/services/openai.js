@@ -360,7 +360,7 @@ export async function extractChatInformation(userMessage, currentData) {
 
   const prompt = `Analiza el mensaje del usuario y extrae la información turística.
 Devuelve ÚNICAMENTE un objeto JSON válido con los campos que puedas identificar.
-Campos posibles: city, budget (Económico, Moderado, Lujo), travelers (Solo, Pareja, Amigos, Familia), hasMinors (boolean), duration (1 a 7 días), pace (Relajado, Equilibrado, Acelerado), schedule (Mañana, Tarde, Noche, Dinámico), transportation (Caminando, Auto rentado, Taxi, Transporte público), interests (array de strings), wantsHotel (boolean).
+Campos posibles: city, budget (Económico, Moderado, Lujo), travelers (Solo, Pareja, Amigos, Familia), hasMinors (boolean), duration (1 a 7 días), pace (Relajado, Equilibrado, Acelerado), schedule (Mañana, Tarde, Noche, Dinámico), transportation (Caminando, Auto rentado, Taxi, Transporte público), interests (array de strings), wantsHotel (boolean), originPlace (string o null, ej: punto o lugar específico de inicio de la ruta), destinationPlace (string o null, ej: punto o lugar específico final de la ruta).
 Mensaje: "${userMessage}"`
 
   try {

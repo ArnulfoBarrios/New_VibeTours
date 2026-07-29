@@ -1057,41 +1057,73 @@ function buildTourPlanner(input, location, places) {
   const normalized = uniqueByName(
     places.map((place, index) => normalizeCandidate(place, index, input, origin)),
   ).filter((place) => place.name)
-  const scored = normalized
-    .map((place) => ({
-      ...place,
-      score: scorePlace(place, input),
-    }))
-    .sort((a, b) => b.score - a.score)
+
+  const isCorridorRoute = Boolean(input.originPlace || input.destinationPlace)
+  let selectedPlaces = []
   const stopTarget = stopCountForDuration(input.durationHours)
-  let selectedPlaces = selectPlaces(scored, stopTarget, input)
-  if (selectedPlaces.length < Math.min(3, scored.length) && scored.length >= 3) {
-    const expanded = scored.filter((place) => !selectedPlaces.some((picked) => normalizeKey(picked.name) === normalizeKey(place.name)))
-    selectedPlaces.push(...expanded.slice(0, Math.max(0, Math.min(stopTarget, 3) - selectedPlaces.length)))
-  }
 
-  // Ensure inter-city / multi-city tours are ordered monotonically along the travel direction (City A -> En Route -> City B)
-  const isMultiCityRoute = input.isMultiCity || (Array.isArray(input.cities) && input.cities.length > 1) || (input.originPlace && input.destinationPlace)
-  if (isMultiCityRoute && selectedPlaces.length > 1) {
-    const firstPlace = selectedPlaces[0]
-    const lastPlace = selectedPlaces[selectedPlaces.length - 1]
-    let startLoc = location ? { latitude: location.latitude, longitude: location.longitude } : { latitude: firstPlace.latitude, longitude: firstPlace.longitude }
-    let endLoc = { latitude: lastPlace.latitude, longitude: lastPlace.longitude }
+  if (isCorridorRoute) {
+    const startPlaceCandidate = normalized.find(p => p.rawTags?.start_point === 'true' || p.type === 'start_point' || (input.originPlace && normalizeKey(p.name) === normalizeKey(input.originPlace)))
+    const endPlaceCandidate = normalized.find(p => p.rawTags?.end_point === 'true' || p.type === 'end_point' || (input.destinationPlace && normalizeKey(p.name) === normalizeKey(input.destinationPlace)))
 
-    if (Array.isArray(input.cities) && input.cities.length > 1) {
-      const startCity = input.cities[0]
-      const endCity = input.cities[input.cities.length - 1]
-      const cityAPlaces = selectedPlaces.filter(p => p.city && normalizeKey(p.city).includes(normalizeKey(startCity)))
-      const cityBPlaces = selectedPlaces.filter(p => p.city && normalizeKey(p.city).includes(normalizeKey(endCity)))
-      if (cityAPlaces.length > 0) {
-        startLoc = { latitude: cityAPlaces[0].latitude, longitude: cityAPlaces[0].longitude }
-      }
-      if (cityBPlaces.length > 0) {
-        endLoc = { latitude: cityBPlaces[cityBPlaces.length - 1].latitude, longitude: cityBPlaces[cityBPlaces.length - 1].longitude }
-      }
+    const intermediates = normalized.filter(p => 
+      (!startPlaceCandidate || normalizeKey(p.name) !== normalizeKey(startPlaceCandidate.name)) &&
+      (!endPlaceCandidate || normalizeKey(p.name) !== normalizeKey(endPlaceCandidate.name))
+    )
+
+    const scoredIntermediates = intermediates
+      .map(p => ({ ...p, score: scorePlace(p, input) }))
+      .sort((a, b) => b.score - a.score)
+
+    const reservedCount = (startPlaceCandidate ? 1 : 0) + (endPlaceCandidate ? 1 : 0)
+    const neededIntermediates = Math.max(1, Math.min(scoredIntermediates.length, stopTarget - reservedCount))
+    let pickedIntermediates = scoredIntermediates.slice(0, neededIntermediates)
+
+    if (startPlaceCandidate && endPlaceCandidate) {
+      pickedIntermediates = orderPlacesAlongRoute(pickedIntermediates, startPlaceCandidate, endPlaceCandidate)
+      selectedPlaces = [startPlaceCandidate, ...pickedIntermediates, endPlaceCandidate]
+    } else if (startPlaceCandidate) {
+      selectedPlaces = [startPlaceCandidate, ...pickedIntermediates]
+    } else if (endPlaceCandidate) {
+      selectedPlaces = [...pickedIntermediates, endPlaceCandidate]
+    } else {
+      selectedPlaces = pickedIntermediates
+    }
+  } else {
+    const scored = normalized
+      .map((place) => ({
+        ...place,
+        score: scorePlace(place, input),
+      }))
+      .sort((a, b) => b.score - a.score)
+    selectedPlaces = selectPlaces(scored, stopTarget, input)
+    if (selectedPlaces.length < Math.min(3, scored.length) && scored.length >= 3) {
+      const expanded = scored.filter((place) => !selectedPlaces.some((picked) => normalizeKey(picked.name) === normalizeKey(place.name)))
+      selectedPlaces.push(...expanded.slice(0, Math.max(0, Math.min(stopTarget, 3) - selectedPlaces.length)))
     }
 
-    selectedPlaces = orderPlacesAlongRoute(selectedPlaces, startLoc, endLoc)
+    const isMultiCityRoute = input.isMultiCity || (Array.isArray(input.cities) && input.cities.length > 1)
+    if (isMultiCityRoute && selectedPlaces.length > 1) {
+      const firstPlace = selectedPlaces[0]
+      const lastPlace = selectedPlaces[selectedPlaces.length - 1]
+      let startLoc = location ? { latitude: location.latitude, longitude: location.longitude } : { latitude: firstPlace.latitude, longitude: firstPlace.longitude }
+      let endLoc = { latitude: lastPlace.latitude, longitude: lastPlace.longitude }
+
+      if (Array.isArray(input.cities) && input.cities.length > 1) {
+        const startCity = input.cities[0]
+        const endCity = input.cities[input.cities.length - 1]
+        const cityAPlaces = selectedPlaces.filter(p => p.city && normalizeKey(p.city).includes(normalizeKey(startCity)))
+        const cityBPlaces = selectedPlaces.filter(p => p.city && normalizeKey(p.city).includes(normalizeKey(endCity)))
+        if (cityAPlaces.length > 0) {
+          startLoc = { latitude: cityAPlaces[0].latitude, longitude: cityAPlaces[0].longitude }
+        }
+        if (cityBPlaces.length > 0) {
+          endLoc = { latitude: cityBPlaces[cityBPlaces.length - 1].latitude, longitude: cityBPlaces[cityBPlaces.length - 1].longitude }
+        }
+      }
+
+      selectedPlaces = orderPlacesAlongRoute(selectedPlaces, startLoc, endLoc)
+    }
   }
 
   const distanceKm = estimateRouteDistance(selectedPlaces, origin)
@@ -2532,7 +2564,8 @@ async function collectCorridorCandidates(input, location) {
         category: 'attraction',
         type: 'start_point',
         city,
-        country
+        country,
+        tags: { start_point: 'true' }
       }
     }
   }
@@ -2547,16 +2580,77 @@ async function collectCorridorCandidates(input, location) {
         category: 'attraction',
         type: 'end_point',
         city,
-        country
+        country,
+        tags: { end_point: 'true' }
       }
     }
   }
 
-  const query = `${input.destination} ${city} ${country}`.trim()
-  const photonPlaces = await photonSearch(query, 25)
+  const pool = []
+
+  // 1. Fetch POIs at spatial midpoints along the route corridor between startPlace and endPlace
+  if (startPlace && endPlace) {
+    const latA = startPlace.latitude
+    const lonA = startPlace.longitude
+    const latB = endPlace.latitude
+    const lonB = endPlace.longitude
+
+    const steps = [0.25, 0.50, 0.75]
+    for (const ratio of steps) {
+      const midLat = latA + (latB - latA) * ratio
+      const midLon = lonA + (lonB - lonA) * ratio
+      try {
+        const attractions = await overpassAttractions(midLat, midLon, 6000)
+        pool.push(...attractions)
+        const foodSpots = await overpassNearbyFood(midLat, midLon, 4000)
+        pool.push(...foodSpots)
+      } catch (err) {
+        console.warn('[corridor] Midpoint fetch error:', err.message)
+      }
+    }
+  }
+
+  // 2. Also search primary location and general city search
+  const query = `${input.destination || ''} ${city} ${country}`.trim()
+  const photonPlaces = await photonSearch(query, 30)
   const overpassPlaces = location ? await overpassAttractions(location.latitude, location.longitude, 10000) : []
-  
-  const pool = [...overpassPlaces, ...photonPlaces]
+  pool.push(...overpassPlaces, ...photonPlaces)
+
+  // 3. Fetch iconic city landmarks if pool is small
+  const iconicLandmarks = await fetchCityIconicLandmarks({
+    destination: input.destination || city,
+    city,
+    country,
+    type: input.type,
+    interests: input.touristInterests,
+    prompt: input.prompt
+  })
+  if (Array.isArray(iconicLandmarks) && iconicLandmarks.length > 0) {
+    const geocodedSettled = await Promise.allSettled(
+      iconicLandmarks.map(async (item) => {
+        const searchQuery = `${item.name} ${city} ${country}`.trim()
+        const geo = await geocodePlace(searchQuery)
+        if (geo && (geo.latitude || geo.longitude)) {
+          return {
+            name: item.name,
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            type: item.type || 'tourism',
+            category: item.category || 'historic',
+            city,
+            country,
+            address: geo.name || `${city}, ${item.name}`,
+            description: item.description || '',
+            tags: { iconic_landmark: 'true' }
+          }
+        }
+        return null
+      })
+    )
+    const geocodedIconics = geocodedSettled.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean)
+    pool.push(...geocodedIconics)
+  }
+
   let intermediates = uniqueByName(pool)
     .filter((place) => place && place.name)
     .filter((place) => isValidTouristAttraction(place, input))
@@ -2570,7 +2664,7 @@ async function collectCorridorCandidates(input, location) {
 
   const selected = []
   if (startPlace) selected.push(startPlace)
-  selected.push(...intermediates.slice(0, 6))
+  selected.push(...intermediates)
   if (endPlace) selected.push(endPlace)
 
   return selected
