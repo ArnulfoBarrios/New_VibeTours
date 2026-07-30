@@ -13,6 +13,8 @@ import '../../core/design/vibe_logo.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import 'admin_events_tab.dart';
+import 'admin_metrics_provider.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key});
@@ -31,23 +33,16 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   List<_AdminTicket> _tickets = const [];
   List<Tour> _pendingTours = const [];
   _AdminTicket? _selectedTicket;
-  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     Future.microtask(_loadTickets);
     Future.microtask(_loadTours);
-    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) {
-        _refreshAdminTours();
-      }
-    });
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
     _response.dispose();
     _search.dispose();
     super.dispose();
@@ -122,6 +117,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                     onPostpone: () => setState(() => _selectedTicket = null),
                     onRefresh: _loadTickets,
                   ),
+                  const AdminEventsTab(),
                   const _AnalyticsHeatmapTab(),
                   const _AdminSettingsTab(),
                 ],
@@ -430,7 +426,7 @@ class _AdminTopBar extends StatelessWidget {
 // Dashboard tab
 // ---------------------------------------------------------------------------
 
-class _DashboardTab extends StatelessWidget {
+class _DashboardTab extends ConsumerWidget {
   const _DashboardTab({
     required this.pendingToursAsync,
     required this.localPendingTours,
@@ -448,8 +444,11 @@ class _DashboardTab extends StatelessWidget {
   final VoidCallback onRefreshTours;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final metricsAsync = ref.watch(adminMetricsProvider);
+    final activeTickets = metricsAsync.asData?.value.activeTicketsCount ?? 0;
+
     final tourCards = pendingToursAsync.when(
       loading: () {
         if (localPendingTours.isNotEmpty) {
@@ -506,7 +505,7 @@ class _DashboardTab extends StatelessWidget {
           title: l10n.adminPqrsManagement,
         ),
         const SizedBox(height: 12),
-        _AdminMetricPill(label: l10n.adminActiveTickets('12')),
+        _AdminMetricPill(label: l10n.adminActiveTickets(activeTickets.toString())),
         const SizedBox(height: 24),
         Row(
           children: [
@@ -1514,6 +1513,7 @@ class _AdminBottomNav extends StatelessWidget {
     const items = [
       (icon: Icons.admin_panel_settings_outlined, label: 'Admin'),
       (icon: Icons.support_agent_rounded, label: 'PQRS'),
+      (icon: Icons.event_rounded, label: 'Eventos'),
       (icon: Icons.local_fire_department_rounded, label: 'Heatmap'),
       (icon: Icons.settings_rounded, label: 'Settings'),
     ];
@@ -2164,7 +2164,22 @@ class _AnalyticsHeatmapTabState extends ConsumerState<_AnalyticsHeatmapTab> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final mapStyle = ref.watch(mapStyleProvider);
-    final filteredPoints = _heatPoints.where((p) {
+    final metricsAsync = ref.watch(adminMetricsProvider);
+    final metricsData = metricsAsync.asData?.value;
+
+    final realPoints = (metricsData != null && metricsData.heatPoints.isNotEmpty)
+        ? metricsData.heatPoints.map((p) => {
+            'name': p.name,
+            'city': p.city,
+            'lat': p.latitude,
+            'lon': p.longitude,
+            'density': p.density,
+            'visits': p.visits,
+            'timePeak': p.timePeak,
+          }).toList()
+        : _heatPoints;
+
+    final filteredPoints = realPoints.where((p) {
       if (_selectedCity != 'Todas' && p['city'] != _selectedCity) {
         return false;
       }
@@ -2212,8 +2227,8 @@ class _AnalyticsHeatmapTabState extends ConsumerState<_AnalyticsHeatmapTab> {
               Expanded(
                 child: _HeatmapMetricCard(
                   title: l10n.heatmapToursToday,
-                  value: '3,420',
-                  subtitle: '+18%',
+                  value: metricsData != null ? '${metricsData.totalTours}' : '...',
+                  subtitle: 'Tours totales',
                   icon: Icons.directions_walk_rounded,
                   color: Colors.deepOrange,
                 ),
@@ -2221,10 +2236,10 @@ class _AnalyticsHeatmapTabState extends ConsumerState<_AnalyticsHeatmapTab> {
               const SizedBox(width: 10),
               Expanded(
                 child: _HeatmapMetricCard(
-                  title: l10n.heatmapAvgTime,
-                  value: '26 min',
-                  subtitle: l10n.heatmapPerStop,
-                  icon: Icons.timer_outlined,
+                  title: 'Usuarios',
+                  value: metricsData != null ? '${metricsData.totalUsersCount}' : '...',
+                  subtitle: 'Registrados',
+                  icon: Icons.people_outline_rounded,
                   color: Colors.amber,
                 ),
               ),
@@ -2232,8 +2247,8 @@ class _AnalyticsHeatmapTabState extends ConsumerState<_AnalyticsHeatmapTab> {
               Expanded(
                 child: _HeatmapMetricCard(
                   title: l10n.heatmapHottestZone,
-                  value: '98%',
-                  subtitle: 'La Candelaria',
+                  value: filteredPoints.isNotEmpty ? '${filteredPoints.first['density']}%' : '0%',
+                  subtitle: filteredPoints.isNotEmpty ? filteredPoints.first['name'].toString() : '-',
                   icon: Icons.local_fire_department_rounded,
                   color: Colors.redAccent,
                 ),
@@ -2360,7 +2375,7 @@ class _AnalyticsHeatmapTabState extends ConsumerState<_AnalyticsHeatmapTab> {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                 ),
                 const SizedBox(height: 16),
-                const _PeakHoursBarChart(),
+                _PeakHoursBarChart(hours: metricsData?.peakHours ?? const []),
               ],
             ),
           ),
@@ -2426,9 +2441,10 @@ class _HeatmapMetricCard extends StatelessWidget {
 }
 
 class _PeakHoursBarChart extends StatelessWidget {
-  const _PeakHoursBarChart();
+  final List<PeakHourData> hours;
+  const _PeakHoursBarChart({this.hours = const []});
 
-  final List<Map<String, dynamic>> _bars = const [
+  final List<Map<String, dynamic>> _defaultBars = const [
     {'hour': '6am', 'height': 0.2},
     {'hour': '8am', 'height': 0.5},
     {'hour': '10am', 'height': 0.85},
@@ -2442,12 +2458,16 @@ class _PeakHoursBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final barsToRender = hours.isNotEmpty
+        ? hours.map((h) => {'hour': h.hourLabel, 'height': h.normalizedHeight}).toList()
+        : _defaultBars;
+
     return SizedBox(
       height: 120,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         crossAxisAlignment: CrossAxisAlignment.end,
-        children: _bars.map((bar) {
+        children: barsToRender.map((bar) {
           final isPeak = (bar['height'] as double) >= 0.9;
           return Column(
             mainAxisAlignment: MainAxisAlignment.end,

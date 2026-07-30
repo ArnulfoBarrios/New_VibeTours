@@ -53,7 +53,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
                 borderRadius: 0,
                 fitPadding: const EdgeInsets.fromLTRB(40, 120, 40, 280),
                 myLocationEnabled: position != null,
-                focusOnLast: true,
+                focusOnLast: false,
                 onMapCreated: (controller) {
                   setState(() {
                     _mapController = controller;
@@ -65,7 +65,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
                 styleUrl: styleUrl,
                 height: MediaQuery.of(context).size.height,
                 borderRadius: 0,
-                focusOnLast: true,
+                focusOnLast: false,
                 onMapCreated: (controller) {
                   setState(() {
                     _mapController = controller;
@@ -77,7 +77,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
                 styleUrl: styleUrl,
                 height: MediaQuery.of(context).size.height,
                 borderRadius: 0,
-                focusOnLast: true,
+                focusOnLast: false,
                 onMapCreated: (controller) {
                   setState(() {
                     _mapController = controller;

@@ -1154,11 +1154,34 @@ function buildTourPlanner(input, location, places) {
     const startPlaceCandidate = normalized.find(p => p.rawTags?.start_point === 'true' || p.type === 'start_point' || (input.originPlace && normalizeKey(p.name) === normalizeKey(input.originPlace)))
     const endPlaceCandidate = normalized.find(p => p.rawTags?.end_point === 'true' || p.type === 'end_point' || (input.destinationPlace && normalizeKey(p.name) === normalizeKey(input.destinationPlace)))
 
-    const intermediates = normalized.filter(p => 
+    let intermediates = normalized.filter(p => 
       (!startPlaceCandidate || normalizeKey(p.name) !== normalizeKey(startPlaceCandidate.name)) &&
       (!endPlaceCandidate || normalizeKey(p.name) !== normalizeKey(endPlaceCandidate.name)) &&
       isWithinCorridor(p, startPlaceCandidate, endPlaceCandidate)
     )
+
+    if (intermediates.length < 2) {
+      intermediates = normalized.filter(p => 
+        (!startPlaceCandidate || normalizeKey(p.name) !== normalizeKey(startPlaceCandidate.name)) &&
+        (!endPlaceCandidate || normalizeKey(p.name) !== normalizeKey(endPlaceCandidate.name)) &&
+        isWithinCorridor(p, startPlaceCandidate, endPlaceCandidate, true)
+      )
+    }
+
+    if (intermediates.length < 2 && startPlaceCandidate && endPlaceCandidate) {
+      const candidatesWithDetour = normalized
+        .filter(p => 
+          normalizeKey(p.name) !== normalizeKey(startPlaceCandidate.name) &&
+          normalizeKey(p.name) !== normalizeKey(endPlaceCandidate.name)
+        )
+        .map(p => ({
+          ...p,
+          detourKm: computeDetourDistance(p, startPlaceCandidate, endPlaceCandidate)
+        }))
+        .sort((a, b) => a.detourKm - b.detourKm)
+      
+      intermediates = candidatesWithDetour.slice(0, 3)
+    }
 
     const scoredIntermediates = intermediates
       .map(p => ({ ...p, score: scorePlace(p, input) }))
@@ -2599,7 +2622,25 @@ function fallbackPlaces(input, location) {
   }]
 }
 
-export function isWithinCorridor(place, startPlace, endPlace) {
+export function computeDetourDistance(place, startPlace, endPlace) {
+  if (!place || !startPlace || !endPlace) return 0
+  const pLat = Number(place.latitude ?? place.lat ?? 0)
+  const pLon = Number(place.longitude ?? place.lon ?? 0)
+  const startLat = Number(startPlace.latitude ?? startPlace.lat ?? 0)
+  const startLon = Number(startPlace.longitude ?? startPlace.lon ?? 0)
+  const endLat = Number(endPlace.latitude ?? endPlace.lat ?? 0)
+  const endLon = Number(endPlace.longitude ?? endPlace.lon ?? 0)
+
+  if (!pLat || !pLon || !startLat || !startLon || !endLat || !endLon) return 0
+
+  const routeDistKm = haversineMeters(startLat, startLon, endLat, endLon) / 1000
+  const distFromStartKm = haversineMeters(pLat, pLon, startLat, startLon) / 1000
+  const distFromEndKm = haversineMeters(pLat, pLon, endLat, endLon) / 1000
+
+  return (distFromStartKm + distFromEndKm) - routeDistKm
+}
+
+export function isWithinCorridor(place, startPlace, endPlace, relaxed = false) {
   if (!place || (!startPlace && !endPlace)) return true
   const pLat = Number(place.latitude ?? place.lat ?? 0)
   const pLon = Number(place.longitude ?? place.lon ?? 0)
@@ -2617,25 +2658,27 @@ export function isWithinCorridor(place, startPlace, endPlace) {
     const distFromStartKm = haversineMeters(pLat, pLon, startLat, startLon) / 1000
     const distFromEndKm = haversineMeters(pLat, pLon, endLat, endLon) / 1000
 
-    // Additional detour distance added by visiting P: (distA_P + distP_B) - distA_B
     const detourKm = (distFromStartKm + distFromEndKm) - routeDistKm
 
-    // Proportional detour limit: allow reasonable minor detours, reject drastic detours across town
-    const maxDetourKm = routeDistKm <= 35 
-      ? Math.min(2.5, Math.max(1.0, routeDistKm * 0.35))
-      : Math.min(25.0, routeDistKm * 0.35)
+    const maxDetourKm = relaxed
+      ? Math.max(8.0, routeDistKm * 0.6)
+      : (routeDistKm <= 35 
+          ? Math.min(4.5, Math.max(1.5, routeDistKm * 0.35))
+          : Math.min(25.0, routeDistKm * 0.35))
 
     if (detourKm > maxDetourKm) {
       return false
     }
 
-    const pCity = place.city ? normalizeKey(place.city) : ''
-    const sCity = startPlace.city ? normalizeKey(startPlace.city) : ''
-    const eCity = endPlace.city ? normalizeKey(endPlace.city) : ''
+    if (!relaxed) {
+      const pCity = place.city ? normalizeKey(place.city) : ''
+      const sCity = startPlace.city ? normalizeKey(startPlace.city) : ''
+      const eCity = endPlace.city ? normalizeKey(endPlace.city) : ''
 
-    if (pCity && sCity && eCity && sCity === eCity) {
-      if (!pCity.includes(sCity) && !sCity.includes(pCity)) {
-        return false
+      if (pCity && sCity && eCity && sCity === eCity) {
+        if (!pCity.includes(sCity) && !sCity.includes(pCity)) {
+          return false
+        }
       }
     }
   }

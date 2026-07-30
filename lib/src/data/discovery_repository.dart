@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
 import '../domain/models.dart';
@@ -307,25 +308,20 @@ class DiscoveryRepository {
     required double longitude,
   }) async {
     try {
-      final places = await nearbyPlaces(latitude: latitude, longitude: longitude);
-      if (places.isNotEmpty) {
-        return [
-          for (int i = 0; i < places.length && i < 8; i++)
-            LocalEvent(
-              id: 'event-$i',
-              title: _eventTitle(i, places[i].name),
-              city: places[i].category,
-              category: const ['Concierto', 'Festival', 'Feria', 'Deportivo', 'Cultural'][i % 5],
-              startsAt: DateTime.now().add(Duration(days: i + 1)),
-              imageUrl: places[i].imageUrl.isNotEmpty ? places[i].imageUrl : _getRandomImageUrlForCategory(places[i].category, places[i].name),
-              location: places[i].location,
-            )
-        ];
-      }
+      final client = Supabase.instance.client;
+      final response = await client
+          .from('events')
+          .select()
+          .order('starts_at', ascending: true);
+      
+      final events = (response as List)
+          .map((item) => LocalEvent.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      return events;
     } catch (_) {
-      // Fall through
+      return const [];
     }
-    return _fallbackEvents(latitude: latitude, longitude: longitude);
   }
 
   // PRIVATE HELPERS FOR BYPASSING BACKEND
@@ -481,19 +477,6 @@ class DiscoveryRepository {
     ].contains(type.toLowerCase());
   }
 
-  String _eventTitle(int index, String place) {
-    final titles = [
-      'Noche cultural cerca de $place',
-      'Festival local en $place',
-      'Feria gastronómica de $place',
-      'Recorrido deportivo urbano',
-      'Encuentro artístico y patrimonial'
-    ];
-    return titles[index % titles.length];
-  }
-
-
-
   List<NearbyPlace> _fallbackPlaces({
     required double latitude,
     required double longitude,
@@ -541,35 +524,6 @@ class DiscoveryRepository {
           longitude: longitude - 0.002,
         ),
         category: 'Mirador',
-      ),
-    ];
-  }
-
-  List<LocalEvent> _fallbackEvents({
-    required double latitude,
-    required double longitude,
-  }) {
-    return [
-      LocalEvent(
-        id: 'fallback-event-1',
-        title: 'Evento local de fin de semana',
-        city: 'Cerca de ti',
-        category: 'Cultural',
-        startsAt: DateTime.now().add(const Duration(days: 1, hours: 3)),
-        imageUrl: '',
-        location: GeoPoint(latitude: latitude, longitude: longitude),
-      ),
-      LocalEvent(
-        id: 'fallback-event-2',
-        title: 'Feria y experiencia gastronómica',
-        city: 'Cerca de ti',
-        category: 'Gastronómica',
-        startsAt: DateTime.now().add(const Duration(days: 2, hours: 5)),
-        imageUrl: '',
-        location: GeoPoint(
-          latitude: latitude + 0.001,
-          longitude: longitude + 0.001,
-        ),
       ),
     ];
   }

@@ -476,6 +476,35 @@ class LocalEvent {
   final DateTime startsAt;
   final String imageUrl;
   final GeoPoint location;
+
+  factory LocalEvent.fromJson(Map<String, dynamic> json) {
+    return LocalEvent(
+      id: json['id']?.toString() ?? '',
+      title: json['title'] ?? 'Evento',
+      city: json['city'] ?? 'Global',
+      category: json['category'] ?? 'Cultural',
+      startsAt: json['starts_at'] != null
+          ? DateTime.tryParse(json['starts_at'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      imageUrl: json['image_url'] ?? '',
+      location: GeoPoint(
+        latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
+        longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'city': city,
+      'category': category,
+      'starts_at': startsAt.toIso8601String(),
+      'image_url': imageUrl,
+      'latitude': location.latitude,
+      'longitude': location.longitude,
+    };
+  }
 }
 
 enum TouristInterest {
