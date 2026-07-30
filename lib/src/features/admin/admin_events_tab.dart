@@ -35,14 +35,67 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   }
 
   Future<void> _loadEvents() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    final Map<String, LocalEvent> eventMap = {};
+    SharedPreferences? prefs;
 
-    // Auto-sync any unsynced local events to Supabase cloud database
+    // 1. Instant Local Cache Load (0ms UI Latency)
     try {
-      final prefs = await SharedPreferences.getInstance();
+      prefs = await SharedPreferences.getInstance();
+      final localJson = prefs.getStringList('local_admin_events') ?? [];
+      for (final jsonStr in localJson) {
+        try {
+          final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final e = LocalEvent.fromJson(map);
+          if (e.id.isNotEmpty) eventMap[e.id] = e;
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    final initialList = eventMap.values.toList()
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+
+    if (mounted) {
+      setState(() {
+        _events = initialList;
+        _isLoading = initialList.isEmpty; // Only show spinner if cache is 100% empty
+        _error = null;
+      });
+    }
+
+    // 2. Fetch Cloud Events Asynchronously in Background
+    try {
+      final response = await Supabase.instance.client
+          .from('events')
+          .select();
+
+      final cloudEvents = (response as List)
+          .map((item) => LocalEvent.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      for (final e in cloudEvents) {
+        if (e.id.isNotEmpty) eventMap[e.id] = e;
+      }
+
+      final updatedList = eventMap.values.toList()
+        ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+
+      if (mounted) {
+        setState(() {
+          _events = updatedList;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted && initialList.isEmpty) {
+        setState(() {
+          _isLoading = false;
+          _error = 'Error de red en nube: $e';
+        });
+      }
+    }
+
+    // 3. Background Unsynced Local Events Push (Unblocking)
+    if (prefs != null) {
       final localJson = prefs.getStringList('local_admin_events') ?? [];
       if (localJson.isNotEmpty) {
         final List<String> remainingLocal = [];
@@ -54,50 +107,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
               syncMap.remove('id');
             }
             await Supabase.instance.client.from('events').insert(syncMap);
-            // Synced to cloud successfully!
           } catch (_) {
             remainingLocal.add(jsonStr);
           }
         }
         await prefs.setStringList('local_admin_events', remainingLocal);
       }
-    } catch (_) {}
-
-    final Map<String, LocalEvent> eventMap = {};
-
-    try {
-      final response = await Supabase.instance.client
-          .from('events')
-          .select()
-          .order('starts_at', ascending: true);
-
-      final events = (response as List)
-          .map((item) => LocalEvent.fromJson(item as Map<String, dynamic>))
-          .toList();
-
-      for (final e in events) {
-        if (e.id.isNotEmpty) eventMap[e.id] = e;
-      }
-    } catch (_) {}
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final localJson = prefs.getStringList('local_admin_events') ?? [];
-      for (final jsonStr in localJson) {
-        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
-        final e = LocalEvent.fromJson(map);
-        if (e.id.isNotEmpty) eventMap[e.id] = e;
-      }
-    } catch (_) {}
-
-    final list = eventMap.values.toList();
-    list.sort((a, b) => a.startsAt.compareTo(b.startsAt));
-
-    if (mounted) {
-      setState(() {
-        _events = list;
-        _isLoading = false;
-      });
     }
   }
 
