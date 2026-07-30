@@ -48,7 +48,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       final packageInfo = await PackageInfo.fromPlatform();
       if (mounted) {
         setState(() {
-          _appVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
+          _appVersion = packageInfo.version;
         });
       }
     } catch (e) {

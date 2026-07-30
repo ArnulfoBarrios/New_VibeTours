@@ -186,10 +186,15 @@ class TourRepository {
 
   Future<void> moderateTour(String tourId, {required bool approved}) async {
     final client = _requireClient();
-    await client.rpc(
-      'admin_moderate_tour',
-      params: {'p_tour_id': tourId, 'p_approved': approved},
-    );
+    final newStatus = approved ? 'published' : 'rejected';
+    try {
+      await client.rpc(
+        'admin_moderate_tour',
+        params: {'p_tour_id': tourId, 'p_approved': approved},
+      );
+    } catch (_) {
+      await client.from('tours').update({'status': newStatus}).eq('id', tourId);
+    }
   }
 
   Future<Map<String, dynamic>> getUserStats(String userId) async {

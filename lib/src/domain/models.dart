@@ -462,6 +462,8 @@ class LocalEvent {
   const LocalEvent({
     required this.id,
     required this.title,
+    this.description = '',
+    this.country = 'Colombia',
     required this.city,
     required this.category,
     required this.startsAt,
@@ -472,6 +474,8 @@ class LocalEvent {
 
   final String id;
   final String title;
+  final String description;
+  final String country;
   final String city;
   final String category;
   final DateTime startsAt;
@@ -480,35 +484,54 @@ class LocalEvent {
   final GeoPoint location;
 
   factory LocalEvent.fromJson(Map<String, dynamic> json) {
+    final startRaw = json['starts_at'] ?? json['start_date'];
+    final endRaw = json['ends_at'] ?? json['end_date'];
+    final latRaw = json['latitude'] ?? json['lat'];
+    final lngRaw = json['longitude'] ?? json['lng'] ?? json['lon'];
+    final rawCat = json['category']?.toString() ?? 'cultural';
+    final formattedCat = rawCat.isEmpty
+        ? 'Cultural'
+        : (rawCat[0].toUpperCase() + rawCat.substring(1));
+
     return LocalEvent(
       id: json['id']?.toString() ?? '',
-      title: json['title'] ?? 'Evento',
+      title: json['title'] ?? json['name'] ?? 'Evento',
+      description: json['description']?.toString() ?? '',
+      country: json['country']?.toString() ?? 'Colombia',
       city: json['city'] ?? 'Global',
-      category: json['category'] ?? 'Cultural',
-      startsAt: json['starts_at'] != null
-          ? DateTime.tryParse(json['starts_at'].toString()) ?? DateTime.now()
+      category: formattedCat,
+      startsAt: startRaw != null
+          ? DateTime.tryParse(startRaw.toString()) ?? DateTime.now()
           : DateTime.now(),
-      endsAt: json['ends_at'] != null
-          ? DateTime.tryParse(json['ends_at'].toString())
+      endsAt: endRaw != null
+          ? DateTime.tryParse(endRaw.toString())
           : null,
       imageUrl: json['image_url'] ?? '',
       location: GeoPoint(
-        latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
-        longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
+        latitude: (latRaw as num?)?.toDouble() ?? 0.0,
+        longitude: (lngRaw as num?)?.toDouble() ?? 0.0,
       ),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
+      'name': title,
       'title': title,
+      'description': description,
+      'country': country,
       'city': city,
       'category': category,
       'starts_at': startsAt.toIso8601String(),
+      'start_date': startsAt.toIso8601String(),
       'ends_at': endsAt?.toIso8601String(),
+      'end_date': endsAt?.toIso8601String(),
       'image_url': imageUrl,
       'latitude': location.latitude,
+      'lat': location.latitude,
       'longitude': location.longitude,
+      'lng': location.longitude,
     };
   }
 }

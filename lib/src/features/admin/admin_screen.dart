@@ -909,6 +909,125 @@ class _PendingTourCard extends StatelessWidget {
   final VoidCallback onApprove;
   final VoidCallback onReject;
 
+  void _showTourInspectionDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.only(top: 50),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      tour.title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              Text(
+                '${tour.city}, ${tour.country} • ${tour.durationHours.toStringAsFixed(1)}h • ${tour.stops.length} Paradas',
+                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              if (tour.description.isNotEmpty) ...[
+                Text(
+                  tour.description,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (tour.stops.isNotEmpty) ...[
+                const Text('Recorrido en el Mapa:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 200,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: OpenFreeRouteMap.fromStops(
+                      stops: tour.stops,
+                      styleUrl: 'https://tiles.openfreemap.org/styles/bright',
+                      height: 200,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Paradas del Tour:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                ...tour.stops.map((stop) => Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                          child: Text('${stop.order + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                        ),
+                        title: Text(stop.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(stop.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      ),
+                    )),
+              ],
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                      icon: const Icon(Icons.close_rounded, color: Colors.white),
+                      label: const Text('Rechazar Tour', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onReject();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+                      icon: const Icon(Icons.check_rounded, color: Colors.white),
+                      label: const Text('Aprobar Tour', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onApprove();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -919,35 +1038,43 @@ class _PendingTourCard extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tour.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onSurface,
-                    fontWeight: FontWeight.w900,
+            child: InkWell(
+              onTap: () => _showTourInspectionDialog(context),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tour.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.onSurface,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${tour.city}, ${tour.country} - ${tour.durationHours.toStringAsFixed(1)}h - ${tour.stops.length} ${l10n.stops}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${tour.city}, ${tour.country} - ${tour.durationHours.toStringAsFixed(1)}h - ${tour.stops.length} ${l10n.stops}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  tour.isAiGenerated ? l10n.adminCreatedWithAI : l10n.adminCreatedManually,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.secondary,
-                    fontWeight: FontWeight.w800,
+                  const SizedBox(height: 4),
+                  Text(
+                    tour.isAiGenerated ? l10n.adminCreatedWithAI : l10n.adminCreatedManually,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.secondary,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+          ),
+          IconButton.filledTonal(
+            tooltip: 'Probar / Inspeccionar Tour',
+            onPressed: () => _showTourInspectionDialog(context),
+            icon: const Icon(Icons.visibility_rounded, color: AppTheme.primary),
           ),
           IconButton.filledTonal(
             tooltip: l10n.adminApprove,

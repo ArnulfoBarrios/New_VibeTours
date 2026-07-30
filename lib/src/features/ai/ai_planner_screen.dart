@@ -83,9 +83,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
+    if ((state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused ||
+            state == AppLifecycleState.detached) &&
+        (_isRecording || _isStartingVoice)) {
       unawaited(_voicePrompt.stop());
       if (mounted) {
         setState(() {
@@ -113,6 +114,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     setState(() {
       _selectedImagePath = null;
       _isProcessingAction = true;
+      _voiceFeedback = null;
     });
     
     // Grab location

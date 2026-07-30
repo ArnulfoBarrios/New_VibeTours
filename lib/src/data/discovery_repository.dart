@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/app_config.dart';
@@ -307,6 +308,7 @@ class DiscoveryRepository {
     required double latitude,
     required double longitude,
   }) async {
+    final Map<String, LocalEvent> eventMap = {};
     try {
       final client = Supabase.instance.client;
       final response = await client
@@ -318,10 +320,24 @@ class DiscoveryRepository {
           .map((item) => LocalEvent.fromJson(item as Map<String, dynamic>))
           .toList();
 
-      return events;
-    } catch (_) {
-      return const [];
-    }
+      for (final e in events) {
+        if (e.id.isNotEmpty) eventMap[e.id] = e;
+      }
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localJson = prefs.getStringList('local_admin_events') ?? [];
+      for (final jsonStr in localJson) {
+        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final e = LocalEvent.fromJson(map);
+        if (e.id.isNotEmpty) eventMap[e.id] = e;
+      }
+    } catch (_) {}
+
+    final list = eventMap.values.toList();
+    list.sort((a, b) => a.startsAt.compareTo(b.startsAt));
+    return list;
   }
 
   // PRIVATE HELPERS FOR BYPASSING BACKEND

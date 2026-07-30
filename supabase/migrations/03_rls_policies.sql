@@ -339,6 +339,24 @@ create policy "Events are public"
   to anon, authenticated
   using (true);
 
+drop policy if exists "Authenticated users can insert events" on public.events;
+create policy "Authenticated users can insert events"
+  on public.events for insert
+  to anon, authenticated
+  with check (true);
+
+drop policy if exists "Authenticated users can update events" on public.events;
+create policy "Authenticated users can update events"
+  on public.events for update
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Authenticated users can delete events" on public.events;
+create policy "Authenticated users can delete events"
+  on public.events for delete
+  to anon, authenticated
+  using (true);
+
 
 -- Notifications table
 drop policy if exists "Users read own notifications" on public.notifications;

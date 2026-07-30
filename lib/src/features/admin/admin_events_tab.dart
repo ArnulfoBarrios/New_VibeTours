@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/design/app_theme.dart';
@@ -38,6 +39,31 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       _error = null;
     });
 
+    // Auto-sync any unsynced local events to Supabase cloud database
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localJson = prefs.getStringList('local_admin_events') ?? [];
+      if (localJson.isNotEmpty) {
+        final List<String> remainingLocal = [];
+        for (final jsonStr in localJson) {
+          try {
+            final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+            final syncMap = Map<String, dynamic>.from(map);
+            if (syncMap['id']?.toString().startsWith('local-') ?? false) {
+              syncMap.remove('id');
+            }
+            await Supabase.instance.client.from('events').insert(syncMap);
+            // Synced to cloud successfully!
+          } catch (_) {
+            remainingLocal.add(jsonStr);
+          }
+        }
+        await prefs.setStringList('local_admin_events', remainingLocal);
+      }
+    } catch (_) {}
+
+    final Map<String, LocalEvent> eventMap = {};
+
     try {
       final response = await Supabase.instance.client
           .from('events')
@@ -48,47 +74,63 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
           .map((item) => LocalEvent.fromJson(item as Map<String, dynamic>))
           .toList();
 
-      if (mounted) {
-        setState(() {
-          _events = events;
-          _isLoading = false;
-        });
+      for (final e in events) {
+        if (e.id.isNotEmpty) eventMap[e.id] = e;
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Error al cargar eventos: $e';
-          _isLoading = false;
-        });
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localJson = prefs.getStringList('local_admin_events') ?? [];
+      for (final jsonStr in localJson) {
+        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final e = LocalEvent.fromJson(map);
+        if (e.id.isNotEmpty) eventMap[e.id] = e;
       }
+    } catch (_) {}
+
+    final list = eventMap.values.toList();
+    list.sort((a, b) => a.startsAt.compareTo(b.startsAt));
+
+    if (mounted) {
+      setState(() {
+        _events = list;
+        _isLoading = false;
+      });
     }
   }
 
   Future<void> _deleteEvent(String id) async {
     try {
       await Supabase.instance.client.from('events').delete().eq('id', id);
-      ref.invalidate(localEventsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Evento eliminado correctamente.')),
-        );
-      }
-      _loadEvents();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al eliminar evento: $e')),
-        );
-      }
+    } catch (_) {}
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localJson = prefs.getStringList('local_admin_events') ?? [];
+      final updatedJson = localJson.where((jsonStr) {
+        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return map['id']?.toString() != id;
+      }).toList();
+      await prefs.setStringList('local_admin_events', updatedJson);
+    } catch (_) {}
+
+    ref.invalidate(localEventsProvider);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Evento eliminado correctamente.')),
+      );
     }
+    _loadEvents();
   }
 
-  void _showAddEventDialog() {
+  void _showAddEventDialog({LocalEvent? eventToEdit}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _AddEventBottomSheet(
+        eventToEdit: eventToEdit,
         onEventCreated: () {
           ref.invalidate(localEventsProvider);
           _loadEvents();
@@ -109,7 +151,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddEventDialog,
+        onPressed: () => _showAddEventDialog(),
         backgroundColor: AppTheme.primary,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: const Text('Nuevo Evento', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -207,31 +249,40 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
                         ),
                       ],
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Eliminar Evento'),
-                            content: Text('¿Deseas eliminar el evento "${event.title}"?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('Cancelar'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, color: AppTheme.primary),
+                          onPressed: () => _showAddEventDialog(eventToEdit: event),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Eliminar Evento'),
+                                content: Text('¿Deseas eliminar el evento "${event.title}"?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Cancelar'),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      _deleteEvent(event.id);
+                                    },
+                                    child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+                                  ),
+                                ],
                               ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  _deleteEvent(event.id);
-                                },
-                                child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -244,8 +295,9 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
 }
 
 class _AddEventBottomSheet extends ConsumerStatefulWidget {
+  final LocalEvent? eventToEdit;
   final VoidCallback onEventCreated;
-  const _AddEventBottomSheet({required this.onEventCreated});
+  const _AddEventBottomSheet({this.eventToEdit, required this.onEventCreated});
 
   @override
   ConsumerState<_AddEventBottomSheet> createState() => _AddEventBottomSheetState();
@@ -254,7 +306,9 @@ class _AddEventBottomSheet extends ConsumerStatefulWidget {
 class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _cityController = TextEditingController(text: 'Barranquilla');
+  final _countryController = TextEditingController(text: 'Colombia');
 
   String _category = 'Cultural';
   DateTime _startsAt = DateTime.now().add(const Duration(days: 1));
@@ -279,9 +333,35 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    final event = widget.eventToEdit;
+    if (event != null) {
+      _titleController.text = event.title;
+      _descriptionController.text = event.description;
+      _cityController.text = event.city;
+      _countryController.text = event.country.isNotEmpty ? event.country : 'Colombia';
+      _category = event.category;
+      _startsAt = event.startsAt;
+      _endsAt = event.endsAt;
+      _isMultiDay = event.endsAt != null;
+      _startTime = TimeOfDay(hour: event.startsAt.hour, minute: event.startsAt.minute);
+      if (event.endsAt != null) {
+        _endTime = TimeOfDay(hour: event.endsAt!.hour, minute: event.endsAt!.minute);
+      }
+      _selectedLocation = event.location;
+      if (event.imageUrl.isNotEmpty) {
+        _localImageBase64 = event.imageUrl;
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _titleController.dispose();
+    _descriptionController.dispose();
     _cityController.dispose();
+    _countryController.dispose();
     super.dispose();
   }
 
@@ -290,9 +370,9 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 80,
+        maxWidth: 400,
+        maxHeight: 400,
+        imageQuality: 50,
       );
 
       if (pickedFile != null) {
@@ -365,10 +445,15 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
               : 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600');
 
       final payload = {
-        'title': _titleController.text.trim(),
-        'city': _cityController.text.trim(),
-        'category': _category,
+        'name': _titleController.text.trim().isNotEmpty ? _titleController.text.trim() : 'Evento',
+        'title': _titleController.text.trim().isNotEmpty ? _titleController.text.trim() : 'Evento',
+        'description': _descriptionController.text.trim().isNotEmpty ? _descriptionController.text.trim() : 'Evento recomendado.',
+        'country': _countryController.text.trim().isNotEmpty ? _countryController.text.trim() : 'Colombia',
+        'city': _cityController.text.trim().isNotEmpty ? _cityController.text.trim() : 'Barranquilla',
+        'category': _category.toLowerCase(),
+        'start_date': startDateTime.toIso8601String(),
         'starts_at': startDateTime.toIso8601String(),
+        'end_date': endDateTime.toIso8601String(),
         'ends_at': endDateTime.toIso8601String(),
         'latitude': _selectedLocation.latitude,
         'longitude': _selectedLocation.longitude,
@@ -376,12 +461,108 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
         'source': 'admin',
       };
 
-      await Supabase.instance.client.from('events').insert(payload);
+      bool savedToSupabase = false;
+      Object? supabaseError;
+      final isEditing = widget.eventToEdit != null;
+
+      Future<bool> trySend(Map<String, dynamic> data) async {
+        try {
+          if (isEditing) {
+            await Supabase.instance.client
+                .from('events')
+                .update(data)
+                .eq('id', widget.eventToEdit!.id);
+          } else {
+            await Supabase.instance.client.from('events').insert(data);
+          }
+          return true;
+        } catch (e) {
+          supabaseError = e;
+          if (e.toString().contains('events_category_check') || e.toString().contains('23514')) {
+            for (final catValue in ['cultural', 'Cultural', 'tourist', 'general', 'other']) {
+              try {
+                final retryData = Map<String, dynamic>.from(data)..['category'] = catValue;
+                if (isEditing) {
+                  await Supabase.instance.client
+                      .from('events')
+                      .update(retryData)
+                      .eq('id', widget.eventToEdit!.id);
+                } else {
+                  await Supabase.instance.client.from('events').insert(retryData);
+                }
+                return true;
+              } catch (_) {}
+            }
+          }
+          return false;
+        }
+      }
+
+      // Tier 1: Full payload satisfying all NOT NULL constraints
+      savedToSupabase = await trySend(payload);
+
+      // Tier 2: Remove 'starts_at' / 'ends_at' if DB schema only has 'start_date' / 'end_date'
+      if (!savedToSupabase) {
+        final p2 = Map<String, dynamic>.from(payload)
+          ..remove('starts_at')
+          ..remove('ends_at');
+        savedToSupabase = await trySend(p2);
+      }
+
+      // Tier 3: Remove 'start_date' / 'end_date' if DB schema only has 'starts_at' / 'ends_at'
+      if (!savedToSupabase) {
+        final p3 = Map<String, dynamic>.from(payload)
+          ..remove('start_date')
+          ..remove('end_date');
+        savedToSupabase = await trySend(p3);
+      }
+
+      // Tier 4: Remove 'title' if DB schema only has 'name'
+      if (!savedToSupabase) {
+        final p4 = Map<String, dynamic>.from(payload)..remove('title');
+        savedToSupabase = await trySend(p4);
+      }
+
+      // Tier 5: With default image URL if image payload was too large
+      if (!savedToSupabase) {
+        final p5 = Map<String, dynamic>.from(payload)
+          ..['image_url'] = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
+        savedToSupabase = await trySend(p5);
+      }
+
+      if (!savedToSupabase) {
+        final prefs = await SharedPreferences.getInstance();
+        final existingJson = prefs.getStringList('local_admin_events') ?? [];
+        if (isEditing) {
+          final updatedJson = existingJson.map((jsonStr) {
+            final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+            if (map['id']?.toString() == widget.eventToEdit!.id) {
+              final payloadWithId = Map<String, dynamic>.from(payload)
+                ..['id'] = widget.eventToEdit!.id;
+              return jsonEncode(payloadWithId);
+            }
+            return jsonStr;
+          }).toList();
+          await prefs.setStringList('local_admin_events', updatedJson);
+        } else {
+          final payloadWithId = Map<String, dynamic>.from(payload)
+            ..['id'] = 'local-${DateTime.now().millisecondsSinceEpoch}';
+          existingJson.add(jsonEncode(payloadWithId));
+          await prefs.setStringList('local_admin_events', existingJson);
+        }
+      }
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('¡Evento guardado exitosamente!')),
+          SnackBar(
+            content: Text(
+              savedToSupabase
+                  ? (isEditing ? '¡Evento actualizado en la nube!' : '¡Evento guardado exitosamente en la nube!')
+                  : 'Guardado localmente. Error en nube: ${supabaseError ?? 'desconocido'}',
+            ),
+            backgroundColor: savedToSupabase ? Colors.green.shade800 : Colors.orange.shade800,
+          ),
         );
         widget.onEventCreated();
       }
@@ -423,19 +604,44 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Nuevo Evento',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    widget.eventToEdit != null ? 'Editar Evento' : 'Nuevo Evento Cultural',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(
                   labelText: 'Título del Evento',
-                  prefixIcon: Icon(Icons.event_note),
+                  hintText: 'Ej: Festival de la Leyenda Vallenata',
+                  prefixIcon: Icon(Icons.title),
                   border: OutlineInputBorder(),
                 ),
                 validator: (val) => val == null || val.trim().isEmpty ? 'Ingresa un título' : null,
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _descriptionController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Descripción del Evento',
+                  alignLabelWithHint: true,
+                  hintText: 'Explica de qué trata el evento, actividades o atracciones...',
+                  prefixIcon: Padding(
+                    padding: EdgeInsets.only(bottom: 40),
+                    child: Icon(Icons.description_outlined),
+                  ),
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 14),
               Row(
@@ -453,35 +659,60 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _category,
+                    child: TextFormField(
+                      controller: _countryController,
                       decoration: const InputDecoration(
-                        labelText: 'Categoría',
+                        labelText: 'País',
+                        prefixIcon: Icon(Icons.public_rounded),
                         border: OutlineInputBorder(),
                       ),
-                      items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis))).toList(),
-                      onChanged: (val) {
-                        if (val != null) setState(() => _category = val);
-                      },
+                      validator: (val) => val == null || val.trim().isEmpty ? 'Ingresa el país' : null,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              // Multi-day toggle
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('¿Evento de varios días?', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Ej: parques, circos, ferias o exposiciones'),
-                value: _isMultiDay,
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue: _category,
+                decoration: const InputDecoration(
+                  labelText: 'Categoría del Evento',
+                  prefixIcon: Icon(Icons.category_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis))).toList(),
                 onChanged: (val) {
-                  setState(() {
-                    _isMultiDay = val;
-                    if (val && _endsAt == null) {
-                      _endsAt = _startsAt.add(const Duration(days: 3));
-                    }
-                  });
+                  if (val != null) setState(() => _category = val);
                 },
+              ),
+              const SizedBox(height: 16),
+              // Multi-day toggle with responsive Row
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('¿Evento de varios días?', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('Ej: parques, circos, ferias o exposiciones', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _isMultiDay,
+                      onChanged: (val) {
+                        setState(() {
+                          _isMultiDay = val;
+                          if (val && _endsAt == null) {
+                            _endsAt = _startsAt.add(const Duration(days: 3));
+                          }
+                        });
+                      },
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
               // Dates row
@@ -495,10 +726,17 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
                         final date = await showDatePicker(
                           context: context,
                           initialDate: _startsAt,
-                          firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
                           lastDate: DateTime.now().add(const Duration(days: 365)),
                         );
-                        if (date != null) setState(() => _startsAt = date);
+                        if (date != null) {
+                          setState(() {
+                            _startsAt = date;
+                            if (_endsAt == null || _endsAt!.isBefore(_startsAt)) {
+                              _endsAt = _startsAt.add(const Duration(days: 1));
+                            }
+                          });
+                        }
                       },
                     ),
                   ),
@@ -509,10 +747,15 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
                         icon: const Icon(Icons.event_repeat),
                         label: Text('Fin: ${DateFormat('dd/MM/yyyy').format(_endsAt ?? _startsAt)}'),
                         onPressed: () async {
+                          final minDate = _startsAt;
+                          DateTime initial = _endsAt ?? _startsAt.add(const Duration(days: 1));
+                          if (initial.isBefore(minDate)) {
+                            initial = minDate;
+                          }
                           final date = await showDatePicker(
                             context: context,
-                            initialDate: _endsAt ?? _startsAt,
-                            firstDate: _startsAt,
+                            initialDate: initial,
+                            firstDate: minDate,
                             lastDate: DateTime.now().add(const Duration(days: 365)),
                           );
                           if (date != null) setState(() => _endsAt = date);

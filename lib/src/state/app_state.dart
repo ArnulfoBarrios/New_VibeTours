@@ -242,11 +242,15 @@ final nearbyPlacesProvider = FutureProvider<List<NearbyPlace>>((ref) async {
 });
 
 final localEventsProvider = FutureProvider<List<LocalEvent>>((ref) async {
-  final position = await ref.watch(currentPositionProvider.future);
-  if (position == null) return const [];
+  dynamic position;
+  try {
+    position = await ref.watch(currentPositionProvider.future);
+  } catch (_) {}
+  final lat = (position?.latitude as num?)?.toDouble() ?? 10.96854;
+  final lng = (position?.longitude as num?)?.toDouble() ?? -74.78132;
   return ref
       .watch(discoveryRepositoryProvider)
-      .localEvents(latitude: position.latitude, longitude: position.longitude);
+      .localEvents(latitude: lat, longitude: lng);
 });
 
 final themeModeProvider = StateNotifierProvider<ThemeModeController, ThemeMode>((ref) {

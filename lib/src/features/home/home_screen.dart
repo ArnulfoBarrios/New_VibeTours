@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../core/design/app_theme.dart';
+import '../../core/design/openfree_route_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/utils/image_utils.dart';
 import '../../domain/models.dart';
@@ -793,12 +794,270 @@ class _UpcomingEventsSection extends StatelessWidget {
   }
 }
 
-class _EventTile extends StatelessWidget {
+class _EventTile extends ConsumerWidget {
   final LocalEvent event;
   const _EventTile({required this.event});
 
+  void _showEventDetailsModal(BuildContext context, WidgetRef ref) {
+    final startTimeStr = '${event.startsAt.hour.toString().padLeft(2, '0')}:${event.startsAt.minute.toString().padLeft(2, '0')}';
+    final endTimeStr = event.endsAt != null
+        ? '${event.endsAt!.hour.toString().padLeft(2, '0')}:${event.endsAt!.minute.toString().padLeft(2, '0')}'
+        : null;
+
+    final dateStr = event.endsAt != null
+        ? 'Del ${event.startsAt.day}/${event.startsAt.month}/${event.startsAt.year} al ${event.endsAt!.day}/${event.endsAt!.month}/${event.endsAt!.year}'
+        : '${event.startsAt.day}/${event.startsAt.month}/${event.startsAt.year}';
+
+    final hasImage = event.imageUrl.isNotEmpty;
+    final isBase64 = event.imageUrl.startsWith('data:image');
+    final descriptionText = event.description.isNotEmpty
+        ? event.description
+        : 'Evento recomendado en la zona para disfrutar con amigos y familia.';
+
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: screenHeight * 0.85,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (hasImage) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: isBase64
+                              ? Image.memory(
+                                  base64Decode(event.imageUrl.split(',').last),
+                                  fit: BoxFit.cover,
+                                )
+                              : CachedNetworkImage(
+                                  imageUrl: event.imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (context, url, error) => Container(color: Colors.grey.shade300),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            event.title,
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Chip(
+                          avatar: const Icon(Icons.category_outlined, size: 16, color: AppTheme.primary),
+                          label: Text(event.category, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                          side: BorderSide.none,
+                        ),
+                        Chip(
+                          avatar: const Icon(Icons.location_city_outlined, size: 16, color: AppTheme.primary),
+                          label: Text(event.city.isNotEmpty ? event.city : 'Zona local', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                          side: BorderSide.none,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Acerca del Evento:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 6),
+                    Text(
+                      descriptionText,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+                            height: 1.4,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                      color: Theme.of(context).colorScheme.surfaceContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_month, color: AppTheme.primary),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Fecha del evento', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                      Text(dateStr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Divider(height: 20),
+                            Row(
+                              children: [
+                                const Icon(Icons.access_time, color: AppTheme.primary),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Horario de funcionamiento', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                      Text(
+                                        endTimeStr != null ? '$startTimeStr a $endTimeStr hs' : '$startTimeStr hs',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Ubicación Exacta en el Mapa:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 220,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: OpenFreeRouteMap(
+                                styleUrl: ref.watch(mapStyleProvider),
+                                points: [event.location],
+                                labels: [event.title],
+                                focusOnLast: true,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 10,
+                            left: 10,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.75),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.location_on, color: Colors.redAccent, size: 16),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Lat: ${event.location.latitude.toStringAsFixed(4)}, Lng: ${event.location.longitude.toStringAsFixed(4)}',
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    icon: const Icon(Icons.navigation_rounded, color: Colors.white),
+                    label: const Text('📍 ¿Cómo llegar? (Ver Ruta)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      final place = NearbyPlace(
+                        id: event.id,
+                        name: event.title,
+                        type: event.category,
+                        distanceMeters: 0,
+                        location: event.location,
+                        imageUrl: event.imageUrl,
+                        category: event.category,
+                      );
+                      ref.read(selectedNearbyPlaceProvider.notifier).state = place;
+                      Navigator.pop(context);
+                      context.push('/place-route');
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final month = _monthName(event.startsAt.month);
     final day = event.startsAt.day.toString();
     final startTimeStr = '${event.startsAt.hour.toString().padLeft(2, '0')}:${event.startsAt.minute.toString().padLeft(2, '0')}';
@@ -811,7 +1070,6 @@ class _EventTile extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
@@ -823,54 +1081,61 @@ class _EventTile extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-              image: hasImage
-                  ? DecorationImage(
-                      image: isBase64
-                          ? MemoryImage(base64Decode(event.imageUrl.split(',').last)) as ImageProvider
-                          : CachedNetworkImageProvider(event.imageUrl),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: !hasImage
-                ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(month, style: const TextStyle(color: AppTheme.primary, fontSize: 10, fontWeight: FontWeight.w800)),
-                      Text(day, style: const TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.w800)),
-                    ],
-                  )
-                : null,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  event.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Theme.of(context).colorScheme.onSurface),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _showEventDetailsModal(context, ref),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  image: hasImage
+                      ? DecorationImage(
+                          image: isBase64
+                              ? MemoryImage(base64Decode(event.imageUrl.split(',').last)) as ImageProvider
+                              : CachedNetworkImageProvider(event.imageUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${event.category} • $dateRangeStr ($startTimeStr)',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                child: !hasImage
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(month, style: const TextStyle(color: AppTheme.primary, fontSize: 10, fontWeight: FontWeight.w800)),
+                          Text(day, style: const TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.w800)),
+                        ],
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Theme.of(context).colorScheme.onSurface),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${event.category} • $dateRangeStr ($startTimeStr)',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppTheme.primary),
+            ],
           ),
-          const Icon(Icons.chevron_right_rounded, color: AppTheme.primary),
-        ],
+        ),
       ),
     );
   }

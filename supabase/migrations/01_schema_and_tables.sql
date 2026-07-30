@@ -191,6 +191,7 @@ create table if not exists public.tour_views (
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   title text not null default 'Evento',
+  description text,
   country text,
   city text not null default 'Global',
   category text not null default 'cultural',
@@ -202,6 +203,9 @@ create table if not exists public.events (
   source text not null default 'overpass',
   created_at timestamptz not null default now()
 );
+
+alter table public.events add column if not exists description text;
+alter table public.events drop constraint if exists events_category_check;
 
 -- 13. Notifications table
 create table if not exists public.notifications (

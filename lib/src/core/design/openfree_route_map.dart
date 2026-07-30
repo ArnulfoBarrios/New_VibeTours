@@ -1026,10 +1026,12 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
     final controller = _controller;
     if (controller == null || !mounted || animId != _currentAnimationId) return;
 
-    final isActive = index == activeIndex;
-    final finalRadius = isActive ? 11.0 : 8.0;
-    final finalStrokeWidth = isActive ? 4.0 : 2.5;
-    final circleColor = isActive ? '#007AFF' : '#FFFFFF';
+    final isSinglePoint = widget.points.length == 1;
+    final isActive = index == activeIndex || isSinglePoint;
+    final finalRadius = isSinglePoint ? 14.0 : (isActive ? 11.0 : 8.0);
+    final finalStrokeWidth = isSinglePoint ? 4.0 : (isActive ? 4.0 : 2.5);
+    final circleColor = isSinglePoint ? '#FF3B30' : (isActive ? '#007AFF' : '#FFFFFF');
+    final strokeColor = isSinglePoint ? '#FFFFFF' : '#007AFF';
 
     Circle? circle;
     try {
@@ -1040,7 +1042,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
           circleRadius: finalRadius * 0.15,
           circleColor: circleColor,
           circleOpacity: 0.98,
-          circleStrokeColor: '#007AFF',
+          circleStrokeColor: strokeColor,
           circleStrokeWidth: finalStrokeWidth * 0.15,
         ),
       );
@@ -1068,12 +1070,16 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
 
     if (animId != _currentAnimationId || !mounted) return;
     
-    final emoji = (widget.stops != null && index < widget.stops!.length)
-        ? _getStopEmoji(widget.stops![index])
-        : '';
-    final label = widget.showNumbers
-        ? (emoji.isNotEmpty ? '$emoji ${index + 1}' : '${index + 1}')
-        : emoji;
+    final emoji = isSinglePoint
+        ? '📍'
+        : ((widget.stops != null && index < widget.stops!.length)
+            ? _getStopEmoji(widget.stops![index])
+            : '');
+    final label = isSinglePoint
+        ? '📍 Ubicación Exacta'
+        : (widget.showNumbers
+            ? (emoji.isNotEmpty ? '$emoji ${index + 1}' : '${index + 1}')
+            : emoji);
 
     if (label.isNotEmpty) {
       try {
@@ -1081,10 +1087,11 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
           SymbolOptions(
             geometry: location,
             textField: label,
-            textSize: isActive ? 13.0 : 11.0,
-            textColor: isActive ? '#FFFFFF' : '#007AFF',
-            textHaloColor: isActive ? '#007AFF' : '#FFFFFF',
-            textHaloWidth: 1.2,
+            textSize: isSinglePoint ? 14.0 : (isActive ? 13.0 : 11.0),
+            textColor: isSinglePoint ? '#FF3B30' : (isActive ? '#FFFFFF' : '#007AFF'),
+            textHaloColor: '#FFFFFF',
+            textHaloWidth: 2.0,
+            textOffset: const Offset(0, 1.2),
           ),
         );
       } catch (_) {}
