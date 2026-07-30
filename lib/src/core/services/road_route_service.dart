@@ -117,9 +117,12 @@ class RoadRouteService {
     for (var index = 0; index < points.length - 1; index++) {
       final start = points[index];
       final end = points[index + 1];
-      final roadRoute = preferLiveTraffic
-          ? await _fetchTomTomTrafficRoute(start, end)
-          : await _fetchDrivingRoute(start, end);
+      _DrivingRoute? roadRoute;
+      if (preferLiveTraffic) {
+        roadRoute = await _fetchTomTomTrafficRoute(start, end);
+      }
+      roadRoute ??= await _fetchDrivingRoute(start, end);
+
       final requiresPortTransfer =
           roadRoute == null ||
           _looksLikeMaritimeTransfer(roadRoute, start, end);
@@ -222,36 +225,44 @@ class RoadRouteService {
     GeoPoint start,
     GeoPoint end,
   ) async {
-    final uri = Uri.parse(
-      '$_osrmBaseUrl/route/v1/driving/'
-      '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
-      '?overview=full&geometries=geojson&steps=true&alternatives=false',
-    );
-    try {
-      final response = await _client
-          .get(uri)
-          .timeout(const Duration(seconds: 9));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
-      }
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      if (decoded['code'] != 'Ok') return null;
-      final routes = decoded['routes'] as List<dynamic>? ?? const [];
-      if (routes.isEmpty) return null;
-      final route = routes.first as Map<String, dynamic>;
-      final geometry = _parseGeoJsonGeometry(route['geometry']);
-      if (geometry.length < 2) return null;
-      return _DrivingRoute(
-        geometry: geometry,
-        distanceMeters: (route['distance'] as num?)?.toDouble() ?? 0,
-        travelTimeSeconds: (route['duration'] as num?)?.round(),
-        trafficDelaySeconds: null,
-        usesLiveTraffic: false,
-        hasFerrySegment: _containsFerryStep(route),
+    final baseUrls = [
+      _osrmBaseUrl,
+      'https://routing.openstreetmap.de/routed-car',
+    ];
+
+    for (final baseUrl in baseUrls) {
+      final uri = Uri.parse(
+        '$baseUrl/route/v1/driving/'
+        '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
+        '?overview=full&geometries=geojson&steps=true&alternatives=false',
       );
-    } on Object {
-      return null;
+      try {
+        final response = await _client
+            .get(uri)
+            .timeout(const Duration(seconds: 5));
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          continue;
+        }
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        if (decoded['code'] != 'Ok') continue;
+        final routes = decoded['routes'] as List<dynamic>? ?? const [];
+        if (routes.isEmpty) continue;
+        final route = routes.first as Map<String, dynamic>;
+        final geometry = _parseGeoJsonGeometry(route['geometry']);
+        if (geometry.length < 2) continue;
+        return _DrivingRoute(
+          geometry: geometry,
+          distanceMeters: (route['distance'] as num?)?.toDouble() ?? 0,
+          travelTimeSeconds: (route['duration'] as num?)?.round(),
+          trafficDelaySeconds: null,
+          usesLiveTraffic: false,
+          hasFerrySegment: _containsFerryStep(route),
+        );
+      } on Object {
+        continue;
+      }
     }
+    return null;
   }
 
   Future<_DrivingRoute?> _fetchTomTomTrafficRoute(

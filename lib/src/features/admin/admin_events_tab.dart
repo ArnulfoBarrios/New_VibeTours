@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -207,85 +208,97 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
                 body: 'No hay eventos en la base de datos. Toca "Nuevo Evento" para agregar uno.',
               )
             else
-              ..._events.map(
-                (event) => Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 2,
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(12),
-                    leading: Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        image: event.imageUrl.isNotEmpty
-                            ? DecorationImage(
-                                image: event.imageUrl.startsWith('data:image')
-                                    ? MemoryImage(base64Decode(event.imageUrl.split(',').last)) as ImageProvider
-                                    : NetworkImage(event.imageUrl),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _events.length,
+                itemBuilder: (context, index) {
+                  final event = _events[index];
+                  return RepaintBoundary(
+                    key: ValueKey(event.id),
+                    child: Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 2,
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        leading: Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            image: event.imageBytes != null
+                                ? DecorationImage(
+                                    image: MemoryImage(event.imageBytes!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : (event.imageUrl.isNotEmpty && !event.imageUrl.startsWith('data:image')
+                                    ? DecorationImage(
+                                        image: NetworkImage(event.imageUrl),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null),
+                          ),
+                          child: (event.imageBytes == null && event.imageUrl.isEmpty)
+                              ? const Icon(Icons.event, color: AppTheme.primary)
+                              : null,
+                        ),
+                        title: Text(
+                          event.title,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            Text('${event.category} • ${event.city}'),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatEventDates(event),
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, color: AppTheme.primary),
+                              onPressed: () => _showAddEventDialog(eventToEdit: event),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Eliminar Evento'),
+                                    content: Text('¿Deseas eliminar el evento "${event.title}"?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx),
+                                        child: const Text('Cancelar'),
+                                      ),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                        onPressed: () {
+                                          Navigator.pop(ctx);
+                                          _deleteEvent(event.id);
+                                        },
+                                        child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                      child: event.imageUrl.isEmpty
-                          ? const Icon(Icons.event, color: AppTheme.primary)
-                          : null,
                     ),
-                    title: Text(
-                      event.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Text('${event.category} • ${event.city}'),
-                        const SizedBox(height: 2),
-                        Text(
-                          _formatEventDates(event),
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined, color: AppTheme.primary),
-                          onPressed: () => _showAddEventDialog(eventToEdit: event),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('Eliminar Evento'),
-                                content: Text('¿Deseas eliminar el evento "${event.title}"?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx),
-                                    child: const Text('Cancelar'),
-                                  ),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                    onPressed: () {
-                                      Navigator.pop(ctx);
-                                      _deleteEvent(event.id);
-                                    },
-                                    child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                  );
+                },
               ),
           ],
         ),
@@ -319,6 +332,7 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
 
   GeoPoint _selectedLocation = const GeoPoint(latitude: 10.96854, longitude: -74.78132);
   String? _localImageBase64;
+  Uint8List? _localImageBytes;
   final String _imageUrlUrl = '';
   bool _isSubmitting = false;
 
@@ -352,6 +366,12 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
       _selectedLocation = event.location;
       if (event.imageUrl.isNotEmpty) {
         _localImageBase64 = event.imageUrl;
+        _localImageBytes = event.imageBytes;
+        if (_localImageBytes == null && event.imageUrl.startsWith('data:image')) {
+          try {
+            _localImageBytes = base64Decode(event.imageUrl.split(',').last);
+          } catch (_) {}
+        }
       }
     }
   }
@@ -380,6 +400,7 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
         final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
         setState(() {
           _localImageBase64 = base64Str;
+          _localImageBytes = bytes;
         });
       }
     } catch (e) {
@@ -580,18 +601,22 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Container(
-      margin: EdgeInsets.only(top: 60, bottom: bottomInset),
-      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(top: 60),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, bottomInset + 20),
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
             children: [
               Center(
                 child: Container(
@@ -800,82 +825,86 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
               ),
               const SizedBox(height: 20),
               // Interactive Map Location Picker
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.map_rounded, color: AppTheme.primary),
-                        const SizedBox(width: 8),
-                        const Text('Ubicación en el mapa', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Lat: ${_selectedLocation.latitude.toStringAsFixed(5)}, Lng: ${_selectedLocation.longitude.toStringAsFixed(5)}',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.pin_drop_rounded, color: AppTheme.primary),
-                        label: const Text('Seleccionar en el mapa interactivo'),
-                        onPressed: _openMapPicker,
+              RepaintBoundary(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.map_rounded, color: AppTheme.primary),
+                          const SizedBox(width: 8),
+                          const Text('Ubicación en el mapa', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Text(
+                        'Lat: ${_selectedLocation.latitude.toStringAsFixed(5)}, Lng: ${_selectedLocation.longitude.toStringAsFixed(5)}',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.pin_drop_rounded, color: AppTheme.primary),
+                          label: const Text('Seleccionar en el mapa interactivo'),
+                          onPressed: _openMapPicker,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
               // Image Picker Section
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.image_outlined, color: AppTheme.primary),
-                            SizedBox(width: 8),
-                            Text('Imagen del Evento', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _pickImage,
-                          icon: const Icon(Icons.photo_library, size: 16),
-                          label: const Text('Subir Foto'),
+              RepaintBoundary(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.image_outlined, color: AppTheme.primary),
+                              SizedBox(width: 8),
+                              Text('Imagen del Evento', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: _pickImage,
+                            icon: const Icon(Icons.photo_library, size: 16),
+                            label: const Text('Subir Foto'),
+                          ),
+                        ],
+                      ),
+                      if (_localImageBytes != null) ...[
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(
+                            _localImageBytes!,
+                            height: 120,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ],
-                    ),
-                    if (_localImageBase64 != null) ...[
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.memory(
-                          base64Decode(_localImageBase64!.split(',').last),
-                          height: 120,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
                     ],
-                  ],
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -891,7 +920,9 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
           ),
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 }
 

@@ -203,10 +203,13 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
   List<LatLng> _trimRouteGeometry(List<LatLng> geometry, LatLng currentPos) {
     if (geometry.length < 2) return geometry;
 
+    // Buscar el segmento más cercano dentro de los primeros segmentos de la ruta
+    final maxSearchIndex = math.min(8, geometry.length - 1);
     int bestSegmentIndex = 0;
     double minSqDistance = double.infinity;
+    LatLng bestProj = geometry.first;
 
-    for (int i = 0; i < geometry.length - 1; i++) {
+    for (int i = 0; i < maxSearchIndex; i++) {
       final p1 = geometry[i];
       final p2 = geometry[i + 1];
 
@@ -216,11 +219,19 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
       if (distSq < minSqDistance) {
         minSqDistance = distSq;
         bestSegmentIndex = i;
+        bestProj = proj;
       }
     }
 
     final remaining = geometry.sublist(bestSegmentIndex + 1);
-    return [currentPos, ...remaining];
+    final distToProjMeters = math.sqrt(minSqDistance) * 111000.0;
+    if (bestSegmentIndex == 0 || distToProjMeters < 500.0) {
+      if (distToProjMeters > 3.0) {
+        return [currentPos, bestProj, ...remaining];
+      }
+      return [bestProj, ...remaining];
+    }
+    return geometry;
   }
 
   void _updateTrimmedRouteLine(LatLng currentPos) {
@@ -315,9 +326,6 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
         ),
         duration: const Duration(milliseconds: 500),
       );
-    } else if (!widget.trackingMode && locationChanged && widget.currentLocation != null) {
-      _hasFitRoute = false;
-      _drawRoute();
     }
   }
 

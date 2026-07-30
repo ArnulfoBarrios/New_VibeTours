@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 enum TourType {
   urban,
   historical,
@@ -469,6 +472,7 @@ class LocalEvent {
     required this.startsAt,
     this.endsAt,
     required this.imageUrl,
+    this.imageBytes,
     required this.location,
   });
 
@@ -481,6 +485,7 @@ class LocalEvent {
   final DateTime startsAt;
   final DateTime? endsAt;
   final String imageUrl;
+  final Uint8List? imageBytes;
   final GeoPoint location;
 
   factory LocalEvent.fromJson(Map<String, dynamic> json) {
@@ -492,6 +497,14 @@ class LocalEvent {
     final formattedCat = rawCat.isEmpty
         ? 'Cultural'
         : (rawCat[0].toUpperCase() + rawCat.substring(1));
+
+    final rawImg = json['image_url']?.toString() ?? '';
+    Uint8List? bytes;
+    if (rawImg.startsWith('data:image')) {
+      try {
+        bytes = base64Decode(rawImg.split(',').last);
+      } catch (_) {}
+    }
 
     return LocalEvent(
       id: json['id']?.toString() ?? '',
@@ -506,7 +519,8 @@ class LocalEvent {
       endsAt: endRaw != null
           ? DateTime.tryParse(endRaw.toString())
           : null,
-      imageUrl: json['image_url'] ?? '',
+      imageUrl: rawImg,
+      imageBytes: bytes,
       location: GeoPoint(
         latitude: (latRaw as num?)?.toDouble() ?? 0.0,
         longitude: (lngRaw as num?)?.toDouble() ?? 0.0,

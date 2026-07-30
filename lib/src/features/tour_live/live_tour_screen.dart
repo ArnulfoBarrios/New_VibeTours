@@ -457,11 +457,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           _navigationTour = tour;
           _scheduleLiveNavigation(tour);
           
-          final liveRoute = (_selectedVoicePlace != null && _liveRouteStopIndex == -2) ||
-                            (_navigatingToHotel && _liveRouteStopIndex == -1) ||
-                            (!_navigatingToHotel && _liveRouteStopIndex == _activeStop)
-              ? _liveRoute
-              : null;
+          final liveRoute = _liveRoute;
 
           // Combine regular map points with temporary food markers
           final basePoints = _mapPointsFor(stop);
@@ -484,7 +480,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             children: [
               Positioned.fill(
                 child: OpenFreeRouteMap(
-                  key: ValueKey('${tour.id}-$mapStyle-${_selectedVoicePlace != null ? "voice" : _navigatingToHotel ? "hotel" : "stop"}-${_voiceFoodPlaces.length}'),
+                  key: ValueKey('${tour.id}-$mapStyle-${_selectedVoicePlace != null ? "voice" : _navigatingToHotel ? "hotel" : "stop"}'),
                   points: allPoints,
                   labels: allLabels,
                   activeIndex: 0,
@@ -494,7 +490,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   fitPadding: const EdgeInsets.fromLTRB(36, 108, 36, 360),
                   showNumbers: false,
                   myLocationEnabled: true,
-                  routeOverride: _noLandRouteAvailable || liveRoute == null ? const RoadRouteResult(geometry: []) : liveRoute,
+                  routeOverride: _noLandRouteAvailable ? const RoadRouteResult(geometry: []) : liveRoute,
                   currentLocation: _currentPoint,
                   useRoadRouting: false,
                   trackingMode: _isTrackingMode,
@@ -858,12 +854,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ? Geolocator.distanceBetween(point.latitude, point.longitude, activeStopPoint.latitude, activeStopPoint.longitude)
         : double.infinity;
     _updateBatterySamplingMode(position.speed, distanceToActiveStop);
-    final targetStopIndex = _selectedVoicePlace != null
-        ? -2
-        : _navigatingToHotel
-            ? -1
-            : _activeStop;
-    final route = _liveRouteStopIndex == targetStopIndex ? _liveRoute : null;
+    final route = _liveRoute;
     final distanceToRoute = route == null
         ? double.infinity
         : _distanceToRouteMeters(point, route.geometry);
@@ -877,7 +868,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             const Duration(minutes: 2);
     final deviated = distanceToRoute > 85;
     if (deviated || refreshTraffic || route == null) {
-      if (_canReroute(now)) {
+      if (_canReroute(now, isOffRoute: deviated)) {
         if (deviated) {
           setState(() {
             _isOffRoute = true;
@@ -886,7 +877,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         unawaited(
           _recalculateRoute(
             tour,
-            force: route == null || refreshTraffic,
+            force: route == null || refreshTraffic || deviated,
             markOffRoute: deviated,
           ),
         );
@@ -974,10 +965,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     });
   }
 
-  bool _canReroute(DateTime now) {
+  bool _canReroute(DateTime now, {bool isOffRoute = false}) {
+    if (_isRouting) return false;
     final last = _lastRerouteAt;
-    return !_isRouting &&
-        (last == null || now.difference(last) > const Duration(seconds: 18));
+    if (last == null) return true;
+    final minInterval = isOffRoute ? const Duration(seconds: 4) : const Duration(seconds: 15);
+    return now.difference(last) > minInterval;
   }
 
   List<GeoPoint> _mapPointsFor(TourStop stop) {
