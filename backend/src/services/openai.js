@@ -548,4 +548,91 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema:
   return []
 }
 
+const reasonCache = new GeoCache(24 * 60 * 60 * 1000, 500)
+
+export async function generateCustomPlaceReasons({ destination = '', city = '', prompt = '', places = [] }) {
+  if (!Array.isArray(places) || places.length === 0) return {}
+
+  const targetCity = city || destination || 'Destino'
+  const apiKey = process.env.OPENAI_API_KEY
+  
+  const result = {}
+  const missingPlaces = []
+
+  for (const place of places) {
+    const pName = typeof place === 'string' ? place : place?.name
+    if (!pName) continue
+    const cacheKey = `reason_${targetCity.toLowerCase().trim()}_${pName.toLowerCase().trim()}`
+    const cached = reasonCache.get(cacheKey)
+    if (cached) {
+      result[pName] = cached
+    } else {
+      missingPlaces.push(pName)
+    }
+  }
+
+  if (missingPlaces.length === 0 || !apiKey) {
+    return result
+  }
+
+  const systemPrompt = `Eres un guía turístico experto en geografía mundial.
+El usuario realiza un viaje en "${targetCity}" hacia "${destination || targetCity}".
+Se te da una lista de lugares turísticos específicos.
+
+TU TAREA:
+Para CADA lugar de la lista, escribe una breve frase explicativa (15 a 25 palabras) que sea 100% ÚNICA, FASCINANTE y ESPECÍFICA sobre ESE monumento o hito físico.
+
+REGLAS OBLIGATORIAS:
+1. Explica qué hace único a ESE lugar físico en particular (su historia real, arquitectura, ambiente, mar, vistas o sazón).
+2. PROHIBIDO ABSOLUTAMENTE usar frases genéricas de relleno como "Una parada estratégica...", "Aporta variedad visual...", "Un sitio de gran relevancia...".
+3. Aunque haya varias iglesias, varios parques o varias playas, CADA EXPLICACIÓN DEBE SER 100% DIFERENTE Y ESPECÍFICA para ese lugar exacto.
+
+Devuelve ÚNICAMENTE un objeto JSON válido con este formato:
+{
+  "reasons": {
+    "Nombre del Lugar 1": "Frase única y fascinante específica sobre este lugar.",
+    "Nombre del Lugar 2": "Frase única y fascinante específica sobre este lugar."
+  }
+}`
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 12000)
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Lugares en ${targetCity}: ${JSON.stringify(missingPlaces)}` }
+        ]
+      }),
+      signal: controller.signal
+    })
+    clearTimeout(timeout)
+
+    if (response.ok) {
+      const json = await response.json()
+      const content = JSON.parse(json.choices?.[0]?.message?.content ?? '{}')
+      const reasons = content.reasons || {}
+      for (const [pName, reasonText] of Object.entries(reasons)) {
+        if (typeof reasonText === 'string' && reasonText.trim().length > 10) {
+          const cacheKey = `reason_${targetCity.toLowerCase().trim()}_${pName.toLowerCase().trim()}`
+          reasonCache.set(cacheKey, reasonText.trim())
+          result[pName] = reasonText.trim()
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[generateCustomPlaceReasons] OpenAI fetch error:', err.message)
+  }
+
+  return result
+}
+
 

@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons } from '../services/openai.js'
 import { supabase } from '../services/supabase.js'
 
 export const aiRouter = Router()
@@ -260,7 +260,16 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     }
     const planner = buildTourPlanner(input, location, candidatePack.places)
     
-    // We send back the selected places as recommendations with real images & smart reasons
+    // Batch-generate 100% unique custom reasons for all selected places using OpenAI
+    const placeNames = planner.selectedPlaces.map(p => p.name)
+    const customReasonsMap = await generateCustomPlaceReasons({
+      destination: input.destination,
+      city: input.city,
+      prompt: input.prompt,
+      places: placeNames
+    }).catch(() => ({}))
+
+    // We send back the selected places as recommendations with real images & 100% unique reasons
     const recommendations = await Promise.all(
       planner.selectedPlaces.map(async (place, index) => {
         let imageUrl = place.imageUrl || place.images?.[0] || ''
@@ -269,15 +278,19 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
             imageUrl = await imageForPlace(place.name, input.city || input.destination || '')
           } catch (_) {}
         }
+        if (!imageUrl) {
+          imageUrl = getReliableCategoryFallbackImage(place.name, place.category)
+        }
+        const aiReason = customReasonsMap[place.name] || null
         return {
           id: place.placeId || place.id || `rec-${index}`,
           name: place.name,
           latitude: place.latitude,
           longitude: place.longitude,
           category: place.category || 'turismo',
-          imageUrl: imageUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500',
+          imageUrl,
           description: place.description || place.history || '',
-          reason: buildRecommendationReason(place, input),
+          reason: buildRecommendationReason(place, input, aiReason),
           durationMinutes: place.minutes || 25,
           locationInfo: {
             nombre_lugar: place.name,
@@ -494,9 +507,18 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       }
     }
 
-    // 5. Build rich alternative DTOs with REAL geocoded coordinates & images for each place
+    // 5. Build rich alternative DTOs with REAL geocoded coordinates, unique AI reasons & images for each place
+    const candidatePlaces = available.slice(0, 6)
+    const placeNames = candidatePlaces.map(p => p.name)
+    const customReasonsMap = await generateCustomPlaceReasons({
+      destination: destination || city,
+      city,
+      prompt: input.prompt,
+      places: placeNames
+    }).catch(() => ({}))
+
     const alternatives = await Promise.all(
-      available.slice(0, 6).map(async (place) => {
+      candidatePlaces.map(async (place) => {
         let realLat = place.latitude
         let realLon = place.longitude
 
@@ -517,16 +539,20 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
             console.warn('[alternatives] Image fetch error for place:', place.name)
           }
         }
+        if (!imageUrl) {
+          imageUrl = getReliableCategoryFallbackImage(place.name, place.category)
+        }
 
+        const aiReason = customReasonsMap[place.name] || place.reason || null
         return {
           id: place.placeId || place.id || place.name,
           name: place.name,
           latitude: realLat,
           longitude: realLon,
           category: place.category || 'turismo',
-          imageUrl: imageUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500',
+          imageUrl,
           description: place.description || place.history || `Explora ${place.name}, una parada imprescindible en ${city} llena de cultura e historia local.`,
-          reason: place.reason || `Excelente opción recomendada para enriquecer tu ruta en ${city}.`,
+          reason: buildRecommendationReason(place, { city, country, destination }, aiReason),
           durationMinutes: place.minutes || 30,
           locationInfo: {
             nombre_lugar: place.name,
@@ -1845,7 +1871,71 @@ function buildCuriousFacts(place, type) {
   ]).slice(0, 3)
 }
 
-export function buildRecommendationReason(place, input = {}) {
+const CATEGORY_IMAGE_POOLS = {
+  beach_island: [
+    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1509233725247-49e657c54213?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?w=800&auto=format&fit=crop',
+  ],
+  historic: [
+    'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1572949645841-094f3a9c4c94?w=800&auto=format&fit=crop',
+  ],
+  nature: [
+    'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=800&auto=format&fit=crop',
+  ],
+  gastronomy: [
+    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&auto=format&fit=crop',
+  ],
+  viewpoint: [
+    'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1476514525535-ce74f458149e?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&auto=format&fit=crop',
+  ],
+  general: [
+    'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1503220317375-aaad61436b1b?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&auto=format&fit=crop',
+  ]
+}
+
+export function getReliableCategoryFallbackImage(name = '', category = '') {
+  const normCat = (category || '').toLowerCase()
+  const normName = (name || '').toLowerCase()
+
+  let poolKey = 'general'
+  if (normCat.includes('beach') || normCat.includes('island') || normCat.includes('playa') || normCat.includes('isla') || normName.includes('isla') || normName.includes('cayo') || normName.includes('playa') || normName.includes('bahia')) {
+    poolKey = 'beach_island'
+  } else if (normCat.includes('historic') || normCat.includes('museum') || normCat.includes('church') || normCat.includes('monument') || normName.includes('catedral') || normName.includes('museo') || normName.includes('castillo') || normName.includes('plaza')) {
+    poolKey = 'historic'
+  } else if (normCat.includes('nature') || normCat.includes('park') || normCat.includes('garden') || normName.includes('parque') || normName.includes('jardin') || normName.includes('bosque')) {
+    poolKey = 'nature'
+  } else if (normCat.includes('restaurant') || normCat.includes('cafe') || normCat.includes('gastronomy') || normName.includes('restaurante') || normName.includes('mercado') || normName.includes('bar')) {
+    poolKey = 'gastronomy'
+  } else if (normCat.includes('viewpoint') || normCat.includes('mirador') || normName.includes('mirador') || normName.includes('malecon')) {
+    poolKey = 'viewpoint'
+  }
+
+  const pool = CATEGORY_IMAGE_POOLS[poolKey] || CATEGORY_IMAGE_POOLS.general
+  const seed = (name + category).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  return pool[seed % pool.length]
+}
+
+export function buildRecommendationReason(place, input = {}, aiReason = null) {
+  if (aiReason && typeof aiReason === 'string' && aiReason.trim().length > 10) {
+    return aiReason.trim()
+  }
+
   const category = place.category || place.type || 'place'
   const tags = place.rawTags || place.tags || {}
   const placeName = place.name || ''
@@ -1860,53 +1950,37 @@ export function buildRecommendationReason(place, input = {}) {
   }
 
   if (isEnd) {
-    return `Seleccionado como el destino principal y punto culminante de tu tour hacia ${destinationPlace || city}.`
+    return `Seleccionado como el destino principal y punto culminante de tu viaje en ${placeName || city}.`
   }
 
-  // Intermediates in corridor route
-  if (input.originPlace || input.destinationPlace) {
-    if (category === 'museum') {
-      return `Seleccionado por ser uno de los museos más destacados en tu trayecto hacia ${destinationPlace}, perfecto para conocer la historia local.`
-    }
-    if (category === 'historic' || tags.historic) {
-      return `Elegido por su alto valor histórico y su excelente ubicación en la ruta directa hacia ${destinationPlace}.`
-    }
-    if (category === 'viewpoint' || tags.tourism === 'viewpoint') {
-      return `Una parada panorámica recomendada en tu trayecto para admirar el paisaje antes de llegar a ${destinationPlace}.`
-    }
-    if (category === 'nature' || category === 'park' || tags.leisure === 'park') {
-      return `Elegido como un respiro natural en tu ruta hacia ${destinationPlace}, ideal para descansar y tomar fotos.`
-    }
-    if (category === 'restaurant' || category === 'cafe' || tags.amenity === 'restaurant') {
-      return `Una parada gastronómica recomendada en la ruta hacia ${destinationPlace} para disfrutar de la cocina típica.`
-    }
-    if (category === 'religious' || tags.historic === 'church') {
-      return `Un templo emblemático seleccionado por su arquitectura y su posición idónea en el trayecto hacia ${destinationPlace}.`
-    }
-    return `Seleccionado como parada estratégica en tu trayecto hacia ${destinationPlace} por su relevante interés local.`
+  const normCat = category.toLowerCase()
+  const normName = placeName.toLowerCase()
+
+  if (normCat.includes('island') || normCat.includes('beach') || normName.includes('isla') || normName.includes('cayo') || normName.includes('playa')) {
+    return `${placeName} es un destino imperdible en ${city} para admirar las aguas cristalinas, arrecifes y paisajes insulares en tu ruta a ${destinationPlace}.`
   }
 
-  // General recommendation reasons
-  if (category === 'museum') {
-    return `Un espacio emblemático en ${city} ideal para descubrir el arte, la memoria y la cultura local.`
-  }
-  if (category === 'historic' || tags.historic) {
-    return `Una joya patrimonial recomendada en ${city} que conserva la arquitectura e historia de la región.`
-  }
-  if (category === 'viewpoint' || tags.tourism === 'viewpoint') {
-    return `Un mirador destacado en ${city} para contemplar las mejores vistas panorámicas de la ciudad.`
-  }
-  if (category === 'nature' || category === 'park' || tags.leisure === 'park') {
-    return `Un espacio verde emblemático en ${city}, perfecto para conectar con la naturaleza y relajarse.`
-  }
-  if (category === 'restaurant' || category === 'cafe' || tags.amenity === 'restaurant') {
-    return `Un rincón culinario de gran sazón recomendado para saborear la gastronomía típica de ${city}.`
-  }
-  if (category === 'religious' || tags.historic === 'church') {
-    return `Un templo imponente recomendado en ${city} por su riqueza artística, arquitectónica y espiritual.`
+  if (normName.includes('malecon') || normName.includes('mirador') || normCat.includes('viewpoint')) {
+    return `${placeName} ofrece un espacio panorámico único en ${city} para contemplar el horizonte, tomar fotos y sentir la brisa antes de continuar hacia ${destinationPlace}.`
   }
 
-  return `Seleccionado por ser uno de los puntos turísticos e históricos más valorados para visitar en ${city}.`
+  if (normName.includes('catedral') || normName.includes('iglesia') || normCat.includes('religious') || tags.historic === 'church') {
+    return `${placeName} destaca en ${city} por su valor arquitectónico e historia sacra, siendo una parada cultural clave camino a ${destinationPlace}.`
+  }
+
+  if (normCat.includes('museum') || normName.includes('museo')) {
+    return `${placeName} es un centro cultural destacado en ${city} que resguarda la memoria, el arte y la identidad de la región.`
+  }
+
+  if (normCat.includes('nature') || normCat.includes('park') || normName.includes('parque')) {
+    return `${placeName} brinda un respiro verde y natural en ${city}, ideal para caminar bajo la sombra y descansar en tu trayecto a ${destinationPlace}.`
+  }
+
+  if (normCat.includes('restaurant') || normCat.includes('cafe') || normName.includes('restaurante')) {
+    return `${placeName} fue seleccionado para saborear la gastronomía típica y la sazón local de ${city} antes de llegar a ${destinationPlace}.`
+  }
+
+  return `Ubicado en ${city}, ${placeName} fue seleccionado por su gran relevancia local para enriquecer tu recorrido directo hacia ${destinationPlace}.`
 }
 
 function buildTips(place, type) {
