@@ -465,6 +465,7 @@ class LocalEvent {
     required this.city,
     required this.category,
     required this.startsAt,
+    this.endsAt,
     required this.imageUrl,
     required this.location,
   });
@@ -474,6 +475,7 @@ class LocalEvent {
   final String city;
   final String category;
   final DateTime startsAt;
+  final DateTime? endsAt;
   final String imageUrl;
   final GeoPoint location;
 
@@ -486,6 +488,9 @@ class LocalEvent {
       startsAt: json['starts_at'] != null
           ? DateTime.tryParse(json['starts_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
+      endsAt: json['ends_at'] != null
+          ? DateTime.tryParse(json['ends_at'].toString())
+          : null,
       imageUrl: json['image_url'] ?? '',
       location: GeoPoint(
         latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
@@ -500,6 +505,7 @@ class LocalEvent {
       'city': city,
       'category': category,
       'starts_at': startsAt.toIso8601String(),
+      'ends_at': endsAt?.toIso8601String(),
       'image_url': imageUrl,
       'latitude': location.latitude,
       'longitude': location.longitude,

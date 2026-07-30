@@ -304,27 +304,37 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
 
   Future<void> _approveTour(Tour tour) async {
     final l10n = AppLocalizations.of(context);
+    setState(() {
+      _pendingTours = _pendingTours.where((t) => t.id != tour.id).toList();
+    });
+    ref.invalidate(adminPendingToursProvider);
+    ref.invalidate(adminMetricsProvider);
+    ref.invalidate(toursProvider);
     try {
       await ref
           .read(tourRepositoryProvider)
           .moderateTour(tour.id, approved: true);
-      await _loadTours();
-      ref.invalidate(toursProvider);
       _snack(l10n.adminTourApproved(tour.title));
     } catch (_) {
+      await _loadTours();
       _snack(l10n.adminCouldNotApproveTour);
     }
   }
 
   Future<void> _rejectTour(Tour tour) async {
     final l10n = AppLocalizations.of(context);
+    setState(() {
+      _pendingTours = _pendingTours.where((t) => t.id != tour.id).toList();
+    });
+    ref.invalidate(adminPendingToursProvider);
+    ref.invalidate(adminMetricsProvider);
     try {
       await ref
           .read(tourRepositoryProvider)
           .moderateTour(tour.id, approved: false);
-      await _loadTours();
       _snack(l10n.adminTourRejected(tour.title));
     } catch (_) {
+      await _loadTours();
       _snack(l10n.adminCouldNotRejectTour);
     }
   }

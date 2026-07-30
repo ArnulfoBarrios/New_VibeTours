@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -800,7 +801,13 @@ class _EventTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final month = _monthName(event.startsAt.month);
     final day = event.startsAt.day.toString();
-    final timeStr = '${event.startsAt.hour.toString().padLeft(2, '0')}:${event.startsAt.minute.toString().padLeft(2, '0')}';
+    final startTimeStr = '${event.startsAt.hour.toString().padLeft(2, '0')}:${event.startsAt.minute.toString().padLeft(2, '0')}';
+    final dateRangeStr = event.endsAt != null
+        ? '${event.startsAt.day}/${event.startsAt.month} - ${event.endsAt!.day}/${event.endsAt!.month}'
+        : '$day $month';
+
+    final hasImage = event.imageUrl.isNotEmpty;
+    final isBase64 = event.imageUrl.startsWith('data:image');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -824,14 +831,24 @@ class _EventTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppTheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
+              image: hasImage
+                  ? DecorationImage(
+                      image: isBase64
+                          ? MemoryImage(base64Decode(event.imageUrl.split(',').last)) as ImageProvider
+                          : CachedNetworkImageProvider(event.imageUrl),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(month, style: const TextStyle(color: AppTheme.primary, fontSize: 10, fontWeight: FontWeight.w800)),
-                Text(day, style: const TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.w800)),
-              ],
-            ),
+            child: !hasImage
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(month, style: const TextStyle(color: AppTheme.primary, fontSize: 10, fontWeight: FontWeight.w800)),
+                      Text(day, style: const TextStyle(color: AppTheme.primary, fontSize: 20, fontWeight: FontWeight.w800)),
+                    ],
+                  )
+                : null,
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -846,7 +863,7 @@ class _EventTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${event.category} • $timeStr',
+                  '${event.category} • $dateRangeStr ($startTimeStr)',
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                 ),
               ],
