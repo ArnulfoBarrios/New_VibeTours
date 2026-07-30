@@ -186,6 +186,37 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         longitude: lon ?? state.request!.longitude,
       );
     } else if (state.needsDuration && state.request != null) {
+      final daysMatch = RegExp(r'(\d+)\s*d[íi]as?', caseSensitive: false).firstMatch(text);
+      if (daysMatch != null) {
+        final days = int.tryParse(daysMatch.group(1) ?? '');
+        if (days != null && days > 14) {
+          final aiMsg = ChatMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            text: 'El límite máximo permitido para la duración de un tour es de 14 días. Por favor ingresa una duración entre 1 y 14 días.',
+            type: ChatMessageType.ai,
+            timestamp: DateTime.now(),
+          );
+          state = state.copyWith(
+            isTyping: false,
+            messages: [...state.messages, aiMsg],
+          );
+          return;
+        }
+        if (state.request!.isMultiCity && days != null && days < 2) {
+          final aiMsg = ChatMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            text: 'Para recorridos entre varias ciudades no es recomendable 1 día. Por favor ingresa una duración de mínimo 2 días.',
+            type: ChatMessageType.ai,
+            timestamp: DateTime.now(),
+          );
+          state = state.copyWith(
+            isTyping: false,
+            messages: [...state.messages, aiMsg],
+          );
+          return;
+        }
+      }
+
       request = AiTourRequest(
         prompt: '${state.request!.prompt}\n$text',
         destination: state.request!.destination,

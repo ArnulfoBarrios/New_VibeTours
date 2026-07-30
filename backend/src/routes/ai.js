@@ -197,7 +197,23 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
       }
     }
     
-    if (!input.destination) {
+    // Classify Tour Type strictly
+    const isExplicitUserGpsOrigin = Boolean(extracted?.is_user_location_origin || input?.originPlace === 'user_current_location')
+    const hasOriginPlace = Boolean(input.originPlace && input.originPlace !== 'user_current_location')
+    const hasDestinationPlace = Boolean(input.destinationPlace)
+    const isPointToPointRoute = (isExplicitUserGpsOrigin && hasDestinationPlace) || (hasOriginPlace && hasDestinationPlace)
+    const isMultiCityTour = Boolean(extracted?.is_multi_city || input?.isMultiCity || (extracted?.cities && extracted.cities.length >= 2))
+    const isDurationSpecifiedInPrompt = Boolean(extracted?.duration_specified || input?.durationSpecified)
+
+    // RULE 1: Point-to-Point A -> B tours NEVER ask for destination or duration
+    if (isPointToPointRoute) {
+      if (!input.durationHours) {
+        input.durationHours = 8 // Default 1 day for point-to-point tours
+      }
+    }
+
+    // RULE 2: If city/destination is missing and it's NOT point-to-point and NOT multi-city, ASK FOR DESTINATION
+    if (!input.destination && !isPointToPointRoute && !isMultiCityTour) {
       const rawSuggestions = (extracted && Array.isArray(extracted.suggestions) && extracted.suggestions.length > 0)
         ? extracted.suggestions
         : [
@@ -229,22 +245,39 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
 
       return res.json({
         needsDestination: true,
-        message: '¿A qué lugar te gustaría ir? Basado en lo que buscas, aquí tienes algunas recomendaciones:',
+        message: '¿A qué ciudad o lugar te gustaría ir? Basado en lo que buscas, aquí tienes algunas recomendaciones:',
         suggestions
       })
     }
-    
-    if (!input.durationHours) {
-      return res.json({
-        needsDuration: true,
-        message: '¿Cuánto tiempo te gustaría que dure tu viaje o recorrido?',
-        suggestions: [
-          { label: '4 horas', hours: 4 },
-          { label: '1 día (8 horas)', hours: 8 },
-          { label: '3 días', hours: 72 },
-          { label: '5 días', hours: 120 }
-        ]
-      })
+
+    // RULE 3: If duration is missing and NOT specified in prompt, ASK FOR DURATION
+    if (!isPointToPointRoute && !isDurationSpecifiedInPrompt && !input.durationHours) {
+      if (isMultiCityTour) {
+        return res.json({
+          needsDuration: true,
+          isMultiCity: true,
+          message: '¿Cuánto tiempo va a durar tu tour entre ciudades? (Mínimo 2 días)',
+          suggestions: [
+            { label: '2 días', hours: 48 },
+            { label: '3 días', hours: 72 },
+            { label: '4 días', hours: 96 },
+            { label: '5 días', hours: 120 }
+          ]
+        })
+      } else {
+        return res.json({
+          needsDuration: true,
+          isMultiCity: false,
+          message: '¿Cuánto tiempo va a durar tu tour?',
+          suggestions: [
+            { label: '1 día (4 horas)', hours: 4 },
+            { label: '1 día', hours: 8 },
+            { label: '2 días', hours: 48 },
+            { label: '3 días', hours: 72 },
+            { label: '4 días', hours: 96 }
+          ]
+        })
+      }
     }
     
     if (input.city && input.city.trim().length > 0) {

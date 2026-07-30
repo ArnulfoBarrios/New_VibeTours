@@ -24,9 +24,11 @@ function sanitizeExtractedLocation(raw) {
       country: '',
       origin_place: null,
       destination_place: null,
+      is_user_location_origin: false,
       cities: [],
       is_multi_city: false,
       duration_hours: null,
+      duration_specified: false,
       budget: null,
       companion_type: null,
       suggestions: []
@@ -39,9 +41,11 @@ function sanitizeExtractedLocation(raw) {
     country: String(raw.country ?? '').trim(),
     origin_place: raw.origin_place ? String(raw.origin_place).trim() : null,
     destination_place: raw.destination_place ? String(raw.destination_place).trim() : null,
+    is_user_location_origin: Boolean(raw.is_user_location_origin),
     cities: Array.isArray(raw.cities) ? raw.cities.map(c => String(c).trim()).filter(Boolean) : [],
-    is_multi_city: Boolean(raw.is_multi_city),
+    is_multi_city: Boolean(raw.is_multi_city) || (Array.isArray(raw.cities) && raw.cities.length >= 2),
     duration_hours: typeof raw.duration_hours === 'number' && Number.isFinite(raw.duration_hours) ? raw.duration_hours : null,
+    duration_specified: Boolean(raw.duration_specified),
     budget: raw.budget ? String(raw.budget).trim() : null,
     companion_type: raw.companion_type ? String(raw.companion_type).trim() : null,
     suggestions: Array.isArray(raw.suggestions)
@@ -51,6 +55,85 @@ function sanitizeExtractedLocation(raw) {
           reason: String(s?.reason ?? '').trim()
         }))
       : []
+  }
+}
+
+export function extractLocationLocalFallback(prompt) {
+  if (!prompt || typeof prompt !== 'string') return null
+  const p = prompt.trim()
+  const lower = p.toLowerCase()
+
+  const isUserGps = /\b(desde mi ubica|donde estoy|mi posici[oó]n|desde aqu[íi]|empieza aqu[íi])\b/i.test(lower)
+
+  let originPlace = null
+  let destinationPlace = null
+  let isMultiCity = false
+  let cities = []
+
+  // Check multi-city pattern: "empieze en X y acabe en Y"
+  const multiCityMatch = lower.match(/\b(empieze|empiece|inicie|desde)\s+en\s+([A-ZÁÉÍÓÚa-záéíóú\s]+?)\s+y\s+(acabe|termine|finalice)\s+en\s+([A-ZÁÉÍÓÚa-záéíóú\s]+?)(?=\s+(?:en|el|la|donde|para)|$)/i)
+  if (multiCityMatch) {
+    isMultiCity = true
+    const city1 = multiCityMatch[2].trim()
+    const city2 = multiCityMatch[4].trim()
+    cities = [city1, city2]
+  } else if (isUserGps) {
+    originPlace = 'user_current_location'
+    const destMatch = lower.match(/\b(hasta|hacia|a|al)\s+([^,.]+)/i)
+    if (destMatch) {
+      destinationPlace = destMatch[2].replace(/\b(donde|pueda|ver|que|lugares|interesantes|para).*/i, '').trim()
+    }
+  } else {
+    const routeMatch = lower.match(/\b(del|de|desde|partiendo de)\s+(.+?)\s+(al|a|hasta|hacia)\s+(.+)/i)
+    if (routeMatch) {
+      const origCandidate = routeMatch[2].replace(/\b(tour|viaje)\b/i, '').trim()
+      const destCandidate = routeMatch[4].replace(/\b(donde|pueda|ver|que|lugares|interesantes|para).*/i, '').trim()
+      if (origCandidate.length > 2 && destCandidate.length > 2) {
+        originPlace = origCandidate
+        destinationPlace = destCandidate
+      }
+    }
+  }
+
+  let durationHours = null
+  let durationSpecified = false
+  const daysMatch = lower.match(/\b(\d+)\s*d[íi]as?\b/i)
+  const hoursMatch = lower.match(/\b(\d+)\s*horas?\b/i)
+  if (daysMatch) {
+    durationSpecified = true
+    durationHours = parseInt(daysMatch[1], 10) * 24
+  } else if (hoursMatch) {
+    durationSpecified = true
+    durationHours = parseInt(hoursMatch[1], 10)
+  }
+
+  let explicitDestination = destinationPlace || (cities.length > 0 ? cities[0] : '')
+  if (!explicitDestination) {
+    const cityMatch = p.match(/\b(a|en|para|hacia)\s+([A-ZÁÉÍÓÚ][a-záéíóú\s]+?)(?=\s+(?:donde|para|con|que|quiero|voy)|$)/i)
+    if (cityMatch) {
+      const candidate = cityMatch[2].trim()
+      const stopWords = ['un', 'una', 'el', 'la', 'los', 'las', 'un ritmo', 'ir', 'estar', 'ver', 'hacer', 'viajar', 'colombia']
+      if (!stopWords.includes(candidate.toLowerCase())) {
+        explicitDestination = candidate
+      }
+    }
+  }
+
+  return {
+    is_unrelated: false,
+    explicit_destination: explicitDestination,
+    city: explicitDestination,
+    country: lower.includes('colombia') ? 'Colombia' : '',
+    origin_place: originPlace,
+    destination_place: destinationPlace,
+    is_user_location_origin: isUserGps,
+    cities: cities.length > 0 ? cities : (explicitDestination ? [explicitDestination] : []),
+    is_multi_city: isMultiCity,
+    duration_hours: durationHours,
+    duration_specified: durationSpecified,
+    budget: null,
+    companion_type: null,
+    suggestions: []
   }
 }
 
@@ -64,14 +147,13 @@ export async function extractLocation(prompt, lat, lon, userCountry = null) {
   const apiKey = process.env.OPENAI_API_KEY
   
   if (!apiKey) {
-    console.warn('[extractLocation] OPENAI_API_KEY no está configurada')
-    return null
+    return extractLocationLocalFallback(prompt)
   }
 
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
-    const response = await fetch(`https://api.openai.com/v1/chat/completions`, {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -82,17 +164,15 @@ export async function extractLocation(prompt, lat, lon, userCountry = null) {
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: `Eres un asistente experto en viajes. Lee el prompt del usuario.
-Determina primero si el mensaje del usuario no tiene sentido, es una secuencia aleatoria de letras/caracteres (ej: "yfyzGgstfuvu", "asdffd"), o si es un tema completamente ajeno a planificar viajes, turismo, tours, hoteles, rutas o geografía (por ejemplo, preguntas de programación, cocina, matemáticas, etc.). Si se da este caso, establece obligatoriamente "is_unrelated" en true. Si es un mensaje coherente relacionado con viajes, turismo o un saludo inicial, establece "is_unrelated" en false.
+Determina primero si el mensaje del usuario no tiene sentido, es una secuencia aleatoria de letras/caracteres (ej: "yfyzGgstfuvu", "asdffd"), o si es un tema completamente ajeno a planificar viajes, turismo, tours, hoteles, rutas o geografía. Si se da este caso, establece obligatoriamente "is_unrelated" en true. Si es un mensaje coherente relacionado con viajes o turismo, establece "is_unrelated" en false.
 
 Si "is_unrelated" es false:
-- Si menciona claramente a dónde quiere ir (una o varias ciudades, un monumento, estadio o atracción específica como "hasta el Estadio Metropolitano", "al Malecón", "a la playa X"), PON OBLIGATORIAMENTE ese lugar o ciudad en "explicit_destination" y deja "suggestions" VACÍO.
-- Si el usuario menciona una ruta dentro de una ciudad con un punto de inicio específico (ej. "empieza en el Malecón", "desde el parque X") y/o un punto final específico (ej. "hasta el Estadio", "termine en el Museo Y"), extrae "origin_place" y "destination_place". Si "destination_place" está presente y "explicit_destination" está vacío, pon "destination_place" en "explicit_destination". Si el usuario indica que desea empezar desde su ubicación actual (ej. "desde mi ubicación", "donde estoy", "desde mi posición", "empieza aquí"), establece "origin_place" obligatoriamente como "user_current_location" y "is_user_location_origin" en true.
-- Si el usuario menciona varias ciudades para recorrer (ej. "empieze en Barranquilla y termine en Santa Marta"), extrae un array con todas las ciudades en "cities" (ej: ["Barranquilla", "Santa Marta"]) y marca "is_multi_city" como true. Si es una sola ciudad, "is_multi_city" es false y "cities" contiene esa ciudad.
+- Si menciona claramente a dónde quiere ir (una o varias ciudades, o una atracción específica como "hasta el Estadio Metropolitano", "al Malecón", "a la playa X"), pon esa ciudad o lugar en "explicit_destination".
+- REGLA CRÍTICA DE ORIGEN DESDE GPS: Marca "is_user_location_origin" en true y "origin_place" en "user_current_location" ÚNICAMENTE si el usuario dijo EXPLÍCITAMENTE en su texto frases como "desde mi ubicación", "partiendo de donde estoy", "desde mi posición", "empieza aquí". Si el usuario NO escribió esas palabras, "is_user_location_origin" DEBE SER FALSE.
+- Si el usuario menciona una ruta de punto a punto dentro de una ciudad (ej. "del Malecón del Río al Estadio Metropolitano"), extrae "origin_place" (ej. "Malecón del Río") y "destination_place" (ej. "Estadio Metropolitano").
+- Si menciona varias ciudades para recorrer (ej. "empieze en Cartagena y termine en Santa Marta"), extrae en "cities" un array con las ciudades (ej: ["Cartagena", "Santa Marta"]) y marca "is_multi_city" en true.
+- Detección de duración: Si el usuario especificó explícitamente el tiempo en su mensaje (ej. "de 3 días", "tour de 4 horas", "2 días"), establece "duration_specified" en true y convierte ese tiempo a horas en "duration_hours" (ej: 3 días = 72, 4 horas = 4). Si el usuario NO mencionó el tiempo ni días ni horas, establece "duration_specified" en false y "duration_hours" en null.
 - ÚNICAMENTE si el usuario NO menciona ninguna ciudad ni lugar a dónde ir, pon "explicit_destination" vacío y recomienda 3 destinos increíbles (ciudades) adaptados a sus gustos en "suggestions".
-- Extrae también la duración (ej: "viaje de 3 días" = 72, "tour de 4 horas" = 4) en "duration_hours" (number o null). Nota: Para tours entre múltiples ciudades (is_multi_city = true), si no especifica duración, asigna al menos 48 horas. Para tours de una sola ciudad con origen y fin especificados, si no se indica duración, asigna 8 horas.
-- Extrae el presupuesto en "budget" (string: "bajo", "medio", "alto", o null).
-- Extrae el tipo de acompañamiento en "companion_type" (string: "solo", "pareja", "familia", "amigos", o null).
-${lat && lon ? `IMPORTANTE: El usuario se encuentra en las coordenadas geográficas latitud ${lat}, longitud ${lon}${userCountry ? ` ubicadas en el país de ${userCountry}` : ''}. Si el usuario pide lugares genéricos, DEBEN estar en el mismo país o región cercana. CRÍTICO: Si el usuario menciona una ciudad con homónimos (como "Cartagena" o "Córdoba"), ASUME ESTRICTAMENTE que se refiere a la ciudad ubicada en ${userCountry || 'su país correspondiente a sus coordenadas actuales'}, y rellena el campo "country" con el nombre de ese país. ` : ''}
 
 Devuelve ÚNICAMENTE JSON válido con este esquema:
 {
@@ -105,6 +185,7 @@ Devuelve ÚNICAMENTE JSON válido con este esquema:
   "is_user_location_origin": boolean,
   "cities": [string],
   "is_multi_city": boolean,
+  "duration_specified": boolean,
   "duration_hours": number o null,
   "budget": string o null,
   "companion_type": string o null,
