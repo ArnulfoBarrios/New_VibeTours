@@ -171,19 +171,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
     AiTourRequest request;
     if (state.needsDestination && state.request != null) {
-      request = AiTourRequest(
+      request = state.request!.copyWith(
         prompt: '${state.request!.prompt}\n$text',
-        destination: text, // Use the user's message as destination
-        country: state.request!.country,
-        city: state.request!.city,
-        type: state.request!.type,
-        durationHours: state.request!.durationHours,
-        language: state.request!.language,
-        touristProfileSummary: state.request!.touristProfileSummary,
-        touristInterests: state.request!.touristInterests,
-        touristPace: state.request!.touristPace,
-        latitude: lat ?? state.request!.latitude,
-        longitude: lon ?? state.request!.longitude,
+        destination: text,
+        city: text,
       );
     } else if (state.needsDuration && state.request != null) {
       final daysMatch = RegExp(r'(\d+)\s*d[íi]as?', caseSensitive: false).firstMatch(text);
@@ -217,19 +208,9 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         }
       }
 
-      request = AiTourRequest(
+      request = state.request!.copyWith(
         prompt: '${state.request!.prompt}\n$text',
-        destination: state.request!.destination,
-        country: state.request!.country,
-        city: state.request!.city,
-        type: state.request!.type,
         durationHours: null, // will be parsed on backend
-        language: state.request!.language,
-        touristProfileSummary: state.request!.touristProfileSummary,
-        touristInterests: state.request!.touristInterests,
-        touristPace: state.request!.touristPace,
-        latitude: lat ?? state.request!.latitude,
-        longitude: lon ?? state.request!.longitude,
       );
     } else {
       final profile = ref.read(touristProfileProvider).valueOrNull ?? TouristProfileV2.empty;
@@ -291,6 +272,16 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           );
           return;
         }
+
+        AiTourRequest updatedReq = request;
+        if (data['destination'] != null && (data['destination'] as String).isNotEmpty) {
+          updatedReq = updatedReq.copyWith(
+            destination: data['destination'] as String,
+            city: data['city'] as String? ?? updatedReq.city,
+            country: data['country'] as String? ?? updatedReq.country,
+          );
+        }
+
         if (data['needsDestination'] == true) {
           final suggs = data['suggestions'] as List? ?? [];
           final suggestions = suggs.map((e) {
@@ -311,6 +302,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             isLoading: false,
             isTyping: false,
             needsDestination: true,
+            request: updatedReq,
             destinationMessage: data['message'],
             destinationSuggestions: suggs,
             messages: [...state.messages, aiMsg],
@@ -334,6 +326,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             isLoading: false,
             isTyping: false,
             needsDuration: true,
+            request: updatedReq,
             messages: [...state.messages, aiMsg],
           );
           return;

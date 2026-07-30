@@ -256,6 +256,9 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         return res.json({
           needsDuration: true,
           isMultiCity: true,
+          destination: input.destination,
+          city: input.city || input.destination,
+          country: input.country || '',
           message: '¿Cuánto tiempo va a durar tu tour entre ciudades? (Mínimo 2 días)',
           suggestions: [
             { label: '2 días', hours: 48 },
@@ -268,6 +271,9 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         return res.json({
           needsDuration: true,
           isMultiCity: false,
+          destination: input.destination,
+          city: input.city || input.destination,
+          country: input.country || '',
           message: '¿Cuánto tiempo va a durar tu tour?',
           suggestions: [
             { label: '1 día (4 horas)', hours: 4 },
