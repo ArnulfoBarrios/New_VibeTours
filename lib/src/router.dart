@@ -14,6 +14,7 @@ import 'features/home/place_route_screen.dart';
 import 'features/legal/legal_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/profile/profile_screen.dart';
+import 'features/profile/public_profile_screen.dart';
 import 'features/profile/tourist_preferences_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/shell/main_shell.dart';
@@ -83,6 +84,27 @@ final routerProvider = Provider<GoRouter>((ref) {
           return CustomTransitionPage(
             key: state.pageKey,
             child: TourDetailScreen(tourId: state.pathParameters['id']!),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(1.0, 0.0),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: child,
+              );
+            },
+          );
+        },
+      ),
+      GoRoute(
+        path: '/user-profile/:userId',
+        pageBuilder: (context, state) {
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: PublicProfileScreen(userId: state.pathParameters['userId']!),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return SlideTransition(
                 position: Tween<Offset>(

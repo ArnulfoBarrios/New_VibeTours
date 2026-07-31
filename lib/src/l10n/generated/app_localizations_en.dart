@@ -753,211 +753,210 @@ class AppLocalizationsEn extends AppLocalizations {
       'Rate the app or leave suggestions in Profile to help us continuously improve VIBETOURS.';
 
   @override
-  String get goodMorning => 'Buenos días';
+  String get goodMorning => 'Good morning';
 
   @override
-  String get editorsChoice => 'SELECCIÓN DEL EDITOR';
+  String get editorsChoice => 'EDITOR\'S CHOICE';
 
   @override
-  String get whereToNext => '¿A dónde vamos?';
+  String get whereToNext => 'Where to next?';
 
   @override
-  String get toursForYou => 'Tours para ti';
+  String get toursForYou => 'Tours for you';
 
   @override
-  String get yourCurrentArea => 'Tu zona actual';
+  String get yourCurrentArea => 'Your current area';
 
   @override
-  String get nearbyPointOfInterest => 'Punto de interes cercano';
+  String get nearbyPointOfInterest => 'Nearby point of interest';
 
   @override
-  String get upcomingEvents => 'Próximos Eventos';
+  String get upcomingEvents => 'Upcoming Events';
 
   @override
-  String get all => 'Todos';
+  String get all => 'All';
 
   @override
-  String get allFem => 'Todas';
+  String get allFem => 'All';
 
   @override
-  String get any => 'Cualquiera';
+  String get any => 'Any';
 
   @override
-  String get searchDestination => 'Buscar destino...';
+  String get searchDestination => 'Search destination...';
 
   @override
-  String get matchAffinity => 'Afinidad';
+  String get matchAffinity => 'Match';
 
   @override
-  String get vibeMatchAffinity => 'Afinidad Vibe';
+  String get vibeMatchAffinity => 'Vibe Match';
 
   @override
-  String get typeUrban => 'Urbano';
+  String get typeUrban => 'Urban';
 
   @override
-  String get typeHistorical => 'Histórico';
+  String get typeHistorical => 'Historical';
 
   @override
-  String get typeGastronomic => 'Gastronómico';
+  String get typeGastronomic => 'Gastronomic';
 
   @override
   String get typeCultural => 'Cultural';
 
   @override
-  String get typeEcological => 'Ecológico';
+  String get typeEcological => 'Ecological';
 
   @override
-  String get typeRomantic => 'Romántico';
+  String get typeRomantic => 'Romantic';
 
   @override
-  String get typeSports => 'Deportivo';
+  String get typeSports => 'Sports';
 
   @override
-  String get typeNightlife => 'Nocturno';
+  String get typeNightlife => 'Nightlife';
 
   @override
-  String get typeFamily => 'Familiar';
+  String get typeFamily => 'Family';
 
   @override
-  String get typeCustom => 'Personalizado';
+  String get typeCustom => 'Custom';
 
   @override
-  String get appearanceSystem => 'Sistema';
+  String get appearanceSystem => 'System';
 
   @override
-  String get appearanceLight => 'Claro';
+  String get appearanceLight => 'Light';
 
   @override
-  String get appearanceDark => 'Oscuro';
+  String get appearanceDark => 'Dark';
 
   @override
-  String get pqrsMyPqrs => 'Mis PQRS';
+  String get pqrsMyPqrs => 'My PQRS';
 
   @override
   String get pqrsHistorySub =>
-      'Historial de tus solicitudes y respuestas del administrador';
+      'History of your requests and administrator responses';
 
   @override
-  String get pqrsStatusAnswered => 'RESPONDIDO';
+  String get pqrsStatusAnswered => 'ANSWERED';
 
   @override
-  String get pqrsStatusOpen => 'PENDIENTE';
+  String get pqrsStatusOpen => 'PENDING';
 
   @override
-  String get pqrsTapToView => 'Toca para ver la respuesta';
+  String get pqrsTapToView => 'Tap to view response';
 
   @override
-  String get pqrsAdminResponse => 'Respuesta del administrador';
+  String get pqrsAdminResponse => 'Admin response';
 
   @override
-  String get pqrsClose => 'Cerrar';
+  String get pqrsClose => 'Close';
 
   @override
-  String get pqrsEmpty => 'Aún no tienes solicitudes en el historial.';
+  String get pqrsEmpty => 'You don\'t have any requests in your history yet.';
 
   @override
   String get helpBody1a =>
-      'Puedes abrir VibeTours como invitado para explorar tours aprobados, lugares cercanos, el mapa basico y detalles publicos.';
+      'You can open VibeTours as a guest to explore approved tours, nearby places, basic map, and public details.';
 
   @override
   String get helpBody1b =>
-      'Para crear tours, guardar favoritos en la nube, comentar, calificar, enviar PQRS o pedir disponibilidad necesitas iniciar sesion.';
+      'To create tours, save favorites to the cloud, comment, rate, send PQRS, or check availability, you need to sign in.';
 
   @override
   String get helpBody1c =>
-      'Si intentas una accion privada, VibeTours mostrara el aviso \'Inicia sesion para continuar\' sin perder lo que estabas viendo.';
+      'If you try a private action, VibeTours will display a \'Sign in to continue\' prompt without losing what you were viewing.';
 
   @override
   String get helpBody1d =>
-      'El login por correo se mantiene disponible. Si Google esta configurado, tambien puedes entrar con tu cuenta de Google.';
+      'Email login remains available. If Google is configured, you can also sign in with your Google account.';
 
   @override
   String get helpBody2a =>
-      'La seccion Descubrir muestra lugares destacados usando tu ubicacion y recomendaciones cercanas.';
+      'The Discover section shows featured places using your location and nearby recommendations.';
 
   @override
   String get helpBody2b =>
-      'Si el buscador esta vacio, veras recomendaciones populares o cercanas para que la pantalla nunca quede sin contenido.';
+      'If the search bar is empty, you will see popular or nearby recommendations so the screen is never left empty.';
 
   @override
   String get helpBody2c =>
-      'Puedes buscar palabras como museo, restaurante, parque, playa o mirador para encontrar lugares reales.';
+      'You can search for words like museum, restaurant, park, beach, or viewpoint to find real places.';
 
   @override
   String get helpBody2d =>
-      'Usa filtros de categoria, precio, distancia y apto para menores para ajustar los resultados.';
+      'Use category, price, distance, and kid-friendly filters to refine the results.';
 
   @override
   String get helpBody3a =>
-      'Explora tours creados por la comunidad o generados por nuestra IA.';
+      'Explore tours created by the community or generated by our AI.';
 
   @override
   String get helpBody3b =>
-      'Usa la barra de busqueda superior para buscar tours por nombre o palabra clave.';
+      'Use the top search bar to search for tours by name or keyword.';
 
   @override
   String get helpBody3c =>
-      'Toca el icono de filtros para ajustar la busqueda por categoria, precio y mas.';
+      'Tap the filter icon to refine your search by category, price, and more.';
 
   @override
   String get helpBody4a =>
-      'Visualiza lugares turisticos, eventos y puntos de interes directamente en el mapa.';
+      'Visualize tourist spots, events, and points of interest directly on the map.';
 
   @override
-  String get helpBody4b =>
-      'Toca sobre los pines para ver una tarjeta rapida del lugar.';
+  String get helpBody4b => 'Tap on pins to view a quick place card.';
 
   @override
   String get helpBody4c =>
-      'Al tocar una tarjeta, se abrira el detalle del lugar donde puedes guardarlo, pedir disponibilidad si es un restaurante/hotel, o iniciar la ruta hasta alli.';
+      'Tapping a card opens the place details where you can save it, check availability if it\'s a restaurant/hotel, or start a route there.';
 
   @override
   String get helpBody5a =>
-      'Crea tus propios tours agregando un nombre, descripcion e imagen de portada.';
+      'Create your own tours by adding a name, description, and cover image.';
 
   @override
   String get helpBody5b =>
-      'Agrega paradas (lugares) buscandolos en nuestra base de datos conectada a mapas.';
+      'Add stops (places) by searching for them in our map-connected database.';
 
   @override
   String get helpBody5c =>
-      'Puedes definir cuantas personas y cuantos dias dura el tour.';
+      'You can define how many people and how many days the tour lasts.';
 
   @override
   String get helpBody6a =>
-      'Genera un tour completo simplemente describiendo lo que quieres ver y hacer con la IA.';
+      'Generate a complete tour simply by describing what you want to see and do using AI.';
 
   @override
   String get helpBody6b =>
-      'Puedes usar opciones avanzadas para especificar si dura dias u horas.';
+      'You can use advanced options to specify whether it lasts days or hours.';
 
   @override
   String get helpBody6c =>
-      'Una vez generado el tour, puedes guardarlo en tu cuenta o editarlo para agregar o quitar paradas antes de guardarlo.';
+      'Once the tour is generated, you can save it to your account or edit it to add or remove stops before saving.';
 
   @override
   String get helpBody7a =>
-      'Puedes editar tus tours creados en la seccion de \'Mis Tours\'.';
+      'You can edit your created tours in the \'My Tours\' section.';
 
   @override
   String get helpBody7b =>
-      'Guarda tus lugares favoritos y organizalos para consultarlos rapidamente.';
+      'Save your favorite places and organize them to access them quickly.';
 
   @override
   String get helpBody8a =>
-      'Completa tu perfil turistico eligiendo tus intereses y categorias favoritas.';
+      'Complete your tourist profile by choosing your favorite interests and categories.';
 
   @override
   String get helpBody8b =>
-      'Cambia tu foto, nombre y preferencias de idioma y tema visual.';
+      'Change your photo, name, and language/theme preferences.';
 
   @override
   String get helpBody9a =>
-      'Envia Peticiones, Quejas, Reclamos y Sugerencias directamente desde la app.';
+      'Send Requests, Complaints, Claims, and Suggestions (PQRS) directly from the app.';
 
   @override
   String get helpBody9b =>
-      'Revisa el estado de tus PQRS y las respuestas del administrador en la pestana \'Historial\'.';
+      'Check the status of your PQRS and administrator responses in the \'History\' tab.';
 
   @override
   String get privSec1Title => 'Data we collect';
@@ -1734,4 +1733,113 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get submitReview => 'Submit Review';
+
+  @override
+  String get aboutMe => 'About me';
+
+  @override
+  String get addBioPlaceholder => 'Add a bio and your interests here...';
+
+  @override
+  String get writeAboutYourself => 'Write something about yourself...';
+
+  @override
+  String get digitalPassportTitle => '🛂 Digital Travel Passport';
+
+  @override
+  String get explorerLevel => 'Explorer Level';
+
+  @override
+  String get statsTravelled => 'Travelled';
+
+  @override
+  String get statsStops => 'Stops';
+
+  @override
+  String get statsBadges => 'Badges';
+
+  @override
+  String get achievementBadges => '🏅 Achievement Badges';
+
+  @override
+  String get badgeRouteCreatorTitle => 'Route Creator';
+
+  @override
+  String badgeRouteCreatorSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count tours created',
+      one: '1 tour created',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get badgeRouteCreatorReason =>
+      'Awarded for creating tours in the community.';
+
+  @override
+  String get badgeTouristCriticTitle => 'Tour Critic';
+
+  @override
+  String badgeTouristCriticSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count reviews given',
+      one: '1 review given',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get badgeTouristCriticReason => 'Awarded for rating explored tours.';
+
+  @override
+  String get badgeCommunityGuideTitle => 'Community Guide';
+
+  @override
+  String badgeCommunityGuideSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count participants',
+      one: '1 participant',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get badgeCommunityGuideReason =>
+      'Awarded for inspiring travelers to join your tours.';
+
+  @override
+  String get badgeVibeExplorerTitle => 'VIBE Explorer';
+
+  @override
+  String get badgeVibeExplorerSubtitle => 'Active profile';
+
+  @override
+  String get badgeVibeExplorerReason => 'Awarded to active VIBETOURS members.';
+
+  @override
+  String get within5km => 'Within 5km';
+
+  @override
+  String get noActiveParticipants => 'No active participants in your tours.';
+
+  @override
+  String get noParticipantsYet => 'No participants yet.';
+
+  @override
+  String participantsCountLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count participants',
+      one: '1 participant',
+    );
+    return '$_temp0';
+  }
 }

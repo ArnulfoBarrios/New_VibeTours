@@ -1052,6 +1052,11 @@ final userStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref)
   return ref.watch(tourRepositoryProvider).getUserStats(user.id);
 });
 
+final publicUserProfileProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, userId) async {
+  return ref.watch(tourRepositoryProvider).getPublicUserProfile(userId);
+});
+
+
 class TourParticipantsController extends AsyncNotifier<List<TourWithParticipants>> {
   @override
   FutureOr<List<TourWithParticipants>> build() async {

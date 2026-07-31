@@ -1743,4 +1743,116 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get submitReview => 'Publicar Reseña';
+
+  @override
+  String get aboutMe => 'Sobre mí';
+
+  @override
+  String get addBioPlaceholder => 'Añade una biografía y tus gustos aquí...';
+
+  @override
+  String get writeAboutYourself => 'Escribe algo sobre ti...';
+
+  @override
+  String get digitalPassportTitle => '🛂 Pasaporte Digital de Viajes';
+
+  @override
+  String get explorerLevel => 'Nivel Explorador';
+
+  @override
+  String get statsTravelled => 'Recorridos';
+
+  @override
+  String get statsStops => 'Paradas';
+
+  @override
+  String get statsBadges => 'Badges';
+
+  @override
+  String get achievementBadges => '🏅 Medallas de Logros';
+
+  @override
+  String get badgeRouteCreatorTitle => 'Creador de Rutas';
+
+  @override
+  String badgeRouteCreatorSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count tours creados',
+      one: '1 tour creado',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get badgeRouteCreatorReason =>
+      'Otorgado por crear tours en la comunidad.';
+
+  @override
+  String get badgeTouristCriticTitle => 'Crítico Turístico';
+
+  @override
+  String badgeTouristCriticSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count reseñas dadas',
+      one: '1 reseña dada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get badgeTouristCriticReason =>
+      'Otorgado por calificar tours explorados.';
+
+  @override
+  String get badgeCommunityGuideTitle => 'Guía Comunitario';
+
+  @override
+  String badgeCommunityGuideSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count participantes',
+      one: '1 participante',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get badgeCommunityGuideReason =>
+      'Otorgado por inspirar a viajeros a unirse a tus tours.';
+
+  @override
+  String get badgeVibeExplorerTitle => 'Explorador VIBE';
+
+  @override
+  String get badgeVibeExplorerSubtitle => 'Perfil activo';
+
+  @override
+  String get badgeVibeExplorerReason =>
+      'Otorgado a los miembros activos de VIBETOURS.';
+
+  @override
+  String get within5km => 'A menos de 5km';
+
+  @override
+  String get noActiveParticipants =>
+      'No hay participantes activos en tus tours.';
+
+  @override
+  String get noParticipantsYet => 'No hay participantes todavía.';
+
+  @override
+  String participantsCountLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count participantes',
+      one: '1 participante',
+    );
+    return '$_temp0';
+  }
 }

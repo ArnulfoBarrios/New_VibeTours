@@ -3254,6 +3254,156 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Publicar Reseña'**
   String get submitReview;
+
+  /// No description provided for @aboutMe.
+  ///
+  /// In es, this message translates to:
+  /// **'Sobre mí'**
+  String get aboutMe;
+
+  /// No description provided for @addBioPlaceholder.
+  ///
+  /// In es, this message translates to:
+  /// **'Añade una biografía y tus gustos aquí...'**
+  String get addBioPlaceholder;
+
+  /// No description provided for @writeAboutYourself.
+  ///
+  /// In es, this message translates to:
+  /// **'Escribe algo sobre ti...'**
+  String get writeAboutYourself;
+
+  /// No description provided for @digitalPassportTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'🛂 Pasaporte Digital de Viajes'**
+  String get digitalPassportTitle;
+
+  /// No description provided for @explorerLevel.
+  ///
+  /// In es, this message translates to:
+  /// **'Nivel Explorador'**
+  String get explorerLevel;
+
+  /// No description provided for @statsTravelled.
+  ///
+  /// In es, this message translates to:
+  /// **'Recorridos'**
+  String get statsTravelled;
+
+  /// No description provided for @statsStops.
+  ///
+  /// In es, this message translates to:
+  /// **'Paradas'**
+  String get statsStops;
+
+  /// No description provided for @statsBadges.
+  ///
+  /// In es, this message translates to:
+  /// **'Badges'**
+  String get statsBadges;
+
+  /// No description provided for @achievementBadges.
+  ///
+  /// In es, this message translates to:
+  /// **'🏅 Medallas de Logros'**
+  String get achievementBadges;
+
+  /// No description provided for @badgeRouteCreatorTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Creador de Rutas'**
+  String get badgeRouteCreatorTitle;
+
+  /// No description provided for @badgeRouteCreatorSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'{count, plural, =1{1 tour creado} other{{count} tours creados}}'**
+  String badgeRouteCreatorSubtitle(int count);
+
+  /// No description provided for @badgeRouteCreatorReason.
+  ///
+  /// In es, this message translates to:
+  /// **'Otorgado por crear tours en la comunidad.'**
+  String get badgeRouteCreatorReason;
+
+  /// No description provided for @badgeTouristCriticTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Crítico Turístico'**
+  String get badgeTouristCriticTitle;
+
+  /// No description provided for @badgeTouristCriticSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'{count, plural, =1{1 reseña dada} other{{count} reseñas dadas}}'**
+  String badgeTouristCriticSubtitle(int count);
+
+  /// No description provided for @badgeTouristCriticReason.
+  ///
+  /// In es, this message translates to:
+  /// **'Otorgado por calificar tours explorados.'**
+  String get badgeTouristCriticReason;
+
+  /// No description provided for @badgeCommunityGuideTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Guía Comunitario'**
+  String get badgeCommunityGuideTitle;
+
+  /// No description provided for @badgeCommunityGuideSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'{count, plural, =1{1 participante} other{{count} participantes}}'**
+  String badgeCommunityGuideSubtitle(int count);
+
+  /// No description provided for @badgeCommunityGuideReason.
+  ///
+  /// In es, this message translates to:
+  /// **'Otorgado por inspirar a viajeros a unirse a tus tours.'**
+  String get badgeCommunityGuideReason;
+
+  /// No description provided for @badgeVibeExplorerTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Explorador VIBE'**
+  String get badgeVibeExplorerTitle;
+
+  /// No description provided for @badgeVibeExplorerSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Perfil activo'**
+  String get badgeVibeExplorerSubtitle;
+
+  /// No description provided for @badgeVibeExplorerReason.
+  ///
+  /// In es, this message translates to:
+  /// **'Otorgado a los miembros activos de VIBETOURS.'**
+  String get badgeVibeExplorerReason;
+
+  /// No description provided for @within5km.
+  ///
+  /// In es, this message translates to:
+  /// **'A menos de 5km'**
+  String get within5km;
+
+  /// No description provided for @noActiveParticipants.
+  ///
+  /// In es, this message translates to:
+  /// **'No hay participantes activos en tus tours.'**
+  String get noActiveParticipants;
+
+  /// No description provided for @noParticipantsYet.
+  ///
+  /// In es, this message translates to:
+  /// **'No hay participantes todavía.'**
+  String get noParticipantsYet;
+
+  /// No description provided for @participantsCountLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'{count, plural, =1{1 participante} other{{count} participantes}}'**
+  String participantsCountLabel(int count);
 }
 
 class _AppLocalizationsDelegate

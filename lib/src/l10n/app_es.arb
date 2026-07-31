@@ -430,7 +430,6 @@
   "prefGrantPermission": "Conceder Permiso",
   "prefPermissionGranted": "¡Permiso concedido!",
   "prefPermissionDenied": "Permiso denegado. Podrás activarlo después.",
-
   "adminAccessRestricted": "Acceso restringido",
   "adminAccessRestrictedBody": "El administrador de VIBETOURS usa una cuenta única.",
   "adminBackToSettings": "Volver a ajustes",
@@ -449,7 +448,9 @@
   "adminActiveTickets": "{count} Tickets Activos",
   "@adminActiveTickets": {
     "placeholders": {
-      "count": { "type": "String" }
+      "count": {
+        "type": "String"
+      }
     }
   },
   "adminToursToApprove": "Tours por aprobar",
@@ -471,7 +472,9 @@
   "adminConnectedUsersThisWeek": "Usuarios conectados esta semana: {count}",
   "@adminConnectedUsersThisWeek": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "adminSystemIntegrity": "INTEGRIDAD DEL SISTEMA",
@@ -491,7 +494,9 @@
   "adminTourStops": "{count} paradas",
   "@adminTourStops": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "adminCreatedWithAI": "Creado con IA",
@@ -505,13 +510,17 @@
   "adminTourApproved": "{title} aprobado para publicacion.",
   "@adminTourApproved": {
     "placeholders": {
-      "title": { "type": "String" }
+      "title": {
+        "type": "String"
+      }
     }
   },
   "adminTourRejected": "{title} rechazado.",
   "@adminTourRejected": {
     "placeholders": {
-      "title": { "type": "String" }
+      "title": {
+        "type": "String"
+      }
     }
   },
   "adminCouldNotApproveTour": "No se pudo aprobar el tour. Revisa permisos o conexion.",
@@ -542,7 +551,9 @@
   "adminHistoryReviewed": "Revisado: {date}",
   "@adminHistoryReviewed": {
     "placeholders": {
-      "date": { "type": "String" }
+      "date": {
+        "type": "String"
+      }
     }
   },
   "adminHistoryApproved": "ACEPTADO",
@@ -550,7 +561,9 @@
   "adminHistoryErrorLoading": "Error al cargar el historial: {error}",
   "@adminHistoryErrorLoading": {
     "placeholders": {
-      "error": { "type": "String" }
+      "error": {
+        "type": "String"
+      }
     }
   },
   "adminPaymentTitle": "Historial de Pagos",
@@ -562,8 +575,12 @@
   "adminPqrsUser": "Usuario: {id}... • Creado: {date}",
   "@adminPqrsUser": {
     "placeholders": {
-      "id": { "type": "String" },
-      "date": { "type": "String" }
+      "id": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
     }
   },
   "adminOriginalQuery": "Consulta original:",
@@ -571,7 +588,9 @@
   "adminPqrsErrorLoading": "Error al cargar PQRS respondidos: {error}",
   "@adminPqrsErrorLoading": {
     "placeholders": {
-      "error": { "type": "String" }
+      "error": {
+        "type": "String"
+      }
     }
   },
   "adminKindPetition": "Peticion",
@@ -598,7 +617,9 @@
   "heatmapVisits": "{count} visitas",
   "@heatmapVisits": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "aiNewChat": "Nuevo Chat",
@@ -606,8 +627,63 @@
   "photosSelected": "{count} foto(s) seleccionada(s)",
   "@photosSelected": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
-  "submitReview": "Publicar Reseña"
+  "submitReview": "Publicar Reseña",
+  "aboutMe": "Sobre mí",
+  "addBioPlaceholder": "Añade una biografía y tus gustos aquí...",
+  "writeAboutYourself": "Escribe algo sobre ti...",
+  "digitalPassportTitle": "🛂 Pasaporte Digital de Viajes",
+  "explorerLevel": "Nivel Explorador",
+  "statsTravelled": "Recorridos",
+  "statsStops": "Paradas",
+  "statsBadges": "Badges",
+  "achievementBadges": "🏅 Medallas de Logros",
+  "badgeRouteCreatorTitle": "Creador de Rutas",
+  "badgeRouteCreatorSubtitle": "{count, plural, =1{1 tour creado} other{{count} tours creados}}",
+  "@badgeRouteCreatorSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "badgeRouteCreatorReason": "Otorgado por crear tours en la comunidad.",
+  "badgeTouristCriticTitle": "Crítico Turístico",
+  "badgeTouristCriticSubtitle": "{count, plural, =1{1 reseña dada} other{{count} reseñas dadas}}",
+  "@badgeTouristCriticSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "badgeTouristCriticReason": "Otorgado por calificar tours explorados.",
+  "badgeCommunityGuideTitle": "Guía Comunitario",
+  "badgeCommunityGuideSubtitle": "{count, plural, =1{1 participante} other{{count} participantes}}",
+  "@badgeCommunityGuideSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "badgeCommunityGuideReason": "Otorgado por inspirar a viajeros a unirse a tus tours.",
+  "badgeVibeExplorerTitle": "Explorador VIBE",
+  "badgeVibeExplorerSubtitle": "Perfil activo",
+  "badgeVibeExplorerReason": "Otorgado a los miembros activos de VIBETOURS.",
+  "within5km": "A menos de 5km",
+  "noActiveParticipants": "No hay participantes activos en tus tours.",
+  "noParticipantsYet": "No hay participantes todavía.",
+  "participantsCountLabel": "{count, plural, =1{1 participante} other{{count} participantes}}",
+  "@participantsCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

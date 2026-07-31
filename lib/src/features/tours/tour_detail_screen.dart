@@ -17,6 +17,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../../core/services/sqlite-service.dart';
 import '../shared/location_disclosure_dialog.dart';
+import '../tour_live/tour_rating_dialog.dart';
 import 'widgets/image_viewer_dialog.dart';
 
 String formatTourDuration(Tour tour) {
@@ -360,7 +361,39 @@ class TourDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      SectionHeader(title: 'Opiniones de Viajeros'),
+                      Builder(
+                        builder: (context) {
+                          final currentUser = ref.watch(authServiceProvider).currentUser;
+                          final canRate = tour.canBeRatedBy(currentUser?.id);
+                          final commentsList = ref.watch(tourCommentsProvider(tour.id)).valueOrNull ?? [];
+                          final userComment = commentsList.where((c) => c.userId == currentUser?.id).firstOrNull;
+
+                          return SectionHeader(
+                            title: 'Opiniones de Viajeros',
+                            action: canRate
+                                ? TextButton.icon(
+                                    onPressed: () {
+                                      showDialog(
+                                        context: context,
+                                        barrierDismissible: false,
+                                        builder: (context) => TourRatingDialog(
+                                          tour: tour,
+                                          existingRating: userComment != null
+                                              ? UserTourRating(comment: userComment, tour: tour)
+                                              : null,
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.star_rounded, size: 18, color: Colors.amber),
+                                    label: Text(
+                                      userComment != null ? 'Editar opinión' : 'Calificar',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                  )
+                                : null,
+                          );
+                        },
+                      ),
                       const SizedBox(height: 8),
                       ref.watch(tourCommentsProvider(tour.id)).when(
                             data: (comments) {
@@ -1769,54 +1802,77 @@ class _ReviewTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: comment.userAvatarUrl.startsWith('data:image')
-                    ? Image.memory(
-                        base64Decode(comment.userAvatarUrl.split(',').last),
-                        width: 38,
-                        height: 38,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const CircleAvatar(radius: 19, child: Icon(Icons.person_outline_rounded)),
-                      )
-                    : CachedNetworkImage(
-                        imageUrl: comment.userAvatarUrl,
-                        width: 38,
-                        height: 38,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => const SkeletonBox(width: 38, height: 38),
-                        errorWidget: (context, url, error) => CircleAvatar(
-                          radius: 19,
-                          backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                          child: Text(
-                            comment.userName.isNotEmpty ? comment.userName[0].toUpperCase() : 'U',
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
-                          ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: comment.userId.isNotEmpty
+                      ? () => context.push('/user-profile/${comment.userId}')
+                      : null,
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: comment.userAvatarUrl.startsWith('data:image')
+                            ? Image.memory(
+                                base64Decode(comment.userAvatarUrl.split(',').last),
+                                width: 38,
+                                height: 38,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => const CircleAvatar(radius: 19, child: Icon(Icons.person_outline_rounded)),
+                              )
+                            : CachedNetworkImage(
+                                imageUrl: comment.userAvatarUrl,
+                                width: 38,
+                                height: 38,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => const SkeletonBox(width: 38, height: 38),
+                                errorWidget: (context, url, error) => CircleAvatar(
+                                  radius: 19,
+                                  backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                                  child: Text(
+                                    comment.userName.isNotEmpty ? comment.userName[0].toUpperCase() : 'U',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
+                                  ),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    comment.userName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.primary),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: List.generate(5, (index) {
+                                return Icon(
+                                  Icons.star_rounded,
+                                  size: 14,
+                                  color: index < comment.rating ? Colors.amber : Colors.grey.shade300,
+                                );
+                              }),
+                            ),
+                          ],
                         ),
                       ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      comment.userName,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: List.generate(5, (index) {
-                        return Icon(
-                          Icons.star_rounded,
-                          size: 14,
-                          color: index < comment.rating ? Colors.amber : Colors.grey.shade300,
-                        );
-                      }),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               Text(

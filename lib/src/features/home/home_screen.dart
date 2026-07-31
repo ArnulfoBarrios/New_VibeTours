@@ -657,7 +657,7 @@ class _NearbyPlacesSection extends ConsumerWidget {
                       children: [
                         Icon(Icons.near_me_outlined, size: 14, color: Colors.grey.shade500),
                         const SizedBox(width: 4),
-                        Text('A menos de 5km', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                        Text(l10n.within5km, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
                       ],
                     ),
                   ],

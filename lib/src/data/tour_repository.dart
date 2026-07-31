@@ -246,6 +246,59 @@ class TourRepository {
     }
   }
 
+  Future<List<Tour>> getPublicUserTours(String userId) async {
+    final client = _requireClient();
+    try {
+      final rows = await client
+          .from('tours')
+          .select('*, tour_stops(*)')
+          .eq('owner_id', userId)
+          .order('created_at', ascending: false);
+      return [
+        for (final row in rows)
+          _tourFromDatabaseJson(Map<String, dynamic>.from(row as Map)),
+      ];
+    } catch (e) {
+      debugPrint('Error fetching public user tours: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> getPublicUserProfile(String userId) async {
+    final client = _requireClient();
+    String fullName = 'Viajero VibeTours';
+    String avatarUrl = '';
+    String bio = '';
+
+    try {
+      final userRow = await client
+          .from('users')
+          .select('full_name, avatar_url, bio')
+          .eq('id', userId)
+          .maybeSingle();
+      if (userRow != null) {
+        fullName = userRow['full_name']?.toString() ?? 'Viajero VibeTours';
+        avatarUrl = userRow['avatar_url']?.toString() ?? '';
+        bio = userRow['bio']?.toString() ?? '';
+      }
+    } catch (e) {
+      debugPrint('Error getting public user profile: $e');
+    }
+
+    final stats = await getUserStats(userId);
+    final createdTours = await getPublicUserTours(userId);
+
+    return {
+      'id': userId,
+      'fullName': fullName,
+      'avatarUrl': avatarUrl,
+      'bio': bio,
+      'stats': stats,
+      'createdTours': createdTours,
+    };
+  }
+
+
   Future<void> joinTour(String tourId) async {
     // If the ID is a temporary AI-generated local ID, skip joining on the database
     if (!_looksLikeUuid(tourId)) {
@@ -335,6 +388,24 @@ class TourRepository {
     final user = client.auth.currentUser;
     if (user == null) {
       throw StateError('Debes iniciar sesion para calificar un tour.');
+    }
+
+    // Check that the tour is published and does not belong to the current user
+    final tourRes = await client
+        .from('tours')
+        .select('owner_id, is_published, status')
+        .eq('id', tourId)
+        .maybeSingle();
+
+    if (tourRes != null) {
+      final ownerId = tourRes['owner_id']?.toString();
+      final isPublished = tourRes['is_published'] == true || tourRes['status'] == 'approved';
+      if (!isPublished) {
+        throw StateError('Solo puedes calificar tours que estén publicados.');
+      }
+      if (ownerId != null && ownerId == user.id) {
+        throw StateError('No puedes calificar tus propios tours.');
+      }
     }
 
     // Eliminar calificacion previa si existe para asegurar que solo haya una por usuario

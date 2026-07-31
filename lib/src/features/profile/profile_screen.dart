@@ -534,11 +534,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final user = ref.watch(authUserProvider).valueOrNull;
     final metadata = user?.userMetadata ?? {};
     final name = (metadata['custom_full_name']?.toString() ?? metadata['full_name']?.toString() ?? 'Usuario').split(' ').first;
     final email = user?.email ?? 'correo@ejemplo.com';
-    final bio = metadata['bio']?.toString() ?? 'Añade una biografía y tus gustos aquí...';
+    final bio = metadata['bio']?.toString() ?? l10n.addBioPlaceholder;
     final avatarUrl = metadata['custom_avatar_url']?.toString() ?? metadata['avatar_url']?.toString();
     final userRatings = user != null
         ? ref.watch(userRatingsProvider(user.id)).valueOrNull ?? []
@@ -548,7 +549,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     ref.watch(tourParticipantsProvider);
     final currency = ref.watch(currencyProvider);
     final locale = ref.watch(localeProvider);
-    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -720,7 +720,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Sobre mí',
+                            l10n.aboutMe,
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -743,7 +743,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           controller: _bioController,
                           maxLines: 3,
                           decoration: InputDecoration(
-                            hintText: 'Escribe algo sobre ti...',
+                            hintText: l10n.writeAboutYourself,
                             filled: true,
                             fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                             border: OutlineInputBorder(
@@ -1264,6 +1264,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           builder: (context, scrollController) {
             return Consumer(
               builder: (context, ref, child) {
+                final l10n = AppLocalizations.of(context);
                 final participantsAsync = ref.watch(tourParticipantsProvider);
                 return SafeArea(
                   child: Padding(
@@ -1302,7 +1303,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       ),
                                       const SizedBox(height: 12),
                                       Text(
-                                        'No hay participantes activos en tus tours.',
+                                        l10n.noActiveParticipants,
                                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                               color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                                             ),
@@ -1352,6 +1353,7 @@ class _TourParticipantsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final tour = tourWithParticipants.tour;
     final participants = tourWithParticipants.participants.where((u) {
       final name = u.fullName.toLowerCase();
@@ -1403,7 +1405,7 @@ class _TourParticipantsTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${participants.length} ${participants.length == 1 ? "participante" : "participantes"}',
+                        l10n.participantsCountLabel(participants.length),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: AppTheme.violet,
                               fontWeight: FontWeight.bold,
@@ -1420,7 +1422,7 @@ class _TourParticipantsTile extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   child: Text(
-                    'No hay participantes todavía.',
+                    l10n.noParticipantsYet,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                         ),
@@ -2016,6 +2018,7 @@ class _DigitalPassportSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final createdCount = (stats['createdTours'] as num?)?.toInt() ?? 0;
     final ratedCount = (stats['toursRated'] as num?)?.toInt() ?? 0;
     final participantsCount = (stats['participants'] as num?)?.toInt() ?? 0;
@@ -2025,31 +2028,31 @@ class _DigitalPassportSection extends StatelessWidget {
     final badges = [
       _BadgeData(
         icon: Icons.map_rounded,
-        title: 'Creador de Rutas',
-        subtitle: '$createdCount tours creados',
+        title: l10n.badgeRouteCreatorTitle,
+        subtitle: l10n.badgeRouteCreatorSubtitle(createdCount),
         isUnlocked: createdCount > 0,
-        reason: 'Otorgado por crear $createdCount tours en la comunidad.',
+        reason: l10n.badgeRouteCreatorReason,
       ),
       _BadgeData(
         icon: Icons.star_rate_rounded,
-        title: 'Crítico Turístico',
-        subtitle: '$ratedCount reseñas dadas',
+        title: l10n.badgeTouristCriticTitle,
+        subtitle: l10n.badgeTouristCriticSubtitle(ratedCount),
         isUnlocked: ratedCount > 0,
-        reason: 'Otorgado por calificar $ratedCount tours explorados.',
+        reason: l10n.badgeTouristCriticReason,
       ),
       _BadgeData(
         icon: Icons.groups_rounded,
-        title: 'Guía Comunitario',
-        subtitle: '$participantsCount participantes',
+        title: l10n.badgeCommunityGuideTitle,
+        subtitle: l10n.badgeCommunityGuideSubtitle(participantsCount),
         isUnlocked: participantsCount > 0,
-        reason: 'Otorgado por inspirar a $participantsCount viajeros a unirse a tus tours.',
+        reason: l10n.badgeCommunityGuideReason,
       ),
       _BadgeData(
         icon: Icons.verified_user_rounded,
-        title: 'Explorador VIBE',
-        subtitle: 'Perfil activo',
+        title: l10n.badgeVibeExplorerTitle,
+        subtitle: l10n.badgeVibeExplorerSubtitle,
         isUnlocked: true,
-        reason: 'Otorgado a los miembros activos de VIBETOURS.',
+        reason: l10n.badgeVibeExplorerReason,
       ),
     ];
 
@@ -2062,7 +2065,7 @@ class _DigitalPassportSection extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '🛂 Pasaporte Digital de Viajes',
+              l10n.digitalPassportTitle,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -2074,13 +2077,13 @@ class _DigitalPassportSection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.verified_rounded, size: 14, color: AppTheme.primary),
-                  SizedBox(width: 4),
+                  const Icon(Icons.verified_rounded, size: 14, color: AppTheme.primary),
+                  const SizedBox(width: 4),
                   Text(
-                    'Nivel Explorador',
-                    style: TextStyle(
+                    l10n.explorerLevel,
+                    style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.primary,
@@ -2145,17 +2148,17 @@ class _DigitalPassportSection extends StatelessWidget {
                   _PassportStat(
                     icon: Icons.directions_walk_rounded,
                     value: '$totalKmWalked km',
-                    label: 'Recorridos',
+                    label: l10n.statsTravelled,
                   ),
                   _PassportStat(
                     icon: Icons.place_rounded,
                     value: '$totalStopsExplored',
-                    label: 'Paradas',
+                    label: l10n.statsStops,
                   ),
                   _PassportStat(
                     icon: Icons.workspace_premium_rounded,
                     value: '$unlockedCount / ${badges.length}',
-                    label: 'Badges',
+                    label: l10n.statsBadges,
                   ),
                 ],
               ),
@@ -2164,7 +2167,7 @@ class _DigitalPassportSection extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         Text(
-          '🏅 Medallas de Logros',
+          l10n.achievementBadges,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
               ),

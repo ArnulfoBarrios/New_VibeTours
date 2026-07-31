@@ -284,6 +284,18 @@ class Tour {
       ? const GeoPoint(latitude: 10.9878, longitude: -74.7889)
       : stops.first.location;
 
+  /// Checks if the tour can be rated by the given [userId].
+  /// Requirements:
+  /// 1. The tour must be published ([isPublished] == true).
+  /// 2. The tour must belong to another user ([ownerId] != [userId]).
+  bool canBeRatedBy(String? userId) {
+    if (!isPublished) return false;
+    if (userId == null || userId.isEmpty) return false;
+    final currentOwnerId = ownerId;
+    if (currentOwnerId != null && currentOwnerId.isNotEmpty && currentOwnerId == userId) return false;
+    return true;
+  }
+
   Map<String, dynamic> toCreationJson() => {
     'nombre_tour': title,
     'resumen_corto': shortSummary.isEmpty ? description : shortSummary,

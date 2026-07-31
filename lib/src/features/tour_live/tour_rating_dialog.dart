@@ -14,10 +14,16 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 
 class TourRatingDialog extends ConsumerStatefulWidget {
-  const TourRatingDialog({super.key, required this.tour, this.existingRating});
+  const TourRatingDialog({
+    super.key,
+    required this.tour,
+    this.existingRating,
+    this.popScreenOnComplete = false,
+  });
 
   final Tour tour;
   final UserTourRating? existingRating;
+  final bool popScreenOnComplete;
 
   @override
   ConsumerState<TourRatingDialog> createState() => _TourRatingDialogState();
@@ -215,7 +221,9 @@ class _TourRatingDialogState extends ConsumerState<TourRatingDialog> {
                           ? null
                           : () {
                               context.pop();
-                              context.pop();
+                              if (widget.popScreenOnComplete && context.mounted) {
+                                context.pop();
+                              }
                             },
                     ),
                   ),
@@ -228,6 +236,16 @@ class _TourRatingDialogState extends ConsumerState<TourRatingDialog> {
                       onPressed: _submitting
                           ? null
                           : () async {
+                              final currentUser = ref.read(authServiceProvider).currentUser;
+                              if (!widget.tour.canBeRatedBy(currentUser?.id)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('No puedes calificar tu propio tour o un tour no publicado.'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                                return;
+                              }
                               if (_rating == 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -255,7 +273,6 @@ class _TourRatingDialogState extends ConsumerState<TourRatingDialog> {
                                 ref.invalidate(toursProvider);
                                 ref.invalidate(tourCommentsProvider(widget.tour.id));
                                 ref.invalidate(userStatsProvider);
-                                final currentUser = ref.read(authServiceProvider).currentUser;
                                 if (currentUser != null) {
                                   ref.invalidate(userRatingsProvider(currentUser.id));
                                 }
@@ -267,7 +284,9 @@ class _TourRatingDialogState extends ConsumerState<TourRatingDialog> {
                                   ),
                                 );
                                 context.pop();
-                                context.pop();
+                                if (widget.popScreenOnComplete && context.mounted) {
+                                  context.pop();
+                                }
                               } catch (e) {
                                 if (!context.mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(

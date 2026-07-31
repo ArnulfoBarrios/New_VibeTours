@@ -1435,19 +1435,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   return;
                 }
 
-                final isOwner = tour.ownerId != null && currentUser.id.isNotEmpty && tour.ownerId == currentUser.id;
-                final isUnpublished = !tour.isPublished;
-                final isAiGenerated = tour.isAiGenerated;
-
-                final shouldSkipRating = isOwner || isUnpublished || isAiGenerated;
+                final canRate = tour.canBeRatedBy(currentUser.id);
                 
-                if (shouldSkipRating) {
+                if (!canRate) {
                   context.pop();
                 } else {
                   showDialog(
                     context: context,
                     barrierDismissible: false,
-                    builder: (context) => TourRatingDialog(tour: tour),
+                    builder: (context) => TourRatingDialog(
+                      tour: tour,
+                      popScreenOnComplete: true,
+                    ),
                   );
                 }
               } else {
