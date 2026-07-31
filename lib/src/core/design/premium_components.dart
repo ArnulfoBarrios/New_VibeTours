@@ -28,6 +28,10 @@ String tourTypeL10n(BuildContext context, TourType type) {
 }
 
 String formatDuration(double hours) {
+  if (hours >= 24) {
+    final days = (hours / 24).round();
+    return '$days días';
+  }
   final totalMinutes = (hours * 60).round();
   final h = totalMinutes ~/ 60;
   final m = totalMinutes % 60;
@@ -38,6 +42,16 @@ String formatDuration(double hours) {
   } else {
     return '$m min';
   }
+}
+
+String formatTourDuration(Tour tour) {
+  final maxDay = tour.stops.isEmpty
+      ? 1
+      : tour.stops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
+  if (maxDay > 1) {
+    return '$maxDay días';
+  }
+  return formatDuration(tour.durationHours);
 }
 
 
@@ -566,7 +580,7 @@ class TourCard extends StatelessWidget {
                       ),
                       _MetaPill(
                         Icons.schedule_rounded,
-                        formatDuration(tour.durationHours),
+                        formatTourDuration(tour),
                       ),
                       _MetaPill(
                         Icons.route_rounded,

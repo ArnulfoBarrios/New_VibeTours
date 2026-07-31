@@ -382,6 +382,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
                         key: ValueKey(_stops[index].id),
                         index: index,
                         stop: _stops[index],
+                        onEdit: () => _showEditStopModal(index),
                         onAiEnrich: () => _generateAiDetailsForStop(index),
                         onRemove: () => setState(() {
                           _stops.removeAt(index);
@@ -637,6 +638,123 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
     } catch (_) {
       _message('No se pudo generar con IA. Revisa tu conexión.');
     }
+  }
+
+  void _showEditStopModal(int index) {
+    if (index < 0 || index >= _stops.length) return;
+    final stop = _stops[index];
+
+    final descController = TextEditingController(text: stop.description);
+    final tipsController = TextEditingController(text: stop.tips.join('\n'));
+    final minutesController = TextEditingController(text: stop.minutes.toString());
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Editar Parada: ${stop.name}',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                
+                const Text('Descripción General de la Parada', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: descController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Escribe una descripción detallada e histórica sobre esta parada...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                const Text('Recomendaciones (Una por línea)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: tipsController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Ejemplo:\nLlevar agua y calzado cómodo\nVisitar temprano para evitar filas',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                const Text('Tiempo sugerido (minutos)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: minutesController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: '25',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      final newDesc = descController.text.trim();
+                      final newTips = tipsController.text
+                          .split('\n')
+                          .map((e) => e.trim())
+                          .where((e) => e.isNotEmpty)
+                          .toList();
+                      final newMinutes = int.tryParse(minutesController.text.trim()) ?? stop.minutes;
+
+                      setState(() {
+                        _stops[index] = stop.copyWith(
+                          description: newDesc.isNotEmpty ? newDesc : stop.description,
+                          tips: newTips.isNotEmpty ? newTips : stop.tips,
+                          minutes: newMinutes,
+                        );
+                      });
+                      Navigator.pop(context);
+                      _message('Parada "${stop.name}" actualizada.');
+                    },
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('Guardar Cambios'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showCoverImageSheet() async {
@@ -1566,12 +1684,14 @@ class _StopOrderTile extends StatelessWidget {
     required this.stop,
     required this.onRemove,
     required this.onAiEnrich,
+    required this.onEdit,
   });
 
   final int index;
   final _DraftStop stop;
   final VoidCallback onRemove;
   final VoidCallback onAiEnrich;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -1583,10 +1703,19 @@ class _StopOrderTile extends StatelessWidget {
         child: Text('${index + 1}'),
       ),
       title: Text(stop.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text('${stop.minutes} min - ${stop.description}'),
+      subtitle: Text(
+        '${stop.minutes} min - ${stop.description}',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          IconButton(
+            tooltip: 'Editar descripción y recomendaciones',
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_note_rounded, color: Colors.blueAccent),
+          ),
           IconButton(
             tooltip: 'Redactar detalles con IA (gpt-4o-mini)',
             onPressed: onAiEnrich,
@@ -1801,9 +1930,9 @@ class _DraftStop {
       name: stop.name,
       location: stop.location,
       imageUrl: stop.imageUrl,
-      description: stop.activities.isEmpty
-          ? 'Parada turistica'
-          : stop.activities.first,
+      description: stop.description.isNotEmpty
+          ? stop.description
+          : (stop.activities.isEmpty ? 'Parada turística' : stop.activities.first),
       minutes: stop.suggestedMinutes,
       activities: stop.activities.isEmpty
           ? const ['Explorar']
@@ -1821,6 +1950,7 @@ class _DraftStop {
 
   _DraftStop copyWith({
     String? description,
+    int? minutes,
     List<String>? curiousFacts,
     List<String>? tips,
     List<String>? activities,
@@ -1831,7 +1961,7 @@ class _DraftStop {
       location: location,
       imageUrl: imageUrl,
       description: description ?? this.description,
-      minutes: minutes,
+      minutes: minutes ?? this.minutes,
       activities: activities ?? this.activities,
       curiousFacts: curiousFacts ?? this.curiousFacts,
       tips: tips ?? this.tips,

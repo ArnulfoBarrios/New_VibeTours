@@ -401,6 +401,14 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
   
   Future<void> fetchHotelsDirectly() async {
     if (state.request == null || state.recommendations.isEmpty) return;
+
+    final durHours = state.request?.durationHours ?? 4.0;
+    if (durHours <= 24.0) {
+      // Si el tour es de 1 día (<= 24h), no se recomiendan hoteles y se genera el tour directamente
+      await buildTour();
+      return;
+    }
+
     state = state.copyWith(isLoading: true, needsBudget: false);
 
     try {
@@ -717,7 +725,14 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
               description: tourData['descripcion_tour'] ?? '',
               coverUrl: tourData['imagen_portada'] ?? '',
               gallery: List<String>.from(tourData['galeria_tour'] ?? []),
-              durationHours: double.tryParse(tourData['duracion_estimada'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 4,
+              durationHours: () {
+                final maxDay = stops.isEmpty ? 1 : stops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
+                final rawDurationStr = tourData['duracion_estimada']?.toString().toLowerCase() ?? '';
+                final parsedNum = double.tryParse(rawDurationStr.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 4.0;
+                final isDays = rawDurationStr.contains('día') || rawDurationStr.contains('dia') || rawDurationStr.contains('day') || maxDay > 1;
+                final days = maxDay > 1 ? maxDay : (isDays ? parsedNum.toInt() : 1);
+                return (isDays || maxDay > 1) ? (days * 24.0) : parsedNum;
+              }(),
               distanceKm: double.tryParse(tourData['distancia_total'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0,
               rating: 5.0,
               reviewCount: 0,

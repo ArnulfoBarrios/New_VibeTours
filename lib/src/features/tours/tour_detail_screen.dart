@@ -17,6 +17,21 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../../core/services/sqlite-service.dart';
 import '../shared/location_disclosure_dialog.dart';
+import 'widgets/image_viewer_dialog.dart';
+
+String formatTourDuration(Tour tour) {
+  final maxDay = tour.stops.isEmpty
+      ? 1
+      : tour.stops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
+  if (maxDay > 1) {
+    return '$maxDay días';
+  }
+  if (tour.durationHours >= 24) {
+    final days = (tour.durationHours / 24).round();
+    return '$days días';
+  }
+  return formatDuration(tour.durationHours);
+}
 
 class TourDetailScreen extends ConsumerWidget {
   const TourDetailScreen({super.key, required this.tourId});
@@ -29,34 +44,92 @@ class TourDetailScreen extends ConsumerWidget {
     final toursAsync = ref.watch(toursProvider);
     final mapStyle = ref.watch(mapStyleProvider);
     final localTours = ref.watch(userToursProvider).valueOrNull?.manualTours;
-    return PremiumScaffold(
-      safeBottom: true,
-      child: toursAsync.when(
-        data: (tours) {
-          final selected = ref.watch(selectedTourProvider);
-          final availableTours = [...?localTours, ...tours];
-          if (availableTours.isEmpty) {
-            return const EmptyState(
+    return toursAsync.when(
+      data: (tours) {
+        final selected = ref.watch(selectedTourProvider);
+        final availableTours = [...?localTours, ...tours];
+        if (availableTours.isEmpty) {
+          return const PremiumScaffold(
+            safeBottom: true,
+            child: EmptyState(
               icon: Icons.map_outlined,
               title: 'Tour no disponible',
-              body: 'No hay tours disponibles en el catalogo.',
-            );
-          }
-          final tour = selected?.id == tourId
-              ? selected!
-              : availableTours.firstWhere(
-                  (item) => item.id == tourId,
-                  orElse: () => selected ?? availableTours.first,
-                );
-          final favorites = ref.watch(favoriteTourIdsProvider);
-          final isFavorite = favorites.contains(tour.id);
-          final commentsAsync = ref.watch(tourCommentsProvider(tour.id));
-          final comments = commentsAsync.valueOrNull ?? [];
-          final displayRating = comments.isNotEmpty
-              ? (comments.map((c) => c.rating).reduce((a, b) => a + b) / comments.length).toStringAsFixed(1)
-              : 'S/C';
-          final displayCommentsCount = comments.isNotEmpty ? comments.length : tour.reviewCount;
-          return CustomScrollView(
+              body: 'No hay tours disponibles en el catálogo.',
+            ),
+          );
+        }
+        final tour = selected?.id == tourId
+            ? selected!
+            : availableTours.firstWhere(
+                (item) => item.id == tourId,
+                orElse: () => selected ?? availableTours.first,
+              );
+        final favorites = ref.watch(favoriteTourIdsProvider);
+        final isFavorite = favorites.contains(tour.id);
+        final commentsAsync = ref.watch(tourCommentsProvider(tour.id));
+        final comments = commentsAsync.valueOrNull ?? [];
+        final displayRating = comments.isNotEmpty
+            ? (comments.map((c) => c.rating).reduce((a, b) => a + b) / comments.length).toStringAsFixed(1)
+            : 'S/C';
+        final displayCommentsCount = comments.isNotEmpty ? comments.length : tour.reviewCount;
+        return PremiumScaffold(
+          safeBottom: true,
+          bottomNavigationBar: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.92),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 18,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+              border: Border(
+                top: BorderSide(
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
+                ),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: LiquidButton(
+                      label: l10n.startTour,
+                      icon: Icons.navigation_rounded,
+                      onPressed: () => _startTourFlow(context, ref, tour),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    tooltip: 'Escuchar Muestra Narrada (Audio Preview)',
+                    onPressed: () => _playTeaserAudio(context, tour),
+                    icon: const Icon(Icons.spatial_audio_off_rounded, color: Colors.blueAccent),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton.filledTonal(
+                    tooltip: l10n.save,
+                    onPressed: () {
+                      final next = <String>{...favorites};
+                      if (isFavorite) {
+                        next.remove(tour.id);
+                      } else {
+                        next.add(tour.id);
+                      }
+                      ref.read(favoriteTourIdsProvider.notifier).state = next;
+                    },
+                    icon: Icon(
+                      isFavorite ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                      color: isFavorite ? AppTheme.violet : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverAppBar(
@@ -69,44 +142,7 @@ class TourDetailScreen extends ConsumerWidget {
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 actions: [
-                  _OfflineDownloadButton(tour: tour),
-                  const SizedBox(width: 4),
-                  IconButton.filledTonal(
-                    onPressed: () => _showExportOptionsModal(context, tour),
-                    icon: const Icon(Icons.ios_share_rounded, color: Colors.white),
-                  ),
-                  const SizedBox(width: 4),
-                  if (tour.ownerId != null && tour.ownerId != ref.watch(authUserProvider).valueOrNull?.id)
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
-                      onSelected: (value) {
-                        final isLogged = ref.read(isAuthenticatedProvider);
-                        if (!isLogged) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Debes iniciar sesión para realizar esta acción.'),
-                              backgroundColor: Colors.redAccent,
-                            ),
-                          );
-                          return;
-                        }
-                        if (value == 'report') {
-                          _showReportDialog(context, ref, tour);
-                        } else if (value == 'block') {
-                          _showBlockDialog(context, ref, tour);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'report',
-                          child: Text('Reportar Tour'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'block',
-                          child: Text('Bloquear Creador'),
-                        ),
-                      ],
-                    ),
+                  _TourOptionsMenuButton(tour: tour, ref: ref),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
                   stretchModes: const [
@@ -218,7 +254,7 @@ class TourDetailScreen extends ConsumerWidget {
                           ),
                           _Metric(
                             icon: Icons.schedule_rounded,
-                            value: formatDuration(tour.durationHours),
+                            value: formatTourDuration(tour),
                             label: l10n.duration,
                           ),
                         ],
@@ -248,53 +284,6 @@ class TourDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: LiquidButton(
-                              label: l10n.startTour,
-                              icon: Icons.navigation_rounded,
-                              onPressed: () => _startTourFlow(context, ref, tour),
-                            ),
-                          ),
-                          IconButton.filledTonal(
-                            tooltip: 'Escuchar Muestra Narrada (Audio Preview)',
-                            onPressed: () => _playTeaserAudio(context, tour),
-                            icon: const Icon(Icons.spatial_audio_off_rounded, color: Colors.blueAccent),
-                          ),
-                          const SizedBox(width: 6),
-                          IconButton.filledTonal(
-                            tooltip: l10n.save,
-                            onPressed: () {
-                              final next = <String>{...favorites};
-                              if (isFavorite) {
-                                next.remove(tour.id);
-                              } else {
-                                next.add(tour.id);
-                              }
-                              ref.read(favoriteTourIdsProvider.notifier).state =
-                                  next;
-                            },
-                            icon: Icon(
-                              isFavorite
-                                  ? Icons.bookmark_rounded
-                                  : Icons.bookmark_border_rounded,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          IconButton.filledTonal(
-                            tooltip: l10n.share,
-                            onPressed: () => SharePlus.instance.share(
-                              ShareParams(
-                                text:
-                                    'VIBETOURS: ${tour.title} en ${tour.city}',
-                              ),
-                            ),
-                            icon: const Icon(Icons.ios_share_rounded),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
                       // ¿Qué incluye y qué NO incluye?
                       _buildIncludesExcludesSection(context, tour),
                       const SizedBox(height: 18),
@@ -315,22 +304,30 @@ class TourDetailScreen extends ConsumerWidget {
                           itemCount: tour.gallery.length,
                           separatorBuilder: (context, index) =>
                               const SizedBox(width: 10),
-                          itemBuilder: (context, index) => ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: CachedNetworkImage(
-                              imageUrl: tour.gallery[index],
-                              width: 132,
-                              fit: BoxFit.cover,
-                              httpHeaders: const {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                              },
-                              placeholder: (context, url) =>
-                                  const SkeletonBox(width: 132),
-                              errorWidget: (context, url, error) => CachedNetworkImage(
-                                imageUrl: _getRandomTravelImage(tour.title + index.toString()),
+                          itemBuilder: (context, index) => GestureDetector(
+                            onTap: () => ImageViewerDialog.show(
+                              context,
+                              images: tour.gallery,
+                              initialIndex: index,
+                              title: tour.title,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
+                              child: CachedNetworkImage(
+                                imageUrl: tour.gallery[index],
                                 width: 132,
                                 fit: BoxFit.cover,
-                                errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
+                                httpHeaders: const {
+                                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                                },
+                                placeholder: (context, url) =>
+                                    const SkeletonBox(width: 132),
+                                errorWidget: (context, url, error) => CachedNetworkImage(
+                                  imageUrl: _getRandomTravelImage(tour.title + index.toString()),
+                                  width: 132,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
+                                ),
                               ),
                             ),
                           ),
@@ -407,15 +404,22 @@ class TourDetailScreen extends ConsumerWidget {
                               style: const TextStyle(color: Colors.redAccent),
                             ),
                           ),
+                      const SizedBox(height: 100),
                     ],
                   ),
                 ),
               ),
             ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => EmptyState(
+          ),
+        );
+      },
+      loading: () => const PremiumScaffold(
+        safeBottom: true,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, stackTrace) => PremiumScaffold(
+        safeBottom: true,
+        child: EmptyState(
           icon: Icons.error_outline_rounded,
           title: 'Tour no disponible',
           body: error.toString(),
@@ -588,104 +592,6 @@ class TourDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _showReportDialog(BuildContext context, WidgetRef ref, Tour tour) {
-    String selectedReason = 'Spam';
-    final TextEditingController detailsController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Reportar Tour'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButton<String>(
-                value: selectedReason,
-                isExpanded: true,
-                items: ['Spam', 'Contenido Ofensivo', 'Fraude', 'Violencia', 'Otro']
-                    .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                    .toList(),
-                onChanged: (v) => setState(() => selectedReason = v!),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: detailsController,
-                decoration: const InputDecoration(
-                  labelText: 'Detalles adicionales (opcional)',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final nav = Navigator.of(context);
-                final scaffold = ScaffoldMessenger.of(context);
-                try {
-                  await ref.read(moderationRepositoryProvider).reportContent(
-                    tourId: tour.id,
-                    reportedUserId: tour.ownerId,
-                    reason: selectedReason,
-                    details: detailsController.text,
-                  );
-                  nav.pop();
-                  scaffold.showSnackBar(const SnackBar(content: Text('Reporte enviado correctamente.')));
-                } catch (e) {
-                  scaffold.showSnackBar(const SnackBar(content: Text('Error al enviar reporte.')));
-                }
-              },
-              child: const Text('Enviar'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showBlockDialog(BuildContext context, WidgetRef ref, Tour tour) {
-    if (tour.ownerId == null) return;
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Bloquear Creador'),
-        content: const Text(
-            'Si bloqueas al creador de este tour, dejarás de ver sus tours y comentarios. ¿Estás seguro?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final nav = Navigator.of(context);
-              final router = GoRouter.of(context);
-              final scaffold = ScaffoldMessenger.of(context);
-              try {
-                await ref.read(blockedUsersProvider.notifier).blockUser(tour.ownerId!);
-                nav.pop();
-                if (router.canPop()) {
-                  router.pop();
-                } else {
-                  router.go('/');
-                }
-                scaffold.showSnackBar(const SnackBar(content: Text('Usuario bloqueado.')));
-              } catch (e) {
-                scaffold.showSnackBar(const SnackBar(content: Text('Error al bloquear usuario.')));
-              }
-            },
-            child: const Text('Bloquear'),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _startTourFlow(BuildContext context, WidgetRef ref, Tour tour) async {
     final granted = await checkAndRequestLocationPermission(context, ref);
@@ -719,7 +625,11 @@ class TourDetailScreen extends ConsumerWidget {
 
     final hasHotel = tour.stops.any((s) => s.id == 'hotel_start' || s.id == 'hotel_end' || s.name.toLowerCase().contains('hotel'));
 
-    if (hasHotel || !context.mounted) {
+    // Si el tour dura 1 día o menos (y no abarca múltiples días), no solicitar ni recomendar hotel
+    final maxDay = tour.stops.isEmpty ? 1 : tour.stops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
+    final isSingleDay = maxDay <= 1 && tour.durationHours <= 24.0;
+
+    if (hasHotel || isSingleDay || !context.mounted) {
       ref.read(selectedTourProvider.notifier).state = tour;
       if (context.mounted) {
         await NavigationTransitionOverlay.show(context);
@@ -1233,6 +1143,248 @@ class _Metric extends StatelessWidget {
   }
 }
 
+void _showStopDetailsSheet(BuildContext context, TourStop stop) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (context) {
+      final allImages = stop.images.isNotEmpty
+          ? stop.images
+          : [if (stop.imageUrl.isNotEmpty) stop.imageUrl];
+
+      final recommendations = stop.tips.isNotEmpty
+          ? stop.tips
+          : [
+              'Planifica tu visita con anticipación para aprovechar mejor el tiempo.',
+              'Lleva agua, calzado cómodo y protección solar para el recorrido.',
+              'Captura los mejores momentos y consulta a guías locales.',
+            ];
+
+      return DraggableScrollableSheet(
+        initialChildSize: 0.78,
+        minChildSize: 0.45,
+        maxChildSize: 0.94,
+        expand: false,
+        builder: (context, scrollController) {
+          return SingleChildScrollView(
+            controller: scrollController,
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Stop Cover Photo with Tap to Zoom
+                  if (stop.imageUrl.isNotEmpty)
+                    GestureDetector(
+                      onTap: () => ImageViewerDialog.show(
+                        context,
+                        images: allImages,
+                        title: stop.name,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Stack(
+                          children: [
+                            CachedNetworkImage(
+                              imageUrl: stop.imageUrl,
+                              height: 180,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorWidget: (c, u, e) => Container(
+                                height: 180,
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                child: const Icon(Icons.place_rounded, size: 48, color: AppTheme.primary),
+                              ),
+                            ),
+                            Positioned(
+                              top: 12,
+                              right: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.65),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                                    SizedBox(width: 4),
+                                    Text('Ver fotos', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+
+                  // Stop Title & Duration
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          stop.name,
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Chip(
+                        avatar: const Icon(Icons.timer_outlined, size: 16),
+                        label: Text('${stop.suggestedMinutes} min'),
+                        backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // General Description Section
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: Theme.of(context).dividerColor.withValues(alpha: 0.12),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.info_outline_rounded, color: AppTheme.primary, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'Descripción General',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          stop.description.isNotEmpty
+                              ? stop.description
+                              : 'Disfruta de esta increíble parada con historia, ambiente único y atractivos turísticos.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Recommendations Section
+                  Row(
+                    children: const [
+                      Icon(Icons.lightbulb_rounded, color: Colors.amber, size: 22),
+                      SizedBox(width: 8),
+                      Text(
+                        'Recomendaciones de la Parada',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...recommendations.map((rec) => Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('💡 ', style: TextStyle(fontSize: 14)),
+                            Expanded(
+                              child: Text(
+                                rec,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 14),
+
+                  // Stop Gallery Thumbnails if available
+                  if (allImages.length > 1) ...[
+                    const Text(
+                      'Galería de la parada',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 80,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: allImages.length,
+                        separatorBuilder: (c, i) => const SizedBox(width: 8),
+                        itemBuilder: (c, i) => GestureDetector(
+                          onTap: () => ImageViewerDialog.show(
+                            context,
+                            images: allImages,
+                            initialIndex: i,
+                            title: stop.name,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl: allImages[i],
+                              width: 100,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Activities
+                  if (stop.activities.isNotEmpty) ...[
+                    const Text('Actividades recomendadas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: stop.activities
+                          .map((act) => Chip(
+                                label: Text(act),
+                                backgroundColor: AppTheme.primary.withValues(alpha: 0.08),
+                              ))
+                          .toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
 class _StopTile extends StatelessWidget {
   const _StopTile({required this.stop});
 
@@ -1241,6 +1393,7 @@ class _StopTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
+      onTap: () => _showStopDetailsSheet(context, stop),
       padding: const EdgeInsets.all(12),
       radius: 22,
       child: Row(
@@ -1979,16 +2132,116 @@ Future<void> _playTeaserAudio(BuildContext context, Tour tour) async {
   await tts.speak(sampleText);
 }
 
-class _OfflineDownloadButton extends StatefulWidget {
-  final Tour tour;
-  const _OfflineDownloadButton({required this.tour});
+void _showReportDialog(BuildContext context, WidgetRef ref, Tour tour) {
+  String selectedReason = 'Spam';
+  final TextEditingController detailsController = TextEditingController();
 
-  @override
-  State<_OfflineDownloadButton> createState() => _OfflineDownloadButtonState();
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Reportar Tour'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButton<String>(
+              value: selectedReason,
+              isExpanded: true,
+              items: ['Spam', 'Contenido Ofensivo', 'Fraude', 'Violencia', 'Otro']
+                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                  .toList(),
+              onChanged: (v) => setState(() => selectedReason = v!),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: detailsController,
+              decoration: const InputDecoration(
+                labelText: 'Detalles adicionales (opcional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final nav = Navigator.of(context);
+              final scaffold = ScaffoldMessenger.of(context);
+              try {
+                await ref.read(moderationRepositoryProvider).reportContent(
+                  tourId: tour.id,
+                  reportedUserId: tour.ownerId,
+                  reason: selectedReason,
+                  details: detailsController.text,
+                );
+                nav.pop();
+                scaffold.showSnackBar(const SnackBar(content: Text('Reporte enviado correctamente.')));
+              } catch (e) {
+                scaffold.showSnackBar(const SnackBar(content: Text('Error al enviar reporte.')));
+              }
+            },
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
-class _OfflineDownloadButtonState extends State<_OfflineDownloadButton> {
-  bool _isSaved = false;
+void _showBlockDialog(BuildContext context, WidgetRef ref, Tour tour) {
+  if (tour.ownerId == null) return;
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Bloquear Creador'),
+      content: const Text(
+          'Si bloqueas al creador de este tour, dejarás de ver sus tours y comentarios. ¿Estás seguro?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            final nav = Navigator.of(context);
+            final router = GoRouter.of(context);
+            final scaffold = ScaffoldMessenger.of(context);
+            try {
+              await ref.read(blockedUsersProvider.notifier).blockUser(tour.ownerId!);
+              nav.pop();
+              if (router.canPop()) {
+                router.pop();
+              } else {
+                router.go('/');
+              }
+              scaffold.showSnackBar(const SnackBar(content: Text('Usuario bloqueado.')));
+            } catch (e) {
+              scaffold.showSnackBar(const SnackBar(content: Text('Error al bloquear usuario.')));
+            }
+          },
+          child: const Text('Bloquear'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _TourOptionsMenuButton extends StatefulWidget {
+  final Tour tour;
+  final WidgetRef ref;
+  const _TourOptionsMenuButton({required this.tour, required this.ref});
+
+  @override
+  State<_TourOptionsMenuButton> createState() => _TourOptionsMenuButtonState();
+}
+
+class _TourOptionsMenuButtonState extends State<_TourOptionsMenuButton> {
+  bool _isOfflineSaved = false;
   final _sqlite = SqliteService();
 
   @override
@@ -1999,15 +2252,15 @@ class _OfflineDownloadButtonState extends State<_OfflineDownloadButton> {
 
   Future<void> _checkStatus() async {
     final saved = await _sqlite.isTourSavedOffline(widget.tour.id);
-    if (mounted) setState(() => _isSaved = saved);
+    if (mounted) setState(() => _isOfflineSaved = saved);
   }
 
   Future<void> _toggleDownload() async {
     final messenger = ScaffoldMessenger.of(context);
-    if (_isSaved) {
+    if (_isOfflineSaved) {
       await _sqlite.removeOfflineTour(widget.tour.id);
       if (mounted) {
-        setState(() => _isSaved = false);
+        setState(() => _isOfflineSaved = false);
         messenger.showSnackBar(
           const SnackBar(content: Text('Tour eliminado de la memoria offline.')),
         );
@@ -2015,7 +2268,7 @@ class _OfflineDownloadButtonState extends State<_OfflineDownloadButton> {
     } else {
       await _sqlite.saveOfflineTour(widget.tour);
       if (mounted) {
-        setState(() => _isSaved = true);
+        setState(() => _isOfflineSaved = true);
         messenger.showSnackBar(
           const SnackBar(
             content: Text('¡Tour descargado exitosamente para uso offline!'),
@@ -2028,13 +2281,102 @@ class _OfflineDownloadButtonState extends State<_OfflineDownloadButton> {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton.filledTonal(
-      onPressed: _toggleDownload,
-      icon: Icon(
-        _isSaved ? Icons.download_done_rounded : Icons.download_for_offline_rounded,
-        color: _isSaved ? Colors.greenAccent : Colors.white,
+    final authUser = widget.ref.watch(authUserProvider).valueOrNull;
+    final isOwner = widget.tour.ownerId != null && widget.tour.ownerId == authUser?.id;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: IconButton.filledTonal(
+        onPressed: null,
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.black.withValues(alpha: 0.35),
+        ),
+        icon: PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          onSelected: (value) async {
+            if (value == 'download') {
+              await _toggleDownload();
+            } else if (value == 'share') {
+              _showExportOptionsModal(context, widget.tour);
+            } else if (value == 'report') {
+              final isLogged = widget.ref.read(isAuthenticatedProvider);
+              if (!isLogged) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Debes iniciar sesión para realizar esta acción.'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+                return;
+              }
+              _showReportDialog(context, widget.ref, widget.tour);
+            } else if (value == 'block') {
+              final isLogged = widget.ref.read(isAuthenticatedProvider);
+              if (!isLogged) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Debes iniciar sesión para realizar esta acción.'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+                return;
+              }
+              _showBlockDialog(context, widget.ref, widget.tour);
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'download',
+              child: Row(
+                children: [
+                  Icon(
+                    _isOfflineSaved ? Icons.download_done_rounded : Icons.download_rounded,
+                    color: _isOfflineSaved ? Colors.green : null,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(_isOfflineSaved ? 'Descargado offline' : 'Guardar offline'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'share',
+              child: Row(
+                children: [
+                  Icon(Icons.ios_share_rounded, size: 20),
+                  SizedBox(width: 12),
+                  Text('Compartir o Exportar'),
+                ],
+              ),
+            ),
+            if (!isOwner) ...[
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined, color: Colors.redAccent, size: 20),
+                    SizedBox(width: 12),
+                    Text('Reportar Tour', style: TextStyle(color: Colors.redAccent)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(Icons.block_rounded, color: Colors.redAccent, size: 20),
+                    SizedBox(width: 12),
+                    Text('Bloquear Creador', style: TextStyle(color: Colors.redAccent)),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
-      tooltip: _isSaved ? 'Guardado Offline' : 'Descargar Offline',
     );
   }
 }

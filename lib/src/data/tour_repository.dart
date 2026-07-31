@@ -1036,6 +1036,7 @@ class TourRepository {
     final parsed = double.tryParse(number?.replaceAll(',', '.') ?? '');
     if (parsed == null) return fallback;
     if (text.contains('min')) return parsed / 60;
+    if (text.contains('día') || text.contains('dia') || text.contains('day')) return parsed * 24.0;
     return parsed;
   }
 
