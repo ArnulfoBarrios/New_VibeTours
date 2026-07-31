@@ -913,14 +913,19 @@ class _PendingTourCard extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        margin: const EdgeInsets.only(top: 50),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.of(sheetContext).viewPadding.bottom;
+        return SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.only(top: 50),
+            padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
+            decoration: BoxDecoration(
+              color: Theme.of(sheetContext).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            ),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1026,6 +1031,8 @@ class _PendingTourCard extends StatelessWidget {
         ),
       ),
     );
+  },
+);
   }
 
   @override

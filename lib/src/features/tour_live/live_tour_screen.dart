@@ -646,7 +646,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               Positioned(
                 left: 16,
                 right: 16,
-                bottom: 18,
+                bottom: 18 + MediaQuery.of(context).padding.bottom,
                 child: GlassPanel(
                   padding: const EdgeInsets.all(16),
                   child: _selectedVoicePlace != null

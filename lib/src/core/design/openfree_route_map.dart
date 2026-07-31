@@ -102,7 +102,8 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
   ConsumerState<OpenFreeRouteMap> createState() => _OpenFreeRouteMapState();
 }
 
-class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with AutomaticKeepAliveClientMixin {
+class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
+    with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   final RoadRouteService _routeService = RoadRouteService();
   MapLibreMapController? _controller;
   bool _styleLoaded = false;
@@ -116,6 +117,11 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
   List<LatLng> _fullRouteGeometry = [];
   GeoPoint? _lastLocation;
   double? _lastCalculatedHeading;
+  int _lastMatchedIndex = 0;
+
+  late final AnimationController _smoothPosController;
+  LatLng? _animStartPos;
+  LatLng? _animTargetPos;
 
   double _getEffectiveHeading() {
     if (widget.trackingHeading != null && widget.trackingHeading! > 0) {
@@ -152,6 +158,21 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
   void initState() {
     super.initState();
     _startMapLoadTimeout();
+    _smoothPosController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    )..addListener(() {
+        if (_animStartPos != null && _animTargetPos != null && mounted) {
+          final t = _smoothPosController.value;
+          final lerpedLat =
+              _animStartPos!.latitude +
+              (_animTargetPos!.latitude - _animStartPos!.latitude) * t;
+          final lerpedLng =
+              _animStartPos!.longitude +
+              (_animTargetPos!.longitude - _animStartPos!.longitude) * t;
+          _updateTrimmedRouteLine(LatLng(lerpedLat, lerpedLng));
+        }
+      });
   }
 
   void _startMapLoadTimeout() {
@@ -203,13 +224,13 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
   List<LatLng> _trimRouteGeometry(List<LatLng> geometry, LatLng currentPos) {
     if (geometry.length < 2) return geometry;
 
-    // Buscar el segmento más cercano dentro de los primeros segmentos de la ruta
-    final maxSearchIndex = math.min(8, geometry.length - 1);
-    int bestSegmentIndex = 0;
-    double minSqDistance = double.infinity;
-    LatLng bestProj = geometry.first;
+    final startIdx = _lastMatchedIndex.clamp(0, geometry.length - 2);
+    final endIdx = math.min(startIdx + 15, geometry.length - 1);
 
-    for (int i = 0; i < maxSearchIndex; i++) {
+    int bestIndex = startIdx;
+    double minSqDistance = double.infinity;
+
+    for (int i = startIdx; i < endIdx; i++) {
       final p1 = geometry[i];
       final p2 = geometry[i + 1];
 
@@ -218,20 +239,23 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
 
       if (distSq < minSqDistance) {
         minSqDistance = distSq;
-        bestSegmentIndex = i;
-        bestProj = proj;
+        bestIndex = i;
       }
     }
 
-    final remaining = geometry.sublist(bestSegmentIndex + 1);
     final distToProjMeters = math.sqrt(minSqDistance) * 111000.0;
-    if (bestSegmentIndex == 0 || distToProjMeters < 500.0) {
-      if (distToProjMeters > 3.0) {
-        return [currentPos, bestProj, ...remaining];
-      }
-      return [bestProj, ...remaining];
+
+    if (distToProjMeters < 60.0) {
+      _lastMatchedIndex = math.max(_lastMatchedIndex, bestIndex);
     }
-    return geometry;
+
+    final activeIndex = _lastMatchedIndex.clamp(0, geometry.length - 2);
+    final p1 = geometry[activeIndex];
+    final p2 = geometry[activeIndex + 1];
+    final activeProj = _projectPointOntoSegment(currentPos, p1, p2);
+
+    final remaining = geometry.sublist(activeIndex + 1);
+    return [activeProj, ...remaining];
   }
 
   void _updateTrimmedRouteLine(LatLng currentPos) {
@@ -289,11 +313,17 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
 
     if (locationChanged && widget.currentLocation != null) {
       _updateCalculatedHeading(widget.currentLocation!);
-      final currentPos = LatLng(
+      final newPos = LatLng(
         widget.currentLocation!.latitude,
         widget.currentLocation!.longitude,
       );
-      _updateTrimmedRouteLine(currentPos);
+      if (_animTargetPos != null) {
+        _animStartPos = _animTargetPos;
+      } else {
+        _animStartPos = newPos;
+      }
+      _animTargetPos = newPos;
+      _smoothPosController.forward(from: 0.0);
     }
 
     final trackingChanged = oldWidget.trackingMode != widget.trackingMode;
@@ -332,6 +362,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
   @override
   void dispose() {
     _loadTimeoutTimer?.cancel();
+    _smoothPosController.dispose();
     _currentAnimationId++;
     super.dispose();
   }
@@ -611,6 +642,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap> with Automa
     
     final animId = ++_currentAnimationId;
     _mainRouteLine = null;
+    _lastMatchedIndex = 0;
 
     final points = [
       for (final point in widget.points)

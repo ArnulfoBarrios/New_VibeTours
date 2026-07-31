@@ -97,7 +97,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
           ),
           Positioned(
             right: 16,
-            bottom: 236,
+            bottom: 236 + MediaQuery.of(context).padding.bottom,
             child: FloatingActionButton.extended(
               heroTag: 'focus_destination_fab',
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -125,7 +125,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
           Positioned(
             left: 16,
             right: 16,
-            bottom: 18,
+            bottom: 18 + MediaQuery.of(context).padding.bottom,
             child: GlassPanel(
               padding: const EdgeInsets.all(18),
               radius: 28,

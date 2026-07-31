@@ -369,8 +369,10 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
       _titleController.text = event.title;
       _descriptionController.text = event.description;
       _cityController.text = event.city;
-      _countryController.text = event.country.isNotEmpty ? event.country : 'Colombia';
-      _category = event.category;
+      _category = _categories.firstWhere(
+        (c) => c.toLowerCase() == event.category.toLowerCase(),
+        orElse: () => _categories.contains(event.category) ? event.category : _categories.first,
+      );
       _startsAt = event.startsAt;
       _endsAt = event.endsAt;
       _isMultiDay = event.endsAt != null;
@@ -714,7 +716,7 @@ class _AddEventBottomSheetState extends ConsumerState<_AddEventBottomSheet> {
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 isExpanded: true,
-                initialValue: _category,
+                initialValue: _categories.contains(_category) ? _category : _categories.first,
                 decoration: const InputDecoration(
                   labelText: 'Categoría del Evento',
                   prefixIcon: Icon(Icons.category_outlined),
