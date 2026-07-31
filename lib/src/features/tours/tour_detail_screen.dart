@@ -429,6 +429,8 @@ class TourDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildAiDraftBanner(BuildContext context, WidgetRef ref, Tour tour) {
+    final isLoggedIn = ref.watch(isAuthenticatedProvider);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -456,93 +458,116 @@ class TourDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Este tour fue generado dinámicamente y aún no está guardado. Elige cómo deseas conservarlo:',
+            isLoggedIn
+                ? 'Este tour fue generado dinámicamente y aún no está guardado. Elige cómo deseas conservarlo:'
+                : 'Este tour fue generado por IA. Inicia sesión para guardarlo en tu cuenta o publicarlo:',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      final personalTour = _copyTour(tour, isPublished: false);
-                      final saved = await ref.read(userToursProvider.notifier).saveTour(personalTour);
-                      ref.read(selectedTourProvider.notifier).state = saved;
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Guardado en tus tours personales exitosamente.'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error al guardar: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.lock_outline_rounded),
-                  label: const Text('Guardar Personal'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+          if (!isLoggedIn)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  context.push('/login');
+                },
+                icon: const Icon(Icons.login_rounded),
+                label: const Text('Iniciar sesión para guardar'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      final publicTour = _copyTour(tour, isPublished: true);
-                      final saved = await ref.read(userToursProvider.notifier).saveTour(publicTour);
-                      ref.read(selectedTourProvider.notifier).state = saved;
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('El tour se ha publicado exitosamente.'),
-                            backgroundColor: AppTheme.primary,
-                          ),
-                        );
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      try {
+                        final personalTour = _copyTour(tour, isPublished: false);
+                        final saved = await ref.read(userToursProvider.notifier).saveTour(personalTour);
+                        ref.read(selectedTourProvider.notifier).state = saved;
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Guardado en tus tours personales exitosamente.'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error al guardar: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error al publicar: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.public_rounded),
-                  label: const Text('Publicar Catálogo'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    },
+                    icon: const Icon(Icons.lock_outline_rounded),
+                    label: const Text('Guardar Personal'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      try {
+                        final publicTour = _copyTour(tour, isPublished: true);
+                        final saved = await ref.read(userToursProvider.notifier).saveTour(publicTour);
+                        ref.read(selectedTourProvider.notifier).state = saved;
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('El tour se ha publicado exitosamente.'),
+                              backgroundColor: AppTheme.primary,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error al publicar: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.public_rounded),
+                    label: const Text('Publicar Catálogo'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -2282,7 +2307,9 @@ class _TourOptionsMenuButtonState extends State<_TourOptionsMenuButton> {
   @override
   Widget build(BuildContext context) {
     final authUser = widget.ref.watch(authUserProvider).valueOrNull;
-    final isOwner = widget.tour.ownerId != null && widget.tour.ownerId == authUser?.id;
+    final isOwner = (widget.tour.ownerId != null && widget.tour.ownerId == authUser?.id) ||
+        widget.tour.id.startsWith('ai-') ||
+        widget.tour.isAiGenerated;
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),

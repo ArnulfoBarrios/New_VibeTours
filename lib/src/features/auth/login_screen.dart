@@ -248,6 +248,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final pendingPrompt = ref.read(aiPromptProvider);
     if (pendingPrompt != null && pendingPrompt.isNotEmpty) {
       context.go('/ai');
+    } else if (context.canPop()) {
+      context.pop();
     } else {
       context.go('/home');
     }
