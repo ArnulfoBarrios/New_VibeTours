@@ -912,7 +912,7 @@ a:hover {
 }
 
 /* --------------------------------------------------------------------------
-   15. RESPONSIVE BREAKPOINTS
+   15. RESPONSIVE BREAKPOINTS & MOBILE IMAGE FIXES
    -------------------------------------------------------------------------- */
 @media (max-width: 1024px) {
   .hero-section {
@@ -939,12 +939,92 @@ a:hover {
     display: none;
   }
   .hero-title {
-    font-size: 38px;
+    font-size: 36px;
+  }
+  .hero-description {
+    font-size: 17px;
   }
   .about-grid, .timeline-container, .advantages-grid, .reviews-grid {
     grid-template-columns: 1fr;
   }
   .footer-container {
     grid-template-columns: 1fr;
+  }
+
+  /* Responsive Mobile Frames & Images Fix */
+  .hero-mockup-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+  }
+
+  .iphone-frame {
+    width: 260px;
+    height: 530px;
+    max-width: 90vw;
+    border-width: 8px;
+    border-radius: 40px;
+  }
+
+  .mockup-glow {
+    width: 260px;
+    height: 260px;
+  }
+
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+    gap: 16px;
+  }
+
+  .gallery-card .iphone-frame {
+    width: 100%;
+    height: 310px;
+    border-width: 4px;
+    border-radius: 24px;
+  }
+
+  .gallery-card-title {
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  .lightbox-content {
+    max-width: 290px;
+  }
+
+  .lightbox-content .iphone-frame {
+    height: 540px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 30px;
+  }
+  .hero-section {
+    padding: 120px 16px 60px;
+  }
+  .section {
+    padding: 60px 16px;
+  }
+  .iphone-frame {
+    width: 240px;
+    height: 490px;
+  }
+  .gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .gallery-card .iphone-frame {
+    height: 270px;
+    border-width: 4px;
+    border-radius: 20px;
+  }
+  .iphone-notch {
+    width: 60px;
+    height: 16px;
+    border-radius: 10px;
+    top: 6px;
   }
 }
