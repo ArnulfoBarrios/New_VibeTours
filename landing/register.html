@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeTours - Registro de Usuario</title>
+  <meta name="description" content="Crea tu cuenta gratuita en VibeTours y accede a itinerarios inteligentes de IA, tours guiados por GPS y audioguías personalizadas.">
+  <link rel="icon" type="image/png" href="assets/images/logo_light.png">
+  
+  <!-- Apple Style Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Supabase JS Client SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    
+    .register-container {
+      width: 100%;
+      max-width: 460px;
+      padding: 44px 36px;
+      margin: 0 auto;
+    }
+    
+    .register-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    
+    .register-header img {
+      height: 48px;
+      margin-bottom: 16px;
+    }
+    
+    .register-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+    
+    .register-desc {
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+    
+    .auth-alert {
+      padding: 14px 18px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .auth-alert.error {
+      display: block;
+      background: rgba(186, 26, 26, 0.12);
+      color: var(--error);
+      border: 1px solid rgba(186, 26, 26, 0.3);
+    }
+    
+    .auth-alert.success {
+      display: block;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    
+    .back-home {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 24px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+    }
+    
+    .back-home:hover {
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="glass-panel register-container">
+    <div class="register-header">
+      <a href="index.html">
+        <img id="regLogoImg" src="assets/images/logo_light.png" alt="VibeTours Logo">
+      </a>
+      <h1 class="register-title">Únete a VibeTours</h1>
+      <p class="register-desc" id="reg-desc-text">Crea tu cuenta gratuita para guardar tours e itinerarios de Inteligencia Artificial.</p>
+    </div>
+
+    <!-- Alert Box for Supabase Auth Feedback -->
+    <div id="authAlert" class="auth-alert"></div>
+
+    <form id="standaloneRegisterForm">
+      <div class="form-group">
+        <label class="form-label" for="regFullName" id="lbl-fullname">Nombre Completo</label>
+        <input type="text" id="regFullName" class="form-input" placeholder="Ej: Juan Pérez" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="regEmail" id="lbl-email">Correo Electrónico</label>
+        <input type="email" id="regEmail" class="form-input" placeholder="tu@correo.com" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="regPassword" id="lbl-password">Contraseña</label>
+        <input type="password" id="regPassword" class="form-input" placeholder="••••••••" minlength="6" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="regConfirmPassword" id="lbl-confirm">Confirmar Contraseña</label>
+        <input type="password" id="regConfirmPassword" class="form-input" placeholder="••••••••" minlength="6" required>
+      </div>
+
+      <button type="submit" id="btn-submit-register" class="btn btn-primary" style="width: 100%; padding: 14px; margin-top: 10px;">
+        <span id="btn-register-text">Crear Cuenta</span>
+      </button>
+    </form>
+
+    <div style="text-align: center;">
+      <a href="index.html" class="back-home" id="btn-back-home">&larr; Volver a la página principal</a>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Supabase Client with VibeTours Credentials
+    const SUPABASE_URL = 'https://cqtatexdaatvcyhhvfao.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxdGF0ZXhkYWF0dmN5aGh2ZmFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNDExMjksImV4cCI6MjA5MTkxNzEyOX0.nKBTTv9PEGua7_d3SF9B8xj4aXyiWf1Lr5n3MaUHFDs';
+    
+    let supabaseClient = null;
+    if (window.supabase) {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+
+    // Apply saved theme
+    const savedTheme = localStorage.getItem('vibetours_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    const regLogoImg = document.getElementById('regLogoImg');
+    if (regLogoImg) {
+      regLogoImg.src = savedTheme === 'dark' ? 'assets/images/logo_dark.png' : 'assets/images/logo_light.png';
+    }
+
+    // Language i18n support for Registration Page
+    const regLang = localStorage.getItem('vibetours_lang') || 'es';
+    if (regLang === 'en') {
+      document.querySelector('.register-title').innerText = 'Join VibeTours';
+      document.getElementById('reg-desc-text').innerText = 'Create your free account to save tours and AI itineraries.';
+      document.getElementById('lbl-fullname').innerText = 'Full Name';
+      document.getElementById('lbl-email').innerText = 'Email Address';
+      document.getElementById('lbl-password').innerText = 'Password';
+      document.getElementById('lbl-confirm').innerText = 'Confirm Password';
+      document.getElementById('btn-register-text').innerText = 'Create Account';
+      document.getElementById('btn-back-home').innerHTML = '&larr; Return to main page';
+    }
+
+    // Handle Registration Form Submit via Supabase Auth
+    const form = document.getElementById('standaloneRegisterForm');
+    const authAlert = document.getElementById('authAlert');
+    const submitBtn = document.getElementById('btn-submit-register');
+    const submitBtnText = document.getElementById('btn-register-text');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      authAlert.className = 'auth-alert';
+      authAlert.style.display = 'none';
+
+      const fullName = document.getElementById('regFullName').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const confirmPassword = document.getElementById('regConfirmPassword').value;
+
+      if (password !== confirmPassword) {
+        showError(regLang === 'en' ? 'Passwords do not match.' : 'Las contraseñas no coinciden.');
+        return;
+      }
+
+      if (password.length < 6) {
+        showError(regLang === 'en' ? 'Password must be at least 6 characters.' : 'La contraseña debe tener al menos 6 caracteres.');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtnText.innerText = regLang === 'en' ? 'Registering...' : 'Registrando usuario...';
+
+      try {
+        if (!supabaseClient) {
+          throw new Error(regLang === 'en' ? 'Supabase client failed to load.' : 'No se pudo cargar el cliente de Supabase.');
+        }
+
+        const { data, error } = await supabaseClient.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              full_name: fullName,
+              name: fullName
+            }
+          }
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        const successMsg = regLang === 'en'
+          ? `¡Success! Account created in Supabase Auth for ${email}. You can now log in.`
+          : `¡Cuenta creada exitosamente en Supabase Authentication para ${email}! Ya estás registrado.`;
+        
+        showSuccess(successMsg);
+        form.reset();
+        
+        setTimeout(() => {
+          window.location.href = 'index.html';
+        }, 3000);
+
+      } catch (err) {
+        console.error('Supabase Auth Error:', err);
+        showError(err.message || (regLang === 'en' ? 'An error occurred during registration.' : 'Ocurrió un error durante el registro.'));
+      } finally {
+        submitBtn.disabled = false;
+        submitBtnText.innerText = regLang === 'en' ? 'Create Account' : 'Crear Cuenta';
+      }
+    });
+
+    function showError(msg) {
+      authAlert.innerText = msg;
+      authAlert.className = 'auth-alert error';
+    }
+
+    function showSuccess(msg) {
+      authAlert.innerText = msg;
+      authAlert.className = 'auth-alert success';
+    }
+  </script>
+</body>
+</html>

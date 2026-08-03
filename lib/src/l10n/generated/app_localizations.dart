@@ -923,7 +923,7 @@ abstract class AppLocalizations {
   /// No description provided for @pqrsTitle.
   ///
   /// In es, this message translates to:
-  /// **'Crear PQRS'**
+  /// **'Nueva Solicitud'**
   String get pqrsTitle;
 
   /// No description provided for @pqrsDesc.
@@ -1043,19 +1043,19 @@ abstract class AppLocalizations {
   /// No description provided for @pqrsErrorSupabase.
   ///
   /// In es, this message translates to:
-  /// **'Supabase no está configurado para enviar PQRS.'**
+  /// **'Supabase no está configurado para enviar solicitudes.'**
   String get pqrsErrorSupabase;
 
   /// No description provided for @pqrsErrorLogin.
   ///
   /// In es, this message translates to:
-  /// **'Inicia sesión para enviar tu PQRS.'**
+  /// **'Inicia sesión para enviar tu solicitud.'**
   String get pqrsErrorLogin;
 
   /// No description provided for @pqrsSuccess.
   ///
   /// In es, this message translates to:
-  /// **'PQRS enviada. Te responderemos en menos de 24h hábiles.'**
+  /// **'Solicitud enviada. Te responderemos en menos de 24h hábiles.'**
   String get pqrsSuccess;
 
   /// No description provided for @aiHello.
@@ -1181,7 +1181,7 @@ abstract class AppLocalizations {
   /// No description provided for @helpChipSupport.
   ///
   /// In es, this message translates to:
-  /// **'Soporte & PQRS'**
+  /// **'Soporte y Ayuda'**
   String get helpChipSupport;
 
   /// No description provided for @helpNoResults.
@@ -1469,7 +1469,7 @@ abstract class AppLocalizations {
   /// No description provided for @helpSectionSupportTitle.
   ///
   /// In es, this message translates to:
-  /// **'🛠️ Soporte, PQRS y Comunidad'**
+  /// **'🛠️ Soporte, Solicitudes y Comunidad'**
   String get helpSectionSupportTitle;
 
   /// No description provided for @helpSectionSupportSub.
@@ -1481,13 +1481,13 @@ abstract class AppLocalizations {
   /// No description provided for @helpSupport1Title.
   ///
   /// In es, this message translates to:
-  /// **'1. Gestión de PQRS'**
+  /// **'1. Envío de Solicitudes'**
   String get helpSupport1Title;
 
   /// No description provided for @helpSupport1Body.
   ///
   /// In es, this message translates to:
-  /// **'Envía Peticiones, Quejas, Reclamos o Sugerencias directamente desde la pantalla de Soporte y consulta las respuestas del administrador en tiempo real.'**
+  /// **'Envía tus consultas, comentarios o sugerencias directamente desde la pantalla de Soporte y consulta las respuestas del administrador en tiempo real.'**
   String get helpSupport1Body;
 
   /// No description provided for @helpSupport2Title.
@@ -1661,7 +1661,7 @@ abstract class AppLocalizations {
   /// No description provided for @pqrsMyPqrs.
   ///
   /// In es, this message translates to:
-  /// **'Mis PQRS'**
+  /// **'Mis Solicitudes'**
   String get pqrsMyPqrs;
 
   /// No description provided for @pqrsHistorySub.
@@ -1715,7 +1715,7 @@ abstract class AppLocalizations {
   /// No description provided for @helpBody1b.
   ///
   /// In es, this message translates to:
-  /// **'Para crear tours, guardar favoritos en la nube, comentar, calificar, enviar PQRS o pedir disponibilidad necesitas iniciar sesion.'**
+  /// **'Para crear tours, guardar favoritos en la nube, comentar, calificar, enviar solicitudes o pedir disponibilidad necesitas iniciar sesion.'**
   String get helpBody1b;
 
   /// No description provided for @helpBody1c.
@@ -1853,13 +1853,13 @@ abstract class AppLocalizations {
   /// No description provided for @helpBody9a.
   ///
   /// In es, this message translates to:
-  /// **'Envia Peticiones, Quejas, Reclamos y Sugerencias directamente desde la app.'**
+  /// **'Envía solicitudes, dudas o sugerencias directamente desde la app.'**
   String get helpBody9a;
 
   /// No description provided for @helpBody9b.
   ///
   /// In es, this message translates to:
-  /// **'Revisa el estado de tus PQRS y las respuestas del administrador en la pestana \'Historial\'.'**
+  /// **'Revisa el estado de tus solicitudes y las respuestas del administrador en la pestaña \'Historial\'.'**
   String get helpBody9b;
 
   /// No description provided for @privSec1Title.
@@ -1871,7 +1871,7 @@ abstract class AppLocalizations {
   /// No description provided for @privSec1Body.
   ///
   /// In es, this message translates to:
-  /// **'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, biografía, preferencias turísticas, favoritos, tours creados, tours realizados, calificación de tours, historial de PQRS, ubicación aproximada y datos técnicos del dispositivo necesarios para operar y optimizar la app.'**
+  /// **'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, biografía, preferencias turísticas, favoritos, tours creados, tours realizados, calificación de tours, historial de solicitudes, ubicación aproximada y datos técnicos del dispositivo necesarios para operar y optimizar la app.'**
   String get privSec1Body;
 
   /// No description provided for @privSec2Title.
@@ -1919,7 +1919,7 @@ abstract class AppLocalizations {
   /// No description provided for @privSec5Body.
   ///
   /// In es, this message translates to:
-  /// **'Si decides publicar tours, dejar comentarios, valoraciones o enviar PQRS, este contenido estará asociado a tu cuenta. Los tours marcados como privados y los borradores no serán visibles para la comunidad.'**
+  /// **'Si decides publicar tours, dejar comentarios, valoraciones o enviar solicitudes, este contenido estará asociado a tu cuenta. Los tours marcados como privados y los borradores no serán visibles para la comunidad.'**
   String get privSec5Body;
 
   /// No description provided for @privSec6Title.
@@ -1943,7 +1943,7 @@ abstract class AppLocalizations {
   /// No description provided for @privSec7Body.
   ///
   /// In es, this message translates to:
-  /// **'Conservamos tus datos mientras tu cuenta esté activa o sea necesario para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar una copia de tus datos o su eliminación definitiva a través del módulo de PQRS o contactando a soporte técnico.'**
+  /// **'Conservamos tus datos mientras tu cuenta esté activa o sea necesario para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar una copia de tus datos o su eliminación definitiva a través del módulo de Soporte o contactando a soporte técnico.'**
   String get privSec7Body;
 
   /// No description provided for @termsSec1Title.
@@ -2021,13 +2021,13 @@ abstract class AppLocalizations {
   /// No description provided for @termsSec7Title.
   ///
   /// In es, this message translates to:
-  /// **'Soporte, Reclamos y PQRS'**
+  /// **'Soporte y Solicitudes'**
   String get termsSec7Title;
 
   /// No description provided for @termsSec7Body.
   ///
   /// In es, this message translates to:
-  /// **'Todas las peticiones, quejas, reclamos y sugerencias deben canalizarse a través del módulo PQRS integrado en la app. El tiempo objetivo de respuesta es menor a 24 horas hábiles, sujeto a disponibilidad técnica y complejidad del requerimiento.'**
+  /// **'Todas las consultas, solicitudes y sugerencias deben canalizarse a través del módulo de Soporte integrado en la app. El tiempo objetivo de respuesta es menor a 24 horas hábiles, sujeto a disponibilidad técnica y complejidad del requerimiento.'**
   String get termsSec7Body;
 
   /// No description provided for @helpBody4d.
@@ -2051,7 +2051,7 @@ abstract class AppLocalizations {
   /// No description provided for @helpBody9c.
   ///
   /// In es, this message translates to:
-  /// **'Puedes consultar el estado de tus solicitudes en el historial de PQRS.'**
+  /// **'Puedes consultar el estado de tus solicitudes en el historial de Solicitudes.'**
   String get helpBody9c;
 
   /// No description provided for @authRequireTitle.
@@ -2592,7 +2592,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminControlCenterBody.
   ///
   /// In es, this message translates to:
-  /// **'Gestiona aprobaciones, PQRS y metricas con permisos de administrador.'**
+  /// **'Gestiona aprobaciones, solicitudes y métricas con permisos de administrador.'**
   String get adminControlCenterBody;
 
   /// No description provided for @adminNewReports.
@@ -2604,7 +2604,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminPqrsManagement.
   ///
   /// In es, this message translates to:
-  /// **'Gestion de PQRS'**
+  /// **'Gestión de Solicitudes'**
   String get adminPqrsManagement;
 
   /// No description provided for @adminActiveTickets.
@@ -2622,7 +2622,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminPqrsTitle.
   ///
   /// In es, this message translates to:
-  /// **'Gestion de PQRS'**
+  /// **'Gestión de Solicitudes'**
   String get adminPqrsTitle;
 
   /// No description provided for @adminPqrsSubtitle.
@@ -2634,13 +2634,13 @@ abstract class AppLocalizations {
   /// No description provided for @adminSearchPqrs.
   ///
   /// In es, this message translates to:
-  /// **'Buscar PQRS...'**
+  /// **'Buscar solicitudes...'**
   String get adminSearchPqrs;
 
   /// No description provided for @adminNoPqrs.
   ///
   /// In es, this message translates to:
-  /// **'Sin PQRS'**
+  /// **'Sin solicitudes'**
   String get adminNoPqrs;
 
   /// No description provided for @adminNoPqrsBody.
@@ -2688,7 +2688,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminPqrsHistory.
   ///
   /// In es, this message translates to:
-  /// **'Historial de PQRS'**
+  /// **'Historial de Solicitudes'**
   String get adminPqrsHistory;
 
   /// No description provided for @adminPqrsHistorySubtitle.
@@ -3060,13 +3060,13 @@ abstract class AppLocalizations {
   /// No description provided for @adminPqrsHistoryScreenTitle.
   ///
   /// In es, this message translates to:
-  /// **'Historial de PQRS Respondidos'**
+  /// **'Historial de Solicitudes Respondidas'**
   String get adminPqrsHistoryScreenTitle;
 
   /// No description provided for @adminPqrsHistoryEmpty.
   ///
   /// In es, this message translates to:
-  /// **'Sin PQRS respondidos'**
+  /// **'Sin solicitudes respondidas'**
   String get adminPqrsHistoryEmpty;
 
   /// No description provided for @adminPqrsHistoryEmptyBody.
@@ -3096,7 +3096,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminPqrsErrorLoading.
   ///
   /// In es, this message translates to:
-  /// **'Error al cargar PQRS respondidos: {error}'**
+  /// **'Error al cargar solicitudes respondidas: {error}'**
   String adminPqrsErrorLoading(String error);
 
   /// No description provided for @adminKindPetition.

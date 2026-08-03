@@ -702,12 +702,13 @@ class _NearbyPlacesSection extends ConsumerWidget {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.9),
+                                    color: Colors.black.withValues(alpha: 0.65),
                                     borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.5),
                                   ),
                                   child: Text(
                                     '${(place.distanceMeters / 1000).toStringAsFixed(1)} km',
-                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
                                   ),
                                 ),
                               ),

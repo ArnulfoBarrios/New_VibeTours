@@ -433,7 +433,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Usa VIBETOURS como guía de apoyo. Confirma condiciones reales antes de desplazarte.';
 
   @override
-  String get pqrsTitle => 'Crear PQRS';
+  String get pqrsTitle => 'Nueva Solicitud';
 
   @override
   String get pqrsDesc =>
@@ -495,14 +495,14 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get pqrsErrorSupabase =>
-      'Supabase no está configurado para enviar PQRS.';
+      'Supabase no está configurado para enviar solicitudes.';
 
   @override
-  String get pqrsErrorLogin => 'Inicia sesión para enviar tu PQRS.';
+  String get pqrsErrorLogin => 'Inicia sesión para enviar tu solicitud.';
 
   @override
   String get pqrsSuccess =>
-      'PQRS enviada. Te responderemos en menos de 24h hábiles.';
+      'Solicitud enviada. Te responderemos en menos de 24h hábiles.';
 
   @override
   String aiHello(String name) {
@@ -568,7 +568,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get helpChipProfile => 'Perfil & Ajustes';
 
   @override
-  String get helpChipSupport => 'Soporte & PQRS';
+  String get helpChipSupport => 'Soporte y Ayuda';
 
   @override
   String get helpNoResults => 'No se encontraron guías para tu búsqueda.';
@@ -737,18 +737,18 @@ class AppLocalizationsEs extends AppLocalizations {
       'Cambia entre Modo Claro y Modo Oscuro en Ajustes para una visualización cómoda tanto de día como de noche.';
 
   @override
-  String get helpSectionSupportTitle => '🛠️ Soporte, PQRS y Comunidad';
+  String get helpSectionSupportTitle => '🛠️ Soporte, Solicitudes y Comunidad';
 
   @override
   String get helpSectionSupportSub =>
       'Canales de ayuda, envío de sugerencias y comentarios.';
 
   @override
-  String get helpSupport1Title => '1. Gestión de PQRS';
+  String get helpSupport1Title => '1. Envío de Solicitudes';
 
   @override
   String get helpSupport1Body =>
-      'Envía Peticiones, Quejas, Reclamos o Sugerencias directamente desde la pantalla de Soporte y consulta las respuestas del administrador en tiempo real.';
+      'Envía tus consultas, comentarios o sugerencias directamente desde la pantalla de Soporte y consulta las respuestas del administrador en tiempo real.';
 
   @override
   String get helpSupport2Title => '2. Calificación y Feedback';
@@ -836,7 +836,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get appearanceDark => 'Oscuro';
 
   @override
-  String get pqrsMyPqrs => 'Mis PQRS';
+  String get pqrsMyPqrs => 'Mis Solicitudes';
 
   @override
   String get pqrsHistorySub =>
@@ -866,7 +866,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get helpBody1b =>
-      'Para crear tours, guardar favoritos en la nube, comentar, calificar, enviar PQRS o pedir disponibilidad necesitas iniciar sesion.';
+      'Para crear tours, guardar favoritos en la nube, comentar, calificar, enviar solicitudes o pedir disponibilidad necesitas iniciar sesion.';
 
   @override
   String get helpBody1c =>
@@ -958,18 +958,18 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get helpBody9a =>
-      'Envia Peticiones, Quejas, Reclamos y Sugerencias directamente desde la app.';
+      'Envía solicitudes, dudas o sugerencias directamente desde la app.';
 
   @override
   String get helpBody9b =>
-      'Revisa el estado de tus PQRS y las respuestas del administrador en la pestana \'Historial\'.';
+      'Revisa el estado de tus solicitudes y las respuestas del administrador en la pestaña \'Historial\'.';
 
   @override
   String get privSec1Title => 'Datos que recopilamos';
 
   @override
   String get privSec1Body =>
-      'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, biografía, preferencias turísticas, favoritos, tours creados, tours realizados, calificación de tours, historial de PQRS, ubicación aproximada y datos técnicos del dispositivo necesarios para operar y optimizar la app.';
+      'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, biografía, preferencias turísticas, favoritos, tours creados, tours realizados, calificación de tours, historial de solicitudes, ubicación aproximada y datos técnicos del dispositivo necesarios para operar y optimizar la app.';
 
   @override
   String get privSec2Title => 'Uso de ubicación y permisos';
@@ -997,7 +997,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get privSec5Body =>
-      'Si decides publicar tours, dejar comentarios, valoraciones o enviar PQRS, este contenido estará asociado a tu cuenta. Los tours marcados como privados y los borradores no serán visibles para la comunidad.';
+      'Si decides publicar tours, dejar comentarios, valoraciones o enviar solicitudes, este contenido estará asociado a tu cuenta. Los tours marcados como privados y los borradores no serán visibles para la comunidad.';
 
   @override
   String get privSec6Title => 'Terceros y Analíticas';
@@ -1011,7 +1011,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get privSec7Body =>
-      'Conservamos tus datos mientras tu cuenta esté activa o sea necesario para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar una copia de tus datos o su eliminación definitiva a través del módulo de PQRS o contactando a soporte técnico.';
+      'Conservamos tus datos mientras tu cuenta esté activa o sea necesario para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar una copia de tus datos o su eliminación definitiva a través del módulo de Soporte o contactando a soporte técnico.';
 
   @override
   String get termsSec1Title => 'Aceptación y Uso de la aplicación';
@@ -1056,11 +1056,11 @@ class AppLocalizationsEs extends AppLocalizations {
       'Queda estrictamente prohibido publicar contenido falso, difamatorio, ofensivo, discriminatorio, peligroso, spam o que infrinja derechos de autor o privacidad. VIBETOURS se reserva el derecho de moderar, ocultar o eliminar contenido y suspender cuentas que violen estas reglas.';
 
   @override
-  String get termsSec7Title => 'Soporte, Reclamos y PQRS';
+  String get termsSec7Title => 'Soporte y Solicitudes';
 
   @override
   String get termsSec7Body =>
-      'Todas las peticiones, quejas, reclamos y sugerencias deben canalizarse a través del módulo PQRS integrado en la app. El tiempo objetivo de respuesta es menor a 24 horas hábiles, sujeto a disponibilidad técnica y complejidad del requerimiento.';
+      'Todas las consultas, solicitudes y sugerencias deben canalizarse a través del módulo de Soporte integrado en la app. El tiempo objetivo de respuesta es menor a 24 horas hábiles, sujeto a disponibilidad técnica y complejidad del requerimiento.';
 
   @override
   String get helpBody4d =>
@@ -1076,7 +1076,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get helpBody9c =>
-      'Puedes consultar el estado de tus solicitudes en el historial de PQRS.';
+      'Puedes consultar el estado de tus solicitudes en el historial de Solicitudes.';
 
   @override
   String get authRequireTitle => 'Inicia sesión para continuar';
@@ -1369,13 +1369,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get adminControlCenterBody =>
-      'Gestiona aprobaciones, PQRS y metricas con permisos de administrador.';
+      'Gestiona aprobaciones, solicitudes y métricas con permisos de administrador.';
 
   @override
   String get adminNewReports => 'Nuevos reportes';
 
   @override
-  String get adminPqrsManagement => 'Gestion de PQRS';
+  String get adminPqrsManagement => 'Gestión de Solicitudes';
 
   @override
   String adminActiveTickets(String count) {
@@ -1386,17 +1386,17 @@ class AppLocalizationsEs extends AppLocalizations {
   String get adminToursToApprove => 'Tours por aprobar';
 
   @override
-  String get adminPqrsTitle => 'Gestion de PQRS';
+  String get adminPqrsTitle => 'Gestión de Solicitudes';
 
   @override
   String get adminPqrsSubtitle =>
       'Supervisa y responde las solicitudes de tus usuarios en tiempo real.';
 
   @override
-  String get adminSearchPqrs => 'Buscar PQRS...';
+  String get adminSearchPqrs => 'Buscar solicitudes...';
 
   @override
-  String get adminNoPqrs => 'Sin PQRS';
+  String get adminNoPqrs => 'Sin solicitudes';
 
   @override
   String get adminNoPqrsBody =>
@@ -1424,7 +1424,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Transacciones financieras y pagos de monetización';
 
   @override
-  String get adminPqrsHistory => 'Historial de PQRS';
+  String get adminPqrsHistory => 'Historial de Solicitudes';
 
   @override
   String get adminPqrsHistorySubtitle =>
@@ -1633,10 +1633,11 @@ class AppLocalizationsEs extends AppLocalizations {
       'Esta sección mostrará las transacciones financieras y pagos a proveedores en una futura actualización, una vez que se implemente la monetización en la plataforma VIBETOURS.';
 
   @override
-  String get adminPqrsHistoryScreenTitle => 'Historial de PQRS Respondidos';
+  String get adminPqrsHistoryScreenTitle =>
+      'Historial de Solicitudes Respondidas';
 
   @override
-  String get adminPqrsHistoryEmpty => 'Sin PQRS respondidos';
+  String get adminPqrsHistoryEmpty => 'Sin solicitudes respondidas';
 
   @override
   String get adminPqrsHistoryEmptyBody =>
@@ -1655,7 +1656,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String adminPqrsErrorLoading(String error) {
-    return 'Error al cargar PQRS respondidos: $error';
+    return 'Error al cargar solicitudes respondidas: $error';
   }
 
   @override

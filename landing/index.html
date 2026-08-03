@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeTours - Tu Guía Turístico Inteligente con IA | Landing Page</title>
+  <meta name="description" content="Descubre la revolución del turismo con VibeTours. Rutas personalizadas con Inteligencia Artificial ancladas a GPS real, audioguías envolventes manos libres y diseño de lujo.">
+  
+  <!-- Apple Style Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       HEADER & NAVIGATION (APPLE-STYLE STICKY NAVBAR)
+       ========================================================================== -->
+  <header class="header">
+    <div class="nav-container">
+      <a href="index.html" class="brand-logo">
+        <img id="brandLogoImg" src="assets/images/logo_light.png" alt="VibeTours Logo">
+        <span class="brand-name">VibeTours</span>
+      </a>
+
+      <nav>
+        <ul class="nav-menu">
+          <li><a href="#que-es" class="nav-link">¿Qué es?</a></li>
+          <li><a href="#como-usar" class="nav-link">¿Cómo usar?</a></li>
+          <li><a href="#funcionalidades" class="nav-link">Funciones</a></li>
+          <li><a href="#ventajas" class="nav-link">Ventajas</a></li>
+          <li><a href="#capturas" class="nav-link">Pantallas</a></li>
+          <li><a href="#comentarios" class="nav-link">Reseñas</a></li>
+          <li><a href="legal.html" class="nav-link">Legal</a></li>
+        </ul>
+      </nav>
+
+      <div class="nav-actions">
+        <!-- Language Selector ES | EN -->
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <button onclick="setLandingLanguage('es')" id="landing-btn-es" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;">ES</button>
+          <button onclick="setLandingLanguage('en')" id="landing-btn-en" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;">EN</button>
+        </div>
+
+        <!-- Light / Dark Theme Toggle Button -->
+        <button id="themeToggleBtn" class="theme-toggle-btn" title="Cambiar Tema (Claro / Oscuro)">
+          <span id="themeIcon">
+            <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4C12.92 3.04 12.46 3 12 3z"/></svg>
+          </span>
+        </button>
+
+        <a href="register.html" id="nav-btn-register" class="btn btn-primary">Registrarse</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       1. HERO SECTION
+       ========================================================================== -->
+  <section class="hero-section">
+    <div class="hero-content reveal-on-scroll">
+      <div class="hero-badge">✨ Experiencia Neomórfica de Lujo</div>
+      <h1 class="hero-title">
+        Explora el mundo a tu propio ritmo con <span class="gradient-text">Inteligencia Artificial</span>
+      </h1>
+      <p class="hero-description">
+        VibeTours reinventa el turismo combinando itinerarios generativos de IA anclados a coordenadas GPS reales de OpenStreetMap, narración de voz manos libres en vivo y mapas vectoriales en un diseño inolvidable.
+      </p>
+
+      <div class="hero-buttons">
+        <a href="https://play.google.com/store" target="_blank" rel="noopener noreferrer" class="btn btn-playstore">
+          <svg class="store-badge-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3.609 1.814L13.792 12 3.61 22.186a2.372 2.372 0 0 1-.61-1.603V3.417c0-.609.227-1.18.609-1.603zm11.597 11.597l2.586-2.586-13.416-7.75 10.83 10.336zm0 1.178L4.376 24.925l13.416-7.75-2.586-2.586zm1.414-1.414l3.784-2.186c.928-.536.928-1.414 0-1.95L16.62 9.176l-2.008 2.008 2.008 2.005z"/>
+          </svg>
+          <span id="hero-playstore-btn">Descargar en Google Play</span>
+        </a>
+
+        <a href="register.html" id="hero-register-btn" class="btn btn-secondary">Crear Cuenta Gratis</a>
+      </div>
+    </div>
+
+    <div class="hero-mockup-wrapper reveal-on-scroll delay-2">
+      <div class="mockup-glow"></div>
+      <div class="iphone-frame">
+        <div class="iphone-notch"></div>
+        <img id="heroMockupImg" src="assets/screenshots/Modo claro/Explorar 1.jpeg" alt="VibeTours App Screen" class="iphone-screen">
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       2. ¿QUÉ ES VIBETOURS?
+       ========================================================================== -->
+  <section id="que-es" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Descubre VibeTours</span>
+      <h2 class="section-title">¿Qué es VibeTours?</h2>
+      <p class="section-description">
+        Es la plataforma móvil y web de turismo inteligente que elimina las visitas guiadas rígidas y costosas. VibeTours perfila tus gustos únicos para crear itinerarios a la medida, sin alucinaciones y anclados a puntos de interés reales.
+      </p>
+    </div>
+
+    <div class="about-grid">
+      <div class="glass-panel about-card reveal-on-scroll delay-1">
+        <div class="card-icon-wrapper">🧠</div>
+        <h3 class="card-title" id="card-ai-title">IA Anclada a Puntos Reales</h3>
+        <p class="card-text" id="card-ai-text">
+          A diferencia de los chats genéricos, la IA de VibeTours ancla sus itinerarios a coordenadas verificadas de OpenStreetMap y Wikipedia, garantizando lugares y horarios de atención 100% reales.
+        </p>
+      </div>
+
+      <div class="glass-panel about-card reveal-on-scroll delay-2">
+        <div class="card-icon-wrapper">📍</div>
+        <h3 class="card-title" id="card-gps-title">Navegación GPS Manos Libres</h3>
+        <p class="card-text" id="card-gps-text">
+          La app detecta tu posición por GPS mientras caminas, guiándote paso a paso por el mapa vectorial y reproduciendo descripciones explicativas automáticamente al llegar a cada parada.
+        </p>
+      </div>
+
+      <div class="glass-panel about-card reveal-on-scroll delay-3">
+        <div class="card-icon-wrapper">🎯</div>
+        <h3 class="card-title" id="card-profile-title">Perfil de Viajero a la Medida</h3>
+        <p class="card-text" id="card-profile-text">
+          Personaliza tu ritmo (Relajado, Equilibrado, Acelerado), grupo de viaje (Solo, Pareja, Familia, Amigos), presupuesto en USD e intereses como Gastronomía, Historia, Naturaleza o Arte.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       3. ¿CÓMO USAR VIBETOURS?
+       ========================================================================== -->
+  <section id="como-usar" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Pasos Sencillos</span>
+      <h2 class="section-title">¿Cómo usar VibeTours?</h2>
+      <p class="section-description">
+        Comenzar tu viaje personalizado es rápido e intuitivo a través de un trayecto interactivo continuo.
+      </p>
+    </div>
+
+    <div class="timeline-container">
+      <div class="glass-panel timeline-step reveal-on-scroll delay-1">
+        <div class="step-number">1</div>
+        <h3 class="card-title" id="step1-title">Configura tu Perfil de Viaje</h3>
+        <p class="card-text" id="step1-text">
+          Ingresa a la app (o pruébala en Modo Demo sin registro). Selecciona tu ritmo de caminata, presupuesto preferido y las categorías temáticas que deseas explorar.
+        </p>
+      </div>
+
+      <div class="glass-panel timeline-step reveal-on-scroll delay-2">
+        <div class="step-number">2</div>
+        <h3 class="card-title" id="step2-title">Genera o Elige tu Recorrido</h3>
+        <p class="card-text" id="step2-text">
+          Chatea con el asistente Vibe Planner AI expresando lo que deseas en lenguaje natural, o bien explora nuestro catálogo de más de 50 tours precargados de ciudades del mundo.
+        </p>
+      </div>
+
+      <div class="glass-panel timeline-step reveal-on-scroll delay-3">
+        <div class="step-number">3</div>
+        <h3 class="card-title" id="step3-title">Inicia el Live Tour con Voz</h3>
+        <p class="card-text" id="step3-text">
+          Activa el modo Live Tour en tiempo real. La app te guiará con mapas vectoriales MapLibre GL y narrará historias locales en audio automáticamente al aproximarte a cada lugar.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       4. ¿QUÉ SE PUEDE HACER EN VIBETOURS? (BENTO GRID)
+       ========================================================================== -->
+  <section id="funcionalidades" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Universo de Posibilidades</span>
+      <h2 class="section-title">¿Qué se puede hacer en VibeTours?</h2>
+      <p class="section-description">
+        Explora el ecosistema completo de funcionalidades avanzadas para turistas, creadores de contenido y administradores.
+      </p>
+    </div>
+
+    <div class="bento-grid">
+      <div class="glass-panel bento-item bento-col-8 reveal-on-scroll delay-1">
+        <div>
+          <span class="bento-tag">Inteligencia Artificial</span>
+          <h3 class="card-title" id="bento1-title">Vibe Planner AI & Asistente Conversacional</h3>
+          <p class="card-text" id="bento1-text">
+            Chatea de forma fluida para crear tours a medida. La IA sugiere hoteles reales como punto de encuentro, desglosa presupuestos estimados en USD por parada y procesa las rutas de forma asíncrona.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-panel bento-item bento-col-4 reveal-on-scroll delay-2">
+        <div>
+          <span class="bento-tag">Navegación GPS</span>
+          <h3 class="card-title" id="bento2-title">Lugares Cercanos & Clima en Vivo</h3>
+          <p class="card-text" id="bento2-text">
+            Descubre Puntos de Interés reales en un radio dinámico (Overpass API) y consulta el clima en tiempo real (Open-Meteo) para planificar tu caminata.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-panel bento-item bento-col-6 reveal-on-scroll delay-1">
+        <div>
+          <span class="bento-tag">Creador de Tours</span>
+          <h3 class="card-title" id="bento3-title">Creador Manual para Guías Locales</h3>
+          <p class="card-text" id="bento3-text">
+            Diseñado para guías y creadores: añade paradas en el mapa interactivo, ordena puntos arrastrando y soltando, sube fotos de portada a Supabase Storage y envía tu tour a revisión.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-panel bento-item bento-col-6 reveal-on-scroll delay-2">
+        <div>
+          <span class="bento-tag">Narración Inmersiva</span>
+          <h3 class="card-title" id="bento4-title">Audioguías TTS & Dictado por Voz</h3>
+          <p class="card-text" id="bento4-text">
+            Disfruta de narraciones de voz automáticas al aproximarte a las coordenadas del mapa. Interactúa por dictado de voz mediante micrófono para adaptar el tour en el camino.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-panel bento-item bento-col-6 reveal-on-scroll delay-1">
+        <div>
+          <span class="bento-tag">Multilingüe & Moneda</span>
+          <h3 class="card-title" id="bento5-title">Filtros Globales y Moneda Preferida</h3>
+          <p class="card-text" id="bento5-text">
+            Busca cualquier ciudad del mundo con el motor Photon de OpenStreetMap. Ajusta tu moneda de preferencia y convierte los valores en tiempo real.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-panel bento-item bento-col-6 reveal-on-scroll delay-2">
+        <div>
+          <span class="bento-tag">Administración</span>
+          <h3 class="card-title" id="bento6-title">Panel Administrativo & Gestión PQRS</h3>
+          <p class="card-text" id="bento6-text">
+            Herramientas avanzadas para moderadores: aprueba o rechaza solicitudes de tours públicos, gestiona eventos locales en el mapa y atiende peticiones de PQRS.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       5. VENTAJAS DE VIBETOURS
+       ========================================================================== -->
+  <section id="ventajas" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">¿Por qué elegirnos?</span>
+      <h2 class="section-title">Ventajas de VibeTours</h2>
+      <p class="section-description">
+        Beneficios tecnológicos clave que destacan a VibeTours frente a las guías tradicionales y los chats genéricos.
+      </p>
+    </div>
+
+    <div class="advantages-grid">
+      <div class="glass-panel advantage-item reveal-on-scroll delay-1">
+        <div class="advantage-icon">⚡</div>
+        <div>
+          <h3 class="card-title" id="adv1-title">Sin Alucinaciones de IA</h3>
+          <p class="card-text" id="adv1-text">
+            La IA no inventa restaurantes ni monumentos ficticios. Cada parada está validada contra coordenadas satelitales y datos abiertos de OpenStreetMap.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-panel advantage-item reveal-on-scroll delay-2">
+        <div class="advantage-icon">🎨</div>
+        <div>
+          <h3 class="card-title" id="adv2-title">Diseño de Lujo Estilo Apple</h3>
+          <p class="card-text" id="adv2-text">
+            Interfaz Neomórfica y Glassmorphic con desenfoque cristalino (blur), esquinas redondeadas de 24px y adaptación perfecta a Modo Claro y Modo Oscuro.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-panel advantage-item reveal-on-scroll delay-3">
+        <div class="advantage-icon">⭐</div>
+        <div>
+          <h3 class="card-title" id="adv3-title">Resiliencia y Modo Demo</h3>
+          <p class="card-text" id="adv3-text">
+            Prueba la aplicación inmediatamente sin necesidad de registrarte, accediendo al catálogo completo de 50 tours precargados con persistencia local.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-panel advantage-item reveal-on-scroll delay-4">
+        <div class="advantage-icon">🔒</div>
+        <div>
+          <h3 class="card-title" id="adv4-title">Privacidad & Seguridad Supabase</h3>
+          <p class="card-text" id="adv4-text">
+            Autenticación segura mediante Google OAuth o correo con Supabase Auth, encriptación SSL y protección estricta de tus datos de viaje.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       6. SHOWCASE DE CAPTURAS DE PANTALLA
+       ========================================================================== -->
+  <section id="capturas" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Explora la Interfaz</span>
+      <h2 class="section-title">Capturas de Pantalla de VibeTours</h2>
+      <p class="section-description">
+        Familiarízate con las 59 pantallas reales de la aplicación. Cambia el tema a Modo Oscuro en la barra superior para ver cómo se transforma la app.
+      </p>
+    </div>
+
+    <!-- Category Tabs Filter -->
+    <div class="gallery-nav reveal-on-scroll delay-1">
+      <button class="gallery-tab active" data-category="all" id="tab-all">Todas</button>
+      <button class="gallery-tab" data-category="auth" id="tab-auth">Onboarding</button>
+      <button class="gallery-tab" data-category="ai" id="tab-ai">IA Assistant</button>
+      <button class="gallery-tab" data-category="explore" id="tab-explore">Exploración</button>
+      <button class="gallery-tab" data-category="tour" id="tab-tour">Tour Activo</button>
+      <button class="gallery-tab" data-category="creator" id="tab-creator">Creador</button>
+      <button class="gallery-tab" data-category="profile" id="tab-profile">Perfil</button>
+      <button class="gallery-tab" data-category="admin" id="tab-admin">Admin</button>
+    </div>
+
+    <!-- Gallery Grid -->
+    <div id="galleryGrid" class="gallery-grid reveal-on-scroll delay-2"></div>
+  </section>
+
+  <!-- Lightbox Modal for Screenshots -->
+  <div id="lightboxModal" class="lightbox-modal">
+    <div class="lightbox-content">
+      <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+      <div class="iphone-frame" style="width: 320px; height: 650px; margin: 0 auto;">
+        <div class="iphone-notch"></div>
+        <img id="lightboxImg" src="" alt="Zoom Screenshot" class="iphone-screen">
+      </div>
+      <p id="lightboxTitle" style="color: #FFF; margin-top: 16px; font-weight: 600; font-size: 18px;"></p>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       7. BANNER DE REGISTRO & DESCARGA
+       ========================================================================== -->
+  <section class="section">
+    <div class="glass-panel download-banner reveal-on-scroll">
+      <span class="bento-tag" style="margin-bottom: 12px;" id="banner-tag">Comunidad de Viajeros</span>
+      <h2 class="section-title" id="banner-title">¿Listo para comenzar tu aventura?</h2>
+      <p class="section-description" id="banner-desc" style="max-width: 600px; margin-bottom: 28px;">
+        Crea tu cuenta gratuita de viajero para sincronizar tus tours favoritos y solicitar itinerarios ilimitados a la Inteligencia Artificial de VibeTours.
+      </p>
+      
+      <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;">
+        <a href="register.html" id="banner-btn-register" class="btn btn-primary" style="padding: 14px 32px; font-size: 16px;">
+          Ir a la Página de Registro
+        </a>
+        <a href="https://play.google.com/store" target="_blank" rel="noopener noreferrer" class="btn btn-playstore" style="padding: 14px 28px; font-size: 16px;">
+          <svg class="store-badge-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3.609 1.814L13.792 12 3.61 22.186a2.372 2.372 0 0 1-.61-1.603V3.417c0-.609.227-1.18.609-1.603zm11.597 11.597l2.586-2.586-13.416-7.75 10.83 10.336zm0 1.178L4.376 24.925l13.416-7.75-2.586-2.586zm1.414-1.414l3.784-2.186c.928-.536.928-1.414 0-1.95L16.62 9.176l-2.008 2.008 2.008 2.005z"/>
+          </svg>
+          <span id="banner-btn-playstore">Descargar en PlayStore</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       8. SECCIÓN DE COMENTARIOS DE USUARIOS
+       ========================================================================== -->
+  <section id="comentarios" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle" id="sub-comentarios">Opiniones de la Comunidad</span>
+      <h2 class="section-title" id="title-comentarios">Comentarios sobre VibeTours</h2>
+      <p class="section-description" id="desc-comentarios">
+        Lee las experiencias reales de usuarios o comparte tu propia opinión a continuación.
+      </p>
+    </div>
+
+    <!-- Review Grid -->
+    <div id="reviewsGrid" class="reviews-grid reveal-on-scroll delay-1" style="margin-bottom: 40px;"></div>
+
+    <!-- Add Review Form -->
+    <div class="glass-panel reveal-on-scroll delay-2" style="padding: 40px; max-width: 680px; margin: 0 auto;">
+      <h3 class="card-title" id="form-review-title" style="margin-bottom: 16px;">¡Deja tu Comentario!</h3>
+      <form id="newReviewForm">
+        <div class="form-group">
+          <label class="form-label" for="reviewNameInput" id="lbl-review-name">Tu Nombre</label>
+          <input type="text" id="reviewNameInput" class="form-input" placeholder="Tu nombre" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reviewStarsInput" id="lbl-review-stars">Calificación (Estrellas)</label>
+          <select id="reviewStarsInput" class="form-input" required>
+            <option value="5">★★★★★ (5 Estrellas - Excelente)</option>
+            <option value="4">★★★★☆ (4 Estrellas - Muy Bueno)</option>
+            <option value="3">★★★☆☆ (3 Estrellas - Bueno)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reviewTextInput" id="lbl-review-text">Tu Opinión o Reseña</label>
+          <textarea id="reviewTextInput" class="form-input" rows="3" placeholder="Escribe aquí tu experiencia con VibeTours..." required></textarea>
+        </div>
+
+        <button type="submit" id="btn-submit-review" class="btn btn-primary" style="width: 100%;">Publicar Comentario</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       9. FOOTER
+       ========================================================================== -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-col-brand">
+        <a href="#" class="brand-logo">
+          <span class="brand-name">VibeTours</span>
+        </a>
+        <p class="section-description" id="footer-desc" style="font-size: 14px;">
+          La plataforma neomórfica líder en tours interactivos con Inteligencia Artificial y geolocalización.
+        </p>
+      </div>
+
+      <div>
+        <h4 class="footer-title" id="footer-col1-title">Navegación</h4>
+        <ul class="footer-links">
+          <li><a href="#que-es" id="footer-link-quees">¿Qué es VibeTours?</a></li>
+          <li><a href="#como-usar" id="footer-link-comousar">¿Cómo usar?</a></li>
+          <li><a href="#funcionalidades" id="footer-link-funciones">Funcionalidades</a></li>
+          <li><a href="#capturas" id="footer-link-capturas">Pantallas de la App</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="footer-title" id="footer-col2-title">Portal Legal</h4>
+        <ul class="footer-links">
+          <li><a href="legal.html?tab=terms" id="footer-link-terms">Términos de Servicio</a></li>
+          <li><a href="legal.html?tab=privacy" id="footer-link-privacy">Política de Privacidad</a></li>
+          <li><a href="legal.html" id="footer-link-legal">Información de Seguridad</a></li>
+          <li><a href="register.html" id="footer-link-register">Registro de Usuarios</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="footer-title" id="footer-col3-title">Descarga Oficial</h4>
+        <a href="https://play.google.com/store" target="_blank" rel="noopener noreferrer" class="btn btn-playstore" style="font-size: 13px; padding: 8px 16px;">
+          <span>Google PlayStore</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>&copy; 2026 VibeTours Inc. <span id="footer-copy-rights">Todos los derechos reservados.</span></p>
+      <p id="footer-copy-design">Diseño Neomórfico & Glassmorphism estilo Apple.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+</body>
+</html>

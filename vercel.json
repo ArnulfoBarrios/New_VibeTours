@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "landing/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/assets/(.*)",
+      "dest": "/landing/assets/$1"
+    },
+    {
+      "src": "/styles.css",
+      "dest": "/landing/styles.css"
+    },
+    {
+      "src": "/app.js",
+      "dest": "/landing/app.js"
+    },
+    {
+      "src": "/legal.html",
+      "dest": "/landing/legal.html"
+    },
+    {
+      "src": "/legal",
+      "dest": "/landing/legal.html"
+    },
+    {
+      "src": "/register.html",
+      "dest": "/landing/register.html"
+    },
+    {
+      "src": "/register",
+      "dest": "/landing/register.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/landing/$1"
+    }
+  ]
+}

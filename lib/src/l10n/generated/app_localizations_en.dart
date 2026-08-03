@@ -429,7 +429,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Use VIBETOURS as a supporting guide. Confirm real conditions before traveling.';
 
   @override
-  String get pqrsTitle => 'Create PQRS';
+  String get pqrsTitle => 'New Request';
 
   @override
   String get pqrsDesc =>
@@ -490,14 +490,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pqrsErrorFill => 'Fill out subject and message with more detail.';
 
   @override
-  String get pqrsErrorSupabase => 'Supabase is not configured to send PQRS.';
+  String get pqrsErrorSupabase =>
+      'Supabase is not configured to send requests.';
 
   @override
-  String get pqrsErrorLogin => 'Log in to send your PQRS.';
+  String get pqrsErrorLogin => 'Log in to send your request.';
 
   @override
   String get pqrsSuccess =>
-      'PQRS sent. We will respond in less than 24 business hours.';
+      'Request sent. We will respond in less than 24 business hours.';
 
   @override
   String aiHello(String name) {
@@ -831,7 +832,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceDark => 'Dark';
 
   @override
-  String get pqrsMyPqrs => 'My PQRS';
+  String get pqrsMyPqrs => 'My Requests';
 
   @override
   String get pqrsHistorySub =>

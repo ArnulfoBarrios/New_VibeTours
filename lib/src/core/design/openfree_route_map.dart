@@ -208,51 +208,65 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     return true;
   }
 
-  LatLng _projectPointOntoSegment(LatLng p, LatLng a, LatLng b) {
-    final dx = b.longitude - a.longitude;
+  LatLng _projectPointOntoSegmentMetric(LatLng p, LatLng a, LatLng b) {
+    final latRad = (a.latitude + b.latitude) / 2.0 * (math.pi / 180.0);
+    final cosLat = math.cos(latRad);
+
+    final dx = (b.longitude - a.longitude) * cosLat;
     final dy = b.latitude - a.latitude;
 
     if (dx == 0 && dy == 0) return a;
 
-    final t = ((p.longitude - a.longitude) * dx + (p.latitude - a.latitude) * dy) /
-        (dx * dx + dy * dy);
+    final wx = (p.longitude - a.longitude) * cosLat;
+    final wy = p.latitude - a.latitude;
 
+    final t = (wx * dx + wy * dy) / (dx * dx + dy * dy);
     final clampedT = t.clamp(0.0, 1.0);
-    return LatLng(a.latitude + clampedT * dy, a.longitude + clampedT * dx);
+
+    return LatLng(
+      a.latitude + clampedT * (b.latitude - a.latitude),
+      a.longitude + clampedT * (b.longitude - a.longitude),
+    );
+  }
+
+  double _metricDistanceMeters(LatLng p1, LatLng p2) {
+    final latRad = (p1.latitude + p2.latitude) / 2.0 * (math.pi / 180.0);
+    final cosLat = math.cos(latRad);
+    final dLat = (p1.latitude - p2.latitude) * 111320.0;
+    final dLng = (p1.longitude - p2.longitude) * 111320.0 * cosLat;
+    return math.sqrt(dLat * dLat + dLng * dLng);
   }
 
   List<LatLng> _trimRouteGeometry(List<LatLng> geometry, LatLng currentPos) {
     if (geometry.length < 2) return geometry;
 
     final startIdx = _lastMatchedIndex.clamp(0, geometry.length - 2);
-    final endIdx = math.min(startIdx + 15, geometry.length - 1);
+    final endIdx = math.min(startIdx + 25, geometry.length - 1);
 
     int bestIndex = startIdx;
-    double minSqDistance = double.infinity;
+    double minDistanceMeters = double.infinity;
 
     for (int i = startIdx; i < endIdx; i++) {
       final p1 = geometry[i];
       final p2 = geometry[i + 1];
 
-      final proj = _projectPointOntoSegment(currentPos, p1, p2);
-      final distSq = _distanceSquared(currentPos, proj);
+      final proj = _projectPointOntoSegmentMetric(currentPos, p1, p2);
+      final distMeters = _metricDistanceMeters(currentPos, proj);
 
-      if (distSq < minSqDistance) {
-        minSqDistance = distSq;
+      if (distMeters < minDistanceMeters) {
+        minDistanceMeters = distMeters;
         bestIndex = i;
       }
     }
 
-    final distToProjMeters = math.sqrt(minSqDistance) * 111000.0;
-
-    if (distToProjMeters < 60.0) {
+    if (minDistanceMeters < 120.0) {
       _lastMatchedIndex = math.max(_lastMatchedIndex, bestIndex);
     }
 
     final activeIndex = _lastMatchedIndex.clamp(0, geometry.length - 2);
     final p1 = geometry[activeIndex];
     final p2 = geometry[activeIndex + 1];
-    final activeProj = _projectPointOntoSegment(currentPos, p1, p2);
+    final activeProj = _projectPointOntoSegmentMetric(currentPos, p1, p2);
 
     final remaining = geometry.sublist(activeIndex + 1);
     return [activeProj, ...remaining];

@@ -1656,7 +1656,7 @@ class _AdminBottomNav extends StatelessWidget {
     // Labels stay as-is (Admin / PQRS / Settings are proper names)
     const items = [
       (icon: Icons.admin_panel_settings_outlined, label: 'Admin'),
-      (icon: Icons.support_agent_rounded, label: 'PQRS'),
+      (icon: Icons.support_agent_rounded, label: 'Soporte'),
       (icon: Icons.event_rounded, label: 'Eventos'),
       (icon: Icons.local_fire_department_rounded, label: 'Heatmap'),
       (icon: Icons.settings_rounded, label: 'Settings'),

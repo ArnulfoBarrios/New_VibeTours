@@ -200,24 +200,50 @@ class DiscoveryRepository {
   }
 
   bool _isBlacklisted(String name, String type) {
-    final lowerName = name.toLowerCase();
-    final lowerType = type.toLowerCase();
-    final blacklistNameKeywords = const [
+    final lowerName = name.trim().toLowerCase();
+    final lowerType = type.trim().toLowerCase();
+
+    // 1. Descartar nombres puramente genéricos de una sola palabra que no aportan suficiente contexto
+    const genericSingleWords = [
+      'parque', 'puente', 'arroyo', 'plaza', 'lugar', 'calle', 'avenida',
+      'camino', 'sendero', 'cancha', 'estadio', 'estacion', 'estación',
+      'edificio', 'torre', 'centro', 'local', 'zona', 'sitio', 'punto'
+    ];
+    if (genericSingleWords.contains(lowerName)) {
+      return true;
+    }
+
+    // 2. Palabras clave prohibidas en el nombre (infraestructura o servicios no turísticos)
+    const blacklistNameKeywords = [
       'cementerio', 'cemetery', 'funeraria', 'jardines del recuerdo', 'jardín del recuerdo',
       'universidad', 'university', 'colegio', 'school', 'hospital', 'clinica', 'clínica',
       'condominio', 'conjunto residencial', 'edificio', 'torre', 'reserva residencial', 'aptos',
-      'apartamento', 'consultorio', 'dental', 'odontología', 'médico'
+      'apartamento', 'consultorio', 'dental', 'odontología', 'médico',
+      'arroyo', 'puente', 'bridge', 'canal', 'quebrada', 'caño', 'drenaje',
+      'gasolinera', 'estacion de servicio', 'estación de servicio', 'terpel', 'texaco', 'primax',
+      'brio', 'petrobras', 'shell', 'esso', 'mobil', 'peaje', 'subestación', 'subestacion',
+      'electrificadora', 'transformador', 'taller', 'serviteca', 'lavadero', 'lavado',
+      'parqueadero', 'parking', 'estacionamiento', 'farmacia', 'droguería', 'drogueria',
+      'drogas', 'rebaja', 'banco', 'cajero', 'atm', 'davivienda', 'bancolombia', 'bbva',
+      'efecty', 'supergiros', 'western union', 'ferretería', 'ferreteria', 'panadería',
+      'panaderia', 'supermercado', 'miscelánea', 'miscelanea', 'alcaldía', 'notaría',
+      'notaria', 'juzgado', 'comisaría', 'comisaria', 'cai', 'estacion de policia',
+      'estación de policía'
     ];
     for (final kw in blacklistNameKeywords) {
       if (lowerName.contains(kw)) return true;
     }
-    final blacklistTypeKeywords = const [
+
+    // 3. Tipos o categorías prohibidos
+    const blacklistTypeKeywords = [
       'cemetery', 'university', 'college', 'hospital', 'clinic', 'dentist', 'physiotherapist',
-      'doctor', 'residential', 'apartment', 'school'
+      'doctor', 'residential', 'apartment', 'school', 'bridge', 'substation', 'fuel',
+      'parking', 'bank', 'atm', 'pharmacy'
     ];
     for (final kw in blacklistTypeKeywords) {
       if (lowerType.contains(kw)) return true;
     }
+
     return false;
   }
 
@@ -362,12 +388,13 @@ class DiscoveryRepository {
     final defaultLat = coordinates.length > 1 ? _double(coordinates[1]) : 0.0;
     final defaultLng = coordinates.isNotEmpty ? _double(coordinates[0]) : 0.0;
     final category = _classifyAttraction(properties);
-    final defaultImg = _getRandomImageUrlForCategory(category, name);
+    final placeId = 'search-$index';
+    final defaultImg = _getRandomImageUrlForCategory(category, name, placeId: placeId);
     
     final corrected = _correctLocation(name, defaultLat, defaultLng, defaultImg);
 
     return NearbyPlace(
-      id: 'search-$index',
+      id: placeId,
       name: name,
       type: _typeLabel(typeStr),
       distanceMeters: 0,
@@ -413,22 +440,40 @@ class DiscoveryRepository {
         for (final element in elements) {
           if (element is Map) {
             final tags = element['tags'] is Map ? Map<String, dynamic>.from(element['tags'] as Map) : const <String, dynamic>{};
-            final name = tags['name']?.toString();
+            final rawName = tags['official_name']?.toString() ??
+                tags['name:es']?.toString() ??
+                tags['name']?.toString() ??
+                tags['alt_name']?.toString();
+            if (rawName == null || rawName.trim().isEmpty) continue;
+            var name = rawName.trim();
+
+            // Si el nombre es algo tan genérico como "Parque" o "Plaza", intentar usar un nombre alternativo/marca/operador o descartar
+            if (name.toLowerCase() == 'parque' || name.toLowerCase() == 'plaza') {
+              final alt = tags['alt_name']?.toString() ??
+                  tags['official_name']?.toString() ??
+                  tags['brand']?.toString() ??
+                  tags['operator']?.toString();
+              if (alt != null && alt.trim().isNotEmpty && alt.toLowerCase() != name.toLowerCase()) {
+                name = alt.trim().toLowerCase().startsWith(name.toLowerCase()) ? alt.trim() : '$name ${alt.trim()}';
+              }
+            }
+
             final defaultLat = _double(element['lat'] ?? (element['center'] as Map?)?['lat']);
             final defaultLon = _double(element['lon'] ?? (element['center'] as Map?)?['lon']);
             final typeStr = tags['tourism']?.toString() ?? tags['historic']?.toString() ?? tags['amenity']?.toString() ?? tags['leisure']?.toString() ?? tags['sport']?.toString() ?? tags['natural']?.toString() ?? 'place';
-            if (name == null || defaultLat == 0.0 || defaultLon == 0.0) continue;
+            if (defaultLat == 0.0 || defaultLon == 0.0) continue;
             if (_isAccommodation(typeStr)) continue;
             if (_isBlacklisted(name, typeStr)) continue;
             
             final category = _classifyAttraction(tags);
-            final defaultImg = _getRandomImageUrlForCategory(category, name);
+            final placeId = 'overpass-${element['id'] ?? idx++}';
+            final defaultImg = _getRandomImageUrlForCategory(category, name, placeId: placeId);
             
             final corrected = _correctLocation(name, defaultLat, defaultLon, defaultImg);
 
             final distance = _distanceMeters(latitude, longitude, corrected.latitude, corrected.longitude);
             places.add(NearbyPlace(
-              id: 'overpass-${element['id'] ?? idx++}',
+              id: placeId,
               name: name,
               type: _typeLabel(typeStr),
               distanceMeters: distance.round(),
@@ -631,7 +676,8 @@ class DiscoveryRepository {
     final name = poi['name']?.toString() ??
         address['freeformAddress']?.toString() ??
         querySafe(address['municipality']);
-    final defaultImg = _getRandomImageUrlForCategory(category, name);
+    final placeId = json['id']?.toString() ?? name;
+    final defaultImg = _getRandomImageUrlForCategory(category, name, placeId: placeId);
     
     final defaultLat = _double(position['lat']);
     final defaultLon = _double(position['lon']);
@@ -643,7 +689,7 @@ class DiscoveryRepository {
         : _int(json['dist']);
 
     return NearbyPlace(
-      id: json['id']?.toString() ?? '',
+      id: placeId,
       name: name,
       type: categories.isEmpty ? 'Atraccion' : _typeLabel(categories.first),
       distanceMeters: distance,
@@ -713,9 +759,21 @@ class DiscoveryRepository {
     }
   }
 
-  String _getRandomImageUrlForCategory(String category, String name) {
+  int _hashString(String input) {
+    int h = 0;
+    for (int i = 0; i < input.codeUnits.length; i++) {
+      h = (31 * h + input.codeUnitAt(i)) & 0x7FFFFFFF;
+    }
+    return h;
+  }
+
+  String _getRandomImageUrlForCategory(String category, String name, {String placeId = ''}) {
     final searchStr = '${category.toLowerCase()} ${name.toLowerCase()}';
-    
+    final seedStr = '${placeId}_${name}_$category';
+    final hash = _hashString(seedStr);
+
+    List<String> pool;
+
     // 1. Iglesias, templos y catedrales
     if (searchStr.contains('iglesia') ||
         searchStr.contains('catedral') ||
@@ -728,11 +786,17 @@ class DiscoveryRepository {
         searchStr.contains('capilla') ||
         searchStr.contains('chapel') ||
         searchStr.contains('santuario')) {
-      return 'https://images.unsplash.com/photo-1548625361-155de6c7f54d?auto=format&fit=crop&w=500&q=80';
+      pool = const [
+        'https://images.unsplash.com/photo-1548625361-155de6c7f54d?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1519817650390-64a93db51149?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1543731068-7e0f5beff43a?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1529070538774-1843cb3265df?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1568849676085-51415703900f?auto=format&fit=crop&w=600&q=80',
+      ];
     }
-    
     // 2. Playas, islas y bahías
-    if (searchStr.contains('playa') ||
+    else if (searchStr.contains('playa') ||
         searchStr.contains('beach') ||
         searchStr.contains('bahia') ||
         searchStr.contains('bahía') ||
@@ -746,24 +810,34 @@ class DiscoveryRepository {
         searchStr.contains('island') ||
         searchStr.contains('puerto') ||
         searchStr.contains('port')) {
-      return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=500&q=80';
+      pool = const [
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1473116763249-2faaef81ccda?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1515238152791-8216bfdf89a7?auto=format&fit=crop&w=600&q=80',
+      ];
     }
-    
-    // 3. Castillos, palacios y ruinas arqueológicas
-    if (searchStr.contains('castillo') ||
-        searchStr.contains('castle') ||
-        searchStr.contains('palacio') ||
-        searchStr.contains('palace') ||
-        searchStr.contains('ruina') ||
-        searchStr.contains('ruins') ||
-        searchStr.contains('fortaleza') ||
-        searchStr.contains('fortress') ||
-        searchStr.contains('arqueo')) {
-      return 'https://images.unsplash.com/photo-1508849789987-4e5333c12b78?auto=format&fit=crop&w=500&q=80';
+    // 3. Atracciones, entretenimiento, diversiones y parques temáticos (Divercity, etc.)
+    else if (searchStr.contains('divercity') ||
+        searchStr.contains('atraccion') ||
+        searchStr.contains('attraction') ||
+        searchStr.contains('theme_park') ||
+        searchStr.contains('recreation') ||
+        searchStr.contains('recreativa') ||
+        searchStr.contains('diversion')) {
+      pool = const [
+        'https://images.unsplash.com/photo-1513889961551-628c1e5e2ee9?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1561489413-985b06da5bee?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1572949645841-094f3a9c4c94?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
+      ];
     }
-    
-    // 4. Parques, jardines y lagos
-    if (searchStr.contains('parque') ||
+    // 4. Parques verdes, jardines y naturaleza urbana
+    else if (searchStr.contains('parque') ||
         searchStr.contains('park') ||
         searchStr.contains('jardin') ||
         searchStr.contains('jardín') ||
@@ -776,69 +850,60 @@ class DiscoveryRepository {
         searchStr.contains('río') ||
         searchStr.contains('river') ||
         searchStr.contains('laguna')) {
-      return 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=500&q=80';
+      pool = const [
+        'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1588880331179-bc9b93a8cb5e?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1596701062351-8c2c14d1fdd0?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80',
+      ];
     }
-
-    // 5. Cascadas y ríos de montaña
-    if (searchStr.contains('cascada') ||
-        searchStr.contains('waterfall') ||
-        searchStr.contains('salto')) {
-      return 'https://images.unsplash.com/photo-1482862549707-f63cb32c5fd9?auto=format&fit=crop&w=500&q=80';
-    }
-
-    // 6. Museos y galerías de arte
-    if (searchStr.contains('museo') ||
+    // 5. Museos y arte
+    else if (searchStr.contains('museo') ||
         searchStr.contains('museum') ||
         searchStr.contains('galeria') ||
         searchStr.contains('galería') ||
         searchStr.contains('gallery') ||
-        searchStr.contains('exposicion') ||
         searchStr.contains('art') ||
         searchStr.contains('arte')) {
-      return 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=500&q=80';
+      pool = const [
+        'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1565008447742-97f6f38c985c?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?auto=format&fit=crop&w=600&q=80',
+      ];
     }
-
-    // 7. Miradores y vistas panorámicas
-    if (searchStr.contains('mirador') ||
-        searchStr.contains('viewpoint') ||
-        searchStr.contains('vista') ||
-        searchStr.contains('outlook') ||
-        searchStr.contains('panoramica') ||
-        searchStr.contains('skyline')) {
-      return 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=500&q=80';
-    }
-
-    // 8. Plazas urbanas y calles históricas
-    if (searchStr.contains('plaza') ||
+    // 6. Plazas, calles urbanas y paseos
+    else if (searchStr.contains('plaza') ||
         searchStr.contains('square') ||
         searchStr.contains('calle') ||
         searchStr.contains('street') ||
         searchStr.contains('avenida') ||
-        searchStr.contains('boulevard') ||
-        searchStr.contains('paseo')) {
-      return 'https://images.unsplash.com/photo-1534430480872-3498386e7856?auto=format&fit=crop&w=500&q=80';
+        searchStr.contains('paseo') ||
+        searchStr.contains('castellana')) {
+      pool = const [
+        'https://images.unsplash.com/photo-1534430480872-3498386e7856?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1498307833015-e7b400441eb8?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=600&q=80',
+      ];
+    }
+    // 7. Fallback general urbano / turístico
+    else {
+      pool = const [
+        'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80',
+      ];
     }
 
-    // 9. Teatros y auditorios
-    if (searchStr.contains('teatro') ||
-        searchStr.contains('theatre') ||
-        searchStr.contains('auditorio') ||
-        searchStr.contains('cinema') ||
-        searchStr.contains('cine') ||
-        searchStr.contains('show')) {
-      return 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=500&q=80';
-    }
-
-    // 10. Monumentos y estatuas históricas
-    if (searchStr.contains('monumento') ||
-        searchStr.contains('monument') ||
-        searchStr.contains('estatua') ||
-        searchStr.contains('statue') ||
-        searchStr.contains('memorial') ||
-        searchStr.contains('obelisco')) {
-      return 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=500&q=80';
-    }
-    
-    return 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=500&q=80';
+    return pool[hash % pool.length];
   }
 }
