@@ -111,6 +111,16 @@ class VoiceGuideService {
   double get currentMultiplier => _currentMultiplier;
 
   Future<void> _initTts() async {
+    try {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final engines = await _tts.getEngines;
+        if (engines is List && engines.contains("com.google.android.tts")) {
+          await _tts.setEngine("com.google.android.tts");
+        }
+      }
+    } catch (e) {
+      debugPrint('TTS engine setting note: $e');
+    }
     await setLanguage('es');
     await setSpeedMultiplier(1.0);
     await _tts.setPitch(1.0);
@@ -123,15 +133,39 @@ class VoiceGuideService {
     await _tts.setLanguage(ttsLang);
     try {
       final voices = await _tts.getVoices;
-      if (voices is List) {
+      if (voices is List && voices.isNotEmpty) {
+        Map<String, String>? bestVoice;
+        int bestScore = -1;
+
         for (final voice in voices) {
           if (voice is Map) {
-            final locale = voice['locale']?.toString().toLowerCase() ?? '';
-            if (locale.replaceAll('_', '-').contains(ttsLang.toLowerCase())) {
-              await _tts.setVoice({"name": voice['name'], "locale": voice['locale']});
-              break;
+            final name = voice['name']?.toString().toLowerCase() ?? '';
+            final locale = voice['locale']?.toString().toLowerCase().replaceAll('_', '-') ?? '';
+
+            final targetLangPrefix = ttsLang.split('-').first.toLowerCase();
+            if (!locale.startsWith(targetLangPrefix)) continue;
+
+            int score = 0;
+            if (locale == ttsLang.toLowerCase()) score += 10;
+            if (name.contains('network') || name.contains('neural') || name.contains('wavenet') || name.contains('natural') || name.contains('premium')) {
+              score += 20;
+            }
+            if (name.contains('google')) score += 5;
+            if (name.contains('es-es') || name.contains('es_es')) score += 5;
+
+            if (score > bestScore) {
+              bestScore = score;
+              bestVoice = {
+                "name": voice['name'].toString(),
+                "locale": voice['locale'].toString(),
+              };
             }
           }
+        }
+
+        if (bestVoice != null) {
+          debugPrint('[VoiceGuide] Voz TTS de alta calidad seleccionada: ${bestVoice['name']} (${bestVoice['locale']}) score: $bestScore');
+          await _tts.setVoice(bestVoice);
         }
       }
     } catch (e) {
