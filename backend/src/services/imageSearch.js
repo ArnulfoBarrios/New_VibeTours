@@ -13,25 +13,25 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   const wikiSummary = await wikipediaSummaryImage(placeName)
   if (wikiSummary) return { url: wikiSummary, isFallback: false }
 
-  // 1B. Consulta por geolocalización (GeoSearch) en Wikimedia Commons si se tienen coordenadas Lat/Lon
-  if (latitude && longitude && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))) {
-    const wikiGeo = await wikimediaGeoImage(Number(latitude), Number(longitude), 1000, seed)
-    if (wikiGeo) return { url: wikiGeo, isFallback: false }
-  }
+  // 1B. Búsqueda estricta por texto del lugar en Wikimedia Commons (Prioridad sobre GeoSearch para evitar fotos de centro de ciudad duplicadas)
+  const wiki = await wikimediaImage(placeName, null, seed)
+  if (wiki) return { url: wiki, isFallback: false }
 
-  // 1C. Consulta a Pexels API (si existe PEXELS_API_KEY configurada en .env)
+  // 1C. Búsqueda estricta en Openverse por nombre del lugar
+  const openverse = await openverseImage(`${placeName} ${city}`, null, seed)
+  if (openverse) return { url: openverse, isFallback: false }
+
+  // 1D. Consulta a Pexels API (si existe PEXELS_API_KEY configurada en .env)
   if (process.env.PEXELS_API_KEY) {
     const pexels = await pexelsImage(`${placeName} ${city}`, seed)
     if (pexels) return { url: pexels, isFallback: false }
   }
 
-  // 1D. Búsqueda estricta por texto del lugar en Wikimedia Commons
-  const wiki = await wikimediaImage(placeName, null, seed)
-  if (wiki) return { url: wiki, isFallback: false }
-
-  // 1E. Búsqueda estricta en Openverse
-  const openverse = await openverseImage(`${placeName} ${city}`, null, seed)
-  if (openverse) return { url: openverse, isFallback: false }
+  // 1E. Consulta por geolocalización (GeoSearch) en Wikimedia Commons únicamente si son coordenadas específicas de un punto
+  if (latitude && longitude && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))) {
+    const wikiGeo = await wikimediaGeoImage(Number(latitude), Number(longitude), 500, seed)
+    if (wikiGeo) return { url: wikiGeo, isFallback: false }
+  }
   
   // 2. Fallback: Buscar imagen de la categoría específica en esa ciudad/región
   if (city) {

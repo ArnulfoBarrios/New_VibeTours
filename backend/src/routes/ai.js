@@ -2260,11 +2260,14 @@ function validateTourQuality(tour, planner, input) {
     return stop
   })
 
-  // Detectar paradas repetidas consecutivas
-  tour.itinerario = tour.itinerario.filter((stop, index, arr) => {
-    if (index === 0) return true
-    const prev = arr[index - 1]
-    return normalizeKey(stop.nombre) !== normalizeKey(prev.nombre)
+  // Detectar y eliminar paradas repetidas en todo el itinerario (no solo consecutivas)
+  const seenKeys = new Set()
+  tour.itinerario = tour.itinerario.filter((stop) => {
+    let key = normalizeKey(stop.nombre || '')
+    key = key.replace(/\b(septiembre|september|9\s*11|11\s*s)\b/g, '911memorial')
+    if (!key || seenKeys.has(key)) return false
+    seenKeys.add(key)
+    return true
   })
 
   return tour
