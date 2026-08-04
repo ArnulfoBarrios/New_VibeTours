@@ -60,24 +60,30 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
 
 async function wikipediaSummaryImage(placeName) {
   if (!placeName || typeof placeName !== 'string') return null
-  const cleanName = placeName.trim()
-  if (cleanName.length < 3) return null
+  const raw = placeName.trim()
+  if (raw.length < 3) return null
 
-  const languages = ['es', 'en']
-  for (const lang of languages) {
-    try {
-      const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(cleanName.replace(/\s+/g, '_'))}`
-      const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
-      if (!response.ok) continue
-      const json = await response.json()
-      if (json.type === 'standard' || json.type === 'normal') {
-        const imageUrl = json.originalimage?.source || json.thumbnail?.source
-        if (imageUrl && isImageTitleRelevant(imageUrl, placeName)) {
-          return imageUrl
+  const cleaned = raw.replace(/\(.*?\)/g, '').replace(/_/g, ' ').trim()
+  const variations = [...new Set([raw, cleaned].filter(v => v.length >= 3))]
+  const languages = ['en', 'es']
+
+  for (const varName of variations) {
+    for (const lang of languages) {
+      try {
+        const slug = encodeURIComponent(varName.trim().replace(/\s+/g, '_'))
+        const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${slug}`
+        const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+        if (!response.ok) continue
+        const json = await response.json()
+        if (json.type === 'standard' || json.type === 'normal') {
+          const imageUrl = json.originalimage?.source || json.thumbnail?.source
+          if (imageUrl && isImageTitleRelevant(imageUrl, varName)) {
+            return imageUrl
+          }
         }
+      } catch {
+        // Continue with next variation
       }
-    } catch {
-      // Intentar con el siguiente idioma sin romper la ejecución
     }
   }
   return null
