@@ -100,8 +100,7 @@ class LocationService {
 
 class VoiceGuideService {
   VoiceGuideService(this._sqliteService) {
-    setSpeedMultiplier(1.0);
-    _tts.setPitch(1.0);
+    _initTts();
   }
 
   final SqliteService _sqliteService;
@@ -111,9 +110,38 @@ class VoiceGuideService {
 
   double get currentMultiplier => _currentMultiplier;
 
+  Future<void> _initTts() async {
+    await setLanguage('es');
+    await setSpeedMultiplier(1.0);
+    await _tts.setPitch(1.0);
+  }
+
+  Future<void> setLanguage(String lang) async {
+    final ttsLang = (lang.toLowerCase() == 'en' || lang.toLowerCase().startsWith('en'))
+        ? 'en-US'
+        : 'es-ES';
+    await _tts.setLanguage(ttsLang);
+    try {
+      final voices = await _tts.getVoices;
+      if (voices is List) {
+        for (final voice in voices) {
+          if (voice is Map) {
+            final locale = voice['locale']?.toString().toLowerCase() ?? '';
+            if (locale.replaceAll('_', '-').contains(ttsLang.toLowerCase())) {
+              await _tts.setVoice({"name": voice['name'], "locale": voice['locale']});
+              break;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('TTS voice setting note: $e');
+    }
+  }
+
   Future<void> setSpeedMultiplier(double multiplier) async {
     _currentMultiplier = multiplier;
-    // Baseline speech rate for 1.0x is 0.46 on mobile FlutterTts
+    // Baseline speech rate for 1.0x is 0.46 on mobile FlutterTts (coincide con el ritmo de la landing page)
     final rawRate = (0.46 * multiplier).clamp(0.2, 1.0);
     await _tts.setSpeechRate(rawRate);
   }
@@ -237,12 +265,13 @@ class VoiceGuideService {
       description = 'Hemos llegado a un punto de interés especial en nuestra ruta. Disfruta de esta parada en el camino.';
     }
 
-    await speak('$title. $description');
+    await speak('$title. $description', lang: lang);
   }
 
-  Future<void> speak(String text) async {
+  Future<void> speak(String text, {String lang = 'es'}) async {
     final value = text.trim();
     if (value.isEmpty) return;
+    await setLanguage(lang);
     await _tts.stop();
     await _tts.speak(value);
   }
