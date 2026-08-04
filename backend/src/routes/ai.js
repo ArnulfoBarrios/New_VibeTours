@@ -176,7 +176,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         if (!input.destination && (input.destinationPlace || extracted?.destination_place || extracted?.explicit_destination)) {
           input.destination = input.destinationPlace || extracted?.destination_place || extracted?.explicit_destination || input.city || ''
         }
-        if (!input.destination && (input.isUserLocationOrigin || (!extracted?.explicit_destination && !extracted?.city))) {
+        if (!input.destination && input.isUserLocationOrigin) {
           if (!input.city && revLocation?.city) input.city = revLocation.city
           if (!input.country && revLocation?.country) input.country = revLocation.country
           if (!input.destination && (revLocation?.city || input.city)) input.destination = revLocation?.city || input.city

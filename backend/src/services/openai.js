@@ -167,15 +167,11 @@ export function extractLocationLocalFallback(prompt) {
     const cityMatch = p.match(/\b(a|en|para|hacia)\s+([A-ZÁÉÍÓÚ][a-záéíóú\s]+?)(?=\s+(?:donde|para|con|que|quiero|voy)|$)/i)
     if (cityMatch) {
       const candidate = cityMatch[2].trim()
-      const stopWords = ['un', 'una', 'el', 'la', 'los', 'las', 'un ritmo', 'ir', 'estar', 'ver', 'hacer', 'viajar', 'colombia']
+      const stopWords = ['un', 'una', 'el', 'la', 'los', 'las', 'un ritmo', 'ir', 'estar', 'ver', 'hacer', 'viajar', 'colombia', 'lugar', 'lugares', 'sitio', 'sitios']
       if (!stopWords.includes(candidate.toLowerCase())) {
         explicitDestination = candidate
       }
     }
-  }
-
-  if (!explicitDestination && p.length > 2 && !isUserGps && !durationSpecified) {
-    explicitDestination = p
   }
 
   return {
