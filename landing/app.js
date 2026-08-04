@@ -1,5 +1,5 @@
 /* ==========================================================================
-   VIBETOURS - LANDING PAGE INTERACTIVITY, ANIMATIONS & BILINGUAL I18N
+   VIBETOURS - LANDING PAGE INTERACTIVITY, APPLE STICKY SHOWCASE & I18N
    ========================================================================== */
 
 let currentLandingLang = localStorage.getItem('vibetours_lang') || 'es';
@@ -10,6 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initUserReviews();
   initStandaloneRegisterForm();
   initScrollAnimations();
+  initAppleStickyShowcase();
+  initFaqAccordion();
+  initLiveTourSimulator();
   setLandingLanguage(currentLandingLang);
 });
 
@@ -55,12 +58,27 @@ function initThemeToggle() {
       }
     }
 
+    // Update sticky phone image if present
+    const activeCard = document.querySelector('.showcase-card.active');
+    const stickyPhoneImg = document.getElementById('stickyPhoneImg');
+    if (activeCard && stickyPhoneImg) {
+      const src = theme === 'dark' ? activeCard.dataset.oscuro : activeCard.dataset.claro;
+      if (src) stickyPhoneImg.src = src;
+    }
+
+    // Update mobile fallback images
+    const showcaseImgs = document.querySelectorAll('.showcase-img');
+    showcaseImgs.forEach(img => {
+      const src = theme === 'dark' ? img.dataset.oscuro : img.dataset.claro;
+      if (src) img.src = src;
+    });
+
     updateGalleryThemeImages(theme);
   }
 }
 
 /* --------------------------------------------------------------------------
-   2. DYNAMIC SCROLL ANIMATIONS
+   2. DYNAMIC SCROLL ANIMATIONS (INTERSECTION OBSERVER)
    -------------------------------------------------------------------------- */
 function initScrollAnimations() {
   const revealElements = document.querySelectorAll('.reveal-on-scroll');
@@ -71,24 +89,105 @@ function initScrollAnimations() {
         entry.target.classList.add('is-visible');
       }
     });
-  }, { threshold: 0.15 });
+  }, { threshold: 0.12 });
 
   revealElements.forEach(el => observer.observe(el));
 }
 
 /* --------------------------------------------------------------------------
-   3. DETAILED BILINGUAL I18N TRANSLATION DICTIONARY (ES / EN)
+   3. APPLE STICKY SHOWCASE CONTROLLER (PINNED IPHONE WITH CROSSFADE & GLOW)
+   -------------------------------------------------------------------------- */
+function initAppleStickyShowcase() {
+  const cards = document.querySelectorAll('.showcase-card');
+  const stickyPhoneImg = document.getElementById('stickyPhoneImg');
+  const stickyMockupGlow = document.getElementById('stickyMockupGlow');
+  const stickyIphoneFrame = document.getElementById('stickyIphoneFrame');
+
+  if (!cards.length || !stickyPhoneImg) return;
+
+  const observerOptions = {
+    root: null,
+    rootMargin: '-20% 0px -40% 0px',
+    threshold: 0.35
+  };
+
+  const showcaseObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        cards.forEach(c => c.classList.remove('active'));
+        entry.target.classList.add('active');
+
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const newSrc = currentTheme === 'dark' ? entry.target.dataset.oscuro : entry.target.dataset.claro;
+        const newGlow = entry.target.dataset.glow;
+
+        if (newSrc && stickyPhoneImg.src !== newSrc) {
+          // Smooth crossfade and 3D scale pulse
+          stickyPhoneImg.style.opacity = '0.3';
+          stickyPhoneImg.style.transform = 'scale(0.96) rotateY(-4deg)';
+
+          setTimeout(() => {
+            stickyPhoneImg.src = newSrc;
+            if (newGlow && stickyMockupGlow) {
+              stickyMockupGlow.style.background = newGlow;
+            }
+            stickyPhoneImg.style.opacity = '1';
+            stickyPhoneImg.style.transform = 'scale(1) rotateY(0deg)';
+          }, 180);
+        }
+      }
+    });
+  }, observerOptions);
+
+  cards.forEach(card => showcaseObserver.observe(card));
+}
+
+/* --------------------------------------------------------------------------
+   4. DETAILED BILINGUAL I18N TRANSLATION DICTIONARY (ES / EN)
    -------------------------------------------------------------------------- */
 const landingTranslations = {
   es: {
     navQueEs: '¿Qué es?',
-    navComoUsar: '¿Cómo usar?',
+    navComparativa: 'Comparativa',
     navFunciones: 'Funciones',
-    navVentajas: 'Ventajas',
-    navPantallas: 'Pantallas',
-    navResenas: 'Reseñas',
-    navLegal: 'Legal',
+    navDestinos: 'Destinos',
+    navCreadores: 'Creadores',
+    navFaq: 'FAQ',
+    navPlanes: 'Planes',
     navRegister: 'Registrarse',
+
+    metric1Label: 'Tours Emblemáticos Precargados',
+    metric2Label: 'Datos GPS Reales de OpenStreetMap',
+    metric3Label: 'Alucinaciones o Lugares Ficticios',
+    metric4Label: 'Valoración Media por Viajeros',
+
+    compTitle: '¿Por qué elegir VibeTours?',
+    compDesc: 'Descubre cómo se compara VibeTours frente a las alternativas tradicionales del mercado.',
+
+    simTitle: 'Simulador de Live Tour',
+    simDesc: 'Experimenta cómo VibeTours combina narración por voz y seguimiento GPS en tiempo real.',
+    simTag: '🔊 Audioguía por Proximidad',
+    simCardTitle: 'Tour Histórico: Cartagena Antigua',
+    simCardDesc: 'Haz clic en reproducir para escuchar cómo la IA narra las historias fascinantes del Centro Histórico mientras te aproximas al lugar.',
+    simPlayText: 'Iniciar Simulación de Audio',
+
+    destTitle: 'Destinos Destacados',
+    destDesc: 'Recorridos precargados listos para explorar en Modo Demo o con tu cuenta de viajero.',
+
+    crTitle: '¿Eres Guía Local o Creator?',
+    crDesc: 'VibeTours te ofrece herramientas avanzadas para digitalizar tus conocimientos turísticos y llegar a miles de viajeros globales.',
+    cr1Title: 'Creador Manual Drag-and-Drop',
+    cr1Text: 'Diseña rutas personalizadas definiendo paradas en el mapa, agregando audios explicativos y subiendo fotos directamente a la nube.',
+    cr2Title: 'Publicación en la Comunidad',
+    cr2Text: 'Envía tus recorridos para revisión y moderación administrativa. Una vez aprobados, estarán disponibles para toda la comunidad global.',
+    cr3Title: 'Perfil Público & Reseñas',
+    cr3Text: 'Construye tu reputación como experto local, recibe valoraciones de 5 estrellas y destaca entre los itinerarios más populares.',
+
+    faqTitle: 'Preguntas Frecuentes',
+    faqDesc: 'Todo lo que necesitas saber antes de iniciar tu viaje con VibeTours.',
+
+    prTitle: 'Elige tu Experiencia',
+    prDesc: 'Sin cargos ocultos ni sorpresas. Comienza gratis hoy mismo.',
 
     heroBadge: '✨ Experiencia Neomórfica de Lujo',
     heroTitle: 'Explora el mundo a tu propio ritmo con <span class="gradient-text">Inteligencia Artificial</span>',
@@ -116,21 +215,45 @@ const landingTranslations = {
     step3Title: 'Inicia el Live Tour con Voz',
     step3Text: 'Activa el modo Live Tour en tiempo real. La app te guiará con mapas vectoriales MapLibre GL y narrará historias locales en audio automáticamente al aproximarte a cada lugar.',
 
-    subFunciones: 'Universo de Posibilidades',
-    titleFunciones: '¿Qué se puede hacer en VibeTours?',
-    descFunciones: 'Explora el ecosistema completo de funcionalidades avanzadas para turistas, creadores de contenido y administradores.',
-    bento1Title: 'Vibe Planner AI & Asistente Conversacional',
-    bento1Text: 'Chatea de forma fluida para crear tours a medida. La IA sugiere hoteles reales como punto de encuentro, desglosa presupuestos estimados en USD por parada y procesa las rutas de forma asíncrona.',
-    bento2Title: 'Lugares Cercanos & Clima en Vivo',
-    bento2Text: 'Descubre Puntos de Interés reales en un radio dinámico (Overpass API) y consulta el clima en tiempo real (Open-Meteo) para planificar tu caminata.',
-    bento3Title: 'Creador Manual para Guías Locales',
-    bento3Text: 'Diseñado para guías y creadores: añade paradas en el mapa interactivo, ordena puntos arrastrando y soltando, sube fotos de portada a Supabase Storage y envía tu tour a revisión.',
-    bento4Title: 'Audioguías TTS & Dictado por Voz',
-    bento4Text: 'Disfruta de narraciones de voz automáticas al aproximarte a las coordenadas del mapa. Interactúa por dictado de voz mediante micrófono para adaptar el tour en el camino.',
-    bento5Title: 'Filtros Globales y Moneda Preferida',
-    bento5Text: 'Busca cualquier ciudad del mundo con el motor Photon de OpenStreetMap. Ajusta tu moneda de preferencia y convierte los valores en tiempo real.',
-    bento6Title: 'Panel Administrativo & Gestión PQRS',
-    bento6Text: 'Herramientas avanzadas para moderadores: aprueba o rechaza solicitudes de tours públicos, gestiona eventos locales en el mapa y atiende peticiones de PQRS.',
+    subFunciones: 'Experiencia Inmersiva',
+    titleFunciones: 'Funcionalidades de VibeTours en Acción',
+    descFunciones: 'Desplázate para ver cómo la Inteligencia Artificial y la geolocalización transforman cada aspecto de tu viaje en tiempo real.',
+
+    feat1Title: 'Vibe Planner AI & Asistente Conversacional',
+    feat1Desc: 'Chatea en lenguaje natural expresando tus deseos de viaje. La IA comprende tu intención, consulta puntos de interés reales en OpenStreetMap, sugiere hoteles reales como punto de encuentro y genera el itinerario de forma asíncrona.',
+    feat1Item1: '✨ Creación por dictado de voz o texto libre.',
+    feat1Item2: '🏨 Sugerencia interactiva de hoteles reales de partida.',
+    feat1Item3: '💵 Desglose de presupuesto estimado por parada en USD.',
+
+    feat2Title: 'Live Tour con Navegación GPS & Audioguías TTS',
+    feat2Desc: 'Sigue la ruta en mapas vectoriales MapLibre GL mientras caminas. La app detecta tu posición GPS y reproduce narraciones de voz automáticas al aproximarte a cada monumento o parada.',
+    feat2Item1: '🎧 Reproducción automática de audio por proximidad GPS.',
+    feat2Item2: '🗺️ Mapas vectoriales MapLibre GL con modo noche/día.',
+    feat2Item3: '🎙️ Interacción por voz hands-free durante la caminata.',
+
+    feat3Title: 'Descubrimiento de Lugares Cercanos & Clima',
+    feat3Desc: 'Encuentra puntos de interés no planificados a tu alrededor en un radio dinámico (Overpass API) y consulta el pronóstico del clima en tiempo real (Open-Meteo) antes de salir a explorar.',
+    feat3Item1: '📍 Consulta de restaurantes, parques y museos en 4.5km a 9km.',
+    feat3Item2: '☀️ Tarjeta de clima en vivo con sensación térmica y humedad.',
+    feat3Item3: '🎪 Sugerencias de eventos culturales y ferias locales.',
+
+    feat4Title: 'Creador Manual de Tours para Guías Locales',
+    feat4Desc: 'Crea tu propio tour desde cero: selecciona puntos en el mapa interactivo, ordena paradas mediante drag-and-drop, sube fotografías a Supabase Storage y comparte tu ruta con la comunidad.',
+    feat4Item1: '✍️ Edición intuitiva drag-and-drop de paradas del itinerario.',
+    feat4Item2: '🖼️ Almacenamiento seguro de fotos en Supabase Storage.',
+    feat4Item3: '📤 Envío para revisión pública o guardado privado.',
+
+    feat5Title: 'Perfil de Viajero & Comunidad de Tours',
+    feat5Desc: 'Ajusta tu experiencia según tus preferencias únicas de ritmo, presupuesto y compañía. Consulta los perfiles de otros viajeros, califica recorridos y guarda tus favoritos.',
+    feat5Item1: '👤 Ritmos de caminata: Relajado, Equilibrado o Acelerado.',
+    feat5Item2: '👨‍👩‍👧‍👦 Filtros para viajes Solo, Pareja, Familia o Amigos.',
+    feat5Item3: '⭐ Calificación de tours y perfiles públicos de guías.',
+
+    feat6Title: 'Panel Administrativo & Gestión PQRS',
+    feat6Desc: 'Panel de control avanzado para administradores y moderadores. Aprueba solicitudes de tours creados por usuarios, gestiona eventos locales en el mapa y atiende peticiones de PQRS.',
+    feat6Item1: '🛡️ Moderación y aprobación de tours públicos.',
+    feat6Item2: '📋 Gestión de PQRS y atención al usuario.',
+    feat6Item3: '🌐 Control de eventos y configuraciones globales.',
 
     subVentajas: '¿Por qué elegirnos?',
     titleVentajas: 'Ventajas de VibeTours',
@@ -188,13 +311,46 @@ const landingTranslations = {
   },
   en: {
     navQueEs: 'What is it?',
-    navComoUsar: 'How to use?',
+    navComparativa: 'Comparison',
     navFunciones: 'Features',
-    navVentajas: 'Advantages',
-    navPantallas: 'Screens',
-    navResenas: 'Reviews',
-    navLegal: 'Legal',
+    navDestinos: 'Destinations',
+    navCreadores: 'Creators',
+    navFaq: 'FAQ',
+    navPlanes: 'Plans',
     navRegister: 'Register',
+
+    metric1Label: 'Pre-loaded Flagship Tours',
+    metric2Label: 'Real OpenStreetMap GPS Data',
+    metric3Label: 'AI Hallucinations or Fake Places',
+    metric4Label: 'Average Traveler Rating',
+
+    compTitle: 'Why Choose VibeTours?',
+    compDesc: 'Discover how VibeTours compares against traditional market alternatives.',
+
+    simTitle: 'Live Tour Simulator',
+    simDesc: 'Experience how VibeTours combines real-time voice narration and GPS tracking.',
+    simTag: '🔊 Proximity Audio Guide',
+    simCardTitle: 'Historic Tour: Old Cartagena',
+    simCardDesc: 'Click play to hear how AI narrates fascinating stories of the Historic Center as you approach.',
+    simPlayText: 'Start Audio Simulation',
+
+    destTitle: 'Featured Destinations',
+    destDesc: 'Pre-loaded tours ready to explore in Demo Mode or with your traveler account.',
+
+    crTitle: 'Are You a Local Guide or Creator?',
+    crDesc: 'VibeTours gives you advanced tools to digitize your travel expertise and reach thousands of global travelers.',
+    cr1Title: 'Drag-and-Drop Tour Creator',
+    cr1Text: 'Design custom routes by dropping map stops, attaching audio stories, and uploading photos to the cloud.',
+    cr2Title: 'Community Publishing',
+    cr2Text: 'Submit your tours for administrative review. Once approved, they will be available to the global community.',
+    cr3Title: 'Public Profile & Reviews',
+    cr3Text: 'Build your reputation as a local expert, earn 5-star ratings, and rank among top tours.',
+
+    faqTitle: 'Frequently Asked Questions',
+    faqDesc: 'Everything you need to know before embarking on your journey with VibeTours.',
+
+    prTitle: 'Choose Your Experience',
+    prDesc: 'No hidden fees or surprises. Start for free today.',
 
     heroBadge: '✨ Luxury Neomorphic Experience',
     heroTitle: 'Explore the world at your own pace with <span class="gradient-text">Artificial Intelligence</span>',
@@ -222,21 +378,45 @@ const landingTranslations = {
     step3Title: 'Start Voice-Guided Live Tour',
     step3Text: 'Activate real-time Live Tour mode. The app will guide you with MapLibre GL vector maps and automatically narrate local stories in audio near each stop.',
 
-    subFunciones: 'Universe of Possibilities',
-    titleFunciones: 'What can you do on VibeTours?',
-    descFunciones: 'Explore the full ecosystem of advanced tools designed for tourists, content creators, and administrators.',
-    bento1Title: 'Vibe Planner AI & Conversational Assistant',
-    bento1Text: 'Chat fluidly to build custom tours. The AI suggests real hotels as meeting points, breaks down estimated budgets in USD per stop, and processes routes asynchronously.',
-    bento2Title: 'Nearby Places & Live Weather',
-    bento2Text: 'Discover real Points of Interest in a dynamic radius (Overpass API) and check real-time weather (Open-Meteo) to plan your walking route.',
-    bento3Title: 'Manual Tour Creator for Local Guides',
-    bento3Text: 'Designed for guides and creators: add stops on interactive maps, reorder via drag-and-drop, upload cover photos to Supabase Storage, and submit for review.',
-    bento4Title: 'TTS Audio Guides & Voice Dictation',
-    bento4Text: 'Enjoy automatic voice narration when approaching map coordinates. Interact via microphone voice dictation to adjust the tour on the go.',
-    bento5Title: 'Global Search & Preferred Currency',
-    bento5Text: 'Search any worldwide city using Photon OpenStreetMap engine. Set your preferred currency and convert values in real time.',
-    bento6Title: 'Admin Dashboard & PQRS Management',
-    bento6Text: 'Advanced tools for moderators: approve or reject public tour requests, manage local events on the map, and attend to PQRS user requests.',
+    subFunciones: 'Immersive Experience',
+    titleFunciones: 'VibeTours Features in Action',
+    descFunciones: 'Scroll down to see how Artificial Intelligence and GPS geolocation transform every aspect of your journey in real time.',
+
+    feat1Title: 'Vibe Planner AI & Conversational Assistant',
+    feat1Desc: 'Chat fluidly in natural language expressing your travel desires. The AI understands your intent, checks real Points of Interest on OpenStreetMap, suggests real starting hotels, and generates the itinerary asynchronously.',
+    feat1Item1: '✨ Creation by voice dictation or free-text.',
+    feat1Item2: '🏨 Interactive suggestions of real starting hotels.',
+    feat1Item3: '💵 Estimated budget breakdown per stop in USD.',
+
+    feat2Title: 'Live Tour with GPS Navigation & TTS Audio Guides',
+    feat2Desc: 'Follow the route on MapLibre GL vector maps while walking. The app detects your GPS position and automatically plays voice narration when approaching each monument.',
+    feat2Item1: '🎧 Automatic audio playback by GPS proximity.',
+    feat2Item2: '🗺️ MapLibre GL vector maps with night/day mode.',
+    feat2Item3: '🎙️ Hands-free voice interaction while walking.',
+
+    feat3Title: 'Nearby Places Discovery & Live Weather',
+    feat3Desc: 'Find unplanned points of interest around you within a dynamic radius (Overpass API) and check real-time weather forecasts (Open-Meteo) before stepping out to explore.',
+    feat3Item1: '📍 Browse restaurants, parks, and museums within 4.5km to 9km.',
+    feat3Item2: '☀️ Live weather card with thermal sensation and humidity.',
+    feat3Item3: '🎪 Cultural event and local fair suggestions.',
+
+    feat4Title: 'Manual Tour Creator for Local Guides',
+    feat4Desc: 'Build your own tour from scratch: select points on interactive maps, reorder stops using drag-and-drop, upload photos to Supabase Storage, and share your route with the community.',
+    feat4Item1: '✍️ Intuitive drag-and-drop itinerary stop editing.',
+    feat4Item2: '🖼️ Secure photo storage in Supabase Storage.',
+    feat4Item3: '📤 Submit for public review or save as private.',
+
+    feat5Title: 'Traveler Profile & Tour Community',
+    feat5Desc: 'Customize your experience based on your unique pace, budget, and travel companion preferences. View other travelers\' profiles, rate tours, and save your favorites.',
+    feat5Item1: '👤 Walking paces: Relaxed, Balanced, or Fast-paced.',
+    feat5Item2: '👨‍👩‍👧‍👦 Filters for Solo, Couple, Family, or Friends trips.',
+    feat5Item3: '⭐ Tour ratings and public guide profiles.',
+
+    feat6Title: 'Admin Panel & PQRS Management',
+    feat6Desc: 'Advanced control dashboard for administrators and moderators. Approve user-created public tour requests, manage local events on the map, and handle PQRS user tickets.',
+    feat6Item1: '🛡️ Moderation and approval of public tours.',
+    feat6Item2: '📋 PQRS ticket management and user support.',
+    feat6Item3: '🌐 Global event control and system settings.',
 
     subVentajas: 'Why Choose Us?',
     titleVentajas: 'Advantages of VibeTours',
@@ -308,13 +488,53 @@ window.setLandingLanguage = function(lang) {
 
   // Header & Nav Links
   updateText('.nav-menu li:nth-child(1) a', t.navQueEs);
-  updateText('.nav-menu li:nth-child(2) a', t.navComoUsar);
+  updateText('.nav-menu li:nth-child(2) a', t.navComparativa);
   updateText('.nav-menu li:nth-child(3) a', t.navFunciones);
-  updateText('.nav-menu li:nth-child(4) a', t.navVentajas);
-  updateText('.nav-menu li:nth-child(5) a', t.navPantallas);
-  updateText('.nav-menu li:nth-child(6) a', t.navResenas);
-  updateText('.nav-menu li:nth-child(7) a', t.navLegal);
+  updateText('.nav-menu li:nth-child(4) a', t.navDestinos);
+  updateText('.nav-menu li:nth-child(5) a', t.navCreadores);
+  updateText('.nav-menu li:nth-child(6) a', t.navFaq);
+  updateText('.nav-menu li:nth-child(7) a', t.navPlanes);
   updateText('#nav-btn-register', t.navRegister);
+
+  // Metrics Bar
+  updateText('#metric1-label', t.metric1Label);
+  updateText('#metric2-label', t.metric2Label);
+  updateText('#metric3-label', t.metric3Label);
+  updateText('#metric4-label', t.metric4Label);
+
+  // Comparison Section
+  updateText('#comp-title', t.compTitle);
+  updateText('#comp-desc', t.compDesc);
+
+  // Simulator Section
+  updateText('#sim-title', t.simTitle);
+  updateText('#sim-desc', t.simDesc);
+  updateText('#sim-tag', t.simTag);
+  updateText('#sim-card-title', t.simCardTitle);
+  updateText('#sim-card-desc', t.simCardDesc);
+  updateText('#simPlayText', t.simPlayText);
+
+  // Destinations
+  updateText('#dest-title', t.destTitle);
+  updateText('#dest-desc', t.destDesc);
+
+  // Creators Section
+  updateText('#cr-title', t.crTitle);
+  updateText('#cr-desc', t.crDesc);
+  updateText('#cr1-title', t.cr1Title);
+  updateText('#cr1-text', t.cr1Text);
+  updateText('#cr2-title', t.cr2Title);
+  updateText('#cr2-text', t.cr2Text);
+  updateText('#cr3-title', t.cr3Title);
+  updateText('#cr3-text', t.cr3Text);
+
+  // FAQ
+  updateText('#faq-title', t.faqTitle);
+  updateText('#faq-desc', t.faqDesc);
+
+  // Pricing
+  updateText('#pr-title', t.prTitle);
+  updateText('#pr-desc', t.prDesc);
 
   // Hero Section
   updateText('.hero-badge', t.heroBadge);
@@ -345,22 +565,46 @@ window.setLandingLanguage = function(lang) {
   updateText('#step3-title', t.step3Title);
   updateText('#step3-text', t.step3Text);
 
-  // Section 4: Funcionalidades
+  // Section 4: Showcase Funcionalidades
   updateText('#funcionalidades .section-subtitle', t.subFunciones);
   updateText('#funcionalidades .section-title', t.titleFunciones);
   updateText('#funcionalidades .section-description', t.descFunciones);
-  updateText('#bento1-title', t.bento1Title);
-  updateText('#bento1-text', t.bento1Text);
-  updateText('#bento2-title', t.bento2Title);
-  updateText('#bento2-text', t.bento2Text);
-  updateText('#bento3-title', t.bento3Title);
-  updateText('#bento3-text', t.bento3Text);
-  updateText('#bento4-title', t.bento4Title);
-  updateText('#bento4-text', t.bento4Text);
-  updateText('#bento5-title', t.bento5Title);
-  updateText('#bento5-text', t.bento5Text);
-  updateText('#bento6-title', t.bento6Title);
-  updateText('#bento6-text', t.bento6Text);
+
+  updateText('#feat1-title', t.feat1Title);
+  updateText('#feat1-desc', t.feat1Desc);
+  updateText('#feat1-item1', t.feat1Item1);
+  updateText('#feat1-item2', t.feat1Item2);
+  updateText('#feat1-item3', t.feat1Item3);
+
+  updateText('#feat2-title', t.feat2Title);
+  updateText('#feat2-desc', t.feat2Desc);
+  updateText('#feat2-item1', t.feat2Item1);
+  updateText('#feat2-item2', t.feat2Item2);
+  updateText('#feat2-item3', t.feat2Item3);
+
+  updateText('#feat3-title', t.feat3Title);
+  updateText('#feat3-desc', t.feat3Desc);
+  updateText('#feat3-item1', t.feat3Item1);
+  updateText('#feat3-item2', t.feat3Item2);
+  updateText('#feat3-item3', t.feat3Item3);
+
+  updateText('#feat4-title', t.feat4Title);
+  updateText('#feat4-desc', t.feat4Desc);
+  updateText('#feat4-item1', t.feat4Item1);
+  updateText('#feat4-item2', t.feat4Item2);
+  updateText('#feat4-item3', t.feat4Item3);
+
+  updateText('#feat5-title', t.feat5Title);
+  updateText('#feat5-desc', t.feat5Desc);
+  updateText('#feat5-item1', t.feat5Item1);
+  updateText('#feat5-item2', t.feat5Item2);
+  updateText('#feat5-item3', t.feat5Item3);
+
+  updateText('#feat6-title', t.feat6Title);
+  updateText('#feat6-desc', t.feat6Desc);
+  updateText('#feat6-item1', t.feat6Item1);
+  updateText('#feat6-item2', t.feat6Item2);
+  updateText('#feat6-item3', t.feat6Item3);
 
   // Section 5: Ventajas
   updateText('#ventajas .section-subtitle', t.subVentajas);
@@ -435,7 +679,7 @@ function updateHTML(selector, html) {
 }
 
 /* --------------------------------------------------------------------------
-   4. SCREENSHOT GALLERY & EXACT DARK/LIGHT MODE FILENAME MAPPING
+   5. SCREENSHOT GALLERY & EXACT DARK/LIGHT MODE FILENAME MAPPING
    -------------------------------------------------------------------------- */
 const screenshotsData = [
   // Onboarding & Autenticación
@@ -552,7 +796,7 @@ window.closeLightbox = function() {
 };
 
 /* --------------------------------------------------------------------------
-   5. SECCIÓN DE COMENTARIOS DE USUARIOS
+   6. SECCIÓN DE COMENTARIOS DE USUARIOS
    -------------------------------------------------------------------------- */
 function initUserReviews() {
   const reviewsGrid = document.getElementById('reviewsGrid');
@@ -623,7 +867,7 @@ function renderReviews(reviews) {
 }
 
 /* --------------------------------------------------------------------------
-   6. STANDALONE REGISTER FORM HANDLER
+   7. STANDALONE REGISTER FORM HANDLER
    -------------------------------------------------------------------------- */
 function initStandaloneRegisterForm() {
   const form = document.getElementById('standaloneRegisterForm');
@@ -634,9 +878,78 @@ function initStandaloneRegisterForm() {
       const msg = currentLandingLang === 'en'
         ? `Welcome to VibeTours, ${name}! Your account has been created. Redirecting to home.`
         : `¡Bienvenido a VibeTours, ${name}! Tu cuenta ha sido registrada con éxito. Te redirigiremos al inicio.`;
-      alert(msg);
-      form.reset();
       window.location.href = 'index.html';
     });
   }
 }
+
+/* --------------------------------------------------------------------------
+   8. FAQ ACCORDION HANDLER
+   -------------------------------------------------------------------------- */
+function initFaqAccordion() {
+  const faqQuestions = document.querySelectorAll('.faq-question');
+  faqQuestions.forEach(q => {
+    q.addEventListener('click', () => {
+      const item = q.parentElement;
+      const isActive = item.classList.contains('active');
+      
+      // Close all other items for clean single accordion
+      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('active'));
+      
+      if (!isActive) {
+        item.classList.add('active');
+      }
+    });
+  });
+}
+
+/* --------------------------------------------------------------------------
+   9. LIVE TOUR INTERACTIVE SIMULATOR
+   -------------------------------------------------------------------------- */
+function initLiveTourSimulator() {
+  const playBtn = document.getElementById('simPlayBtn');
+  const playIcon = document.getElementById('simPlayIcon');
+  const playText = document.getElementById('simPlayText');
+  const waveAnim = document.getElementById('simWaveAnimation');
+
+  if (!playBtn) return;
+
+  let isPlaying = false;
+  let synthUtterance = null;
+
+  playBtn.addEventListener('click', () => {
+    isPlaying = !isPlaying;
+
+    if (isPlaying) {
+      if (playIcon) playIcon.textContent = '⏸';
+      if (playText) playText.textContent = currentLandingLang === 'en' ? 'Pause Simulation' : 'Pausar Simulación';
+      if (waveAnim) waveAnim.style.opacity = '1';
+
+      // Use Web Speech API if supported for real interactive audio
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const textToSpeak = currentLandingLang === 'en'
+          ? 'You are approaching Clock Tower, built in the 19th century as the main gate of the walled city of Cartagena.'
+          : 'Estás llegando a la Torre del Reloj, construida en el siglo 19 como la entrada principal de la ciudad amurallada de Cartagena.';
+        
+        synthUtterance = new SpeechSynthesisUtterance(textToSpeak);
+        synthUtterance.lang = currentLandingLang === 'en' ? 'en-US' : 'es-ES';
+        synthUtterance.onend = () => {
+          stopSimulator();
+        };
+        window.speechSynthesis.speak(synthUtterance);
+      }
+    } else {
+      stopSimulator();
+    }
+  });
+
+  function stopSimulator() {
+    isPlaying = false;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if (playIcon) playIcon.textContent = '▶';
+    if (playText) playText.textContent = currentLandingLang === 'en' ? 'Start Audio Simulation' : 'Iniciar Simulación de Audio';
+    if (waveAnim) waveAnim.style.opacity = '0.3';
+  }
+}
+

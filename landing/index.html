@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VibeTours - Tu Guía Turístico Inteligente con IA | Landing Page</title>
   <meta name="description" content="Descubre la revolución del turismo con VibeTours. Rutas personalizadas con Inteligencia Artificial ancladas a GPS real, audioguías envolventes manos libres y diseño de lujo.">
+  <link rel="icon" type="image/png" href="assets/images/logo_light.png">
   
   <!-- Apple Style Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,12 +30,12 @@
       <nav>
         <ul class="nav-menu">
           <li><a href="#que-es" class="nav-link">¿Qué es?</a></li>
-          <li><a href="#como-usar" class="nav-link">¿Cómo usar?</a></li>
+          <li><a href="#comparativa" class="nav-link">Comparativa</a></li>
           <li><a href="#funcionalidades" class="nav-link">Funciones</a></li>
-          <li><a href="#ventajas" class="nav-link">Ventajas</a></li>
-          <li><a href="#capturas" class="nav-link">Pantallas</a></li>
-          <li><a href="#comentarios" class="nav-link">Reseñas</a></li>
-          <li><a href="legal.html" class="nav-link">Legal</a></li>
+          <li><a href="#destinos" class="nav-link">Destinos</a></li>
+          <li><a href="#creadores" class="nav-link">Creadores</a></li>
+          <li><a href="#faq" class="nav-link">FAQ</a></li>
+          <li><a href="#planes" class="nav-link">Planes</a></li>
         </ul>
       </nav>
 
@@ -92,6 +93,30 @@
   </section>
 
   <!-- ==========================================================================
+       1.5 METRICS & SOCIAL PROOF BAR
+       ========================================================================== -->
+  <section class="metrics-section">
+    <div class="glass-panel metrics-grid reveal-on-scroll">
+      <div class="metric-card">
+        <span class="metric-number" id="metric1-num">+50</span>
+        <span class="metric-label" id="metric1-label">Tours Emblemáticos Precargados</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-number" id="metric2-num">100%</span>
+        <span class="metric-label" id="metric2-label">Datos GPS Reales de OpenStreetMap</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-number" id="metric3-num">0</span>
+        <span class="metric-label" id="metric3-label">Alucinaciones o Lugares Ficticios</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-number" id="metric4-num">4.9★</span>
+        <span class="metric-label" id="metric4-label">Valoración Media por Viajeros</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
        2. ¿QUÉ ES VIBETOURS?
        ========================================================================== -->
   <section id="que-es" class="section">
@@ -127,6 +152,70 @@
           Personaliza tu ritmo (Relajado, Equilibrado, Acelerado), grupo de viaje (Solo, Pareja, Familia, Amigos), presupuesto en USD e intereses como Gastronomía, Historia, Naturaleza o Arte.
         </p>
       </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       2.5 TABLA COMPARATIVA
+       ========================================================================== -->
+  <section id="comparativa" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Comparativa Directa</span>
+      <h2 class="section-title" id="comp-title">¿Por qué elegir VibeTours?</h2>
+      <p class="section-description" id="comp-desc">
+        Descubre cómo se compara VibeTours frente a las alternativas tradicionales del mercado.
+      </p>
+    </div>
+
+    <div class="glass-panel comparison-wrapper reveal-on-scroll delay-1">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Característica</th>
+            <th class="highlight-col"><span class="comparison-badge">🎧 VibeTours</span></th>
+            <th>🚶 Guía Humano</th>
+            <th>🤖 ChatGPT / General</th>
+            <th>📖 Audioguía Tradicional</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td id="comp-row1-feat">Puntos 100% Reales Sin Alucinaciones</td>
+            <td class="highlight-col tag-yes">✓ Sí (OpenStreetMap)</td>
+            <td class="tag-yes">✓ Sí</td>
+            <td class="tag-no">✗ No (Inventa lugares)</td>
+            <td class="tag-yes">✓ Sí</td>
+          </tr>
+          <tr>
+            <td id="comp-row2-feat">Voz Automática por Proximidad GPS</td>
+            <td class="highlight-col tag-yes">✓ Manos Libres</td>
+            <td class="tag-no">✗ No</td>
+            <td class="tag-no">✗ No</td>
+            <td class="tag-warn">⚠ Manual</td>
+          </tr>
+          <tr>
+            <td id="comp-row3-feat">Itinerario Personalizado por IA</td>
+            <td class="highlight-col tag-yes">✓ 100% Medida</td>
+            <td class="tag-no">✗ Rígido</td>
+            <td class="tag-yes">✓ Solo Texto</td>
+            <td class="tag-no">✗ Fijo</td>
+          </tr>
+          <tr>
+            <td id="comp-row4-feat">Adaptación a tu Ritmo y Grupo</td>
+            <td class="highlight-col tag-yes">✓ Configurable</td>
+            <td class="tag-no">✗ Horario Rígido</td>
+            <td class="tag-warn">⚠ Parcial</td>
+            <td class="tag-no">✗ No</td>
+          </tr>
+          <tr>
+            <td id="comp-row5-feat">Acceso Gratuito & Modo Demo</td>
+            <td class="highlight-col tag-yes">✓ Sí</td>
+            <td class="tag-no">💰 Costoso ($50-$150)</td>
+            <td class="tag-yes">✓ Sí</td>
+            <td class="tag-no">💰 Pago por ciudad</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
@@ -170,75 +259,260 @@
   </section>
 
   <!-- ==========================================================================
-       4. ¿QUÉ SE PUEDE HACER EN VIBETOURS? (BENTO GRID)
+       4. APPLE STICKY SHOWCASE DE FUNCIONALIDADES CON CAMBIO DINÁMICO DE PANTALLAS
        ========================================================================== -->
-  <section id="funcionalidades" class="section">
+  <section id="funcionalidades" class="section sticky-showcase-section">
     <div class="section-header reveal-on-scroll">
-      <span class="section-subtitle">Universo de Posibilidades</span>
-      <h2 class="section-title">¿Qué se puede hacer en VibeTours?</h2>
+      <span class="section-subtitle">Experiencia Inmersiva</span>
+      <h2 class="section-title">Funcionalidades de VibeTours en Acción</h2>
       <p class="section-description">
-        Explora el ecosistema completo de funcionalidades avanzadas para turistas, creadores de contenido y administradores.
+        Desplázate para ver cómo la Inteligencia Artificial y la geolocalización transforman cada aspecto de tu viaje en tiempo real.
       </p>
     </div>
 
-    <div class="bento-grid">
-      <div class="glass-panel bento-item bento-col-8 reveal-on-scroll delay-1">
-        <div>
-          <span class="bento-tag">Inteligencia Artificial</span>
-          <h3 class="card-title" id="bento1-title">Vibe Planner AI & Asistente Conversacional</h3>
-          <p class="card-text" id="bento1-text">
-            Chatea de forma fluida para crear tours a medida. La IA sugiere hoteles reales como punto de encuentro, desglosa presupuestos estimados en USD por parada y procesa las rutas de forma asíncrona.
+    <div class="sticky-showcase-wrapper">
+      <!-- Left Column: Scrolling Text Cards -->
+      <div class="showcase-cards-column">
+        
+        <!-- CARD 1: Vibe Planner AI -->
+        <div class="glass-panel showcase-card active" data-feature="ai" data-claro="assets/screenshots/Modo claro/Chat de IA.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Chat de IA.jpeg" data-glow="radial-gradient(circle, rgba(0, 122, 255, 0.45) 0%, rgba(175, 82, 222, 0.35) 50%, transparent 75%)">
+          <span class="bento-tag">01. Inteligencia Artificial Generativa</span>
+          <h3 class="feature-showcase-title" id="feat1-title">Vibe Planner AI & Asistente Conversacional</h3>
+          <p class="feature-showcase-desc" id="feat1-desc">
+            Chatea en lenguaje natural expresando tus deseos de viaje. La IA comprende tu intención, consulta puntos de interés reales en OpenStreetMap, sugiere hoteles reales como punto de encuentro y genera el itinerario de forma asíncrona.
           </p>
+          <ul class="feature-list">
+            <li id="feat1-item1">✨ Creación por dictado de voz o texto libre.</li>
+            <li id="feat1-item2">🏨 Sugerencia interactiva de hoteles reales de partida.</li>
+            <li id="feat1-item3">💵 Desglose de presupuesto estimado por parada en USD.</li>
+          </ul>
+
+          <!-- Fallback mockup for small mobile screens -->
+          <div class="mobile-only-mockup">
+            <div class="iphone-frame">
+              <div class="iphone-notch"></div>
+              <img class="iphone-screen showcase-img" data-claro="assets/screenshots/Modo claro/Chat de IA.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Chat de IA.jpeg" src="assets/screenshots/Modo claro/Chat de IA.jpeg" alt="Chat de IA VibeTours">
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 2: Live Tour GPS -->
+        <div class="glass-panel showcase-card" data-feature="gps" data-claro="assets/screenshots/Modo claro/Tour iniciado.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Tour iniciado.jpeg" data-glow="radial-gradient(circle, rgba(88, 86, 214, 0.45) 0%, rgba(0, 122, 255, 0.35) 50%, transparent 75%)">
+          <span class="bento-tag" style="background: rgba(88, 86, 214, 0.14); color: var(--accent-indigo);">02. Guiado Satelital en Tiempo Real</span>
+          <h3 class="feature-showcase-title" id="feat2-title">Live Tour con Navegación GPS & Audioguías TTS</h3>
+          <p class="feature-showcase-desc" id="feat2-desc">
+            Sigue la ruta en mapas vectoriales MapLibre GL mientras caminas. La app detecta tu posición GPS y reproduce narraciones de voz automáticas al aproximarte a cada monumento o parada.
+          </p>
+          <ul class="feature-list">
+            <li id="feat2-item1">🎧 Reproducción automática de audio por proximidad GPS.</li>
+            <li id="feat2-item2">🗺️ Mapas vectoriales MapLibre GL con modo noche/día.</li>
+            <li id="feat2-item3">🎙️ Interacción por voz hands-free durante la caminata.</li>
+          </ul>
+
+          <!-- Fallback mockup for small mobile screens -->
+          <div class="mobile-only-mockup">
+            <div class="iphone-frame">
+              <div class="iphone-notch"></div>
+              <img class="iphone-screen showcase-img" data-claro="assets/screenshots/Modo claro/Tour iniciado.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Tour iniciado.jpeg" src="assets/screenshots/Modo claro/Tour iniciado.jpeg" alt="Tour Iniciado GPS VibeTours">
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 3: Lugares Cercanos & Clima -->
+        <div class="glass-panel showcase-card" data-feature="places" data-claro="assets/screenshots/Modo claro/Lugar cercano.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Lugar cercano.jpeg" data-glow="radial-gradient(circle, rgba(16, 185, 129, 0.45) 0%, rgba(0, 122, 255, 0.3) 50%, transparent 75%)">
+          <span class="bento-tag" style="background: rgba(16, 185, 129, 0.14); color: var(--success);">03. Geolocalización Urbana</span>
+          <h3 class="feature-showcase-title" id="feat3-title">Descubrimiento de Lugares Cercanos & Clima</h3>
+          <p class="feature-showcase-desc" id="feat3-desc">
+            Encuentra puntos de interés no planificados a tu alrededor en un radio dinámico (Overpass API) y consulta el pronóstico del clima en tiempo real (Open-Meteo) antes de salir a explorar.
+          </p>
+          <ul class="feature-list">
+            <li id="feat3-item1">📍 Consulta de restaurantes, parques y museos en 4.5km a 9km.</li>
+            <li id="feat3-item2">☀️ Tarjeta de clima en vivo con sensación térmica y humedad.</li>
+            <li id="feat3-item3">🎪 Sugerencias de eventos culturales y ferias locales.</li>
+          </ul>
+
+          <!-- Fallback mockup for small mobile screens -->
+          <div class="mobile-only-mockup">
+            <div class="iphone-frame">
+              <div class="iphone-notch"></div>
+              <img class="iphone-screen showcase-img" data-claro="assets/screenshots/Modo claro/Lugar cercano.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Lugar cercano.jpeg" src="assets/screenshots/Modo claro/Lugar cercano.jpeg" alt="Lugares Cercanos VibeTours">
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 4: Creador Manual -->
+        <div class="glass-panel showcase-card" data-feature="creator" data-claro="assets/screenshots/Modo claro/Creador Manual de tours 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Creador Manual de tour 1.jpeg" data-glow="radial-gradient(circle, rgba(245, 158, 11, 0.45) 0%, rgba(175, 82, 222, 0.3) 50%, transparent 75%)">
+          <span class="bento-tag" style="background: rgba(245, 158, 11, 0.14); color: var(--warning);">04. Herramienta para Creadores</span>
+          <h3 class="feature-showcase-title" id="feat4-title">Creador Manual de Tours para Guías Locales</h3>
+          <p class="feature-showcase-desc" id="feat4-desc">
+            Crea tu propio tour desde cero: selecciona puntos en el mapa interactivo, ordena paradas mediante drag-and-drop, sube fotografías a Supabase Storage y comparte tu ruta con la comunidad.
+          </p>
+          <ul class="feature-list">
+            <li id="feat4-item1">✍️ Edición intuitiva drag-and-drop de paradas del itinerario.</li>
+            <li id="feat4-item2">🖼️ Almacenamiento seguro de fotos en Supabase Storage.</li>
+            <li id="feat4-item3">📤 Envío para revisión pública o guardado privado.</li>
+          </ul>
+
+          <!-- Fallback mockup for small mobile screens -->
+          <div class="mobile-only-mockup">
+            <div class="iphone-frame">
+              <div class="iphone-notch"></div>
+              <img class="iphone-screen showcase-img" data-claro="assets/screenshots/Modo claro/Creador Manual de tours 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Creador Manual de tour 1.jpeg" src="assets/screenshots/Modo claro/Creador Manual de tours 1.jpeg" alt="Creador Manual VibeTours">
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 5: Perfil & Comunidad -->
+        <div class="glass-panel showcase-card" data-feature="profile" data-claro="assets/screenshots/Modo claro/Perfil 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Perfil 1.jpeg" data-glow="radial-gradient(circle, rgba(175, 82, 222, 0.45) 0%, rgba(0, 122, 255, 0.3) 50%, transparent 75%)">
+          <span class="bento-tag">05. Personalización Absoluta</span>
+          <h3 class="feature-showcase-title" id="feat5-title">Perfil de Viajero & Comunidad de Tours</h3>
+          <p class="feature-showcase-desc" id="feat5-desc">
+            Ajusta tu experiencia según tus preferencias únicas de ritmo, presupuesto y compañía. Consulta los perfiles de otros viajeros, califica recorridos y guarda tus favoritos.
+          </p>
+          <ul class="feature-list">
+            <li id="feat5-item1">👤 Ritmos de caminata: Relajado, Equilibrado o Acelerado.</li>
+            <li id="feat5-item2">👨‍👩‍👧‍👦 Filtros para viajes Solo, Pareja, Familia o Amigos.</li>
+            <li id="feat5-item3">⭐ Calificación de tours y perfiles públicos de guías.</li>
+          </ul>
+
+          <!-- Fallback mockup for small mobile screens -->
+          <div class="mobile-only-mockup">
+            <div class="iphone-frame">
+              <div class="iphone-notch"></div>
+              <img class="iphone-screen showcase-img" data-claro="assets/screenshots/Modo claro/Perfil 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Perfil 1.jpeg" src="assets/screenshots/Modo claro/Perfil 1.jpeg" alt="Perfil de Viajero VibeTours">
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 6: Admin Panel -->
+        <div class="glass-panel showcase-card" data-feature="admin" data-claro="assets/screenshots/Modo claro/Panel Admin.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Panel Admin.jpeg" data-glow="radial-gradient(circle, rgba(186, 26, 26, 0.45) 0%, rgba(88, 86, 214, 0.3) 50%, transparent 75%)">
+          <span class="bento-tag" style="background: rgba(186, 26, 26, 0.14); color: var(--error);">06. Control & Moderación</span>
+          <h3 class="feature-showcase-title" id="feat6-title">Panel Administrativo & Gestión PQRS</h3>
+          <p class="feature-showcase-desc" id="feat6-desc">
+            Panel de control avanzado para administradores y moderadores. Aprueba solicitudes de tours creados por usuarios, gestiona eventos locales en el mapa y atiende peticiones de PQRS.
+          </p>
+          <ul class="feature-list">
+            <li id="feat6-item1">🛡️ Moderación y aprobación de tours públicos.</li>
+            <li id="feat6-item2">📋 Gestión de PQRS y atención al usuario.</li>
+            <li id="feat6-item3">🌐 Control de eventos y configuraciones globales.</li>
+          </ul>
+
+          <!-- Fallback mockup for small mobile screens -->
+          <div class="mobile-only-mockup">
+            <div class="iphone-frame">
+              <div class="iphone-notch"></div>
+              <img class="iphone-screen showcase-img" data-claro="assets/screenshots/Modo claro/Panel Admin.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Panel Admin.jpeg" src="assets/screenshots/Modo claro/Panel Admin.jpeg" alt="Panel Admin VibeTours">
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Sticky iPhone Mockup with Smooth Screen Transition -->
+      <div class="sticky-phone-column">
+        <div class="sticky-phone-container">
+          <div id="stickyMockupGlow" class="mockup-glow" style="background: radial-gradient(circle, rgba(0, 122, 255, 0.45) 0%, rgba(175, 82, 222, 0.35) 50%, transparent 75%); transition: background 0.6s ease;"></div>
+          <div class="iphone-frame sticky-iphone-frame" id="stickyIphoneFrame">
+            <div class="iphone-notch"></div>
+            <img id="stickyPhoneImg" class="iphone-screen" src="assets/screenshots/Modo claro/Chat de IA.jpeg" alt="Screen Showcase VibeTours" style="transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       4.5 SIMULADOR INTERACTIVO DE LIVE TOUR
+       ========================================================================== -->
+  <section id="simulador" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Prueba en Vivo</span>
+      <h2 class="section-title" id="sim-title">Simulador de Live Tour</h2>
+      <p class="section-description" id="sim-desc">
+        Experimenta cómo VibeTours combina narración por voz y seguimiento GPS en tiempo real.
+      </p>
+    </div>
+
+    <div class="glass-panel simulator-container reveal-on-scroll delay-1">
+      <div>
+        <span class="bento-tag" style="margin-bottom: 12px;" id="sim-tag">🔊 Audioguía por Proximidad</span>
+        <h3 class="card-title" id="sim-card-title" style="margin-bottom: 12px;">Tour Histórico: Cartagena Antigua</h3>
+        <p class="card-text" id="sim-card-desc" style="margin-bottom: 20px;">
+          Haz clic en reproducir para escuchar cómo la IA narra las historias fascinantes del Centro Histórico mientras te aproximas al lugar.
+        </p>
+        <button id="simPlayBtn" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px;">
+          <span id="simPlayIcon">▶</span> <span id="simPlayText">Iniciar Simulación de Audio</span>
+        </button>
+      </div>
+
+      <div class="sim-screen">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span style="font-size: 12px; font-weight: 700; color: var(--primary);">LIVE TOUR ACTIVE</span>
+          <span style="font-size: 11px; color: rgba(255,255,255,0.6);" id="simGpsStatus">GPS: Anclado 📡</span>
+        </div>
+        
+        <div class="sim-map-graphic">
+          <div class="sim-pin"></div>
+        </div>
+
+        <div style="margin-top: 16px;">
+          <div style="font-size: 14px; font-weight: 700;" id="simStopTitle">Parada 1: Torre del Reloj</div>
+          <div style="font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 4px;" id="simStopSnippet">"Estás llegando a la entrada principal de la ciudad amurallada construida en el siglo XIX..."</div>
+        </div>
+
+        <div class="sim-wave" id="simWaveAnimation" style="opacity: 0.3;">
+          <div class="sim-bar"></div>
+          <div class="sim-bar"></div>
+          <div class="sim-bar"></div>
+          <div class="sim-bar"></div>
+          <div class="sim-bar"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       4.6 DESTINOS POPULARES
+       ========================================================================== -->
+  <section id="destinos" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Explora el Mundo</span>
+      <h2 class="section-title" id="dest-title">Destinos Destacados</h2>
+      <p class="section-description" id="dest-desc">
+        Recorridos precargados listos para explorar en Modo Demo o con tu cuenta de viajero.
+      </p>
+    </div>
+
+    <div class="destinations-grid reveal-on-scroll delay-1">
+      <div class="city-card">
+        <img src="https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=600&q=80" alt="Roma" class="city-card-bg">
+        <div class="city-card-overlay">
+          <div class="city-name">Roma, Italia</div>
+          <div class="city-stops" id="city1-stops">🏛️ 8 Paradas | Coliseo, Foro & Trevi</div>
         </div>
       </div>
 
-      <div class="glass-panel bento-item bento-col-4 reveal-on-scroll delay-2">
-        <div>
-          <span class="bento-tag">Navegación GPS</span>
-          <h3 class="card-title" id="bento2-title">Lugares Cercanos & Clima en Vivo</h3>
-          <p class="card-text" id="bento2-text">
-            Descubre Puntos de Interés reales en un radio dinámico (Overpass API) y consulta el clima en tiempo real (Open-Meteo) para planificar tu caminata.
-          </p>
+      <div class="city-card">
+        <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=80" alt="París" class="city-card-bg">
+        <div class="city-card-overlay">
+          <div class="city-name">París, Francia</div>
+          <div class="city-stops" id="city2-stops">🎨 10 Paradas | Torre Eiffel & Louvre</div>
         </div>
       </div>
 
-      <div class="glass-panel bento-item bento-col-6 reveal-on-scroll delay-1">
-        <div>
-          <span class="bento-tag">Creador de Tours</span>
-          <h3 class="card-title" id="bento3-title">Creador Manual para Guías Locales</h3>
-          <p class="card-text" id="bento3-text">
-            Diseñado para guías y creadores: añade paradas en el mapa interactivo, ordena puntos arrastrando y soltando, sube fotos de portada a Supabase Storage y envía tu tour a revisión.
-          </p>
+      <div class="city-card">
+        <img src="https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=600&q=80" alt="Tokio" class="city-card-bg">
+        <div class="city-card-overlay">
+          <div class="city-name">Tokio, Japón</div>
+          <div class="city-stops" id="city3-stops">⛩️ 12 Paradas | Shibuya, Asakusa & Akihabara</div>
         </div>
       </div>
 
-      <div class="glass-panel bento-item bento-col-6 reveal-on-scroll delay-2">
-        <div>
-          <span class="bento-tag">Narración Inmersiva</span>
-          <h3 class="card-title" id="bento4-title">Audioguías TTS & Dictado por Voz</h3>
-          <p class="card-text" id="bento4-text">
-            Disfruta de narraciones de voz automáticas al aproximarte a las coordenadas del mapa. Interactúa por dictado de voz mediante micrófono para adaptar el tour en el camino.
-          </p>
-        </div>
-      </div>
-
-      <div class="glass-panel bento-item bento-col-6 reveal-on-scroll delay-1">
-        <div>
-          <span class="bento-tag">Multilingüe & Moneda</span>
-          <h3 class="card-title" id="bento5-title">Filtros Globales y Moneda Preferida</h3>
-          <p class="card-text" id="bento5-text">
-            Busca cualquier ciudad del mundo con el motor Photon de OpenStreetMap. Ajusta tu moneda de preferencia y convierte los valores en tiempo real.
-          </p>
-        </div>
-      </div>
-
-      <div class="glass-panel bento-item bento-col-6 reveal-on-scroll delay-2">
-        <div>
-          <span class="bento-tag">Administración</span>
-          <h3 class="card-title" id="bento6-title">Panel Administrativo & Gestión PQRS</h3>
-          <p class="card-text" id="bento6-text">
-            Herramientas avanzadas para moderadores: aprueba o rechaza solicitudes de tours públicos, gestiona eventos locales en el mapa y atiende peticiones de PQRS.
-          </p>
+      <div class="city-card">
+        <img src="https://images.unsplash.com/photo-1518391846015-55a9cc003b25?auto=format&fit=crop&w=600&q=80" alt="Nueva York" class="city-card-bg">
+        <div class="city-card-overlay">
+          <div class="city-name">Nueva York, EE.UU.</div>
+          <div class="city-stops" id="city4-stops">🗽 9 Paradas | Central Park & Times Sq.</div>
         </div>
       </div>
     </div>
@@ -300,6 +574,45 @@
   </section>
 
   <!-- ==========================================================================
+       5.5 CREADORES & GUÍAS LOCALES
+       ========================================================================== -->
+  <section id="creadores" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Economía de Creadores</span>
+      <h2 class="section-title" id="cr-title">¿Eres Guía Local o Creator?</h2>
+      <p class="section-description" id="cr-desc">
+        VibeTours te ofrece herramientas avanzadas para digitalizar tus conocimientos turísticos y llegar a miles de viajeros globales.
+      </p>
+    </div>
+
+    <div class="creators-grid reveal-on-scroll delay-1">
+      <div class="glass-panel about-card">
+        <div class="card-icon-wrapper">🛠️</div>
+        <h3 class="card-title" id="cr1-title">Creador Manual Drag-and-Drop</h3>
+        <p class="card-text" id="cr1-text">
+          Diseña rutas personalizadas definiendo paradas en el mapa, agregando audios explicativos y subiendo fotos directamente a la nube.
+        </p>
+      </div>
+
+      <div class="glass-panel about-card">
+        <div class="card-icon-wrapper">🌐</div>
+        <h3 class="card-title" id="cr2-title">Publicación en la Comunidad</h3>
+        <p class="card-text" id="cr2-text">
+          Envía tus recorridos para revisión y moderación administrativa. Una vez aprobados, estarán disponibles para toda la comunidad global.
+        </p>
+      </div>
+
+      <div class="glass-panel about-card">
+        <div class="card-icon-wrapper">📈</div>
+        <h3 class="card-title" id="cr3-title">Perfil Público & Reseñas</h3>
+        <p class="card-text" id="cr3-text">
+          Construye tu reputación como experto local, recibe valoraciones de 5 estrellas y destaca entre los itinerarios más populares.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
        6. SHOWCASE DE CAPTURAS DE PANTALLA
        ========================================================================== -->
   <section id="capturas" class="section">
@@ -338,6 +651,109 @@
       <p id="lightboxTitle" style="color: #FFF; margin-top: 16px; font-weight: 600; font-size: 18px;"></p>
     </div>
   </div>
+
+  <!-- ==========================================================================
+       6.5 PREGUNTAS FRECUENTES (FAQ)
+       ========================================================================== -->
+  <section id="faq" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Resolvemos tus dudas</span>
+      <h2 class="section-title" id="faq-title">Preguntas Frecuentes</h2>
+      <p class="section-description" id="faq-desc">
+        Todo lo que necesitas saber antes de iniciar tu viaje con VibeTours.
+      </p>
+    </div>
+
+    <div class="faq-container reveal-on-scroll delay-1">
+      <div class="glass-panel faq-item">
+        <button class="faq-question">
+          <span id="faq1-q">¿Cómo garantiza VibeTours que la IA no invente lugares ficticios?</span>
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer">
+          <p id="faq1-a">Nuestra arquitectura valida cada punto sugerido por la IA contra coordenadas satelitales en tiempo real de OpenStreetMap y Wikipedia. Si una ubicación no existe o carece de coordenadas geográficas verificadas, es descartada automáticamente del itinerario.</p>
+        </div>
+      </div>
+
+      <div class="glass-panel faq-item">
+        <button class="faq-question">
+          <span id="faq2-q">¿Puedo usar la aplicación sin necesidad de crear una cuenta?</span>
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer">
+          <p id="faq2-a">¡Sí! VibeTours cuenta con un Modo Demo completamente resiliente. Puedes ingresar de inmediato y explorar el catálogo de más de 50 tours precargados de ciudades emblemáticas del mundo sin registrarte.</p>
+        </div>
+      </div>
+
+      <div class="glass-panel faq-item">
+        <button class="faq-question">
+          <span id="faq3-q">¿La narración por voz funciona automáticamente al caminar?</span>
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer">
+          <p id="faq3-a">Correcto. Al iniciar el "Live Tour", la app rastrea tu posición GPS por geofencing. Al aproximarte a un punto de interés (un monumento, plaza o restaurante), la voz sintética reproduce la historia automáticamente sin que tengas que sacar el teléfono del bolsillo.</p>
+        </div>
+      </div>
+
+      <div class="glass-panel faq-item">
+        <button class="faq-question">
+          <span id="faq4-q">¿Cómo funciona la personalización de ritmo y presupuesto?</span>
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer">
+          <p id="faq4-a">En tu Perfil de Viajero seleccionas tu ritmo de caminata (Relajado, Equilibrado o Acelerado), la compañía (Solo, Pareja, Familia, Amigos) y tu rango de presupuesto. Vibe Planner AI ajusta las distancias, paradas de descanso y lugares sugeridos según estos parámetros.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       6.6 PLANES & ACCESO
+       ========================================================================== -->
+  <section id="planes" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle">Acceso Transparente</span>
+      <h2 class="section-title" id="pr-title">Elige tu Experiencia</h2>
+      <p class="section-description" id="pr-desc">
+        Sin cargos ocultos ni sorpresas. Comienza gratis hoy mismo.
+      </p>
+    </div>
+
+    <div class="pricing-grid reveal-on-scroll delay-1">
+      <!-- Plan Explorador Gratis -->
+      <div class="glass-panel pricing-card">
+        <div>
+          <span class="bento-tag" id="pr1-tag">Acceso Libre</span>
+          <h3 class="card-title" id="pr1-title" style="margin-top: 12px;">Plan Explorador</h3>
+          <div class="price-tag" id="pr1-price">$0 USD</div>
+          <ul class="feature-list" style="margin-bottom: 24px;">
+            <li id="pr1-feat1">✓ Acceso completo al Modo Demo.</li>
+            <li id="pr1-feat2">✓ +50 Tours Precargados en el mundo.</li>
+            <li id="pr1-feat3">✓ Navegación GPS con mapas vectoriales.</li>
+            <li id="pr1-feat4">✓ Audioguías automáticas por proximidad.</li>
+          </ul>
+        </div>
+        <a href="register.html" class="btn btn-secondary" style="width: 100%; text-align: center;" id="pr1-btn">Comenzar Gratis</a>
+      </div>
+
+      <!-- Plan Vibe Pro -->
+      <div class="glass-panel pricing-card popular">
+        <span class="pricing-badge-popular" id="pr2-badge">Recomendado</span>
+        <div>
+          <span class="bento-tag" style="background: rgba(0,122,255,0.15);" id="pr2-tag">Experiencia Completa</span>
+          <h3 class="card-title" id="pr2-title" style="margin-top: 12px;">Plan Vibe Pro & Creador</h3>
+          <div class="price-tag" id="pr2-price">Gratis <span style="font-size: 14px; color: var(--text-muted); font-weight: 500;">(Lanzamiento)</span></div>
+          <ul class="feature-list" style="margin-bottom: 24px;">
+            <li id="pr2-feat1">✨ Generación Ilimitada de itinerarios con IA.</li>
+            <li id="pr2-feat2">🎙️ Interacción conversacional por voz y texto libre.</li>
+            <li id="pr2-feat3">🛠️ Creador Manual de Tours para guías locales.</li>
+            <li id="pr2-feat4">☁️ Sincronización en la nube con Supabase.</li>
+          </ul>
+        </div>
+        <a href="register.html" class="btn btn-primary" style="width: 100%; text-align: center;" id="pr2-btn">Crear Cuenta Pro</a>
+      </div>
+    </div>
+  </section>
 
   <!-- ==========================================================================
        7. BANNER DE REGISTRO & DESCARGA

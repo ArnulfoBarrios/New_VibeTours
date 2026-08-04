@@ -396,10 +396,10 @@ a:hover {
 .iphone-frame {
   position: relative;
   z-index: 2;
-  width: 300px;
-  height: 610px;
+  width: 290px;
+  height: 590px;
   background: #000000;
-  border-radius: 48px;
+  border-radius: 46px;
   border: 10px solid #2C2C2E;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.15);
   overflow: hidden;
@@ -572,41 +572,111 @@ a:hover {
 }
 
 /* --------------------------------------------------------------------------
-   9. ¿QUÉ SE PUEDE HACER EN VIBETOURS? (BENTO GRID)
+   9. APPLE STICKY SHOWCASE FEATURE DESIGN & SCROLL ANIMATIONS
    -------------------------------------------------------------------------- */
-.bento-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 26px;
+.sticky-showcase-section {
+  position: relative;
 }
 
-.bento-item {
-  padding: 40px;
+.sticky-showcase-wrapper {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 60px;
+  position: relative;
+  align-items: start;
+}
+
+.showcase-cards-column {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  transition: transform var(--transition-speed), border-color var(--transition-speed), box-shadow var(--transition-speed);
+  gap: 60px;
 }
 
-.bento-item:hover {
-  transform: var(--card-hover-transform);
+.showcase-card {
+  padding: 48px 44px;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0.55;
+  transform: scale(0.97);
+  border-color: transparent;
+}
+
+.showcase-card.active {
+  opacity: 1;
+  transform: scale(1.02);
   border-color: var(--primary);
-  box-shadow: 0 25px 50px rgba(0, 122, 255, 0.15);
+  box-shadow: 0 25px 60px rgba(0, 122, 255, 0.18);
 }
 
-.bento-col-8 { grid-column: span 8; }
-.bento-col-4 { grid-column: span 4; }
-.bento-col-6 { grid-column: span 6; }
+.feature-showcase-title {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+
+.feature-showcase-desc {
+  font-size: 17px;
+  color: var(--text-muted);
+  line-height: 1.65;
+  margin-bottom: 24px;
+}
+
+.feature-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.feature-list li {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
 .bento-tag {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--accent-ai);
   background: rgba(175, 82, 222, 0.14);
-  padding: 6px 14px;
+  padding: 6px 16px;
   border-radius: 980px;
   align-self: flex-start;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+}
+
+/* Sticky Phone Column */
+.sticky-phone-column {
+  position: relative;
+  height: 100%;
+}
+
+.sticky-phone-container {
+  position: sticky;
+  top: 140px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  perspective: 1200px;
+}
+
+.sticky-iphone-frame {
+  animation: none !important;
+  width: 280px;
+  height: 570px;
+  box-shadow: 0 35px 90px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15);
+  transform-style: preserve-3d;
+}
+
+.mobile-only-mockup {
+  display: none;
+  margin-top: 24px;
+  width: 100%;
+  justify-content: center;
 }
 
 /* --------------------------------------------------------------------------
@@ -926,11 +996,24 @@ a:hover {
   .about-grid, .timeline-container, .reviews-grid {
     grid-template-columns: 1fr 1fr;
   }
-  .bento-col-8, .bento-col-4, .bento-col-6 {
-    grid-column: span 12;
-  }
   .footer-container {
     grid-template-columns: 1fr 1fr;
+  }
+
+  /* Hide sticky column on mobile, show mobile inline mockups */
+  .sticky-showcase-wrapper {
+    grid-template-columns: 1fr;
+  }
+  .sticky-phone-column {
+    display: none;
+  }
+  .mobile-only-mockup {
+    display: flex;
+  }
+  .showcase-card {
+    opacity: 1;
+    transform: none;
+    padding: 36px 28px;
   }
 }
 
@@ -951,7 +1034,6 @@ a:hover {
     grid-template-columns: 1fr;
   }
 
-  /* Responsive Mobile Frames & Images Fix */
   .hero-mockup-wrapper {
     width: 100%;
     display: flex;
@@ -967,9 +1049,13 @@ a:hover {
     border-radius: 40px;
   }
 
+  .feature-showcase-title {
+    font-size: 24px;
+  }
+
   .mockup-glow {
-    width: 260px;
-    height: 260px;
+    width: 240px;
+    height: 240px;
   }
 
   .gallery-grid {
@@ -1028,3 +1114,278 @@ a:hover {
     top: 6px;
   }
 }
+
+/* ==========================================================================
+   NEW ENHANCED LANDING SECTIONS (METRICS, COMPARISON, SIMULATOR, DESTINATIONS, FAQ, PRICING)
+   ========================================================================== */
+
+/* 1. SOCIAL PROOF METRICS BAR */
+.metrics-section {
+  padding: 20px 24px 60px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  padding: 32px;
+  text-align: center;
+}
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.metric-number {
+  font-size: 38px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent-ai) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1.1;
+}
+.metric-label {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* 2. COMPARISON TABLE SECTION */
+.comparison-wrapper {
+  overflow-x: auto;
+  border-radius: 24px;
+  margin-top: 32px;
+}
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  min-width: 680px;
+}
+.comparison-table th, .comparison-table td {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 15px;
+}
+.comparison-table th {
+  background: rgba(0, 122, 255, 0.06);
+  font-weight: 700;
+  color: var(--text-main);
+}
+.comparison-table th.highlight-col, .comparison-table td.highlight-col {
+  background: rgba(0, 122, 255, 0.12);
+  font-weight: 600;
+}
+.comparison-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--primary);
+}
+.tag-yes { color: var(--success); font-weight: 700; }
+.tag-no { color: var(--error); font-weight: 700; }
+.tag-warn { color: var(--warning); font-weight: 700; }
+
+/* 3. INTERACTIVE TOUR SIMULATOR */
+.simulator-container {
+  max-width: 900px;
+  margin: 40px auto 0;
+  padding: 36px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: center;
+}
+@media (max-width: 768px) {
+  .simulator-container { grid-template-columns: 1fr; }
+}
+.sim-screen {
+  background: #000;
+  border-radius: 28px;
+  padding: 24px;
+  color: #FFF;
+  position: relative;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+.sim-map-graphic {
+  height: 180px;
+  background: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sim-pin {
+  width: 20px;
+  height: 20px;
+  background: var(--primary);
+  border-radius: 50%;
+  border: 3px solid #FFF;
+  box-shadow: 0 0 15px var(--primary);
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+.sim-wave {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  height: 24px;
+  margin-top: 14px;
+}
+.sim-bar {
+  width: 4px;
+  height: 100%;
+  background: var(--accent-ai);
+  border-radius: 2px;
+  animation: waveBar 1.2s infinite ease-in-out alternate;
+}
+.sim-bar:nth-child(2) { animation-delay: 0.2s; }
+.sim-bar:nth-child(3) { animation-delay: 0.4s; }
+.sim-bar:nth-child(4) { animation-delay: 0.6s; }
+.sim-bar:nth-child(5) { animation-delay: 0.8s; }
+@keyframes waveBar {
+  0% { height: 6px; }
+  100% { height: 24px; }
+}
+
+/* 4. DESTINATIONS POPULAR GRID */
+.destinations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  margin-top: 36px;
+}
+.city-card {
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+  height: 280px;
+  transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+}
+.city-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+}
+.city-card-bg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(0.75);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.city-card:hover .city-card-bg {
+  transform: scale(1.08);
+  filter: brightness(0.65);
+}
+.city-card-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 24px;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
+  color: #FFF;
+}
+.city-name { font-size: 22px; font-weight: 700; }
+.city-stops { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+/* 5. CREATORS SECTION */
+.creators-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-top: 36px;
+}
+
+/* 6. FAQ ACCORDION */
+.faq-container {
+  max-width: 800px;
+  margin: 36px auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.faq-item {
+  border-radius: 18px;
+  transition: background var(--transition-speed);
+}
+.faq-question {
+  width: 100%;
+  padding: 22px 28px;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-main);
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-family: inherit;
+}
+.faq-icon {
+  font-size: 20px;
+  transition: transform 0.3s ease;
+}
+.faq-item.active .faq-icon {
+  transform: rotate(45deg);
+}
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), padding 0.3s ease;
+  padding: 0 28px;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.faq-item.active .faq-answer {
+  max-height: 250px;
+  padding: 0 28px 22px;
+}
+
+/* 7. PRICING & ACCESS CARDS */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 32px;
+  max-width: 900px;
+  margin: 40px auto 0;
+}
+.pricing-card {
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+}
+.pricing-card.popular {
+  border: 2px solid var(--primary);
+  box-shadow: var(--glass-glow);
+}
+.pricing-badge-popular {
+  position: absolute;
+  top: -14px;
+  right: 28px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent-ai) 100%);
+  color: #FFF;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.price-tag {
+  font-size: 36px;
+  font-weight: 800;
+  margin: 16px 0 24px;
+}
+
