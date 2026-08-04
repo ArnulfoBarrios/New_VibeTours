@@ -72,38 +72,104 @@ export async function reverseGeocodeLocation(lat, lon) {
   return null
 }
 
+export function normalizeGeocodeQuery(query) {
+  if (!query || typeof query !== 'string') return ''
+  let cleaned = query.trim()
+  
+  // Strip punctuation and dots (e.g. EE.UU. -> EEUU)
+  cleaned = cleaned.replace(/[.\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+
+  // Map Spanish country names and abbreviations to international OSM English names
+  cleaned = cleaned.replace(/\b(ee\s*uu|eeuu|usa|us|estados\s+unidos)\b/gi, 'United States')
+  cleaned = cleaned.replace(/\b(uk|reino\s+unido)\b/gi, 'United Kingdom')
+  cleaned = cleaned.replace(/\b(francia)\b/gi, 'France')
+  cleaned = cleaned.replace(/\b(italia)\b/gi, 'Italy')
+  cleaned = cleaned.replace(/\b(españa|espana)\b/gi, 'Spain')
+  cleaned = cleaned.replace(/\b(alemania)\b/gi, 'Germany')
+  cleaned = cleaned.replace(/\b(japon|japón)\b/gi, 'Japan')
+  cleaned = cleaned.replace(/\b(brasil)\b/gi, 'Brazil')
+  cleaned = cleaned.replace(/\b(peru|perú)\b/gi, 'Peru')
+  cleaned = cleaned.replace(/\b(mexico|méxico)\b/gi, 'Mexico')
+
+  // Map famous Spanish city names to international OSM English names
+  cleaned = cleaned.replace(/\bnueva\s+york\b/gi, 'New York')
+  cleaned = cleaned.replace(/\bpar[íi]s\b/gi, 'Paris')
+  cleaned = cleaned.replace(/\blondres\b/gi, 'London')
+  cleaned = cleaned.replace(/\broma\b/gi, 'Rome')
+  cleaned = cleaned.replace(/\btokio\b/gi, 'Tokyo')
+  cleaned = cleaned.replace(/\bmosc[uú]\b/gi, 'Moscow')
+  cleaned = cleaned.replace(/\bvarsovia\b/gi, 'Warsaw')
+  cleaned = cleaned.replace(/\batenas\b/gi, 'Athens')
+  cleaned = cleaned.replace(/\blisboa\b/gi, 'Lisbon')
+  cleaned = cleaned.replace(/\bpraga\b/gi, 'Prague')
+
+  // Remove duplicate tokens while preserving order
+  const tokens = cleaned.split(/\s+/).filter(Boolean)
+  const uniqueTokens = []
+  for (const t of tokens) {
+    if (!uniqueTokens.length || uniqueTokens[uniqueTokens.length - 1].toLowerCase() !== t.toLowerCase()) {
+      uniqueTokens.push(t)
+    }
+  }
+  return uniqueTokens.join(' ')
+}
+
 export async function geocodePlace(query, lat = null, lon = null) {
   if (!query || typeof query !== 'string') return null
-  const key = `geocode_${query.toLowerCase().trim()}_${lat ?? ''}_${lon ?? ''}`
+  const normalizedQuery = normalizeGeocodeQuery(query)
+  if (!normalizedQuery) return null
+
+  const key = `geocode_${normalizedQuery.toLowerCase().trim()}_${lat ?? ''}_${lon ?? ''}`
   const cached = geocodeCache.get(key)
   if (cached) return cached
 
-  // 1. Try Photon first as it has better search relevance for natural language
-  // and prioritizes larger regions/cities over small shops or POIs with the same name.
+  // 1. Try global Photon search first (without lat/lon) to avoid local user GPS proximity
+  // bias distorting major international city lookups (e.g. user in Colombia/Mexico searching "Nueva York").
   try {
-    const photonResults = await photonSearch(query, 1, lat, lon)
-    const [photon] = photonResults
-    if (photon && Number.isFinite(photon.latitude) && Number.isFinite(photon.longitude)) {
+    const globalResults = await photonSearch(normalizedQuery, 1, null, null)
+    const [photonGlobal] = globalResults
+    if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
       const res = {
-        name: photon.name,
-        latitude: Number(photon.latitude),
-        longitude: Number(photon.longitude),
-        city: photon.city || '',
-        country: photon.country || ''
+        name: photonGlobal.name,
+        latitude: Number(photonGlobal.latitude),
+        longitude: Number(photonGlobal.longitude),
+        city: photonGlobal.city || '',
+        country: photonGlobal.country || ''
       }
       geocodeCache.set(key, res)
       return res
     }
   } catch (err) {
-    console.warn('[geocodePlace] Photon search failed:', err.message)
+    console.warn('[geocodePlace] Global Photon search failed:', err.message)
   }
 
-  // 2. Fallback to Nominatim if Photon fails or returns no results
+  // 2. Try with lat/lon proximity bias if provided and global search returned nothing
+  if (lat && lon) {
+    try {
+      const proxResults = await photonSearch(normalizedQuery, 1, lat, lon)
+      const [photonProx] = proxResults
+      if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
+        const res = {
+          name: photonProx.name,
+          latitude: Number(photonProx.latitude),
+          longitude: Number(photonProx.longitude),
+          city: photonProx.city || '',
+          country: photonProx.country || ''
+        }
+        geocodeCache.set(key, res)
+        return res
+      }
+    } catch (err) {
+      console.warn('[geocodePlace] Proximity Photon search failed:', err.message)
+    }
+  }
+
+  // 3. Fallback to Nominatim if Photon fails or returns no results
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.searchParams.set('format', 'jsonv2')
   url.searchParams.set('limit', '3')
   url.searchParams.set('addressdetails', '1')
-  url.searchParams.set('q', query)
+  url.searchParams.set('q', normalizedQuery)
   try {
     const response = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT }

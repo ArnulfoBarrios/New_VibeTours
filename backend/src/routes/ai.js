@@ -157,11 +157,11 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         if (extracted.explicit_destination && !input.destination) {
           input.destination = extracted.explicit_destination || extracted.city || extracted.country || ''
         }
-        if (!input.city && (extracted.city || revLocation?.city)) {
-          input.city = extracted.city || revLocation?.city || ''
+        if (!input.city && extracted.city) {
+          input.city = extracted.city
         }
-        if (!input.country && (extracted.country || revLocation?.country)) {
-          input.country = extracted.country || revLocation?.country || ''
+        if (!input.country && extracted.country) {
+          input.country = extracted.country
         }
         if (extracted.origin_place && !input.originPlace) {
           input.originPlace = extracted.origin_place
@@ -174,10 +174,12 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
           input.destinationPlace = extracted.destination_place
         }
         if (!input.destination && (input.destinationPlace || extracted?.destination_place || extracted?.explicit_destination)) {
-          input.destination = input.destinationPlace || extracted?.destination_place || extracted?.explicit_destination || input.city || revLocation?.city || ''
+          input.destination = input.destinationPlace || extracted?.destination_place || extracted?.explicit_destination || input.city || ''
         }
-        if (!input.destination && input.isUserLocationOrigin && (revLocation?.city || input.city)) {
-          input.destination = revLocation?.city || input.city
+        if (!input.destination && (input.isUserLocationOrigin || (!extracted?.explicit_destination && !extracted?.city))) {
+          if (!input.city && revLocation?.city) input.city = revLocation.city
+          if (!input.country && revLocation?.country) input.country = revLocation.country
+          if (!input.destination && (revLocation?.city || input.city)) input.destination = revLocation?.city || input.city
         }
         if (extracted.cities && extracted.cities.length > 0 && (!input.cities || input.cities.length === 0)) {
           input.cities = extracted.cities
@@ -286,10 +288,11 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
       }
     }
     
-    if (input.city && input.city.trim().length > 0) {
+    if (input.city && input.city.trim().length > 0 && (!input.destination || input.destination === 'Destino')) {
       input.destination = input.city.trim()
     }
-    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
+    const queryParts = [...new Set([input.destination, input.city, input.country].filter(Boolean))]
+    const location = await geocodePlace(queryParts.join(', '))
     if (!location) {
       return res.status(400).json({ error: 'No pudimos identificar la ubicación ingresada.' })
     }
@@ -817,7 +820,8 @@ async function processTourGeneration(jobId, input) {
 
   try {
     console.info('[tour-ai] generate:start', { jobId: jobId || 'sync', destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
-    const location = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
+    const queryParts = [...new Set([input.destination, input.city, input.country].filter(Boolean))]
+    const location = await geocodePlace(queryParts.join(', '))
     console.info('[tour-ai] geocode', location ? { name: location.name, latitude: location.latitude, longitude: location.longitude } : { ok: false })
     
     if (!location) {

@@ -58,6 +58,49 @@ function sanitizeExtractedLocation(raw) {
   }
 }
 
+const FAMOUS_CITIES_MAP = {
+  'nueva york': { city: 'Nueva York', country: 'Estados Unidos' },
+  'new york': { city: 'Nueva York', country: 'Estados Unidos' },
+  'ny': { city: 'Nueva York', country: 'Estados Unidos' },
+  'nyc': { city: 'Nueva York', country: 'Estados Unidos' },
+  'miami': { city: 'Miami', country: 'Estados Unidos' },
+  'orlando': { city: 'Orlando', country: 'Estados Unidos' },
+  'los angeles': { city: 'Los Ángeles', country: 'Estados Unidos' },
+  'los ángeles': { city: 'Los Ángeles', country: 'Estados Unidos' },
+  'san francisco': { city: 'San Francisco', country: 'Estados Unidos' },
+  'las vegas': { city: 'Las Vegas', country: 'Estados Unidos' },
+  'chicago': { city: 'Chicago', country: 'Estados Unidos' },
+  'washington': { city: 'Washington D.C.', country: 'Estados Unidos' },
+  'parís': { city: 'París', country: 'Francia' },
+  'paris': { city: 'París', country: 'Francia' },
+  'londres': { city: 'Londres', country: 'Reino Unido' },
+  'london': { city: 'Londres', country: 'Reino Unido' },
+  'roma': { city: 'Roma', country: 'Italia' },
+  'rome': { city: 'Roma', country: 'Italia' },
+  'tokio': { city: 'Tokio', country: 'Japón' },
+  'tokyo': { city: 'Tokio', country: 'Japón' },
+  'madrid': { city: 'Madrid', country: 'España' },
+  'barcelona': { city: 'Barcelona', country: 'España' },
+  'cancun': { city: 'Cancún', country: 'México' },
+  'cancún': { city: 'Cancún', country: 'México' },
+  'ciudad de mexico': { city: 'Ciudad de México', country: 'México' },
+  'cdmx': { city: 'Ciudad de México', country: 'México' },
+  'bogota': { city: 'Bogotá', country: 'Colombia' },
+  'bogotá': { city: 'Bogotá', country: 'Colombia' },
+  'medellin': { city: 'Medellín', country: 'Colombia' },
+  'medellín': { city: 'Medellín', country: 'Colombia' },
+  'cartagena': { city: 'Cartagena', country: 'Colombia' },
+  'cali': { city: 'Cali', country: 'Colombia' },
+  'barranquilla': { city: 'Barranquilla', country: 'Colombia' },
+  'santa marta': { city: 'Santa Marta', country: 'Colombia' },
+  'buenos aires': { city: 'Buenos Aires', country: 'Argentina' },
+  'rio de janeiro': { city: 'Río de Janeiro', country: 'Brasil' },
+  'río de janeiro': { city: 'Río de Janeiro', country: 'Brasil' },
+  'lima': { city: 'Lima', country: 'Perú' },
+  'cusco': { city: 'Cusco', country: 'Perú' },
+  'santiago': { city: 'Santiago', country: 'Chile' }
+}
+
 export function extractLocationLocalFallback(prompt) {
   if (!prompt || typeof prompt !== 'string') return null
   const p = prompt.trim()
@@ -108,6 +151,18 @@ export function extractLocationLocalFallback(prompt) {
   }
 
   let explicitDestination = destinationPlace || (cities.length > 0 ? cities[0] : '')
+  let explicitCity = ''
+  let explicitCountry = ''
+
+  for (const [key, info] of Object.entries(FAMOUS_CITIES_MAP)) {
+    if (lower.includes(key)) {
+      explicitDestination = info.city
+      explicitCity = info.city
+      explicitCountry = info.country
+      break
+    }
+  }
+
   if (!explicitDestination) {
     const cityMatch = p.match(/\b(a|en|para|hacia)\s+([A-ZÁÉÍÓÚ][a-záéíóú\s]+?)(?=\s+(?:donde|para|con|que|quiero|voy)|$)/i)
     if (cityMatch) {
@@ -119,11 +174,15 @@ export function extractLocationLocalFallback(prompt) {
     }
   }
 
+  if (!explicitDestination && p.length > 2 && !isUserGps && !durationSpecified) {
+    explicitDestination = p
+  }
+
   return {
     is_unrelated: false,
     explicit_destination: explicitDestination,
-    city: explicitDestination,
-    country: lower.includes('colombia') ? 'Colombia' : '',
+    city: explicitCity || explicitDestination,
+    country: explicitCountry || (lower.includes('colombia') ? 'Colombia' : ''),
     origin_place: originPlace,
     destination_place: destinationPlace,
     is_user_location_origin: isUserGps,
@@ -168,6 +227,7 @@ Determina primero si el mensaje del usuario no tiene sentido, es una secuencia a
 
 Si "is_unrelated" es false:
 - Si menciona claramente a dónde quiere ir (una o varias ciudades, o una atracción específica como "hasta el Estadio Metropolitano", "al Malecón", "a la playa X"), pon esa ciudad o lugar en "explicit_destination".
+- REGLA CRÍTICA DE PAÍS Y METRÓPOLIS: Si la ciudad solicitada es una metrópoli o ciudad mundialmente conocida (ej: "Nueva York", "París", "Roma", "Londres", "Tokio", "Madrid", "Miami", "Cancún"), establece OBLIGATORIAMENTE el país oficial en "country" (ej: "Estados Unidos", "Francia", "Italia", "Reino Unido", "Japón", "España", "México"). NUNCA dejes "country" vacío para ciudades famosas y NUNCA asignes el país del GPS del usuario a la propiedad "country" cuando el destino solicitado es internacional.
 - REGLA CRÍTICA DE ORIGEN DESDE GPS: Marca "is_user_location_origin" en true y "origin_place" en "user_current_location" ÚNICAMENTE si el usuario dijo EXPLÍCITAMENTE en su texto frases como "desde mi ubicación", "partiendo de donde estoy", "desde mi posición", "empieza aquí". Si el usuario NO escribió esas palabras, "is_user_location_origin" DEBE SER FALSE.
 - Si el usuario menciona una ruta de punto a punto dentro de una ciudad (ej. "del Malecón del Río al Estadio Metropolitano"), extrae "origin_place" (ej. "Malecón del Río") y "destination_place" (ej. "Estadio Metropolitano").
 - Si menciona varias ciudades para recorrer (ej. "empieze en Cartagena y termine en Santa Marta"), extrae en "cities" un array con las ciudades (ej: ["Cartagena", "Santa Marta"]) y marca "is_multi_city" en true.
