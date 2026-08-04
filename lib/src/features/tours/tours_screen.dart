@@ -8,6 +8,7 @@ import '../../core/utils/debouncer.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../ads/presentation/widgets/native_ad_banner.dart';
 
 class ToursScreen extends ConsumerStatefulWidget {
   const ToursScreen({super.key});
@@ -145,15 +146,25 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final tour = tours[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: TourCard(
-                            tour: tour,
-                            onTap: () => context.push('/tours/${tour.id}'),
-                          )
-                              .animate(delay: (index.clamp(0, 4) * 80).ms)
-                              .fadeIn(duration: 350.ms)
-                              .slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
+                        final showAd = index > 0 && index % 4 == 0;
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (showAd)
+                              const NativeAdBanner(
+                                padding: EdgeInsets.only(bottom: 16),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: TourCard(
+                                tour: tour,
+                                onTap: () => context.push('/tours/${tour.id}'),
+                              )
+                                  .animate(delay: (index.clamp(0, 4) * 80).ms)
+                                  .fadeIn(duration: 350.ms)
+                                  .slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
+                            ),
+                          ],
                         );
                       },
                       childCount: tours.length,

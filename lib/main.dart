@@ -11,6 +11,7 @@ import 'firebase_options.dart';
 import 'src/app.dart';
 import 'src/core/config/app_config.dart';
 import 'src/core/providers/provider_observer.dart';
+import 'src/core/services/ad_service.dart';
 import 'src/state/app_state.dart';
 
 /// Custom HttpOverrides to inject a descriptive User-Agent header globally
@@ -97,6 +98,9 @@ Future<void> main() async {
       publishableKey: AppConfig.supabaseAnonKey,
     );
   }
+
+  // Initialize Google Mobile Ads SDK asynchronously
+  await AdService.instance.initialize();
 
   final prefs = await SharedPreferences.getInstance();
   runApp(

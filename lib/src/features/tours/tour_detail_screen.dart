@@ -15,6 +15,7 @@ import '../../core/utils/image_utils.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../../core/services/ad_service.dart';
 import '../../core/services/sqlite-service.dart';
 import '../shared/location_disclosure_dialog.dart';
 import '../tour_live/tour_rating_dialog.dart';
@@ -687,17 +688,13 @@ class TourDetailScreen extends ConsumerWidget {
     final maxDay = tour.stops.isEmpty ? 1 : tour.stops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
     final isSingleDay = maxDay <= 1 && tour.durationHours <= 24.0;
 
-    if (hasHotel || isSingleDay || !context.mounted) {
-      ref.read(selectedTourProvider.notifier).state = tour;
-      if (context.mounted) {
-        await NavigationTransitionOverlay.show(context);
-        if (context.mounted) {
-          context.push('/live/${tour.id}');
-        }
-      }
+    if (hasHotel || isSingleDay) {
+      if (!context.mounted) return;
+      await _navigateToLiveTour(context, ref, tour);
       return;
     }
 
+    if (!context.mounted) return;
     // Show dialog: Do you want to add a hotel?
     final wantHotel = await showDialog<bool>(
       context: context,
@@ -719,17 +716,13 @@ class TourDetailScreen extends ConsumerWidget {
       ),
     );
 
-    if (wantHotel != true || !context.mounted) {
-      ref.read(selectedTourProvider.notifier).state = tour;
-      if (context.mounted) {
-        await NavigationTransitionOverlay.show(context);
-        if (context.mounted) {
-          context.push('/live/${tour.id}');
-        }
-      }
+    if (wantHotel != true) {
+      if (!context.mounted) return;
+      await _navigateToLiveTour(context, ref, tour);
       return;
     }
 
+    if (!context.mounted) return;
     // Show loading and fetch hotels
     final hotels = await showDialog<List<dynamic>>(
       context: context,
@@ -770,17 +763,13 @@ class TourDetailScreen extends ConsumerWidget {
       ),
     );
 
-    if (hotels == null || hotels.isEmpty || !context.mounted) {
-      ref.read(selectedTourProvider.notifier).state = tour;
-      if (context.mounted) {
-        await NavigationTransitionOverlay.show(context);
-        if (context.mounted) {
-          context.push('/live/${tour.id}');
-        }
-      }
+    if (hotels == null || hotels.isEmpty) {
+      if (!context.mounted) return;
+      await _navigateToLiveTour(context, ref, tour);
       return;
     }
 
+    if (!context.mounted) return;
     // Show hotel selection list
     final selectedHotel = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -805,26 +794,32 @@ class TourDetailScreen extends ConsumerWidget {
       ),
     );
 
-    if (selectedHotel == null || !context.mounted) {
-      ref.read(selectedTourProvider.notifier).state = tour;
-      if (context.mounted) {
-        await NavigationTransitionOverlay.show(context);
-        if (context.mounted) {
-          context.push('/live/${tour.id}');
-        }
-      }
+    if (selectedHotel == null) {
+      if (!context.mounted) return;
+      await _navigateToLiveTour(context, ref, tour);
       return;
     }
 
-    // Add hotel stops to tour and start
+    if (!context.mounted) return;
     final modifiedTour = _addHotelToTour(tour, selectedHotel);
-    ref.read(selectedTourProvider.notifier).state = modifiedTour;
-    if (context.mounted) {
-      await NavigationTransitionOverlay.show(context);
-      if (context.mounted) {
-        context.push('/live/${modifiedTour.id}');
-      }
-    }
+    await _navigateToLiveTour(context, ref, modifiedTour);
+  }
+
+  Future<void> _navigateToLiveTour(BuildContext context, WidgetRef ref, Tour tourToStart) async {
+    ref.read(selectedTourProvider.notifier).state = tourToStart;
+    if (!context.mounted) return;
+
+    // Trigger Interstitial Video Ad before launching the live tour navigation
+    AdService.instance.showInterstitialAd(
+      onAdClosed: () async {
+        if (context.mounted) {
+          await NavigationTransitionOverlay.show(context);
+          if (context.mounted) {
+            context.push('/live/${tourToStart.id}');
+          }
+        }
+      },
+    );
   }
 
   Tour _addHotelToTour(Tour tour, Map<String, dynamic> hotel) {

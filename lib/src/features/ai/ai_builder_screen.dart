@@ -6,6 +6,7 @@ import '../../core/design/openfree_route_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../domain/models.dart';
 import '../../state/app_state.dart';
+import '../ads/presentation/widgets/native_ad_banner.dart';
 import 'ai_builder_controller.dart';
 
 class AiBuilderScreen extends ConsumerStatefulWidget {
@@ -283,6 +284,11 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                       ),
                       const SizedBox(height: 8),
                       const _AnimatedLoaderText(),
+                      const SizedBox(height: 24),
+                      const NativeAdBanner(
+                        customTitle: 'Patrocinador VibeTours',
+                        padding: EdgeInsets.symmetric(horizontal: 24),
+                      ),
                     ],
                   ),
                 ),

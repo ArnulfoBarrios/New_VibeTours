@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 
 import '../../core/config/app_config.dart';
 import '../../core/design/app_theme.dart';
-import '../../core/design/openfree_route_map.dart';
+import '../../core/design/live_navigation_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/services/road_route_service.dart';
 import '../../core/services/tour_runtime_services.dart';
@@ -459,40 +459,28 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           
           final liveRoute = _liveRoute;
 
-          // Combine regular map points with temporary food markers
-          final basePoints = _mapPointsFor(stop);
-          final allPoints = _voiceFoodPlaces.isEmpty
-              ? basePoints
-              : [...basePoints, ..._voiceFoodPlaces.map((p) => p.toGeoPoint())];
-
-          final baseLabels = [
-            _selectedVoicePlace != null
-                ? _selectedVoicePlace!.name
-                : _navigatingToHotel
-                    ? (_findHotelStop(tour)?.name ?? 'Hotel')
-                    : stop.name,
-          ];
-          final allLabels = _voiceFoodPlaces.isEmpty
-              ? baseLabels
-              : [...baseLabels, ..._voiceFoodPlaces.map((p) => p.name)];
+          final destinationPoint = _selectedVoicePlace != null
+              ? _selectedVoicePlace!.toGeoPoint()
+              : _navigatingToHotel
+                  ? (_findHotelStop(tour)?.location ?? stop.location)
+                  : stop.location;
+          final destinationName = _selectedVoicePlace != null
+              ? _selectedVoicePlace!.name
+              : _navigatingToHotel
+                  ? (_findHotelStop(tour)?.name ?? 'Hotel')
+                  : stop.name;
 
           return Stack(
             children: [
               Positioned.fill(
-                child: OpenFreeRouteMap(
+                child: LiveNavigationMap(
                   key: ValueKey('${tour.id}-$mapStyle-${_selectedVoicePlace != null ? "voice" : _navigatingToHotel ? "hotel" : "stop"}'),
-                  points: allPoints,
-                  labels: allLabels,
-                  activeIndex: 0,
+                  destination: destinationPoint,
+                  destinationName: destinationName,
                   styleUrl: mapStyle,
-                  height: MediaQuery.of(context).size.height,
-                  borderRadius: 0,
                   fitPadding: const EdgeInsets.fromLTRB(36, 108, 36, 360),
-                  showNumbers: false,
-                  myLocationEnabled: true,
-                  routeOverride: _noLandRouteAvailable ? const RoadRouteResult(geometry: []) : liveRoute,
+                  route: _noLandRouteAvailable ? const RoadRouteResult(geometry: []) : liveRoute,
                   currentLocation: _currentPoint,
-                  useRoadRouting: false,
                   trackingMode: _isTrackingMode,
                   trackingHeading: _currentHeading,
                   onPointSelected: (point) {
@@ -971,18 +959,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     if (last == null) return true;
     final minInterval = isOffRoute ? const Duration(seconds: 4) : const Duration(seconds: 15);
     return now.difference(last) > minInterval;
-  }
-
-  List<GeoPoint> _mapPointsFor(TourStop stop) {
-    final GeoPoint destination;
-    if (_selectedVoicePlace != null) {
-      destination = _selectedVoicePlace!.toGeoPoint();
-    } else if (_navigatingToHotel) {
-      destination = _findHotelStop(_navigationTour!)?.location ?? stop.location;
-    } else {
-      destination = stop.location;
-    }
-    return [destination];
   }
 
   GeoPoint _pointFromPosition(Position position) {

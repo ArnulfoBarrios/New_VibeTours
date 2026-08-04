@@ -16,8 +16,6 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
-    project.evaluationDependsOn(":app")
-    
     // Suprimir avisos molestos de plugins de terceros
     tasks.withType<JavaCompile>().configureEach {
         options.compilerArgs.addAll(listOf(
