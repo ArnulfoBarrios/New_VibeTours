@@ -15,7 +15,7 @@ export function summarizePlaces(places = []) {
   }))
 }
 
-function sanitizeExtractedLocation(raw) {
+function sanitizeExtractedLocation(raw, promptText = '') {
   if (!raw || typeof raw !== 'object') {
     return {
       is_unrelated: false,
@@ -34,8 +34,15 @@ function sanitizeExtractedLocation(raw) {
       suggestions: []
     }
   }
+
+  let isUnrelated = Boolean(raw.is_unrelated)
+  const travelKeywords = /\b(tour|tours|viaje|viajes|viajar|itinerario|recorrido|turismo|tur[íi]stico|lugar|lugares|visitar|pasar|pasarla|divertido|divertirme|entretenido|vacaciones|experiencia|destino|destinos|hotel|hoteles|playa|playas|museo|museos|ciudad|ciudades)\b/i
+  if (travelKeywords.test(promptText || '')) {
+    isUnrelated = false
+  }
+
   return {
-    is_unrelated: Boolean(raw.is_unrelated),
+    is_unrelated: isUnrelated,
     explicit_destination: String(raw.explicit_destination ?? '').trim(),
     city: String(raw.city ?? '').trim(),
     country: String(raw.country ?? '').trim(),
@@ -260,7 +267,7 @@ Devuelve ÚNICAMENTE JSON válido con este esquema:
     const json = await response.json()
     let content = json.choices?.[0]?.message?.content ?? '{}'
     const parsed = JSON.parse(content)
-    const result = sanitizeExtractedLocation(parsed)
+    const result = sanitizeExtractedLocation(parsed, prompt)
     if (result) locationExtractCache.set(cacheKey, result)
     return result
   } catch (err) {
