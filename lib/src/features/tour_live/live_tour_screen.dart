@@ -1259,23 +1259,42 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             Expanded(
               child: Text(
                 stop.name,
-                style: Theme.of(context).textTheme.titleLarge,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
             ),
-            Text('${_activeStop + 1}/${tour.stops.length}'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${_activeStop + 1}/${tour.stops.length}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         LinearProgressIndicator(
           value: progress,
-          minHeight: 8,
+          minHeight: 4,
           borderRadius: BorderRadius.circular(999),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         if (_noLandRouteAvailable)
           Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.8),
               borderRadius: BorderRadius.circular(12),
@@ -1283,82 +1302,97 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             ),
             child: Row(
               children: [
-                Icon(Icons.directions_off_rounded, color: Theme.of(context).colorScheme.onErrorContainer),
-                const SizedBox(width: 12),
+                Icon(Icons.directions_off_rounded, size: 20, color: Theme.of(context).colorScheme.onErrorContainer),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'No se puede calcular la ruta debido a que no hay ruta terrestre disponible.',
+                    'Sin ruta terrestre disponible.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onErrorContainer,
                       fontWeight: FontWeight.w500,
+                      fontSize: 12,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (_currentSamplingMode == LocationSamplingMode.stationary)
-              const _LiveChip(
-                icon: Icons.battery_saver_rounded,
-                label: 'Ahorro GPS (Estático)',
-              ),
-            if (_currentPoint != null &&
-                Geolocator.distanceBetween(
-                      _currentPoint!.latitude,
-                      _currentPoint!.longitude,
-                      stop.location.latitude,
-                      stop.location.longitude,
-                    ) <=
-                    50.0)
-              const _LiveChip(
-                icon: Icons.radar_rounded,
-                label: '¡Cerca de parada! (Radar active)',
-              ),
-            if (!_noLandRouteAvailable)
-              _LiveChip(
-                icon: Icons.route_rounded,
-                label: _distanceLabel(tour, progress, liveRoute),
-              ),
-            if (!_noLandRouteAvailable)
-              _LiveChip(
-                icon: Icons.schedule_rounded,
-                label: _timeLabel(tour, progress, liveRoute),
-              ),
-            if (!_noLandRouteAvailable)
-              _LiveChip(
-                icon: Icons.traffic_rounded,
-                label: _trafficLabel(liveRoute),
-              ),
-            if (_isOffRoute || _isRouting)
-              _LiveChip(
-                icon: Icons.alt_route_rounded,
-                label: _isRouting
-                    ? 'Actualizando ruta'
-                    : 'Desvio detectado',
-              ),
-            if (_currentPoint != null)
-              const _LiveChip(
-                icon: Icons.gps_fixed_rounded,
-                label: 'GPS live',
-              )
-            else
-              const _LiveChip(
-                icon: Icons.gps_not_fixed_rounded,
-                label: 'Buscando GPS',
-              ),
-          ],
+        // Unified Telemetry Strip
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.25),
+            ),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                if (!_noLandRouteAvailable) ...[
+                  Icon(Icons.route_rounded, size: 14, color: AppTheme.primary),
+                  const SizedBox(width: 4),
+                  Text(_distanceLabel(tour, progress, liveRoute), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 10),
+                  Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+                  const SizedBox(width: 10),
+                  Icon(Icons.schedule_rounded, size: 14, color: AppTheme.primary),
+                  const SizedBox(width: 4),
+                  Text(_timeLabel(tour, progress, liveRoute), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 10),
+                  Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+                  const SizedBox(width: 10),
+                  Icon(Icons.traffic_rounded, size: 14, color: AppTheme.primary),
+                  const SizedBox(width: 4),
+                  Text(_trafficLabel(liveRoute), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 10),
+                  Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+                  const SizedBox(width: 10),
+                ],
+                Icon(
+                  _currentPoint != null ? Icons.gps_fixed_rounded : Icons.gps_not_fixed_rounded,
+                  size: 14,
+                  color: _currentPoint != null ? Colors.green : Colors.orange,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _currentPoint != null ? 'GPS live' : 'Buscando GPS',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _currentPoint != null ? Colors.green : Colors.orange,
+                  ),
+                ),
+                if (_currentSamplingMode == LocationSamplingMode.stationary) ...[
+                  const SizedBox(width: 10),
+                  Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.battery_saver_rounded, size: 14, color: Colors.blueAccent),
+                  const SizedBox(width: 4),
+                  const Text('Ahorro GPS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blueAccent)),
+                ],
+                if (_isOffRoute || _isRouting) ...[
+                  const SizedBox(width: 10),
+                  Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.alt_route_rounded, size: 14, color: Colors.amber),
+                  const SizedBox(width: 4),
+                  Text(_isRouting ? 'Recalculando' : 'Desvío', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.amber)),
+                ],
+              ],
+            ),
+          ),
         ),
-        if (!_noLandRouteAvailable)
-          const SizedBox(height: 14),
+        const SizedBox(height: 10),
+        // Action Controls Row 1: Primary Voice & AI Assistant
         Row(
           children: [
             Expanded(
               child: LiquidButton(
-                label: l10n.voiceGuide,
+                label: 'Audioguía',
                 icon: Icons.record_voice_over_rounded,
                 onPressed: () async {
                   await ref.read(voiceGuideProvider).narrateStop(
@@ -1384,6 +1418,69 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               ),
             ),
             const SizedBox(width: 8),
+            _buildMicButton(context),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Action Controls Row 2: Settings & Tools
+        Row(
+          children: [
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _autoPlayProximityEnabled = !_autoPlayProximityEnabled;
+                    });
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          _autoPlayProximityEnabled
+                              ? 'Audioguía automática por proximidad activada'
+                              : 'Audioguía automática por proximidad desactivada',
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _autoPlayProximityEnabled
+                          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.85)
+                          : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _autoPlayProximityEnabled ? Icons.sensors_rounded : Icons.sensors_off_rounded,
+                          size: 16,
+                          color: _autoPlayProximityEnabled
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _autoPlayProximityEnabled ? 'Auto Voz: ON' : 'Auto Voz: OFF',
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: _autoPlayProximityEnabled
+                                    ? Theme.of(context).colorScheme.onPrimaryContainer
+                                    : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
             PopupMenuButton<double>(
               tooltip: 'Velocidad de voz',
               initialValue: _ttsSpeedMultiplier,
@@ -1400,7 +1497,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 PopupMenuItem(value: 1.5, child: Text('1.5x (Muy rápido)')),
               ],
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(12),
@@ -1408,7 +1505,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.speed_rounded, size: 18, color: AppTheme.primary),
+                    Icon(Icons.speed_rounded, size: 16, color: AppTheme.primary),
                     const SizedBox(width: 4),
                     Text(
                       '${_ttsSpeedMultiplier}x',
@@ -1419,66 +1516,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               ),
             ),
             const SizedBox(width: 8),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    _autoPlayProximityEnabled = !_autoPlayProximityEnabled;
-                  });
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        _autoPlayProximityEnabled
-                            ? 'Audioguía automática por proximidad activada'
-                            : 'Audioguía automática por proximidad desactivada',
-                      ),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _autoPlayProximityEnabled
-                        ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.85)
-                        : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _autoPlayProximityEnabled ? Icons.sensors_rounded : Icons.sensors_off_rounded,
-                        size: 18,
-                        color: _autoPlayProximityEnabled
-                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                            : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _autoPlayProximityEnabled ? 'Auto Voz' : 'Voz Manual',
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: _autoPlayProximityEnabled
-                                  ? Theme.of(context).colorScheme.onPrimaryContainer
-                                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            _buildMicButton(context),
             IconButton.filledTonal(
               tooltip: l10n.recalculate,
-              onPressed: () =>
-                  _recalculateRoute(tour, force: true),
-              icon: const Icon(Icons.sync_rounded),
+              onPressed: () => _recalculateRoute(tour, force: true),
+              icon: const Icon(Icons.sync_rounded, size: 18),
             ),
           ],
         ),

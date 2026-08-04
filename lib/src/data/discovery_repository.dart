@@ -370,13 +370,13 @@ class DiscoveryRepository {
 
   String _weatherLabel(int code, bool isDay) {
     if (code == 0) return isDay ? 'Soleado' : 'Despejado';
-    if (const [1, 2, 3].contains(code)) return 'Parcial';
+    if (const [1, 2, 3].contains(code)) return isDay ? 'Soleado con nubes' : 'Parcialmente nublado';
     if (const [45, 48].contains(code)) return 'Niebla';
-    if (const [51, 53, 55, 56, 57].contains(code)) return 'Llovizna';
+    if (const [51, 53, 55, 56, 57].contains(code)) return isDay ? 'Soleado / Llovizna' : 'Llovizna';
     if (const [61, 63, 65, 66, 67, 80, 81, 82].contains(code)) return 'Lluvia';
     if (const [71, 73, 75, 77, 85, 86].contains(code)) return 'Nieve';
     if (const [95, 96, 99].contains(code)) return 'Tormenta';
-    return 'Actual';
+    return isDay ? 'Soleado' : 'Despejado';
   }
 
   NearbyPlace _nearbyPlaceFromPhotonFeature(Map<String, dynamic> feature, int index) {

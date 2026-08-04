@@ -447,27 +447,31 @@ class WeatherSnapshot {
   final bool isDay;
   final String locationName;
 
-  /// Retorna true si hay condiciones de lluvia, nieve o tormenta.
+  /// Retorna true si hay condiciones de lluvia moderada/fuerte, nieve o tormenta.
+  /// Ignores lloviznas muy ligeras cuando hace calor (>=29°C) para evitar falsos positivos tropicales.
   bool get isRainyOrStormy {
     final lowerCond = condition.toLowerCase();
-    final isRainyCode = (code >= 50 && code <= 99);
+    final isLightDrizzle = (code >= 51 && code <= 57) || lowerCond.contains('llovizna') || lowerCond.contains('drizzle');
+    if (temperatureC >= 29 && isLightDrizzle) {
+      return false;
+    }
+
+    final isRainyCode = (code >= 60 && code <= 99);
     final isRainyText = lowerCond.contains('lluvia') ||
         lowerCond.contains('rain') ||
         lowerCond.contains('storm') ||
         lowerCond.contains('tormenta') ||
-        lowerCond.contains('chubasco') ||
-        lowerCond.contains('drizzle') ||
-        lowerCond.contains('llovizna');
+        lowerCond.contains('chubasco');
     return isRainyCode || isRainyText;
   }
 
-  /// Retorna una sugerencia en español sobre tours bajo techo.
+  /// Retorna una sugerencia en español sobre tours recomendados.
   String get indoorAdvice {
     if (isRainyOrStormy) {
       return 'Lluvia o precipitación detectada. Te recomendamos explorar itinerarios bajo techo (museos, galerías y cafés).';
     }
-    if (temperatureC > 32) {
-      return 'Día caluroso. Considera visitas con aire acondicionado o itinerarios bajo sombra.';
+    if (temperatureC >= 30) {
+      return 'Día caluroso ($temperatureC°C). Considera visitas con aire acondicionado o itinerarios bajo sombra.';
     }
     return '¡Excelente clima para explorar al aire libre!';
   }

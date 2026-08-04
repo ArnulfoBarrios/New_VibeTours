@@ -220,10 +220,14 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
           : null;
       final destPos = LatLng(widget.destination.latitude, widget.destination.longitude);
 
+      final activeRemainingPoints = currentPos != null && _fullGeometry.length >= 2
+          ? _getZeroGapTrimmedGeometry(currentPos)
+          : _fullGeometry;
+
       final boundsPoints = <LatLng>[
         ?currentPos,
         destPos,
-        ..._fullGeometry,
+        ...activeRemainingPoints,
       ];
 
       if (boundsPoints.isNotEmpty) {
