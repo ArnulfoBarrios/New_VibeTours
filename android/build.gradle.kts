@@ -5,6 +5,19 @@ allprojects {
     }
 }
 
+// Automatically patch third-party plugins (google_mobile_ads) for Gradle 8+ compatibility in any environment (CI/CD / GitHub Actions)
+subprojects {
+    if (name == "google_mobile_ads") {
+        val buildFile = file("build.gradle")
+        if (buildFile.exists()) {
+            val text = buildFile.readText()
+            if (text.contains("configurations.all")) {
+                buildFile.writeText(text.replace("configurations.all", "configurations"))
+            }
+        }
+    }
+}
+
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
