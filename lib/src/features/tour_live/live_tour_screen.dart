@@ -118,6 +118,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   DateTime? _stoppedSince;
   DateTime? _lastModeSwitchAt;
   double _ttsSpeedMultiplier = 1.0;
+  bool _autoPlayProximityEnabled = true;
+  final Set<String> _autoTriggeredStopIds = {};
 
   Future<void> _updateBatterySamplingMode(double speed, double distanceToStop) async {
     final isStopped = speed < 0.5 || distanceToStop < 30.0;
@@ -842,6 +844,37 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ? Geolocator.distanceBetween(point.latitude, point.longitude, activeStopPoint.latitude, activeStopPoint.longitude)
         : double.infinity;
     _updateBatterySamplingMode(position.speed, distanceToActiveStop);
+
+    // Audioguía automática por proximidad (< 30 metros)
+    if (_autoPlayProximityEnabled && _activeStop < tour.stops.length) {
+      final currentStop = tour.stops[_activeStop];
+      if (distanceToActiveStop <= 30.0 && !_autoTriggeredStopIds.contains(currentStop.id)) {
+        _autoTriggeredStopIds.add(currentStop.id);
+        debugPrint('[ProximityTTS] Disparando narración automática para parada ${currentStop.name} (distancia: ${distanceToActiveStop.toStringAsFixed(1)}m)');
+        unawaited(
+          ref.read(voiceGuideProvider).narrateStop(
+            currentStop,
+            lang: tour.language,
+            onResolved: (name, description) {
+              if (mounted) {
+                setState(() {
+                  final updatedStops = tour.stops.map((s) {
+                    if (s.id == currentStop.id) {
+                      return s.copyWith(name: name, description: description);
+                    }
+                    return s;
+                  }).toList();
+                  final updatedTour = tour.copyWith(stops: updatedStops);
+                  _navigationTour = updatedTour;
+                  ref.read(selectedTourProvider.notifier).state = updatedTour;
+                });
+              }
+            },
+          ),
+        );
+        ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
+      }
+    }
     final route = _liveRoute;
     final distanceToRoute = route == null
         ? double.infinity
@@ -1382,6 +1415,60 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _autoPlayProximityEnabled = !_autoPlayProximityEnabled;
+                  });
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _autoPlayProximityEnabled
+                            ? 'Audioguía automática por proximidad activada'
+                            : 'Audioguía automática por proximidad desactivada',
+                      ),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _autoPlayProximityEnabled
+                        ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.85)
+                        : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _autoPlayProximityEnabled ? Icons.sensors_rounded : Icons.sensors_off_rounded,
+                        size: 18,
+                        color: _autoPlayProximityEnabled
+                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                            : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _autoPlayProximityEnabled ? 'Auto Voz' : 'Voz Manual',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: _autoPlayProximityEnabled
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -729,13 +729,25 @@ const screenshotsData = [
 ];
 
 function initScreenshotGallery() {
-  const galleryGrid = document.getElementById('galleryGrid');
-  const tabs = document.querySelectorAll('.gallery-tab');
-
-  if (!galleryGrid) return;
-
   renderGallery('all');
 
+  const toggleBtn = document.getElementById('toggleGalleryBtn');
+  const collapsibleContent = document.getElementById('galleryCollapsibleContent');
+
+  if (toggleBtn && collapsibleContent) {
+    toggleBtn.addEventListener('click', () => {
+      const isHidden = collapsibleContent.style.display === 'none';
+      if (isHidden) {
+        collapsibleContent.style.display = 'block';
+        updateToggleBtnText(true);
+      } else {
+        collapsibleContent.style.display = 'none';
+        updateToggleBtnText(false);
+      }
+    });
+  }
+
+  const tabs = document.querySelectorAll('.gallery-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
@@ -743,6 +755,16 @@ function initScreenshotGallery() {
       renderGallery(tab.dataset.category);
     });
   });
+}
+
+function updateToggleBtnText(isOpen) {
+  const toggleText = document.getElementById('toggleGalleryText');
+  if (!toggleText) return;
+  if (isOpen) {
+    toggleText.textContent = currentLandingLang === 'en' ? '✕ Hide Screenshots' : '✕ Ocultar Capturas de Pantalla';
+  } else {
+    toggleText.textContent = currentLandingLang === 'en' ? '📱 View Screenshots (59)' : '📱 Ver Capturas de Pantalla (59)';
+  }
 }
 
 function renderGallery(category) {

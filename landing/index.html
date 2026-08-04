@@ -622,22 +622,30 @@
       <p class="section-description">
         Familiarízate con las 59 pantallas reales de la aplicación. Cambia el tema a Modo Oscuro en la barra superior para ver cómo se transforma la app.
       </p>
+
+      <!-- Toggle Button to Show/Hide Screenshots -->
+      <button id="toggleGalleryBtn" class="btn btn-secondary" style="margin-top: 20px; font-weight: 600; padding: 12px 28px;">
+        <span id="toggleGalleryText">📱 Ver Capturas de Pantalla (59)</span>
+      </button>
     </div>
 
-    <!-- Category Tabs Filter -->
-    <div class="gallery-nav reveal-on-scroll delay-1">
-      <button class="gallery-tab active" data-category="all" id="tab-all">Todas</button>
-      <button class="gallery-tab" data-category="auth" id="tab-auth">Onboarding</button>
-      <button class="gallery-tab" data-category="ai" id="tab-ai">IA Assistant</button>
-      <button class="gallery-tab" data-category="explore" id="tab-explore">Exploración</button>
-      <button class="gallery-tab" data-category="tour" id="tab-tour">Tour Activo</button>
-      <button class="gallery-tab" data-category="creator" id="tab-creator">Creador</button>
-      <button class="gallery-tab" data-category="profile" id="tab-profile">Perfil</button>
-      <button class="gallery-tab" data-category="admin" id="tab-admin">Admin</button>
-    </div>
+    <!-- Collapsible Container for Screenshots Gallery -->
+    <div id="galleryCollapsibleContent" style="display: none; margin-top: 32px;">
+      <!-- Category Tabs Filter -->
+      <div class="gallery-nav reveal-on-scroll delay-1">
+        <button class="gallery-tab active" data-category="all" id="tab-all">Todas</button>
+        <button class="gallery-tab" data-category="auth" id="tab-auth">Onboarding</button>
+        <button class="gallery-tab" data-category="ai" id="tab-ai">IA Assistant</button>
+        <button class="gallery-tab" data-category="explore" id="tab-explore">Exploración</button>
+        <button class="gallery-tab" data-category="tour" id="tab-tour">Tour Activo</button>
+        <button class="gallery-tab" data-category="creator" id="tab-creator">Creador</button>
+        <button class="gallery-tab" data-category="profile" id="tab-profile">Perfil</button>
+        <button class="gallery-tab" data-category="admin" id="tab-admin">Admin</button>
+      </div>
 
-    <!-- Gallery Grid -->
-    <div id="galleryGrid" class="gallery-grid"></div>
+      <!-- Gallery Grid -->
+      <div id="galleryGrid" class="gallery-grid"></div>
+    </div>
   </section>
 
   <!-- Lightbox Modal for Screenshots -->
