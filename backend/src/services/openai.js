@@ -620,12 +620,13 @@ CRITICAL: Do NOT invent or hallucinate places that do not exist in real life. En
 
 const landmarkCache = new GeoCache(24 * 60 * 60 * 1000, 300)
 
-export async function fetchCityIconicLandmarks({ destination, city, country, type = 'cultural', interests = [], prompt = '' }) {
+export async function fetchCityIconicLandmarks({ destination, city, country, type = 'cultural', interests = [], prompt = '', durationHours = 24 }) {
   const targetCity = city || destination || ''
   const targetCountry = country || ''
   if (!targetCity) return []
 
-  const cacheKey = `landmarks_${targetCity.toLowerCase().trim()}_${targetCountry.toLowerCase().trim()}_${type}`
+  const count = (durationHours && Number(durationHours) >= 48) ? 25 : 18
+  const cacheKey = `landmarks_${targetCity.toLowerCase().trim()}_${targetCountry.toLowerCase().trim()}_${type}_${count}`
   const cached = landmarkCache.get(cacheKey)
   if (cached) return cached
 
@@ -637,12 +638,12 @@ export async function fetchCityIconicLandmarks({ destination, city, country, typ
 
   const systemPrompt = `Eres un experto mundial en geografía, viajes y turismo.
 El usuario quiere conocer la ciudad o destino "${targetCity}"${targetCountry ? ` ubicado en "${targetCountry}"` : ''}.
-Tu objetivo es listar los 10 a 15 atracciones e hitos turísticos MÁS FAMOSOS, EMBLEMÁTICOS, ICÓNICOS, CULTURALES, RECREATIVOS Y DE ENTRETENIMIENTO que existen físicamente en "${targetCity}" y sus inmediaciones inmediatas.
+Tu objetivo es listar las ${count} atracciones e hitos turísticos MÁS FAMOSOS, EMBLEMÁTICOS, ICÓNICOS, CULTURALES, RECREATIVOS Y DE ENTRETENIMIENTO que existen físicamente en "${targetCity}" y sus inmediaciones inmediatas.
 
 REGLAS CRÍTICAS DE CALIDAD TURÍSTICA:
 1. Incluye únicamente verdaderos puntos de interés turístico: monumentos célebres, malecones, plazas icónicas, miradores, museos principales, ecoparques, estadios deportivos destacados, teatros, centros comerciales emblemáticos de entretenimiento y paseos peatonales famosos.
-2. PROHIBIDO ABSOLUTAMENTE incluir: plantas industriales, zonas francas, puertos de carga, empresas o marcas corporativas, centros de bodegas, fábricas, conjuntos residenciales, urbanizaciones o corregimientos/límites vagos sin un local turístico específico.
-3. Si el usuario especificó intereses o un tema (${interests.join(', ') || prompt || type}), incluye lugares destacados relacionados a ese tema, pero siempre asegurando que sean lugares emblemáticos y turísticos reales.
+2. PROHIBIDO ABSOLUTAMENTE incluir: nombres genéricos como "Parada 1", "Parada 2", o zonas francas, empresas o fábricas.
+3. Cada hito debe tener su NOMBRE REAL Y EXACTO en la vida real.
 
 Devuelve ÚNICAMENTE un objeto JSON válido con este esquema:
 {
@@ -670,7 +671,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema:
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `List 12 iconic tourist landmarks for "${targetCity}, ${targetCountry}"` }
+          { role: 'user', content: `List ${count} distinct real iconic tourist landmarks for "${targetCity}, ${targetCountry}"` }
         ]
       }),
       signal: controller.signal

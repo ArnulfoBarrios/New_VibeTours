@@ -2273,11 +2273,18 @@ function validateTourQuality(tour, planner, input) {
 async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null) {
   const source = stop && typeof stop === 'object' ? stop : {}
   const ubicacion = source.ubicacion ?? source.locationInfo ?? {}
-  const sourceName = [source.nombre, source.name, ubicacion.nombre_lugar]
+  const candidateIndex = (index < candidatePlaces.length) ? index : (candidatePlaces.length > 0 ? (index % candidatePlaces.length) : 0)
+  const candidateFallback = candidatePlaces[candidateIndex] ?? anchorPlace ?? candidatePlaces[0] ?? null
+
+  let rawName = [source.nombre, source.name, ubicacion.nombre_lugar]
       .map((value) => value == null ? "" : value.toString().trim())
-      .find((value) => value.length > 0) ?? `${input.destination} parada ${index + 1}`
+      .find((value) => value.length > 0) ?? ''
+
+  const isGenericPlaceholder = !rawName || /parada \d+/i.test(rawName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(rawName)
+  const sourceName = isGenericPlaceholder ? (candidateFallback?.name ?? `${input.destination} ${index + 1}`) : rawName
+
   const matchedPlace = findCandidatePlace(sourceName, candidatePlaces, anchorPlace)
-  const fallbackPlace = matchedPlace ?? anchorPlace ?? null
+  const fallbackPlace = matchedPlace ?? candidateFallback ?? anchorPlace ?? null
   const startPlace = candidatePlaces[0] ?? null
   const endPlace = candidatePlaces[candidatePlaces.length - 1] ?? null
   const coordinates = await resolveStopCoordinates({
@@ -2288,7 +2295,10 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     startPlace,
     endPlace,
   })
-  const resolvedName = (coordinates.wasFallback || !matchedPlace) ? (fallbackPlace?.name ?? sourceName) : sourceName
+  let resolvedName = (coordinates.wasFallback || !matchedPlace) ? (fallbackPlace?.name ?? candidateFallback?.name ?? sourceName) : sourceName
+  if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName)) {
+    resolvedName = candidateFallback?.name || fallbackPlace?.name || `${input.destination}`
+  }
   let description = source.descripcion ?? source.description
   if (!description || description.trim().length === 0 || coordinates.wasFallback) {
     const category = fallbackPlace?.category || 'lugar'
@@ -2990,7 +3000,8 @@ export async function collectTourCandidates(input, location) {
     country,
     type: input.type,
     interests: input.touristInterests,
-    prompt: input.prompt
+    prompt: input.prompt,
+    durationHours: input.durationHours
   })
 
   let geocodedIconics = []
