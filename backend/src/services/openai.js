@@ -291,8 +291,10 @@ export async function planWithOpenAI({
   recommendedSchedule = '',
   timeProfile = {},
   selectedHotel = null,
+  webSearchSummary = '',
+  userPreferences = {}
 }) {
-  const cacheKey = `plan_${destination}_${city}_${country}_${type}_${durationHours}_${language}_${selectedHotel?.name ?? ''}`
+  const cacheKey = `plan_${destination}_${city}_${country}_${type}_${durationHours}_${language}_${selectedHotel?.name ?? ''}_${userPreferences.companions ?? ''}_${userPreferences.budget ?? ''}`
   const cached = planCache.get(cacheKey)
   if (cached) {
     console.info('[openai] Returning cached tour plan from GeoCache')
@@ -312,28 +314,24 @@ export async function planWithOpenAI({
 
 Tu respuesta debe ser siempre un unico objeto JSON valido. No agregues markdown, comentarios, etiquetas, explicaciones ni texto fuera del JSON.
 
-Reglas centrales:
-- Crea experiencias inmersivas y altamente atractivas. ¡No seas aburrido, estándar ni monótono!
-- Prioriza obligatoriamente Puntos de Interés (POIs) turísticos altamente populares, icónicos reales, sitios históricos verificables y joyas turísticas reales. La lista de lugares (selectedPlaces) que recibes representa los puntos más populares, emblemáticos y mejor calificados de la ciudad. Destaca siempre su carácter emblemático, historia y valor cultural en la narración.
-- Si la petición del usuario es abierta o general, enfoca el tour como un recorrido clásico e imprescindible por la esencia misma de la ciudad, resaltando por qué cada parada es legendaria. Si la petición es específica, enfoca la narrativa en torno a ese tema de interés, seleccionando lo mejor y más selecto.
-- PROHIBIDO INVENTAR: No alucines, no inventes monumentos, museos, restaurantes ni direcciones que no existan en la vida real. Si no conoces una dirección exacta, deja el campo vacío en vez de inventar.
-- No uses coordenadas geográficas en el JSON.
+REGLAS CRÍTICAS DE BALANCE DUAL (ICÓNICO + PREFERENCIAS):
+- BALANCE PERFECTO: Combina las atracciones turísticas MÁS EMBLEMÁTICAS, FAMOSAS Y POPULARES de la ciudad (los lugares imperdibles) con las preferencias específicas indicadas por el usuario.
+- ADAPTACIÓN A LAS RESPUESTAS DEL USUARIO:
+  * Acompañantes (${userPreferences.companions || 'no especificado'}): Si viaja con niños o personas mayores, adapta el ritmo, incluye consejos de sombras/descansos y facilidades para niños.
+  * Presupuesto (${userPreferences.budget || 'Moderado'}): Ajusta las actividades, entradas recomendadas y sugerencias gastronómicas al nivel de presupuesto del usuario.
+  * Transporte (${userPreferences.transport || 'Caminando/Auto'}): Detalla instrucciones de traslado según el medio de transporte preferido.
+  * Fechas/Época (${userPreferences.datesSeason || 'Temporada habitual'}): Integra eventos reales, clima y consejos según la temporada indicada.
+  * Hospedaje (${userPreferences.accommodationStatus || 'Sin especificar'}): Si hay hotel seleccionado o punto de encuentro, inicia o finaliza el recorrido allí.
+  * Lugares específicos solicitados (${(userPreferences.specificPlaces || []).join(', ') || 'ninguno'}): DEBEN estar obligatoriamente en las paradas del tour.
+
+${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB (Eventos, Clima, Precios reales):\n${webSearchSummary}\n` : ''}
+
+REGLAS DE CONTENIDO:
+- PROHIBIDO INVENTAR: No alucines lugares inexistentes.
 - Escribe en ${language}.
-- CRÍTICO: La descripción general del tour ("descripcion_tour") debe atrapar al usuario desde la primera línea, tener 150 a 300 palabras, y explicar la vibra de la experiencia.
 - CRÍTICO GUÍA DE VOZ INMERSIVA: Cada descripción de parada ("descripcion") DEBE ser una guía de voz completa y envolvente de 80 a 120 palabras. Escribe como si fueras un guía local experto hablando en vivo al oído del turista. Narra la historia fascinante del sitio, los detalles arquitectónicos o naturales que tiene enfrente, anécdotas culturales únicas y sugerencias de 'Qué hacer o qué probar aquí'.
-- CRÍTICO CADA PARADA ES ÚNICA: PROHIBIDO ABSOLUTAMENTE copiar y pegar descripciones, actividades o consejos genéricos en las paradas. Para CADA parada individual en el itinerario:
-  * "descripcion": Narración de 80 a 120 palabras sobre la historia y contexto específico de ESE sitio.
-  * "actividades": Array de 2 a 4 actividades específicas y reales que se pueden realizar en ESE sitio en particular (ejemplo: "Caminar por la pasarela peatonal", "Visitar la sala de lectura principal"). NUNCA uses etiquetas genéricas sueltas como "Explorar" o "Fotografiar".
-  * "consejos": Array de 2 a 3 recomendaciones prácticas y valiosas redactadas específicamente para ESE sitio (ejemplo: "Reserva tus entradas con anticipación", "Toma fotos desde la escalinata de mármol"). NUNCA uses avisos genéricos como "Confirma horarios locales antes de llegar".
-- CRÍTICO: El array de salida "itinerario" debe tener EXACTAMENTE la misma longitud que la lista de lugares seleccionados (selectedPlaces) que recibes. Debes procesar y describir una por una todas las paradas provistas, sin omitir absolutamente ninguna. Si el array selectedPlaces contiene 6 elementos, tu array "itinerario" de salida debe contener exactamente 6 elementos correspondientes, en el mismo orden. No agrupas ni omites nada.
-- COBERTURA REGIONAL: No te limites únicamente al centro urbano geocodificado de la ciudad principal. Cuando los lugares seleccionados estén ubicados en los alrededores, debes tejer una ruta regional coherente y atractiva que los integre.
-- DETALLE DE TRANSPORTE ESPECIAL: Para aquellas paradas que se encuentren alejadas del centro de la ciudad o requieran un traslado no convencional, DEBES detallar de manera obligatoria y explícita en su descripción el método de transporte necesario y sugerido para llegar allí.
-- CRÍTICO: Prohibido usar frases genéricas de transición como "En esta parada...", "Aquí puedes observar...", "Ahora llegamos a...". Usa un Storytelling dinámico.
-- Cada parada debe incluir actividades específicas reales, 2 a 5 datos curiosos históricos o culturales verificados y consejos prácticos útiles.
-- Ten en cuenta el perfil del viajero cuando exista: ${touristProfileSummary || 'sin perfil adicional'}.
-- Intereses del viajero: ${touristInterests.length ? touristInterests.join(', ') : 'no especificados'}.
-- Ritmo preferido: ${touristPace}.
-- Estima un presupuesto realista en USD.`
+- CRÍTICO CADA PARADA ES ÚNICA: PROHIBIDO copiar y pegar descripciones o consejos genéricos.
+- El array de salida "itinerario" debe tener EXACTAMENTE la misma longitud que la lista de lugares seleccionados (selectedPlaces) que recibes.`
 
   if (selectedHotel && selectedHotel.name) {
     system += `\n- CRÍTICO: El turista se hospedará o iniciará en el hotel: "${selectedHotel.name}". El "punto_encuentro" (meetingPoint) del tour DEBE ser obligatoriamente este hotel y debes integrarlo de manera relevante al inicio del itinerario.`
@@ -503,14 +501,46 @@ Input: ${JSON.stringify(routeBrief)}`,
   return null
 }
 
-export async function extractChatInformation(userMessage, currentData) {
+export async function extractChatInformation(userMessage, currentData = {}) {
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return null
+  if (!apiKey) return extractChatInformationFallback(userMessage)
 
-  const prompt = `Analiza el mensaje del usuario y extrae la información turística.
-Devuelve ÚNICAMENTE un objeto JSON válido con los campos que puedas identificar.
-Campos posibles: city, budget (Económico, Moderado, Lujo), travelers (Solo, Pareja, Amigos, Familia), hasMinors (boolean), duration (1 a 7 días), pace (Relajado, Equilibrado, Acelerado), schedule (Mañana, Tarde, Noche, Dinámico), transportation (Caminando, Auto rentado, Taxi, Transporte público), interests (array de strings), wantsHotel (boolean), originPlace (string o null, ej: punto o lugar específico de inicio de la ruta, o "user_current_location" si pide empezar desde su ubicación), destinationPlace (string o null, ej: punto o lugar específico final de la ruta), isUserLocationOrigin (boolean, true si pide iniciar desde su ubicación actual/donde está).
-Mensaje: "${userMessage}"`
+  const prompt = `Analiza el mensaje del usuario e identifica las preferencias turísticas para planificar su tour.
+Devuelve ÚNICAMENTE un objeto JSON válido con los campos que logres identificar (mantén los campos no mencionados como null).
+
+CAMPOS Y REGLAS DE INTERPRETACIÓN DE LENGUAJE NATURAL E INFORMAL:
+1. "destination" / "city": Nombre de la ciudad o lugar de destino.
+2. "datesSeason": Fechas, mes o época del viaje (ej: "Diciembre", "Vacaciones de julio", "Próximo fin de semana", "Semana Santa", "Verano").
+3. "durationDays" (número): Días de duración del tour.
+   REGLAS CRÍTICAS DE CONTEXTO INFORMAL:
+   - "un fin de semana" ➔ 2
+   - "un fin de semana con puente", "puente festivo", "un puente" ➔ 3
+   - "un par de días" ➔ 2
+   - "una semanita", "una semana" ➔ 7
+   - "un día", "un día completo" ➔ 1
+   - "3 días", "4 días", etc. ➔ El número indicado.
+4. "companions": Tipo de acompañantes. Valores posibles: "Solo", "Pareja", "Familia con niños", "Amigos", "Grupo".
+   - "con mis hijos", "con los niños", "con mi familia y niños" ➔ "Familia con niños"
+   - "con mi esposo/a", "con mi novia/o", "con mi pareja" ➔ "Pareja"
+   - "solo", "conmigo mismo" ➔ "Solo"
+   - "con amigos", "con los panas", "con parceros" ➔ "Amigos"
+5. "hasChildren" (boolean): true si viaja con niños o menores de edad.
+6. "budget": Presupuesto. Valores: "Económico", "Moderado", "Lujo".
+   - "quiero ahorrar", "poco dinero", "barato", "económico" ➔ "Económico"
+   - "sin escatimar", "de lujo", "cinco estrellas", "alto" ➔ "Lujo"
+   - "normal", "moderado", "estándar" ➔ "Moderado"
+7. "transport": Medio de transporte preferido durante el tour: "Caminando", "Transporte público", "Auto rentado", "Taxi/Uber".
+   - "a pie", "caminando" ➔ "Caminando"
+   - "en bus", "en metro", "transporte público" ➔ "Transporte público"
+   - "en carro", "auto propio", "auto rentado" ➔ "Auto rentado"
+   - "en taxi", "uber", "cabify" ➔ "Taxi/Uber"
+8. "accommodationStatus": Estado de hospedaje: "Ya posee hospedaje", "Quiere buscar hospedaje".
+   - "ya tengo hotel", "me quedo en casa de familiar", "ya tengo hospedaje" ➔ "Ya posee hospedaje"
+   - "necesito hotel", "quiero recomendaciones de hotel", "no tengo hotel" ➔ "Quiere buscar hospedaje"
+9. "specificPlaces" (array de strings): Nombres de atracciones o lugares específicos que el usuario expresamente quiere visitar (ej: ["Castillo de San Felipe", "Playa Blanca"]).
+10. "interests" (array de strings): Intereses (ej: ["gastronomía", "cultura", "naturaleza", "playa", "historia"]).
+
+Mensaje del usuario: "${userMessage}"`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -523,25 +553,115 @@ Mensaje: "${userMessage}"`
       })
     })
     const json = await response.json()
-    return JSON.parse(json.choices?.[0]?.message?.content ?? '{}')
+    const parsed = JSON.parse(json.choices?.[0]?.message?.content ?? '{}')
+    
+    // Normalización de duración en horas si se extrajo en días
+    if (typeof parsed.durationDays === 'number' && parsed.durationDays > 0) {
+      parsed.durationHours = parsed.durationDays >= 2 ? parsed.durationDays * 24 : 8
+    }
+
+    if (parsed.companions === 'Familia con niños') {
+      parsed.hasChildren = true
+    }
+
+    return parsed
   } catch (err) {
     console.error('[openai] extract error:', err)
-    return null
+    return extractChatInformationFallback(userMessage)
   }
 }
 
-export async function generateChatResponse(state, backendInstruction) {
+export function extractChatInformationFallback(prompt) {
+  if (!prompt || typeof prompt !== 'string') return {}
+  const lower = prompt.toLowerCase()
+  const result = {}
+
+  if (/\b(fin de semana con puente|puente festivo|fin de semana largo)\b/i.test(lower)) {
+    result.durationDays = 3
+    result.durationHours = 72
+  } else if (/\b(fin de semana|un par de d[íi]as)\b/i.test(lower)) {
+    result.durationDays = 2
+    result.durationHours = 48
+  } else if (/\b(semanita|una semana)\b/i.test(lower)) {
+    result.durationDays = 7
+    result.durationHours = 168
+  }
+
+  if (/\b(ni[ñn]o|ni[ñn]as|hijo|hijas|bebe|familia)\b/i.test(lower)) {
+    result.companions = 'Familia con niños'
+    result.hasChildren = true
+  } else if (/\b(pareja|esposo|esposa|novio|novia)\b/i.test(lower)) {
+    result.companions = 'Pareja'
+  } else if (/\b(amigos|parceros|panas|grupo)\b/i.test(lower)) {
+    result.companions = 'Amigos'
+  } else if (/\b(solo|conmigo)\b/i.test(lower)) {
+    result.companions = 'Solo'
+  }
+
+  if (/\b(ahorrar|econ[oó]mico|barato|poco presupuesto)\b/i.test(lower)) {
+    result.budget = 'Económico'
+  } else if (/\b(lujo|sin escatimar|5 estrellas|cinco estrellas)\b/i.test(lower)) {
+    result.budget = 'Lujo'
+  }
+
+  if (/\b(caminando|a pie)\b/i.test(lower)) {
+    result.transport = 'Caminando'
+  } else if (/\b(carro|auto|veh[íi]culo)\b/i.test(lower)) {
+    result.transport = 'Auto rentado'
+  } else if (/\b(bus|metro|p[úu]blico)\b/i.test(lower)) {
+    result.transport = 'Transporte público'
+  } else if (/\b(taxi|uber|cabify)\b/i.test(lower)) {
+    result.transport = 'Taxi/Uber'
+  }
+
+  if (/\b(tengo (hotel|hospedaje|casa)|quedarme en)\b/i.test(lower)) {
+    result.accommodationStatus = 'Ya posee hospedaje'
+  } else if (/\b(buscar (hotel|hospedaje)|recomienda (hotel|hospedaje))\b/i.test(lower)) {
+    result.accommodationStatus = 'Quiere buscar hospedaje'
+  }
+
+  return result
+}
+
+export async function generateChatResponse(state, backendInstruction, webSearchSummary = '') {
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return 'Error de conexión con IA.'
+  if (!apiKey) return {
+    responseMessage: '¡Hola! Qué gusto saludarte. Cuéntame: ¿a qué ciudad te gustaría viajar?',
+    actionChips: ['Cartagena', 'Medellín', 'Santa Marta'],
+    readyToBuild: false
+  }
 
-  const systemPrompt = `Eres Tour Planner AI, asistente experto en diseño de tours personalizados.
-Tu única función es conversar con el usuario para recolectar datos y diseñar su viaje basado en información real.
-No eres un chatbot general. Nunca respondas temas políticos, programación, matemáticas, medicina o personales.
-Si intenta cambiar de tema responde: "Soy un asistente especializado en la planificación de tours. Puedo ayudarte a diseñar viajes."
-INSTRUCCIÓN DEL SISTEMA (CRÍTICA): ${backendInstruction}`
+  const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual de VibeTours.
+Tu personalidad es EXTREMADAMENTE CORDIAL, CÁLIDA, EMPÁTICA Y ENTUSIASTA. Saluda amablemente al usuario, celebra sus elecciones con frases entusiastas (ej: "¡Excelente elección!", "¡Ese destino es maravilloso!", "¡Viajar en familia siempre es algo mágico!").
 
-  // Solo enviamos los últimos 3 mensajes para ahorrar tokens
-  const recentHistory = state.history.slice(-3).map(m => ({ role: m.role, content: m.content }))
+OBJETIVO PRINCIPAL:
+Guiar amablemente al usuario para conocer los detalles de su viaje antes de diseñar el tour perfecto.
+
+REGLAS DE COMPORTAMIENTO CORDIAL:
+1. SIEMPRE agradece o haz un comentario amigable sobre lo que el usuario acaba de responder.
+2. Mantén un tono servicial y profesional pero muy cercano y humano.
+3. Si el usuario hace preguntas o dudas sobre el viaje, respóndelas amablemente usando la información disponible o de búsqueda web.
+4. Si falta información relevante, realiza amablemente la SIGUIENTE pregunta de las 8 preguntas fundamentales:
+   - 📍 ¿A qué ciudad o lugar te gustaría ir?
+   - 📅 ¿En qué fechas, mes o época del año planeas viajar?
+   - ⏳ ¿Cuántos días va a durar tu tour? (Acepta respuestas informales como "un fin de semana con puente", "un par de días", etc.)
+   - 👥 ¿Viajarás solo, en pareja, con amigos o en familia con niños?
+   - 💰 ¿Qué estilo de presupuesto tienes en mente? (Económico, Moderado, Lujo)
+   - 🚗 ¿Cómo prefieres moverte durante el tour? (Caminando, Transporte público, Auto rentado, Taxi)
+   - 🏨 ¿Ya tienes hospedaje reservado o deseas que te recomendemos opciones de hotel?
+   - 🎯 ¿Hay algún lugar o atracción específica en la ciudad que sí o sí quieras visitar?
+
+${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}\n` : ''}
+${backendInstruction ? `INSTRUCCIÓN DEL SISTEMA:\n${backendInstruction}\n` : ''}
+
+IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
+{
+  "responseMessage": "Tu mensaje amigable, ameno y cordial para el usuario.",
+  "actionChips": ["Sugerencia 1", "Sugerencia 2", "Sugerencia 3"],
+  "readyToBuild": boolean (true solo cuando ya tenemos al menos ciudad/destino y duración razonable o cuando el usuario pida generar el tour)
+}`
+
+  const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -549,14 +669,20 @@ INSTRUCCIÓN DEL SISTEMA (CRÍTICA): ${backendInstruction}`
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
         messages: [{ role: 'system', content: systemPrompt }, ...recentHistory]
       })
     })
     const json = await response.json()
-    return json.choices?.[0]?.message?.content ?? 'Lo siento, no pude procesar tu solicitud.'
+    const content = json.choices?.[0]?.message?.content ?? '{}'
+    return JSON.parse(content)
   } catch (err) {
     console.error('[openai] chat response error:', err)
-    return 'Lo siento, ha ocurrido un error al conectar con la IA.'
+    return {
+      responseMessage: '¡Hola! Qué gusto saludarte. Tuve un pequeño inconveniente de conexión, pero cuéntame: ¿a dónde te gustaría viajar hoy?',
+      actionChips: ['Cartagena', 'Medellín', 'Santa Marta'],
+      readyToBuild: false
+    }
   }
 }
 

@@ -1478,20 +1478,30 @@ class _StopTile extends StatelessWidget {
                 ),
                 if (stop.isFallbackImage)
                   Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
+                    bottom: 2,
+                    left: 2,
+                    right: 2,
                     child: Container(
-                      color: Colors.black54,
-                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xC0000000),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
                       alignment: Alignment.center,
-                      child: const Text(
-                        'Demo',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.info_outline, color: Colors.amber, size: 10),
+                          SizedBox(width: 2),
+                          Text(
+                            'Foto demo',
+                            style: TextStyle(
+                              color: Colors.amber,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

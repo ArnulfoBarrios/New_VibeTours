@@ -4,7 +4,8 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse } from '../services/openai.js'
+import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 
 export const aiRouter = Router()
@@ -43,6 +44,70 @@ const requestSchema = z.object({
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   budget: z.string().optional()
+})
+
+aiRouter.post('/chat', async (req, res, next) => {
+  try {
+    const chatSchema = z.object({
+      message: z.string(),
+      history: z.array(z.object({ role: z.string(), content: z.string() })).optional().default([]),
+      currentPreferences: z.record(z.any()).optional().default({})
+    })
+    const { message, history, currentPreferences } = chatSchema.parse(req.body)
+
+    // 1. Extraer preferencias del último mensaje del usuario usando LLM + Fallback
+    const extracted = await extractChatInformation(message, currentPreferences)
+    const updatedPreferences = {
+      ...currentPreferences,
+      ...(extracted || {})
+    }
+
+    // Si hay objetos vacíos o nulos, limpiarlos
+    Object.keys(updatedPreferences).forEach(key => {
+      if (updatedPreferences[key] === null || updatedPreferences[key] === undefined) {
+        delete updatedPreferences[key]
+      }
+    })
+
+    // 2. Si el usuario ya proporcionó una ciudad o destino, realizar búsqueda en vivo en la web (Tavily/DDG)
+    let webSearchResult = null
+    const dest = updatedPreferences.city || updatedPreferences.destination
+    if (dest) {
+      webSearchResult = await searchWebForTravel({
+        city: dest,
+        destination: dest,
+        country: updatedPreferences.country || '',
+        dates: updatedPreferences.datesSeason || ''
+      }).catch(err => {
+        console.warn('[ai/chat] web search failed:', err.message)
+        return null
+      })
+    }
+
+    // 3. Generar respuesta conversacional amigable y cordial con la IA
+    const chatState = {
+      history: [
+        ...history,
+        { role: 'user', content: message }
+      ]
+    }
+
+    const aiResponse = await generateChatResponse(
+      chatState,
+      `Preferencias del usuario acumuladas: ${JSON.stringify(updatedPreferences)}`,
+      webSearchResult?.summary || ''
+    )
+
+    res.json({
+      responseMessage: aiResponse.responseMessage,
+      actionChips: aiResponse.actionChips || [],
+      readyToBuild: Boolean(aiResponse.readyToBuild),
+      preferences: updatedPreferences,
+      webSearchDone: Boolean(webSearchResult)
+    })
+  } catch (error) {
+    next(error)
+  }
 })
 
 aiRouter.post('/tours/confirm', async (req, res, next) => {
@@ -702,12 +767,22 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       if (!shouldAskOllama) {
         console.info('[tour-ai] openai-skipped (build)')
       } else {
+        const dest = input.city || input.destination
+        const webSearchResult = await searchWebForTravel({
+          city: dest,
+          destination: dest,
+          country: input.country || '',
+          dates: plannerContext?.datesSeason || ''
+        }).catch(() => null)
+
         ollama = await planWithOpenAI({
           ...input,
           places: planner.selectedPlaces,
           recommendedSchedule: planner.recommendedSchedule,
           timeProfile: planner.timeProfile,
           selectedHotel: plannerContext?.selectedHotel,
+          webSearchSummary: webSearchResult?.summary || '',
+          userPreferences: plannerContext || {},
           sourceSummary: { location: null, candidateSource: 'user-confirmed', candidateCount: confirmedPlaces.length, selectedCount: confirmedPlaces.length },
         })
       }

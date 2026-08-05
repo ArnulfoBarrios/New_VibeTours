@@ -280,6 +280,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       ),
       body: Column(
         children: [
+          _buildPreferencesSummaryBar(builderState),
           Expanded(
             child: ListView(
               controller: _scrollController,
@@ -307,6 +308,108 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             ),
           ),
           _buildInputArea(builderState.isLoading || builderState.isBuilding),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreferencesSummaryBar(AiBuilderState state) {
+    final prefs = state.preferences;
+    if (prefs.isEmpty && !state.webSearchDone) return const SizedBox.shrink();
+
+    final city = prefs['city'] ?? prefs['destination'];
+    final datesSeason = prefs['datesSeason'];
+    final durationDays = prefs['durationDays'] ?? (prefs['durationHours'] != null ? (prefs['durationHours'] / 24.0).toStringAsFixed(0) : null);
+    final companions = prefs['companions'];
+    final budget = prefs['budget'];
+    final transport = prefs['transport'];
+    final accommodation = prefs['accommodationStatus'];
+    final specificPlaces = prefs['specificPlaces'] is List ? (prefs['specificPlaces'] as List).join(', ') : prefs['specificPlaces'];
+
+    final items = <Map<String, dynamic>>[];
+    if (city != null && city.toString().isNotEmpty) items.add({'icon': Icons.location_on_rounded, 'label': 'Destino: $city', 'color': Colors.blue});
+    if (datesSeason != null && datesSeason.toString().isNotEmpty) items.add({'icon': Icons.calendar_month_rounded, 'label': '$datesSeason', 'color': Colors.purple});
+    if (durationDays != null && durationDays.toString().isNotEmpty) items.add({'icon': Icons.timer_rounded, 'label': '$durationDays día(s)', 'color': Colors.amber.shade800});
+    if (companions != null && companions.toString().isNotEmpty) items.add({'icon': Icons.people_rounded, 'label': '$companions', 'color': Colors.teal});
+    if (budget != null && budget.toString().isNotEmpty) items.add({'icon': Icons.account_balance_wallet_rounded, 'label': 'Presupuesto: $budget', 'color': Colors.green});
+    if (transport != null && transport.toString().isNotEmpty) items.add({'icon': Icons.directions_car_rounded, 'label': '$transport', 'color': Colors.indigo});
+    if (accommodation != null && accommodation.toString().isNotEmpty) items.add({'icon': Icons.hotel_rounded, 'label': '$accommodation', 'color': Colors.deepOrange});
+    if (specificPlaces != null && specificPlaces.toString().isNotEmpty) items.add({'icon': Icons.star_rounded, 'label': 'Lugar: $specificPlaces', 'color': Colors.pink});
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Resumen de tu viaje',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
+              ),
+              const Spacer(),
+              if (state.webSearchDone) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.language_rounded, size: 12, color: Colors.green.shade700),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Web Search Activa',
+                        style: TextStyle(fontSize: 10, color: Colors.green.shade800, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (items.isEmpty)
+            Text(
+              'La IA adaptará el tour a medida que respondas...',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: items.map((item) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: (item['color'] as Color).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: (item['color'] as Color).withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(item['icon'] as IconData, size: 14, color: item['color'] as Color),
+                          const SizedBox(width: 6),
+                          Text(
+                            item['label'] as String,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: item['color'] as Color),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
         ],
       ),
     );
@@ -420,7 +523,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   ],
                 ),
                 child: const Text(
-                  '¡Hola! Soy Tour Planner AI 🤖\n\nCuéntame qué tipo de tour tienes en mente y crearé una experiencia única para ti.',
+                  '¡Hola! Qué gusto saludarte. Soy Tour Planner AI 🤖, tu asistente personal de viajes en VibeTours.\n\nEstoy aquí para diseñar un tour increíble adaptado a tus fechas, acompañantes, presupuesto y gustos. Cuéntame: ¿a qué ciudad o lugar te gustaría viajar hoy?',
                   style: TextStyle(fontSize: 15, height: 1.4),
                 ),
               ),

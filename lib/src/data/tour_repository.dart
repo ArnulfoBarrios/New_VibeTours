@@ -716,7 +716,7 @@ class TourRepository {
           30,
         ),
         order: entry.key,
-        isFallbackImage: item['isFallbackImage'] == true,
+        isFallbackImage: item['isFallbackImage'] == true || item['is_fallback_image'] == true,
       );
     }).toList();
     final gallery = _stringList(json['galeria_tour'] ?? json['gallery']);
@@ -880,7 +880,7 @@ class TourRepository {
           }
         }
       }
-      return stop.copyWith(imageUrl: img);
+      return stop.copyWith(imageUrl: img, isFallbackImage: isGeneric || stop.isFallbackImage);
     }).toList();
 
     final meetingInfo = _locationInfo(source['punto_encuentro'], _emptyRequest);

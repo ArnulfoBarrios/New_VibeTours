@@ -163,6 +163,7 @@ class TourStop {
     String? imageUrl,
     String? description,
     int? order,
+    bool? isFallbackImage,
   }) => TourStop(
     id: id,
     name: name ?? this.name,
@@ -177,7 +178,7 @@ class TourStop {
     locationInfo: locationInfo,
     images: images,
     day: day,
-    isFallbackImage: isFallbackImage,
+    isFallbackImage: isFallbackImage ?? this.isFallbackImage,
   );
 
   Map<String, dynamic> toCreationJson(int index) => {

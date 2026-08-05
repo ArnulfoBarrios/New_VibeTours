@@ -25,6 +25,8 @@ class AiBuilderState {
     this.needsBudget = false,
     this.needsDuration = false,
     this.selectedHotel,
+    this.preferences = const {},
+    this.webSearchDone = false,
   });
 
   final bool isLoading;
@@ -44,6 +46,8 @@ class AiBuilderState {
   final bool needsBudget;
   final bool needsDuration;
   final Map<String, dynamic>? selectedHotel;
+  final Map<String, dynamic> preferences;
+  final bool webSearchDone;
 
   AiBuilderState copyWith({
     bool? isLoading,
@@ -63,6 +67,8 @@ class AiBuilderState {
     bool? needsBudget,
     bool? needsDuration,
     Map<String, dynamic>? selectedHotel,
+    Map<String, dynamic>? preferences,
+    bool? webSearchDone,
   }) {
     return AiBuilderState(
       isLoading: isLoading ?? this.isLoading,
@@ -82,6 +88,8 @@ class AiBuilderState {
       needsBudget: needsBudget ?? this.needsBudget,
       needsDuration: needsDuration ?? this.needsDuration,
       selectedHotel: selectedHotel ?? this.selectedHotel,
+      preferences: preferences ?? this.preferences,
+      webSearchDone: webSearchDone ?? this.webSearchDone,
     );
   }
 
@@ -104,6 +112,8 @@ class AiBuilderState {
       needsBudget: needsBudget,
       needsDuration: needsDuration,
       selectedHotel: hotel,
+      preferences: preferences,
+      webSearchDone: webSearchDone,
     );
   }
 }
@@ -167,79 +177,93 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     state = state.copyWith(
       messages: [...state.messages, userMsg],
       isTyping: true,
+      error: null,
     );
 
-    AiTourRequest request;
-    if (state.needsDestination && state.request != null) {
-      request = state.request!.copyWith(
-        prompt: '${state.request!.prompt}\n$text',
-        destination: text,
-        city: text,
-      );
-    } else if (state.needsDuration && state.request != null) {
-      final daysMatch = RegExp(r'(\d+)\s*d[íi]as?', caseSensitive: false).firstMatch(text);
-      if (daysMatch != null) {
-        final days = int.tryParse(daysMatch.group(1) ?? '');
-        if (days != null && days > 14) {
-          final aiMsg = ChatMessage(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            text: 'El límite máximo permitido para la duración de un tour es de 14 días. Por favor ingresa una duración entre 1 y 14 días.',
-            type: ChatMessageType.ai,
-            timestamp: DateTime.now(),
-          );
-          state = state.copyWith(
-            isTyping: false,
-            messages: [...state.messages, aiMsg],
-          );
-          return;
+    // Preparar historial reciente para el backend
+    final history = state.messages.map((m) => {
+      'role': m.isUser ? 'user' : 'assistant',
+      'content': m.text,
+    }).toList();
+
+    try {
+      final response = await _postJson('/ai/chat', {
+        'message': text,
+        'history': history,
+        'currentPreferences': state.preferences,
+      });
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final responseMessage = data['responseMessage'] as String? ?? '¡Excelente!';
+        final actionChips = (data['actionChips'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        final updatedPreferences = data['preferences'] as Map<String, dynamic>? ?? state.preferences;
+        final readyToBuild = data['readyToBuild'] == true;
+        final webSearchDone = data['webSearchDone'] == true;
+
+        final aiMsg = ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: responseMessage,
+          type: ChatMessageType.ai,
+          timestamp: DateTime.now(),
+          actionChips: actionChips.isNotEmpty ? actionChips : null,
+        );
+
+        state = state.copyWith(
+          isTyping: false,
+          messages: [...state.messages, aiMsg],
+          preferences: updatedPreferences,
+          webSearchDone: webSearchDone,
+        );
+
+        // Si el backend considera que ya tenemos la información suficiente o el usuario lo pide
+        if (readyToBuild || text.toLowerCase().contains('generar tour') || text.toLowerCase().contains('crear tour')) {
+          final dest = updatedPreferences['city'] ?? updatedPreferences['destination'] ?? '';
+          if (dest.toString().isNotEmpty) {
+            final profile = ref.read(touristProfileProvider).valueOrNull ?? TouristProfileV2.empty;
+            final summary = TouristProfileV2.generateSummary(
+              travelerType: profile.travelerType,
+              budget: profile.budget,
+              companionType: profile.companionType,
+              hasChildren: profile.hasChildren,
+              interests: profile.interests,
+              preferredPace: profile.preferredPace,
+            );
+
+            final numDays = (updatedPreferences['durationDays'] as num?)?.toDouble() ?? 1.0;
+            final durHours = (updatedPreferences['durationHours'] as num?)?.toDouble() ?? (numDays >= 2 ? numDays * 24 : 8.0);
+
+            final request = AiTourRequest(
+              prompt: text,
+              destination: dest.toString(),
+              country: updatedPreferences['country']?.toString() ?? '',
+              city: dest.toString(),
+              type: TourType.custom,
+              durationHours: durHours,
+              language: 'es',
+              touristProfileSummary: summary,
+              touristInterests: profile.interests.map((e) => e.translationKey).toList(),
+              touristPace: profile.preferredPace,
+              latitude: lat,
+              longitude: lon,
+              budget: updatedPreferences['budget']?.toString(),
+            );
+
+            await startPlanning(request);
+          }
         }
-        if (state.request!.isMultiCity && days != null && days < 2) {
-          final aiMsg = ChatMessage(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            text: 'Para recorridos entre varias ciudades no es recomendable 1 día. Por favor ingresa una duración de mínimo 2 días.',
-            type: ChatMessageType.ai,
-            timestamp: DateTime.now(),
-          );
-          state = state.copyWith(
-            isTyping: false,
-            messages: [...state.messages, aiMsg],
-          );
-          return;
-        }
+      } else {
+        state = state.copyWith(
+          isTyping: false,
+          error: 'Error ${response.statusCode} al conectar con el asistente.',
+        );
       }
-
-      request = state.request!.copyWith(
-        prompt: '${state.request!.prompt}\n$text',
-        durationHours: null, // will be parsed on backend
-      );
-    } else {
-      final profile = ref.read(touristProfileProvider).valueOrNull ?? TouristProfileV2.empty;
-      final summary = TouristProfileV2.generateSummary(
-        travelerType: profile.travelerType,
-        budget: profile.budget,
-        companionType: profile.companionType,
-        hasChildren: profile.hasChildren,
-        interests: profile.interests,
-        preferredPace: profile.preferredPace,
-      );
-
-      request = AiTourRequest(
-        prompt: text,
-        destination: '',
-        country: '',
-        city: '',
-        type: TourType.custom,
-        durationHours: null, // default to null to trigger prompt if absent
-        language: 'es',
-        touristProfileSummary: summary,
-        touristInterests: profile.interests.map((e) => e.translationKey).toList(),
-        touristPace: profile.preferredPace,
-        latitude: lat,
-        longitude: lon,
+    } catch (e) {
+      state = state.copyWith(
+        isTyping: false,
+        error: _friendlyError(e),
       );
     }
-    
-    await startPlanning(request);
   }
 
   Future<void> startPlanning(AiTourRequest request) async {
@@ -601,6 +625,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         'places': state.recommendations.map((e) => e.toJson()).toList(),
         'plannerContext': {
           ...?state.plannerContext,
+          ...state.preferences,
           if (state.selectedHotel != null) 'selectedHotel': state.selectedHotel,
         },
       });

@@ -67,11 +67,16 @@ class AdService {
   }
 
   /// Initializes MobileAds SDK
-  Future<void> initialize() async {
+  Future<void> initialize({List<String>? testDeviceIds}) async {
     if (_isInitialized) return;
 
     try {
       await MobileAds.instance.initialize();
+      if (testDeviceIds != null && testDeviceIds.isNotEmpty) {
+        await MobileAds.instance.updateRequestConfiguration(
+          RequestConfiguration(testDeviceIds: testDeviceIds),
+        );
+      }
       _isInitialized = true;
       if (kDebugMode) {
         print('[AdService] Google Mobile Ads initialized successfully.');
