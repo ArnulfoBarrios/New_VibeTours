@@ -35,6 +35,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   
   bool _isRecording = false;
   bool _isStartingVoice = false;
+  String? _voiceFeedback;
+  bool _voiceFeedbackIsError = false;
   String _baselinePrompt = '';
   String _accumulatedVoiceText = '';
   bool _ignoreVoiceResults = false;
