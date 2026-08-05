@@ -35,9 +35,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   
   bool _isRecording = false;
   bool _isStartingVoice = false;
-  String? _voiceFeedback;
-  bool _voiceFeedbackIsError = false;
   String _baselinePrompt = '';
+  String _accumulatedVoiceText = '';
+  bool _ignoreVoiceResults = false;
   String? _selectedImagePath;
   bool _isProcessingAction = false;
 
@@ -115,6 +115,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _selectedImagePath = null;
       _isProcessingAction = true;
       _voiceFeedback = null;
+      _accumulatedVoiceText = '';
+      _baselinePrompt = '';
+      _ignoreVoiceResults = true;
     });
     
     // Grab location
@@ -1009,17 +1012,35 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _voiceFeedback = l10n.voicePromptPreparing;
       _voiceFeedbackIsError = false;
       _baselinePrompt = _prompt.text.trim();
+      _accumulatedVoiceText = '';
+      _ignoreVoiceResults = false;
     });
 
     try {
       await _voicePrompt.start(
         localeCode: 'es', 
-        onResult: (words) {
-          if (!mounted) return;
-          _setPromptText(_mergePromptText(_baselinePrompt, words));
+        onResult: (words, isFinal) {
+          if (!mounted || _ignoreVoiceResults) return;
+          
+          final currentPartial = words.trim();
+          String combinedText = '';
+          
+          if (_accumulatedVoiceText.isNotEmpty && currentPartial.isNotEmpty) {
+            combinedText = '$_accumulatedVoiceText $currentPartial';
+          } else if (_accumulatedVoiceText.isNotEmpty) {
+            combinedText = _accumulatedVoiceText;
+          } else {
+            combinedText = currentPartial;
+          }
+
+          if (isFinal && currentPartial.isNotEmpty) {
+            _accumulatedVoiceText = combinedText;
+          }
+
+          _setPromptText(_mergePromptText(_baselinePrompt, combinedText));
         },
         onStatus: (status) {
-          if (!mounted) return;
+          if (!mounted || _ignoreVoiceResults) return;
           setState(() {
             if (status == 'listening') {
               _isRecording = true;
@@ -1027,7 +1048,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               _voiceFeedback = '🎙️ Escuchando... Toca el micrófono cuando termines de hablar.';
               _voiceFeedbackIsError = false;
             } else if (status == 'done' || status == 'notListening') {
-              // Mantener activo a menos que haya sido detenido manualmente o por error
               if (_isRecording && !_voiceFeedbackIsError) {
                 _voiceFeedback = '🎙️ Escuchando... Toca el micrófono para enviar.';
               }
@@ -1035,7 +1055,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           });
         },
         onError: (error) {
-          if (!mounted) return;
+          if (!mounted || _ignoreVoiceResults) return;
           final message = _voiceErrorMessage(l10n, error);
           setState(() {
             _isRecording = false;
@@ -1072,18 +1092,21 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
   Future<void> _stopVoiceInput({bool autoSend = false}) async {
     final l10n = AppLocalizations.of(context);
-    try {
-      await _voicePrompt.stop();
-    } catch (_) {
-      await _voicePrompt.cancel();
-    }
-    if (!mounted) return;
     setState(() {
+      _ignoreVoiceResults = true;
       _isRecording = false;
       _isStartingVoice = false;
       _voiceFeedback = l10n.voicePromptStopped;
       _voiceFeedbackIsError = false;
     });
+
+    try {
+      await _voicePrompt.stop();
+    } catch (_) {
+      await _voicePrompt.cancel();
+    }
+
+    if (!mounted) return;
 
     if (autoSend && _prompt.text.trim().isNotEmpty) {
       await _sendMessage();
@@ -1449,7 +1472,7 @@ class _VoicePromptSession {
 
   Future<void> start({
     required String localeCode,
-    required void Function(String words) onResult,
+    required void Function(String words, bool isFinal) onResult,
     required void Function(String status) onStatus,
     required void Function(SpeechRecognitionError error) onError,
   }) async {
@@ -1471,7 +1494,7 @@ class _VoicePromptSession {
 
     final localeId = await _preferredLocaleId(localeCode);
     await _speech.listen(
-      onResult: (result) => onResult(result.recognizedWords),
+      onResult: (result) => onResult(result.recognizedWords, result.finalResult),
       listenOptions: SpeechListenOptions(
         partialResults: true,
         cancelOnError: false,
