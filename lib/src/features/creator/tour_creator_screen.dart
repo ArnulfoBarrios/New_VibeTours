@@ -1904,13 +1904,16 @@ class _DraftStop {
       imageUrl: image,
       description: place.type,
       minutes: 25,
-      activities: const [
-        'Explorar',
-        'Fotografiar',
-        'Escuchar narracion guiada',
+      activities: [
+        'Recorrer los puntos principales de ${place.name}',
+        'Fotografiar los detalles de ${place.name}',
+        'Escuchar narración guiada por voz',
       ],
-      curiousFacts: ['${place.name} es una parada seleccionada desde el mapa.'],
-      tips: const ['Confirma horarios locales antes de llegar'],
+      curiousFacts: ['${place.name} es uno de los puntos destacados seleccionados en la ruta.'],
+      tips: [
+        'Recorre ${place.name} con tiempo suficiente para apreciar su valor histórico y cultural.',
+        'Toma fotografías desde los mejores ángulos del lugar.',
+      ],
       locationInfo: TourLocationInfo(
         nombreLugar: place.name,
         direccion: place.type,
@@ -1932,14 +1935,17 @@ class _DraftStop {
       imageUrl: stop.imageUrl,
       description: stop.description.isNotEmpty
           ? stop.description
-          : (stop.activities.isEmpty ? 'Parada turística' : stop.activities.first),
+          : (stop.activities.isEmpty ? 'Parada turística de interés local' : stop.activities.first),
       minutes: stop.suggestedMinutes,
       activities: stop.activities.isEmpty
-          ? const ['Explorar']
+          ? ['Recorrer las instalaciones de ${stop.name}', 'Fotografiar los paisajes locales']
           : stop.activities,
       curiousFacts: stop.curiousFacts,
       tips: stop.tips.isEmpty
-          ? const ['Confirma horarios locales antes de llegar']
+          ? [
+              'Visita ${stop.name} con tiempo para apreciar sus detalles clave.',
+              'Disfruta de la atmósfera y el entorno de esta parada.'
+            ]
           : stop.tips,
       locationInfo: stop.locationInfo,
       images: stop.images.isEmpty

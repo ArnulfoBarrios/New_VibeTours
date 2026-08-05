@@ -2273,6 +2273,90 @@ function validateTourQuality(tour, planner, input) {
   return tour
 }
 
+function generateDynamicDescription(name, category, city) {
+  const cleanName = String(name || '').replace(/_/g, ' ').trim()
+  const loc = city ? `en ${city}` : 'en la ciudad'
+  
+  if (/biblioteca|library/i.test(cleanName)) {
+    return `Imagina caminar entre estanterías de valor incalculable en ${cleanName}. Este imponente espacio es un santuario del conocimiento ${loc}, conservando colecciones históricas de literatura, arquitectura icónica y salas de lectura legendarias.`
+  }
+  if (/opera|teatro|theatre|theater|hall|auditorio/i.test(cleanName)) {
+    return `Sumérgete en la elegancia escénica de ${cleanName}. Reconocido por su acústica espectacular y su deslumbrante diseño arquitectónico, es uno de los epicentros culturales más aclamados ${loc} para disfrutar del arte vivo.`
+  }
+  if (/puente|bridge/i.test(cleanName)) {
+    return `Cruza la impresionante estructura del ${cleanName}, una maravilla de la ingeniería civil que conecta puntos neurálgicos ${loc}. Ofrece vistas panorámicas incomparables del horizonte urbano y la bahía.`
+  }
+  if (/vessel|mirador|skyline|tower|torre|observatory|observatorio/i.test(cleanName)) {
+    return `Contempla la geometría deslumbrante de ${cleanName}. Diseñado como una obra monumental interactiva, ofrece ángulos fotográficos únicos y perspectivas panorámicas impresionantes de todo el entorno ${loc}.`
+  }
+  if (/iglesia|church|cathedral|catedral|basilica|basílica|bautista|templo|temple/i.test(cleanName)) {
+    return `Admira la serenidad y riqueza espiritual en ${cleanName}. Este recinto de profunda tradición comunitaria destaca por sus vidrieras, arte sacro y la cálida hospitalidad de sus feligreses ${loc}.`
+  }
+  if (/estatua|statue|libertad|liberty|monumento|monument|memorial/i.test(cleanName)) {
+    return `Maravíllate ante el monumento icónico de ${cleanName}, un símbolo universal de libertad y esperanza admirado por millones de visitantes de todo el mundo ${loc}.`
+  }
+  if (/museo|museum|galeria|gallery/i.test(cleanName)) {
+    return `Explora las fascinantes exhibiciones de ${cleanName}, donde se exhiben obras maestras, tesoros históricos e instalaciones artísticas que resumen la memoria estética ${loc}.`
+  }
+  if (/parque|park|garden|jardin|jardín/i.test(cleanName)) {
+    return `Relájate en los hermosos senderos y zonas verdes de ${cleanName}, un verdadero oasis urbano ${loc} ideal para contemplar la naturaleza y desconectar del bullicio.`
+  }
+
+  return `Descubre los secretos y la fascinante atmósfera de ${cleanName}, un destino imperdible ${loc} que cautiva por su identidad auténtica, arquitectura y encanto local.`
+}
+
+function generateDynamicTips(name, category, city) {
+  const cleanName = String(name || '').replace(/_/g, ' ').trim()
+  if (/biblioteca|library|museo|museum|galeria/i.test(cleanName)) {
+    return [
+      `Explora con calma las salas principales y verifica las exposiciones temporales de ${cleanName}.`,
+      `Conserva un tono de voz moderado dentro de las instalaciones para disfrutar de la experiencia.`
+    ]
+  }
+  if (/puente|bridge|mirador|vessel|tower|observatorio/i.test(cleanName)) {
+    return [
+      `Visita ${cleanName} durante la hora dorada al atardecer para capturar las mejores vistas del horizonte.`,
+      `Lleva calzado cómodo para el recorrido a pie y una chaqueta si sopla el viento.`
+    ]
+  }
+  if (/estatua|libertad|statue|monumento|memorial/i.test(cleanName)) {
+    return [
+      `Reserva tus entradas con la mayor antelación posible para asegurar el acceso a ${cleanName}.`,
+      `Inicia el recorrido temprano por la mañana para evitar filas y disfrutar de mayor tranquilidad.`
+    ]
+  }
+  if (/opera|teatro|theatre/i.test(cleanName)) {
+    return [
+      `Consulta la programación oficial por si deseas asistir a funciones o recorridos guiados en ${cleanName}.`,
+      `Tómate unos minutos para admirar la arquitectura del vestíbulo y las obras de arte expuestas.`
+    ]
+  }
+  return [
+    `Recorre ${cleanName} con tiempo suficiente para apreciar sus detalles arquitectónicos y entorno.`,
+    `Toma fotografías desde los mejores ángulos frontales y explora los alrededores.`
+  ]
+}
+
+function generateDynamicActivities(name, category) {
+  const cleanName = String(name || '').replace(/_/g, ' ').trim()
+  if (/biblioteca|library|museo|museum|galeria/i.test(cleanName)) {
+    return ['Recorrer las galerías principales', 'Visitar la tienda de recuerdos y exposiciones', 'Fotografiar los detalles de la arquitectura']
+  }
+  if (/puente|bridge/i.test(cleanName)) {
+    return ['Caminar por el pasillo peatonal', 'Contemplar la vista panorámica de la ciudad', 'Tomar fotos del paisaje al atardecer']
+  }
+  if (/estatua|libertad|statue|monumento|memorial/i.test(cleanName)) {
+    return ['Pasear por la explanada monumental', 'Apreciar la escultura desde los mejores miradores', 'Conocer la historia del monumento']
+  }
+  if (/opera|teatro|theatre/i.test(cleanName)) {
+    return ['Admirar los ornamentos y esculturas del vestíbulo', 'Conocer la historia de las grandes producciones', 'Fotografiar la fachada emblemática']
+  }
+  if (/parque|park|garden/i.test(cleanName)) {
+    return ['Pasear por los senderos arbolados', 'Descansar en las áreas verdes', 'Disfrutar del paisaje natural']
+  }
+  return [`Descubrir la historia de ${cleanName}`, 'Tomar fotos representativas de la parada', 'Explorar la cultura y ambiente local']
+}
+
 async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null) {
   const source = stop && typeof stop === 'object' ? stop : {}
   const ubicacion = source.ubicacion ?? source.locationInfo ?? {}
@@ -2303,23 +2387,21 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     resolvedName = candidateFallback?.name || fallbackPlace?.name || `${input.destination}`
   }
   let description = source.descripcion ?? source.description
-  if (!description || description.trim().length === 0 || coordinates.wasFallback) {
-    const category = fallbackPlace?.category || 'lugar'
-    const cleanName = resolvedName.replace(/_/g, ' ')
-    if (category === 'nature') {
-      description = `Disfruta del increíble entorno natural y la belleza escénica de ${cleanName}, un punto destacado por su ecología y paisajes en la región.`
-    } else if (category === 'historic' || category === 'religious' || category === 'museum') {
-      description = `Explora la riqueza histórica y el gran valor patrimonial de ${cleanName}, un lugar emblemático ideal para conocer la cultura local.`
-    } else if (category === 'restaurant' || category === 'cafe' || category === 'market') {
-      description = `Prueba la maravillosa oferta culinaria de ${cleanName}, ideal para deleitarse con sabores típicos y la gastronomía local.`
-    } else {
-      description = `Visita ${cleanName}, un punto de gran interés recomendado para enriquecer tu experiencia y descubrir los atractivos locales.`
-    }
+  const isGenericDesc = !description || 
+                         description.trim().length === 0 || 
+                         coordinates.wasFallback ||
+                         description.includes('un punto de gran interés recomendado') ||
+                         description.includes('gran valor patrimonial de') ||
+                         description.includes('increíble entorno natural') ||
+                         description.includes('maravillosa oferta culinaria');
+
+  if (isGenericDesc) {
+    const rawCat = fallbackPlace?.category || source.categoria || source.category || 'lugar'
+    description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
   }
   
   let durationText = source.duracion_estimada ?? `${source.suggestedMinutes ?? 25} minutos`
   const minutes = minutesFromLabel(durationText)
-  // Evitar tiempos absurdos de 1-2 minutos en paradas que merecen más tiempo
   if (minutes < 15) {
     const fallbackMins = fallbackPlace?.minutes ?? source.suggestedMinutes ?? 25
     durationText = `${fallbackMins} minutos`
@@ -2328,7 +2410,6 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   const images = normalizeList(source.imagenes ?? source.images, [])
   const cityFallback = input.city ? `${input.city}, ${input.country || ''}`.trim().replace(/,\s*$/, '') : input.destination
   
-  // Obtener la categoría dinámicamente usando el nombre y propiedades del objeto AI (source)
   const rawCategory = source.categoria || source.category || source.type || fallbackPlace?.category || fallbackPlace?.type || ''
   const placeCategory = normalizeCategory({
     category: rawCategory,
@@ -2336,12 +2417,28 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     tags: source.etiquetas || source.tags || []
   })
   
-  // Pasar 'index' como semilla y las coordenadas del lugar para la búsqueda prioritaria por lat/lon
   const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index, {
     latitude: coordinates.latitude,
     longitude: coordinates.longitude
   }).catch(() => ({ url: "", isFallback: true }))
   const image = images[0] ?? source.imageUrl ?? imageStatus.url
+
+  // Normalizar lista de actividades evitando genéricos "Explorar" / "Fotografiar" sueltos
+  let rawActivities = normalizeList(source.actividades ?? source.activities, [])
+  const isGenericActivities = rawActivities.length === 0 || 
+                              (rawActivities.length <= 2 && rawActivities.every(a => a.toLowerCase() === 'explorar' || a.toLowerCase() === 'fotografiar'));
+  if (isGenericActivities) {
+    rawActivities = generateDynamicActivities(resolvedName, rawCategory)
+  }
+
+  // Normalizar lista de consejos evitando el aviso genérico de horarios
+  let rawTips = normalizeList(source.consejos ?? source.tips, [])
+  const isGenericTips = rawTips.length === 0 || 
+                        rawTips.every(t => t.includes('Confirma horarios') || t.includes('horarios locales'));
+  if (isGenericTips) {
+    rawTips = generateDynamicTips(resolvedName, rawCategory, input.city || input.destination)
+  }
+
   const publicStop = {
     parada: index + 1,
     dia: calculatedDay !== null ? calculatedDay : Number(source.dia ?? 1),
@@ -2349,9 +2446,9 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     isFallbackImage: imageStatus.isFallback && !images[0] && !source.imageUrl,
     descripcion: description,
     duracion_estimada: durationText,
-    actividades: normalizeList(source.actividades ?? source.activities, ["Explorar", "Fotografiar"]),
-    datos_curiosos: normalizeList(source.datos_curiosos, [`${resolvedName} fue seleccionado por su relevancia local.`]),
-    consejos: normalizeList(source.consejos ?? source.tips, ["Confirma horarios locales antes de llegar"]),
+    actividades: rawActivities,
+    datos_curiosos: normalizeList(source.datos_curiosos, [`${resolvedName} es uno de los puntos emblemáticos más destacados de la zona.`]),
+    consejos: rawTips,
     ubicacion: {
       nombre_lugar: fallbackPlace?.name ?? ubicacion.nombre_lugar ?? resolvedName,
       direccion: fallbackPlace?.address ?? ubicacion.direccion ?? source.address ?? "",
@@ -3211,6 +3308,13 @@ function isCandidateNearDestination(place, input, location) {
   const longitude = numberValue(place.longitude, NaN)
   const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
   if (!hasCoordinates) return false
+
+  // Los hitos icónicos principales nunca se descartan por distancia dentro de la metrópoli
+  const isIconic = (place.tags && place.tags.iconic_landmark === 'true') ||
+                   place.isIconic ||
+                   /libertad|liberty|statue|eiffel|coliseo|colosseum|sagrada familia|taj mahal|cristo redentor|big ben|louvre|empire state|central park|brooklyn bridge/i.test(place.name || '');
+  if (isIconic) return true;
+
   const distanceKm = haversineMeters(location.latitude, location.longitude, latitude, longitude) / 1000
 
   // Detect if the tour is regional or nature-oriented to allow a wider radius filter
@@ -3222,19 +3326,19 @@ function isCandidateNearDestination(place, input, location) {
     /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
     /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.city || '');
 
-  const maxDistance = isRegionalOrNature ? 55 : 45
+  const maxDistance = isRegionalOrNature ? 65 : 50
   if (distanceKm > maxDistance) return false
 
-  // If it's far from the center (>12 km), only allow nature, coastal, islands, viewpoints or beaches
-  if (distanceKm > 12) {
+  // If it's far from the center (>20 km), allow nature, coastal, islands, viewpoints, beaches or iconic landmarks
+  if (distanceKm > 20) {
     const category = String(place.category || '').toLowerCase()
     const type = String(place.type || '').toLowerCase()
     const name = String(place.name || '').toLowerCase()
     
     const isEcoOrCoastal = 
-      ['nature', 'viewpoint'].includes(category) || 
-      ['beach', 'water', 'island', 'national_park', 'nature_reserve', 'park', 'forest', 'sea'].includes(type) ||
-      /playa|beach|isla|island|cayo|archipielago|archipiélago|bahia|bahía|ciénaga|cienaga|reserva|parque|mirador|viewpoint|punta|faro|cabo|morrosquillo|san-bernardo|mucura|múcura|tintipan|tintipán|palma|boqueron|boquerón|isleta|coveñas/i.test(name) ||
+      ['nature', 'viewpoint', 'historic', 'museum'].includes(category) || 
+      ['beach', 'water', 'island', 'national_park', 'nature_reserve', 'park', 'forest', 'sea', 'monument', 'memorial'].includes(type) ||
+      /playa|beach|isla|island|cayo|archipielago|archipiélago|bahia|bahía|ciénaga|cienaga|reserva|parque|mirador|viewpoint|punta|faro|cabo|morrosquillo|san-bernardo|mucura|múcura|tintipan|tintipán|palma|boqueron|boquerón|isleta|coveñas|libertad|statue|monumento/i.test(name) ||
       (place.tags && (place.tags.natural || place.tags.water || place.tags.place === 'island' || place.tags.boundary === 'national_park'))
       
     if (!isEcoOrCoastal) {

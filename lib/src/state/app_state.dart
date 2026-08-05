@@ -926,9 +926,10 @@ Tour _tourFromJson(Map<String, dynamic> json) {
 }
 
 TourStop _stopFromJson(Map<String, dynamic> json) {
+  final name = _string(json['name'], 'Parada');
   return TourStop(
     id: _string(json['id'], 'stop-${DateTime.now().microsecondsSinceEpoch}'),
-    name: _string(json['name'], 'Parada'),
+    name: name,
     location: GeoPoint(
       latitude: _double(json['latitude'], 0),
       longitude: _double(json['longitude'], 0),
@@ -936,11 +937,11 @@ TourStop _stopFromJson(Map<String, dynamic> json) {
     imageUrl: _string(json['imageUrl'], ''),
     description: _string(json['description'], ''),
     activities: _stringList(json['activities']).isEmpty
-        ? const ['Explorar']
+        ? ['Recorrer las instalaciones de $name', 'Fotografiar el entorno de $name']
         : _stringList(json['activities']),
     curiousFacts: _stringList(json['curiousFacts']),
     tips: _stringList(json['tips']).isEmpty
-        ? const ['Confirma horarios locales antes de llegar']
+        ? ['Visita $name con tiempo para apreciar sus detalles culturales y la historia del lugar.']
         : _stringList(json['tips']),
     locationInfo: _locationInfoFromJson(json['locationInfo']),
     images: _stringList(json['images']),

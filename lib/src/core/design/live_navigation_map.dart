@@ -17,7 +17,7 @@ class LiveNavigationMap extends ConsumerStatefulWidget {
     this.currentLocation,
     this.trackingMode = true,
     this.trackingHeading,
-    this.fitPadding = const EdgeInsets.fromLTRB(36, 108, 36, 360),
+    this.fitPadding = const EdgeInsets.fromLTRB(36, 108, 36, 440),
     this.onMapCreated,
     this.onPointSelected,
   });
@@ -42,6 +42,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
   bool _styleLoaded = false;
   bool _hasMapError = false;
   Line? _routeLine;
+  Circle? _userPuckCircle;
+  Circle? _userPuckHalo;
   List<LatLng> _fullGeometry = [];
   List<double> _cumulativeDistances = [];
   int _lastSegmentIndex = 0;
@@ -107,16 +109,35 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
   }
 
   LatLngBounds _calculateBounds(List<LatLng> points) {
-    double minLat = points.first.latitude;
-    double maxLat = points.first.latitude;
-    double minLng = points.first.longitude;
-    double maxLng = points.first.longitude;
+    final validPoints = points.where((p) =>
+      p.latitude > 1.0 && p.latitude < 20.0 &&
+      p.longitude > -90.0 && p.longitude < -60.0
+    ).toList();
 
-    for (final p in points) {
+    final pts = validPoints.isNotEmpty ? validPoints : points;
+    double minLat = pts.first.latitude;
+    double maxLat = pts.first.latitude;
+    double minLng = pts.first.longitude;
+    double maxLng = pts.first.longitude;
+
+    for (final p in pts) {
       if (p.latitude < minLat) minLat = p.latitude;
       if (p.latitude > maxLat) maxLat = p.latitude;
       if (p.longitude < minLng) minLng = p.longitude;
       if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+
+    double latSpan = maxLat - minLat;
+    double lngSpan = maxLng - minLng;
+    if (latSpan < 0.008) {
+      final mid = (minLat + maxLat) / 2.0;
+      minLat = mid - 0.004;
+      maxLat = mid + 0.004;
+    }
+    if (lngSpan < 0.008) {
+      final mid = (minLng + maxLng) / 2.0;
+      minLng = mid - 0.004;
+      maxLng = mid + 0.004;
     }
 
     return LatLngBounds(
@@ -143,7 +164,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
     if (_fullGeometry.length < 2) return _fullGeometry;
 
     final startIdx = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
-    final endIdx = math.min(startIdx + 25, _fullGeometry.length - 1);
+    final endIdx = _fullGeometry.length - 1;
 
     int bestSegment = startIdx;
     double minDist = double.infinity;
@@ -161,7 +182,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
       }
     }
 
-    if (minDist < 120.0) {
+    if (minDist < 1000.0) {
       _lastSegmentIndex = math.max(_lastSegmentIndex, bestSegment);
     }
 
@@ -174,21 +195,88 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
     return [activeProj, ...remaining];
   }
 
+  Future<void> _createPuckCircles(LatLng currentPos) async {
+    final controller = _controller;
+    if (controller == null || !_styleLoaded) return;
+    try {
+      if (_userPuckHalo != null) {
+        await controller.removeCircle(_userPuckHalo!);
+        _userPuckHalo = null;
+      }
+      if (_userPuckCircle != null) {
+        await controller.removeCircle(_userPuckCircle!);
+        _userPuckCircle = null;
+      }
+    } catch (_) {}
+
+    try {
+      _userPuckHalo = await controller.addCircle(
+        CircleOptions(
+          geometry: currentPos,
+          circleRadius: 18,
+          circleColor: '#007AFF',
+          circleOpacity: 0.20,
+        ),
+      );
+      _userPuckCircle = await controller.addCircle(
+        CircleOptions(
+          geometry: currentPos,
+          circleRadius: 9,
+          circleColor: '#007AFF',
+          circleOpacity: 1.0,
+          circleStrokeColor: '#FFFFFF',
+          circleStrokeWidth: 3.5,
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _updateUserPuck(LatLng currentPos) async {
+    final controller = _controller;
+    if (controller == null || !_styleLoaded) return;
+
+    if (_userPuckCircle == null) {
+      await _createPuckCircles(currentPos);
+    } else {
+      try {
+        if (_userPuckHalo != null) {
+          await controller.updateCircle(
+            _userPuckHalo!,
+            CircleOptions(geometry: currentPos),
+          );
+        }
+        await controller.updateCircle(
+          _userPuckCircle!,
+          CircleOptions(geometry: currentPos),
+        );
+      } catch (_) {
+        // If circle was wiped by clearCircles() or map style reload, immediately recreate it!
+        _userPuckCircle = null;
+        _userPuckHalo = null;
+        await _createPuckCircles(currentPos);
+      }
+    }
+  }
+
   void _updateTrimmedRouteLine(LatLng currentPos) {
     final controller = _controller;
-    if (controller == null || _routeLine == null || _fullGeometry.isEmpty) return;
+    if (controller == null || _fullGeometry.isEmpty) return;
 
-    final trimmed = _getZeroGapTrimmedGeometry(currentPos);
-    if (trimmed.length >= 2) {
-      try {
-        controller.updateLine(
-          _routeLine!,
-          LineOptions(
-            geometry: trimmed,
-          ),
-        );
-      } catch (e) {
-        debugPrint('Error updating live navigation line: $e');
+    _updateUserPuck(currentPos);
+
+    if (_routeLine != null) {
+      final trimmed = _getZeroGapTrimmedGeometry(currentPos);
+      if (trimmed.length >= 2) {
+        try {
+          controller.updateLine(
+            _routeLine!,
+            LineOptions(
+              geometry: trimmed,
+            ),
+          );
+        } catch (e) {
+          debugPrint('Error updating live navigation line: $e');
+        }
       }
     }
   }
@@ -211,7 +299,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
             bearing: widget.trackingHeading ?? 0.0,
           ),
         ),
-        duration: const Duration(milliseconds: 500),
+        duration: const Duration(milliseconds: 150),
       );
     } else {
       final currentLocation = widget.currentLocation;
@@ -232,17 +320,34 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
 
       if (boundsPoints.isNotEmpty) {
         final bounds = _calculateBounds(boundsPoints);
+        final centerLat = (bounds.southwest.latitude + bounds.northeast.latitude) / 2.0;
+        final centerLng = (bounds.southwest.longitude + bounds.northeast.longitude) / 2.0;
 
-        controller.animateCamera(
-          CameraUpdate.newLatLngBounds(
-            bounds,
-            left: widget.fitPadding.left,
-            top: widget.fitPadding.top,
-            right: widget.fitPadding.right,
-            bottom: widget.fitPadding.bottom,
-          ),
-          duration: const Duration(milliseconds: 600),
-        );
+        try {
+          controller.animateCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(
+                target: LatLng(centerLat, centerLng),
+                tilt: 0.0,
+                bearing: 0.0,
+              ),
+            ),
+            duration: const Duration(milliseconds: 100),
+          ).then((_) {
+            try {
+              controller.animateCamera(
+                CameraUpdate.newLatLngBounds(
+                  bounds,
+                  left: widget.fitPadding.left,
+                  top: widget.fitPadding.top,
+                  right: widget.fitPadding.right,
+                  bottom: widget.fitPadding.bottom,
+                ),
+                duration: const Duration(milliseconds: 300),
+              );
+            } catch (_) {}
+          });
+        } catch (_) {}
       }
     }
   }
@@ -272,7 +377,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
       _updateTrimmedRouteLine(currentPos);
     }
 
-    if (trackingChanged || (widget.trackingMode && (locationChanged || headingChanged)) || (!widget.trackingMode && locationChanged)) {
+    if (trackingChanged || routeChanged || (widget.trackingMode && (locationChanged || headingChanged))) {
       _updateCameraPosition();
     }
   }
@@ -288,6 +393,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
     if (controller == null || !_styleLoaded) return;
 
     _routeLine = null;
+    _userPuckCircle = null;
+    _userPuckHalo = null;
 
     final routeGeom = widget.route?.geometry ?? [];
     final currentLocation = widget.currentLocation;
@@ -309,6 +416,10 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
       await controller.clearCircles();
       await controller.clearSymbols();
     } catch (_) {}
+
+    if (currentPos != null) {
+      unawaited(_updateUserPuck(currentPos));
+    }
 
     final lineGeometry = currentPos != null && _fullGeometry.length >= 2
         ? _getZeroGapTrimmedGeometry(currentPos)
@@ -376,7 +487,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap> with Auto
             ),
             compassEnabled: true,
             rotateGesturesEnabled: true,
-            myLocationEnabled: true,
+            myLocationEnabled: false,
             onMapCreated: (controller) {
               _controller = controller;
               if (widget.onMapCreated != null) {
