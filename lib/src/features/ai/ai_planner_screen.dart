@@ -291,11 +291,11 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   _buildMessageBubble(msg, builderState.isLoading || builderState.isBuilding),
                   const SizedBox(height: 16),
                 ],
-                if (builderState.recommendations.isNotEmpty) ...[
+                if (builderState.recommendations.isNotEmpty ||
+                    (builderState.builtTour != null && builderState.builtTour!.stops.isNotEmpty)) ...[
                   _buildMapCard(builderState),
                   const SizedBox(height: 16),
                 ],
-
 
                 if (builderState.error != null) ...[
                   _buildErrorBanner(builderState.error!),
@@ -313,13 +313,23 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   }
 
   Widget _buildMapCard(AiBuilderState builderState) {
-    final points = builderState.recommendations
-        .map((r) => GeoPoint(latitude: r.latitude, longitude: r.longitude))
-        .toList();
-    final labels = builderState.recommendations.map((r) => r.name).toList();
+    List<GeoPoint> points = [];
+    List<String> labels = [];
+
+    if (builderState.recommendations.isNotEmpty) {
+      points = builderState.recommendations
+          .map((r) => GeoPoint(latitude: r.latitude, longitude: r.longitude))
+          .toList();
+      labels = builderState.recommendations.map((r) => r.name).toList();
+    } else if (builderState.builtTour != null && builderState.builtTour!.stops.isNotEmpty) {
+      points = builderState.builtTour!.stops.map((s) => s.location).toList();
+      labels = builderState.builtTour!.stops.map((s) => s.name).toList();
+    }
+
+    if (points.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      key: const ValueKey('ai_planner_map_card'),
+      key: ValueKey('ai_planner_map_card_${points.length}_${points.first.latitude}'),
       height: 250,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -335,7 +345,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: OpenFreeRouteMap(
-          key: const ValueKey('ai_planner_openfree_map'),
+          key: ValueKey('ai_planner_openfree_map_${points.length}'),
           points: points,
           labels: labels,
           styleUrl: ref.watch(mapStyleProvider),

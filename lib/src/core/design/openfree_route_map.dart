@@ -610,38 +610,39 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       }
       return;
     }
+
+    // Pintar primero la Polyline de respaldo de manera instantánea
+    try {
+      await _paintRoute(
+        RoadRouteResult(geometry: widget.points),
+        focusActiveStop: focusActiveStop,
+        fitRoute: !_hasFitRoute,
+        isIncremental: isIncremental,
+      );
+    } catch (e) {
+      debugPrint('Error painting instant fallback route: $e');
+    }
+
     if (!shouldResolveRoadRoute) return;
     
     try {
       final resolvedRoute = await _routeService.resolveRoute(widget.points);
       if (!mounted || requestId != _drawRequest) return;
       
-      final routeToPaint = resolvedRoute.geometry.isNotEmpty
-          ? resolvedRoute
-          : RoadRouteResult(geometry: widget.points);
-
-      try {
-        await _paintRoute(
-          routeToPaint,
-          focusActiveStop: focusActiveStop,
-          fitRoute: true,
-          isIncremental: isIncremental,
-        );
-      } catch (e) {
-        debugPrint('Error painting resolved route: $e');
+      if (resolvedRoute.geometry.isNotEmpty) {
+        try {
+          await _paintRoute(
+            resolvedRoute,
+            focusActiveStop: focusActiveStop,
+            fitRoute: false,
+            isIncremental: isIncremental,
+          );
+        } catch (e) {
+          debugPrint('Error painting resolved route: $e');
+        }
       }
     } catch (_) {
-      if (!mounted || requestId != _drawRequest) return;
-      try {
-        await _paintRoute(
-          RoadRouteResult(geometry: widget.points),
-          focusActiveStop: focusActiveStop,
-          fitRoute: true,
-          isIncremental: isIncremental,
-        );
-      } catch (e) {
-        debugPrint('Error painting fallback route: $e');
-      }
+      // La ruta de respaldo ya se pintó previamente
     }
   }
 

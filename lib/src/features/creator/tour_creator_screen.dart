@@ -330,10 +330,16 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
                   children: [
                     OpenFreeRouteMap(
                       key: ValueKey(
-                        '${_previewPlace!.name}-${_previewPlace!.location.latitude}-${_previewPlace!.location.longitude}',
+                        '${_previewPlace!.name}-${_previewPlace!.location.latitude}-${_previewPlace!.location.longitude}-${_stops.length}',
                       ),
-                      points: [_previewPlace!.location],
-                      labels: [_previewPlace!.name],
+                      points: [
+                        ..._stops.map((s) => s.location),
+                        _previewPlace!.location,
+                      ],
+                      labels: [
+                        ..._stops.map((s) => s.name),
+                        _previewPlace!.name,
+                      ],
                       styleUrl: mapStyle,
                       height: 180,
                       fitPadding: const EdgeInsets.all(24),
