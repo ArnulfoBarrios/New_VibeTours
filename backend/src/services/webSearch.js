@@ -1,5 +1,3 @@
-import fetch from 'node-fetch'
-
 /**
  * Service to perform live web search using Tavily API (free tier 1000 requests/mo)
  * with graceful fallbacks (DuckDuckGo HTML scraping/API or empty result if offline).

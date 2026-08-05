@@ -89,6 +89,8 @@ class AppConfig {
       _asset('API_BASE_URL'),
       'https://new-vibe-tours.vercel.app/api',
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+        'http://192.168.1.222:3000/api',
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         _localNetworkApiBaseUrl,
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         'http://10.0.2.2:3000/api',

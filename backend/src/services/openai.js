@@ -501,6 +501,26 @@ Input: ${JSON.stringify(routeBrief)}`,
   return null
 }
 
+function safeParseJson(raw, fallback = {}) {
+  if (!raw || typeof raw !== 'string') return fallback
+  try {
+    let clean = raw.trim()
+    if (clean.startsWith('```')) {
+      clean = clean.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
+    }
+    return JSON.parse(clean)
+  } catch (err) {
+    console.warn('[safeParseJson] parse error, attempting regex extraction:', err.message)
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (match) {
+      try {
+        return JSON.parse(match[0])
+      } catch (_) {}
+    }
+    return fallback
+  }
+}
+
 export async function extractChatInformation(userMessage, currentData = {}) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return extractChatInformationFallback(userMessage)
@@ -553,7 +573,7 @@ Mensaje del usuario: "${userMessage}"`
       })
     })
     const json = await response.json()
-    const parsed = JSON.parse(json.choices?.[0]?.message?.content ?? '{}')
+    const parsed = safeParseJson(json.choices?.[0]?.message?.content ?? '{}', {})
     
     // Normalización de duración en horas si se extrajo en días
     if (typeof parsed.durationDays === 'number' && parsed.durationDays > 0) {
@@ -675,7 +695,11 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     })
     const json = await response.json()
     const content = json.choices?.[0]?.message?.content ?? '{}'
-    return JSON.parse(content)
+    return safeParseJson(content, {
+      responseMessage: '¡Excelente! Cuéntame más sobre tu viaje para diseñar el tour ideal.',
+      actionChips: ['Cartagena', 'Medellín', 'Santa Marta'],
+      readyToBuild: false
+    })
   } catch (err) {
     console.error('[openai] chat response error:', err)
     return {

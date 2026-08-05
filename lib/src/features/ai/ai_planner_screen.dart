@@ -995,8 +995,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
   Future<void> _toggleVoiceInput() async {
     if (_isStartingVoice) return;
-    if (_voicePrompt.isListening) {
-      await _stopVoiceInput();
+    if (_isRecording || _voicePrompt.isListening) {
+      await _stopVoiceInput(autoSend: true);
       return;
     }
     await _startVoiceInput();
@@ -1024,13 +1024,12 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             if (status == 'listening') {
               _isRecording = true;
               _isStartingVoice = false;
-              _voiceFeedback = l10n.voicePromptListening;
+              _voiceFeedback = '🎙️ Escuchando... Toca el micrófono cuando termines de hablar.';
               _voiceFeedbackIsError = false;
             } else if (status == 'done' || status == 'notListening') {
-              _isRecording = false;
-              _isStartingVoice = false;
-              if (!_voiceFeedbackIsError) {
-                _voiceFeedback = l10n.voicePromptStopped;
+              // Mantener activo a menos que haya sido detenido manualmente o por error
+              if (_isRecording && !_voiceFeedbackIsError) {
+                _voiceFeedback = '🎙️ Escuchando... Toca el micrófono para enviar.';
               }
             }
           });
@@ -1071,7 +1070,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     }
   }
 
-  Future<void> _stopVoiceInput() async {
+  Future<void> _stopVoiceInput({bool autoSend = false}) async {
     final l10n = AppLocalizations.of(context);
     try {
       await _voicePrompt.stop();
@@ -1085,6 +1084,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _voiceFeedback = l10n.voicePromptStopped;
       _voiceFeedbackIsError = false;
     });
+
+    if (autoSend && _prompt.text.trim().isNotEmpty) {
+      await _sendMessage();
+    }
   }
 
   void _setPromptText(String value) {
@@ -1471,11 +1474,11 @@ class _VoicePromptSession {
       onResult: (result) => onResult(result.recognizedWords),
       listenOptions: SpeechListenOptions(
         partialResults: true,
-        cancelOnError: true,
+        cancelOnError: false,
         listenMode: ListenMode.dictation,
         localeId: localeId,
-        listenFor: const Duration(seconds: 45),
-        pauseFor: const Duration(seconds: 3),
+        listenFor: const Duration(minutes: 10),
+        pauseFor: const Duration(minutes: 5),
       ),
     );
   }
