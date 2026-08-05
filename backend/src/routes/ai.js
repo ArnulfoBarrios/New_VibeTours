@@ -69,14 +69,21 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     })
 
-    // 2. Si el usuario ya proporcionó una ciudad o destino, realizar búsqueda en vivo en la web (Tavily/DDG)
+    // 2. Realizar búsqueda en vivo en la web (Tavily/DDG) si hay destino O si la consulta incluye preguntas sobre fechas, festivos, clima o eventos
     let webSearchResult = null
     const dest = updatedPreferences.city || updatedPreferences.destination
-    if (dest) {
+    const isDateOrEventQuery = /\b(festivo|festivos|puente|puentes|clima|evento|eventos|calendario|septiembre|octubre|noviembre|diciembre|enero|febrero|marzo|abril|mayo|junio|julio|agosto)\b/i.test(message)
+
+    if (dest || isDateOrEventQuery) {
+      const searchQuery = isDateOrEventQuery 
+        ? `${message} en ${dest || 'Colombia'}`
+        : `eventos turismo clima atracciones imperdibles en ${dest} ${updatedPreferences.datesSeason || ''}`.trim()
+
       webSearchResult = await searchWebForTravel({
-        city: dest,
-        destination: dest,
-        country: updatedPreferences.country || '',
+        query: searchQuery,
+        city: dest || '',
+        destination: dest || '',
+        country: updatedPreferences.country || 'Colombia',
         dates: updatedPreferences.datesSeason || ''
       }).catch(err => {
         console.warn('[ai/chat] web search failed:', err.message)
