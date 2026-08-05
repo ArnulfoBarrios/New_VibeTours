@@ -39,6 +39,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   bool _voiceFeedbackIsError = false;
   String _baselinePrompt = '';
   String _accumulatedVoiceText = '';
+  String _lastRecognizedSegment = '';
   bool _ignoreVoiceResults = false;
   String? _selectedImagePath;
   bool _isProcessingAction = false;
@@ -118,6 +119,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _isProcessingAction = true;
       _voiceFeedback = null;
       _accumulatedVoiceText = '';
+      _lastRecognizedSegment = '';
       _baselinePrompt = '';
       _ignoreVoiceResults = true;
     });
@@ -1015,6 +1017,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _voiceFeedbackIsError = false;
       _baselinePrompt = _prompt.text.trim();
       _accumulatedVoiceText = '';
+      _lastRecognizedSegment = '';
       _ignoreVoiceResults = false;
     });
 
@@ -1025,21 +1028,36 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           if (!mounted || _ignoreVoiceResults) return;
           
           final currentPartial = words.trim();
-          String combinedText = '';
-          
-          if (_accumulatedVoiceText.isNotEmpty && currentPartial.isNotEmpty) {
-            combinedText = '$_accumulatedVoiceText $currentPartial';
-          } else if (_accumulatedVoiceText.isNotEmpty) {
-            combinedText = _accumulatedVoiceText;
+          if (currentPartial.isEmpty) return;
+
+          // Si el reconocedor comenzó un nuevo segmento tras una pausa (currentPartial no continúa a _lastRecognizedSegment)
+          if (_lastRecognizedSegment.isNotEmpty && !currentPartial.startsWith(_lastRecognizedSegment)) {
+            if (_accumulatedVoiceText.isNotEmpty) {
+              _accumulatedVoiceText = '$_accumulatedVoiceText $_lastRecognizedSegment';
+            } else {
+              _accumulatedVoiceText = _lastRecognizedSegment;
+            }
+            _lastRecognizedSegment = currentPartial;
           } else {
-            combinedText = currentPartial;
+            _lastRecognizedSegment = currentPartial;
           }
 
-          if (isFinal && currentPartial.isNotEmpty) {
-            _accumulatedVoiceText = combinedText;
+          if (isFinal) {
+            if (_accumulatedVoiceText.isNotEmpty) {
+              _accumulatedVoiceText = '$_accumulatedVoiceText $_lastRecognizedSegment';
+            } else {
+              _accumulatedVoiceText = _lastRecognizedSegment;
+            }
+            _lastRecognizedSegment = '';
           }
 
-          _setPromptText(_mergePromptText(_baselinePrompt, combinedText));
+          final fullSpeech = _accumulatedVoiceText.isNotEmpty
+              ? (_lastRecognizedSegment.isNotEmpty
+                  ? '$_accumulatedVoiceText $_lastRecognizedSegment'
+                  : _accumulatedVoiceText)
+              : _lastRecognizedSegment;
+
+          _setPromptText(_mergePromptText(_baselinePrompt, fullSpeech));
         },
         onStatus: (status) {
           if (!mounted || _ignoreVoiceResults) return;
