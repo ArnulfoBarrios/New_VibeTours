@@ -669,14 +669,14 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
 }
 
 export async function generateChatResponse(state, backendInstruction, webSearchSummary = '', currentPreferences = {}) {
+  const known = currentPreferences || {}
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return {
     responseMessage: '¡Hola! Qué gusto saludarte. Cuéntame: ¿a qué ciudad te gustaría viajar?',
-    actionChips: ['Cartagena', 'Medellín', 'Santa Marta'],
+    actionChips: getDefaultActionChips(known),
+    destinationSuggestions: (!known.city && !known.destination) ? await buildVisualDestinationSuggestions(getDefaultActionChips(known)).catch(() => []) : [],
     readyToBuild: false
   }
-
-  const known = currentPreferences || {}
   const remainingQuestions = []
   if (!known.city && !known.destination) remainingQuestions.push('- 📍 ¿A qué ciudad o lugar te gustaría ir?')
   if (!known.datesSeason) remainingQuestions.push('- 📅 ¿En qué fechas, mes o época del año planeas viajar?')
@@ -763,10 +763,18 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       readyToBuild: false
     })
 
-    // Limpiar actionChips si la IA devolvió "Sugerencia 1, 2, 3"
+    // REGLA CRÍTICA DE CIUDAD YA SELECCIONADA:
+    const targetDest = (known.city || known.destination || '').trim().toLowerCase()
+    const isSpecificCityKnown = targetDest.length > 0 && !/europa|asia|sudamerica|caribe|exterior|internacional|latinoamerica/i.test(targetDest)
+
     let chips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
     const hasGenericChips = chips.some(c => typeof c === 'string' && /sugerencia|opcion|opción/i.test(c))
-    if (chips.length === 0 || hasGenericChips) {
+    const isCityListChips = chips.length > 0 && chips.every(c => typeof c === 'string' && /cartagena|medellín|medellin|santa marta|bogotá|bogota|roma|barcelona|parís|paris/i.test(c.toLowerCase()))
+
+    // Si ya hay una ciudad específica conocida y la IA devolvió sugerencias de ciudades o fichas genéricas, forzar los chips de la siguiente pregunta pendiente
+    if (isSpecificCityKnown && (hasGenericChips || isCityListChips || chips.length === 0)) {
+      chips = getDefaultActionChips(known, lastUserMsg)
+    } else if (chips.length === 0 || hasGenericChips) {
       chips = getDefaultActionChips(known, lastUserMsg)
     }
     parsed.actionChips = chips
@@ -777,7 +785,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       parsed.readyToBuild = false
     }
 
-    // REGLA 2 Y 4: Generar tarjetas visuales de destino o de Hospedaje (Hotel vs Casa propia)
+    // REGLA DE TARJETAS VISUALES:
     const isHospedajeQuestion = chips.some(c => typeof c === 'string' && /hospedaje|hotel|alojamiento/i.test(c))
     if (isHospedajeQuestion) {
       parsed.destinationSuggestions = [
@@ -804,15 +812,16 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
           temperature: '28°C'
         }
       ]
-    } else {
-      const targetDest = (known.city || known.destination || '').toLowerCase()
-      const isGeneralOrEmpty = !targetDest || /europa|asia|sudamerica|caribe|exterior|internacional|latinoamerica/i.test(targetDest)
-      if (isGeneralOrEmpty || chips.some(c => typeof c === 'string' && /tayrona|minca|rosario|bocagrande|monserrate|guatap|candelaria|taganga|palomino/i.test(c.toLowerCase()))) {
-        const isCityOrPlaceList = chips.every(c => !/días|fin de semana|económico|moderado|lujo|auto|caminando|taxi/i.test(c))
-        if (isCityOrPlaceList && chips.length > 0) {
-          parsed.destinationSuggestions = await buildVisualDestinationSuggestions(chips, known.city || known.destination || '')
-        }
+    } else if (!isSpecificCityKnown) {
+      // SOLO mostrar carrusel de ciudades si NO se conoce aún una ciudad específica
+      const isCityOrPlaceList = chips.every(c => !/días|fin de semana|económico|moderado|lujo|auto|caminando|taxi/i.test(c))
+      if (isCityOrPlaceList && chips.length > 0) {
+        parsed.destinationSuggestions = await buildVisualDestinationSuggestions(chips, known.city || known.destination || '')
+      } else {
+        parsed.destinationSuggestions = []
       }
+    } else {
+      parsed.destinationSuggestions = []
     }
 
     return parsed
