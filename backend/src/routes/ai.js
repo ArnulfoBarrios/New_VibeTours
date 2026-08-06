@@ -2468,6 +2468,28 @@ function generateDynamicActivities(name, category) {
   return [`Descubrir la historia de ${cleanName}`, 'Tomar fotos representativas de la parada', 'Explorar la cultura y ambiente local']
 }
 
+function isPlaceBelongingToCity(placeName, targetCity = '') {
+  const normPlace = String(placeName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const normCity = String(targetCity || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+  const CITY_EXCLUSIVE_LANDMARKS = {
+    'cartagena': ['bocagrande', 'castillo san felipe', 'getsemani', 'islas del rosario', 'baru', 'la popa'],
+    'barranquilla': ['malecon del rio', 'ventana al mundo', 'boca de ceniza', 'casa del carnaval', 'edgar renteria'],
+    'santa marta': ['tayrona', 'rodadero', 'taganga', 'minca', 'quinta de san pedro'],
+    'medellin': ['comuna 13', 'pueblito paisa', 'parque botero', 'el penol', 'guatape'],
+    'bogota': ['monserrate', 'la candelaria', 'plaza de bolivar', 'zipaquira']
+  }
+
+  for (const [cityKey, landmarks] of Object.entries(CITY_EXCLUSIVE_LANDMARKS)) {
+    if (!normCity.includes(cityKey)) {
+      if (landmarks.some(l => normPlace.includes(l))) {
+        return false // Pertenece a otra ciudad!
+      }
+    }
+  }
+  return true
+}
+
 async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null) {
   const source = stop && typeof stop === 'object' ? stop : {}
   const ubicacion = source.ubicacion ?? source.locationInfo ?? {}
@@ -2494,7 +2516,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     endPlace,
   })
   let resolvedName = sourceName || fallbackPlace?.name || candidateFallback?.name || `${input.destination}`
-  if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName)) {
+  if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isPlaceBelongingToCity(resolvedName, input.city || input.destination)) {
     resolvedName = candidateFallback?.name || fallbackPlace?.name || `${input.destination}`
   }
   let description = source.descripcion ?? source.description

@@ -329,6 +329,7 @@ ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB (Eventos, Clima, 
 
 REGLAS DE CONTENIDO:
 - PROHIBIDO INVENTAR: No alucines lugares inexistentes.
+- CRÍTICO GEOGRAFÍA STRICTA: PROHIBIDO incluir lugares o atracciones que pertenezcan a OTRA ciudad. Por ejemplo: si la ciudad es Barranquilla, está PROHIBIDO incluir "Bocagrande" (Bocagrande es de Cartagena) o "Tayrona" (es de Santa Marta). Si la ciudad es Santa Marta, está PROHIBIDO incluir "Museo del Caribe" (es de Barranquilla) o "Bocagrande". Todas las paradas DEBEN pertenecer 100% a la ciudad de "${city || destination}".
 - Escribe en ${language}.
 - CRÍTICO GUÍA DE VOZ INMERSIVA: Cada descripción de parada ("descripcion") DEBE ser una guía de voz completa y envolvente de 80 a 120 palabras. Escribe como si fueras un guía local experto hablando en vivo al oído del turista. Narra la historia fascinante del sitio, los detalles arquitectónicos o naturales que tiene enfrente, anécdotas culturales únicas y sugerencias de 'Qué hacer o qué probar aquí'.
 - CRÍTICO CADA PARADA ES ÚNICA: PROHIBIDO copiar y pegar descripciones o consejos genéricos.
