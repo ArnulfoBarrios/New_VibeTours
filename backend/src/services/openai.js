@@ -572,10 +572,16 @@ Mensaje del usuario: "${userMessage}"`
         response_format: { type: 'json_object' },
         messages: [{ role: 'system', content: prompt }]
       })
-    })
     const json = await response.json()
     const parsed = safeParseJson(json.choices?.[0]?.message?.content ?? '{}', {})
-    
+
+    // Limpiar claves nulas o vacías extraídas para evitar sobreescribir las preferencias previas en el acumulado
+    Object.keys(parsed).forEach(key => {
+      if (parsed[key] === null || parsed[key] === undefined || parsed[key] === '') {
+        delete parsed[key]
+      }
+    })
+
     // Normalización de duración en horas si se extrajo en días
     if (typeof parsed.durationDays === 'number' && parsed.durationDays > 0) {
       parsed.durationHours = parsed.durationDays >= 2 ? parsed.durationDays * 24 : 8
