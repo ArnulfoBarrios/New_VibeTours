@@ -2468,10 +2468,20 @@ function generateDynamicActivities(name, category) {
   return [`Descubrir la historia de ${cleanName}`, 'Tomar fotos representativas de la parada', 'Explorar la cultura y ambiente local']
 }
 
-function isPlaceBelongingToCity(placeName, targetCity = '') {
+async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lon = null, targetCityCoords = null) {
   const normPlace = String(placeName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const normCity = String(targetCity || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
+  // 1. Verificación por distancia radial esférica desde el centro del municipio destino (máximo 25 km)
+  if (lat && lon && targetCityCoords?.latitude && targetCityCoords?.longitude) {
+    const distKm = haversineMeters(targetCityCoords.latitude, targetCityCoords.longitude, lat, lon) / 1000
+    if (distKm > 25) {
+      console.warn(`[UniversalGeoBoundary] Rechazado "${placeName}" (${distKm.toFixed(1)} km) por exceder 25 km del centro de "${targetCity}"`)
+      return false
+    }
+  }
+
+  // 2. Mapeo preventivo para metrópolis principales
   const CITY_EXCLUSIVE_LANDMARKS = {
     'cartagena': ['bocagrande', 'castillo san felipe', 'getsemani', 'islas del rosario', 'baru', 'la popa'],
     'barranquilla': ['malecon del rio', 'ventana al mundo', 'boca de ceniza', 'casa del carnaval', 'edgar renteria'],
@@ -2483,10 +2493,27 @@ function isPlaceBelongingToCity(placeName, targetCity = '') {
   for (const [cityKey, landmarks] of Object.entries(CITY_EXCLUSIVE_LANDMARKS)) {
     if (!normCity.includes(cityKey)) {
       if (landmarks.some(l => normPlace.includes(l))) {
-        return false // Pertenece a otra ciudad!
+        return false
       }
     }
   }
+
+  // 3. Geocodificación inversa dinámica si hay coordenadas
+  if (lat && lon) {
+    try {
+      const geo = await reverseGeocode(lat, lon)
+      if (geo && geo.city) {
+        const placeCityNorm = String(geo.city).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        if (normCity.length >= 3 && placeCityNorm.length >= 3 && !placeCityNorm.includes(normCity) && !normCity.includes(placeCityNorm)) {
+          if (targetCityCoords?.latitude) {
+            const distKm = haversineMeters(targetCityCoords.latitude, targetCityCoords.longitude, lat, lon) / 1000
+            if (distKm > 15) return false
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   return true
 }
 
@@ -2513,10 +2540,10 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     name: sourceName,
     fallbackPlace,
     startPlace,
-    endPlace,
-  })
+    })
   let resolvedName = sourceName || fallbackPlace?.name || candidateFallback?.name || `${input.destination}`
-  if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isPlaceBelongingToCity(resolvedName, input.city || input.destination)) {
+  const isValidCityPlace = await isPlaceBelongingToCity(resolvedName, input.city || input.destination, coordinates.latitude, coordinates.longitude, candidatePlaces[0])
+  if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
     resolvedName = candidateFallback?.name || fallbackPlace?.name || `${input.destination}`
   }
   let description = source.descripcion ?? source.description
