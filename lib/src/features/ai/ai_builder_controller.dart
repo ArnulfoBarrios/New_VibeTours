@@ -195,8 +195,12 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final responseMessage = data['responseMessage'] as String? ?? '¡Excelente!';
+        final actionChips = (data['actionChips'] as List?)?.map((e) => e.toString()).toList() ?? [];
         final rawPrefs = data['preferences'] as Map<String, dynamic>? ?? {};
-        final mergedPreferences = Map<String, dynamic>.from(state.preferences)..addAll(rawPrefs);
+        final updatedPreferences = Map<String, dynamic>.from(state.preferences)..addAll(rawPrefs);
+        final readyToBuild = data['readyToBuild'] == true;
+        final webSearchDone = data['webSearchDone'] == true;
 
         final suggs = data['destinationSuggestions'] as List? ?? [];
         final suggestions = suggs.map((e) {
@@ -215,7 +219,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         state = state.copyWith(
           isTyping: false,
           messages: [...state.messages, aiMsg],
-          preferences: mergedPreferences,
+          preferences: updatedPreferences,
           webSearchDone: webSearchDone,
         );
 
