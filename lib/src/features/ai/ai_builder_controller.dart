@@ -191,8 +191,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         'message': text,
         'history': history,
         'currentPreferences': state.preferences,
-        '?latitude': lat,
-        '?longitude': lon,
+        // ignore: use_null_aware_elements
+        if (lat != null) 'latitude': lat,
+        // ignore: use_null_aware_elements
+        if (lon != null) 'longitude': lon,
       });
 
       if (response.statusCode == 200) {
