@@ -191,6 +191,8 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         'message': text,
         'history': history,
         'currentPreferences': state.preferences,
+        if (lat != null) 'latitude': lat,
+        if (lon != null) 'longitude': lon,
       });
 
       if (response.statusCode == 200) {
@@ -239,6 +241,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
             final numDays = (updatedPreferences['durationDays'] as num?)?.toDouble() ?? 1.0;
             final durHours = (updatedPreferences['durationHours'] as num?)?.toDouble() ?? (numDays >= 2 ? numDays * 24 : 8.0);
+            final specPlaces = (updatedPreferences['specificPlaces'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
             final request = AiTourRequest(
               prompt: text,
@@ -254,6 +257,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
               latitude: lat,
               longitude: lon,
               budget: updatedPreferences['budget']?.toString(),
+              selectedPlaces: specPlaces,
             );
 
             await startPlanning(request);

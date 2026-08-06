@@ -751,6 +751,7 @@ class AiTourRequest {
     this.latitude,
     this.longitude,
     this.budget,
+    this.selectedPlaces = const [],
   });
 
   final String destination;
@@ -770,6 +771,7 @@ class AiTourRequest {
   final double? latitude;
   final double? longitude;
   final String? budget;
+  final List<String> selectedPlaces;
 
   Map<String, dynamic> toJson() => {
     'destination': destination,
@@ -789,6 +791,7 @@ class AiTourRequest {
     if (latitude != null) 'latitude': latitude,
     if (longitude != null) 'longitude': longitude,
     if (budget != null) 'budget': budget,
+    if (selectedPlaces.isNotEmpty) 'selectedPlaces': selectedPlaces,
   };
 
   AiTourRequest copyWith({
@@ -809,6 +812,7 @@ class AiTourRequest {
     double? latitude,
     double? longitude,
     String? budget,
+    List<String>? selectedPlaces,
   }) {
     return AiTourRequest(
       destination: destination ?? this.destination,
@@ -828,6 +832,7 @@ class AiTourRequest {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       budget: budget ?? this.budget,
+      selectedPlaces: selectedPlaces ?? this.selectedPlaces,
     );
   }
 }
