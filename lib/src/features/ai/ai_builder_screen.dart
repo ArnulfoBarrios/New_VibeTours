@@ -68,16 +68,19 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
         children: [
           // Mapa de fondo
           Positioned.fill(
-            child: OpenFreeRouteMap(
-              key: const ValueKey('ai_builder_openfree_map'),
-              points: points,
-              labels: labels,
-              styleUrl: mapStyle,
-              activeIndex: _activeIndex,
-              height: double.infinity,
-              borderRadius: 0,
-              showNumbers: true,
-              useRoadRouting: true,
+            child: RepaintBoundary(
+              key: ValueKey('ai_builder_map_boundary_${state.builtTour?.id ?? "stable"}'),
+              child: OpenFreeRouteMap(
+                key: const ValueKey('ai_builder_openfree_map'),
+                points: points,
+                labels: labels,
+                styleUrl: mapStyle,
+                activeIndex: _activeIndex,
+                height: double.infinity,
+                borderRadius: 0,
+                showNumbers: true,
+                useRoadRouting: true,
+              ),
             ),
           ),
           // Degradado en la parte inferior para que las tarjetas resalten

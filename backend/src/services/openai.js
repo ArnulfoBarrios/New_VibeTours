@@ -769,15 +769,64 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       chips = getDefaultActionChips(known, lastUserMsg)
     }
     parsed.actionChips = chips
+
+    // Generar las tarjetas visuales enriquecidas de destino (Carrusel de la Imagen 3) cuando no hay ciudad definida
+    if (!known.city && !known.destination) {
+      const isCityList = chips.every(c => !/días|fin de semana|económico|moderado|lujo|auto|caminando|taxi/i.test(c))
+      if (isCityList) {
+        parsed.destinationSuggestions = buildVisualDestinationSuggestions(chips)
+      }
+    }
+
     return parsed
   } catch (err) {
     console.error('[openai] chat response error:', err)
+    const fallbackChips = getDefaultActionChips(known, lastUserMsg)
     return {
       responseMessage: '¡Hola! Es un placer saludarte. Cuéntame, ¿a qué ciudad te gustaría viajar hoy?',
-      actionChips: getDefaultActionChips(known, lastUserMsg),
+      actionChips: fallbackChips,
+      destinationSuggestions: (!known.city && !known.destination) ? buildVisualDestinationSuggestions(fallbackChips) : [],
       readyToBuild: false
     }
   }
+}
+
+function buildVisualDestinationSuggestions(cityList = []) {
+  const cityData = {
+    'roma': { name: 'Roma', city: 'Roma', country: 'Italia', countryCode: 'IT', flagEmoji: '🇮🇹', description: 'Conocida por su rica historia, impresionante arquitectura antigua y plazas tranquilas.', imageUrl: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '26°C' },
+    'barcelona': { name: 'Barcelona', city: 'Barcelona', country: 'España', countryCode: 'ES', flagEmoji: '🇪🇸', description: 'Famosa por sus obras arquitectónicas de Gaudí y sus hermosos lugares para relajarse como la Playa de la Barceloneta.', imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '25°C' },
+    'tokio': { name: 'Tokio', city: 'Tokio', country: 'Japón', countryCode: 'JP', flagEmoji: '🇯🇵', description: 'Una metrópolis moderna que combina rascacielos iluminados con templos históricos y jardines serenos.', imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=75', suggestedDays: 5, temperature: '22°C' },
+    'parís': { name: 'París', city: 'París', country: 'Francia', countryCode: 'FR', flagEmoji: '🇫🇷', description: 'La capital del arte, la gastronomía y los museos icónicos junto al río Sena.', imageUrl: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '22°C' },
+    'madrid': { name: 'Madrid', city: 'Madrid', country: 'España', countryCode: 'ES', flagEmoji: '🇪🇸', description: 'Famosa por sus amplios bulevares, palacios reales y museos de arte de clase mundial.', imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '24°C' },
+    'cancún': { name: 'Cancún', city: 'Cancún', country: 'México', countryCode: 'MX', flagEmoji: '🇲🇽', description: 'Aguas turquesas del Caribe, playas de arena blanca y zonas de relax absoluto.', imageUrl: 'https://images.unsplash.com/photo-1512813195386-6cf811ad3542?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '31°C' },
+    'cartagena': { name: 'Cartagena', city: 'Cartagena', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Ciudad amurallada del Caribe con encanto colonial, playas y ambiente vibrante.', imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '30°C' },
+    'santa marta': { name: 'Santa Marta', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Puerta de entrada al Parque Tayrona con playas vírgenes y bahías tranquilas.', imageUrl: 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '29°C' },
+    'medellín': { name: 'Medellín', city: 'Medellín', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'La ciudad de la eterna primavera con parques ecológicos, cultura y gastronomía.', imageUrl: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '24°C' },
+    'san andrés': { name: 'San Andrés', city: 'San Andrés', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Isla del mar de los siete colores, perfecta para snorkel, relax y descanso en familia.', imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '29°C' },
+    'eje cafetero': { name: 'Eje Cafetero', city: 'Salento / Armenia', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Paisajes montañosos, palmas de cera gigantes y fincas cafeteras tradicionales.', imageUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '22°C' },
+    'bogotá': { name: 'Bogotá', city: 'Bogotá', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital cultural con arquitectura histórica en La Candelaria y museos de oro.', imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '18°C' }
+  }
+
+  const result = []
+  for (const rawName of cityList) {
+    const key = rawName.toLowerCase().trim()
+    if (cityData[key]) {
+      result.push(cityData[key])
+    } else {
+      result.push({
+        name: rawName,
+        city: rawName,
+        country: 'Destino Destacado',
+        countryCode: 'WORLD',
+        flagEmoji: '✈️',
+        description: `Descubre los mejores lugares y experiencias turísticas en ${rawName}.`,
+        imageUrl: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=75',
+        suggestedDays: 3,
+        temperature: '24°C'
+      })
+    }
+  }
+  return result
 }
 
 /**

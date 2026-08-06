@@ -109,6 +109,7 @@ aiRouter.post('/chat', async (req, res, next) => {
     res.json({
       responseMessage: aiResponse.responseMessage,
       actionChips: aiResponse.actionChips || [],
+      destinationSuggestions: aiResponse.destinationSuggestions || [],
       readyToBuild: Boolean(aiResponse.readyToBuild),
       preferences: updatedPreferences,
       webSearchDone: Boolean(webSearchResult)

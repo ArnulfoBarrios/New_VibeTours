@@ -195,11 +195,13 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final responseMessage = data['responseMessage'] as String? ?? '¡Excelente!';
-        final actionChips = (data['actionChips'] as List?)?.map((e) => e.toString()).toList() ?? [];
-        final updatedPreferences = data['preferences'] as Map<String, dynamic>? ?? state.preferences;
-        final readyToBuild = data['readyToBuild'] == true;
-        final webSearchDone = data['webSearchDone'] == true;
+        final rawPrefs = data['preferences'] as Map<String, dynamic>? ?? {};
+        final mergedPreferences = Map<String, dynamic>.from(state.preferences)..addAll(rawPrefs);
+
+        final suggs = data['destinationSuggestions'] as List? ?? [];
+        final suggestions = suggs.map((e) {
+          return DestinationSuggestion.fromJson(Map<String, dynamic>.from(e as Map));
+        }).toList();
 
         final aiMsg = ChatMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -207,12 +209,13 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           type: ChatMessageType.ai,
           timestamp: DateTime.now(),
           actionChips: actionChips.isNotEmpty ? actionChips : null,
+          destinationSuggestions: suggestions.isNotEmpty ? suggestions : null,
         );
 
         state = state.copyWith(
           isTyping: false,
           messages: [...state.messages, aiMsg],
-          preferences: updatedPreferences,
+          preferences: mergedPreferences,
           webSearchDone: webSearchDone,
         );
 
