@@ -441,7 +441,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     if (points.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      key: ValueKey('ai_planner_map_card_${points.length}_${points.first.latitude}'),
+      key: const ValueKey('ai_planner_map_card_stable'),
       height: 250,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -457,7 +457,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: OpenFreeRouteMap(
-          key: ValueKey('ai_planner_openfree_map_${points.length}'),
+          key: const ValueKey('ai_planner_openfree_map_stable'),
           points: points,
           labels: labels,
           styleUrl: ref.watch(mapStyleProvider),
@@ -468,7 +468,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           useRoadRouting: true,
         ),
       ),
-    ).animate().fadeIn().slideY(begin: 0.05);
+    );
   }
 
 

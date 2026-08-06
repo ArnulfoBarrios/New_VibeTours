@@ -1453,60 +1453,26 @@ class _StopTile extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: Stack(
-              children: [
-                CachedNetworkImage(
-                  imageUrl: stop.imageUrl,
-                  width: 76,
-                  height: 76,
-                  fit: BoxFit.cover,
-                  httpHeaders: const {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                  },
-                  placeholder: (context, url) =>
-                      const SkeletonBox(width: 76, height: 76),
-                  errorWidget: (context, url, error) => CachedNetworkImage(
-                    imageUrl: _getRandomTravelImage(stop.name),
+            child: (stop.isFallbackImage || stop.imageUrl.isEmpty)
+                ? TravelImageFallback(
+                    title: stop.name,
+                    icon: Icons.place_rounded,
+                  )
+                : CachedNetworkImage(
+                    imageUrl: stop.imageUrl,
                     width: 76,
                     height: 76,
                     fit: BoxFit.cover,
-                    errorWidget: (c, u, e) => TravelImageFallback(
+                    httpHeaders: const {
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    },
+                    placeholder: (context, url) =>
+                        const SkeletonBox(width: 76, height: 76),
+                    errorWidget: (context, url, error) => TravelImageFallback(
                       title: stop.name,
                       icon: Icons.place_rounded,
                     ),
                   ),
-                ),
-                if (stop.isFallbackImage)
-                  Positioned(
-                    bottom: 2,
-                    left: 2,
-                    right: 2,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xC0000000),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-                      alignment: Alignment.center,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.info_outline, color: Colors.amber, size: 10),
-                          SizedBox(width: 2),
-                          Text(
-                            'Foto demo',
-                            style: TextStyle(
-                              color: Colors.amber,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
           ),
           const SizedBox(width: 12),
           Expanded(

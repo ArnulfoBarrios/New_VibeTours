@@ -817,7 +817,11 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
 
     // REGLA ESTRICTA DE INTENCIÓN DE GENERACIÓN: Solo marcar readyToBuild = true si el usuario lo pidió EXPLÍCITAMENTE
     const userExplicitBuildIntent = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|empezar tour|comenzar tour|sí genera|sí armalo|crealo|hazlo|armalo|armar el tour|armar tour|generar tour ahora)\b/i.test(lastUserMsg)
-    if (!userExplicitBuildIntent) {
+    if (userExplicitBuildIntent) {
+      parsed.readyToBuild = true
+      parsed.actionChips = []
+      parsed.destinationSuggestions = []
+    } else {
       parsed.readyToBuild = false
     }
 

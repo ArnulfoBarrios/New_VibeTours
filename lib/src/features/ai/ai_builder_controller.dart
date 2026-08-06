@@ -393,17 +393,8 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           state = state.copyWith(
             isLoading: false, 
             plannerContext: context,
-            recommendations: [recs.first],
+            recommendations: recs,
           );
-          
-          // Animación progresiva
-          for (int i = 1; i < recs.length; i++) {
-            await Future.delayed(const Duration(milliseconds: 800));
-            if (!mounted) return;
-            state = state.copyWith(
-              recommendations: [...state.recommendations, recs[i]],
-            );
-          }
         }
 
         final aiMsg = ChatMessage(
