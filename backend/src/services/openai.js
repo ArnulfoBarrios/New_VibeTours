@@ -770,13 +770,47 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     }
     parsed.actionChips = chips
 
-    // Generar las tarjetas visuales enriquecidas de destino (Carrusel de la Imagen 3) cuando no hay ciudad definida o cuando es una región general
-    const targetDest = (known.city || known.destination || '').toLowerCase()
-    const isGeneralOrEmpty = !targetDest || /europa|asia|sudamerica|caribe|exterior|internacional|latinoamerica/i.test(targetDest)
-    if (isGeneralOrEmpty) {
-      const isCityList = chips.every(c => !/días|fin de semana|económico|moderado|lujo|auto|caminando|taxi/i.test(c))
-      if (isCityList && chips.length > 0) {
-        parsed.destinationSuggestions = buildVisualDestinationSuggestions(chips)
+    // REGLA ESTRICTA 1: Solo marcar readyToBuild = true si el usuario lo pidió EXPLÍCITAMENTE en su mensaje
+    const userExplicitBuildIntent = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|empezar tour|comenzar tour)\b/i.test(lastUserMsg)
+    if (!userExplicitBuildIntent) {
+      parsed.readyToBuild = false
+    }
+
+    // REGLA 2 Y 4: Generar tarjetas visuales de destino o de Hospedaje (Hotel vs Casa propia)
+    const isHospedajeQuestion = chips.some(c => typeof c === 'string' && /hospedaje|hotel|alojamiento/i.test(c))
+    if (isHospedajeQuestion) {
+      parsed.destinationSuggestions = [
+        {
+          name: 'Recomiéndame hoteles',
+          city: 'Opciones de Hotel',
+          country: 'Hospedaje',
+          countryCode: 'HOTEL',
+          flagEmoji: '🏨',
+          description: 'Te recomendaremos las mejores opciones de hoteles cómodos según tu presupuesto.',
+          imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=75',
+          suggestedDays: 3,
+          temperature: '28°C'
+        },
+        {
+          name: 'Tengo mi propio hospedaje',
+          city: 'Alojamiento Propio',
+          country: 'Hospedaje',
+          countryCode: 'HOME',
+          flagEmoji: '🏠',
+          description: 'Utilizarás tu propio hospedaje o alojamiento reservado para el tour.',
+          imageUrl: 'https://images.unsplash.com/photo-1587061949409-02df41d5e562?auto=format&fit=crop&w=600&q=75',
+          suggestedDays: 3,
+          temperature: '28°C'
+        }
+      ]
+    } else {
+      const targetDest = (known.city || known.destination || '').toLowerCase()
+      const isGeneralOrEmpty = !targetDest || /europa|asia|sudamerica|caribe|exterior|internacional|latinoamerica/i.test(targetDest)
+      if (isGeneralOrEmpty || chips.some(c => typeof c === 'string' && /tayrona|minca|rosario|bocagrande|monserrate|guatap/i.test(c.toLowerCase()))) {
+        const isCityOrPlaceList = chips.every(c => !/días|fin de semana|económico|moderado|lujo|auto|caminando|taxi/i.test(c))
+        if (isCityOrPlaceList && chips.length > 0) {
+          parsed.destinationSuggestions = buildVisualDestinationSuggestions(chips)
+        }
       }
     }
 
@@ -806,7 +840,11 @@ function buildVisualDestinationSuggestions(cityList = []) {
     'medellín': { name: 'Medellín', city: 'Medellín', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'La ciudad de la eterna primavera con parques ecológicos, cultura y gastronomía.', imageUrl: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '24°C' },
     'san andrés': { name: 'San Andrés', city: 'San Andrés', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Isla del mar de los siete colores, perfecta para snorkel, relax y descanso en familia.', imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '29°C' },
     'eje cafetero': { name: 'Eje Cafetero', city: 'Salento / Armenia', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Paisajes montañosos, palmas de cera gigantes y fincas cafeteras tradicionales.', imageUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '22°C' },
-    'bogotá': { name: 'Bogotá', city: 'Bogotá', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital cultural con arquitectura histórica en La Candelaria y museos de oro.', imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '18°C' }
+    'bogotá': { name: 'Bogotá', city: 'Bogotá', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital cultural con arquitectura histórica en La Candelaria y museos de oro.', imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '18°C' },
+    'parque tayrona': { name: 'Parque Tayrona', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🏖️', description: 'Santuario natural con bosques tropicales, bahías cristalinas y arrecifes coralinos.', imageUrl: 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=600&q=75', suggestedDays: 1, temperature: '29°C' },
+    'minca': { name: 'Minca', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🌿', description: 'Pueblo de montaña famoso por sus cascadas, fincas de café orgánico y avistamiento de aves.', imageUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=75', suggestedDays: 1, temperature: '23°C' },
+    'islas del rosario': { name: 'Islas del Rosario', city: 'Cartagena', country: 'Colombia', countryCode: 'CO', flagEmoji: '🏝️', description: 'Archipiélago paradisíaco de aguas cristalinas ideales para snorkel y relax en el mar.', imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=75', suggestedDays: 1, temperature: '30°C' },
+    'playa de bocagrande': { name: 'Playa de Bocagrande', city: 'Cartagena', country: 'Colombia', countryCode: 'CO', flagEmoji: '🌊', description: 'Playa urbana con ambiente vibrante, deportes acuáticos y vista a los rascacielos.', imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=75', suggestedDays: 1, temperature: '30°C' }
   }
 
   const result = []

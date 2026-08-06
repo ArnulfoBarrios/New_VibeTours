@@ -750,7 +750,12 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   }
 
   Widget _buildEmbeddedTourCard(Tour tour) {
+    final points = tour.stops.map((s) => s.location).toList();
+    final labels = tour.stops.map((s) => s.name).toList();
+    final mapStyle = ref.watch(mapStyleProvider);
+
     return Container(
+      key: ValueKey('embedded_tour_card_${tour.id}'),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         borderRadius: BorderRadius.circular(12),
@@ -805,14 +810,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           Text('${tour.stops.length} paradas', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.bar_chart, size: 12, color: Colors.grey),
-                          const SizedBox(width: 4),
-                          const Text('Dificultad: Baja', style: TextStyle(fontSize: 12, color: Colors.grey)), 
-                        ],
-                      ),
                       const SizedBox(height: 8),
                       GestureDetector(
                         onTap: () {
@@ -834,6 +831,28 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               )
             ],
           ),
+          if (points.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+              child: SizedBox(
+                height: 160,
+                width: double.infinity,
+                child: RepaintBoundary(
+                  key: ValueKey('embedded_map_boundary_${tour.id}'),
+                  child: OpenFreeRouteMap(
+                    key: ValueKey('embedded_openfree_map_${tour.id}'),
+                    points: points,
+                    labels: labels,
+                    styleUrl: mapStyle,
+                    height: 160,
+                    borderRadius: 0,
+                    showNumbers: true,
+                    useRoadRouting: true,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
