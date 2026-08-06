@@ -643,6 +643,30 @@ export function extractChatInformationFallback(prompt) {
   return result
 }
 
+function getDefaultActionChips(known = {}, lastMessage = '') {
+  if (!known.city && !known.destination) {
+    const isInternational = /internacional|exterior|otro país|fuera del país|europa|asia|eeuu|usa|extranjero|fuera|viaje internacional/i.test(lastMessage)
+    if (isInternational) {
+      return ['París', 'Madrid', 'Nueva York', 'Cancún']
+    }
+    const isBeach = /playa|mar|costa|brisa|isla|relajarme|relajar/i.test(lastMessage)
+    if (isBeach) {
+      return ['Cartagena', 'Santa Marta', 'San Andrés', 'Cancún']
+    }
+    const isNature = /naturaleza|bosque|senderismo|ecoturismo|montaña/i.test(lastMessage)
+    if (isNature) {
+      return ['Eje Cafetero', 'Medellín', 'Santa Marta', 'San Gil']
+    }
+    return ['Cartagena', 'Medellín', 'Santa Marta', 'Bogotá']
+  }
+  if (!known.durationDays && !known.durationHours) return ['Un fin de semana (2-3 días)', '3 días', '1 día completo']
+  if (!known.companions) return ['En familia con niños', 'Solo', 'En pareja', 'Con amigos']
+  if (!known.transport) return ['Auto propio', 'Caminando', 'Transporte público', 'Taxi']
+  if (!known.budget) return ['Económico', 'Moderado', 'Lujo']
+  if (!known.accommodationStatus) return ['Tengo mi propio hospedaje', 'Recomiéndame hoteles']
+  return ['Generar Tour Final', 'Quiero cambiar lugares']
+}
+
 export async function generateChatResponse(state, backendInstruction, webSearchSummary = '', currentPreferences = {}) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return {
