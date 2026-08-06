@@ -572,6 +572,12 @@ Mensaje del usuario: "${userMessage}"`
         response_format: { type: 'json_object' },
         messages: [{ role: 'system', content: prompt }]
       })
+    })
+
+    if (!response.ok) {
+      return extractChatInformationFallback(userMessage)
+    }
+
     const json = await response.json()
     const parsed = safeParseJson(json.choices?.[0]?.message?.content ?? '{}', {})
 
