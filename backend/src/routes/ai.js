@@ -1005,7 +1005,9 @@ async function processTourGeneration(jobId, input) {
           return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
         }),
       )
-      const normalizedStops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+      const rawNormalized = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+      const uniquePublicStops = uniqueByName(rawNormalized.map(s => s.publicStop))
+      const normalizedStops = uniquePublicStops.map(pub => rawNormalized.find(r => r.publicStop.nombre === pub.nombre)).filter(Boolean)
       const stops = normalizedStops.map((stop) => stop.publicStop)
       const routeStops = normalizedStops.map((stop) => stop.routeStop)
       const coverUrl = await imageForPlace(input.city || input.destination, input.country || "").catch(() => fallbackCover(input.destination))
@@ -1411,6 +1413,9 @@ function normalizeCandidate(place, index, input, origin) {
 
 function scorePlace(place, input) {
   const distanceKm = place.distanceMeters / 1000
+  if (distanceKm > 30 && !place.isUserSelected) {
+    return -9999
+  }
   const typeScore = typeAffinityScore(input.type, place.category, place.name, place.tags)
   const popularityScore = popularityScoreFor(place, input)
   const proximityScore = proximityScoreFor(distanceKm)
@@ -2488,7 +2493,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     startPlace,
     endPlace,
   })
-  let resolvedName = (coordinates.wasFallback || !matchedPlace) ? (fallbackPlace?.name ?? candidateFallback?.name ?? sourceName) : sourceName
+  let resolvedName = sourceName || fallbackPlace?.name || candidateFallback?.name || `${input.destination}`
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName)) {
     resolvedName = candidateFallback?.name || fallbackPlace?.name || `${input.destination}`
   }
@@ -2702,12 +2707,24 @@ function unique(values) {
   return [...new Set(values.filter(Boolean))]
 }
 
+function fuzzyNormalizeKey(name) {
+  return normalizeKey(name)
+    .replace(/^playa/g, '')
+    .replace(/^centrocomercial/g, 'cc')
+    .replace(/^parque/g, '')
+    .replace(/^museo/g, '')
+    .replace(/^bahiade/g, '')
+}
+
 function uniqueByName(values) {
   const seen = new Set()
   return values.filter((value) => {
+    if (!value || !value.name) return false
     const key = normalizeKey(value.name)
-    if (seen.has(key)) return false
+    const fuzzyKey = fuzzyNormalizeKey(value.name)
+    if (seen.has(key) || (fuzzyKey.length > 3 && seen.has(fuzzyKey))) return false
     seen.add(key)
+    if (fuzzyKey.length > 3) seen.add(fuzzyKey)
     return true
   })
 }
