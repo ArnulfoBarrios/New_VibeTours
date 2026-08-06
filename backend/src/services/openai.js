@@ -701,7 +701,10 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
 
   const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
   const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
-  const isAskingRecommendations = /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|atracciones|actividades|lugares|opciones)\b/i.test(lastUserMsg)
+  
+  const hasCity = Boolean(known.city || known.destination)
+  const isAskingCityRecommendations = !hasCity && /\b(recomien|recomiend|qué me recomiendas|que me recomiendas|dónde ir|donde ir|sugiéreme|sugiereme|opciones|destinos|playas|viaje|tour)\b/i.test(lastUserMsg)
+  const isAskingHotelRecommendations = hasCity && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje)\b/i.test(lastUserMsg)
   const isExplicitBuild = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|empezar tour|comenzar tour|sí genera|sí armalo|crealo|hazlo|armalo|armar el tour|armar tour|generar tour ahora)\b/i.test(lastUserMsg)
 
   const nextMissing = getNextMissingPreference(known)
@@ -711,14 +714,21 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     promptInstruction = `
     EL USUARIO SOLICITÓ EXPLÍCITAMENTE GENERAR SU TOUR.
     Confirma con entusiasmo que estás listo y procedes de inmediato a armar su itinerario perfecto.
-    PROHIBIDO incluir listas largas de recomendaciones adicionales de hoteles o atracciones aquí, ya que el tour se construirá a continuación.
+    PROHIBIDO incluir listas largas de recomendaciones adicionales aquí.
     `
-  } else if (isAskingRecommendations) {
+  } else if (isAskingCityRecommendations) {
     promptInstruction = `
-    ATENCIÓN CRÍTICA: EL USUARIO HA SOLICITADO RECOMENDACIONES DE HOTELES O LUGARES EN SU MENSAJE: "${lastUserMsg}".
-    DEBES RESPONDER DE INMEDIATO A SU SOLICITUD EN ESTE MISMO MENSAJE: Proporciona 3 excelentes recomendaciones reales de hoteles o atracciones en ${known.city || known.destination || 'el destino'} acordes a sus preferencias (${known.budget || 'Económico'}, ${known.companions || 'en familia'}).
+    EL USUARIO SOLICITÓ RECOMENDACIONES DE DESTINOS/CIUDADES ("${lastUserMsg}").
+    AÚN NO HA ELEGIDO UNA CIUDAD DESTINO.
+    Recomienda con entusiasmo 3 a 4 ciudades o regiones maravillosas adaptadas a sus gustos.
+    PREGUNTA EXPLÍCITAMENTE CUÁL DE ESTAS CIUDADES PREFIERE ELEGIR PARA SU VIAJE.
+    PROHIBIDO preguntar si desea armar el tour ahora mismo antes de que escoja la ciudad.
+    `
+  } else if (isAskingHotelRecommendations) {
+    promptInstruction = `
+    EL USUARIO SOLICITÓ RECOMENDACIONES DE HOTELES EN ${known.city || known.destination}: "${lastUserMsg}".
+    Proporciona 3 excelentes opciones reales de hospedaje en ${known.city || known.destination} acordes a sus preferencias (${known.budget || 'Económico'}).
     AL FINAL DE TU MENSAJE, PREGUNTA SI CON ESTAS OPCIONES REVISADAS YA DESEA PROCEDER A ARMAR SU TOUR AHORA MISMO.
-    ActionChips obligatorios: ["🚀 ¡Sí, generar tour ahora!", "✏️ Cambiar un detalle"]
     `
   } else if (nextMissing === 'city') {
     promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 📍 ¿A qué ciudad o lugar te gustaría ir?'
@@ -863,6 +873,16 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
 }
 
 export async function buildVisualDestinationSuggestions(cityList = [], defaultCity = '') {
+  const filteredList = cityList.filter(c => {
+    if (typeof c !== 'string') return false
+    const clean = c.trim().toLowerCase()
+    if (clean.length < 2) return false
+    if (/🚀|✏️|🌟|➕|generar|arma|armar|cambiar|detalle|opción|opcion|sugerencia|tour/i.test(clean)) return false
+    return true
+  })
+
+  if (filteredList.length === 0) return []
+
   const cityData = {
     'roma': { name: 'Roma', city: 'Roma', country: 'Italia', countryCode: 'IT', flagEmoji: '🇮🇹', description: 'Conocida por su rica historia, impresionante arquitectura antigua y plazas tranquilas.', imageUrl: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '26°C', isDemoImage: false },
     'barcelona': { name: 'Barcelona', city: 'Barcelona', country: 'España', countryCode: 'ES', flagEmoji: '🇪🇸', description: 'Famosa por sus obras arquitectónicas de Gaudí y sus hermosos lugares para relajarse como la Playa de la Barceloneta.', imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '25°C', isDemoImage: false },
@@ -883,7 +903,7 @@ export async function buildVisualDestinationSuggestions(cityList = [], defaultCi
   }
 
   const result = await Promise.all(
-    cityList.map(async (rawName) => {
+    filteredList.map(async (rawName) => {
       const placeName = String(rawName || '').trim()
       if (!placeName) return null
 
