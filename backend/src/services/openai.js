@@ -643,12 +643,25 @@ export function extractChatInformationFallback(prompt) {
   return result
 }
 
-export async function generateChatResponse(state, backendInstruction, webSearchSummary = '') {
+export async function generateChatResponse(state, backendInstruction, webSearchSummary = '', currentPreferences = {}) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return {
     responseMessage: '¡Hola! Qué gusto saludarte. Cuéntame: ¿a qué ciudad te gustaría viajar?',
     actionChips: ['Cartagena', 'Medellín', 'Santa Marta'],
     readyToBuild: false
+  }
+
+  const known = currentPreferences || {}
+  const remainingQuestions = []
+  if (!known.city && !known.destination) remainingQuestions.push('- 📍 ¿A qué ciudad o lugar te gustaría ir?')
+  if (!known.datesSeason) remainingQuestions.push('- 📅 ¿En qué fechas, mes o época del año planeas viajar?')
+  if (!known.durationDays && !known.durationHours) remainingQuestions.push('- ⏳ ¿Cuántos días va a durar tu tour?')
+  if (!known.companions) remainingQuestions.push('- 👥 ¿Viajarás solo, en pareja, con amigos o en familia con niños?')
+  if (!known.budget) remainingQuestions.push('- 💰 ¿Qué estilo de presupuesto tienes en mente? (Económico, Moderado, Lujo)')
+  if (!known.transport) remainingQuestions.push('- 🚗 ¿Cómo prefieres moverte durante el tour? (Caminando, Transporte público, Auto rentado, Taxi)')
+  if (!known.accommodationStatus) remainingQuestions.push('- 🏨 ¿Ya tienes hospedaje reservado o deseas que te recomendemos opciones de hotel?')
+  if (!known.specificPlaces || (Array.isArray(known.specificPlaces) && known.specificPlaces.length === 0)) {
+    remainingQuestions.push('- 🎯 ¿Hay algún lugar o atracción específica en la ciudad que sí o sí quieras visitar?')
   }
 
   const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual de VibeTours.
@@ -657,24 +670,19 @@ Tu personalidad es EXTREMADAMENTE CORDIAL, CÁLIDA, EMPÁTICA Y ENTUSIASTA. Salu
 OBJETIVO PRINCIPAL:
 Guiar amablemente al usuario para conocer los detalles de su viaje antes de diseñar el tour perfecto.
 
-REGLAS DE COMPORTAMIENTO CORDIAL:
+PREFERENCIAS YA RECOPILADAS Y CONFIRMADAS HASTA EL MOMENTO:
+${JSON.stringify(known, null, 2)}
+
+REGLAS ABSOLUTAS E INVIOLABLES DE COMPORTAMIENTO:
 1. SIEMPRE agradece o haz un comentario amigable sobre lo que el usuario acaba de responder.
-2. Mantén un tono servicial y profesional pero muy cercano y humano.
-3. Si el usuario hace preguntas o dudas sobre el viaje, respóndelas amablemente usando la información disponible o de búsqueda web.
-4. REGLAS CRÍTICAS DE VERIFICACIÓN DE DATOS (FESTIVOS Y CALENDARIO):
+2. REGLA DE ORO DE NO REPETICIÓN: JAMÁS, bajo ninguna circunstancia, vuelvas a preguntar una preferencia que YA APARECE en "PREFERENCIAS YA RECOPILADAS". Si ya se conoce el destino, las fechas, la duración, los acompañantes, el transporte, el presupuesto o el hospedaje, PROHIBIDO volver a pedir esa información.
+3. REGLAS CRÍTICAS DE VERIFICACIÓN DE DATOS (FESTIVOS Y CALENDARIO):
    - En Colombia, SEPTIEMBRE NO TIENE NINGÚN DÍA FESTIVO OFICIAL NI PUENTES FESTIVOS (es un mes sin festivos).
    - El Día de la Independencia de Colombia es el 20 DE JULIO (jamás en septiembre).
    - El Día de la Batalla de Boyacá es el 7 DE AGOSTO (jamás en septiembre).
-   - NUNCA inventes días festivos ni traslades festivos de julio o agosto a septiembre. Si el usuario pregunta si hay puente o festivo en septiembre en Colombia, explica amablemente que en Colombia septiembre no cuenta con días festivos oficiales, pero que cualquier fin de semana es una oportunidad genial para escapar y disfrutar de su tour.
-5. Si falta información relevante, realiza amablemente la SIGUIENTE pregunta de las 8 preguntas fundamentales:
-   - 📍 ¿A qué ciudad o lugar te gustaría ir?
-   - 📅 ¿En qué fechas, mes o época del año planeas viajar?
-   - ⏳ ¿Cuántos días va a durar tu tour? (Acepta respuestas informales como "un fin de semana con puente", "un par de días", etc.)
-   - 👥 ¿Viajarás solo, en pareja, con amigos o en familia con niños?
-   - 💰 ¿Qué estilo de presupuesto tienes en mente? (Económico, Moderado, Lujo)
-   - 🚗 ¿Cómo prefieres moverte durante el tour? (Caminando, Transporte público, Auto rentado, Taxi)
-   - 🏨 ¿Ya tienes hospedaje reservado o deseas que te recomendemos opciones de hotel?
-   - 🎯 ¿Hay algún lugar o atracción específica en la ciudad que sí o sí quieras visitar?
+   - NUNCA inventes días festivos ni traslades festivos de julio o agosto a septiembre.
+4. Si aún faltan detalles por definir, realiza ÚNICAMENTE UNA de las siguientes preguntas pendientes:
+${remainingQuestions.length > 0 ? remainingQuestions.join('\n') : '¡Ya tenemos toda la información necesaria! Notifica amablemente al usuario que estás listo para generar su tour perfecto.'}
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}\n` : ''}
 ${backendInstruction ? `INSTRUCCIÓN DEL SISTEMA:\n${backendInstruction}\n` : ''}

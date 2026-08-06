@@ -102,7 +102,8 @@ aiRouter.post('/chat', async (req, res, next) => {
     const aiResponse = await generateChatResponse(
       chatState,
       `Preferencias del usuario acumuladas: ${JSON.stringify(updatedPreferences)}`,
-      webSearchResult?.summary || ''
+      webSearchResult?.summary || '',
+      updatedPreferences
     )
 
     res.json({
@@ -3148,6 +3149,18 @@ async function collectCorridorCandidates(input, location) {
   return selected
 }
 
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
 export async function collectTourCandidates(input, location) {
   // Case A: Multi-city tour (e.g. Santa Marta -> Cartagena)
   if (input.isMultiCity || (Array.isArray(input.cities) && input.cities.length > 1)) {
@@ -3175,6 +3188,21 @@ export async function collectTourCandidates(input, location) {
   const city = location?.city || input.city || ''
   const country = location?.country || input.country || ''
 
+  // Obtenemos primero las coordenadas del centro de la ciudad destino para validar el radio
+  const cityGeo = await geocodePlace(`${city} ${country}`.trim()).catch(() => null)
+  const cityCenterLat = cityGeo?.latitude
+  const cityCenterLon = cityGeo?.longitude
+
+  function isWithinCityBounds(lat, lon, maxDistanceKm = 30) {
+    if (!cityCenterLat || !cityCenterLon || !lat || !lon) return true
+    const dist = getDistanceKm(cityCenterLat, cityCenterLon, lat, lon)
+    if (dist > maxDistanceKm) {
+      console.warn(`[collectTourCandidates] Omitiendo parada lejana (${dist.toFixed(1)} km > ${maxDistanceKm} km del centro de ${city})`)
+      return false
+    }
+    return true
+  }
+
   // 1. Fetch top iconic landmarks from OpenAI global geography knowledge
   const iconicLandmarks = await fetchCityIconicLandmarks({
     destination: input.destination,
@@ -3192,7 +3220,7 @@ export async function collectTourCandidates(input, location) {
       iconicLandmarks.map(async (item) => {
         const searchQuery = `${item.name} ${city} ${country}`.trim()
         const geo = await geocodePlace(searchQuery)
-        if (geo && (geo.latitude || geo.longitude)) {
+        if (geo && (geo.latitude || geo.longitude) && isWithinCityBounds(geo.latitude, geo.longitude, 30)) {
           return {
             name: item.name,
             latitude: geo.latitude,

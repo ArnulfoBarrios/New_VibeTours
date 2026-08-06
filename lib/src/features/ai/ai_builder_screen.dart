@@ -69,6 +69,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
           // Mapa de fondo
           Positioned.fill(
             child: OpenFreeRouteMap(
+              key: const ValueKey('ai_builder_openfree_map'),
               points: points,
               labels: labels,
               styleUrl: mapStyle,

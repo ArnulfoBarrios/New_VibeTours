@@ -77,7 +77,7 @@ async function wikipediaSummaryImage(placeName) {
         const json = await response.json()
         if (json.type === 'standard' || json.type === 'normal') {
           const imageUrl = json.originalimage?.source || json.thumbnail?.source
-          if (imageUrl && isImageTitleRelevant(imageUrl, varName)) {
+          if (imageUrl) {
             return imageUrl
           }
         }

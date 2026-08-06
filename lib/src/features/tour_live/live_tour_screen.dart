@@ -958,33 +958,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final point = _pointFromPosition(position);
     if (!mounted) return;
 
-    final previousPoint = _currentPoint;
-    final previousHeading = _currentHeading ?? 0.0;
-    bool needsRebuild = previousPoint == null;
-
-    if (previousPoint != null) {
-      final shiftMeters = Geolocator.distanceBetween(
-        previousPoint.latitude,
-        previousPoint.longitude,
-        point.latitude,
-        point.longitude,
-      );
-      final headingDiff = (position.heading - previousHeading).abs();
-      if (shiftMeters >= 1.5 || headingDiff >= 5.0) {
-        needsRebuild = true;
-      }
-    }
-
     _currentPoint = point;
-    if (position.heading > 0) {
+    if (position.heading >= 0) {
       _currentHeading = position.heading;
     }
 
-    if (needsRebuild) {
-      setState(() {});
-    } else {
-      debugPrint('[GPS-Throttle] Omitiendo rebuild UI: desplazamiento < 1.5m y giro < 5°');
-    }
+    setState(() {});
     final tour = _navigationTour;
     if (tour == null || tour.stops.isEmpty) return;
 
