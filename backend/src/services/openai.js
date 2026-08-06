@@ -645,27 +645,23 @@ export function extractChatInformationFallback(prompt) {
 }
 
 function getDefaultActionChips(known = {}, lastMessage = '') {
-  if (!known.city && !known.destination) {
+  const hasCity = Boolean(known.city || known.destination)
+  const hasDuration = Boolean(known.durationDays || known.durationHours)
+
+  if (!hasCity) {
     const isInternational = /internacional|exterior|otro país|fuera del país|europa|asia|eeuu|usa|extranjero|fuera|viaje internacional/i.test(lastMessage)
-    if (isInternational) {
-      return ['París', 'Madrid', 'Nueva York', 'Cancún']
-    }
+    if (isInternational) return ['París', 'Madrid', 'Nueva York', 'Cancún']
     const isBeach = /playa|mar|costa|brisa|isla|relajarme|relajar/i.test(lastMessage)
-    if (isBeach) {
-      return ['Cartagena', 'Santa Marta', 'San Andrés', 'Cancún']
-    }
+    if (isBeach) return ['Cartagena', 'Santa Marta', 'San Andrés', 'Cancún']
     const isNature = /naturaleza|bosque|senderismo|ecoturismo|montaña/i.test(lastMessage)
-    if (isNature) {
-      return ['Eje Cafetero', 'Medellín', 'Santa Marta', 'San Gil']
-    }
+    if (isNature) return ['Eje Cafetero', 'Medellín', 'Santa Marta', 'San Gil']
     return ['Cartagena', 'Medellín', 'Santa Marta', 'Bogotá']
   }
-  if (!known.durationDays && !known.durationHours) return ['Un fin de semana (2-3 días)', '3 días', '1 día completo']
-  if (!known.companions) return ['En familia con niños', 'Solo', 'En pareja', 'Con amigos']
-  if (!known.transport) return ['Auto propio', 'Caminando', 'Transporte público', 'Taxi']
-  if (!known.budget) return ['Económico', 'Moderado', 'Lujo']
-  if (!known.accommodationStatus) return ['Tengo mi propio hospedaje', 'Recomiéndame hoteles']
-  return ['Generar Tour Final', 'Quiero cambiar lugares']
+  
+  if (!hasDuration) return ['Un fin de semana (2-3 días)', '3 días', '1 día completo']
+
+  // ¡SI YA TENEMOS CIUDAD Y DURACIÓN, YA TENEMOS LO ESENCIAL!
+  return ['🚀 ¡Sí, arma el tour ahora!', '➕ Agregar un lugar específico']
 }
 
 export async function generateChatResponse(state, backendInstruction, webSearchSummary = '', currentPreferences = {}) {
@@ -677,20 +673,16 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     destinationSuggestions: (!known.city && !known.destination) ? await buildVisualDestinationSuggestions(getDefaultActionChips(known)).catch(() => []) : [],
     readyToBuild: false
   }
+
+  const hasCity = Boolean(known.city || known.destination)
+  const hasDuration = Boolean(known.durationDays || known.durationHours)
+
   const remainingQuestions = []
-  if (!known.city && !known.destination) remainingQuestions.push('- 📍 ¿A qué ciudad o lugar te gustaría ir?')
-  if (!known.datesSeason) remainingQuestions.push('- 📅 ¿En qué fechas, mes o época del año planeas viajar?')
-  if (!known.durationDays && !known.durationHours) remainingQuestions.push('- ⏳ ¿Cuántos días va a durar tu tour?')
-  if (!known.companions) remainingQuestions.push('- 👥 ¿Viajarás solo, en pareja, con amigos o en familia con niños?')
-  if (!known.budget) remainingQuestions.push('- 💰 ¿Qué estilo de presupuesto tienes en mente? (Económico, Moderado, Lujo)')
-  if (!known.transport) remainingQuestions.push('- 🚗 ¿Cómo prefieres moverte durante el tour? (Caminando, Transporte público, Auto rentado, Taxi)')
-  if (!known.accommodationStatus) remainingQuestions.push('- 🏨 ¿Ya tienes hospedaje reservado o deseas que te recomendemos opciones de hotel?')
-  if (!known.specificPlaces || (Array.isArray(known.specificPlaces) && known.specificPlaces.length === 0)) {
-    remainingQuestions.push('- 🎯 ¿Hay algún lugar o atracción específica en la ciudad que sí o sí quieras visitar?')
-  }
+  if (!hasCity) remainingQuestions.push('- 📍 ¿A qué ciudad o lugar te gustaría ir?')
+  if (!hasDuration) remainingQuestions.push('- ⏳ ¿Cuántos días va a durar tu tour?')
 
   const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual de VibeTours.
-Tu personalidad es EXTREMADAMENTE CORDIAL, CÁLIDA, EMPÁTICA Y ENTUSIASTA. Saluda amablemente al usuario, celebra sus elecciones con frases entusiastas (ej: "¡Excelente elección!", "¡Ese destino es maravilloso!", "¡Viajar en familia siempre es algo mágico!").
+Tu personalidad es EXTREMADAMENTE CORDIAL, CÁLIDA, EMPÁTICA Y ENTUSIASTA. Saluda amablemente al usuario y celebra sus elecciones con frases entusiastas.
 
 OBJETIVO PRINCIPAL:
 Guiar amablemente al usuario para conocer los detalles de su viaje antes de diseñar el tour perfecto.
@@ -700,26 +692,23 @@ ${JSON.stringify(known, null, 2)}
 
 REGLAS ABSOLUTAS E INVIOLABLES DE COMPORTAMIENTO:
 1. SIEMPRE agradece o haz un comentario amigable sobre lo que el usuario acaba de responder.
-2. REGLA DE ORO DE NO REPETICIÓN: JAMÁS, bajo ninguna circunstancia, vuelvas a preguntar una preferencia que YA APARECE en "PREFERENCIAS YA RECOPILADAS". Si ya se conoce el destino, las fechas, la duración, los acompañantes, el transporte, el presupuesto o el hospedaje, PROHIBIDO volver a pedir esa información.
-3. REGLAS CRÍTICAS DE VERIFICACIÓN DE DATOS (FESTIVOS Y CALENDARIO):
-   - En Colombia, SEPTIEMBRE NO TIENE NINGÚN DÍA FESTIVO OFICIAL NI PUENTES FESTIVOS (es un mes sin festivos).
-   - El Día de la Independencia de Colombia es el 20 DE JULIO (jamás en septiembre).
-   - El Día de la Batalla de Boyacá es el 7 DE AGOSTO (jamás en septiembre).
-   - NUNCA inventes días festivos ni traslades festivos de julio o agosto a septiembre.
-4. Si aún faltan detalles por definir, realiza ÚNICAMENTE UNA de las siguientes preguntas pendientes:
-${remainingQuestions.length > 0 ? remainingQuestions.join('\n') : '¡Ya tenemos toda la información necesaria! Notifica amablemente al usuario que estás listo para generar su tour perfecto.'}
+2. REGLA DE ORO DE NO REPETICIÓN: JAMÁS, bajo ninguna circunstancia, vuelvas a preguntar una preferencia que YA APARECE en "PREFERENCIAS YA RECOPILADAS". Si ya se conoce la ciudad o la duración, PROHIBIDO volver a pedir esa información.
+3. REGLA DE FINALIZACIÓN Y PREGUNTA DE CONFIRMACIÓN:
+   ${hasCity && hasDuration ? `
+   ¡YA TENEMOS LOS PARÁMETROS CLAVE DEL VIAJE! (Ciudad: ${known.city || known.destination}, Duración: ${known.durationDays || known.durationHours} días).
+   PROHIBIDO hacer más preguntas de detalles (no preguntes más por transporte, presupuesto o fechas).
+   CONFIRMA alegremente los datos guardados y PREGUNTA EXPLÍCITAMENTE AL USUARIO SI YA DESEA ARMAR EL TOUR AHORA O SI QUIERE AGREGAR ALGO MÁS.
+   Ejemplo: "¡Excelente! Ya tenemos todo lo necesario para tu viaje a ${known.city || known.destination} durante ${known.durationDays || known.durationHours} días. 🎉 ¿Te gustaría que armemos tu tour ahora mismo o deseas agregar algún lugar o detalle más?"
+   Botones actionChips: ["🚀 ¡Sí, arma el tour ahora!", "➕ Agregar un lugar específico"]
+   ` : `
+   Realiza ÚNICAMENTE la siguiente pregunta pendiente:
+   ${remainingQuestions.join('\n')}
+   `}
 
 REGLAS PARA actionChips (BOTONES DE RESPUESTA RÁPIDA):
-- actionChips DEBE contener de 2 a 4 OPCIONES REALES Y ÚTILES que el usuario pueda presionar como respuesta directa a tu pregunta.
+- actionChips DEBE contener de 2 a 4 OPCIONES REALES Y ÚTILES.
 - JAMÁS devuelvas el texto literal "Sugerencia 1", "Sugerencia 2" o "Opción 1".
-- REGLA DE SUGERENCIA DE CIUDADES:
-  * Si el usuario pregunta o muestra interés en viajes INTERNACIONALES / AL EXTERIOR: sugiere ciudades famosas del mundo adaptadas a su gusto (ej. ["París", "Madrid", "Nueva York", "Cancún", "Roma", "Tokio", "Buenos Aires"]).
-  * Si el usuario busca destinos NACIONALES O CERCANOS: sugiere ciudades de su país/región adaptadas a sus gustos (ej. para familia/relajante: ["Cartagena", "Santa Marta", "Medellín", "Eje Cafetero"]).
-  * Si preguntas por acompañantes: ["En familia con niños", "Solo", "En pareja", "Con amigos"]
-  * Si preguntas por duración: ["Un fin de semana (2-3 días)", "3 días", "1 día completo"]
-  * Si preguntas por transporte: ["Auto propio", "Caminando", "Transporte público", "Taxi"]
-  * Si preguntas por presupuesto: ["Económico", "Moderado", "Lujo"]
-  * Si preguntas por hospedaje: ["Tengo mi propio hospedaje", "Recomiéndame hoteles"]
+${hasCity && hasDuration ? '- DEBES incluir obligatoriamente: ["🚀 ¡Sí, arma el tour ahora!", "➕ Agregar un lugar específico"]' : ''}
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}\n` : ''}
 ${backendInstruction ? `INSTRUCCIÓN DEL SISTEMA:\n${backendInstruction}\n` : ''}
@@ -727,8 +716,8 @@ ${backendInstruction ? `INSTRUCCIÓN DEL SISTEMA:\n${backendInstruction}\n` : ''
 IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
 {
   "responseMessage": "Tu mensaje amigable, ameno y cordial para el usuario.",
-  "actionChips": ["Nombres reales de ciudades (nacionales/internacionales según contexto), duraciones o presupuestos"],
-  "readyToBuild": boolean (true solo cuando ya tenemos al menos ciudad/destino y duración razonable o cuando el usuario pida generar el tour)
+  "actionChips": ["🚀 ¡Sí, arma el tour ahora!", "➕ Agregar un lugar específico"],
+  "readyToBuild": false
 }`
 
   const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
