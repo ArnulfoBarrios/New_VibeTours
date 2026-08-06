@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import crypto from 'crypto'
 
-import { imageForPlace, imageForPlaceWithStatus } from '../services/imageSearch.js'
+import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
@@ -2359,34 +2359,37 @@ function validateTourQuality(tour, planner, input) {
 
 function generateDynamicDescription(name, category, city) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
-  const loc = city ? `en ${city}` : 'en la ciudad'
-  
-  if (/biblioteca|library/i.test(cleanName)) {
-    return `Imagina caminar entre estanterías de valor incalculable en ${cleanName}. Este imponente espacio es un santuario del conocimiento ${loc}, conservando colecciones históricas de literatura, arquitectura icónica y salas de lectura legendarias.`
+  const loc = city ? `en ${city}` : 'en la zona'
+
+  if (/convención|convention|congreso|eventos/i.test(cleanName) || /convention/i.test(category)) {
+    return `${cleanName} es un emblemático centro de eventos y exposiciones ${loc}, reconocido por albergar importantes cumbres internacionales, conferencias corporativas y eventos culturales de primer nivel.`
   }
-  if (/opera|teatro|theatre|theater|hall|auditorio/i.test(cleanName)) {
-    return `Sumérgete en la elegancia escénica de ${cleanName}. Reconocido por su acústica espectacular y su deslumbrante diseño arquitectónico, es uno de los epicentros culturales más aclamados ${loc} para disfrutar del arte vivo.`
+  if (/mall|plaza comercial|centro comercial|shopping|outlet/i.test(cleanName) || /compras|shopping/i.test(category)) {
+    return `${cleanName} es uno de los centros comerciales y gastronómicos más concurridos ${loc}, ofreciendo tiendas de marcas exclusivas, boutiques locales, restaurantes frente al mar y áreas de esparcimiento.`
   }
-  if (/puente|bridge/i.test(cleanName)) {
-    return `Cruza la impresionante estructura del ${cleanName}, una maravilla de la ingeniería civil que conecta puntos neurálgicos ${loc}. Ofrece vistas panorámicas incomparables del horizonte urbano y la bahía.`
+  if (/cantina|bar|club|discoteca|pub|roe|wabo|karaoke|nightlife/i.test(cleanName) || /vida nocturna|bar/i.test(category)) {
+    return `${cleanName} es un legendario ícono de la vida nocturna y el entretenimiento ${loc}, famoso por sus espectáculos de música en vivo, ambiente festivo, cócteles artesanales y vibrante gastronomía local.`
   }
-  if (/vessel|mirador|skyline|tower|torre|observatory|observatorio/i.test(cleanName)) {
-    return `Contempla la geometría deslumbrante de ${cleanName}. Diseñado como una obra monumental interactiva, ofrece ángulos fotográficos únicos y perspectivas panorámicas impresionantes de todo el entorno ${loc}.`
+  if (/marina|puerto|dock|embarcadero|puerto deportivo/i.test(cleanName) || /marina|puerto/i.test(category)) {
+    return `${cleanName} constituye el corazón náutico ${loc}, punto de partida de excursiones marítimas, yates de lujo y paseos hacia los acantilados, rodeado de un animado malecón comercial.`
   }
-  if (/iglesia|church|cathedral|catedral|basilica|basílica|bautista|templo|temple/i.test(cleanName)) {
-    return `Admira la serenidad y riqueza espiritual en ${cleanName}. Este recinto de profunda tradición comunitaria destaca por sus vidrieras, arte sacro y la cálida hospitalidad de sus feligreses ${loc}.`
+  if (/faro|lighthouse/i.test(cleanName)) {
+    return `${cleanName} destaca por su histórica presencia en el litoral marítimo ${loc}, guiando a la navegación sobre las costas y brindando una de las panorámicas fotográficas más hermosas sobre el océano.`
   }
-  if (/estatua|statue|libertad|liberty|monumento|monument|memorial/i.test(cleanName)) {
-    return `Maravíllate ante el monumento icónico de ${cleanName}, un símbolo universal de libertad y esperanza admirado por millones de visitantes de todo el mundo ${loc}.`
+  if (/arco|arch|formación/i.test(cleanName)) {
+    return `${cleanName} representa uno de los monumentos naturales más espectaculares e icónicos ${loc}, tallado por la fuerza del mar y el viento donde se encuentran grandes corrientes oceánicas.`
   }
-  if (/museo|museum|galeria|gallery/i.test(cleanName)) {
-    return `Explora las fascinantes exhibiciones de ${cleanName}, donde se exhiben obras maestras, tesoros históricos e instalaciones artísticas que resumen la memoria estética ${loc}.`
+  if (/playa|beach|bahía|bay|marina|cabo|caleta/i.test(cleanName) || /playa|sol/i.test(category)) {
+    return `${cleanName} cautiva a los visitantes por sus playas de arena dorada y aguas cristalinas ${loc}, perfectas para nadar, practicar deportes acuáticos, relajarse y contemplar la fauna marina.`
   }
-  if (/parque|park|garden|jardin|jardín/i.test(cleanName)) {
-    return `Relájate en los hermosos senderos y zonas verdes de ${cleanName}, un verdadero oasis urbano ${loc} ideal para contemplar la naturaleza y desconectar del bullicio.`
+  if (/museo|museum|galeria|gallery|exhibición/i.test(cleanName) || /museo|arte/i.test(category)) {
+    return `${cleanName} resguarda valiosas colecciones históricas, artesanales y artísticas ${loc}, ofreciendo recorridos educativos que conectan a los visitantes con la historia y herencia cultural del lugar.`
+  }
+  if (/parque|park|garden|jardin|reserva/i.test(cleanName) || /naturaleza/i.test(category)) {
+    return `${cleanName} es un verdadero pulmón verde y santuario natural ${loc}, ideal para caminatas, contemplación del paisaje y actividades al aire libre rodeado de flora y fauna local.`
   }
 
-  return `Descubre los secretos y la fascinante atmósfera de ${cleanName}, un destino imperdible ${loc} que cautiva por su identidad auténtica, arquitectura y encanto local.`
+  return `${cleanName} es un lugar emblemático de gran interés ${loc}, destacado por su valor cultural, su arquitectura representativa y las experiencias únicas que ofrece a los viajeros.`
 }
 
 function generateDynamicTips(name, category, city) {
@@ -2477,11 +2480,19 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
                          description.includes('un punto de gran interés recomendado') ||
                          description.includes('gran valor patrimonial de') ||
                          description.includes('increíble entorno natural') ||
-                         description.includes('maravillosa oferta culinaria');
+                         description.includes('maravillosa oferta culinaria') ||
+                         description.includes('fascinante atmósfera de') ||
+                         description.includes('identidad auténtica') ||
+                         description.includes('destacado de la zona');
 
   if (isGenericDesc) {
-    const rawCat = fallbackPlace?.category || source.categoria || source.category || 'lugar'
-    description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
+    const wikiText = await wikipediaSummaryText(resolvedName).catch(() => null)
+    if (wikiText) {
+      description = wikiText
+    } else {
+      const rawCat = fallbackPlace?.category || source.categoria || source.category || 'lugar'
+      description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
+    }
   }
   
   let durationText = source.duracion_estimada ?? `${source.suggestedMinutes ?? 25} minutos`
@@ -2505,7 +2516,15 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     latitude: coordinates.latitude,
     longitude: coordinates.longitude
   }).catch(() => ({ url: "", isFallback: true }))
-  const image = images[0] ?? source.imageUrl ?? imageStatus.url
+  
+  // Priorizar siempre la foto REAL obtenida de Wikipedia/Wikimedia/Openverse/Pexels si no es fallback genérico
+  let image = imageStatus.url
+  if (imageStatus.isFallback && (images[0] || source.imageUrl)) {
+    image = images[0] || source.imageUrl
+  }
+  if (!image) {
+    image = imageStatus.url
+  }
 
   // Normalizar lista de actividades evitando genéricos "Explorar" / "Fotografiar" sueltos
   let rawActivities = normalizeList(source.actividades ?? source.activities, [])

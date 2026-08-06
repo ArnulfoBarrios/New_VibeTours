@@ -89,6 +89,36 @@ async function wikipediaSummaryImage(placeName) {
   return null
 }
 
+export async function wikipediaSummaryText(placeName) {
+  if (!placeName || typeof placeName !== 'string') return null
+  const raw = placeName.trim()
+  if (raw.length < 3) return null
+
+  const cleaned = raw.replace(/\(.*?\)/g, '').replace(/_/g, ' ').trim()
+  const variations = [...new Set([raw, cleaned].filter(v => v.length >= 3))]
+  const languages = ['es', 'en']
+
+  for (const varName of variations) {
+    for (const lang of languages) {
+      try {
+        const slug = encodeURIComponent(varName.trim().replace(/\s+/g, '_'))
+        const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${slug}`
+        const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+        if (!response.ok) continue
+        const json = await response.json()
+        if (json.type === 'standard' || json.type === 'normal') {
+          if (json.extract && json.extract.length > 40 && !json.extract.includes('puede referirse a')) {
+            return json.extract
+          }
+        }
+      } catch {
+        // Continue with next variation
+      }
+    }
+  }
+  return null
+}
+
 async function wikimediaGeoImage(lat, lon, radiusMeters = 1000, indexSeed = 0) {
   try {
     const url = new URL('https://commons.wikimedia.org/w/api.php')

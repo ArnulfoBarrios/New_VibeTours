@@ -423,6 +423,11 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   }
 
   Widget _buildMapCard(AiBuilderState builderState) {
+    // Si ya existe un tour construido, el mapa se muestra de forma limpia y única dentro de la tarjeta embebida del chat
+    if (builderState.builtTour != null) {
+      return const SizedBox.shrink();
+    }
+
     List<GeoPoint> points = [];
     List<String> labels = [];
 
@@ -431,9 +436,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           .map((r) => GeoPoint(latitude: r.latitude, longitude: r.longitude))
           .toList();
       labels = builderState.recommendations.map((r) => r.name).toList();
-    } else if (builderState.builtTour != null && builderState.builtTour!.stops.isNotEmpty) {
-      points = builderState.builtTour!.stops.map((s) => s.location).toList();
-      labels = builderState.builtTour!.stops.map((s) => s.name).toList();
     }
 
     if (points.isEmpty) return const SizedBox.shrink();
