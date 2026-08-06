@@ -329,7 +329,7 @@ ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB (Eventos, Clima, 
 
 REGLAS DE CONTENIDO:
 - PROHIBIDO INVENTAR: No alucines lugares inexistentes.
-- CRÍTICO LÍMITES GEOGRÁFICOS MUNICIPALES UNIVERSALES: Todas las paradas del itinerario DEBEN estar ubicadas geográficamente dentro del municipio, municipio vecino directo o ciudad de "${city || destination}, ${country || ''}". Queda ESTRICTAMENTE PROHIBIDO incluir lugares, barrios, playas o atracciones de OTRAS ciudades o departamentos distantes, sin importar lo famosos que sean. Cada parada debe ser 100% nativa y perteneciente a "${city || destination}".
+- CRÍTICO LÍMITES TURÍSTICOS REGIONALES UNIVERSALES: Puedes incluir atracciones icónicas, parques naturales, playas o excursiones de un día ubicadas dentro del área metropolitana o región turística habitual de "${city || destination}, ${country || ''}" (hasta ~40 km, como Parque Tayrona o Minca para Santa Marta, Guatapé para Medellín, Islas del Rosario para Cartagena). Queda PROHIBIDO incluir atracciones ubicadas en un centro urbano o metrópoli DISTANTE totalmente diferente (ej: no incluir atracciones de Cartagena en un tour de Barranquilla, ni atracciones de Bogotá en un tour de Medellín).
 - Escribe en ${language}.
 - CRÍTICO GUÍA DE VOZ INMERSIVA: Cada descripción de parada ("descripcion") DEBE ser una guía de voz completa y envolvente de 80 a 120 palabras. Escribe como si fueras un guía local experto hablando en vivo al oído del turista. Narra la historia fascinante del sitio, los detalles arquitectónicos o naturales que tiene enfrente, anécdotas culturales únicas y sugerencias de 'Qué hacer o qué probar aquí'.
 - CRÍTICO CADA PARADA ES ÚNICA: PROHIBIDO copiar y pegar descripciones o consejos genéricos.

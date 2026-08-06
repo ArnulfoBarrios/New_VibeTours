@@ -1413,7 +1413,7 @@ function normalizeCandidate(place, index, input, origin) {
 
 function scorePlace(place, input) {
   const distanceKm = place.distanceMeters / 1000
-  if (distanceKm > 30 && !place.isUserSelected) {
+  if (distanceKm > 45 && !place.isUserSelected) {
     return -9999
   }
   const typeScore = typeAffinityScore(input.type, place.category, place.name, place.tags)
@@ -2472,16 +2472,16 @@ async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lo
   const normPlace = String(placeName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const normCity = String(targetCity || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-  // 1. Verificación por distancia radial esférica desde el centro del municipio destino (máximo 25 km)
+  // 1. Verificación por distancia radial esférica desde el centro del municipio/región turística (máximo 45 km para excursiones de día)
   if (lat && lon && targetCityCoords?.latitude && targetCityCoords?.longitude) {
     const distKm = haversineMeters(targetCityCoords.latitude, targetCityCoords.longitude, lat, lon) / 1000
-    if (distKm > 25) {
-      console.warn(`[UniversalGeoBoundary] Rechazado "${placeName}" (${distKm.toFixed(1)} km) por exceder 25 km del centro de "${targetCity}"`)
+    if (distKm > 45) {
+      console.warn(`[UniversalGeoBoundary] Rechazado "${placeName}" (${distKm.toFixed(1)} km) por exceder 45 km del centro de "${targetCity}"`)
       return false
     }
   }
 
-  // 2. Mapeo preventivo para metrópolis principales
+  // 2. Mapeo preventivo para atracciones exclusivas de centros urbanos lejanos
   const CITY_EXCLUSIVE_LANDMARKS = {
     'cartagena': ['bocagrande', 'castillo san felipe', 'getsemani', 'islas del rosario', 'baru', 'la popa'],
     'barranquilla': ['malecon del rio', 'ventana al mundo', 'boca de ceniza', 'casa del carnaval', 'edgar renteria'],
@@ -2507,7 +2507,7 @@ async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lo
         if (normCity.length >= 3 && placeCityNorm.length >= 3 && !placeCityNorm.includes(normCity) && !normCity.includes(placeCityNorm)) {
           if (targetCityCoords?.latitude) {
             const distKm = haversineMeters(targetCityCoords.latitude, targetCityCoords.longitude, lat, lon) / 1000
-            if (distKm > 15) return false
+            if (distKm > 45) return false
           }
         }
       }
