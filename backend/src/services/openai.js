@@ -644,11 +644,20 @@ export function extractChatInformationFallback(prompt) {
   return result
 }
 
-function getDefaultActionChips(known = {}, lastMessage = '') {
-  const hasCity = Boolean(known.city || known.destination)
-  const hasDuration = Boolean(known.durationDays || known.durationHours)
+function getNextMissingPreference(known = {}) {
+  if (!known.city && !known.destination) return 'city'
+  if (!known.durationDays && !known.durationHours) return 'duration'
+  if (!known.companions) return 'companions'
+  if (!known.budget) return 'budget'
+  if (!known.transport) return 'transport'
+  if (!known.accommodationStatus) return 'accommodationStatus'
+  return 'all_completed'
+}
 
-  if (!hasCity) {
+function getDefaultActionChips(known = {}, lastMessage = '') {
+  const nextMissing = getNextMissingPreference(known)
+
+  if (nextMissing === 'city') {
     const isInternational = /internacional|exterior|otro país|fuera del país|europa|asia|eeuu|usa|extranjero|fuera|viaje internacional/i.test(lastMessage)
     if (isInternational) return ['París', 'Madrid', 'Nueva York', 'Cancún']
     const isBeach = /playa|mar|costa|brisa|isla|relajarme|relajar/i.test(lastMessage)
@@ -657,11 +666,15 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
     if (isNature) return ['Eje Cafetero', 'Medellín', 'Santa Marta', 'San Gil']
     return ['Cartagena', 'Medellín', 'Santa Marta', 'Bogotá']
   }
-  
-  if (!hasDuration) return ['Un fin de semana (2-3 días)', '3 días', '1 día completo']
 
-  // ¡SI YA TENEMOS CIUDAD Y DURACIÓN, YA TENEMOS LO ESENCIAL!
-  return ['🚀 ¡Sí, arma el tour ahora!', '➕ Agregar un lugar específico']
+  if (nextMissing === 'duration') return ['Un fin de semana (2-3 días)', '3 días', '1 día completo']
+  if (nextMissing === 'companions') return ['En familia con niños', 'Solo', 'En pareja', 'Con amigos']
+  if (nextMissing === 'budget') return ['Económico', 'Moderado', 'Lujo']
+  if (nextMissing === 'transport') return ['Auto rentado', 'Caminando', 'Transporte público', 'Taxi / Uber']
+  if (nextMissing === 'accommodationStatus') return ['Tengo mi propio hospedaje', 'Recomiéndame hoteles']
+
+  // ¡CUANDO YA SE RESPONDIERON TODAS LAS PREGUNTAS!
+  return ['🚀 ¡Sí, generar tour ahora!', '✏️ Cambiar un detalle']
 }
 
 export async function generateChatResponse(state, backendInstruction, webSearchSummary = '', currentPreferences = {}) {
@@ -674,15 +687,33 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     readyToBuild: false
   }
 
-  const hasCity = Boolean(known.city || known.destination)
-  const hasDuration = Boolean(known.durationDays || known.durationHours)
+  const nextMissing = getNextMissingPreference(known)
 
-  const remainingQuestions = []
-  if (!hasCity) remainingQuestions.push('- 📍 ¿A qué ciudad o lugar te gustaría ir?')
-  if (!hasDuration) remainingQuestions.push('- ⏳ ¿Cuántos días va a durar tu tour?')
+  let promptInstruction = ''
+  if (nextMissing === 'city') {
+    promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 📍 ¿A qué ciudad o lugar te gustaría ir?'
+  } else if (nextMissing === 'duration') {
+    promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - ⏳ ¿Cuántos días va a durar tu tour?'
+  } else if (nextMissing === 'companions') {
+    promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 👥 ¿Viajarás solo, en pareja, con amigos o en familia con niños?'
+  } else if (nextMissing === 'budget') {
+    promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 💰 ¿Qué estilo de presupuesto tienes en mente? (Económico, Moderado, Lujo)'
+  } else if (nextMissing === 'transport') {
+    promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 🚗 ¿Cuál será tu medio de transporte principal durante el tour? (Auto rentado, Caminando, Transporte público, Taxi)'
+  } else if (nextMissing === 'accommodationStatus') {
+    promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 🏨 ¿Ya tienes hospedaje reservado o deseas que te recomendemos opciones de hotel?'
+  } else {
+    promptInstruction = `
+    ¡YA TENEMOS TODAS LAS PREFERENCIAS COMPLETAS DE CADA PREGUNTA!
+    PROHIBIDO hacer más preguntas.
+    CONFIRMA alegremente la información guardada (${known.city || known.destination}, ${known.durationDays || known.durationHours} días, ${known.companions || 'Solo'}, ${known.budget || 'Económico'}, ${known.transport || 'Auto rentado'})
+    Y PREGUNTA EXPLÍCITAMENTE AL USUARIO SI YA DESEA GENERAR EL TOUR AHORA MISMO.
+    Ejemplo: "¡Excelente! Ya tenemos toda tu información completa para tu viaje en ${known.city || known.destination} (${known.durationDays || known.durationHours} días). 🎉 ¿Deseas que generemos tu tour ahora mismo?"
+    `
+  }
 
   const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual de VibeTours.
-Tu personalidad es EXTREMADAMENTE CORDIAL, CÁLIDA, EMPÁTICA Y ENTUSIASTA. Saluda amablemente al usuario y celebra sus elecciones con frases entusiastas.
+Tu personalidad es EXTREMADAMENTE CORDIAL, CÁLIDA, EMPÁTICA Y ENTUSIASTA. Saluda amablemente al usuario y celebra sus elecciones.
 
 OBJETIVO PRINCIPAL:
 Guiar amablemente al usuario para conocer los detalles de su viaje antes de diseñar el tour perfecto.
@@ -692,23 +723,12 @@ ${JSON.stringify(known, null, 2)}
 
 REGLAS ABSOLUTAS E INVIOLABLES DE COMPORTAMIENTO:
 1. SIEMPRE agradece o haz un comentario amigable sobre lo que el usuario acaba de responder.
-2. REGLA DE ORO DE NO REPETICIÓN: JAMÁS, bajo ninguna circunstancia, vuelvas a preguntar una preferencia que YA APARECE en "PREFERENCIAS YA RECOPILADAS". Si ya se conoce la ciudad o la duración, PROHIBIDO volver a pedir esa información.
-3. REGLA DE FINALIZACIÓN Y PREGUNTA DE CONFIRMACIÓN:
-   ${hasCity && hasDuration ? `
-   ¡YA TENEMOS LOS PARÁMETROS CLAVE DEL VIAJE! (Ciudad: ${known.city || known.destination}, Duración: ${known.durationDays || known.durationHours} días).
-   PROHIBIDO hacer más preguntas de detalles (no preguntes más por transporte, presupuesto o fechas).
-   CONFIRMA alegremente los datos guardados y PREGUNTA EXPLÍCITAMENTE AL USUARIO SI YA DESEA ARMAR EL TOUR AHORA O SI QUIERE AGREGAR ALGO MÁS.
-   Ejemplo: "¡Excelente! Ya tenemos todo lo necesario para tu viaje a ${known.city || known.destination} durante ${known.durationDays || known.durationHours} días. 🎉 ¿Te gustaría que armemos tu tour ahora mismo o deseas agregar algún lugar o detalle más?"
-   Botones actionChips: ["🚀 ¡Sí, arma el tour ahora!", "➕ Agregar un lugar específico"]
-   ` : `
-   Realiza ÚNICAMENTE la siguiente pregunta pendiente:
-   ${remainingQuestions.join('\n')}
-   `}
+2. REGLA DE ORO DE NO REPETICIÓN: JAMÁS, bajo ninguna circunstancia, vuelvas a preguntar una preferencia que YA APARECE en "PREFERENCIAS YA RECOPILADAS". Si una preferencia ya está recopilada, ESTÁ PROHIBIDO VOLVER A PREGUNTAR POR ELLA.
+3. ${promptInstruction}
 
 REGLAS PARA actionChips (BOTONES DE RESPUESTA RÁPIDA):
 - actionChips DEBE contener de 2 a 4 OPCIONES REALES Y ÚTILES.
 - JAMÁS devuelvas el texto literal "Sugerencia 1", "Sugerencia 2" o "Opción 1".
-${hasCity && hasDuration ? '- DEBES incluir obligatoriamente: ["🚀 ¡Sí, arma el tour ahora!", "➕ Agregar un lugar específico"]' : ''}
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}\n` : ''}
 ${backendInstruction ? `INSTRUCCIÓN DEL SISTEMA:\n${backendInstruction}\n` : ''}
@@ -716,7 +736,7 @@ ${backendInstruction ? `INSTRUCCIÓN DEL SISTEMA:\n${backendInstruction}\n` : ''
 IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
 {
   "responseMessage": "Tu mensaje amigable, ameno y cordial para el usuario.",
-  "actionChips": ["🚀 ¡Sí, arma el tour ahora!", "➕ Agregar un lugar específico"],
+  "actionChips": ["Opciones útiles acorde a la pregunta actual"],
   "readyToBuild": false
 }`
 
@@ -740,6 +760,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       return {
         responseMessage: '¡Hola! Con mucho gusto te ayudo a planear tu viaje. ¿A qué ciudad o lugar te gustaría viajar?',
         actionChips: getDefaultActionChips(known, lastUserMsg),
+        destinationSuggestions: (nextMissing === 'city') ? await buildVisualDestinationSuggestions(getDefaultActionChips(known, lastUserMsg)).catch(() => []) : [],
         readyToBuild: false
       }
     }
@@ -752,31 +773,26 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       readyToBuild: false
     })
 
-    // REGLA CRÍTICA DE CIUDAD YA SELECCIONADA:
-    const targetDest = (known.city || known.destination || '').trim().toLowerCase()
-    const isSpecificCityKnown = targetDest.length > 0 && !/europa|asia|sudamerica|caribe|exterior|internacional|latinoamerica/i.test(targetDest)
-
     let chips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
     const hasGenericChips = chips.some(c => typeof c === 'string' && /sugerencia|opcion|opción/i.test(c))
-    const isCityListChips = chips.length > 0 && chips.every(c => typeof c === 'string' && /cartagena|medellín|medellin|santa marta|bogotá|bogota|roma|barcelona|parís|paris/i.test(c.toLowerCase()))
-
-    // Si ya hay una ciudad específica conocida y la IA devolvió sugerencias de ciudades o fichas genéricas, forzar los chips de la siguiente pregunta pendiente
-    if (isSpecificCityKnown && (hasGenericChips || isCityListChips || chips.length === 0)) {
-      chips = getDefaultActionChips(known, lastUserMsg)
-    } else if (chips.length === 0 || hasGenericChips) {
+    
+    // Forzar actionChips adecuados a la pregunta faltante actual
+    if (chips.length === 0 || hasGenericChips || (nextMissing !== 'city' && chips.some(c => typeof c === 'string' && /cartagena|medellín|bogotá|roma/i.test(c.toLowerCase())))) {
       chips = getDefaultActionChips(known, lastUserMsg)
     }
     parsed.actionChips = chips
 
-    // REGLA ESTRICTA 1: Solo marcar readyToBuild = true si el usuario lo pidió EXPLÍCITAMENTE en su mensaje
-    const userExplicitBuildIntent = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|empezar tour|comenzar tour)\b/i.test(lastUserMsg)
+    // REGLA ESTRICTA DE INTENCIÓN DE GENERACIÓN: Solo marcar readyToBuild = true si el usuario lo pidió EXPLÍCITAMENTE
+    const userExplicitBuildIntent = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|empezar tour|comenzar tour|sí genera|sí armalo|crealo|hazlo|armalo|armar el tour|armar tour|generar tour ahora)\b/i.test(lastUserMsg)
     if (!userExplicitBuildIntent) {
       parsed.readyToBuild = false
     }
 
-    // REGLA DE TARJETAS VISUALES:
-    const isHospedajeQuestion = chips.some(c => typeof c === 'string' && /hospedaje|hotel|alojamiento/i.test(c))
-    if (isHospedajeQuestion) {
+    // REGLA ABSOLUTA DE TARJETAS VISUALES:
+    // SOLO mostrar destinationSuggestions si la pregunta actual es la Ciudad (nextMissing === 'city') O si es Hospedaje (nextMissing === 'accommodationStatus')
+    if (nextMissing === 'city') {
+      parsed.destinationSuggestions = await buildVisualDestinationSuggestions(chips, '')
+    } else if (nextMissing === 'accommodationStatus' || chips.some(c => typeof c === 'string' && /hospedaje|hotel|alojamiento/i.test(c))) {
       parsed.destinationSuggestions = [
         {
           name: 'Recomiéndame hoteles',
@@ -801,14 +817,6 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
           temperature: '28°C'
         }
       ]
-    } else if (!isSpecificCityKnown) {
-      // SOLO mostrar carrusel de ciudades si NO se conoce aún una ciudad específica
-      const isCityOrPlaceList = chips.every(c => !/días|fin de semana|económico|moderado|lujo|auto|caminando|taxi/i.test(c))
-      if (isCityOrPlaceList && chips.length > 0) {
-        parsed.destinationSuggestions = await buildVisualDestinationSuggestions(chips, known.city || known.destination || '')
-      } else {
-        parsed.destinationSuggestions = []
-      }
     } else {
       parsed.destinationSuggestions = []
     }
@@ -817,7 +825,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
   } catch (err) {
     console.error('[openai] chat response error:', err)
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
-    const fallbackSuggs = (!known.city && !known.destination) ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : []
+    const fallbackSuggs = (nextMissing === 'city') ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : []
     return {
       responseMessage: '¡Hola! Es un placer saludarte. Cuéntame, ¿a qué ciudad te gustaría viajar hoy?',
       actionChips: fallbackChips,
