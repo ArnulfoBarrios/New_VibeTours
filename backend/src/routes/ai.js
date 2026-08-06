@@ -51,12 +51,26 @@ aiRouter.post('/chat', async (req, res, next) => {
     const chatSchema = z.object({
       message: z.string(),
       history: z.array(z.object({ role: z.string(), content: z.string() })).optional().default([]),
-      currentPreferences: z.record(z.any()).optional().default({})
+      currentPreferences: z.record(z.any()).optional().default({}),
+      latitude: z.number().optional(),
+      longitude: z.number().optional()
     })
-    const { message, history, currentPreferences } = chatSchema.parse(req.body)
+    const { message, history, currentPreferences, latitude, longitude } = chatSchema.parse(req.body)
+
+    // Si el usuario pide atracciones "cerca de mi zona / cerca de mí" y tenemos GPS, geocodificar su ciudad actual
+    if (latitude && longitude && /\b(cerca de mi|cerca de m[íi]|mi zona|mi ubicaci[óo]n|mi ciudad|aqu[íi])\b/i.test(message)) {
+      try {
+        const geoResult = await reverseGeocode(latitude, longitude)
+        if (geoResult?.city) {
+          currentPreferences.city = geoResult.city
+          currentPreferences.destination = geoResult.city
+          if (geoResult.country) currentPreferences.country = geoResult.country
+        }
+      } catch (_) {}
+    }
 
     // 1. Extraer preferencias del último mensaje del usuario usando LLM + Fallback
-    const extracted = await extractChatInformation(message, currentPreferences)
+    const extracted = await extractChatInformation(message, currentPreferences, history)
     const updatedPreferences = {
       ...currentPreferences,
       ...(extracted || {})

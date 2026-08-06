@@ -522,46 +522,31 @@ function safeParseJson(raw, fallback = {}) {
   }
 }
 
-export async function extractChatInformation(userMessage, currentData = {}) {
+export async function extractChatInformation(userMessage, currentData = {}, history = []) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return extractChatInformationFallback(userMessage)
 
-  const prompt = `Analiza el mensaje del usuario e identifica las preferencias turísticas para planificar su tour.
+  const recentHistoryText = (history || []).slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')
+
+  const prompt = `Analiza el último mensaje del usuario Y el historial de conversación reciente para identificar las preferencias turísticas y atracciones mencionadas/aceptadas.
 Devuelve ÚNICAMENTE un objeto JSON válido con los campos que logres identificar (mantén los campos no mencionados como null).
 
-CAMPOS Y REGLAS DE INTERPRETACIÓN DE LENGUAJE NATURAL E INFORMAL:
-1. "destination" / "city": Nombre de la ciudad o lugar de destino.
-2. "datesSeason": Fechas, mes o época del viaje (ej: "Diciembre", "Vacaciones de julio", "Próximo fin de semana", "Semana Santa", "Verano").
+CAMPOS Y REGLAS DE INTERPRETACIÓN:
+1. "destination" / "city": Nombre de la ciudad o lugar de destino. SI es una región o frase vaga ("Playa en el Caribe", "Montaña", "Europa"), asígnala a "destination" pero mantén "city" como null.
+2. "datesSeason": Fechas, mes o época del viaje.
 3. "durationDays" (número): Días de duración del tour.
-   REGLAS CRÍTICAS DE CONTEXTO INFORMAL:
-   - "un fin de semana" ➔ 2
-   - "un fin de semana con puente", "puente festivo", "un puente" ➔ 3
-   - "un par de días" ➔ 2
-   - "una semanita", "una semana" ➔ 7
-   - "un día", "un día completo" ➔ 1
-   - "3 días", "4 días", etc. ➔ El número indicado.
-4. "companions": Tipo de acompañantes. Valores posibles: "Solo", "Pareja", "Familia con niños", "Amigos", "Grupo".
-   - "con mis hijos", "con los niños", "con mi familia y niños" ➔ "Familia con niños"
-   - "con mi esposo/a", "con mi novia/o", "con mi pareja" ➔ "Pareja"
-   - "solo", "conmigo mismo" ➔ "Solo"
-   - "con amigos", "con los panas", "con parceros" ➔ "Amigos"
-5. "hasChildren" (boolean): true si viaja con niños o menores de edad.
-6. "budget": Presupuesto. Valores: "Económico", "Moderado", "Lujo".
-   - "quiero ahorrar", "poco dinero", "barato", "económico" ➔ "Económico"
-   - "sin escatimar", "de lujo", "cinco estrellas", "alto" ➔ "Lujo"
-   - "normal", "moderado", "estándar" ➔ "Moderado"
-7. "transport": Medio de transporte preferido durante el tour: "Caminando", "Transporte público", "Auto rentado", "Taxi/Uber".
-   - "a pie", "caminando" ➔ "Caminando"
-   - "en bus", "en metro", "transporte público" ➔ "Transporte público"
-   - "en carro", "auto propio", "auto rentado" ➔ "Auto rentado"
-   - "en taxi", "uber", "cabify" ➔ "Taxi/Uber"
-8. "accommodationStatus": Estado de hospedaje: "Ya posee hospedaje", "Quiere buscar hospedaje".
-   - "ya tengo hotel", "me quedo en casa de familiar", "ya tengo hospedaje" ➔ "Ya posee hospedaje"
-   - "necesito hotel", "quiero recomendaciones de hotel", "no tengo hotel" ➔ "Quiere buscar hospedaje"
-9. "specificPlaces" (array de strings): Nombres de atracciones o lugares específicos que el usuario expresamente quiere visitar (ej: ["Castillo de San Felipe", "Playa Blanca"]).
-10. "interests" (array de strings): Intereses (ej: ["gastronomía", "cultura", "naturaleza", "playa", "historia"]).
+4. "companions": "Solo", "Pareja", "Familia con niños", "Amigos", "Grupo".
+5. "hasChildren" (boolean): true si viaja con niños.
+6. "budget": "Económico", "Moderado", "Lujo".
+7. "transport": "Caminando", "Transporte público", "Auto rentado", "Taxi/Uber".
+8. "accommodationStatus": "Ya posee hospedaje", "Quiere buscar hospedaje".
+9. "specificPlaces" (array de strings): Nombres de atracciones o lugares específicos que el usuario quiere visitar O que la IA recomendó en los mensajes recientes y el usuario aceptó/interesó (ej: ["Parque Xcaret", "Cenote Dos Ojos", "Isla Cozumel", "Tulum"]).
+10. "interests" (array de strings): Intereses.
 
-Mensaje del usuario: "${userMessage}"`
+HISTORIAL DE CONVERSACIÓN RECIENTE:
+${recentHistoryText}
+
+ÚLTIMO MENSAJE DEL USUARIO: "${userMessage}"`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -656,8 +641,18 @@ export function extractChatInformationFallback(prompt) {
   return result
 }
 
+export function isVagueDestination(dest = '') {
+  if (!dest) return true
+  const lower = String(dest).toLowerCase().trim()
+  if (lower.length < 3) return true
+  const isVagueTerm = /playa|caribe|costa|mar|monta[ñn]a|naturaleza|europa|asia|latinoam[ée]rica|sudam[ée]rica|extranjero|fuera|exterior|frontera|isla|alojamiento|hospedaje/i.test(lower)
+  const isSpecificCityName = /cartagena|santa marta|san andr[ée]s|canc[úu]n|punta cana|riviera maya|medell[íi]n|bogot[áa]|cali|barranquilla|eje cafetero|salento|roma|barcelona|madrid|par[íi]s|tokio|nueva york|miami|cabo san lucas|orlando|londres/i.test(lower)
+  return isVagueTerm && !isSpecificCityName
+}
+
 function getNextMissingPreference(known = {}) {
-  if (!known.city && !known.destination) return 'city'
+  const dest = known.city || known.destination
+  if (!dest || isVagueDestination(dest)) return 'city'
   if (!known.durationDays && !known.durationHours) return 'duration'
   if (!known.companions) return 'companions'
   if (!known.budget) return 'budget'
