@@ -1259,22 +1259,51 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                               Expanded(
                                 child: Container(
                                   alignment: Alignment.topLeft,
-                                  child: Text(
-                                    reason,
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w400,
-                                      height: 1.3,
-                                      shadows: [
-                                        Shadow(
-                                          color: Colors.black45,
-                                          blurRadius: 4,
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          reason,
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w400,
+                                            height: 1.3,
+                                            shadows: [
+                                              Shadow(
+                                                color: Colors.black45,
+                                                blurRadius: 4,
+                                              ),
+                                            ],
+                                          ),
+                                          maxLines: 4,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (country.toLowerCase().contains('demo') || flag == '📷') ...[
+                                        Container(
+                                          margin: const EdgeInsets.only(left: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.65),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: Colors.amber.shade300, width: 0.8),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.camera_alt_rounded, size: 10, color: Colors.amber),
+                                              SizedBox(width: 3),
+                                              Text(
+                                                'Demo',
+                                                style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ],
-                                    ),
-                                    maxLines: 4,
-                                    overflow: TextOverflow.ellipsis,
+                                    ],
                                   ),
                                 ),
                               ),
