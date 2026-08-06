@@ -646,8 +646,8 @@ export function isVagueDestination(dest = '') {
   if (!dest) return true
   const lower = String(dest).toLowerCase().trim()
   if (lower.length < 3) return true
-  const isVagueTerm = /playa|caribe|costa|mar|monta[ñn]a|naturaleza|europa|asia|latinoam[ée]rica|sudam[ée]rica|extranjero|fuera|exterior|frontera|isla|alojamiento|hospedaje/i.test(lower)
-  const isSpecificCityName = /cartagena|santa marta|san andr[ée]s|canc[úu]n|punta cana|riviera maya|medell[íi]n|bogot[áa]|cali|barranquilla|eje cafetero|salento|roma|barcelona|madrid|par[íi]s|tokio|nueva york|miami|cabo san lucas|orlando|londres/i.test(lower)
+  const isVagueTerm = /playa|caribe|costa|mar|monta[ñn]a|naturaleza|europa|asia|latinoam[ée]rica|sudam[ée]rica|extranjero|fuera|exterior|frontera|isla|alojamiento|hospedaje|ciudad hist[óo]rica|ciudad historica|ciudad|hist[óo]rica|tem[áa]tico|parque tem[áa]tico|parque tematico|destino|lugar/i.test(lower)
+  const isSpecificCityName = /cartagena|santa marta|san andr[ée]s|canc[úu]n|punta cana|riviera maya|medell[íi]n|bogot[áa]|cali|barranquilla|eje cafetero|salento|roma|barcelona|madrid|par[íi]s|tokio|nueva york|miami|cabo san lucas|orlando|londres|cusco|cuzco|toledo|granada|sevilla|oaxaca|guanajuato|san miguel|athenas|atenas/i.test(lower)
   return isVagueTerm && !isSpecificCityName
 }
 
@@ -666,6 +666,8 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
   const nextMissing = getNextMissingPreference(known)
 
   if (nextMissing === 'city') {
+    const isHistory = /hist[óo]rica|historia|patrimonio|monumento|antigua|museo|cultural/i.test(lastMessage) || /hist[óo]rica/i.test(String(known.destination || '')) || /hist[óo]rica/i.test(String(known.city || ''))
+    if (isHistory) return ['Cartagena', 'Cusco', 'Roma', 'Toledo']
     const isInternational = /internacional|exterior|otro país|fuera del país|europa|asia|eeuu|usa|extranjero|fuera|viaje internacional/i.test(lastMessage)
     if (isInternational) return ['París', 'Madrid', 'Nueva York', 'Cancún']
     const isBeach = /playa|mar|costa|brisa|isla|relajarme|relajar/i.test(lastMessage)
