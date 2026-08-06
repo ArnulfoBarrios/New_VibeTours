@@ -699,10 +699,28 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     readyToBuild: false
   }
 
+  const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
+  const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
+  const isAskingRecommendations = /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|atracciones|actividades|lugares|opciones)\b/i.test(lastUserMsg)
+  const isExplicitBuild = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|empezar tour|comenzar tour|sí genera|sí armalo|crealo|hazlo|armalo|armar el tour|armar tour|generar tour ahora)\b/i.test(lastUserMsg)
+
   const nextMissing = getNextMissingPreference(known)
 
   let promptInstruction = ''
-  if (nextMissing === 'city') {
+  if (isExplicitBuild) {
+    promptInstruction = `
+    EL USUARIO SOLICITÓ EXPLÍCITAMENTE GENERAR SU TOUR.
+    Confirma con entusiasmo que estás listo y procedes de inmediato a armar su itinerario perfecto.
+    PROHIBIDO incluir listas largas de recomendaciones adicionales de hoteles o atracciones aquí, ya que el tour se construirá a continuación.
+    `
+  } else if (isAskingRecommendations) {
+    promptInstruction = `
+    ATENCIÓN CRÍTICA: EL USUARIO HA SOLICITADO RECOMENDACIONES DE HOTELES O LUGARES EN SU MENSAJE: "${lastUserMsg}".
+    DEBES RESPONDER DE INMEDIATO A SU SOLICITUD EN ESTE MISMO MENSAJE: Proporciona 3 excelentes recomendaciones reales de hoteles o atracciones en ${known.city || known.destination || 'el destino'} acordes a sus preferencias (${known.budget || 'Económico'}, ${known.companions || 'en familia'}).
+    AL FINAL DE TU MENSAJE, PREGUNTA SI CON ESTAS OPCIONES REVISADAS YA DESEA PROCEDER A ARMAR SU TOUR AHORA MISMO.
+    ActionChips obligatorios: ["🚀 ¡Sí, generar tour ahora!", "✏️ Cambiar un detalle"]
+    `
+  } else if (nextMissing === 'city') {
     promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 📍 ¿A qué ciudad o lugar te gustaría ir?'
   } else if (nextMissing === 'duration') {
     promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - ⏳ ¿Cuántos días va a durar tu tour?'
@@ -751,9 +769,6 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
   "actionChips": ["Opciones útiles acorde a la pregunta actual"],
   "readyToBuild": false
 }`
-
-  const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
-  const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

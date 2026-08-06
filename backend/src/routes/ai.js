@@ -858,7 +858,11 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
           }
         : normalizeLocationInfo(sourceTour.punto_encuentro, publicStops[0], input),
       imagen_portada: coverUrl,
-      galeria_tour: unique([...normalizeList(sourceTour.galeria_tour, []), ...publicStops.flatMap(s => s.imagenes)]).slice(0, 8),
+      galeria_tour: unique([
+        ...publicStops.flatMap(s => s.imagenes).filter(img => img && !img.includes('photo-1469854523086') && !img.includes('photo-1507525428034')),
+        coverUrl,
+        ...normalizeList(sourceTour.galeria_tour, [])
+      ]).slice(0, 8),
       itinerario: publicStops,
       orden_paradas: publicStops.map(s => s.nombre),
       incluye: normalizeList(sourceTour.incluye, defaultIncludes(input.type)),
@@ -1024,8 +1028,9 @@ async function processTourGeneration(jobId, input) {
         punto_encuentro: normalizeLocationInfo(sourceTour.punto_encuentro, stops[0], input),
         imagen_portada: sourceTour.imagen_portada ?? sourceTour.coverUrl ?? coverUrl,
         galeria_tour: unique([
+          ...stops.flatMap((stop) => stop.imagenes).filter(img => img && !img.includes('photo-1469854523086') && !img.includes('photo-1507525428034')),
+          coverUrl,
           ...(normalizeList(sourceTour.galeria_tour, [])),
-          ...stops.flatMap((stop) => stop.imagenes),
         ]).slice(0, 8),
         itinerario: stops,
         orden_paradas: stops.map((stop) => stop.nombre),
