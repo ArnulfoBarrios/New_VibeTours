@@ -686,13 +686,15 @@ ${remainingQuestions.length > 0 ? remainingQuestions.join('\n') : '¡Ya tenemos 
 
 REGLAS PARA actionChips (BOTONES DE RESPUESTA RÁPIDA):
 - actionChips DEBE contener de 2 a 4 OPCIONES REALES Y ÚTILES que el usuario pueda presionar como respuesta directa a tu pregunta.
-- JAMÁS devuelvas el texto literal "Sugerencia 1", "Sugerencia 2" o "Opción 1". Ofrece alternativas reales como:
-  * Si preguntas por ciudad: ["Cartagena", "Medellín", "Santa Marta", "Bogotá"]
+- JAMÁS devuelvas el texto literal "Sugerencia 1", "Sugerencia 2" o "Opción 1".
+- REGLA DE SUGERENCIA DE CIUDADES:
+  * Si el usuario pregunta o muestra interés en viajes INTERNACIONALES / AL EXTERIOR: sugiere ciudades famosas del mundo adaptadas a su gusto (ej. ["París", "Madrid", "Nueva York", "Cancún", "Roma", "Tokio", "Buenos Aires"]).
+  * Si el usuario busca destinos NACIONALES O CERCANOS: sugiere ciudades de su país/región adaptadas a sus gustos (ej. para familia/relajante: ["Cartagena", "Santa Marta", "Medellín", "Eje Cafetero"]).
   * Si preguntas por acompañantes: ["En familia con niños", "Solo", "En pareja", "Con amigos"]
-  * Si preguntas por duración: ["Un fin de semana (2-3 días)", "3 días", "1 día"]
+  * Si preguntas por duración: ["Un fin de semana (2-3 días)", "3 días", "1 día completo"]
   * Si preguntas por transporte: ["Auto propio", "Caminando", "Transporte público", "Taxi"]
   * Si preguntas por presupuesto: ["Económico", "Moderado", "Lujo"]
-  * Si preguntas por hospedaje: ["Tengo hospedaje", "Recomiéndame hoteles"]
+  * Si preguntas por hospedaje: ["Tengo mi propio hospedaje", "Recomiéndame hoteles"]
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}\n` : ''}
 ${backendInstruction ? `INSTRUCCIÓN DEL SISTEMA:\n${backendInstruction}\n` : ''}
@@ -700,11 +702,12 @@ ${backendInstruction ? `INSTRUCCIÓN DEL SISTEMA:\n${backendInstruction}\n` : ''
 IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
 {
   "responseMessage": "Tu mensaje amigable, ameno y cordial para el usuario.",
-  "actionChips": ["Nombres reales de ciudades, duraciones o presupuestos según la pregunta"],
+  "actionChips": ["Nombres reales de ciudades (nacionales/internacionales según contexto), duraciones o presupuestos"],
   "readyToBuild": boolean (true solo cuando ya tenemos al menos ciudad/destino y duración razonable o cuando el usuario pida generar el tour)
 }`
 
   const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
+  const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -720,7 +723,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     const content = json.choices?.[0]?.message?.content ?? '{}'
     const parsed = safeParseJson(content, {
       responseMessage: '¡Excelente! Cuéntame más sobre tu viaje para diseñar el tour ideal.',
-      actionChips: getDefaultActionChips(known),
+      actionChips: getDefaultActionChips(known, lastUserMsg),
       readyToBuild: false
     })
 
@@ -728,7 +731,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     let chips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
     const hasGenericChips = chips.some(c => typeof c === 'string' && /sugerencia|opcion|opción/i.test(c))
     if (chips.length === 0 || hasGenericChips) {
-      chips = getDefaultActionChips(known)
+      chips = getDefaultActionChips(known, lastUserMsg)
     }
     parsed.actionChips = chips
     return parsed
