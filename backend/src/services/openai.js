@@ -770,10 +770,12 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     }
     parsed.actionChips = chips
 
-    // Generar las tarjetas visuales enriquecidas de destino (Carrusel de la Imagen 3) cuando no hay ciudad definida
-    if (!known.city && !known.destination) {
+    // Generar las tarjetas visuales enriquecidas de destino (Carrusel de la Imagen 3) cuando no hay ciudad definida o cuando es una región general
+    const targetDest = (known.city || known.destination || '').toLowerCase()
+    const isGeneralOrEmpty = !targetDest || /europa|asia|sudamerica|caribe|exterior|internacional|latinoamerica/i.test(targetDest)
+    if (isGeneralOrEmpty) {
       const isCityList = chips.every(c => !/días|fin de semana|económico|moderado|lujo|auto|caminando|taxi/i.test(c))
-      if (isCityList) {
+      if (isCityList && chips.length > 0) {
         parsed.destinationSuggestions = buildVisualDestinationSuggestions(chips)
       }
     }
