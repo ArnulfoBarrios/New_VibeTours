@@ -684,13 +684,23 @@ REGLAS ABSOLUTAS E INVIOLABLES DE COMPORTAMIENTO:
 4. Si aún faltan detalles por definir, realiza ÚNICAMENTE UNA de las siguientes preguntas pendientes:
 ${remainingQuestions.length > 0 ? remainingQuestions.join('\n') : '¡Ya tenemos toda la información necesaria! Notifica amablemente al usuario que estás listo para generar su tour perfecto.'}
 
+REGLAS PARA actionChips (BOTONES DE RESPUESTA RÁPIDA):
+- actionChips DEBE contener de 2 a 4 OPCIONES REALES Y ÚTILES que el usuario pueda presionar como respuesta directa a tu pregunta.
+- JAMÁS devuelvas el texto literal "Sugerencia 1", "Sugerencia 2" o "Opción 1". Ofrece alternativas reales como:
+  * Si preguntas por ciudad: ["Cartagena", "Medellín", "Santa Marta", "Bogotá"]
+  * Si preguntas por acompañantes: ["En familia con niños", "Solo", "En pareja", "Con amigos"]
+  * Si preguntas por duración: ["Un fin de semana (2-3 días)", "3 días", "1 día"]
+  * Si preguntas por transporte: ["Auto propio", "Caminando", "Transporte público", "Taxi"]
+  * Si preguntas por presupuesto: ["Económico", "Moderado", "Lujo"]
+  * Si preguntas por hospedaje: ["Tengo hospedaje", "Recomiéndame hoteles"]
+
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}\n` : ''}
 ${backendInstruction ? `INSTRUCCIÓN DEL SISTEMA:\n${backendInstruction}\n` : ''}
 
 IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
 {
   "responseMessage": "Tu mensaje amigable, ameno y cordial para el usuario.",
-  "actionChips": ["Sugerencia 1", "Sugerencia 2", "Sugerencia 3"],
+  "actionChips": ["Nombres reales de ciudades, duraciones o presupuestos según la pregunta"],
   "readyToBuild": boolean (true solo cuando ya tenemos al menos ciudad/destino y duración razonable o cuando el usuario pida generar el tour)
 }`
 
@@ -708,17 +718,24 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     })
     const json = await response.json()
     const content = json.choices?.[0]?.message?.content ?? '{}'
-    return safeParseJson(content, {
+    const parsed = safeParseJson(content, {
       responseMessage: '¡Excelente! Cuéntame más sobre tu viaje para diseñar el tour ideal.',
-      actionChips: ['Cartagena', 'Medellín', 'Santa Marta'],
+      actionChips: getDefaultActionChips(known),
       readyToBuild: false
     })
+
+    // Limpiar actionChips si la IA devolvió "Sugerencia 1, 2, 3"
+    let chips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
+    const hasGenericChips = chips.some(c => typeof c === 'string' && /sugerencia|opcion|opción/i.test(c))
+    if (chips.length === 0 || hasGenericChips) {
+      chips = getDefaultActionChips(known)
+    }
+    parsed.actionChips = chips
+    return parsed
   } catch (err) {
     console.error('[openai] chat response error:', err)
     return {
       responseMessage: '¡Hola! Qué gusto saludarte. Tuve un pequeño inconveniente de conexión, pero cuéntame: ¿a dónde te gustaría viajar hoy?',
-      actionChips: ['Cartagena', 'Medellín', 'Santa Marta'],
-      readyToBuild: false
     }
   }
 }
