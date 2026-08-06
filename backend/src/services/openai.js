@@ -719,6 +719,17 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
         messages: [{ role: 'system', content: systemPrompt }, ...recentHistory]
       })
     })
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '')
+      console.error('[openai] chat response OpenAI API non-200 status:', response.status, errText)
+      return {
+        responseMessage: '¡Hola! Con mucho gusto te ayudo a planear tu viaje. ¿A qué ciudad o lugar te gustaría viajar?',
+        actionChips: getDefaultActionChips(known, lastUserMsg),
+        readyToBuild: false
+      }
+    }
+
     const json = await response.json()
     const content = json.choices?.[0]?.message?.content ?? '{}'
     const parsed = safeParseJson(content, {
@@ -738,7 +749,9 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
   } catch (err) {
     console.error('[openai] chat response error:', err)
     return {
-      responseMessage: '¡Hola! Qué gusto saludarte. Tuve un pequeño inconveniente de conexión, pero cuéntame: ¿a dónde te gustaría viajar hoy?',
+      responseMessage: '¡Hola! Es un placer saludarte. Cuéntame, ¿a qué ciudad te gustaría viajar hoy?',
+      actionChips: getDefaultActionChips(known, lastUserMsg),
+      readyToBuild: false
     }
   }
 }
