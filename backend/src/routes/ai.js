@@ -102,7 +102,8 @@ aiRouter.post('/chat', async (req, res, next) => {
       if (canonical) {
         // If destination changed, clear previous specific places and hotel to prevent cross-destination pollution
         if (currentPreferences.canonicalDestination && 
-            currentPreferences.canonicalDestination.displayName !== canonical.displayName) {
+            currentPreferences.canonicalDestination.city &&
+            currentPreferences.canonicalDestination.city !== canonical.city) {
           delete updatedPreferences.specificPlaces
           delete updatedPreferences.selectedHotel
         }
@@ -2581,6 +2582,24 @@ async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lo
   return true
 }
 
+function sanitizeStopTitle(rawName) {
+  if (!rawName || typeof rawName !== 'string') return 'Parada del Tour'
+  let name = rawName.trim()
+  if (name.toUpperCase().includes('OBELISCO: MONUMENTO A LA DECLARACIÓN DE INDEPENDENCIA')) {
+    return 'Obelisco de la Independencia'
+  }
+  name = name.replace(/^OBELISCO:\s*/i, 'Obelisco: ')
+  if (name.length > 50) {
+    const parts = name.split(/[:\-\–\—]/)
+    if (parts[0].trim().length >= 8) {
+      name = parts[0].trim()
+    } else {
+      name = name.substring(0, 48).trim() + '...'
+    }
+  }
+  return name
+}
+
 async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null) {
   const source = stop && typeof stop === 'object' ? stop : {}
   const ubicacion = source.ubicacion ?? source.locationInfo ?? {}
@@ -2610,6 +2629,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
     resolvedName = candidateFallback?.name || fallbackPlace?.name || `${input.destination}`
   }
+  resolvedName = sanitizeStopTitle(resolvedName)
   let description = source.descripcion ?? source.description
   const isGenericDesc = !description || 
                          description.trim().length === 0 || 
@@ -3367,8 +3387,13 @@ export async function collectTourCandidates(input, location) {
   const cityCenterLat = cityGeo?.latitude
   const cityCenterLon = cityGeo?.longitude
 
-  function isWithinCityBounds(lat, lon, maxDistanceKm = 30) {
+  const isWalkingOrUrban = input.transport === 'Caminando' || input.transport === 'Bicicleta' || input.type === 'cultural' || input.type === 'historic'
+  const maxCityRadiusKm = isRegionalOrNature ? 55 : (isWalkingOrUrban ? 4.5 : 8)
+
+  function isWithinCityBounds(lat, lon, maxDistanceKm = maxCityRadiusKm) {
     if (!cityCenterLat || !cityCenterLon || !lat || !lon) return true
+    const isIslandOrExcursion = /isla|rosario|barú|baru|playa blanca|tayrona|minca|guatapé/i.test(input.destination || '') || /isla|rosario|barú|baru|playa blanca|tayrona|minca|guatapé/i.test(input.prompt || '')
+    if (isIslandOrExcursion) return true
     const dist = getDistanceKm(cityCenterLat, cityCenterLon, lat, lon)
     if (dist > maxDistanceKm) {
       console.warn(`[collectTourCandidates] Omitiendo parada lejana (${dist.toFixed(1)} km > ${maxDistanceKm} km del centro de ${city})`)
@@ -3494,6 +3519,14 @@ export async function collectTourCandidates(input, location) {
         console.info('[tour-ai] Successfully validated AI-suggested POIs:', validFallbacks.map(p => p.name))
       }
     }
+  }
+
+  if (input.selectedHotel && input.selectedHotel.name) {
+    const hotelNameLower = String(input.selectedHotel.name).toLowerCase()
+    selected = selected.filter(p => {
+      const pNameLower = (p.name || '').toLowerCase()
+      return !pNameLower.includes(hotelNameLower) && !hotelNameLower.includes(pNameLower)
+    })
   }
 
   if (selected.length < 3) {

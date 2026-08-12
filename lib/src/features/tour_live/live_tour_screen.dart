@@ -666,9 +666,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               _buildSimulationBar(context),
               if (_isRemoteUser)
                 Positioned(
-                  top: MediaQuery.of(context).padding.top + 8,
-                  left: 60,
-                  right: 60,
+                  top: MediaQuery.of(context).padding.top + 54,
+                  left: 16,
+                  right: 16,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -1196,18 +1196,26 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   String _timeLabel(Tour tour, double progress, RoadRouteResult? route) {
     final seconds = route?.travelTimeSeconds;
-    if (seconds != null && seconds > 0) {
+    if (seconds != null && seconds > 0 && seconds < 7200) {
       final remainingMeters = _remainingRouteDistanceMeters(route);
       final totalMeters = route?.distanceMeters ?? 0;
       final remainingSeconds = remainingMeters != null && totalMeters > 0
           ? (seconds * (remainingMeters / totalMeters)).round()
           : seconds;
-      return _formatDuration(remainingSeconds.clamp(0, seconds));
+      return _formatDuration(remainingSeconds.clamp(0, 7200));
     }
     if (_selectedVoicePlace != null || _navigatingToHotel) return 'Calculando...';
-    final fallbackMinutes = ((tour.durationHours * 60) * (1 - progress))
-        .round();
-    return '$fallbackMinutes min';
+    // Calculate realistic walking time for the active leg based on remaining meters
+    final legMeters = _remainingRouteDistanceMeters(route) ?? route?.distanceMeters ?? 0;
+    if (legMeters > 0) {
+      // Estimated walking speed: 4.2 km/h (1.16 m/s)
+      final estimatedMins = (legMeters / 1000.0 / 4.2 * 60).round().clamp(1, 90);
+      return '$estimatedMins min';
+    }
+    final activeStopMins = tour.stops.isNotEmpty && _activeStop < tour.stops.length
+        ? (tour.stops[_activeStop].suggestedMinutes > 0 ? tour.stops[_activeStop].suggestedMinutes : 25)
+        : 25;
+    return '$activeStopMins min';
   }
 
   String _trafficLabel(RoadRouteResult? route) {

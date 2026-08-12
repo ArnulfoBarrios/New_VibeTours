@@ -34,6 +34,106 @@ class _ParsedLocation {
 
 class DiscoveryRepository {
   static const Map<String, _CorrectedPlace> _correctedPlaces = {
+    'torre del reloj': _CorrectedPlace(
+      latitude: 10.4231,
+      longitude: -75.5501,
+      imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=800&q=80',
+    ),
+    'plaza de los coches': _CorrectedPlace(
+      latitude: 10.4230,
+      longitude: -75.5500,
+      imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=800&q=80',
+    ),
+    'museo del oro': _CorrectedPlace(
+      latitude: 10.4234,
+      longitude: -75.5512,
+      imageUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=800&q=80',
+    ),
+    'plaza santo domingo': _CorrectedPlace(
+      latitude: 10.4236,
+      longitude: -75.5521,
+      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
+    ),
+    'museo de arte moderno': _CorrectedPlace(
+      latitude: 10.4222,
+      longitude: -75.5518,
+      imageUrl: 'https://images.unsplash.com/photo-1580136579312-94651dfd596d?auto=format&fit=crop&w=800&q=80',
+    ),
+    'museo naval': _CorrectedPlace(
+      latitude: 10.4218,
+      longitude: -75.5524,
+      imageUrl: 'https://images.unsplash.com/photo-1566121318594-a4f65f3a4c12?auto=format&fit=crop&w=800&q=80',
+    ),
+    'catedral de santa catalina': _CorrectedPlace(
+      latitude: 10.4235,
+      longitude: -75.5506,
+      imageUrl: 'https://images.unsplash.com/photo-1548625361-155de6c7f54a?auto=format&fit=crop&w=800&q=80',
+    ),
+    'ciudad amurallada': _CorrectedPlace(
+      latitude: 10.4238,
+      longitude: -75.5500,
+      imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=800&q=80',
+    ),
+    'museo historico': _CorrectedPlace(
+      latitude: 10.4232,
+      longitude: -75.5515,
+      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
+    ),
+    'inquisicion': _CorrectedPlace(
+      latitude: 10.4232,
+      longitude: -75.5515,
+      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
+    ),
+    'castillo de san sebastian del pastelillo': _CorrectedPlace(
+      latitude: 10.4192,
+      longitude: -75.5348,
+      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
+    ),
+    'pastelillo': _CorrectedPlace(
+      latitude: 10.4192,
+      longitude: -75.5348,
+      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
+    ),
+    'plaza de la trinidad': _CorrectedPlace(
+      latitude: 10.4208,
+      longitude: -75.5458,
+      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
+    ),
+    'getsemani': _CorrectedPlace(
+      latitude: 10.4208,
+      longitude: -75.5458,
+      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
+    ),
+    'castillo de san felipe': _CorrectedPlace(
+      latitude: 10.4223,
+      longitude: -75.5394,
+      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
+    ),
+    'san felipe': _CorrectedPlace(
+      latitude: 10.4223,
+      longitude: -75.5394,
+      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
+    ),
+    'islas del rosario': _CorrectedPlace(
+      latitude: 10.1772,
+      longitude: -75.7482,
+      imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+    ),
+    'bocagrande': _CorrectedPlace(
+      latitude: 10.4042,
+      longitude: -75.5567,
+      imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+    ),
+    'obelisco': _CorrectedPlace(
+      latitude: 10.4225,
+      longitude: -75.5450,
+      imageUrl: 'https://images.unsplash.com/photo-1549693578-d683be217e58?auto=format&fit=crop&w=800&q=80',
+    ),
+    'declaracion de independencia': _CorrectedPlace(
+      latitude: 10.4225,
+      longitude: -75.5450,
+      imageUrl: 'https://images.unsplash.com/photo-1549693578-d683be217e58?auto=format&fit=crop&w=800&q=80',
+    ),
     'joe arroyo': _CorrectedPlace(
       latitude: 10.9948286,
       longitude: -74.806177,
