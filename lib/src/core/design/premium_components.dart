@@ -3,11 +3,9 @@ import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
-import '../../state/app_state.dart';
 import '../utils/image_utils.dart';
 import 'app_theme.dart';
 
@@ -62,6 +60,7 @@ class PremiumScaffold extends StatelessWidget {
     this.appBar,
     this.bottomNavigationBar,
     this.floatingActionButton,
+    this.safeTop = false,
     this.safeBottom = false,
   });
 
@@ -69,6 +68,7 @@ class PremiumScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
   final Widget? bottomNavigationBar;
   final Widget? floatingActionButton;
+  final bool safeTop;
   final bool safeBottom;
 
   @override
@@ -80,7 +80,7 @@ class PremiumScaffold extends StatelessWidget {
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: bottomNavigationBar,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Fondo sólido estilo iOS
-      body: SafeArea(bottom: safeBottom, child: child),
+      body: SafeArea(top: safeTop, bottom: safeBottom, child: child),
     );
   }
 }
@@ -103,23 +103,20 @@ class GlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        final highPerformance = ref.watch(highRefreshRateProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        final border = Border.all(
+    final border = Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.12)
               : Colors.black.withValues(alpha: 0.08),
           width: 1.2,
         );
 
-        final container = Container(
+        final panel = Container(
           decoration: BoxDecoration(
             color: isDark
-                ? const Color(0xFF1C1C1E).withValues(alpha: highPerformance ? 0.65 : 0.95)
-                : const Color(0xFFFFFFFF).withValues(alpha: highPerformance ? 0.70 : 0.98),
+                ? const Color(0xFF1C1C1E)
+                : const Color(0xFFFFFFFF),
             borderRadius: BorderRadius.circular(radius),
             border: border,
             boxShadow: [
@@ -138,16 +135,6 @@ class GlassPanel extends StatelessWidget {
           child: Padding(padding: padding, child: child),
         );
 
-        final panel = highPerformance
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(radius),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                  child: container,
-                ),
-              )
-            : container;
-
         return Padding(
           padding: margin ?? EdgeInsets.zero,
           child: onTap == null
@@ -158,8 +145,6 @@ class GlassPanel extends StatelessWidget {
                   child: panel,
                 ),
         );
-      },
-    );
   }
 }
 
@@ -320,9 +305,11 @@ class TravelImageFallback extends StatelessWidget {
         ),
       ),
       child: Stack(
-        fit: StackFit.expand,
+        fit: StackFit.loose,
         children: [
-          CustomPaint(painter: _FallbackPatternPainter(isDark: isDark)),
+          Positioned.fill(
+            child: CustomPaint(painter: _FallbackPatternPainter(isDark: isDark)),
+          ),
           Center(
             child: Icon(
               icon ?? Icons.travel_explore_rounded,
@@ -747,25 +734,20 @@ class VibeBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: BottomNavigationBar(
-          currentIndex: currentIndex,
-          onTap: onChanged,
-          backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
-          selectedItemColor: AppTheme.primary,
-          unselectedItemColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-          type: BottomNavigationBarType.fixed,
-          elevation: 0,
-          items: [
-            BottomNavigationBarItem(icon: const Icon(Icons.explore_outlined), activeIcon: const Icon(Icons.explore_rounded), label: l10n.explore),
-            BottomNavigationBarItem(icon: const Icon(Icons.chat_bubble_outline_rounded), activeIcon: const Icon(Icons.chat_bubble_rounded), label: 'Chat'),
-            BottomNavigationBarItem(icon: const Icon(Icons.beach_access_outlined), activeIcon: const Icon(Icons.beach_access_rounded), label: 'Tours'),
-            BottomNavigationBarItem(icon: const Icon(Icons.person_outline_rounded), activeIcon: const Icon(Icons.person_rounded), label: l10n.profile),
-          ],
-        ),
-      ),
+    return BottomNavigationBar(
+      currentIndex: currentIndex,
+      onTap: onChanged,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      selectedItemColor: AppTheme.primary,
+      unselectedItemColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+      type: BottomNavigationBarType.fixed,
+      elevation: 8,
+      items: [
+        BottomNavigationBarItem(icon: const Icon(Icons.explore_outlined), activeIcon: const Icon(Icons.explore_rounded), label: l10n.explore),
+        BottomNavigationBarItem(icon: const Icon(Icons.chat_bubble_outline_rounded), activeIcon: const Icon(Icons.chat_bubble_rounded), label: 'Chat'),
+        BottomNavigationBarItem(icon: const Icon(Icons.beach_access_outlined), activeIcon: const Icon(Icons.beach_access_rounded), label: 'Tours'),
+        BottomNavigationBarItem(icon: const Icon(Icons.person_outline_rounded), activeIcon: const Icon(Icons.person_rounded), label: l10n.profile),
+      ],
     );
   }
 }

@@ -7,6 +7,7 @@ import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpa
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
+import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm } from '../services/destinationService.js'
 
 export const aiRouter = Router()
 
@@ -27,6 +28,17 @@ const requestSchema = z.object({
   destination: z.string().optional().default(''),
   country: z.string().optional().default(''),
   city: z.string().optional().default(''),
+  canonicalDestination: z.object({
+    displayName: z.string(),
+    city: z.string(),
+    region: z.string().optional().default(''),
+    country: z.string(),
+    countryCode: z.string(),
+    latitude: z.number(),
+    longitude: z.number(),
+    placeId: z.string().optional().default(''),
+    isAmbiguous: z.boolean().optional().default(false)
+  }).optional(),
   originPlace: z.string().optional(),
   destinationPlace: z.string().optional(),
   isUserLocationOrigin: z.boolean().optional(),
@@ -83,9 +95,28 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     })
 
+    // Resolve Canonical Destination if city/destination is present
+    const rawDest = updatedPreferences.city || updatedPreferences.destination
+    if (rawDest && typeof rawDest === 'string' && rawDest.trim().length > 0) {
+      const canonical = await resolveCanonicalDestination(rawDest)
+      if (canonical) {
+        // If destination changed, clear previous specific places and hotel to prevent cross-destination pollution
+        if (currentPreferences.canonicalDestination && 
+            currentPreferences.canonicalDestination.displayName !== canonical.displayName) {
+          delete updatedPreferences.specificPlaces
+          delete updatedPreferences.selectedHotel
+        }
+        updatedPreferences.canonicalDestination = canonical
+        updatedPreferences.city = canonical.city
+        updatedPreferences.country = canonical.country
+        updatedPreferences.region = canonical.region
+        updatedPreferences.destination = canonical.displayName
+      }
+    }
+
     // 2. Realizar búsqueda en vivo en la web (Tavily/DDG) si hay destino O si la consulta incluye preguntas sobre fechas, festivos, clima o eventos
     let webSearchResult = null
-    const dest = updatedPreferences.city || updatedPreferences.destination
+    const dest = updatedPreferences.canonicalDestination?.displayName || updatedPreferences.city || updatedPreferences.destination
     const isDateOrEventQuery = /\b(festivo|festivos|puente|puentes|clima|evento|eventos|calendario|septiembre|octubre|noviembre|diciembre|enero|febrero|marzo|abril|mayo|junio|julio|agosto)\b/i.test(message)
 
     if (dest || isDateOrEventQuery) {
@@ -922,23 +953,56 @@ async function processTourGeneration(jobId, input) {
 
   try {
     console.info('[tour-ai] generate:start', { jobId: jobId || 'sync', destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
-    const queryParts = [...new Set([input.destination, input.city, input.country].filter(Boolean))]
-    const location = await geocodePlace(queryParts.join(', '))
-    console.info('[tour-ai] geocode', location ? { name: location.name, latitude: location.latitude, longitude: location.longitude } : { ok: false })
     
-    if (!location) {
-      const msg = 'No pudimos identificar la ubicación ingresada. Intenta con un nombre más específico o conocido.'
+    let canonicalDest = input.canonicalDestination
+    if (!canonicalDest || !canonicalDest.latitude || !canonicalDest.longitude) {
+      const queryParts = [...new Set([input.destination, input.city, input.country].filter(Boolean))]
+      canonicalDest = await resolveCanonicalDestination(queryParts.join(', '))
+    }
+
+    if (!canonicalDest || !canonicalDest.latitude || !canonicalDest.longitude) {
+      const msg = 'No pudimos identificar y validar la ubicación ingresada. Intenta con un nombre de ciudad más específico.'
       updateJob({ status: 'failed', message: msg })
       if (isSync) throw new Error(msg)
       return
     }
+
+    if (canonicalDest.isAmbiguous) {
+      const msg = `El destino "${input.destination}" tiene varias coincidencias posibles. Por favor confirma cuál deseas visitar.`
+      updateJob({ status: 'ambiguous_destination', message: msg, candidates: canonicalDest.candidates })
+      if (isSync) {
+        const err = new Error(msg)
+        err.isAmbiguous = true
+        err.candidates = canonicalDest.candidates
+        throw err
+      }
+      return
+    }
+
+    // Anchor input to canonical destination
+    input.canonicalDestination = canonicalDest
+    input.destination = canonicalDest.displayName
+    input.city = canonicalDest.city
+    input.country = canonicalDest.country
+    input.region = canonicalDest.region
+
+    const location = {
+      name: canonicalDest.displayName,
+      latitude: canonicalDest.latitude,
+      longitude: canonicalDest.longitude,
+      city: canonicalDest.city,
+      country: canonicalDest.country,
+      placeId: canonicalDest.placeId
+    }
+
+    console.info('[tour-ai] canonical geocode', { name: location.name, latitude: location.latitude, longitude: location.longitude })
 
     updateJob({ status: 'selecting_places', message: 'Seleccionando los mejores lugares turísticos...' })
     const candidatePack = await collectTourCandidates(input, location)
     console.info('[tour-ai] candidates', { raw: candidatePack.rawCount, normalized: candidatePack.places.length, source: candidatePack.source, selectedHint: candidatePack.places.slice(0, 5).map((place) => place.name) })
     
     if (!candidatePack.places || candidatePack.places.length === 0) {
-      const msg = 'No encontramos suficientes lugares de interés en este destino para generar un tour válido.'
+      const msg = `No encontramos suficientes lugares de interés válidos en ${canonicalDest.displayName} para generar un tour.`
       updateJob({ status: 'failed', message: msg })
       if (isSync) throw new Error(msg)
       return
@@ -3389,36 +3453,47 @@ export async function collectTourCandidates(input, location) {
       destination: input.destination,
       city,
       country,
-      type: input.type
+      type: input.type,
+      canonicalDestination: input.canonicalDestination
     })
 
-    if (aiFallbacks && aiFallbacks.length >= 3) {
-      const centerLat = location?.latitude ?? 0
-      const centerLon = location?.longitude ?? 0
-      const baseName = input.city || input.destination || 'Destino'
-      
-      selected = aiFallbacks.map((item, index) => {
-        const latOffset = index === 0 ? 0.001 : (index === 1 ? -0.001 : 0.0015)
-        const lonOffset = index === 0 ? 0 : (index === 1 ? 0.001 : -0.001)
-        return {
-          name: item.name,
-          latitude: centerLat + latOffset,
-          longitude: centerLon + lonOffset,
-          type: item.type || 'tourism',
-          category: item.category || input.type || 'historic',
-          city: input.city,
-          country: input.country,
-          address: `${baseName}, ${item.name}`,
-          description: item.description || '',
-          tags: { ai_generated_fallback: 'true' }
-        }
-      })
-      source = 'ai-suggested-fallback'
-      console.info('[tour-ai] Successfully loaded AI-suggested POIs:', selected.map(p => p.name))
-    } else {
-      console.warn('[tour-ai] Failed to get fallback places from AI. Using synthetic fallbacks.')
-      selected = buildSyntheticFallbackPlaces(input, location)
+    if (aiFallbacks && aiFallbacks.length >= 1) {
+      const geocodedFallbacks = await Promise.allSettled(
+        aiFallbacks.map(async (item) => {
+          const searchQuery = `${item.name} ${city} ${country}`.trim()
+          const geo = await geocodePlace(searchQuery).catch(() => null)
+          if (geo && validateCandidateLocation(geo, input.canonicalDestination || location, 35)) {
+            return {
+              name: item.name,
+              latitude: geo.latitude,
+              longitude: geo.longitude,
+              type: item.type || 'tourism',
+              category: item.category || input.type || 'historic',
+              city,
+              country,
+              address: geo.name || `${city}, ${item.name}`,
+              description: item.description || '',
+              tags: { ai_generated_fallback: 'true' }
+            }
+          }
+          return null
+        })
+      )
+      const validFallbacks = geocodedFallbacks
+        .map(r => r.status === 'fulfilled' ? r.value : null)
+        .filter(Boolean)
+
+      if (validFallbacks.length > 0) {
+        selected = uniqueByName([...normalizedPool, ...validFallbacks])
+        source = 'ai-suggested-fallback'
+        console.info('[tour-ai] Successfully validated AI-suggested POIs:', validFallbacks.map(p => p.name))
+      }
     }
+  }
+
+  if (selected.length < 3) {
+    console.warn('[tour-ai] Insufficient validated POIs for destination:', input.destination)
+    return { rawCount: pool.length, places: [], source: 'insufficient-validated-pois' }
   }
 
   return { rawCount: pool.length, places: selected, source }
@@ -3519,49 +3594,27 @@ function isValidTouristAttraction(place, input) {
 
 function isCandidateNearDestination(place, input, location) {
   if (!location) return true
-  const latitude = numberValue(place.latitude, NaN)
-  const longitude = numberValue(place.longitude, NaN)
-  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
-  if (!hasCoordinates) return false
+  const canonicalDest = input.canonicalDestination || (location.latitude && location.longitude ? {
+    displayName: location.name || `${location.city}, ${location.country}`,
+    city: location.city || input.city,
+    country: location.country || input.country,
+    countryCode: location.countryCode || '',
+    latitude: location.latitude,
+    longitude: location.longitude
+  } : null)
 
-  // Los hitos icónicos principales nunca se descartan por distancia dentro de la metrópoli
-  const isIconic = (place.tags && place.tags.iconic_landmark === 'true') ||
-                   place.isIconic ||
-                   /libertad|liberty|statue|eiffel|coliseo|colosseum|sagrada familia|taj mahal|cristo redentor|big ben|louvre|empire state|central park|brooklyn bridge/i.test(place.name || '');
-  if (isIconic) return true;
+  if (!canonicalDest) return true
 
-  const distanceKm = haversineMeters(location.latitude, location.longitude, latitude, longitude) / 1000
-
-  // Detect if the tour is regional or nature-oriented to allow a wider radius filter
   const isRegionalOrNature = 
     input.type === 'ecological' || 
     input.type === 'sports' || 
     (input.durationHours && input.durationHours >= 12) ||
     /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.prompt || '') ||
     /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.city || '');
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.city || '')
 
-  const maxDistance = isRegionalOrNature ? 65 : 50
-  if (distanceKm > maxDistance) return false
-
-  // If it's far from the center (>20 km), allow nature, coastal, islands, viewpoints, beaches or iconic landmarks
-  if (distanceKm > 20) {
-    const category = String(place.category || '').toLowerCase()
-    const type = String(place.type || '').toLowerCase()
-    const name = String(place.name || '').toLowerCase()
-    
-    const isEcoOrCoastal = 
-      ['nature', 'viewpoint', 'historic', 'museum'].includes(category) || 
-      ['beach', 'water', 'island', 'national_park', 'nature_reserve', 'park', 'forest', 'sea', 'monument', 'memorial'].includes(type) ||
-      /playa|beach|isla|island|cayo|archipielago|archipiélago|bahia|bahía|ciénaga|cienaga|reserva|parque|mirador|viewpoint|punta|faro|cabo|morrosquillo|san-bernardo|mucura|múcura|tintipan|tintipán|palma|boqueron|boquerón|isleta|coveñas|libertad|statue|monumento/i.test(name) ||
-      (place.tags && (place.tags.natural || place.tags.water || place.tags.place === 'island' || place.tags.boundary === 'national_park'))
-      
-    if (!isEcoOrCoastal) {
-      return false
-    }
-  }
-
-  return true
+  const maxDistanceKm = isRegionalOrNature ? 65 : 35
+  return validateCandidateLocation(place, canonicalDest, maxDistanceKm)
 }
 
 function findCandidatePlace(name, candidatePlaces, anchorPlace) {

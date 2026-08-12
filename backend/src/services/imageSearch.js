@@ -251,6 +251,10 @@ function isImageTitleRelevant(title, query, requiredGroups = null, url = '') {
   const titleLower = title.toLowerCase()
   const urlLower = (url || '').toLowerCase()
   
+  // Filter out non-photo image types like maps, flags, logos, coats of arms, location diagrams
+  const isInvalidType = ['map', 'mapa', 'flag', 'bandera', 'logo', 'icon', 'symbol', 'coat_of_arms', 'escudo', 'location_map', 'chart', 'diagram'].some(term => titleLower.includes(term) || urlLower.includes(term))
+  if (isInvalidType) return false
+
   // Validar extensión del archivo
   const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']
   const hasValidExtension = validExtensions.some(ext => 

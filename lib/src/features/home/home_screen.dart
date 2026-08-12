@@ -324,7 +324,10 @@ class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
         alignment: Alignment.bottomCenter,
         children: [
           GestureDetector(
-            onTap: () => context.push('/tours/${widget.tour.id}'),
+            onTap: () {
+              ref.read(selectedTourProvider.notifier).state = widget.tour;
+              context.push('/tours/${widget.tour.id}');
+            },
             child: Container(
               width: double.infinity,
               height: 380, // Taller size
@@ -544,7 +547,7 @@ class _ToursForYouSection extends StatelessWidget {
   }
 }
 
-class _StaggeredTourCard extends StatelessWidget {
+class _StaggeredTourCard extends ConsumerWidget {
   final Tour tour;
   final double height;
   final bool isLarge;
@@ -558,10 +561,13 @@ class _StaggeredTourCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return GestureDetector(
-      onTap: () => context.push('/tours/${tour.id}'),
+      onTap: () {
+        ref.read(selectedTourProvider.notifier).state = tour;
+        context.push('/tours/${tour.id}');
+      },
       child: Container(
         height: height,
         width: double.infinity,

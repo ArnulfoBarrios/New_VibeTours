@@ -732,11 +732,62 @@ class TouristProfileV2 {
   }
 }
 
+class CanonicalDestination {
+  const CanonicalDestination({
+    required this.displayName,
+    required this.city,
+    required this.region,
+    required this.country,
+    required this.countryCode,
+    required this.latitude,
+    required this.longitude,
+    required this.placeId,
+    this.isAmbiguous = false,
+  });
+
+  final String displayName;
+  final String city;
+  final String region;
+  final String country;
+  final String countryCode;
+  final double latitude;
+  final double longitude;
+  final String placeId;
+  final bool isAmbiguous;
+
+  factory CanonicalDestination.fromJson(Map<String, dynamic> json) {
+    return CanonicalDestination(
+      displayName: json['displayName'] as String? ?? '',
+      city: json['city'] as String? ?? '',
+      region: json['region'] as String? ?? '',
+      country: json['country'] as String? ?? '',
+      countryCode: json['countryCode'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
+      placeId: json['placeId'] as String? ?? '',
+      isAmbiguous: json['isAmbiguous'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'displayName': displayName,
+    'city': city,
+    'region': region,
+    'country': country,
+    'countryCode': countryCode,
+    'latitude': latitude,
+    'longitude': longitude,
+    'placeId': placeId,
+    'isAmbiguous': isAmbiguous,
+  };
+}
+
 class AiTourRequest {
   const AiTourRequest({
     required this.destination,
     required this.country,
     required this.city,
+    this.canonicalDestination,
     this.originPlace,
     this.destinationPlace,
     this.cities = const [],
@@ -757,6 +808,7 @@ class AiTourRequest {
   final String destination;
   final String country;
   final String city;
+  final CanonicalDestination? canonicalDestination;
   final String? originPlace;
   final String? destinationPlace;
   final List<String> cities;
@@ -777,6 +829,7 @@ class AiTourRequest {
     'destination': destination,
     'country': country,
     'city': city,
+    if (canonicalDestination != null) 'canonicalDestination': canonicalDestination!.toJson(),
     if (originPlace != null) 'originPlace': originPlace,
     if (destinationPlace != null) 'destinationPlace': destinationPlace,
     if (cities.isNotEmpty) 'cities': cities,
@@ -798,6 +851,7 @@ class AiTourRequest {
     String? destination,
     String? country,
     String? city,
+    CanonicalDestination? canonicalDestination,
     String? originPlace,
     String? destinationPlace,
     List<String>? cities,
@@ -818,6 +872,7 @@ class AiTourRequest {
       destination: destination ?? this.destination,
       country: country ?? this.country,
       city: city ?? this.city,
+      canonicalDestination: canonicalDestination ?? this.canonicalDestination,
       originPlace: originPlace ?? this.originPlace,
       destinationPlace: destinationPlace ?? this.destinationPlace,
       cities: cities ?? this.cities,

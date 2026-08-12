@@ -245,19 +245,27 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             final durHours = (updatedPreferences['durationHours'] as num?)?.toDouble() ?? (numDays >= 2 ? numDays * 24 : 8.0);
             final specPlaces = (updatedPreferences['specificPlaces'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
+            CanonicalDestination? canonical;
+            if (updatedPreferences['canonicalDestination'] != null) {
+              try {
+                canonical = CanonicalDestination.fromJson(Map<String, dynamic>.from(updatedPreferences['canonicalDestination'] as Map));
+              } catch (_) {}
+            }
+
             final request = AiTourRequest(
               prompt: text,
-              destination: dest.toString(),
-              country: updatedPreferences['country']?.toString() ?? '',
-              city: dest.toString(),
+              destination: canonical?.displayName ?? dest.toString(),
+              country: canonical?.country ?? updatedPreferences['country']?.toString() ?? '',
+              city: canonical?.city ?? dest.toString(),
+              canonicalDestination: canonical,
               type: TourType.custom,
               durationHours: durHours,
               language: 'es',
               touristProfileSummary: summary,
               touristInterests: profile.interests.map((e) => e.translationKey).toList(),
               touristPace: profile.preferredPace,
-              latitude: lat,
-              longitude: lon,
+              latitude: canonical?.latitude ?? lat,
+              longitude: canonical?.longitude ?? lon,
               budget: updatedPreferences['budget']?.toString(),
               selectedPlaces: specPlaces,
             );

@@ -959,14 +959,14 @@ export async function buildVisualDestinationSuggestions(cityList = [], defaultCi
  * Suggest 3 real, physical tourist attractions/POIs for destinations where
  * traditional maps (Overpass/Photon) do not yield enough candidates.
  */
-export async function suggestFallbackPlacesWithOpenAI({ destination, city, country, type, excludeNames = [] }) {
+export async function suggestFallbackPlacesWithOpenAI({ destination, city, country, type, excludeNames = [], canonicalDestination }) {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     console.warn('[suggestFallbackPlacesWithOpenAI] OPENAI_API_KEY is not configured')
     return null
   }
 
-  const targetLocation = `${destination || ''} ${city || ''} ${country || ''}`.trim()
+  const targetLocation = canonicalDestination?.displayName || `${destination || ''} ${city || ''} ${country || ''}`.trim()
   const excludedText = excludeNames.length > 0 ? `\nCRITICAL: Do NOT suggest any of these places as they are already included or excluded: ${excludeNames.join(', ')}.` : ''
 
   const systemPrompt = `You are a world-class travel and geography expert. The user wants to plan a "${type}" tour in "${targetLocation}".
@@ -983,7 +983,7 @@ Return ONLY a valid JSON object matching this exact schema:
     }
   ]
 }
-CRITICAL: Do NOT invent or hallucinate places that do not exist in real life. Ensure they are physically located in or immediately adjacent to the specified destination.${excludedText}`
+CRITICAL: Do NOT invent or hallucinate places that do not exist in real life. Ensure they are physically located in or immediately adjacent to ${targetLocation}. Do NOT suggest places from another country or city.${excludedText}`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

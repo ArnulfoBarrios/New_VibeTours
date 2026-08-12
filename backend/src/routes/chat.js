@@ -6,6 +6,7 @@ import { geocodePlace, photonSearch, overpassAttractions, overpassHotels } from 
 import { getWikipediaContext } from '../services/wikipedia.js'
 import { optimizeRoute } from '../services/tomtom.js'
 import { collectTourCandidates } from './ai.js'
+import { resolveCanonicalDestination } from '../services/destinationService.js'
 
 export const chatRouter = Router()
 
@@ -113,17 +114,30 @@ chatRouter.post('/message', async (req, res, next) => {
       }
 
       case 'GENERATE_STOPS': {
-        // En un flujo real, aquí dispararíamos un job asíncrono. Para simplificar:
-        const geocode = await geocodePlace(state.collectedData.city)
-        if (!geocode) {
+        const canonical = await resolveCanonicalDestination(state.collectedData.city || state.collectedData.destination)
+        if (!canonical) {
           state.currentState = 'COLLECT_INFORMATION'
           state.collectedData.city = null
           responseText = "No pude encontrar esa ciudad en la base de datos. ¿Podrías verificar el nombre o darme más detalles?"
           break
         }
         
+        state.collectedData.canonicalDestination = canonical
+        state.collectedData.city = canonical.city
+        state.collectedData.country = canonical.country
+        state.collectedData.destination = canonical.displayName
+
+        const location = {
+          name: canonical.displayName,
+          latitude: canonical.latitude,
+          longitude: canonical.longitude,
+          city: canonical.city,
+          country: canonical.country,
+          placeId: canonical.placeId
+        }
+
         // Obtener lugares reales filtrados turísticamente
-        const candidatePack = await collectTourCandidates(state.collectedData, geocode)
+        const candidatePack = await collectTourCandidates(state.collectedData, location)
         state.places = (candidatePack.places || []).slice(0, 10)
         
         // Enriquecer con Wikipedia

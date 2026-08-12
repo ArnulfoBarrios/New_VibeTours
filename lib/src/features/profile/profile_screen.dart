@@ -1142,6 +1142,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   return _CreatedTourTile(
                                     tour: tour,
                                     onTap: () {
+                                      ref.read(selectedTourProvider.notifier).state = tour;
                                       Navigator.pop(context);
                                       context.push('/tours/${tour.id}');
                                     },
@@ -1230,6 +1231,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 return _RatedTourTile(
                                   rating: rating,
                                   onTap: () {
+                                    ref.read(selectedTourProvider.notifier).state = rating.tour;
                                     Navigator.pop(context);
                                     context.push('/tours/${rating.tour.id}');
                                   },

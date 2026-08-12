@@ -60,12 +60,10 @@ class TourDetailScreen extends ConsumerWidget {
             ),
           );
         }
-        final tour = selected?.id == tourId
+        final Tour? matchedInAvailable = availableTours.where((item) => item.id == tourId).firstOrNull;
+        final tour = (selected?.id == tourId)
             ? selected!
-            : availableTours.firstWhere(
-                (item) => item.id == tourId,
-                orElse: () => selected ?? availableTours.first,
-              );
+            : (matchedInAvailable ?? selected ?? availableTours.first);
         final favorites = ref.watch(favoriteTourIdsProvider);
         final isFavorite = favorites.contains(tour.id);
         final commentsAsync = ref.watch(tourCommentsProvider(tour.id));
@@ -157,12 +155,14 @@ class TourDetailScreen extends ConsumerWidget {
                       double translation = 0.0;
                       double fadeProgress = 1.0;
 
-                      if (currentHeight > 330.0) {
-                        scale = currentHeight / 330.0;
-                      } else {
-                        final double scrollProgress = ((330.0 - currentHeight) / (330.0 - kToolbarHeight)).clamp(0.0, 1.0);
-                        translation = scrollProgress * 60.0;
-                        fadeProgress = (1.0 - scrollProgress * 1.5).clamp(0.0, 1.0);
+                      if (currentHeight.isFinite && !currentHeight.isNaN) {
+                        if (currentHeight > 330.0) {
+                          scale = (currentHeight / 330.0).clamp(1.0, 2.5);
+                        } else {
+                          final double scrollProgress = ((330.0 - currentHeight) / (330.0 - kToolbarHeight)).clamp(0.0, 1.0);
+                          translation = scrollProgress * 60.0;
+                          fadeProgress = (1.0 - scrollProgress * 1.5).clamp(0.0, 1.0);
+                        }
                       }
 
                       return Stack(
@@ -173,21 +173,23 @@ class TourDetailScreen extends ConsumerWidget {
                             child: Transform.scale(
                               scale: scale,
                               alignment: Alignment.center,
-                              child: CachedNetworkImage(
-                                imageUrl: optimizeImageUrl(tour.coverUrl),
-                                fit: BoxFit.cover,
-                                memCacheWidth: 600,
-                                maxWidthDiskCache: 800,
-                                httpHeaders: const {
-                                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                                },
-                                placeholder: (context, url) => const SkeletonBox(),
-                                errorWidget: (context, url, error) => CachedNetworkImage(
-                                  imageUrl: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80',
-                                  fit: BoxFit.cover,
-                                  errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
-                                ),
-                              ),
+                              child: tour.coverUrl.trim().isEmpty
+                                  ? TravelImageFallback(title: tour.title)
+                                  : CachedNetworkImage(
+                                      imageUrl: optimizeImageUrl(tour.coverUrl),
+                                      fit: BoxFit.cover,
+                                      memCacheWidth: 600,
+                                      maxWidthDiskCache: 800,
+                                      httpHeaders: const {
+                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                                      },
+                                      placeholder: (context, url) => const SkeletonBox(),
+                                      errorWidget: (context, url, error) => CachedNetworkImage(
+                                        imageUrl: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80',
+                                        fit: BoxFit.cover,
+                                        errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
+                                      ),
+                                    ),
                             ),
                           ),
                           DecoratedBox(
@@ -251,7 +253,7 @@ class TourDetailScreen extends ConsumerWidget {
                           ),
                           _Metric(
                             icon: Icons.route_rounded,
-                            value: '${tour.distanceKm.toStringAsFixed(1)} km',
+                            value: '${(!tour.distanceKm.isFinite || tour.distanceKm.isNaN) ? '0.0' : tour.distanceKm.toStringAsFixed(1)} km',
                             label: l10n.distance,
                           ),
                           _Metric(
@@ -275,17 +277,19 @@ class TourDetailScreen extends ConsumerWidget {
                       // Público recomendado e Idiomas disponibles
                       _buildAudienceAndLanguagesSection(context, tour),
                       const SizedBox(height: 18),
-                      GlassPanel(
-                        padding: const EdgeInsets.all(10),
-                        radius: 28,
-                        child: OpenFreeRouteMap.fromStops(
-                          stops: tour.stops,
-                          styleUrl: mapStyle,
-                          height: 230,
-                          fitPadding: const EdgeInsets.all(34),
+                      if (tour.stops.isNotEmpty) ...[
+                        GlassPanel(
+                          padding: const EdgeInsets.all(10),
+                          radius: 28,
+                          child: OpenFreeRouteMap.fromStops(
+                            stops: tour.stops,
+                            styleUrl: mapStyle,
+                            height: 230,
+                            fitPadding: const EdgeInsets.all(34),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 18),
+                        const SizedBox(height: 18),
+                      ],
                       // ¿Qué incluye y qué NO incluye?
                       _buildIncludesExcludesSection(context, tour),
                       const SizedBox(height: 18),
@@ -315,22 +319,24 @@ class TourDetailScreen extends ConsumerWidget {
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(18),
-                              child: CachedNetworkImage(
-                                imageUrl: tour.gallery[index],
-                                width: 132,
-                                fit: BoxFit.cover,
-                                httpHeaders: const {
-                                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                                },
-                                placeholder: (context, url) =>
-                                    const SkeletonBox(width: 132),
-                                errorWidget: (context, url, error) => CachedNetworkImage(
-                                  imageUrl: _getRandomTravelImage(tour.title + index.toString()),
-                                  width: 132,
-                                  fit: BoxFit.cover,
-                                  errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
-                                ),
-                              ),
+                              child: tour.gallery[index].trim().isEmpty
+                                  ? TravelImageFallback(title: tour.title)
+                                  : CachedNetworkImage(
+                                      imageUrl: tour.gallery[index],
+                                      width: 132,
+                                      fit: BoxFit.cover,
+                                      httpHeaders: const {
+                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                                      },
+                                      placeholder: (context, url) =>
+                                          const SkeletonBox(width: 132),
+                                      errorWidget: (context, url, error) => CachedNetworkImage(
+                                        imageUrl: _getRandomTravelImage(tour.title + index.toString()),
+                                        width: 132,
+                                        fit: BoxFit.cover,
+                                        errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
@@ -1187,8 +1193,8 @@ class _Metric extends StatelessWidget {
           children: [
             Icon(icon, color: AppTheme.primary),
             const SizedBox(height: 6),
-            Text(value, style: Theme.of(context).textTheme.titleMedium),
-            Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            Text(value, style: Theme.of(context).textTheme.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(label, style: Theme.of(context).textTheme.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -1451,28 +1457,32 @@ class _StopTile extends StatelessWidget {
       radius: 22,
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: (stop.isFallbackImage || stop.imageUrl.isEmpty)
-                ? TravelImageFallback(
-                    title: stop.name,
-                    icon: Icons.place_rounded,
-                  )
-                : CachedNetworkImage(
-                    imageUrl: stop.imageUrl,
-                    width: 76,
-                    height: 76,
-                    fit: BoxFit.cover,
-                    httpHeaders: const {
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    },
-                    placeholder: (context, url) =>
-                        const SkeletonBox(width: 76, height: 76),
-                    errorWidget: (context, url, error) => TravelImageFallback(
+          SizedBox(
+            width: 76,
+            height: 76,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: stop.imageUrl.trim().isEmpty
+                  ? TravelImageFallback(
                       title: stop.name,
                       icon: Icons.place_rounded,
+                    )
+                  : CachedNetworkImage(
+                      imageUrl: stop.imageUrl,
+                      width: 76,
+                      height: 76,
+                      fit: BoxFit.cover,
+                      httpHeaders: const {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                      },
+                      placeholder: (context, url) =>
+                          const SkeletonBox(width: 76, height: 76),
+                      errorWidget: (context, url, error) => TravelImageFallback(
+                        title: stop.name,
+                        icon: Icons.place_rounded,
+                      ),
                     ),
-                  ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1565,7 +1575,7 @@ class _MovingDashedLineState extends State<_MovingDashedLine> with SingleTickerP
       animation: _controller,
       builder: (context, child) {
         return CustomPaint(
-          size: const Size(2, double.infinity),
+          size: const Size(2, 44),
           painter: _AnimatedPathPainter(
             progress: _controller.value,
             color: AppTheme.primary,
@@ -1633,7 +1643,8 @@ class _TimelineConnector extends StatelessWidget {
           ),
         ),
         if (!isLast)
-          const Expanded(
+          const SizedBox(
+            height: 44,
             child: _MovingDashedLine(),
           ),
       ],
@@ -1695,28 +1706,26 @@ class _StopsTimelineList extends StatelessWidget {
             final isFirst = currIndex == 0;
             final emoji = _getStopEmoji(stop);
 
-            return IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _TimelineConnector(
-                    index: currIndex,
-                    isFirst: isFirst,
-                    isLast: isLast,
-                    emoji: emoji,
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _TimelineConnector(
+                  index: currIndex,
+                  isFirst: isFirst,
+                  isLast: isLast,
+                  emoji: emoji,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _StopTile(stop: stop)
+                        .animate(delay: (currIndex.clamp(0, 4) * 80).ms)
+                        .fadeIn(duration: 350.ms)
+                        .slideX(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _StopTile(stop: stop)
-                          .animate(delay: (currIndex.clamp(0, 4) * 80).ms)
-                          .fadeIn(duration: 350.ms)
-                          .slideX(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             );
           }),
         ],

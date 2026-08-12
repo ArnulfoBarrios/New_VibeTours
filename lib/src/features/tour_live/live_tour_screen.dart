@@ -112,7 +112,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _isOffRoute = false;
   bool _locationStreamRequested = false;
   bool _noLandRouteAvailable = false;
-  bool _isTrackingMode = false;
+  // Live navigation opens in follow mode. The full-route view remains
+  // available from the map menu, but is not useful while driving or walking.
+  bool _isTrackingMode = true;
   bool _navigatingToHotel = false;
   double? _currentHeading;
   bool _stopsEnriched = false;
@@ -289,7 +291,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       }
       final service = ref.read(locationServiceProvider);
       final stream = await service.positionStream(
-        distanceFilterMeters: targetMode == LocationSamplingMode.stationary ? 35 : 12,
+        // Navigation needs frequent fixes; sparse fixes are still smoothed by
+        // LiveNavigationMap, but a 3 m filter keeps GPS corrections subtle.
+        distanceFilterMeters: targetMode == LocationSamplingMode.stationary ? 35 : 3,
         mode: targetMode,
       );
       if (!mounted || stream == null) return;
@@ -627,7 +631,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   destination: destinationPoint,
                   destinationName: destinationName,
                   styleUrl: mapStyle,
-                  fitPadding: const EdgeInsets.fromLTRB(36, 108, 36, 440),
+                  fitPadding: const EdgeInsets.fromLTRB(28, 100, 28, 390),
                   route: _noLandRouteAvailable ? const RoadRouteResult(geometry: []) : liveRoute,
                   currentLocation: _currentPoint,
                   trackingMode: _isTrackingMode,
@@ -700,7 +704,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                           children: [
                             _MapMenuItem(
                               icon: _isTrackingMode ? Icons.my_location_rounded : Icons.explore_rounded,
-                              label: _isTrackingMode ? 'Fijar mapa' : 'Seguimiento',
+                              label: _isTrackingMode ? 'Vista general' : 'Seguimiento',
                               isActive: _isTrackingMode,
                               onTap: () {
                                 setState(() {
@@ -787,7 +791,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 right: 16,
                 bottom: 18 + MediaQuery.of(context).padding.bottom,
                 child: GlassPanel(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12),
+                  radius: 24,
                   child: _selectedVoicePlace != null
                       ? _buildRestaurantNavigationPanel(context, tour)
                       : _navigatingToHotel
@@ -1127,8 +1132,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   String _distanceLabel(Tour tour, double progress, RoadRouteResult? route) {
-    final meters = route?.distanceMeters ?? 0;
+    final meters = _remainingRouteDistanceMeters(route) ?? route?.distanceMeters ?? 0;
     if (meters > 0) {
+      if (meters < 1000) return '${meters.round()} m restantes';
       return '${(meters / 1000).toStringAsFixed(1)} km restantes';
     }
     if (_selectedVoicePlace != null || _navigatingToHotel) return 'Por calcular';
@@ -1137,7 +1143,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   String _timeLabel(Tour tour, double progress, RoadRouteResult? route) {
     final seconds = route?.travelTimeSeconds;
-    if (seconds != null && seconds > 0) return _formatDuration(seconds);
+    if (seconds != null && seconds > 0) {
+      final remainingMeters = _remainingRouteDistanceMeters(route);
+      final totalMeters = route?.distanceMeters ?? 0;
+      final remainingSeconds = remainingMeters != null && totalMeters > 0
+          ? (seconds * (remainingMeters / totalMeters)).round()
+          : seconds;
+      return _formatDuration(remainingSeconds.clamp(0, seconds));
+    }
     if (_selectedVoicePlace != null || _navigatingToHotel) return 'Calculando...';
     final fallbackMinutes = ((tour.durationHours * 60) * (1 - progress))
         .round();
@@ -1145,7 +1158,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   String _trafficLabel(RoadRouteResult? route) {
-    if (_isRouting) return 'Calculando trafico';
+    // Route and traffic requests are asynchronous. Keep the previous route on
+    // screen while they refresh instead of suggesting that navigation stopped.
+    if (_isRouting) return 'Actualizando trafico';
     if (!_routeService.hasLiveTrafficProvider) return 'Sin trafico en vivo';
     if (route == null || !route.usesLiveTraffic) return 'Trafico pendiente';
     final delayMinutes = ((route.trafficDelaySeconds ?? 0) / 60).round();
@@ -1171,17 +1186,87 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   double _distanceToRouteMeters(GeoPoint point, List<GeoPoint> route) {
     if (route.isEmpty) return double.infinity;
-    var best = double.infinity;
-    for (final routePoint in route) {
-      final distance = Geolocator.distanceBetween(
+    if (route.length == 1) {
+      return Geolocator.distanceBetween(
         point.latitude,
         point.longitude,
-        routePoint.latitude,
-        routePoint.longitude,
+        route.first.latitude,
+        route.first.longitude,
+      );
+    }
+
+    var best = double.infinity;
+    for (var index = 0; index < route.length - 1; index++) {
+      final distance = _distanceToSegmentMeters(
+        point,
+        route[index],
+        route[index + 1],
       );
       if (distance < best) best = distance;
     }
     return best;
+  }
+
+  double _distanceToSegmentMeters(GeoPoint point, GeoPoint start, GeoPoint end) {
+    // Local equirectangular projection is sufficiently accurate at navigation
+    // distances and measures the road segment itself, not just its vertices.
+    final referenceLatitude = (start.latitude + end.latitude + point.latitude) / 3;
+    final longitudeScale = math.cos(referenceLatitude * math.pi / 180);
+    final segmentX = (end.longitude - start.longitude) * longitudeScale;
+    final segmentY = end.latitude - start.latitude;
+    final pointX = (point.longitude - start.longitude) * longitudeScale;
+    final pointY = point.latitude - start.latitude;
+    final lengthSquared = segmentX * segmentX + segmentY * segmentY;
+    final t = lengthSquared == 0
+        ? 0.0
+        : ((pointX * segmentX + pointY * segmentY) / lengthSquared).clamp(0.0, 1.0);
+    final projectedLatitude = start.latitude + t * (end.latitude - start.latitude);
+    final projectedLongitude = start.longitude + t * (end.longitude - start.longitude);
+    return Geolocator.distanceBetween(
+      point.latitude,
+      point.longitude,
+      projectedLatitude,
+      projectedLongitude,
+    );
+  }
+
+  double? _remainingRouteDistanceMeters(RoadRouteResult? route) {
+    final current = _currentPoint;
+    final geometry = route?.geometry;
+    if (current == null || geometry == null || geometry.length < 2) return null;
+
+    var closestIndex = 0;
+    var closestDistance = double.infinity;
+    for (var index = 0; index < geometry.length; index++) {
+      final candidate = geometry[index];
+      final distance = Geolocator.distanceBetween(
+        current.latitude,
+        current.longitude,
+        candidate.latitude,
+        candidate.longitude,
+      );
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    }
+
+    // Keep the original estimate when the GPS is not close enough to the
+    // current route for a meaningful remaining-distance calculation.
+    if (closestDistance > 250) return null;
+
+    var remaining = closestDistance;
+    for (var index = closestIndex; index < geometry.length - 1; index++) {
+      final start = geometry[index];
+      final end = geometry[index + 1];
+      remaining += Geolocator.distanceBetween(
+        start.latitude,
+        start.longitude,
+        end.latitude,
+        end.longitude,
+      );
+    }
+    return remaining;
   }
 
   Widget _buildRestaurantNavigationPanel(BuildContext context, Tour tour) {
@@ -1456,8 +1541,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.25),
             ),
           ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
             child: Row(
               children: [
                 if (!_noLandRouteAvailable) ...[
@@ -1765,7 +1851,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   Widget _buildSimulationBar(BuildContext context) {
     if (!_isSimulatingGps) {
       return Positioned(
-        left: 16,
+        left: 76,
         top: MediaQuery.of(context).padding.top + 2,
         child: Material(
           color: Colors.transparent,
@@ -1800,7 +1886,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
 
     return Positioned(
-      left: 16,
+      left: 76,
       top: MediaQuery.of(context).padding.top + 2,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),

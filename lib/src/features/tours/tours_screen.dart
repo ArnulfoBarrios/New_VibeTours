@@ -158,7 +158,10 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
                               padding: const EdgeInsets.only(bottom: 16),
                               child: TourCard(
                                 tour: tour,
-                                onTap: () => context.push('/tours/${tour.id}'),
+                                onTap: () {
+                                  ref.read(selectedTourProvider.notifier).state = tour;
+                                  context.push('/tours/${tour.id}');
+                                },
                               )
                                   .animate(delay: (index.clamp(0, 4) * 80).ms)
                                   .fadeIn(duration: 350.ms)

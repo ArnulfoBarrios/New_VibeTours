@@ -642,13 +642,13 @@ class _PublicBadgeChip extends StatelessWidget {
   }
 }
 
-class _PublicCreatedToursSection extends StatelessWidget {
+class _PublicCreatedToursSection extends ConsumerWidget {
   const _PublicCreatedToursSection({required this.createdTours});
 
   final List<Tour> createdTours;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
     return Column(
@@ -698,7 +698,10 @@ class _PublicCreatedToursSection extends StatelessWidget {
                   color: Colors.transparent,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(20),
-                    onTap: () => context.push('/tours/${tour.id}'),
+                    onTap: () {
+                      ref.read(selectedTourProvider.notifier).state = tour;
+                      context.push('/tours/${tour.id}');
+                    },
                     child: GlassPanel(
                       padding: const EdgeInsets.all(14),
                       radius: 20,

@@ -128,7 +128,13 @@ class RoadRouteService {
           _looksLikeMaritimeTransfer(roadRoute, start, end);
 
       if (!requiresPortTransfer) {
-        _appendGeometry(geometry, roadRoute.geometry);
+        // Routing engines commonly snap their first/last geometry points to a
+        // nearby road. Preserve the exact requested endpoints so the rendered
+        // route always starts at the live GPS fix and ends at the selected POI.
+        _appendGeometry(
+          geometry,
+          _withRequestedEndpoints(roadRoute.geometry, start, end),
+        );
         totalDistanceMeters += roadRoute.distanceMeters;
         totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
         totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
@@ -147,7 +153,10 @@ class RoadRouteService {
         totalTrafficDelaySeconds += maritimeRoute.trafficDelaySeconds ?? 0;
         usesLiveTraffic = usesLiveTraffic || maritimeRoute.usesLiveTraffic;
       } else if (roadRoute != null) {
-        _appendGeometry(geometry, roadRoute.geometry);
+        _appendGeometry(
+          geometry,
+          _withRequestedEndpoints(roadRoute.geometry, start, end),
+        );
         totalDistanceMeters += roadRoute.distanceMeters;
         totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
         totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
@@ -488,6 +497,25 @@ out center tags 30;
         target.add(point);
       }
     }
+  }
+
+  static List<GeoPoint> _withRequestedEndpoints(
+    List<GeoPoint> geometry,
+    GeoPoint start,
+    GeoPoint end,
+  ) {
+    if (geometry.isEmpty) return [start, end];
+
+    final result = <GeoPoint>[start];
+    for (final point in geometry) {
+      if (_distanceMeters(result.last, point) > 1) {
+        result.add(point);
+      }
+    }
+    if (_distanceMeters(result.last, end) > 1) {
+      result.add(end);
+    }
+    return result;
   }
 
   static double _geometryDistanceMeters(List<GeoPoint> geometry) {
