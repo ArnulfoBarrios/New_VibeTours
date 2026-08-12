@@ -146,7 +146,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       // Ignorar error de ubicación
     }
 
-    ref.read(aiBuilderProvider.notifier).sendMessage(text, imagePath: imagePath, lat: lat, lon: lon);
+    await ref.read(aiBuilderProvider.notifier).sendMessage(text, imagePath: imagePath, lat: lat, lon: lon);
     if (mounted) {
       setState(() {
         _isProcessingAction = false;
@@ -198,7 +198,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       // Ignore location error
     }
 
-    ref.read(aiBuilderProvider.notifier).sendMessage(
+    await ref.read(aiBuilderProvider.notifier).sendMessage(
       aiPrompt,
       lat: lat,
       lon: lon,

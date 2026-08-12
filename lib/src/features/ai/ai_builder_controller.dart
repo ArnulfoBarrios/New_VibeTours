@@ -167,11 +167,22 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
   }
 
   Future<void> sendMessage(String text, {String? imagePath, double? lat, double? lon, String? displayLabel}) async {
+    final now = DateTime.now();
+    final messageText = displayLabel ?? text;
+
+    // Prevent duplicate submission if the last user message is identical and sent within 1.5 seconds
+    if (state.messages.isNotEmpty) {
+      final lastMsg = state.messages.last;
+      if (lastMsg.isUser && lastMsg.text == messageText && now.difference(lastMsg.timestamp).inMilliseconds < 1500) {
+        return;
+      }
+    }
+
     final userMsg = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      text: displayLabel ?? text,
+      id: now.millisecondsSinceEpoch.toString(),
+      text: messageText,
       type: ChatMessageType.user,
-      timestamp: DateTime.now(),
+      timestamp: now,
       localImagePath: imagePath,
     );
     state = state.copyWith(

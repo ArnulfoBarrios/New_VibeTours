@@ -831,7 +831,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     // SOLO mostrar destinationSuggestions si la pregunta actual es la Ciudad (nextMissing === 'city') O si es Hospedaje (nextMissing === 'accommodationStatus')
     if (nextMissing === 'city') {
       parsed.destinationSuggestions = await buildVisualDestinationSuggestions(chips, '')
-    } else if (nextMissing === 'accommodationStatus' || chips.some(c => typeof c === 'string' && /hospedaje|hotel|alojamiento/i.test(c))) {
+    } else if (nextMissing === 'accommodationStatus' && !known.accommodationStatus) {
       parsed.destinationSuggestions = [
         {
           name: 'Recomiéndame hoteles',
