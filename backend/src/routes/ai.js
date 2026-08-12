@@ -3387,6 +3387,15 @@ export async function collectTourCandidates(input, location) {
   const cityCenterLat = cityGeo?.latitude
   const cityCenterLon = cityGeo?.longitude
 
+  // Check if it is a regional or nature-oriented tour
+  const isRegionalOrNature = 
+    input.type === 'ecological' || 
+    input.type === 'sports' || 
+    (input.durationHours && input.durationHours >= 12) ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.prompt || '') ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
+    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(city);
+
   const isWalkingOrUrban = input.transport === 'Caminando' || input.transport === 'Bicicleta' || input.type === 'cultural' || input.type === 'historic'
   const maxCityRadiusKm = isRegionalOrNature ? 55 : (isWalkingOrUrban ? 4.5 : 8)
 
@@ -3444,15 +3453,6 @@ export async function collectTourCandidates(input, location) {
 
   const query = `${input.destination} ${city} ${country}`.trim()
   const photonPlaces = await photonSearch(query, 30)
-
-  // Check if it is a regional or nature-oriented tour
-  const isRegionalOrNature = 
-    input.type === 'ecological' || 
-    input.type === 'sports' || 
-    (input.durationHours && input.durationHours >= 12) ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.prompt || '') ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(city);
 
   const radiusPrimary = isRegionalOrNature ? 15000 : 4500
   const radiusWide = isRegionalOrNature ? 55000 : 9000
