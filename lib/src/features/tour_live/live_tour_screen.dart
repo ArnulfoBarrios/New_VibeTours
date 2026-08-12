@@ -664,6 +664,36 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               ),
               // ── GPS Drive Simulator Floating Control Bar (Top Left) ─────────────
               _buildSimulationBar(context),
+              if (_isRemoteUser)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 8,
+                  left: 60,
+                  right: 60,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade900.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 6),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.info_outline_rounded, color: Colors.white, size: 16),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Modo Remoto (${_remoteDistanceKm.toStringAsFixed(0)} km)',
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               // ── Single Hamburger Menu FAB (Top Right) ───────────────────────────
               Positioned(
                 right: 16,
@@ -1039,6 +1069,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
   }
 
+  bool _isRemoteUser = false;
+  double _remoteDistanceKm = 0.0;
+
   Future<void> _recalculateRoute(
     Tour tour, {
     bool force = false,
@@ -1076,19 +1109,39 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       destination = tour.stops[_activeStop].location;
     }
 
+    final firstStopLoc = tour.stops.first.location;
+    final distToTourStart = Geolocator.distanceBetween(
+      origin.latitude,
+      origin.longitude,
+      firstStopLoc.latitude,
+      firstStopLoc.longitude,
+    );
+    final isRemote = distToTourStart > 5000;
+
+    GeoPoint routingOrigin = origin;
+    if (isRemote && _selectedVoicePlace == null && !_navigatingToHotel) {
+      if (_activeStop > 0 && _activeStop < tour.stops.length) {
+        routingOrigin = tour.stops[_activeStop - 1].location;
+      } else {
+        routingOrigin = firstStopLoc;
+      }
+    }
+
     setState(() {
       _isRouting = true;
       _isOffRoute = markOffRoute;
+      _isRemoteUser = isRemote;
+      _remoteDistanceKm = distToTourStart / 1000.0;
     });
     final route = await _routeService.resolveRoute(
-      [origin, destination],
+      [routingOrigin, destination],
       preferLiveTraffic: true,
       forceRefresh: true,
     );
     if (!mounted) return;
     
     final directDist = Geolocator.distanceBetween(
-      origin.latitude, origin.longitude,
+      routingOrigin.latitude, routingOrigin.longitude,
       destination.latitude, destination.longitude,
     );
     
@@ -1096,7 +1149,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     
     if (route.geometry.isNotEmpty) {
       final snapStart = Geolocator.distanceBetween(
-        origin.latitude, origin.longitude,
+        routingOrigin.latitude, routingOrigin.longitude,
         route.geometry.first.latitude, route.geometry.first.longitude,
       );
       if (snapStart > 50000) {

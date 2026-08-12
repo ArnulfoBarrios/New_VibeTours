@@ -411,6 +411,23 @@ function isNonTouristFacility(tags = {}) {
   if (!tags) return false
   if (tags.office || tags.industrial) return true
 
+  const name = String(tags.name ?? '').toLowerCase()
+  if (
+    name.includes('aguas de') ||
+    name.includes('acueducto') ||
+    name.includes('alcantarillado') ||
+    name.includes('servicios publicos') ||
+    name.includes('s.a. e.s.p.') ||
+    name.includes('secretaria de') ||
+    name.includes('notaria') ||
+    name.includes('camara de comercio') ||
+    name.includes('tránsito') ||
+    name.includes('subestacion') ||
+    name.includes('gas natural')
+  ) {
+    return true
+  }
+
   const landuse = String(tags.landuse ?? '').toLowerCase()
   if (['industrial', 'residential', 'commercial', 'construction', 'quarry'].includes(landuse)) {
     return true
@@ -421,7 +438,7 @@ function isNonTouristFacility(tags = {}) {
     'university', 'school', 'college', 'kindergarten',
     'bank', 'atm', 'pharmacy', 'dentist', 'doctors', 'hospital', 'clinic',
     'police', 'post_office', 'townhall', 'courthouse', 'embassy',
-    'fuel', 'car_wash', 'parking', 'bus_station'
+    'fuel', 'car_wash', 'parking', 'bus_station', 'utility', 'waste_disposal'
   ].includes(amenity)) {
     return true
   }

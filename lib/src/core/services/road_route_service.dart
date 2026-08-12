@@ -325,6 +325,19 @@ class RoadRouteService {
     }
   }
 
+  static final List<RoutePortWaypoint> _curatedFallbackPorts = [
+    RoutePortWaypoint(
+      name: 'Muelle de la Bodeguita (Cartagena)',
+      location: const GeoPoint(latitude: 10.4206, longitude: -75.5539),
+      role: 'Puerto de Embarque',
+    ),
+    RoutePortWaypoint(
+      name: 'Muelle Turístico de Cartagena',
+      location: const GeoPoint(latitude: 10.4190, longitude: -75.5525),
+      role: 'Puerto de Embarque',
+    ),
+  ];
+
   Future<List<RoutePortWaypoint>> _findPortsNear(
     GeoPoint point, {
     required String role,
@@ -339,6 +352,10 @@ class RoadRouteService {
         );
         if (ports.isNotEmpty) return ports;
       }
+      final fallback = _curatedFallbackPorts.where((p) {
+        return _distanceMeters(point, p.location) <= 50000;
+      }).toList();
+      if (fallback.isNotEmpty) return fallback;
       return const [];
     });
   }
@@ -422,9 +439,10 @@ out center tags 30;
   ) {
     if (route.hasFerrySegment) return true;
     final directDistance = _distanceMeters(start, end);
-    if (directDistance < 20000) return false;
-    if (route.distanceMeters <= 0) return false;
-    return route.distanceMeters / directDistance > 8;
+    if (directDistance < 3000) return false;
+    if (route.distanceMeters <= 0) return true;
+    if (route.distanceMeters / directDistance > 3.5) return true;
+    return false;
   }
 
   List<GeoPoint> _parseGeoJsonGeometry(Object? rawGeometry) {

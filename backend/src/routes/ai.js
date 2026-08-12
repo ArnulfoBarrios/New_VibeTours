@@ -2633,9 +2633,13 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   }
   
   let durationText = source.duracion_estimada ?? `${source.suggestedMinutes ?? 25} minutos`
-  const minutes = minutesFromLabel(durationText)
-  if (minutes < 15) {
-    const fallbackMins = fallbackPlace?.minutes ?? source.suggestedMinutes ?? 25
+  let minutes = minutesFromLabel(durationText)
+  const isMuseumOrGallery = /museo|palacio|galer[ií]a|fuerte|castillo|inquisici[oó]n|naval/i.test(resolvedName)
+  if (isMuseumOrGallery && minutes < 45) {
+    minutes = 45
+    durationText = "45 minutos"
+  } else if (minutes < 20) {
+    const fallbackMins = Math.max(25, fallbackPlace?.minutes ?? source.suggestedMinutes ?? 25)
     durationText = `${fallbackMins} minutos`
   }
 
@@ -2878,13 +2882,14 @@ function numberValue(value, fallback) {
 }
 
 function minutesFromLabel(value) {
-  if (typeof value === 'number') return Math.round(value)
+  if (typeof value === 'number') return Math.max(20, Math.round(value))
   const text = String(value ?? '').toLowerCase()
   const match = text.match(/(\d+(?:[.,]\d+)?)/)
   if (!match) return 25
   const parsed = Number(match[1].replace(',', '.'))
   if (!Number.isFinite(parsed)) return 25
-  return text.includes('hora') ? Math.round(parsed * 60) : Math.round(parsed)
+  const mins = text.includes('hora') ? Math.round(parsed * 60) : Math.round(parsed)
+  return Math.max(20, mins)
 }
 
 function typeLabel(type) {

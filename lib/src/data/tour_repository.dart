@@ -930,10 +930,18 @@ class TourRepository {
         final stopCount = stops.isEmpty ? 5 : stops.length;
         return (stopCount * 0.35).clamp(0.5, 12.0);
       }(),
-      distanceKm: _kilometersFromValue(
-        source['distancia_total'] ?? json['distanceKm'],
-        0,
-      ),
+      distanceKm: () {
+        final val = _kilometersFromValue(
+          source['distancia_total'] ?? json['distanceKm'],
+          0,
+        );
+        if (val > 0) return val;
+        final meters = json['distance_meters'];
+        if (meters is num && meters > 0) {
+          return meters / 1000.0;
+        }
+        return 0.0;
+      }(),
       rating: _doubleValue(json['rating'], 4.8),
       reviewCount: _intValue(json['review_count'], 0),
       likes: _intValue(json['likes_count'], 0),
@@ -942,26 +950,46 @@ class TourRepository {
       ),
       language: json['language']?.toString() ?? 'es',
       tags: _stringList(source['etiquetas'] ?? json['tags']),
-      shortSummary: source['resumen_corto']?.toString() ?? '',
-      subcategories: _stringList(source['subcategorias']),
-      featuredExperience: source['experiencia_destacada']?.toString() ?? '',
-      placeHistory: source['historia_del_lugar']?.toString() ?? '',
-      culturalContext: source['contexto_cultural']?.toString() ?? '',
-      availableLanguages: _stringList(source['idiomas_disponibles']),
-      recommendedAudience: _stringList(source['publico_recomendado']),
-      bestSeason: source['mejor_epoca']?.toString() ?? '',
-      recommendedSchedule: source['horario_recomendado']?.toString() ?? '',
-      meetingPoint: _meetingPointLabel(source['punto_encuentro']),
+      shortSummary: source['resumen_corto']?.toString() ?? json['short_summary']?.toString() ?? '',
+      subcategories: _stringList(source['subcategorias'] ?? json['subcategories']),
+      featuredExperience: source['experiencia_destacada']?.toString() ?? json['featured_experience']?.toString() ?? '',
+      placeHistory: source['historia_del_lugar']?.toString() ?? json['place_history']?.toString() ?? '',
+      culturalContext: source['contexto_cultural']?.toString() ?? json['cultural_context']?.toString() ?? '',
+      availableLanguages: () {
+        final list = _stringList(source['idiomas_disponibles']);
+        if (list.isNotEmpty) return list;
+        return _stringList(json['available_languages']);
+      }(),
+      recommendedAudience: () {
+        final list = _stringList(source['publico_recomendado']);
+        if (list.isNotEmpty) return list;
+        return _stringList(json['recommended_audience']);
+      }(),
+      bestSeason: source['mejor_epoca']?.toString() ?? json['best_season']?.toString() ?? '',
+      recommendedSchedule: source['horario_recomendado']?.toString() ?? json['recommended_schedule']?.toString() ?? '',
+      meetingPoint: () {
+        final mp = _meetingPointLabel(source['punto_encuentro']);
+        if (mp.isNotEmpty) return mp;
+        return _meetingPointLabel(json['meeting_point']);
+      }(),
       meetingPointInfo: meetingInfo,
-      includes: _stringList(source['incluye'] ?? json['included_items']),
-      excludes: _stringList(source['no_incluye'] ?? json['excluded_items']),
-      recommendations: _stringList(source['recomendaciones']),
-      whatToBring: _stringList(source['que_llevar']),
-      tourRules: _stringList(source['normas_del_tour']),
-      keywords: _stringList(source['palabras_clave']),
-      mainCategory: source['categoria_principal']?.toString() ?? '',
-      budget: _budget(source['presupuesto_estimado_usd']),
-      additionalInfo: _additionalInfo(source['informacion_adicional']),
+      includes: () {
+        final list = _stringList(source['incluye']);
+        if (list.isNotEmpty) return list;
+        return _stringList(json['included_items'] ?? json['includes']);
+      }(),
+      excludes: () {
+        final list = _stringList(source['no_incluye']);
+        if (list.isNotEmpty) return list;
+        return _stringList(json['excluded_items'] ?? json['excludes']);
+      }(),
+      recommendations: _stringList(source['recomendaciones'] ?? json['recommendations']),
+      whatToBring: _stringList(source['que_llevar'] ?? json['what_to_bring']),
+      tourRules: _stringList(source['normas_del_tour'] ?? json['tour_rules']),
+      keywords: _stringList(source['palabras_clave'] ?? json['keywords']),
+      mainCategory: source['categoria_principal']?.toString() ?? json['main_category']?.toString() ?? '',
+      budget: _budget(source['presupuesto_estimado_usd'] ?? json['budget']),
+      additionalInfo: _additionalInfo(source['informacion_adicional'] ?? json['additional_info']),
       isAiGenerated: true,
       isPublished: json['is_published'] == true || json['status'] == 'approved',
     );
@@ -1002,9 +1030,9 @@ class TourRepository {
       'language': tour.language,
       'tags': tour.tags,
       'is_ai_generated': tour.isAiGenerated,
-      'is_published': false,
+      'is_published': tour.isPublished,
       'is_private': !tour.isPublished,
-      'moderation_status': tour.isPublished ? 'pending' : 'approved',
+      'moderation_status': tour.isPublished ? 'approved' : 'approved',
       'creation_json': tour.toCreationJson(),
       'short_summary': tour.shortSummary,
       'subcategories': tour.subcategories,

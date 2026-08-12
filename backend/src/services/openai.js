@@ -333,6 +333,8 @@ REGLAS DE CONTENIDO:
 - Escribe en ${language}.
 - CRÍTICO GUÍA DE VOZ INMERSIVA: Cada descripción de parada ("descripcion") DEBE ser una guía de voz completa y envolvente de 80 a 120 palabras. Escribe como si fueras un guía local experto hablando en vivo al oído del turista. Narra la historia fascinante del sitio, los detalles arquitectónicos o naturales que tiene enfrente, anécdotas culturales únicas y sugerencias de 'Qué hacer o qué probar aquí'.
 - CRÍTICO CADA PARADA ES ÚNICA: PROHIBIDO copiar y pegar descripciones o consejos genéricos.
+- CRÍTICO DURACIONES REALISTAS: Queda estrictamente PROHIBIDO asignar duraciones de menos de 20 minutos a cualquier parada. Para museos, galerías, castillos y recintos históricos (ej: Palacio de la Inquisición, Museo del Oro, Cerro de la Popa, Museo Naval), asigna entre 45 y 90 minutos de visita. Para monumentos o plazas al aire libre, asigna entre 25 y 40 minutos.
+- CRÍTICO LOGÍSTICA DE ISLAS Y EXCURSIONES MARÍTIMAS: Si el itinerario incluye una atracción insular o marítima alejada (ej: Islas del Rosario, Isla Barú o Playa Blanca desde Cartagena), esta actividad representa una excursión de medio día o día completo. Asigna a esta actividad suficiente tiempo (mínimo 4 a 6 horas en el itinerario del día) y detalla que la partida se realiza desde el muelle de embarque (ej: Muelle de la Bodeguita). Queda PROHIBIDO asignarle duraciones relámpago de 20 o 30 minutos intercaladas en caminatas urbanas del mismo día.
 - El array de salida "itinerario" debe tener EXACTAMENTE la misma longitud que la lista de lugares seleccionados (selectedPlaces) que recibes.`
 
   if (selectedHotel && selectedHotel.name) {
@@ -340,7 +342,7 @@ REGLAS DE CONTENIDO:
   }
 
   system += `\n- CRÍTICO RUTA CON INICIO Y FIN: Si el usuario especificó un punto de partida y un punto de llegada, la Parada 1 del itinerario DEBE ser el punto de partida especificado y la última Parada DEBE ser el destino final especificado. Las paradas intermedias deben integrarse de forma fluida de camino hacia la meta final.`
-  system += `\n- CRÍTICO TOUR MULTICIUDAD / MULTIDÍA: Si el tour abarca más de una ciudad o recorrido de carretera interurbana, las paradas seleccionadas están ordenadas estrictamente desde la ciudad de origen hacia la ciudad de destino. Narra el itinerario respetando esta secuencia progresiva sin hacer retrocesos geográficos ni saltos anacrónicos. Organiza el itinerario dividiendo las paradas de manera equilibrada por días y en los trayectos entre ciudades, detalla las instrucciones del viaje intermunicipal.`
+  system += `\n- CRÍTICO TOUR MULTICIUDAD / MULTIDÍA: Si el tour abarca más de una ciudad o recorrido de carretera interurbana, las paradas seleccionadas están ordenadas strictly desde la ciudad de origen hacia la ciudad de destino. Narra el itinerario respetando esta secuencia progresiva sin hacer retrocesos geográficos ni saltos anacrónicos. Organiza el itinerario dividiendo las paradas de manera equilibrada por días y en los trayectos entre ciudades, detalla las instrucciones del viaje intermunicipal.`
 
   const routeBrief = {
     destination,
