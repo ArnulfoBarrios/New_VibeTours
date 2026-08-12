@@ -867,7 +867,15 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
       })
     )
-    const stops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+    const rawStops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+    const hotelNameLower = String(input.selectedHotel?.name || plannerContext?.selectedHotel?.name || '').toLowerCase()
+    const stops = rawStops.filter(s => {
+      const nameLower = (s.routeStop?.name || s.publicStop?.nombre || '').toLowerCase()
+      if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
+        return false
+      }
+      return true
+    })
     
     const publicStops = stops.map(s => s.publicStop)
     const routeStops = stops.map(s => s.routeStop)
@@ -1072,7 +1080,17 @@ async function processTourGeneration(jobId, input) {
       )
       const rawNormalized = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
       const uniquePublicStops = uniqueByName(rawNormalized.map(s => s.publicStop))
-      const normalizedStops = uniquePublicStops.map(pub => rawNormalized.find(r => r.publicStop.nombre === pub.nombre)).filter(Boolean)
+      const hotelNameLower = String(input.selectedHotel?.name || plannerContext?.selectedHotel?.name || '').toLowerCase()
+      const normalizedStops = uniquePublicStops
+        .map(pub => rawNormalized.find(r => r.publicStop.nombre === pub.nombre))
+        .filter(Boolean)
+        .filter(s => {
+          const nameLower = (s.routeStop?.name || s.publicStop?.nombre || '').toLowerCase()
+          if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
+            return false
+          }
+          return true
+        })
       const stops = normalizedStops.map((stop) => stop.publicStop)
       const routeStops = normalizedStops.map((stop) => stop.routeStop)
       const coverUrl = await imageForPlace(input.city || input.destination, input.country || "").catch(() => fallbackCover(input.destination))
@@ -3411,6 +3429,33 @@ export async function collectTourCandidates(input, location) {
     return true
   }
 
+  // Geocode any specific places requested or discussed in chat
+  let geocodedSpecifics = []
+  if (Array.isArray(input.specificPlaces) && input.specificPlaces.length > 0) {
+    const specificSettled = await Promise.allSettled(
+      input.specificPlaces.map(async (placeName) => {
+        if (!placeName || typeof placeName !== 'string' || placeName.length < 3) return null
+        const searchQuery = `${placeName} ${city} ${country}`.trim()
+        const geo = await geocodePlace(searchQuery).catch(() => null)
+        return {
+          name: placeName,
+          latitude: geo?.latitude || cityCenterLat || 10.4230,
+          longitude: geo?.longitude || cityCenterLon || -75.5500,
+          type: 'tourism',
+          category: 'requested',
+          city,
+          country,
+          address: geo?.name || `${city}, ${placeName}`,
+          description: `Atracción/Restaurante: ${placeName}`,
+          tags: { requested_place: 'true' }
+        }
+      })
+    )
+    geocodedSpecifics = specificSettled
+      .map(r => r.status === 'fulfilled' ? r.value : null)
+      .filter(Boolean)
+  }
+
   // 1. Fetch top iconic landmarks from OpenAI global geography knowledge
   const iconicLandmarks = await fetchCityIconicLandmarks({
     destination: input.destination,
@@ -3428,7 +3473,7 @@ export async function collectTourCandidates(input, location) {
       iconicLandmarks.map(async (item) => {
         const searchQuery = `${item.name} ${city} ${country}`.trim()
         const geo = await geocodePlace(searchQuery)
-        if (geo && (geo.latitude || geo.longitude) && isWithinCityBounds(geo.latitude, geo.longitude, 30)) {
+        if (geo && (geo.latitude || geo.longitude) && isWithinCityBounds(geo.latitude, geo.longitude)) {
           return {
             name: item.name,
             latitude: geo.latitude,
@@ -3464,9 +3509,26 @@ export async function collectTourCandidates(input, location) {
       ])
     : [[], []]
   
-  // Prioritize geocoded iconic landmarks first in the pool
-  const pool = [...geocodedIconics, ...overpassPrimary, ...overpassWide, ...photonPlaces]
-  const normalizedPool = uniqueByName(pool)
+  // Prioritize specific chat places and geocoded iconic landmarks first in the pool
+  const pool = [...geocodedSpecifics, ...geocodedIconics, ...overpassPrimary, ...overpassWide, ...photonPlaces]
+  
+  function dedupeByProximity(places, minDistanceMeters = 150) {
+    const result = []
+    for (const p of places) {
+      if (!p || !p.name) continue
+      const exists = result.some(item => {
+        if (normalizeKey(item.name) === normalizeKey(p.name)) return true
+        if (hasUsableCoordinates(item.latitude, item.longitude) && hasUsableCoordinates(p.latitude, p.longitude)) {
+          return haversineMeters(item.latitude, item.longitude, p.latitude, p.longitude) < minDistanceMeters
+        }
+        return false
+      })
+      if (!exists) result.push(p)
+    }
+    return result
+  }
+
+  const normalizedPool = dedupeByProximity(uniqueByName(pool))
     .filter((place) => place && place.name)
     .filter((place) => hasUsableCoordinates(place.latitude, place.longitude) || place.city || place.country)
     .filter((place) => isCandidateNearDestination(place, input, location))

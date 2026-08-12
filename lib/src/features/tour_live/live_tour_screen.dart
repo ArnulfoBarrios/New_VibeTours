@@ -125,147 +125,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _autoPlayProximityEnabled = true;
   final Set<String> _autoTriggeredStopIds = {};
 
-  // ── GPS Drive Simulator State ──────────────────────────────────────────────
-  bool _isSimulatingGps = false;
-  bool _isSimulationPaused = false;
-  Timer? _simulationTimer;
-  int _simulatedSegmentIndex = 0;
-  double _simulatedSegmentProgress = 0.0;
-  double _simulatedSpeedMultiplier = 1.0;
 
-  void _startGpsSimulation() {
-    final route = _liveRoute;
-    final geom = route?.geometry ?? [];
-    if (geom.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Calculando ruta antes de iniciar el simulador...')),
-      );
-      final tour = _navigationTour;
-      if (tour != null) _recalculateRoute(tour, force: true);
-      return;
-    }
-
-    _simulationTimer?.cancel();
-    setState(() {
-      _isSimulatingGps = true;
-      _isSimulationPaused = false;
-      _simulatedSegmentIndex = 0;
-      _simulatedSegmentProgress = 0.0;
-      _isTrackingMode = true;
-    });
-
-    _simulationTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
-      _stepGpsSimulation();
-    });
-  }
-
-  void _stopGpsSimulation() {
-    _simulationTimer?.cancel();
-    _simulationTimer = null;
-    if (mounted) {
-      setState(() {
-        _isSimulatingGps = false;
-        _isSimulationPaused = false;
-      });
-    }
-  }
-
-  void _toggleSimulationPause() {
-    setState(() {
-      _isSimulationPaused = !_isSimulationPaused;
-    });
-  }
-
-  void _simulateOffRoute() {
-    final current = _currentPoint;
-    if (current == null) return;
-
-    final simulatedOffRoutePosition = Position(
-      latitude: current.latitude + 0.0007,
-      longitude: current.longitude + 0.0007,
-      timestamp: DateTime.now(),
-      accuracy: 5.0,
-      altitude: 10.0,
-      altitudeAccuracy: 1.0,
-      heading: ((_currentHeading ?? 0.0) + 90.0) % 360.0,
-      headingAccuracy: 1.0,
-      speed: 12.0,
-      speedAccuracy: 1.0,
-    );
-
-    _handlePositionUpdate(simulatedOffRoutePosition);
-  }
-
-  void _stepGpsSimulation() {
-    if (!mounted || !_isSimulatingGps || _isSimulationPaused) return;
-
-    final route = _liveRoute;
-    final geom = route?.geometry ?? [];
-    if (geom.length < 2) return;
-
-    if (_simulatedSegmentIndex >= geom.length - 1) {
-      _stopGpsSimulation();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('¡Simulación completada! Has llegado a la parada.')),
-      );
-      return;
-    }
-
-    final pA = geom[_simulatedSegmentIndex];
-    final pB = geom[_simulatedSegmentIndex + 1];
-
-    final segmentDist = Geolocator.distanceBetween(
-      pA.latitude, pA.longitude,
-      pB.latitude, pB.longitude,
-    );
-
-    final speedMps = 12.0 * _simulatedSpeedMultiplier;
-    final stepMeters = speedMps * 0.12;
-
-    final deltaT = segmentDist > 0.1 ? (stepMeters / segmentDist) : 1.0;
-    _simulatedSegmentProgress += deltaT;
-
-    if (_simulatedSegmentProgress >= 1.0) {
-      _simulatedSegmentProgress = 0.0;
-      _simulatedSegmentIndex++;
-      if (_simulatedSegmentIndex >= geom.length - 1) {
-        _stopGpsSimulation();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('¡Simulación completada! Has llegado a la parada.')),
-        );
-        return;
-      }
-    }
-
-    final currentA = geom[_simulatedSegmentIndex];
-    final currentB = geom[math.min(_simulatedSegmentIndex + 1, geom.length - 1)];
-
-    final t = _simulatedSegmentProgress.clamp(0.0, 1.0);
-    final interpLat = currentA.latitude + t * (currentB.latitude - currentA.latitude);
-    final interpLng = currentA.longitude + t * (currentB.longitude - currentA.longitude);
-
-    final latRad = (currentA.latitude + currentB.latitude) / 2.0 * (math.pi / 180.0);
-    final cosLat = math.cos(latRad);
-    final dLat = (currentB.latitude - currentA.latitude) * 111320.0;
-    final dLng = (currentB.longitude - currentA.longitude) * 111320.0 * cosLat;
-    double heading = (math.atan2(dLng, dLat) * (180.0 / math.pi)) % 360.0;
-    if (heading < 0) heading += 360.0;
-
-    final simulatedPosition = Position(
-      latitude: interpLat,
-      longitude: interpLng,
-      timestamp: DateTime.now(),
-      accuracy: 3.0,
-      altitude: 10.0,
-      altitudeAccuracy: 1.0,
-      heading: heading,
-      headingAccuracy: 1.0,
-      speed: speedMps,
-      speedAccuracy: 1.0,
-    );
-
-    _handlePositionUpdate(simulatedPosition);
-  }
 
   Future<void> _updateBatterySamplingMode(double speed, double distanceToStop) async {
     final isStopped = speed < 0.5 || distanceToStop < 30.0;
@@ -580,7 +440,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   @override
   void dispose() {
-    _simulationTimer?.cancel();
     unawaited(WakelockPlus.disable());
     _positionSubscription?.cancel();
     _micPulseController.dispose();
@@ -662,38 +521,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   },
                 ),
               ),
-              // ── GPS Drive Simulator Floating Control Bar (Top Left) ─────────────
-              _buildSimulationBar(context),
-              if (_isRemoteUser)
-                Positioned(
-                  top: MediaQuery.of(context).padding.top + 54,
-                  left: 16,
-                  right: 16,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade900.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black26, blurRadius: 6),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.info_outline_rounded, color: Colors.white, size: 16),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            'Modo Remoto (${_remoteDistanceKm.toStringAsFixed(0)} km)',
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+
               // ── Single Hamburger Menu FAB (Top Right) ───────────────────────────
               Positioned(
                 right: 16,
@@ -1069,9 +897,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
   }
 
-  bool _isRemoteUser = false;
-  double _remoteDistanceKm = 0.0;
-
   Future<void> _recalculateRoute(
     Tour tour, {
     bool force = false,
@@ -1109,39 +934,19 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       destination = tour.stops[_activeStop].location;
     }
 
-    final firstStopLoc = tour.stops.first.location;
-    final distToTourStart = Geolocator.distanceBetween(
-      origin.latitude,
-      origin.longitude,
-      firstStopLoc.latitude,
-      firstStopLoc.longitude,
-    );
-    final isRemote = distToTourStart > 5000;
-
-    GeoPoint routingOrigin = origin;
-    if (isRemote && _selectedVoicePlace == null && !_navigatingToHotel) {
-      if (_activeStop > 0 && _activeStop < tour.stops.length) {
-        routingOrigin = tour.stops[_activeStop - 1].location;
-      } else {
-        routingOrigin = firstStopLoc;
-      }
-    }
-
     setState(() {
       _isRouting = true;
       _isOffRoute = markOffRoute;
-      _isRemoteUser = isRemote;
-      _remoteDistanceKm = distToTourStart / 1000.0;
     });
     final route = await _routeService.resolveRoute(
-      [routingOrigin, destination],
+      [origin, destination],
       preferLiveTraffic: true,
       forceRefresh: true,
     );
     if (!mounted) return;
     
     final directDist = Geolocator.distanceBetween(
-      routingOrigin.latitude, routingOrigin.longitude,
+      origin.latitude, origin.longitude,
       destination.latitude, destination.longitude,
     );
     
@@ -1149,7 +954,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     
     if (route.geometry.isNotEmpty) {
       final snapStart = Geolocator.distanceBetween(
-        routingOrigin.latitude, routingOrigin.longitude,
+        origin.latitude, origin.longitude,
         route.geometry.first.latitude, route.geometry.first.longitude,
       );
       if (snapStart > 50000) {
@@ -1909,115 +1714,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     );
   }
 
-  Widget _buildSimulationBar(BuildContext context) {
-    if (!_isSimulatingGps) {
-      return Positioned(
-        left: 76,
-        top: MediaQuery.of(context).padding.top + 2,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: _startGpsSimulation,
-            borderRadius: BorderRadius.circular(999),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.85), width: 1.5),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
-                ],
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.sports_esports_rounded, size: 16, color: Colors.blueAccent),
-                  SizedBox(width: 6),
-                  Text(
-                    'Simular GPS',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
 
-    return Positioned(
-      left: 76,
-      top: MediaQuery.of(context).padding.top + 2,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.90),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.9), width: 1.5),
-          boxShadow: const [
-            BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 3)),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              constraints: const BoxConstraints(),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              icon: Icon(
-                _isSimulationPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                color: Colors.greenAccent,
-                size: 20,
-              ),
-              onPressed: _toggleSimulationPause,
-              tooltip: _isSimulationPaused ? 'Reanudar Simulación' : 'Pausar Simulación',
-            ),
-            InkWell(
-              onTap: () {
-                setState(() {
-                  if (_simulatedSpeedMultiplier == 1.0) {
-                    _simulatedSpeedMultiplier = 2.0;
-                  } else if (_simulatedSpeedMultiplier == 2.0) {
-                    _simulatedSpeedMultiplier = 4.0;
-                  } else {
-                    _simulatedSpeedMultiplier = 1.0;
-                  }
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${_simulatedSpeedMultiplier.toStringAsFixed(0)}x',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              constraints: const BoxConstraints(),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              icon: const Icon(Icons.alt_route_rounded, color: Colors.amberAccent, size: 18),
-              onPressed: _simulateOffRoute,
-              tooltip: 'Simular Desvío',
-            ),
-            const SizedBox(width: 2),
-            IconButton(
-              constraints: const BoxConstraints(),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              icon: const Icon(Icons.stop_rounded, color: Colors.redAccent, size: 20),
-              onPressed: _stopGpsSimulation,
-              tooltip: 'Detener Simulación',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _LiveChip extends StatelessWidget {
