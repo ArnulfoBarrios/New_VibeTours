@@ -635,9 +635,9 @@ export function extractChatInformationFallback(prompt) {
     result.transport = 'Taxi/Uber'
   }
 
-  if (/\b(tengo (hotel|hospedaje|casa)|quedarme en)\b/i.test(lower)) {
+  if (/\b(tengo (hotel|hospedaje|casa)|ya tengo|quedarme en|reserva)\b/i.test(lower)) {
     result.accommodationStatus = 'Ya posee hospedaje'
-  } else if (/\b(buscar (hotel|hospedaje)|recomienda (hotel|hospedaje))\b/i.test(lower)) {
+  } else if (/\b(hotel|hoteles|hospedaje|alojamiento|quedarse|dónde hospedarme|opciones de hotel|opciones de hospedaje)\b/i.test(lower)) {
     result.accommodationStatus = 'Quiere buscar hospedaje'
   }
 
@@ -704,7 +704,7 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   
   const hasCity = Boolean(known.city || known.destination)
   const isAskingCityRecommendations = !hasCity && /\b(recomien|recomiend|qué me recomiendas|que me recomiendas|dónde ir|donde ir|sugiéreme|sugiereme|opciones|destinos|playas|viaje|tour)\b/i.test(lastUserMsg)
-  const isAskingHotelRecommendations = hasCity && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje)\b/i.test(lastUserMsg)
+  const isAskingHotelRecommendations = hasCity && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje)\b/i.test(lastUserMsg)
   const isExplicitBuild = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|empezar tour|comenzar tour|sí genera|sí armalo|crealo|hazlo|armalo|armar el tour|armar tour|generar tour ahora)\b/i.test(lastUserMsg)
 
   const nextMissing = getNextMissingPreference(known)
