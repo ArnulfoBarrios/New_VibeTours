@@ -1,5 +1,5 @@
 /* ==========================================================================
-   VIBETOURS - LANDING PAGE LOGIC & BILINGUAL SUPPORT (ES / EN)
+   VIBETOURS - MODERN INTERACTIVE LOGIC & BILINGUAL ENGINE (ES / EN)
    ========================================================================== */
 
 let currentLandingLang = localStorage.getItem('vibetours_lang') || 'es';
@@ -7,14 +7,14 @@ let currentLandingLang = localStorage.getItem('vibetours_lang') || 'es';
 document.addEventListener('DOMContentLoaded', () => {
   initThemeToggle();
   initScrollAnimations();
-  initStickyShowcase();
-  initFaqAccordion();
+  initTourGeneratorWidget();
   initAudioSimulator();
+  initFaqAccordion();
   setLandingLanguage(currentLandingLang);
 });
 
 /* --------------------------------------------------------------------------
-   1. THEME TOGGLE (LIGHT / DARK)
+   1. THEME TOGGLE (LIGHT / DARK) WITH PERSISTENCE
    -------------------------------------------------------------------------- */
 function initThemeToggle() {
   const toggleBtn = document.getElementById('themeToggleBtn');
@@ -55,15 +55,7 @@ function initThemeToggle() {
       }
     }
 
-    // Update sticky phone image
-    const activeCard = document.querySelector('.showcase-card.active');
-    const stickyPhoneImg = document.getElementById('stickyPhoneImg');
-    if (activeCard && stickyPhoneImg) {
-      const src = theme === 'dark' ? activeCard.dataset.oscuro : activeCard.dataset.claro;
-      if (src) stickyPhoneImg.src = src;
-    }
-
-    // Update mobile fallback images
+    // Update Bento showcase images
     const showcaseImgs = document.querySelectorAll('.showcase-img');
     showcaseImgs.forEach(img => {
       const src = theme === 'dark' ? img.dataset.oscuro : img.dataset.claro;
@@ -73,7 +65,7 @@ function initThemeToggle() {
 }
 
 /* --------------------------------------------------------------------------
-   2. SCROLL REVEAL ANIMATIONS
+   2. SCROLL REVEAL ANIMATIONS (INTERSECTION OBSERVER)
    -------------------------------------------------------------------------- */
 function initScrollAnimations() {
   const revealElements = document.querySelectorAll('.reveal-on-scroll');
@@ -84,113 +76,403 @@ function initScrollAnimations() {
         entry.target.classList.add('is-visible');
       }
     });
-  }, { threshold: 0.1 });
+  }, { threshold: 0.08 });
 
   revealElements.forEach(el => observer.observe(el));
 }
 
 /* --------------------------------------------------------------------------
-   3. STICKY SHOWCASE CONTROLLER
+   3. WIDGET INTERACTIVO: GENERADOR DE TOURS EN VIVO
    -------------------------------------------------------------------------- */
-function initStickyShowcase() {
-  const cards = document.querySelectorAll('.showcase-card');
-  const stickyPhoneImg = document.getElementById('stickyPhoneImg');
-
-  if (!cards.length || !stickyPhoneImg) return;
-
-  const observerOptions = {
-    root: null,
-    rootMargin: '-20% 0px -40% 0px',
-    threshold: 0.3
-  };
-
-  const showcaseObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        cards.forEach(c => c.classList.remove('active'));
-        entry.target.classList.add('active');
-
-        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-        const newSrc = currentTheme === 'dark' ? entry.target.dataset.oscuro : entry.target.dataset.claro;
-
-        if (newSrc && stickyPhoneImg.src !== newSrc) {
-          stickyPhoneImg.style.opacity = '0.3';
-          stickyPhoneImg.style.transform = 'scale(0.97)';
-
-          setTimeout(() => {
-            stickyPhoneImg.src = newSrc;
-            stickyPhoneImg.style.opacity = '1';
-            stickyPhoneImg.style.transform = 'scale(1)';
-          }, 150);
-        }
+const tourTemplates = {
+  cartagena: {
+    history: {
+      es: {
+        title: "Cartagena Colonial: Murallas, Plazas y Leyendas",
+        desc: "Recorrido histórico guiado por las fortalezas del siglo XVI, conventos coloniales y baluartes con audioguía GPS.",
+        stops: [
+          "Torre del Reloj & Plaza de los Coches",
+          "Plaza de la Aduana & Museo de Arte Moderno",
+          "Santuario San Pedro Claver",
+          "Baluarte de Santo Domingo (Café del Mar)"
+        ]
+      },
+      en: {
+        title: "Colonial Cartagena: Walls, Plazas & Legends",
+        desc: "Historical guided tour along 16th-century fortresses, colonial convents, and sea bastions with GPS audio.",
+        stops: [
+          "Clock Tower & Plaza de los Coches",
+          "Plaza de la Aduana & Modern Art Museum",
+          "San Pedro Claver Sanctuary",
+          "Santo Domingo Bastion (Café del Mar)"
+        ]
       }
-    });
-  }, observerOptions);
-
-  cards.forEach(card => {
-    showcaseObserver.observe(card);
-    
-    // Also allow clicking cards directly
-    card.addEventListener('click', () => {
-      cards.forEach(c => c.classList.remove('active'));
-      card.classList.add('active');
-      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-      const newSrc = currentTheme === 'dark' ? card.dataset.oscuro : card.dataset.claro;
-      if (newSrc && stickyPhoneImg) {
-        stickyPhoneImg.src = newSrc;
+    },
+    food: {
+      es: {
+        title: "Sabores del Caribe: Getsemaní & Centro Gastronómico",
+        desc: "Ruta de comida típica, arepas de huevo, dulces tradicionales en el Portal de los Dulces y cócteles de autor.",
+        stops: [
+          "Portal de los Dulces & Plaza de los Coches",
+          "Calle de la Sierpe (Graffitis & Street Food)",
+          "Plaza de la Trinidad (Comida típica de Getsemaní)",
+          "Muelle de los Pegasos (Bebidas al atardecer)"
+        ]
+      },
+      en: {
+        title: "Caribbean Flavors: Getsemaní & Food Haven",
+        desc: "Authentic food tour featuring egg arepas, traditional sweets at Portal de los Dulces, and signature sunset cocktails.",
+        stops: [
+          "Portal de los Dulces & Coaches Plaza",
+          "Calle de la Sierpe (Graffiti & Street Food)",
+          "Trinidad Plaza (Getsemaní Local Bites)",
+          "Pegasos Pier (Sunset Drinks)"
+        ]
       }
+    },
+    art: {
+      es: {
+        title: "Ruta del Arte & Color: Museos y Muralismo Urbano",
+        desc: "Descubre el arte colonial en museos del Centro y la galería abierta de murales en las calles de Getsemaní.",
+        stops: [
+          "Museo Histórico de Cartagena (Palacio de la Inquisición)",
+          "Museo Naval del Caribe",
+          "Callejón Angosto (Getsemaní Art Murals)",
+          "Teatro Adolfo Mejía"
+        ]
+      },
+      en: {
+        title: "Art & Color Route: Museums & Street Murals",
+        desc: "Explore colonial fine arts in Historic Center museums and the vibrant open-air street murals of Getsemaní.",
+        stops: [
+          "Cartagena Historical Museum (Inquisition Palace)",
+          "Caribbean Naval Museum",
+          "Callejón Angosto (Getsemaní Art Murals)",
+          "Adolfo Mejía Theater"
+        ]
+      }
+    }
+  },
+  tokio: {
+    history: {
+      es: {
+        title: "Tokio Tradicional: Santuarios y Jardines Imperiales",
+        desc: "Un viaje espiritual e histórico desde los templos milenarios de Asakusa hasta los jardines del Palacio Imperial.",
+        stops: [
+          "Templo Senso-ji & Puerta Kaminarimon",
+          "Calle Comercial Nakamise",
+          "Jardines del Palacio Imperial de Tokio",
+          "Santuario Meiji Jingu"
+        ]
+      },
+      en: {
+        title: "Traditional Tokyo: Shrines & Imperial Gardens",
+        desc: "A spiritual and historic journey from the ancient temples of Asakusa to the serene Imperial Palace grounds.",
+        stops: [
+          "Senso-ji Temple & Kaminarimon Gate",
+          "Nakamise Historic Shopping Street",
+          "Tokyo Imperial Palace East Gardens",
+          "Meiji Jingu Shrine"
+        ]
+      }
+    },
+    food: {
+      es: {
+        title: "Ruta Culinaria de Tokio: Ramen, Tsukiji & Izakayas",
+        desc: "Experiencia gastronómica inmersiva probando sushi fresco, brochetas yakitori en Omoide Yokocho y ramen artesanal.",
+        stops: [
+          "Mercado Exterior de Tsukiji",
+          "Callejón Omoide Yokocho (Shinjuku)",
+          "Calle de Ramen en Estación de Tokio",
+          "Barrio Gastronómico de Ginza"
+        ]
+      },
+      en: {
+        title: "Tokyo Culinary Odyssey: Ramen, Tsukiji & Izakayas",
+        desc: "An immersive foodie adventure tasting fresh sushi, yakitori skewers in Omoide Yokocho, and artisanal ramen.",
+        stops: [
+          "Tsukiji Outer Seafood Market",
+          "Omoide Yokocho Alley (Shinjuku)",
+          "Tokyo Station Ramen Street",
+          "Ginza Gourmet Food District"
+        ]
+      }
+    },
+    art: {
+      es: {
+        title: "Tokio Futurista & Arte Digital: Shibuya y Akihabara",
+        desc: "Explora galerías interactivas, distritos tecnológicos y las vistas urbanas del cruce de Shibuya.",
+        stops: [
+          "Cruce de Shibuya & Mirador Shibuya Sky",
+          "Distrito Tecnológico de Akihabara",
+          "Mori Art Museum (Roppongi Hills)",
+          "Isla Artificial de Odaiba"
+        ]
+      },
+      en: {
+        title: "Futuristic Tokyo & Digital Art: Shibuya to Akiba",
+        desc: "Explore interactive digital art galleries, tech districts, and panoramic neon skyline views in Shibuya.",
+        stops: [
+          "Shibuya Crossing & Shibuya Sky Lookout",
+          "Akihabara Tech & Anime Quarter",
+          "Mori Art Museum (Roppongi Hills)",
+          "Odaiba Futuristic Bay"
+        ]
+      }
+    }
+  },
+  paris: {
+    history: {
+      es: {
+        title: "París Imperial: De Notre-Dame a los Campos Elíseos",
+        desc: "Recorrido histórico por la Île de la Cité, puentes del río Sena y la emblemática arquitectura neoclásica.",
+        stops: [
+          "Catedral de Notre-Dame & Sainte-Chapelle",
+          "Puente Alejandro III sobre el Sena",
+          "Museo del Louvre (Patio de la Pirámide)",
+          "Arco de Triunfo & Campos Elíseos"
+        ]
+      },
+      en: {
+        title: "Imperial Paris: Notre-Dame to Champs-Élysées",
+        desc: "Historic walking tour across Île de la Cité, historic Seine bridges, and monumental neoclassical landmarks.",
+        stops: [
+          "Notre-Dame Cathedral & Sainte-Chapelle",
+          "Pont Alexandre III on the Seine",
+          "Louvre Courtyard & Pyramid",
+          "Arc de Triomphe & Champs-Élysées"
+        ]
+      }
+    },
+    food: {
+      es: {
+        title: "Bistrós & Boulangeries: El París Gourmet de Le Marais",
+        desc: "Degustación de croissants artesanales, quesos franceses, crepes dulces y café en terrazas clásicas.",
+        stops: [
+          "Marché des Enfants Rouges",
+          "Place des Vosges & Pastelería Carette",
+          "Bistró Tradicional en Rue des Rosiers",
+          "Café de Flore en Saint-Germain"
+        ]
+      },
+      en: {
+        title: "Bistros & Boulangeries: Gourmet Le Marais",
+        desc: "Tasting tour featuring artisanal croissants, fine French cheeses, sweet crêpes, and iconic terrace cafés.",
+        stops: [
+          "Marché des Enfants Rouges (Oldest Market)",
+          "Place des Vosges & Carette Patisserie",
+          "Classic Bistro on Rue des Rosiers",
+          "Café de Flore in Saint-Germain"
+        ]
+      }
+    },
+    art: {
+      es: {
+        title: "París Bohemio: Montmartre y la Cuna de los Pintores",
+        desc: "Recorre las calles empedradas donde vivieron Picasso y Van Gogh, la Plaza del Tertre y la Basílica del Sacré-Cœur.",
+        stops: [
+          "Basílica del Sacré-Cœur",
+          "Place du Tertre (Pintores al aire libre)",
+          "Museo de Montmartre",
+          "Moulin Rouge & Calle Lepic"
+        ]
+      },
+      en: {
+        title: "Bohemian Paris: Montmartre & The Painter's Haven",
+        desc: "Wander cobblestone alleys where Picasso and Van Gogh painted, Place du Tertre, and Sacré-Cœur Basilica.",
+        stops: [
+          "Sacré-Cœur Basilica Overlook",
+          "Place du Tertre (Open-air Painters)",
+          "Montmartre Museum & Vineyard",
+          "Moulin Rouge on Rue Lepic"
+        ]
+      }
+    }
+  },
+  roma: {
+    history: {
+      es: {
+        title: "Roma Eterna: Coliseo, Foros y el Panteón de Agripa",
+        desc: "Sumérgete en dos mil años de historia imperial visitando los monumentos cumbre de la civilización romana.",
+        stops: [
+          "Coliseo Romano & Arco de Constantino",
+          "Foro Romano & Colina Palatina",
+          "Panteón de Agripa",
+          "Fontana di Trevi"
+        ]
+      },
+      en: {
+        title: "Eternal Rome: Colosseum, Forum & Pantheon",
+        desc: "Immerse yourself in two millennia of imperial history exploring the pinnacle of ancient Roman architecture.",
+        stops: [
+          "Roman Colosseum & Arch of Constantine",
+          "Roman Forum & Palatine Hill",
+          "Pantheon of Agrippa",
+          "Trevi Fountain"
+        ]
+      }
+    },
+    food: {
+      es: {
+        title: "Trastevere Auténtico: Pizza al Taglio, Pasta & Gelato",
+        desc: "Paseo gastronómico por callejones empedrados degustando pasta carbonara original, supplì y helados artesanales.",
+        stops: [
+          "Piazza Santa Maria in Trastevere",
+          "Trattoria Tradicional (Pasta Cacio e Pepe)",
+          "Pani e Panelle (Supplì romanos)",
+          "Gelateria Histórica en Campo de' Fiori"
+        ]
+      },
+      en: {
+        title: "Authentic Trastevere: Pasta, Pizza & Gelato",
+        desc: "Gourmet evening stroll through cobblestone lanes tasting authentic carbonara, supplì, and artisan gelato.",
+        stops: [
+          "Piazza Santa Maria in Trastevere",
+          "Local Trattoria (Cacio e Pepe Pasta)",
+          "Street Food Stand (Roman Supplì)",
+          "Historic Gelateria at Campo de' Fiori"
+        ]
+      }
+    },
+    art: {
+      es: {
+        title: "El Barroco Romano: Plazas, Esculturas y Fuentes",
+        desc: "Las obras maestras de Bernini y Borromini reflejadas en las fuentes monumentales y plazas renacentistas.",
+        stops: [
+          "Piazza Navona & Fuente de los Cuatro Ríos",
+          "Iglesia de San Luis de los Franceses (Caravaggio)",
+          "Piazza di Spagna & Escalinata",
+          "Piazza del Popolo"
+        ]
+      },
+      en: {
+        title: "Roman Baroque: Plazas, Sculptures & Fountains",
+        desc: "Masterpieces by Bernini and Borromini showcasing monumental marble fountains and renaissance piazzas.",
+        stops: [
+          "Piazza Navona & Four Rivers Fountain",
+          "San Luigi dei Francesi (Caravaggio Altars)",
+          "Piazza di España & Spanish Steps",
+          "Piazza del Popolo"
+        ]
+      }
+    }
+  }
+};
+
+let currentCity = 'cartagena';
+let currentPace = 'relaxed';
+let currentInterest = 'history';
+
+function initTourGeneratorWidget() {
+  const cityChips = document.querySelectorAll('#cityChips .chip');
+  const paceChips = document.querySelectorAll('#paceChips .chip');
+  const interestChips = document.querySelectorAll('#interestChips .chip');
+
+  cityChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      cityChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentCity = chip.dataset.city;
+      updateGeneratedPreview();
     });
   });
+
+  paceChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      paceChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentPace = chip.dataset.pace;
+      updateGeneratedPreview();
+    });
+  });
+
+  interestChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      interestChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentInterest = chip.dataset.interest;
+      updateGeneratedPreview();
+    });
+  });
+
+  updateGeneratedPreview();
+}
+
+function updateGeneratedPreview() {
+  const cityData = tourTemplates[currentCity] || tourTemplates.cartagena;
+  const template = cityData[currentInterest] || cityData.history;
+  const langData = template[currentLandingLang] || template['es'];
+
+  const titleEl = document.getElementById('tourPreviewTitle');
+  const descEl = document.getElementById('tourPreviewDesc');
+  const stopsEl = document.getElementById('tourPreviewStops');
+  const durEl = document.getElementById('tourPreviewDuration');
+  const distEl = document.getElementById('tourPreviewDistance');
+  const budgEl = document.getElementById('tourPreviewBudget');
+
+  if (titleEl) titleEl.innerText = langData.title;
+  if (descEl) descEl.innerText = langData.desc;
+
+  if (stopsEl) {
+    stopsEl.innerHTML = langData.stops.map((stop, i) => `
+      <div class="stop-item">
+        <span class="stop-number">${i + 1}</span>
+        <span class="stop-name">${stop}</span>
+      </div>
+    `).join('');
+  }
+
+  // Pace metrics
+  let duration = currentLandingLang === 'en' ? '2 Hours' : '2 Horas';
+  let distance = '2.1 km';
+  let budget = '$15 - $25 USD';
+
+  if (currentPace === 'balanced') {
+    duration = currentLandingLang === 'en' ? '3.5 Hours' : '3.5 Horas';
+    distance = '3.8 km';
+    budget = '$25 - $40 USD';
+  } else if (currentPace === 'fast') {
+    duration = currentLandingLang === 'en' ? '5 Hours' : '5 Horas';
+    distance = '5.4 km';
+    budget = '$40 - $65 USD';
+  }
+
+  if (durEl) durEl.innerText = `${currentLandingLang === 'en' ? 'Duration' : 'Duración'}: ${duration}`;
+  if (distEl) distEl.innerText = `${currentLandingLang === 'en' ? 'Distance' : 'Distancia'}: ${distance}`;
+  if (budgEl) budgEl.innerText = `${currentLandingLang === 'en' ? 'Budget' : 'Presupuesto'}: ${budget}`;
 }
 
 /* --------------------------------------------------------------------------
-   4. FAQ ACCORDION
-   -------------------------------------------------------------------------- */
-function initFaqAccordion() {
-  const faqQuestions = document.querySelectorAll('.faq-question');
-  faqQuestions.forEach(q => {
-    q.addEventListener('click', () => {
-      const item = q.parentElement;
-      const isActive = item.classList.contains('active');
-      
-      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('active'));
-      
-      if (!isActive) {
-        item.classList.add('active');
-      }
-    });
-  });
-}
-
-/* --------------------------------------------------------------------------
-   5. LIVE AUDIO SIMULATOR
+   4. AUDIO SIMULATOR (BENTO CARD 2)
    -------------------------------------------------------------------------- */
 function initAudioSimulator() {
   const playBtn = document.getElementById('simPlayBtn');
   const playIcon = document.getElementById('simPlayIcon');
   const playText = document.getElementById('simPlayText');
+  const waveAnim = document.getElementById('bentoWaveAnimation');
 
   if (!playBtn) return;
 
   let isPlaying = false;
   let synthUtterance = null;
 
-  playBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
+  playBtn.addEventListener('click', () => {
     isPlaying = !isPlaying;
 
     if (isPlaying) {
       if (playIcon) playIcon.textContent = '⏸';
-      if (playText) playText.textContent = currentLandingLang === 'en' ? 'Pausar Audioguía' : 'Pausar Audioguía';
+      if (playText) playText.textContent = currentLandingLang === 'en' ? 'Pause Audio Preview' : 'Pausar Demostración';
+      if (waveAnim) waveAnim.classList.add('playing');
 
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const textToSpeak = currentLandingLang === 'en'
-          ? 'You are arriving at the Clock Tower, built in the 19th century as the main entrance to the walled historic city of Cartagena.'
+          ? 'You are approaching Clock Tower, constructed in the nineteenth century as the grand entrance to the historic walled city of Cartagena.'
           : 'Estás llegando a la Torre del Reloj, construida en el siglo 19 como la entrada principal de la ciudad amurallada de Cartagena.';
         
         synthUtterance = new SpeechSynthesisUtterance(textToSpeak);
         synthUtterance.lang = currentLandingLang === 'en' ? 'en-US' : 'es-ES';
+        synthUtterance.rate = 0.95;
         synthUtterance.onend = () => stopSimulator();
         window.speechSynthesis.speak(synthUtterance);
       }
@@ -203,97 +485,135 @@ function initAudioSimulator() {
     isPlaying = false;
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     if (playIcon) playIcon.textContent = '▶';
-    if (playText) playText.textContent = currentLandingLang === 'en' ? 'Play Audio Guide' : 'Reproducir Audioguía';
+    if (playText) playText.textContent = currentLandingLang === 'en' ? 'Play Voice Preview' : 'Reproducir Demostración de Voz';
+    if (waveAnim) waveAnim.classList.remove('playing');
   }
 }
 
 /* --------------------------------------------------------------------------
-   6. BILINGUAL TRANSLATIONS (ES / EN)
+   5. FAQ ACCORDION
+   -------------------------------------------------------------------------- */
+function initFaqAccordion() {
+  const faqCards = document.querySelectorAll('.faq-card');
+  faqCards.forEach(card => {
+    const btn = card.querySelector('.faq-btn');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const isActive = card.classList.contains('active');
+        faqCards.forEach(c => c.classList.remove('active'));
+        if (!isActive) {
+          card.classList.add('active');
+        }
+      });
+    }
+  });
+}
+
+/* --------------------------------------------------------------------------
+   6. BILINGUAL TRANSLATION DICTIONARY
    -------------------------------------------------------------------------- */
 const landingTranslations = {
   es: {
     navHow: '¿Cómo Funciona?',
+    navGenerator: 'Probar IA',
     navFeatures: 'Funciones',
     navDestinations: 'Destinos',
-    navFaq: 'Preguntas Frecuentes',
+    navFaq: 'FAQ',
     navRegister: 'Registrarse',
 
-    heroBadge: '✨ Turismo Inteligente con IA & GPS',
+    heroBadge: 'Turismo Inteligente con IA & GPS Real',
     heroTitle: 'Explora el mundo a tu propio ritmo con <span class="gradient-text">Inteligencia Artificial</span>',
-    heroDesc: 'VibeTours crea itinerarios a tu medida basados en datos satelitales reales de OpenStreetMap, acompañándote con narraciones de voz automáticas y mapas vectoriales mientras caminas.',
+    heroDesc: 'VibeTours transforma tu viaje con itinerarios generativos adaptados a tu ritmo, anclados a coordenadas satelitales verificadas de OpenStreetMap y narraciones de voz automáticas mientras caminas.',
     heroCtaPrimary: 'Crear Cuenta Gratis',
-    heroCtaSecondary: 'Ver Cómo Funciona',
+    heroCtaSecondary: 'Probar Simulador de IA',
+    trust1: 'Sin Alucinaciones (OpenStreetMap)',
+    trust2: 'Audioguías GPS Manos Libres',
 
-    pillar1Title: 'Rutas Reales Sin Alucinaciones',
-    pillar1Desc: 'Cada punto sugerido por la IA está verificado con coordenadas satelitales de OpenStreetMap y Wikipedia.',
-    pillar2Title: 'Audioguía Manos Libres GPS',
-    pillar2Desc: 'La voz inteligente narra historias y detalles fascinantes de forma automática al aproximarte a cada lugar.',
-    pillar3Title: 'Modo Demo sin Registro',
-    pillar3Desc: 'Explora el catálogo de más de 50 tours precargados inmediatamente sin necesidad de registrarte.',
+    floatVoiceTitle: 'Audioguía en Vivo',
+    floatVoiceSub: 'Reproduciendo: Torre del Reloj',
+    floatGpsTitle: 'GPS Satelital Activo',
+    floatGpsSub: '6 Paradas • 2.4 km • 100% Real',
 
-    howSubtitle: 'Experiencia Fluida',
-    howTitle: '¿Cómo funciona VibeTours?',
-    howDesc: 'Empieza tu recorrido en tres simples pasos desde cualquier lugar del mundo.',
-    step1Title: 'Define tu Estilo de Viaje',
-    step1Desc: 'Elige tu ritmo de caminata (Relajado, Equilibrado o Dinámico), tu compañía (Solo, Pareja, Familia, Amigos) y tus gustos principales.',
-    step2Title: 'Genera o Elige tu Recorrido',
-    step2Desc: 'Pídele a Vibe Planner AI un itinerario personalizado en lenguaje natural o explora tours creados por la comunidad.',
-    step3Title: 'Inicia el Live Tour con Voz',
-    step3Desc: 'Camina con el mapa vectorial. La aplicación detecta tu proximidad por GPS y reproduce narraciones de audio automáticamente.',
+    genSubtitle: 'Prueba la Experiencia',
+    genTitle: 'Experimenta la IA de VibeTours',
+    genDesc: 'Selecciona tus preferencias y observa cómo nuestro motor generativo estructura un itinerario real al instante.',
+    genLblCity: '1. Elige una Ciudad',
+    genLblPace: '2. Ritmo de Caminata',
+    genLblInterest: '3. Interés Principal',
+    genBadgeLive: '✨ Itinerario Generado por IA',
+    genStatusOsm: '📡 Coordenadas OpenStreetMap Verificadas',
+    genBtnCta: 'Explorar este tour en la app',
 
-    featSubtitle: 'Tecnología en Acción',
-    featTitle: 'Funcionalidades Principales',
-    featDesc: 'Descubre cómo la IA y la geolocalización transforman cada minuto de tu experiencia de viaje.',
+    bentoSubtitle: 'Poder y Elegancia',
+    bentoTitle: 'Funcionalidades de Vanguardia',
+    bentoDesc: 'La combinación perfecta entre inteligencia artificial, datos satelitales abiertos y diseño visual de lujo.',
 
-    feat1Title: 'Vibe Planner AI & Asistente Conversacional',
-    feat1Desc: 'Chatea en lenguaje natural para diseñar tu tour ideal. La IA analiza tu intención, consulta puntos de interés reales y sugiere hoteles de partida y presupuestos estimados.',
-    feat1Bullet1: '✨ Creación mediante texto libre o dictado por voz.',
-    feat1Bullet2: '🏨 Sugerencia de hoteles y puntos de encuentro verificados.',
-    feat1Bullet3: '💵 Estimación de presupuesto por parada.',
+    bento1Pill: '01. IA Generativa',
+    bento1Title: 'Vibe Planner AI & Asistente Conversacional',
+    bento1Desc: 'Chatea en lenguaje natural para diseñar tu tour soñado. La IA comprende tus gustos, sugiere hoteles verificados de salida y estructura itinerarios optimizados por coordenadas satelitales.',
+    bento1ChatUser: '"Quiero un tour de 3 horas por cafeterías y museos en París con poco presupuesto."',
+    bento1ChatAi: '"¡Perfecto! Diseñando tu ruta por Montmartre y Le Marais: 5 paradas reales, $18 USD estimados y mapa listo."',
 
-    feat2Title: 'Live Tour con Navegación GPS & Audioguías',
-    feat2Desc: 'Navega con mapas vectoriales MapLibre GL mientras caminas. La app detecta tu posición satelital y reproduce narraciones de voz automáticas al aproximarte a cada lugar.',
-    audioDemoLabel: '🔊 Probar Simulación de Voz:',
-    audioDemoSnippet: '"Estás llegando a la Torre del Reloj, construida en el siglo XIX como la entrada principal de la ciudad amurallada..."',
-    simPlayText: 'Reproducir Audioguía',
+    bento2Pill: '02. Guiado Satelital',
+    bento2Title: 'Live Tour & Audioguía Manos Libres',
+    bento2Desc: 'Camina con mapas vectoriales MapLibre GL. Al aproximarte a cada parada, la voz narra historias y detalles en vivo.',
+    bento2PlayerLabel: 'Audioguía Proximidad GPS',
+    bento2Snippet: '"Estás llegando a la Torre del Reloj, construida en el siglo XIX..."',
+    simPlayText: 'Reproducir Demostración de Voz',
 
-    feat3Title: 'Descubrimiento de Lugares Cercanos & Clima',
-    feat3Desc: 'Encuentra monumentos, museos y gastronomía en tu radio actual y consulta el pronóstico del clima en tiempo real antes de salir a recorrer.',
-    feat3Bullet1: '📍 Puntos de interés cercanos con cálculo de distancias.',
-    feat3Bullet2: '☀️ Clima en vivo, sensación térmica y alertas de lluvia.',
-    feat3Bullet3: '🎪 Sugerencias de eventos culturales locales.',
+    bento3Pill: '03. Exploración Urbana',
+    bento3Title: 'Lugares Cercanos & Clima en Vivo',
+    bento3Desc: 'Descubre museos, restaurantes y eventos culturales en tu radio actual y revisa la sensación térmica antes de salir.',
+    bento3WeatherCity: 'Cartagena de Indias',
+    bento3WeatherTag: 'Cielo Despejado',
 
-    feat4Title: 'Creador de Tours para Guías & Locales',
-    feat4Desc: 'Diseña tus propias rutas personalizadas: añade paradas en el mapa interactivo, organiza el orden de visita y compártelas con otros viajeros.',
-    feat4Bullet1: '✍️ Edición rápida e intuitiva de paradas e itinerarios.',
-    feat4Bullet2: '🖼️ Galería fotográfica y descripciones personalizadas.',
-    feat4Bullet3: '⭐ Calificación comunitaria y perfiles de guías locales.',
+    bento4Pill: '04. Creadores & Guías',
+    bento4Title: 'Creador Manual de Tours Comunitarios',
+    bento4Desc: 'Diseña tus propias rutas personalizadas: ubica puntos en el mapa interactivo, organiza paradas y compártelas con viajeros de todo el mundo.',
+    bento4Item1: '✍️ Edición rápida drag-and-drop de paradas e itinerarios.',
+    bento4Item2: '🖼️ Galería fotográfica en alta resolución y descripciones locales.',
+    bento4Item3: '⭐ Valoraciones comunitarias y perfiles de guías de ciudad.',
 
-    destSubtitle: 'Inspiración de Viaje',
-    destTitle: 'Destinos Populares',
-    destDesc: 'Recorridos precargados listos para explorar en Modo Demo o con tu cuenta.',
+    howSubtitle: 'Simple y Fluido',
+    howTitle: 'Tu Viaje en Tres Pasos',
+    howDesc: 'Comienza a explorar cualquier ciudad en minutos de manera autónoma.',
+    step1Title: 'Configura tus Preferencias',
+    step1Desc: 'Define tu ritmo de caminata (Relajado, Equilibrado o Dinámico), presupuesto e intereses específicos en segundos.',
+    step2Title: 'Genera o Selecciona un Tour',
+    step2Desc: 'Pídele al asistente de IA un recorrido personalizado por chat o elige entre más de 50 tours precargados del catálogo.',
+    step3Title: 'Recorre con Live Tour',
+    step3Desc: 'Sigue el mapa vectorial en tiempo real mientras la aplicación reproduce narraciones de voz automáticamente al llegar a cada sitio.',
+
+    destSubtitle: 'Explora el Mundo',
+    destTitle: 'Destinos Destacados',
+    destDesc: 'Rutas precargadas listas para recorrer en Modo Demo o con tu cuenta.',
+    city1Sub: 'Coliseo, Foro Romano & Fontana di Trevi',
+    city2Sub: 'Torre Eiffel, Louvre & Barrio Latino',
+    city3Sub: 'Shibuya, Senso-ji & Akihabara',
+    city4Sub: 'Central Park, Times Square & Soho',
 
     faqSubtitle: 'Resolvemos tus dudas',
     faqTitle: 'Preguntas Frecuentes',
     faqDesc: 'Todo lo que necesitas saber antes de iniciar tu viaje con VibeTours.',
     faq1Q: '¿Cómo garantiza VibeTours que la IA no invente lugares ficticios?',
-    faq1A: 'La IA de VibeTours ancla cada punto sugerido a coordenadas satelitales y datos verificados de OpenStreetMap y Wikipedia. Si un sitio no cuenta con ubicación geográfica real, es descartado del itinerario.',
-    faq2Q: '¿Puedo usar la aplicación sin crear una cuenta?',
-    faq2A: '¡Sí! VibeTours incluye un Modo Demo que te permite explorar de inmediato el catálogo de tours precargados sin necesidad de registro previo.',
-    faq3Q: '¿La audioguía funciona de forma automática al caminar?',
-    faq3A: 'Correcto. Al iniciar el modo "Live Tour", la aplicación monitorea tu posición GPS y reproduce automáticamente la narración de audio al aproximarte a cada punto de interés.',
-    faq4Q: '¿Puedo personalizar el ritmo y presupuesto de mis tours?',
-    faq4A: 'Sí. Puedes definir tu ritmo de caminata (Relajado, Equilibrado o Dinámico), tu rango de presupuesto y si viajas en familia o con amigos para adaptar todas las recomendaciones.',
+    faq1A: 'La IA de VibeTours ancla cada parada sugerida a coordenadas satelitales y datos verificados de OpenStreetMap y Wikipedia. Si una ubicación no existe en mapas reales, es descartada automáticamente del itinerario.',
+    faq2Q: '¿Puedo probar la aplicación sin necesidad de crear una cuenta?',
+    faq2A: '¡Sí! VibeTours cuenta con un Modo Demo que te permite explorar de inmediato el catálogo completo de más de 50 tours precargados sin necesidad de registro previo.',
+    faq3Q: '¿La narración por voz funciona automáticamente al caminar?',
+    faq3A: 'Correcto. Al iniciar el modo "Live Tour", la aplicación rastrea tu posición por GPS y reproduce narraciones de audio automáticamente al aproximarte a cada monumento o sitio de interés.',
+    faq4Q: '¿Puedo crear y compartir mis propios recorridos?',
+    faq4A: 'Sí. Con el Creador Manual de Tours puedes fijar paradas en el mapa, añadir fotografías, redactar explicaciones y publicar tu itinerario para que otros miembros de la comunidad lo disfruten.',
 
-    bannerTag: 'Acceso Libre',
-    bannerTitle: '¿Listo para comenzar tu aventura?',
-    bannerDesc: 'Crea tu cuenta gratuita para sincronizar tus recorridos favoritos y generar itinerarios inteligentes con VibeTours.',
+    bannerTag: 'Acceso Libre & Sin Costos Ocultos',
+    bannerTitle: '¿Listo para comenzar tu próxima aventura?',
+    bannerDesc: 'Crea tu cuenta gratuita para sincronizar tus recorridos favoritos y generar itinerarios ilimitados con Inteligencia Artificial.',
     bannerBtnRegister: 'Crear Cuenta Gratis',
-    bannerBtnDemo: 'Probar en Modo Demo',
+    bannerBtnDemo: 'Explorar en Modo Demo',
 
-    footerDesc: 'Tu compañero de viaje inteligente con Inteligencia Artificial, geolocalización y audioguías automáticas.',
+    footerDesc: 'Tu compañero de viaje inteligente con Inteligencia Artificial, geolocalización satelital y audioguías en vivo.',
     footerCol1Title: 'Navegación',
     footerLinkHow: '¿Cómo Funciona?',
+    footerLinkGenerator: 'Probar IA',
     footerLinkFeatures: 'Funciones',
     footerLinkDestinations: 'Destinos',
     footerLinkFaq: 'Preguntas Frecuentes',
@@ -303,91 +623,109 @@ const landingTranslations = {
     footerLinkLegal: 'Información de Seguridad',
     footerLinkRegister: 'Registro de Usuario',
     footerCopyRights: 'Todos los derechos reservados.',
-    footerCopyDesign: 'Diseño limpio y optimizado para exploradores modernos.'
+    footerCopyDesign: 'Diseño Glassmorphic & Neomórfico de Alta Fidelidad.'
   },
   en: {
     navHow: 'How it Works',
+    navGenerator: 'Try AI',
     navFeatures: 'Features',
     navDestinations: 'Destinations',
     navFaq: 'FAQ',
     navRegister: 'Register',
 
-    heroBadge: '✨ Smart Tourism with AI & GPS',
+    heroBadge: 'Smart Tourism with AI & Real GPS',
     heroTitle: 'Explore the world at your own pace with <span class="gradient-text">Artificial Intelligence</span>',
-    heroDesc: 'VibeTours creates custom itineraries based on verified OpenStreetMap satellite coordinates, guiding you with hands-free voice audio and vector maps as you walk.',
+    heroDesc: 'VibeTours reinvents travel with custom itineraries tuned to your pace, anchored to verified OpenStreetMap satellite coordinates and hands-free voice audio as you walk.',
     heroCtaPrimary: 'Create Free Account',
-    heroCtaSecondary: 'See How it Works',
+    heroCtaSecondary: 'Try AI Simulator',
+    trust1: 'Zero Hallucinations (OpenStreetMap)',
+    trust2: 'Hands-Free GPS Audio Guides',
 
-    pillar1Title: 'Real Routes Without Hallucinations',
-    pillar1Desc: 'Every point suggested by AI is verified against OpenStreetMap satellite coordinates and Wikipedia.',
-    pillar2Title: 'Hands-Free GPS Audio Guide',
-    pillar2Desc: 'Smart voice narrations trigger automatically as you approach monuments and landmarks.',
-    pillar3Title: 'Demo Mode Without Registration',
-    pillar3Desc: 'Instantly explore our catalog of 50+ pre-loaded city tours without signing up.',
+    floatVoiceTitle: 'Live Audio Guide',
+    floatVoiceSub: 'Now Playing: Clock Tower',
+    floatGpsTitle: 'Active GPS Sat-Lock',
+    floatGpsSub: '6 Stops • 2.4 km • 100% Real',
 
-    howSubtitle: 'Seamless Experience',
-    howTitle: 'How does VibeTours work?',
-    howDesc: 'Start your custom journey in three simple steps anywhere in the world.',
-    step1Title: 'Set Your Travel Style',
-    step1Desc: 'Choose your walking pace (Relaxed, Balanced, Fast), companions (Solo, Couple, Family, Friends) and top interests.',
-    step2Title: 'Generate or Choose a Tour',
-    step2Desc: 'Ask Vibe Planner AI for a custom itinerary in natural language or browse community-curated routes.',
-    step3Title: 'Start Voice-Guided Live Tour',
-    step3Desc: 'Walk with interactive vector maps. The app tracks your GPS proximity and narrates stories hands-free.',
+    genSubtitle: 'Experience the Magic',
+    genTitle: 'Try the VibeTours AI Engine',
+    genDesc: 'Select your preferences and watch our generative AI assemble a verified real-world itinerary on the fly.',
+    genLblCity: '1. Pick a City',
+    genLblPace: '2. Walking Pace',
+    genLblInterest: '3. Main Interest',
+    genBadgeLive: '✨ AI Generated Itinerary',
+    genStatusOsm: '📡 Verified OpenStreetMap Coordinates',
+    genBtnCta: 'Explore this tour in app',
 
-    featSubtitle: 'Technology in Action',
-    featTitle: 'Core Features',
-    featDesc: 'Discover how AI and real-time geolocation transform every minute of your travel journey.',
+    bentoSubtitle: 'Power & Elegance',
+    bentoTitle: 'Cutting-Edge Features',
+    bentoDesc: 'The ultimate synthesis of generative AI, open geospatial data, and luxury glassmorphic design.',
 
-    feat1Title: 'Vibe Planner AI & Conversational Assistant',
-    feat1Desc: 'Chat fluidly in natural language to craft your dream tour. AI analyzes your intent, consults real landmarks, and estimates budget.',
-    feat1Bullet1: '✨ Create via free-text prompt or voice dictation.',
-    feat1Bullet2: '🏨 Verified hotel suggestions and departure points.',
-    feat1Bullet3: '💵 Budget estimate per tour stop.',
+    bento1Pill: '01. Generative AI',
+    bento1Title: 'Vibe Planner AI & Conversational Assistant',
+    bento1Desc: 'Chat fluidly in natural language to craft your dream tour. AI understands your intent, suggests verified starting hotels, and structures optimal satellite-anchored stops.',
+    bento1ChatUser: '"I want a 3-hour budget tour through cafés and art museums in Paris."',
+    bento1ChatAi: '"Done! Designing your route across Montmartre & Le Marais: 5 real stops, ~$18 USD estimate and ready map."',
 
-    feat2Title: 'Live Tour with GPS Navigation & Audio Guides',
-    feat2Desc: 'Navigate MapLibre GL vector maps while walking. The app detects your GPS coordinates and triggers audio automatically near each landmark.',
-    audioDemoLabel: '🔊 Test Voice Simulation:',
-    audioDemoSnippet: '"You are arriving at the Clock Tower, built in the 19th century as the main entrance to the walled city..."',
-    simPlayText: 'Play Audio Guide',
+    bento2Pill: '02. Satellite Guidance',
+    bento2Title: 'Live Tour & Hands-Free Audio Guide',
+    bento2Desc: 'Walk with MapLibre GL vector maps. As you approach each stop, the voice automatically narrates local stories and insights.',
+    bento2PlayerLabel: 'GPS Proximity Audio Guide',
+    bento2Snippet: '"You are arriving at the Clock Tower, built in the nineteenth century..."',
+    simPlayText: 'Play Voice Preview',
 
-    feat3Title: 'Nearby Places Discovery & Live Weather',
-    feat3Desc: 'Find landmarks, museums, and food spots around your current radius with live weather forecasts before heading out.',
-    feat3Bullet1: '📍 Nearby points of interest with real-time distance.',
-    feat3Bullet2: '☀️ Live weather, thermal sensation and rain alerts.',
-    feat3Bullet3: '🎪 Local cultural event suggestions.',
+    bento3Pill: '03. Urban Discovery',
+    bento3Title: 'Nearby Places & Real-time Weather',
+    bento3Desc: 'Discover museums, authentic eateries, and cultural events around your radius with real-time temperature forecasts.',
+    bento3WeatherCity: 'Cartagena, Colombia',
+    bento3WeatherTag: 'Clear Skies',
 
-    feat4Title: 'Tour Creator for Guides & Locals',
-    feat4Desc: 'Design your own custom routes: pin stops on the map, arrange itinerary order, and share with travelers worldwide.',
-    feat4Bullet1: '✍️ Quick, intuitive stop and itinerary editing.',
-    feat4Bullet2: '🖼️ Custom photo gallery and descriptions.',
-    feat4Bullet3: '⭐ Community ratings and local guide profiles.',
+    bento4Pill: '04. Creators & Guides',
+    bento4Title: 'Community Manual Tour Creator',
+    bento4Desc: 'Design custom walking routes: drop pins on interactive maps, arrange stops, and share your expertise with global travelers.',
+    bento4Item1: '✍️ Quick drag-and-drop itinerary editing.',
+    bento4Item2: '🖼️ High-resolution photo galleries and local storytelling.',
+    bento4Item3: '⭐ Community ratings and local guide profiles.',
 
-    destSubtitle: 'Travel Inspiration',
-    destTitle: 'Popular Destinations',
-    destDesc: 'Pre-loaded tours ready to explore in Demo Mode or with your account.',
+    howSubtitle: 'Simple & Seamless',
+    howTitle: 'Your Journey in Three Steps',
+    howDesc: 'Start exploring any city in minutes with total freedom.',
+    step1Title: 'Set Your Style',
+    step1Desc: 'Choose your walking pace (Relaxed, Balanced, Fast), budget, and companions in seconds.',
+    step2Title: 'Generate or Pick a Tour',
+    step2Desc: 'Ask the AI assistant for a personalized route in chat or choose from 50+ pre-loaded catalog tours.',
+    step3Title: 'Explore with Live Tour',
+    step3Desc: 'Follow interactive vector maps as voice narrations trigger automatically when approaching monuments.',
+
+    destSubtitle: 'Explore the World',
+    destTitle: 'Featured Destinations',
+    destDesc: 'Pre-loaded flagship tours ready to walk in Demo Mode or with your account.',
+    city1Sub: 'Colosseum, Roman Forum & Trevi Fountain',
+    city2Sub: 'Eiffel Tower, Louvre & Latin Quarter',
+    city3Sub: 'Shibuya, Senso-ji & Akihabara',
+    city4Sub: 'Central Park, Times Square & Soho',
 
     faqSubtitle: 'Clear Answers',
     faqTitle: 'Frequently Asked Questions',
     faqDesc: 'Everything you need to know before stepping out with VibeTours.',
-    faq1Q: 'How does VibeTours guarantee AI doesn\'t make up fake places?',
-    faq1A: 'VibeTours AI anchors every recommended point to satellite coordinates and verified OpenStreetMap and Wikipedia data. Unverified places are excluded from itineraries.',
-    faq2Q: 'Can I use the app without creating an account?',
-    faq2A: 'Yes! VibeTours includes a resilient Demo Mode allowing you to explore the catalog of pre-loaded tours immediately without registration.',
-    faq3Q: 'Does the audio narration play automatically while walking?',
-    faq3A: 'Yes. When starting "Live Tour" mode, the app tracks your GPS position and automatically plays audio stories upon approaching each stop.',
-    faq4Q: 'Can I customize my pace and budget?',
-    faq4A: 'Yes. You can define your walking pace (Relaxed, Balanced, Fast), budget preferences, and companion filters to customize all recommendations.',
+    faq1Q: 'How does VibeTours ensure the AI doesn\'t make up fake places?',
+    faq1A: 'VibeTours AI anchors every recommended stop against satellite coordinates and verified OpenStreetMap and Wikipedia data. Unverified places are automatically discarded.',
+    faq2Q: 'Can I try the app without creating an account?',
+    faq2A: 'Yes! VibeTours features a resilient Demo Mode allowing you to explore all 50+ pre-loaded city tours immediately without registration.',
+    faq3Q: 'Does voice narration trigger automatically while walking?',
+    faq3A: 'Yes. When starting "Live Tour" mode, the app tracks your GPS position and triggers audio stories automatically as you enter the geofenced radius.',
+    faq4Q: 'Can I create and share my own tours?',
+    faq4A: 'Yes. With the Manual Tour Creator you can pin stops on the map, attach photos, write narratives, and share with the global community.',
 
-    bannerTag: 'Free Access',
-    bannerTitle: 'Ready to start your adventure?',
-    bannerDesc: 'Create your free account to sync favorite tours and generate smart AI itineraries with VibeTours.',
+    bannerTag: 'Free Access & Zero Hidden Fees',
+    bannerTitle: 'Ready to start your next adventure?',
+    bannerDesc: 'Create your free account to sync favorite tours and generate unlimited smart AI itineraries.',
     bannerBtnRegister: 'Create Free Account',
     bannerBtnDemo: 'Try Demo Mode',
 
-    footerDesc: 'Your smart travel companion powered by Artificial Intelligence, GPS geolocation, and hands-free audio guides.',
+    footerDesc: 'Your smart travel companion powered by Artificial Intelligence, satellite geolocation, and hands-free audio guides.',
     footerCol1Title: 'Navigation',
     footerLinkHow: 'How it Works',
+    footerLinkGenerator: 'Try AI',
     footerLinkFeatures: 'Features',
     footerLinkDestinations: 'Destinations',
     footerLinkFaq: 'FAQ',
@@ -397,7 +735,7 @@ const landingTranslations = {
     footerLinkLegal: 'Security Info',
     footerLinkRegister: 'User Registration',
     footerCopyRights: 'All rights reserved.',
-    footerCopyDesign: 'Clean and optimized design for modern travelers.'
+    footerCopyDesign: 'High-Fidelity Glassmorphic & Neomorphic Design.'
   }
 };
 
@@ -408,13 +746,14 @@ window.setLandingLanguage = function(lang) {
   const btnEs = document.getElementById('landing-btn-es');
   const btnEn = document.getElementById('landing-btn-en');
 
-  if (btnEs) btnEs.className = lang === 'es' ? 'btn btn-lang active' : 'btn btn-lang';
-  if (btnEn) btnEn.className = lang === 'en' ? 'btn btn-lang active' : 'btn btn-lang';
+  if (btnEs) btnEs.className = lang === 'es' ? 'btn-lang active' : 'btn-lang';
+  if (btnEn) btnEn.className = lang === 'en' ? 'btn-lang active' : 'btn-lang';
 
   const t = landingTranslations[lang] || landingTranslations['es'];
 
   // Navigation
   updateText('#nav-how', t.navHow);
+  updateText('#nav-generator', t.navGenerator);
   updateText('#nav-features', t.navFeatures);
   updateText('#nav-destinations', t.navDestinations);
   updateText('#nav-faq', t.navFaq);
@@ -424,16 +763,57 @@ window.setLandingLanguage = function(lang) {
   updateText('#hero-badge', t.heroBadge);
   updateHTML('#hero-title', t.heroTitle);
   updateText('#hero-desc', t.heroDesc);
-  updateText('#hero-cta-primary', t.heroCtaPrimary);
-  updateText('#hero-cta-secondary', t.heroCtaSecondary);
+  updateText('#hero-cta-primary span', t.heroCtaPrimary);
+  updateText('#hero-cta-secondary span', t.heroCtaSecondary);
+  updateText('#trust-1', t.trust1);
+  updateText('#trust-2', t.trust2);
 
-  // Pillars
-  updateText('#pillar1-title', t.pillar1Title);
-  updateText('#pillar1-desc', t.pillar1Desc);
-  updateText('#pillar2-title', t.pillar2Title);
-  updateText('#pillar2-desc', t.pillar2Desc);
-  updateText('#pillar3-title', t.pillar3Title);
-  updateText('#pillar3-desc', t.pillar3Desc);
+  updateText('#float-voice-title', t.floatVoiceTitle);
+  updateText('#float-voice-sub', t.floatVoiceSub);
+  updateText('#float-gps-title', t.floatGpsTitle);
+  updateText('#float-gps-sub', t.floatGpsSub);
+
+  // Generator
+  updateText('#gen-subtitle', t.genSubtitle);
+  updateText('#gen-title', t.genTitle);
+  updateText('#gen-desc', t.genDesc);
+  updateText('#gen-lbl-city', t.genLblCity);
+  updateText('#gen-lbl-pace', t.genLblPace);
+  updateText('#gen-lbl-interest', t.genLblInterest);
+  updateText('#gen-badge-live', t.genBadgeLive);
+  updateText('#gen-status-osm', t.genStatusOsm);
+  updateText('#gen-btn-cta', t.genBtnCta);
+
+  // Bento Features
+  updateText('#bento-subtitle', t.bentoSubtitle);
+  updateText('#bento-title', t.bentoTitle);
+  updateText('#bento-desc', t.bentoDesc);
+
+  updateText('#bento1-pill', t.bento1Pill);
+  updateText('#bento1-title', t.bento1Title);
+  updateText('#bento1-desc', t.bento1Desc);
+  updateText('#bento1-chat-user', t.bento1ChatUser);
+  updateText('#bento1-chat-ai', t.bento1ChatAi);
+
+  updateText('#bento2-pill', t.bento2Pill);
+  updateText('#bento2-title', t.bento2Title);
+  updateText('#bento2-desc', t.bento2Desc);
+  updateText('#bento2-player-label', t.bento2PlayerLabel);
+  updateText('#bento2-snippet', t.bento2Snippet);
+  updateText('#simPlayText', t.simPlayText);
+
+  updateText('#bento3-pill', t.bento3Pill);
+  updateText('#bento3-title', t.bento3Title);
+  updateText('#bento3-desc', t.bento3Desc);
+  updateText('#bento3-weather-city', t.bento3WeatherCity);
+  updateText('#bento3-weather-tag', t.bento3WeatherTag);
+
+  updateText('#bento4-pill', t.bento4Pill);
+  updateText('#bento4-title', t.bento4Title);
+  updateText('#bento4-desc', t.bento4Desc);
+  updateText('#bento4-item1', t.bento4Item1);
+  updateText('#bento4-item2', t.bento4Item2);
+  updateText('#bento4-item3', t.bento4Item3);
 
   // How it Works
   updateText('#how-subtitle', t.howSubtitle);
@@ -446,39 +826,14 @@ window.setLandingLanguage = function(lang) {
   updateText('#step3-title', t.step3Title);
   updateText('#step3-desc', t.step3Desc);
 
-  // Features Showcase
-  updateText('#feat-subtitle', t.featSubtitle);
-  updateText('#feat-title', t.featTitle);
-  updateText('#feat-desc', t.featDesc);
-
-  updateText('#feat1-title', t.feat1Title);
-  updateText('#feat1-desc', t.feat1Desc);
-  updateText('#feat1-bullet1', t.feat1Bullet1);
-  updateText('#feat1-bullet2', t.feat1Bullet2);
-  updateText('#feat1-bullet3', t.feat1Bullet3);
-
-  updateText('#feat2-title', t.feat2Title);
-  updateText('#feat2-desc', t.feat2Desc);
-  updateText('#audio-demo-label', t.audioDemoLabel);
-  updateText('#audio-demo-snippet', t.audioDemoSnippet);
-  updateText('#simPlayText', t.simPlayText);
-
-  updateText('#feat3-title', t.feat3Title);
-  updateText('#feat3-desc', t.feat3Desc);
-  updateText('#feat3-bullet1', t.feat3Bullet1);
-  updateText('#feat3-bullet2', t.feat3Bullet2);
-  updateText('#feat3-bullet3', t.feat3Bullet3);
-
-  updateText('#feat4-title', t.feat4Title);
-  updateText('#feat4-desc', t.feat4Desc);
-  updateText('#feat4-bullet1', t.feat4Bullet1);
-  updateText('#feat4-bullet2', t.feat4Bullet2);
-  updateText('#feat4-bullet3', t.feat4Bullet3);
-
   // Destinations
   updateText('#dest-subtitle', t.destSubtitle);
   updateText('#dest-title', t.destTitle);
   updateText('#dest-desc', t.destDesc);
+  updateText('#city1-sub', t.city1Sub);
+  updateText('#city2-sub', t.city2Sub);
+  updateText('#city3-sub', t.city3Sub);
+  updateText('#city4-sub', t.city4Sub);
 
   // FAQ
   updateText('#faq-subtitle', t.faqSubtitle);
@@ -493,7 +848,7 @@ window.setLandingLanguage = function(lang) {
   updateText('#faq4-q', t.faq4Q);
   updateText('#faq4-a', t.faq4A);
 
-  // Banner CTA
+  // Banner
   updateText('#banner-tag', t.bannerTag);
   updateText('#banner-title', t.bannerTitle);
   updateText('#banner-desc', t.bannerDesc);
@@ -504,6 +859,7 @@ window.setLandingLanguage = function(lang) {
   updateText('#footer-desc', t.footerDesc);
   updateText('#footer-col1-title', t.footerCol1Title);
   updateText('#footer-link-how', t.footerLinkHow);
+  updateText('#footer-link-generator', t.footerLinkGenerator);
   updateText('#footer-link-features', t.footerLinkFeatures);
   updateText('#footer-link-destinations', t.footerLinkDestinations);
   updateText('#footer-link-faq', t.footerLinkFaq);
@@ -514,6 +870,8 @@ window.setLandingLanguage = function(lang) {
   updateText('#footer-link-register', t.footerLinkRegister);
   updateText('#footer-copy-rights', t.footerCopyRights);
   updateText('#footer-copy-design', t.footerCopyDesign);
+
+  updateGeneratedPreview();
 };
 
 function updateText(selector, text) {
