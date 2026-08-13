@@ -3690,9 +3690,9 @@ function isValidTouristAttraction(place, input) {
   }
   if (osmVal === 'administrative') return false
 
-  // 5. Exclude transport infrastructure, roads, highways or streets
+  // 5. Exclude transport infrastructure, roads, highways, corridors, bypasses or streets
   if (
-    /via |vía |calle |carrera |avenida |diagonal |transversal |variante |puente |autopista |road |street |highway /i.test(nameLower) ||
+    /corredor vial|variante|troncal|autopista|via |vía |calle |carrera |avenida |diagonal |transversal |puente |road |street |highway /i.test(nameLower) ||
     /^via |^vía |^calle |^carrera |^avenida |^diagonal |^transversal |^variante |^puente |^autopista |^road |^street |^highway /i.test(nameLower) ||
     /via$|vía$|calle$|carrera$|avenida$|diagonal$|transversal$|variante$|puente$|autopista$|road$|street$|highway$/i.test(nameLower)
   ) {
@@ -3704,10 +3704,10 @@ function isValidTouristAttraction(place, input) {
     return false
   }
 
-  // 7. Exclude educational centers (schools, universities, kindergartens, campus, institutes)
+  // 7. Exclude educational centers (schools, universities, kindergartens, campus, institutes, private gyms)
   // unless explicitly classified as a historic site or museum
   const isHistoricOrMuseum = place.category === 'museum' || place.category === 'historic' || place.tags?.historic || place.tags?.tourism === 'museum'
-  if (!isHistoricOrMuseum && /colegio|escuela|school|institucion educativa|institución educativa|universidad|university|sena|jardin infantil|jardín infantil|campus|facultad|instituto/i.test(nameLower)) {
+  if (!isHistoricOrMuseum && /colegio|escuela|school|institucion educativa|institución educativa|universidad|university|sena|jardin infantil|jardín infantil|campus|facultad|instituto|aspaen|gimnasio cartagena|gimnasio|gym|fitness|crossfit|academia/i.test(nameLower)) {
     return false
   }
 
@@ -3716,14 +3716,14 @@ function isValidTouristAttraction(place, input) {
     return false
   }
 
-  // 9. Exclude utilities, trash or telecommunication offices
-  if (/aseo|limpieza|acueducto|alcantarillado|electricaribe|afinia|gas|claro|tigo|movistar/i.test(nameLower)) {
+  // 9. Exclude utilities, trash or telecommunication offices (Aguas de Cartagena, acueductos, gas, etc.)
+  if (/aguas de cartagena|acueducto|alcantarillado|electricaribe|afinia|epm|gas natural|surtigas|electrificadora|aseo|limpieza|claro|tigo|movistar/i.test(nameLower)) {
     return false
   }
 
-  // 10. Exclude corporate companies, private businesses, law firms, real estate, tech/consulting offices, factories, industrial plants
+  // 10. Exclude corporate companies, private businesses, law firms, real estate, tech/consulting offices, factories, industrial plants, refineries
   if (
-    /\bs\.a\b|\bs\.a\.s\b|\bltda\b|\binc\b|\bcorp\b|\bllc\b|empresa|consultora|consultoria|inmobiliaria|asesores|comercializadora|distribuidora|oficina|despacho|tecnologia|software|logistica|servicios integrales|grupo empresarial|planta|fabrica|fábrica|corrugado|zona franca|sociedad portuaria|terminal de carga|termoelectrica|termoeléctrica|cantera|taller|bodega|industria|industrial|plant|factory|warehouse|freight|corporate center/i.test(nameLower)
+    /\bs\.a\b|\bs\.a\.s\b|\bltda\b|\binc\b|\bcorp\b|\bllc\b|empresa|consultora|consultoria|inmobiliaria|asesores|comercializadora|distribuidora|oficina|despacho|tecnologia|software|logistica|servicios integrales|grupo empresarial|planta|fabrica|fábrica|corrugado|zona franca|sociedad portuaria|terminal de carga|termoelectrica|termoeléctrica|cantera|taller|bodega|industria|industrial|plant|factory|warehouse|freight|corporate center|reficar|cb&i|cbi|refineria|refinería|quimica|química|planta termica|planta térmica/i.test(nameLower)
   ) {
     return false
   }
@@ -3742,8 +3742,18 @@ function isValidTouristAttraction(place, input) {
     return false
   }
 
-  // 13. Exclude banks, ATMs, financial entities, gas stations, parking lots
+  // 13. Exclude cemeteries and graveyards
+  if (/cementerio|camposanto|jardines de cartagena|jardines del recuerdo|parque cementerio|graveyard|cemetery/i.test(nameLower)) {
+    return false
+  }
+
+  // 14. Exclude banks, ATMs, financial entities, gas stations, parking lots
   if (/\bbanco\b|bancolombia|davivienda|bbva|cajero|atm|fiduciaria|financiera|gasolinera|estacionamiento|parqueadero/i.test(nameLower)) {
+    return false
+  }
+
+  // 15. Exclude neighborhood parish churches without historic or patrimonial heritage
+  if (!isHistoricOrMuseum && /parroquia /i.test(nameLower)) {
     return false
   }
   

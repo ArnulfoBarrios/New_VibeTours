@@ -692,7 +692,11 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
   const isAskingRestaurants = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|gastronom[íi]a|comida)\b/i.test(lastMessage)
   const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|concierto|eventos locales)\b/i.test(lastMessage)
   const isAskingHotel = hasCity && /\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastMessage)
+  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver tour|desglose del tour|plan actual)\b/i.test(lastMessage)
 
+  if (isAskingItineraryStatus) {
+    return ['🚀 Generar itinerario completo', '✏️ Modificar algún día', '➕ Agregar otra actividad']
+  }
   if (isAskingRestaurants) {
     return [`🚀 Generar tour en ${destName}`, '🏨 Ver opciones de hotel', '🎉 Consultar eventos']
   }
@@ -729,18 +733,33 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
 
 export async function generateChatResponse(state, backendInstruction, webSearchSummary = '', currentPreferences = {}) {
   const known = currentPreferences || {}
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return {
-    responseMessage: '¡Hola! Qué gusto saludarte. Cuéntame: ¿a qué ciudad te gustaría viajar?',
-    actionChips: getDefaultActionChips(known),
-    destinationSuggestions: (!known.city && !known.destination) ? await buildVisualDestinationSuggestions(getDefaultActionChips(known)).catch(() => []) : [],
-    readyToBuild: false
-  }
-
   const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
   const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
-  
   const hasCity = Boolean(known.city || known.destination)
+  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver tour|desglose del tour|plan actual)\b/i.test(lastUserMsg)
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    const fallbackChips = getDefaultActionChips(known, lastUserMsg)
+    let fallbackMsg = '¡Hola! Qué gusto saludarte. Cuéntame: ¿a qué ciudad te gustaría viajar?'
+    if (isAskingItineraryStatus) {
+      const places = (known.specificPlaces || []).length > 0 ? known.specificPlaces : ['Centro Histórico', 'Atracción principal']
+      fallbackMsg = `¡Aquí tienes el desglose de lo que llevamos planeado para tu viaje en ${known.city || known.destination}! 🗺️\n\n` +
+        `**Día 1:**\n` +
+        `- 🏨 **Alojamiento / Punto de partida**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado / Punto de encuentro'}\n` +
+        `- 🌅 **Mañana**: Visita a ${places[0] || 'Atracción principal'}\n` +
+        `- 🍽️ **Almuerzo**: Restaurante local típico\n` +
+        `- 🌇 **Tarde**: Recorrido cultural y paseo por la zona histórica\n` +
+        `- 🌙 **Noche / Cena**: Cena especial en restaurante de gastronomía local\n\n` +
+        `¿Deseas generar el itinerario completo o modificar algún día?`
+    }
+    return {
+      responseMessage: fallbackMsg,
+      actionChips: fallbackChips,
+      destinationSuggestions: (!known.city && !known.destination) ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : [],
+      readyToBuild: false
+    }
+  }
   const isAskingCityRecommendations = !hasCity && /\b(recomien|recomiend|qué me recomiendas|que me recomiendas|dónde ir|donde ir|sugiéreme|sugiereme|opciones|destinos|playas|viaje|tour)\b/i.test(lastUserMsg)
   const isAskingHotelRecommendations = hasCity && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje)\b/i.test(lastUserMsg)
   const isAskingActivities = hasCity && /\b(actividad|actividades|actividades acu[aá]ticas|tours? culturales?|qu[eé] hacer|que hacer|atracciones|lugares|ver|visitar|imperdibles|snorkel|playa|aventura|naturaleza)\b/i.test(lastUserMsg)
@@ -756,6 +775,20 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     EL USUARIO SOLICITÓ EXPLÍCITAMENTE GENERAR SU TOUR.
     Confirma con entusiasmo que estás listo y procedes de inmediato a armar su itinerario perfecto.
     PROHIBIDO incluir listas largas de recomendaciones adicionales aquí.
+    `
+  } else if (isAskingItineraryStatus) {
+    promptInstruction = `
+    EL USUARIO SOLICITÓ CONSULTAR EL ESTADO DEL ITINERARIO ("${lastUserMsg}").
+    ESTÁ ESTRICTAMENTE PROHIBIDO responder con mensajes preliminares vacíos como "Aquí tienes un esbozo..." esperando confirmación.
+    DEBES generar y mostrar INMEDIATAMENTE el desglose completo organizado por días (Día 1, Día 2, Día 3...) con viñetas claras que especifiquen:
+    - 🏨 **Alojamiento / Punto de partida**: Hotel elegido (${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado / Punto de encuentro'}).
+    - 🌅 **Mañana**: Actividad o atracción confirmada de la lista acumulada de lugares acordados (${(known.specificPlaces || []).join(', ') || 'Atracciones principales'}).
+    - 🍽️ **Almuerzo**: Restaurante seleccionado para ese día (diferente en cada día, PROHIBIDO DUPLICAR RESTAURANTES EN EL MISMO DÍA).
+    - 🌇 **Tarde**: Actividad o paseo cultural/aventura confirmado.
+    - 🌙 **Noche / Cena**: Restaurante o experiencia de vida nocturna.
+
+    PROHIBIDO OMITIR atracciones principales acordadas en chat: ${JSON.stringify(known.specificPlaces || [])}.
+    Al final del desglose, incluye una invitación a continuar con los botones de acción rápida.
     `
   } else if (isAskingCityRecommendations) {
     promptInstruction = `
@@ -802,7 +835,7 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     `
   }
 
-  const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual de VibeTours.
+  const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual y motor de planificación de VibeTours.
 Tu personalidad es EXTREMADAMENTE CORDIAL, CÁLIDA, EMPÁTICA Y ENTUSIASTA. Saluda amablemente al usuario y celebra sus elecciones.
 
 OBJETIVO PRINCIPAL:
