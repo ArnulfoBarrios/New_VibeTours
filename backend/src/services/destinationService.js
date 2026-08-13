@@ -90,7 +90,7 @@ export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
 
 export async function resolveCanonicalDestination(query, options = {}) {
   if (!query || typeof query !== 'string') return null
-  const cleaned = query.trim()
+  let cleaned = query.trim().replace(/^(destino|lugar|ciudad|ubicaci[oó]n|location|destination|pais|pa[íi]s)\s*:\s*/i, '').trim()
   if (!cleaned) return null
 
   const cacheKey = `canonical_${cleaned.toLowerCase()}`

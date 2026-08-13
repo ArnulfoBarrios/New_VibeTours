@@ -240,8 +240,9 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
         // Si el backend considera que ya tenemos la información suficiente o el usuario lo pide
         if (readyToBuild || text.toLowerCase().contains('generar tour') || text.toLowerCase().contains('crear tour')) {
-          final dest = updatedPreferences['city'] ?? updatedPreferences['destination'] ?? '';
-          if (dest.toString().isNotEmpty) {
+          final rawDest = (updatedPreferences['city'] ?? updatedPreferences['destination'] ?? '').toString();
+          final dest = rawDest.replaceFirst(RegExp(r'^(destino|lugar|ciudad|ubicación|ubicacion|location|destination|pais|país)\s*:\s*', caseSensitive: false), '').trim();
+          if (dest.isNotEmpty) {
             final profile = ref.read(touristProfileProvider).valueOrNull ?? TouristProfileV2.empty;
             final summary = TouristProfileV2.generateSummary(
               travelerType: profile.travelerType,

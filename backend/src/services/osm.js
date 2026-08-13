@@ -74,7 +74,7 @@ export async function reverseGeocodeLocation(lat, lon) {
 
 export function normalizeGeocodeQuery(query) {
   if (!query || typeof query !== 'string') return ''
-  let cleaned = query.trim()
+  let cleaned = query.trim().replace(/^(destino|lugar|ciudad|ubicaci[oó]n|location|destination|pais|pa[íi]s)\s*:\s*/i, '').trim()
   
   // Strip punctuation and dots (e.g. EE.UU. -> EEUU)
   cleaned = cleaned.replace(/[.\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
