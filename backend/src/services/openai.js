@@ -666,18 +666,18 @@ export function extractChatInformationFallback(prompt) {
   return result
 }
 
-export function isVagueDestination(dest = '') {
+export function isVagueDestination(dest, known = {}) {
   if (!dest) return true
+  if (known.canonicalDestination && known.canonicalDestination.city) return false
   const lower = String(dest).toLowerCase().trim()
-  if (lower.length < 3) return true
-  const isVagueTerm = /playa|caribe|costa|mar|monta[ñn]a|naturaleza|europa|asia|latinoam[ée]rica|sudam[ée]rica|extranjero|fuera|exterior|frontera|isla|alojamiento|hospedaje|ciudad hist[óo]rica|ciudad historica|ciudad|hist[óo]rica|tem[áa]tico|parque tem[áa]tico|parque tematico|destino|lugar/i.test(lower)
-  const isSpecificCityName = /cartagena|santa marta|san andr[ée]s|canc[úu]n|punta cana|riviera maya|medell[íi]n|bogot[áa]|cali|barranquilla|eje cafetero|salento|roma|barcelona|madrid|par[íi]s|tokio|nueva york|miami|cabo san lucas|orlando|londres|cusco|cuzco|toledo|granada|sevilla|oaxaca|guanajuato|san miguel|athenas|atenas/i.test(lower)
-  return isVagueTerm && !isSpecificCityName
+  if (lower.length < 2) return true
+  const isGenericTermOnly = /^(playa|playas|caribe|costa|mar|monta[ñn]a|naturaleza|europa|asia|latinoam[ée]rica|sudam[ée]rica|extranjero|fuera|exterior|frontera|isla|alojamiento|hospedaje|ciudad|destino|lugar)$/i.test(lower)
+  return isGenericTermOnly
 }
 
 function getNextMissingPreference(known = {}) {
   const dest = known.city || known.destination
-  if (!dest || isVagueDestination(dest)) return 'city'
+  if (!dest || isVagueDestination(dest, known)) return 'city'
   if (!known.durationDays && !known.durationHours) return 'duration'
   if (!known.companions) return 'companions'
   if (!known.budget) return 'budget'
@@ -727,6 +727,9 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   const hasCity = Boolean(known.city || known.destination)
   const isAskingCityRecommendations = !hasCity && /\b(recomien|recomiend|qué me recomiendas|que me recomiendas|dónde ir|donde ir|sugiéreme|sugiereme|opciones|destinos|playas|viaje|tour)\b/i.test(lastUserMsg)
   const isAskingHotelRecommendations = hasCity && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje)\b/i.test(lastUserMsg)
+  const isAskingActivities = hasCity && /\b(actividad|actividades|qu[eé] hacer|que hacer|atracciones|lugares|ver|visitar|imperdibles)\b/i.test(lastUserMsg)
+  const isAskingRestaurants = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|donde comer|gastronom[íi]a|comida|cenar|desayuno|almuerzo|cena)\b/i.test(lastUserMsg)
+  const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|fiesta|concierto|agenda|carnaval)\b/i.test(lastUserMsg)
   const isExplicitBuild = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|empezar tour|comenzar tour|sí genera|sí armalo|crealo|hazlo|armalo|armar el tour|armar tour|generar tour ahora)\b/i.test(lastUserMsg)
 
   const nextMissing = getNextMissingPreference(known)
@@ -751,6 +754,15 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     EL USUARIO SOLICITÓ RECOMENDACIONES DE HOTELES EN ${known.city || known.destination}: "${lastUserMsg}".
     Proporciona 3 excelentes opciones reales de hospedaje en ${known.city || known.destination} acordes a sus preferencias (${known.budget || 'Económico'}).
     AL FINAL DE TU MENSAJE, PREGUNTA SI CON ESTAS OPCIONES REVISADAS YA DESEA PROCEDER A ARMAR SU TOUR AHORA MISMO.
+    `
+  } else if (isAskingActivities || isAskingRestaurants || isAskingEvents) {
+    const categoryLabel = isAskingRestaurants ? 'RESTAURANTES Y GASTRONOMÍA' : (isAskingActivities ? 'ACTIVIDADES Y LUGARES IMPERDIBLES' : 'EVENTOS Y FESTIVALES')
+    promptInstruction = `
+    EL USUARIO SOLICITÓ RECOMENDACIONES DE ${categoryLabel} EN ${known.city || known.destination}: "${lastUserMsg}".
+    DESTINO CONFIRMADO: ${known.city || known.destination}.
+    PROHIBIDO VOLVER A PREGUNTAR A QUÉ CIUDAD O LUGAR DESEA IR.
+    Menciona con entusiasmo 3 a 4 excelentes opciones reales en ${known.city || known.destination} especificando sus nombres exactos.
+    Pregunta amablemente al final si desea incluir estas opciones en su itinerario o si prefiere proceder a generar su tour ahora.
     `
   } else if (nextMissing === 'city') {
     promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 📍 ¿A qué ciudad o lugar te gustaría ir?'
@@ -849,6 +861,9 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       parsed.destinationSuggestions = []
     } else {
       parsed.readyToBuild = false
+      parsed.destinationSuggestions = (!hasCity && nextMissing === 'city')
+        ? await buildVisualDestinationSuggestions(chips).catch(() => [])
+        : []
     }
 
     // REGLA ABSOLUTA DE TARJETAS VISUALES:
