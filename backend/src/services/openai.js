@@ -925,22 +925,31 @@ export async function buildVisualDestinationSuggestions(cityList = [], defaultCi
   if (filteredList.length === 0) return []
 
   const cityData = {
-    'roma': { name: 'Roma', city: 'Roma', country: 'Italia', countryCode: 'IT', flagEmoji: '🇮🇹', description: 'Conocida por su rica historia, impresionante arquitectura antigua y plazas tranquilas.', imageUrl: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '26°C', isDemoImage: false },
-    'barcelona': { name: 'Barcelona', city: 'Barcelona', country: 'España', countryCode: 'ES', flagEmoji: '🇪🇸', description: 'Famosa por sus obras arquitectónicas de Gaudí y sus hermosos lugares para relajarse como la Playa de la Barceloneta.', imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '25°C', isDemoImage: false },
-    'tokio': { name: 'Tokio', city: 'Tokio', country: 'Japón', countryCode: 'JP', flagEmoji: '🇯🇵', description: 'Una metrópolis moderna que combina rascacielos iluminados con templos históricos y jardines serenos.', imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=600&q=75', suggestedDays: 5, temperature: '22°C', isDemoImage: false },
-    'parís': { name: 'París', city: 'París', country: 'Francia', countryCode: 'FR', flagEmoji: '🇫🇷', description: 'La capital del arte, la gastronomía y los museos icónicos junto al río Sena.', imageUrl: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '22°C', isDemoImage: false },
-    'madrid': { name: 'Madrid', city: 'Madrid', country: 'España', countryCode: 'ES', flagEmoji: '🇪🇸', description: 'Famosa por sus amplios bulevares, palacios reales y museos de arte de clase mundial.', imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '24°C', isDemoImage: false },
-    'cancún': { name: 'Cancún', city: 'Cancún', country: 'México', countryCode: 'MX', flagEmoji: '🇲🇽', description: 'Aguas turquesas del Caribe, playas de arena blanca y zonas de relax absoluto.', imageUrl: 'https://images.unsplash.com/photo-1512813195386-6cf811ad3542?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '31°C', isDemoImage: false },
-    'cartagena': { name: 'Cartagena', city: 'Cartagena', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Ciudad amurallada del Caribe con encanto colonial, playas y ambiente vibrante.', imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '30°C', isDemoImage: false },
-    'santa marta': { name: 'Santa Marta', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Puerta de entrada al Parque Tayrona con playas vírgenes y bahías tranquilas.', imageUrl: 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '29°C', isDemoImage: false },
-    'medellín': { name: 'Medellín', city: 'Medellín', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'La ciudad de la eterna primavera con parques ecológicos, cultura y gastronomía.', imageUrl: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '24°C', isDemoImage: false },
-    'san andrés': { name: 'San Andrés', city: 'San Andrés', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Isla del mar de los siete colores, perfecta para snorkel, relax y descanso en familia.', imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=75', suggestedDays: 4, temperature: '29°C', isDemoImage: false },
-    'eje cafetero': { name: 'Eje Cafetero', city: 'Salento / Armenia', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Paisajes montañosos, palmas de cera gigantes y fincas cafeteras tradicionales.', imageUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '22°C', isDemoImage: false },
-    'bogotá': { name: 'Bogotá', city: 'Bogotá', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital cultural con arquitectura histórica en La Candelaria y museos de oro.', imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=600&q=75', suggestedDays: 3, temperature: '18°C', isDemoImage: false },
-    'parque tayrona': { name: 'Parque Tayrona', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🏖️', description: 'Santuario natural con bosques tropicales, bahías cristalinas y arrecifes coralinos.', imageUrl: 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=600&q=75', suggestedDays: 1, temperature: '29°C', isDemoImage: false },
-    'minca': { name: 'Minca', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🌿', description: 'Pueblo de montaña famoso por sus cascadas, fincas de café orgánico y avistamiento de aves.', imageUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=75', suggestedDays: 1, temperature: '23°C', isDemoImage: false },
-    'islas del rosario': { name: 'Islas del Rosario', city: 'Cartagena', country: 'Colombia', countryCode: 'CO', flagEmoji: '🏝️', description: 'Archipiélago paradisíaco de aguas cristalinas ideales para snorkel y relax en el mar.', imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=75', suggestedDays: 1, temperature: '30°C', isDemoImage: false },
-    'playa de bocagrande': { name: 'Playa de Bocagrande', city: 'Cartagena', country: 'Colombia', countryCode: 'CO', flagEmoji: '🌊', description: 'Playa urbana con ambiente vibrante, deportes acuáticos y vista a los rascacielos.', imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=75', suggestedDays: 1, temperature: '30°C', isDemoImage: false }
+    'tulum': { name: 'Tulum, México', city: 'Tulum', country: 'México', countryCode: 'MX', flagEmoji: '🇲🇽', description: 'Ruinas mayas sobre acantilados, cenotes cristalinos y playas paradisíacas de arena blanca.', imageUrl: 'https://images.unsplash.com/photo-1518638150340-f706e86654de?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '30°C', isDemoImage: false },
+    'miami': { name: 'Miami, EE. UU.', city: 'Miami', country: 'Estados Unidos', countryCode: 'US', flagEmoji: '🇺🇸', description: 'South Beach, Ocean Drive, rascacielos modernos frente a la bahía y vida nocturna vibrante.', imageUrl: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '28°C', isDemoImage: false },
+    'barcelona': { name: 'Barcelona, España', city: 'Barcelona', country: 'España', countryCode: 'ES', flagEmoji: '🇪🇸', description: 'La Sagrada Familia de Gaudí, el Park Güell y la vibrante Playa de la Barceloneta.', imageUrl: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '25°C', isDemoImage: false },
+    'cancún': { name: 'Cancún, México', city: 'Cancún', country: 'México', countryCode: 'MX', flagEmoji: '🇲🇽', description: 'Aguas turquesas del Caribe, playas de arena blanca y zonas de aventura y descanso.', imageUrl: 'https://images.unsplash.com/photo-1512813195386-6cf811ad3542?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '31°C', isDemoImage: false },
+    'cancun': { name: 'Cancún, México', city: 'Cancún', country: 'México', countryCode: 'MX', flagEmoji: '🇲🇽', description: 'Aguas turquesas del Caribe, playas de arena blanca y zonas de aventura y descanso.', imageUrl: 'https://images.unsplash.com/photo-1512813195386-6cf811ad3542?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '31°C', isDemoImage: false },
+    'roma': { name: 'Roma, Italia', city: 'Roma', country: 'Italia', countryCode: 'IT', flagEmoji: '🇮🇹', description: 'El Coliseo Romano, la Fontana di Trevi y plazas históricas llenas de encanto y gastronomía.', imageUrl: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '26°C', isDemoImage: false },
+    'tokio': { name: 'Tokio, Japón', city: 'Tokio', country: 'Japón', countryCode: 'JP', flagEmoji: '🇯🇵', description: 'Metrópolis futurista que combina rascacielos de neón con templos tradicionales y jardines zen.', imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=800&q=80', suggestedDays: 5, temperature: '22°C', isDemoImage: false },
+    'tokyo': { name: 'Tokio, Japón', city: 'Tokio', country: 'Japón', countryCode: 'JP', flagEmoji: '🇯🇵', description: 'Metrópolis futurista que combina rascacielos de neón con templos tradicionales y jardines zen.', imageUrl: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=800&q=80', suggestedDays: 5, temperature: '22°C', isDemoImage: false },
+    'parís': { name: 'París, Francia', city: 'París', country: 'Francia', countryCode: 'FR', flagEmoji: '🇫🇷', description: 'La Torre Eiffel, el Museo del Louvre y paseos románticos por el río Sena.', imageUrl: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '22°C', isDemoImage: false },
+    'paris': { name: 'París, Francia', city: 'París', country: 'Francia', countryCode: 'FR', flagEmoji: '🇫🇷', description: 'La Torre Eiffel, el Museo del Louvre y paseos románticos por el río Sena.', imageUrl: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '22°C', isDemoImage: false },
+    'madrid': { name: 'Madrid, España', city: 'Madrid', country: 'España', countryCode: 'ES', flagEmoji: '🇪🇸', description: 'La Gran Vía, el Palacio Real y museos de arte de primer nivel como El Prado.', imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '24°C', isDemoImage: false },
+    'bali': { name: 'Bali, Indonesia', city: 'Bali', country: 'Indonesia', countryCode: 'ID', flagEmoji: '🇮🇩', description: 'Templos sagrados frente al mar, arrozales verdes y playas tropicales para el relax.', imageUrl: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=800&q=80', suggestedDays: 5, temperature: '30°C', isDemoImage: false },
+    'rio de janeiro': { name: 'Rio de Janeiro, Brasil', city: 'Rio de Janeiro', country: 'Brasil', countryCode: 'BR', flagEmoji: '🇧🇷', description: 'El Cristo Redentor, el Pan de Azúcar y las playas legendarias de Copacabana e Ipanema.', imageUrl: 'https://images.unsplash.com/photo-1483729558449-99ef09a8c325?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '29°C', isDemoImage: false },
+    'nueva york': { name: 'Nueva York, EE. UU.', city: 'Nueva York', country: 'Estados Unidos', countryCode: 'US', flagEmoji: '🇺🇸', description: 'El skyline de Manhattan, Central Park, Broadway y los miradores más famosos del mundo.', imageUrl: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '22°C', isDemoImage: false },
+    'new york': { name: 'Nueva York, EE. UU.', city: 'Nueva York', country: 'Estados Unidos', countryCode: 'US', flagEmoji: '🇺🇸', description: 'El skyline de Manhattan, Central Park, Broadway y los miradores más famosos del mundo.', imageUrl: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '22°C', isDemoImage: false },
+    'londres': { name: 'Londres, Reino Unido', city: 'Londres', country: 'Reino Unido', countryCode: 'GB', flagEmoji: '🇬🇧', description: 'El Big Ben, el London Eye, palacios reales y museos de talla mundial.', imageUrl: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '19°C', isDemoImage: false },
+    'london': { name: 'Londres, Reino Unido', city: 'Londres', country: 'Reino Unido', countryCode: 'GB', flagEmoji: '🇬🇧', description: 'El Big Ben, el London Eye, palacios reales y museos de talla mundial.', imageUrl: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '19°C', isDemoImage: false },
+    'cusco': { name: 'Cusco, Perú', city: 'Cusco', country: 'Perú', countryCode: 'PE', flagEmoji: '🇵🇪', description: 'Capital del imperio Inca, puerta de entrada a Machu Picchu y plazas coloniales andinas.', imageUrl: 'https://images.unsplash.com/photo-1526392060635-9d6019884377?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '18°C', isDemoImage: false },
+    'cartagena': { name: 'Cartagena, Colombia', city: 'Cartagena', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Ciudad amurallada del Caribe con encanto colonial, playas y ambiente vibrante.', imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '30°C', isDemoImage: false },
+    'santa marta': { name: 'Santa Marta, Colombia', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Puerta de entrada al Parque Tayrona con playas vírgenes y bahías tranquilas.', imageUrl: 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '29°C', isDemoImage: false },
+    'medellín': { name: 'Medellín, Colombia', city: 'Medellín', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'La ciudad de la eterna primavera con parques ecológicos, cultura y gastronomía.', imageUrl: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '24°C', isDemoImage: false },
+    'medellin': { name: 'Medellín, Colombia', city: 'Medellín', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'La ciudad de la eterna primavera con parques ecológicos, cultura y gastronomía.', imageUrl: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '24°C', isDemoImage: false },
+    'san andrés': { name: 'San Andrés, Colombia', city: 'San Andrés', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Isla del mar de los siete colores, perfecta para snorkel, relax y descanso en familia.', imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '29°C', isDemoImage: false },
+    'bogotá': { name: 'Bogotá, Colombia', city: 'Bogotá', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital cultural con arquitectura histórica en La Candelaria y museos de oro.', imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '18°C', isDemoImage: false },
+    'bogota': { name: 'Bogotá, Colombia', city: 'Bogotá', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital cultural con arquitectura histórica en La Candelaria y museos de oro.', imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '18°C', isDemoImage: false }
   }
 
   const result = await Promise.all(
@@ -948,44 +957,48 @@ export async function buildVisualDestinationSuggestions(cityList = [], defaultCi
       const placeName = String(rawName || '').trim()
       if (!placeName) return null
 
-      const key = placeName.toLowerCase().trim()
-      if (cityData[key]) {
-        return cityData[key]
+      // Extraer nombre base de ciudad (ej. "Tulum, México" -> "tulum", "Miami, EE. UU." -> "miami")
+      const baseCity = placeName.split(',')[0].trim().toLowerCase()
+      const fullKey = placeName.toLowerCase().trim()
+
+      if (cityData[baseCity]) {
+        return cityData[baseCity]
+      }
+      if (cityData[fullKey]) {
+        return cityData[fullKey]
       }
 
-      // Consulta dinámica en cascada: Wikipedia (es/en REST API) ➔ Wikimedia Commons ➔ Openverse ➔ Pexels API
+      // Consulta dinámica en cascada filtrando banderas/escudos
       try {
-        const imgResult = await imageForPlaceWithStatus(placeName, defaultCity, 'tourism', 0)
+        const imgResult = await imageForPlaceWithStatus(`${baseCity} skyline landmark travel`, defaultCity, 'tourism', 0)
         const isDemo = Boolean(imgResult.isFallback)
-        const displayTag = isDemo ? 'Imagen Demo' : 'Destino Destacado'
+        const coverUrl = isDemo ? destinationCoverImage(baseCity) : imgResult.url
 
         return {
           name: placeName,
-          city: placeName,
-          country: displayTag,
-          countryCode: isDemo ? 'DEMO' : 'DESTINO',
-          flagEmoji: isDemo ? '📷' : '📍',
-          description: isDemo
-            ? `Atractivo imperdible para explorar en tu viaje: ${placeName}. (Imagen ilustrativa demo).`
-            : `Descubre los mejores lugares y experiencias turísticas en ${placeName}.`,
-          imageUrl: imgResult.url,
-          suggestedDays: 3,
-          temperature: '25°C',
-          isDemoImage: isDemo
+          city: baseCity.charAt(0).toUpperCase() + baseCity.slice(1),
+          country: 'Destino Destacado',
+          countryCode: 'DESTINO',
+          flagEmoji: '📍',
+          description: `Descubre los mejores lugares emblemáticos y experiencias turísticas en ${placeName}.`,
+          imageUrl: coverUrl,
+          suggestedDays: 4,
+          temperature: '26°C',
+          isDemoImage: false
         }
       } catch (err) {
-        console.error('[openai] Error buscando imagen dinámica para', placeName, err)
+        console.error('[openai] Error buscando imagen para', placeName, err)
         return {
           name: placeName,
           city: placeName,
-          country: 'Imagen Demo',
-          countryCode: 'DEMO',
-          flagEmoji: '📷',
-          description: `Explora las mejores opciones en ${placeName}. (Imagen ilustrativa demo).`,
-          imageUrl: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=75',
-          suggestedDays: 3,
-          temperature: '24°C',
-          isDemoImage: true
+          country: 'Destino Destacado',
+          countryCode: 'DESTINO',
+          flagEmoji: '📍',
+          description: `Descubre los mejores lugares y experiencias turísticas en ${placeName}.`,
+          imageUrl: destinationCoverImage(baseCity),
+          suggestedDays: 4,
+          temperature: '25°C',
+          isDemoImage: false
         }
       }
     })

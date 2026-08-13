@@ -78,7 +78,15 @@ async function wikipediaSummaryImage(placeName) {
         if (json.type === 'standard' || json.type === 'normal') {
           const imageUrl = json.originalimage?.source || json.thumbnail?.source
           if (imageUrl) {
-            return imageUrl
+            const lower = imageUrl.toLowerCase()
+            const isUnusable = [
+              '.svg', 'flag', 'bandera', 'escudo', 'coat_of_arms', 'coat of arms', 'blason', 'stemma',
+              'seal', 'logo', 'icon', 'symbol', 'map', 'mapa', 'location', 'diagram', 'chart',
+              'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_'
+            ].some(k => lower.includes(k))
+            if (!isUnusable) {
+              return imageUrl
+            }
           }
         }
       } catch {
@@ -405,20 +413,42 @@ function curatedImage(seed, category, indexSeed = 0) {
   }
 
   const cityLower = String(seed || '').toLowerCase()
-  if (cityLower.includes('barcelona')) {
-    return 'https://images.unsplash.com/photo-1583422409516-2895a77efded?auto=format&fit=crop&w=1200&q=80' // Sagrada Familia / Barcelona skyline
+  if (cityLower.includes('tulum')) {
+    return 'https://images.unsplash.com/photo-1518638150340-f706e86654de?auto=format&fit=crop&w=1200&q=80' // Tulum Mayan cliff & turquoise sea
+  } else if (cityLower.includes('miami')) {
+    return 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=1200&q=80' // Miami South Beach / Biscayne Bay skyline
+  } else if (cityLower.includes('cancun') || cityLower.includes('cancún')) {
+    return 'https://images.unsplash.com/photo-1512813195386-6cf811ad3542?auto=format&fit=crop&w=1200&q=80' // Cancun Caribbean turquoise beach
+  } else if (cityLower.includes('barcelona')) {
+    return 'https://images.unsplash.com/photo-1583422409516-2895a77efded?auto=format&fit=crop&w=1200&q=80' // Sagrada Familia & Barcelona skyline
   } else if (cityLower.includes('madrid')) {
-    return 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=1200&q=80' // Madrid Gran Via
+    return 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=1200&q=80' // Madrid Gran Via / Cibeles
   } else if (cityLower.includes('paris') || cityLower.includes('parís')) {
-    return 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1200&q=80' // Paris Eiffel
+    return 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1200&q=80' // Paris Eiffel Tower
   } else if (cityLower.includes('roma') || cityLower.includes('rome')) {
     return 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=1200&q=80' // Colosseum Rome
+  } else if (cityLower.includes('tokio') || cityLower.includes('tokyo')) {
+    return 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1200&q=80' // Tokyo Skyline & Mount Fuji view
+  } else if (cityLower.includes('new york') || cityLower.includes('nueva york')) {
+    return 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=1200&q=80' // New York Manhattan skyline
+  } else if (cityLower.includes('bali')) {
+    return 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=80' // Bali scenic temple
+  } else if (cityLower.includes('rio de janeiro') || cityLower.includes('rio')) {
+    return 'https://images.unsplash.com/photo-1483729558449-99ef09a8c325?auto=format&fit=crop&w=1200&q=80' // Rio Christ & Sugarloaf Bay
+  } else if (cityLower.includes('londres') || cityLower.includes('london')) {
+    return 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=1200&q=80' // London Big Ben
+  } else if (cityLower.includes('cusco') || cityLower.includes('cuzco') || cityLower.includes('machu')) {
+    return 'https://images.unsplash.com/photo-1526392060635-9d6019884377?auto=format&fit=crop&w=1200&q=80' // Machu Picchu / Cusco
   } else if (cityLower.includes('bogota') || cityLower.includes('bogotá')) {
     return 'https://images.unsplash.com/photo-1584305574647-0cc949a2da9f?auto=format&fit=crop&w=1200&q=80' // Bogota Monserrate
   } else if (cityLower.includes('medellin') || cityLower.includes('medellín')) {
     return 'https://images.unsplash.com/photo-1599388301549-3714578b820a?auto=format&fit=crop&w=1200&q=80' // Medellin
   } else if (cityLower.includes('cartagena')) {
     return 'https://images.unsplash.com/photo-1583531352515-888413146611?auto=format&fit=crop&w=1200&q=80' // Cartagena
+  } else if (cityLower.includes('santa marta')) {
+    return 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=1200&q=80' // Santa Marta Tayrona
+  } else if (cityLower.includes('san andres') || cityLower.includes('san andrés')) {
+    return 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80' // San Andres Island
   }
 
   const list = categoryImages[category] || categoryImages.default
