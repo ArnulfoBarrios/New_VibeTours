@@ -35,7 +35,7 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 // Serve static files from the public directory
 app.use(express.static(path.join(process.cwd(), 'public')))
 
-app.get('/health', (req, res) => {
+app.get(['/health', '/api/health'], (req, res) => {
   res.json({
     ok: true,
     name: 'VIBETOURS API',

@@ -99,14 +99,31 @@ discoveryRouter.get('/events', async (req, res, next) => {
     }).catch(() => null)
 
     const places = await overpassAttractions(query.lat, query.lng, query.radius)
-  return [
-    `Noche cultural cerca de ${place}`,
-    `Festival local en ${place}`,
-    `Feria gastronomica de ${place}`,
-    `Recorrido deportivo urbano`,
-    `Encuentro artistico y patrimonial`
-  ][index % 5]
-}
+    const events = (places.length ? places : fallbackPlaces(query.lat, query.lng)).map((placeItem, index) => {
+      const pName = placeItem.name || 'Lugar cultural'
+      const eventTitle = [
+        `Noche cultural cerca de ${pName}`,
+        `Festival local en ${pName}`,
+        `Feria gastronómica de ${pName}`,
+        `Recorrido deportivo urbano`,
+        `Encuentro artístico y patrimonial`
+      ][index % 5]
+
+      return {
+        id: `event-${index + 1}`,
+        name: eventTitle,
+        dateTime: `${query.startDate} 18:00`,
+        location: pName,
+        source: liveSearch?.summary ? 'Web Search API' : 'OSM Agenda',
+        verificationStatus: liveSearch?.summary ? 'verified' : 'pending_confirmation'
+      }
+    })
+
+    return res.json({ events, needsFullDate: false })
+  } catch (error) {
+    next(error)
+  }
+})
 
 async function currentWeather(latitude, longitude) {
   const url = new URL('https://api.open-meteo.com/v1/forecast')
