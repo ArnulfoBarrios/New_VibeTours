@@ -242,7 +242,13 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         );
 
         // Si el backend considera que ya tenemos la información suficiente o el usuario lo pide
-        if (readyToBuild || text.toLowerCase().contains('generar tour') || text.toLowerCase().contains('crear tour')) {
+        final isExplicitBuild = RegExp(r'\b(generar|crear|construir|armar|haz)\s+(el\s+)?(tour|itinerario)\b', caseSensitive: false).hasMatch(text) ||
+            text.toLowerCase().contains('generar tour') ||
+            text.toLowerCase().contains('crear tour') ||
+            text.toLowerCase().contains('generar itinerario') ||
+            text.toLowerCase().contains('crear itinerario');
+
+        if (readyToBuild || isExplicitBuild) {
           final rawDest = (updatedPreferences['city'] ?? updatedPreferences['destination'] ?? '').toString();
           final dest = rawDest.replaceFirst(RegExp(r'^(destino|lugar|ciudad|ubicación|ubicacion|location|destination|pais|país)\s*:\s*', caseSensitive: false), '').trim();
           if (dest.isNotEmpty) {

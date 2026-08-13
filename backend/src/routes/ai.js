@@ -436,8 +436,49 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     if (input.city && input.city.trim().length > 0 && (!input.destination || input.destination === 'Destino')) {
       input.destination = input.city.trim()
     }
-    const queryParts = [...new Set([input.destination, input.city, input.country].filter(Boolean))]
-    const location = await geocodePlace(queryParts.join(', '))
+    
+    let location = null
+
+    // 1. If explicit valid coordinates were provided in request, use them directly
+    if (input.latitude && input.longitude && Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude))) {
+      location = {
+        name: input.canonicalDestination?.displayName || input.destination || input.city,
+        latitude: Number(input.latitude),
+        longitude: Number(input.longitude),
+        city: input.canonicalDestination?.city || input.city || input.destination,
+        country: input.canonicalDestination?.country || input.country || '',
+        placeId: input.canonicalDestination?.placeId
+      }
+    }
+
+    // 2. Try geocoding with composite query parts
+    if (!location) {
+      const queryParts = [...new Set([input.destination, input.city, input.country].filter(Boolean))]
+      if (queryParts.length > 0) {
+        location = await geocodePlace(queryParts.join(', '))
+      }
+    }
+
+    // 3. Try geocoding city or destination alone
+    if (!location && (input.city || input.destination)) {
+      location = await geocodePlace(input.city || input.destination)
+    }
+
+    // 4. Try canonical destination resolution
+    if (!location && (input.city || input.destination)) {
+      const canonical = await resolveCanonicalDestination(input.city || input.destination)
+      if (canonical) {
+        location = {
+          name: canonical.displayName,
+          latitude: canonical.latitude,
+          longitude: canonical.longitude,
+          city: canonical.city,
+          country: canonical.country,
+          placeId: canonical.placeId
+        }
+      }
+    }
+
     if (!location) {
       return res.status(400).json({ error: 'No pudimos identificar la ubicación ingresada.' })
     }

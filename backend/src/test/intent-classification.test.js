@@ -30,6 +30,16 @@ describe('Intent Classification Unit Tests', () => {
     assert.equal(eventResult.intent, INTENT_TYPES.EVENT_INQUIRY)
     assert.equal(eventResult.needsClarification, false)
     assert.ok(eventResult.confidence >= 0.70)
+
+    const activityResult = classifyUserIntent('Actividades acuáticas', context)
+    assert.equal(activityResult.intent, INTENT_TYPES.ACTIVITY_INQUIRY)
+    assert.equal(activityResult.needsClarification, false)
+    assert.ok(activityResult.confidence >= 0.70)
+
+    const tourResult = classifyUserIntent('Tours culturales', context)
+    assert.equal(tourResult.intent, INTENT_TYPES.ACTIVITY_INQUIRY)
+    assert.equal(tourResult.needsClarification, false)
+    assert.ok(tourResult.confidence >= 0.70)
   })
 
   it('should NOT infer auto rentado or budget from single word "presupuesto"', () => {

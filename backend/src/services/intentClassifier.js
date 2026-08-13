@@ -33,7 +33,7 @@ export function classifyUserIntent(userMessage = '', currentContext = {}) {
   const words = lower.split(/\s+/).filter(Boolean)
   const hasDestination = Boolean(currentContext.city || currentContext.destination || currentContext.canonicalDestination)
 
-  // 1. Contextual Intent: If a destination/city is already chosen, single category queries are explicit inquiries for that city
+  // 1. Contextual Intent: If a destination/city is already chosen, category queries and chips are explicit inquiries for that city
   if (hasDestination) {
     if (/^(hotel|hoteles|alojamiento|hospedaje|d[oó]nde hospedarme|buscar hotel|opciones de hotel)$/i.test(lower)) {
       return {
@@ -42,21 +42,21 @@ export function classifyUserIntent(userMessage = '', currentContext = {}) {
         needsClarification: false
       }
     }
-    if (/^(restaurante|restaurantes|comida|comer|d[oó]nde comer|gastronom[íi]a|platos t[íi]picos)$/i.test(lower)) {
+    if (/^(restaurante|restaurantes|comida|comer|d[oó]nde comer|gastronom[íi]a|platos t[íi]picos|ver restaurantes)$/i.test(lower)) {
       return {
         intent: INTENT_TYPES.RESTAURANT_INQUIRY,
         confidence: 0.90,
         needsClarification: false
       }
     }
-    if (/^(evento|eventos|festival|festivales|concierto|conciertos|eventos locales)$/i.test(lower)) {
+    if (/^(evento|eventos|festival|festivales|concierto|conciertos|eventos locales|consultar eventos)$/i.test(lower)) {
       return {
         intent: INTENT_TYPES.EVENT_INQUIRY,
         confidence: 0.90,
         needsClarification: false
       }
     }
-    if (/^(actividad|actividades|atracciones|lugares|qu[eé] hacer|sitios tur[íi]sticos)$/i.test(lower)) {
+    if (/\b(actividad|actividades|atracciones|lugares|qu[eé] hacer|sitios tur[íi]sticos|actividades acu[aá]ticas|tours? culturales?|aventura|naturaleza|playa|vida nocturna|snorkel|buceo|senderismo)\b/i.test(lower)) {
       return {
         intent: INTENT_TYPES.ACTIVITY_INQUIRY,
         confidence: 0.90,
@@ -76,6 +76,13 @@ export function classifyUserIntent(userMessage = '', currentContext = {}) {
         confidence: 0.90,
         needsClarification: false
       }
+    }
+
+    // Any other selection or phrase in a destination context should proceed to the LLM
+    return {
+      intent: INTENT_TYPES.PLAN_TRIP,
+      confidence: 0.85,
+      needsClarification: false
     }
   }
 
