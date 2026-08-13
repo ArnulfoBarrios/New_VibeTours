@@ -242,11 +242,17 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         );
 
         // Si el backend considera que ya tenemos la información suficiente o el usuario lo pide
-        final isExplicitBuild = RegExp(r'\b(generar|crear|construir|armar|haz)\s+(el\s+)?(tour|itinerario)\b', caseSensitive: false).hasMatch(text) ||
+        final isExplicitBuild = RegExp(r'\b(genera(r)?|crea(r)?|construir|arma(r)?|haz|listo)\s+(el\s+)?(tour|itinerario)\b', caseSensitive: false).hasMatch(text) ||
             text.toLowerCase().contains('generar tour') ||
+            text.toLowerCase().contains('genera el tour') ||
             text.toLowerCase().contains('crear tour') ||
             text.toLowerCase().contains('generar itinerario') ||
-            text.toLowerCase().contains('crear itinerario');
+            text.toLowerCase().contains('genera el itinerario') ||
+            text.toLowerCase().contains('sí, genera') ||
+            text.toLowerCase().contains('si, genera') ||
+            text.toLowerCase().contains('finalizar') ||
+            text.toLowerCase().contains('generar tour ahora') ||
+            text.toLowerCase().contains('generar itinerario completo');
 
         if (readyToBuild || isExplicitBuild) {
           final rawDest = (updatedPreferences['city'] ?? updatedPreferences['destination'] ?? '').toString();

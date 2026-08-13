@@ -711,9 +711,11 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       ),
                       onPressed: isBusy ? null : () {
-                        if (action == 'Ver paradas sugeridas') {
-                          context.push('/ai/builder');
-                        } else if (action == 'Quiero cambiar lugares') {
+                        if (action == 'Ver paradas sugeridas' ||
+                            action == 'Quiero cambiar lugares' ||
+                            action == 'Modificar tour' ||
+                            action == '✏️ Modificar algún día' ||
+                            action == 'Modificar itinerario') {
                           context.push('/ai/builder');
                         } else if (action == 'Generar Tour Final') {
                           if (_isProcessingAction) return;

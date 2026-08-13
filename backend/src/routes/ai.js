@@ -177,6 +177,30 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences
     )
 
+    // Extraer lugares mencionados o planificados en la respuesta de la IA para retención acumulativa
+    const extractedFromMsg = []
+    const lines = (aiResponse.responseMessage || '').split('\n')
+    for (const line of lines) {
+      const match = line.match(/^[-*•]\s*(?:🏨|🌅|🍽️|🌇|🌙)?\s*(?:Alojamiento|Mañana|Almuerzo|Tarde|Noche|Cena|Visita|Recorrido|Punto de partida)?\s*:\s*(.+)/i)
+      if (match) {
+        let placeCandidate = match[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita)\b/gi, '').trim()
+        placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
+        if (placeCandidate.length >= 3 && !/hotel elegido|hotel acordado|punto de encuentro|restaurante local/i.test(placeCandidate)) {
+          extractedFromMsg.push(placeCandidate)
+        }
+      }
+    }
+
+    const combinedSpecifics = Array.from(new Set([
+      ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
+      ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
+      ...extractedFromMsg
+    ])).filter(p => typeof p === 'string' && p.trim().length >= 3)
+
+    if (combinedSpecifics.length > 0) {
+      updatedPreferences.specificPlaces = combinedSpecifics
+    }
+
     res.json({
       responseMessage: aiResponse.responseMessage,
       actionChips: aiResponse.actionChips || [],
@@ -1545,6 +1569,15 @@ function normalizeCandidate(place, index, input, origin) {
 }
 
 function scorePlace(place, input) {
+  const isRequested = place.rawTags?.requested_place === 'true' || 
+                      place.category === 'requested' || 
+                      (Array.isArray(input.specificPlaces) && input.specificPlaces.some(sp => normalizeKey(sp) === normalizeKey(place.name) || normalizeKey(place.name).includes(normalizeKey(sp)))) ||
+                      (Array.isArray(input.selectedPlaces) && input.selectedPlaces.some(sp => normalizeKey(sp) === normalizeKey(place.name) || normalizeKey(place.name).includes(normalizeKey(sp))))
+
+  if (isRequested) {
+    return 10000 // TOP PRIORITY: 100% inclusion for user/chat requested places
+  }
+
   const distanceKm = place.distanceMeters / 1000
   if (distanceKm > 45 && !place.isUserSelected) {
     return -9999
@@ -1601,6 +1634,22 @@ function scorePlace(place, input) {
 function selectPlaces(scoredPlaces, targetCount, input) {
   const selected = []
   const seen = new Set()
+
+  // 1. ALWAYS include 100% of requested / specific places first!
+  for (const place of scoredPlaces) {
+    const isRequested = place.rawTags?.requested_place === 'true' || 
+                        place.category === 'requested' || 
+                        place.score >= 5000
+    if (isRequested) {
+      const key = normalizeKey(place.name)
+      if (!seen.has(key)) {
+        selected.push(place)
+        seen.add(key)
+      }
+    }
+  }
+
+  // 2. Fill remaining target quota with best contextual matches
   const aligned = scoredPlaces.filter((place) => isAlignedWithTourType(input.type, place.category, place.name))
   const preferredQuota = Math.min(targetCount, Math.max(0, Math.ceil(targetCount * preferredQuotaFor(input.type))))
 
@@ -3752,8 +3801,37 @@ function isValidTouristAttraction(place, input) {
     return false
   }
 
-  // 15. Exclude neighborhood parish churches without historic or patrimonial heritage
-  if (!isHistoricOrMuseum && /parroquia /i.test(nameLower)) {
+  // 15. Exclude open water bodies, generic bays, seas, or maritime polygons (Paradas en tierra firme únicamente)
+  if (
+    /^(bah[íi]a|bay|mar |mar$|oc[eé]ano|ocean|golfo|gulf|ensenada|cove)\b/i.test(nameLower) ||
+    /bah[íi]a de |bay of |mar caribe|bah[íi]a interna|bah[íi]a de cartagena/i.test(nameLower) ||
+    place.tags?.natural === 'bay' ||
+    place.tags?.natural === 'water' ||
+    place.tags?.place === 'sea'
+  ) {
+    return false
+  }
+
+  // 16. Exclude commercial boat rental, yacht charter, jet ski, flyboard and equipment rental agencies
+  if (
+    /boat rental|yacht rental|jet ski|flyboard|alquiler de yates|alquiler de botes|renta de botes|charter|yate|lancha|bote privado/i.test(nameLower) ||
+    place.tags?.shop === 'rental' ||
+    place.tags?.amenity === 'boat_rental'
+  ) {
+    return false
+  }
+
+  // 17. Exclude neighborhood non-historic churches, chapels, and evangelical/pentecostal congregations
+  if (
+    !isHistoricOrMuseum &&
+    /pentecost[eé]s|misionero mundial|sal[oó]n del reino|testigos de jehov[aá]|adventista|asamblea de dios|iglesia cristiana|movimiento misionero|tabern[aá]culo|parroquia|capilla de barrio|misi[oó]n cristiana/i.test(nameLower)
+  ) {
+    return false
+  }
+
+  // 18. Exclude hotels, resorts, hostels, and convention centers from being tourist attraction stops
+  const isHotelOrResort = /hotel|resort|hostal|hostel|centro de convenciones|estelar /i.test(nameLower)
+  if (isHotelOrResort && !place.tags?.requested_place && !isHistoricOrMuseum) {
     return false
   }
   

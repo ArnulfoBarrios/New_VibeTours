@@ -765,16 +765,17 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   const isAskingActivities = hasCity && /\b(actividad|actividades|actividades acu[aá]ticas|tours? culturales?|qu[eé] hacer|que hacer|atracciones|lugares|ver|visitar|imperdibles|snorkel|playa|aventura|naturaleza)\b/i.test(lastUserMsg)
   const isAskingRestaurants = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|donde comer|gastronom[íi]a|comida|cenar|desayuno|almuerzo|cena)\b/i.test(lastUserMsg)
   const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|fiesta|concierto|agenda|carnaval|eventos locales)\b/i.test(lastUserMsg)
-  const isExplicitBuild = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|generar itinerario completo|crear itinerario completo|empezar tour|comenzar tour|sí genera|sí armalo|crealo|hazlo|armalo|armar el tour|armar tour|generar tour ahora)\b/i.test(lastUserMsg)
+  const isExplicitBuild = /\b(genera(r)?(\s+el)?\s+(tour|itinerario)|crea(r)?(\s+el)?\s+(tour|itinerario)|arma(r)?(\s+el)?\s+(tour|itinerario)|haz(\s+el)?\s+(tour|itinerario)|construir\s+(el\s+)?(tour|itinerario)|finalizar|comenzar(\s+el)?\s+tour|empezar(\s+el)?\s+tour|listo genera|s[íi],?\s*genera|s[íi],?\s*arma|cr[eé]alo|h[aá]zlo|[aá]rmalo|generar\s+ahora|genera\s+ahora|confirmar tour|confirmar itinerario)\b/i.test(lastUserMsg)
 
   const nextMissing = getNextMissingPreference(known)
 
   let promptInstruction = ''
   if (isExplicitBuild) {
     promptInstruction = `
-    EL USUARIO SOLICITÓ EXPLÍCITAMENTE GENERAR SU TOUR.
-    Confirma con entusiasmo que estás listo y procedes de inmediato a armar su itinerario perfecto.
-    PROHIBIDO incluir listas largas de recomendaciones adicionales aquí.
+    EL USUARIO SOLICITÓ EXPLÍCITAMENTE GENERAR SU TOUR ("${lastUserMsg}").
+    ESTÁ ESTRICTAMENTE PROHIBIDO volver a preguntar si desea generar el tour o hacer preguntas redundantes.
+    Confirma con entusiasmo que su tour está siendo generado y preparado a la perfección.
+    PROHIBIDO incluir preguntas redundantes o listas vacías de confirmación.
     `
   } else if (isAskingItineraryStatus) {
     promptInstruction = `
@@ -860,6 +861,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
 {
   "responseMessage": "Tu mensaje amigable, ameno y cordial para el usuario.",
   "actionChips": ["Opciones útiles acorde a la pregunta actual"],
+  "specificPlaces": ["Nombres exactos de lugares, atracciones o restaurantes propuestos en este mensaje"],
   "readyToBuild": false
 }`
 
@@ -890,6 +892,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     const parsed = safeParseJson(content, {
       responseMessage: '¡Excelente! Cuéntame más sobre tu viaje para diseñar el tour ideal.',
       actionChips: getDefaultActionChips(known, lastUserMsg),
+      specificPlaces: [],
       readyToBuild: false
     })
 
@@ -902,8 +905,8 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     }
     parsed.actionChips = chips
 
-    // REGLA ESTRICTA DE INTENCIÓN DE GENERACIÓN: Solo marcar readyToBuild = true si el usuario lo pidió EXPLÍCITAMENTE
-    const userExplicitBuildIntent = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|generar itinerario completo|crear itinerario completo|empezar tour|comenzar tour|sí genera|sí armalo|crealo|hazlo|armalo|armar el tour|armar tour|generar tour ahora)\b/i.test(lastUserMsg)
+    // REGLA ESTRICTA DE INTENCIÓN DE GENERACIÓN: Si el usuario solicitó generar o finalizar el tour
+    const userExplicitBuildIntent = /\b(genera(r)?(\s+el)?\s+(tour|itinerario)|crea(r)?(\s+el)?\s+(tour|itinerario)|arma(r)?(\s+el)?\s+(tour|itinerario)|haz(\s+el)?\s+(tour|itinerario)|construir\s+(el\s+)?(tour|itinerario)|finalizar|comenzar(\s+el)?\s+tour|empezar(\s+el)?\s+tour|listo genera|s[íi],?\s*genera|s[íi],?\s*arma|cr[eé]alo|h[aá]zlo|[aá]rmalo|generar\s+ahora|genera\s+ahora|confirmar tour|confirmar itinerario)\b/i.test(lastUserMsg)
     if (userExplicitBuildIntent) {
       parsed.readyToBuild = true
       parsed.actionChips = []
