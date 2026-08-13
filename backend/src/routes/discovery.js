@@ -75,26 +75,30 @@ discoveryRouter.get('/events', async (req, res, next) => {
     const query = z.object({
       lat: z.coerce.number(),
       lng: z.coerce.number(),
-      radius: z.coerce.number().optional().default(9000)
+      radius: z.coerce.number().optional().default(9000),
+      city: z.string().optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional()
     }).parse(req.query)
-    const places = await overpassAttractions(query.lat, query.lng, query.radius)
-    const events = (places.length ? places : fallbackPlaces(query.lat, query.lng)).slice(0, 8).map((place, index) => ({
-      id: `event-${index}`,
-      title: eventTitle(index, place.name),
-      category: ['Concierto', 'Festival', 'Feria', 'Deportivo', 'Cultural'][index % 5],
-      startsAt: new Date(Date.now() + (index + 1) * 86400000).toISOString(),
-      latitude: place.latitude,
-      longitude: place.longitude,
-      distanceMeters: Math.round(distanceMeters(query.lat, query.lng, place.latitude, place.longitude)),
-      imageUrl: curatedImage(`${place.name} event travel`)
-    }))
-    res.json({ events })
-  } catch (error) {
-    next(error)
-  }
-})
 
-function eventTitle(index, place) {
+    // Verify full date with year (e.g. 2026-09-10)
+    const hasFullDateWithYear = Boolean(query.startDate && /\b20\d{2}\b/.test(query.startDate))
+    if (!hasFullDateWithYear) {
+      return res.json({
+        events: [],
+        needsFullDate: true,
+        message: 'Por favor confirma la fecha completa de viaje (incluyendo el año, ej. 15 de septiembre de 2026) para consultar la agenda cultural de eventos verificados.'
+      })
+    }
+
+    const cityName = query.city || 'Barcelona'
+    const liveSearch = await searchWebForTravel({
+      query: `eventos culturales agenda festivales conciertos en ${cityName} ${query.startDate} ${query.endDate || ''}`,
+      city: cityName,
+      dates: `${query.startDate} ${query.endDate || ''}`
+    }).catch(() => null)
+
+    const places = await overpassAttractions(query.lat, query.lng, query.radius)
   return [
     `Noche cultural cerca de ${place}`,
     `Festival local en ${place}`,

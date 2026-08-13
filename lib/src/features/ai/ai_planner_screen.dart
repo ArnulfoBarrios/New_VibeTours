@@ -659,13 +659,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                       const SizedBox(height: 8),
                     ],
                     if (message.text.isNotEmpty)
-                      Text(
-                        message.text,
-                        style: TextStyle(
-                          color: isUser ? Colors.white : Theme.of(context).colorScheme.onSurface,
-                          fontSize: 15,
-                          height: 1.4,
-                        ),
+                      FormattedMessageText(
+                        text: message.text,
+                        isUser: isUser,
+                        textColor: isUser ? Colors.white : Theme.of(context).colorScheme.onSurface,
                       ),
                     if (message.embeddedTour != null) ...[
                       const SizedBox(height: 12),
@@ -1637,3 +1634,120 @@ class _VoicePromptSession {
     return languageCode == 'en' ? 'en_US' : 'es_ES';
   }
 }
+
+class FormattedMessageText extends StatelessWidget {
+  const FormattedMessageText({
+    super.key,
+    required this.text,
+    required this.isUser,
+    required this.textColor,
+  });
+
+  final String text;
+  final bool isUser;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.isEmpty) return const SizedBox.shrink();
+
+    final lines = text.split('\n');
+    final List<Widget> children = [];
+
+    for (final rawLine in lines) {
+      final line = rawLine.trimRight();
+      if (line.isEmpty) {
+        children.add(const SizedBox(height: 6));
+        continue;
+      }
+
+      // Headers (### Header)
+      if (line.startsWith('#')) {
+        final cleanHeader = line.replaceAll(RegExp(r'^#+\s*'), '').replaceAll(RegExp(r'\*\*|\*'), '');
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 4),
+            child: Text(
+              cleanHeader,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                height: 1.3,
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+
+      // Bullet points (- or *)
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        final bulletText = line.substring(2).trim();
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 2, bottom: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('• ', style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                Expanded(
+                  child: RichText(
+                    text: _buildTextSpan(bulletText, textColor),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        continue;
+      }
+
+      // Regular paragraph line with **bold** parsing
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 1, bottom: 1),
+          child: RichText(
+            text: _buildTextSpan(line, textColor),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  TextSpan _buildTextSpan(String input, Color baseColor) {
+    final List<InlineSpan> spans = [];
+    final regExp = RegExp(r'\*\*(.*?)\*\*');
+    int lastMatchEnd = 0;
+
+    for (final match in regExp.allMatches(input)) {
+      if (match.start > lastMatchEnd) {
+        spans.add(TextSpan(
+          text: input.substring(lastMatchEnd, match.start),
+          style: TextStyle(color: baseColor, fontSize: 15, height: 1.4),
+        ));
+      }
+      spans.add(TextSpan(
+        text: match.group(1),
+        style: TextStyle(color: baseColor, fontSize: 15, fontWeight: FontWeight.bold, height: 1.4),
+      ));
+      lastMatchEnd = match.end;
+    }
+
+    if (lastMatchEnd < input.length) {
+      spans.add(TextSpan(
+        text: input.substring(lastMatchEnd),
+        style: TextStyle(color: baseColor, fontSize: 15, height: 1.4),
+      ));
+    }
+
+    return TextSpan(children: spans);
+  }
+}
+

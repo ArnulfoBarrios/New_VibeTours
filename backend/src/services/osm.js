@@ -111,8 +111,26 @@ export function normalizeGeocodeQuery(query) {
       uniqueTokens.push(t)
     }
   }
-  return uniqueTokens.join(' ')
 }
+
+export function selectBestPoiResult(results, originalQuery = '') {
+  if (!Array.isArray(results) || results.length === 0) return null
+  const lowerQuery = String(originalQuery || '').toLowerCase()
+  const isExplicitTransitQuery = /\b(estaci[oó]n|bus|metro|subway|parada|transit|train|railway|stop)\b/i.test(lowerQuery)
+
+  if (!isExplicitTransitQuery && results.length > 1) {
+    const nonTransitMatch = results.find(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || '').toLowerCase()
+      const isTransit = ['bus_stop', 'tram_stop', 'station', 'subway', 'railway', 'platform', 'highway'].includes(type) || key === 'highway'
+      return !isTransit
+    })
+    if (nonTransitMatch) return nonTransitMatch
+  }
+
+  return results[0]
+}
+
 
 export async function geocodePlace(query, lat = null, lon = null) {
   if (!query || typeof query !== 'string') return null
@@ -126,8 +144,8 @@ export async function geocodePlace(query, lat = null, lon = null) {
   // 1. Try global Photon search first (without lat/lon) to avoid local user GPS proximity
   // bias distorting major international city lookups (e.g. user in Colombia/Mexico searching "Nueva York").
   try {
-    const globalResults = await photonSearch(normalizedQuery, 1, null, null)
-    const [photonGlobal] = globalResults
+    const globalResults = await photonSearch(normalizedQuery, 5, null, null)
+    const photonGlobal = selectBestPoiResult(globalResults, query)
     if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
       const res = {
         name: photonGlobal.name,
@@ -146,8 +164,8 @@ export async function geocodePlace(query, lat = null, lon = null) {
   // 2. Try with lat/lon proximity bias if provided and global search returned nothing
   if (lat && lon) {
     try {
-      const proxResults = await photonSearch(normalizedQuery, 1, lat, lon)
-      const [photonProx] = proxResults
+      const proxResults = await photonSearch(normalizedQuery, 5, lat, lon)
+      const photonProx = selectBestPoiResult(proxResults, query)
       if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
         const res = {
           name: photonProx.name,

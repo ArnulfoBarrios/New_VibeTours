@@ -236,9 +236,16 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   }
 
   LatLngBounds _calculateBounds(List<LatLng> points) {
+    if (points.isEmpty) {
+      return LatLngBounds(
+        southwest: const LatLng(0, 0),
+        northeast: const LatLng(0, 0),
+      );
+    }
     final validPoints = points.where((p) =>
-      p.latitude > 1.0 && p.latitude < 20.0 &&
-      p.longitude > -90.0 && p.longitude < -60.0
+      p.latitude >= -90.0 && p.latitude <= 90.0 &&
+      p.longitude >= -180.0 && p.longitude <= 180.0 &&
+      (p.latitude != 0.0 || p.longitude != 0.0)
     ).toList();
 
     final pts = validPoints.isNotEmpty ? validPoints : points;
@@ -545,24 +552,21 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
               : null);
       final destPos = LatLng(widget.destination.latitude, widget.destination.longitude);
 
-      final activeRemainingPoints = currentPos != null && _fullGeometry.length >= 2
-          ? _getZeroGapTrimmedGeometry(currentPos)
-          : _fullGeometry;
-
       final boundsPoints = <LatLng>[
         ?currentPos,
         destPos,
-        ...activeRemainingPoints,
+        ..._fullGeometry,
       ];
 
       if (boundsPoints.isNotEmpty) {
         final bounds = _calculateBounds(boundsPoints);
-        try {
-          // A full-route overview is an explicit mode switch, not navigation.
-          // Applying the final bounds immediately avoids several seconds of
-          // intermediate zoom levels while tiles and annotations load.
-          unawaited(
-            controller.moveCamera(
+        unawaited(() async {
+          try {
+            // First, reset orientation facing North (0.0°) and 2D flat view (0.0° tilt)
+            await controller.moveCamera(CameraUpdate.bearingTo(0.0));
+            await controller.moveCamera(CameraUpdate.tiltTo(0.0));
+            // Then fit the entire route within the viewport with bottom/top padding
+            await controller.moveCamera(
               CameraUpdate.newLatLngBounds(
                 bounds,
                 left: widget.fitPadding.left,
@@ -570,9 +574,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                 right: widget.fitPadding.right,
                 bottom: widget.fitPadding.bottom,
               ),
-            ),
-          );
-        } catch (_) {}
+            );
+          } catch (_) {}
+        }());
       }
     }
   }
@@ -773,7 +777,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
               target: initialTarget,
               zoom: widget.trackingMode ? 17.2 : 13.5,
               tilt: widget.trackingMode ? 48.0 : 0.0,
-              bearing: widget.trackingHeading ?? 0.0,
+              bearing: widget.trackingMode ? (widget.trackingHeading ?? 0.0) : 0.0,
             ),
             compassEnabled: true,
             rotateGesturesEnabled: true,

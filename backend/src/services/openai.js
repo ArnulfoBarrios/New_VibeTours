@@ -1,5 +1,6 @@
 import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus } from './imageSearch.js'
+import { classifyUserIntent, INTENT_TYPES } from './intentClassifier.js'
 
 const locationExtractCache = new GeoCache(12 * 60 * 60 * 1000, 300)
 const planCache = new GeoCache(6 * 60 * 60 * 1000, 200)
@@ -526,24 +527,36 @@ function safeParseJson(raw, fallback = {}) {
 }
 
 export async function extractChatInformation(userMessage, currentData = {}, history = []) {
+  // First evaluate user intent confidence & ambiguity
+  const intentEval = classifyUserIntent(userMessage, currentData)
+  if (intentEval.needsClarification) {
+    return {
+      intentEval,
+      isAmbiguousInput: true
+    }
+  }
+
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return extractChatInformationFallback(userMessage)
+  if (!apiKey) {
+    const fallback = extractChatInformationFallback(userMessage)
+    return { ...fallback, intentEval }
+  }
 
   const recentHistoryText = (history || []).slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')
 
   const prompt = `Analiza el último mensaje del usuario Y el historial de conversación reciente para identificar las preferencias turísticas y atracciones mencionadas/aceptadas.
-Devuelve ÚNICAMENTE un objeto JSON válido con los campos que logres identificar (mantén los campos no mencionados como null).
+Devuelve ÚNICAMENTE un objeto JSON válido con los campos que logres identificar con ALTA CONFIANZA. NO INFIERAS campos de frases de una sola palabra o sin contexto (mantén los campos no mencionados como null).
 
 CAMPOS Y REGLAS DE INTERPRETACIÓN:
 1. "destination" / "city": Nombre de la ciudad o lugar de destino. SI es una región o frase vaga ("Playa en el Caribe", "Montaña", "Europa"), asígnala a "destination" pero mantén "city" como null.
-2. "datesSeason": Fechas, mes o época del viaje.
+2. "datesSeason": Fechas, mes o época del viaje (incluye el año si se menciona).
 3. "durationDays" (número): Días de duración del tour.
 4. "companions": "Solo", "Pareja", "Familia con niños", "Amigos", "Grupo".
 5. "hasChildren" (boolean): true si viaja con niños.
-6. "budget": "Económico", "Moderado", "Lujo".
-7. "transport": "Caminando", "Transporte público", "Auto rentado", "Taxi/Uber".
+6. "budget": "Económico", "Moderado", "Lujo". Solo extraer si hay contexto claro (ej. "mi presupuesto es económico").
+7. "transport": "Caminando", "Transporte público", "Auto rentado", "Taxi/Uber". Solo extraer si hay intención explícita de medio de transporte.
 8. "accommodationStatus": "Ya posee hospedaje", "Quiere buscar hospedaje".
-9. "specificPlaces" (array de strings): Nombres de atracciones o lugares específicos que el usuario quiere visitar O que la IA recomendó en los mensajes recientes y el usuario aceptó/interesó (ej: ["Parque Xcaret", "Cenote Dos Ojos", "Isla Cozumel", "Tulum"]).
+9. "specificPlaces" (array de strings): Nombres de atracciones o lugares específicos.
 10. "interests" (array de strings): Intereses.
 
 HISTORIAL DE CONVERSACIÓN RECIENTE:
@@ -563,20 +576,20 @@ ${recentHistoryText}
     })
 
     if (!response.ok) {
-      return extractChatInformationFallback(userMessage)
+      const fallback = extractChatInformationFallback(userMessage)
+      return { ...fallback, intentEval }
     }
 
     const json = await response.json()
     const parsed = safeParseJson(json.choices?.[0]?.message?.content ?? '{}', {})
 
-    // Limpiar claves nulas o vacías extraídas para evitar sobreescribir las preferencias previas en el acumulado
+    // Clean null or empty fields
     Object.keys(parsed).forEach(key => {
       if (parsed[key] === null || parsed[key] === undefined || parsed[key] === '') {
         delete parsed[key]
       }
     })
 
-    // Normalización de duración en horas si se extrajo en días
     if (typeof parsed.durationDays === 'number' && parsed.durationDays > 0) {
       parsed.durationHours = parsed.durationDays >= 2 ? parsed.durationDays * 24 : 8
     }
@@ -585,17 +598,24 @@ ${recentHistoryText}
       parsed.hasChildren = true
     }
 
-    return parsed
+    return { ...parsed, intentEval }
   } catch (err) {
     console.error('[openai] extract error:', err)
-    return extractChatInformationFallback(userMessage)
+    const fallback = extractChatInformationFallback(userMessage)
+    return { ...fallback, intentEval }
   }
 }
 
 export function extractChatInformationFallback(prompt) {
   if (!prompt || typeof prompt !== 'string') return {}
-  const lower = prompt.toLowerCase()
+  const lower = prompt.trim().toLowerCase()
+  const words = lower.split(/\s+/).filter(Boolean)
   const result = {}
+
+  // If input is ambiguous or a single keyword like "presupuesto", do not infer transport or budget values blindly
+  if (words.length <= 1) {
+    return result
+  }
 
   if (/\b(fin de semana con puente|puente festivo|fin de semana largo)\b/i.test(lower)) {
     result.durationDays = 3
@@ -608,36 +628,38 @@ export function extractChatInformationFallback(prompt) {
     result.durationHours = 168
   }
 
-  if (/\b(ni[ñn]o|ni[ñn]as|hijo|hijas|bebe|familia)\b/i.test(lower)) {
+  if (/\b(ni[ñn]o|ni[ñn]as|hijo|hijas|bebe|familia con ni[ñn]os)\b/i.test(lower)) {
     result.companions = 'Familia con niños'
     result.hasChildren = true
   } else if (/\b(pareja|esposo|esposa|novio|novia)\b/i.test(lower)) {
     result.companions = 'Pareja'
   } else if (/\b(amigos|parceros|panas|grupo)\b/i.test(lower)) {
     result.companions = 'Amigos'
-  } else if (/\b(solo|conmigo)\b/i.test(lower)) {
+  } else if (/\b(viajo solo|voy solo|conmigo mismo)\b/i.test(lower)) {
     result.companions = 'Solo'
   }
 
-  if (/\b(ahorrar|econ[oó]mico|barato|poco presupuesto)\b/i.test(lower)) {
+  if (/\b(presupuesto (ahorrar|econ[oó]mico|barato|bajo))\b/i.test(lower)) {
     result.budget = 'Económico'
-  } else if (/\b(lujo|sin escatimar|5 estrellas|cinco estrellas)\b/i.test(lower)) {
+  } else if (/\b(presupuesto (lujo|alto|sin escatimar|5 estrellas))\b/i.test(lower)) {
     result.budget = 'Lujo'
+  } else if (/\b(presupuesto (moderado|medio|normal))\b/i.test(lower)) {
+    result.budget = 'Moderado'
   }
 
-  if (/\b(caminando|a pie)\b/i.test(lower)) {
+  if (/\b(ir caminando|desplazarse a pie)\b/i.test(lower)) {
     result.transport = 'Caminando'
-  } else if (/\b(carro|auto|veh[íi]culo)\b/i.test(lower)) {
+  } else if (/\b(rentar auto|alquilar coche|alquilar carro|rentar veh[íi]culo)\b/i.test(lower)) {
     result.transport = 'Auto rentado'
-  } else if (/\b(bus|metro|p[úu]blico)\b/i.test(lower)) {
+  } else if (/\b(usar (bus|metro|transporte p[úu]blico))\b/i.test(lower)) {
     result.transport = 'Transporte público'
-  } else if (/\b(taxi|uber|cabify)\b/i.test(lower)) {
+  } else if (/\b(tomar (taxi|uber|cabify))\b/i.test(lower)) {
     result.transport = 'Taxi/Uber'
   }
 
   if (/\b(tengo (hotel|hospedaje|casa)|ya tengo|quedarme en|reserva)\b/i.test(lower)) {
     result.accommodationStatus = 'Ya posee hospedaje'
-  } else if (/\b(hotel|hoteles|hospedaje|alojamiento|quedarse|dónde hospedarme|opciones de hotel|opciones de hospedaje)\b/i.test(lower)) {
+  } else if (/\b(buscar (hotel|hoteles|hospedaje|alojamiento)|quiero quedarme en hotel)\b/i.test(lower)) {
     result.accommodationStatus = 'Quiere buscar hospedaje'
   }
 

@@ -55,7 +55,9 @@ const requestSchema = z.object({
   userId: z.string().uuid().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
-  budget: z.string().optional()
+  budget: z.string().optional(),
+  selectedPlaces: z.array(z.string()).optional().default([]),
+  specificPlaces: z.array(z.string()).optional().default([])
 })
 
 aiRouter.post('/chat', async (req, res, next) => {
@@ -83,10 +85,28 @@ aiRouter.post('/chat', async (req, res, next) => {
 
     // 1. Extraer preferencias del último mensaje del usuario usando LLM + Fallback
     const extracted = await extractChatInformation(message, currentPreferences, history)
+
+    // Si la intención es ambigua (ej. "presupuesto" sin contexto), no mutar estado ni inferir transportes
+    if (extracted?.isAmbiguousInput && extracted?.intentEval?.needsClarification) {
+      const promptText = extracted.intentEval.clarificationPrompt
+      const options = extracted.intentEval.options || []
+      return res.json({
+        message: promptText,
+        botMessage: promptText,
+        intentEval: extracted.intentEval,
+        updatedPreferences: currentPreferences,
+        options,
+        actionChips: options.map(o => o.label),
+        needsClarification: true
+      })
+    }
+
     const updatedPreferences = {
       ...currentPreferences,
       ...(extracted || {})
     }
+    delete updatedPreferences.intentEval
+    delete updatedPreferences.isAmbiguousInput
 
     // Si hay objetos vacíos o nulos, limpiarlos
     Object.keys(updatedPreferences).forEach(key => {
@@ -748,35 +768,16 @@ aiRouter.post('/tours/hotels', async (req, res, next) => {
     let hotels = await overpassHotels(latitude, longitude, budget, 15000)
     
     if (!hotels || hotels.length === 0) {
-      hotels = [
-        {
-          id: 'fallback-hotel-1',
-          name: 'Vibe Hotel & Suites',
-          latitude: latitude + 0.002,
-          longitude: longitude - 0.001,
-          stars: '4',
-          type: 'hotel',
-          address: 'Avenida del Libertador, Centro'
-        },
-        {
-          id: 'fallback-hotel-2',
-          name: 'Hostal del Sol',
-          latitude: latitude - 0.001,
-          longitude: longitude + 0.003,
-          stars: '3',
-          type: 'hotel',
-          address: 'Calle Turística Principal'
-        },
-        {
-          id: 'fallback-hotel-3',
-          name: 'Grand Horizon Resort',
-          latitude: latitude + 0.0015,
-          longitude: longitude + 0.0015,
-          stars: '5',
-          type: 'hotel',
-          address: 'Frente a la Playa, Bahía'
-        }
-      ]
+      return res.json({
+        hotels: [],
+        hasVerifiedResults: false,
+        message: 'No se encontraron alojamientos verificados en este radio. Te sugerimos ampliar el radio de búsqueda, cambiar las fechas o modificar tu preferencia de presupuesto.',
+        suggestions: [
+          'Ampliar radio de búsqueda',
+          'Cambiar preferencia de presupuesto',
+          'Modificar fechas del viaje'
+        ]
+      })
     }
     
     hotels.sort((a, b) => {
@@ -785,7 +786,10 @@ aiRouter.post('/tours/hotels', async (req, res, next) => {
       return bStars - aStars
     })
 
-    res.json({ hotels: hotels.slice(0, 5) })
+    res.json({
+      hotels: hotels.slice(0, 5),
+      hasVerifiedResults: true
+    })
   } catch (error) {
     next(error)
   }
@@ -2796,9 +2800,12 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
     }
   }
 
+  const defaultLat = hasUsableCoordinates(input.latitude, input.longitude) ? input.latitude : (fallbackPlace?.latitude ?? sourceLatitude)
+  const defaultLon = hasUsableCoordinates(input.longitude, input.latitude) ? input.longitude : (fallbackPlace?.longitude ?? sourceLongitude)
+
   return {
-    latitude: fallbackPlace?.latitude ?? (hasUsableCoordinates(sourceLatitude, sourceLongitude) ? sourceLatitude : 0),
-    longitude: fallbackPlace?.longitude ?? (hasUsableCoordinates(sourceLatitude, sourceLongitude) ? sourceLongitude : 0),
+    latitude: hasUsableCoordinates(defaultLat, defaultLon) ? defaultLat : (input.latitude || 41.3851),
+    longitude: hasUsableCoordinates(defaultLon, defaultLat) ? defaultLon : (input.longitude || 2.1734),
     wasFallback: true
   }
 }
@@ -3430,10 +3437,15 @@ export async function collectTourCandidates(input, location) {
   }
 
   // Geocode any specific places requested or discussed in chat
+  const mergedSpecifics = Array.from(new Set([
+    ...(Array.isArray(input.specificPlaces) ? input.specificPlaces : []),
+    ...(Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
+  ])).filter(p => typeof p === 'string' && p.trim().length >= 3)
+
   let geocodedSpecifics = []
-  if (Array.isArray(input.specificPlaces) && input.specificPlaces.length > 0) {
+  if (mergedSpecifics.length > 0) {
     const specificSettled = await Promise.allSettled(
-      input.specificPlaces.map(async (placeName) => {
+      mergedSpecifics.map(async (placeName) => {
         if (!placeName || typeof placeName !== 'string' || placeName.length < 3) return null
         const searchQuery = `${placeName} ${city} ${country}`.trim()
         const geo = await geocodePlace(searchQuery).catch(() => null)

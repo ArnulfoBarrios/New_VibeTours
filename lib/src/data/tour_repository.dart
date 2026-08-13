@@ -815,9 +815,13 @@ class TourRepository {
         metadata['location_info'] ?? item['location_info'],
         _emptyRequest,
       );
-      final images = _stringList(
-        item['image_urls'] ?? item['images'] ?? item['image_url'],
+      final rawImages = _stringList(
+        item['image_urls'] ?? item['images'] ?? item['imagenes'] ?? item['image_url'],
       );
+      final fallbackSingle = item['image_url']?.toString() ?? item['imageUrl']?.toString() ?? '';
+      final images = rawImages.isNotEmpty ? rawImages : (fallbackSingle.isNotEmpty ? [fallbackSingle] : <String>[]);
+      final firstImg = images.firstWhere((img) => img.trim().isNotEmpty, orElse: () => fallbackSingle);
+
       return TourStop(
         id: item['id']?.toString() ?? 'db-stop-${entry.key}',
         name:
@@ -829,7 +833,7 @@ class TourRepository {
           latitude: _doubleValue(item['latitude'], 0),
           longitude: _doubleValue(item['longitude'], 0),
         ),
-        imageUrl: images.isEmpty ? '' : images.first,
+        imageUrl: firstImg,
         description:
             item['description']?.toString() ??
             item['custom_description']?.toString() ??

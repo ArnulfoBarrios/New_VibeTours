@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:vibetoursapp/src/app.dart';
 import 'package:vibetoursapp/src/state/app_state.dart';
+import 'package:vibetoursapp/src/features/ai/ai_planner_screen.dart';
 
 void main() {
   testWidgets('VIBETOURS boots without startup exceptions', (tester) async {
@@ -31,5 +32,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('FormattedMessageText renders headers, bold text and bullets cleanly', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: FormattedMessageText(
+            text: '### Título Recomendado\n**Presupuesto:** Moderado\n- Hotel Centro\n- Museo del Prado',
+            isUser: false,
+            textColor: Colors.black,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Título Recomendado'), findsOneWidget);
+    expect(find.text('### Título Recomendado'), findsNothing);
+    expect(find.textContaining('•'), findsNWidgets(2));
   });
 }

@@ -945,12 +945,26 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     );
     if (!mounted) return;
     
+    // Validate non-zero coordinates and distance bounds before navigation
+    final isZeroOrigin = origin.latitude == 0 && origin.longitude == 0;
+    final isZeroDest = destination.latitude == 0 && destination.longitude == 0;
+
+    if (isZeroOrigin || isZeroDest) {
+      if (!mounted) return;
+      setState(() {
+        _isRouting = false;
+        _noLandRouteAvailable = true;
+      });
+      return;
+    }
+
     final directDist = Geolocator.distanceBetween(
       origin.latitude, origin.longitude,
       destination.latitude, destination.longitude,
     );
-    
-    bool isUnreachable = route.usedFallback && directDist > 20000;
+
+    // Intra-city anomaly check: block jumps over 100km unless explicitly multi-region
+    bool isUnreachable = (route.usedFallback && directDist > 20000) || (directDist > 100000);
     
     if (route.geometry.isNotEmpty) {
       final snapStart = Geolocator.distanceBetween(
@@ -962,7 +976,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       }
     }
     
-    if (route.usesMaritimeTransfer && directDist > 500000) {
+    if (route.usesMaritimeTransfer && directDist > 300000) {
       isUnreachable = true;
     }
 

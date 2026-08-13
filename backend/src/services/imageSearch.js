@@ -404,7 +404,29 @@ function curatedImage(seed, category, indexSeed = 0) {
     ]
   }
 
+  const cityLower = String(seed || '').toLowerCase()
+  if (cityLower.includes('barcelona')) {
+    return 'https://images.unsplash.com/photo-1583422409516-2895a77efded?auto=format&fit=crop&w=1200&q=80' // Sagrada Familia / Barcelona skyline
+  } else if (cityLower.includes('madrid')) {
+    return 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=1200&q=80' // Madrid Gran Via
+  } else if (cityLower.includes('paris') || cityLower.includes('parís')) {
+    return 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1200&q=80' // Paris Eiffel
+  } else if (cityLower.includes('roma') || cityLower.includes('rome')) {
+    return 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=1200&q=80' // Colosseum Rome
+  } else if (cityLower.includes('bogota') || cityLower.includes('bogotá')) {
+    return 'https://images.unsplash.com/photo-1584305574647-0cc949a2da9f?auto=format&fit=crop&w=1200&q=80' // Bogota Monserrate
+  } else if (cityLower.includes('medellin') || cityLower.includes('medellín')) {
+    return 'https://images.unsplash.com/photo-1599388301549-3714578b820a?auto=format&fit=crop&w=1200&q=80' // Medellin
+  } else if (cityLower.includes('cartagena')) {
+    return 'https://images.unsplash.com/photo-1583531352515-888413146611?auto=format&fit=crop&w=1200&q=80' // Cartagena
+  }
+
   const list = categoryImages[category] || categoryImages.default
   const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0) + indexSeed
   return list[Math.abs(hash) % list.length]
 }
+
+export function destinationCoverImage(city = '', country = '') {
+  return curatedImage(`${city} ${country}`, 'historic', 0)
+}
+

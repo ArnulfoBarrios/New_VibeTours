@@ -158,6 +158,15 @@ class TourStop {
   final int day;
   final bool isFallbackImage;
 
+  String get displayImageUrl {
+    if (imageUrl.trim().isNotEmpty) return imageUrl;
+    if (images.isNotEmpty) {
+      final first = images.firstWhere((img) => img.trim().isNotEmpty, orElse: () => '');
+      if (first.isNotEmpty) return first;
+    }
+    return '';
+  }
+
   TourStop copyWith({
     String? name,
     String? imageUrl,
@@ -844,7 +853,10 @@ class AiTourRequest {
     if (latitude != null) 'latitude': latitude,
     if (longitude != null) 'longitude': longitude,
     if (budget != null) 'budget': budget,
-    if (selectedPlaces.isNotEmpty) 'selectedPlaces': selectedPlaces,
+    if (selectedPlaces.isNotEmpty) ...{
+      'selectedPlaces': selectedPlaces,
+      'specificPlaces': selectedPlaces,
+    },
   };
 
   AiTourRequest copyWith({
