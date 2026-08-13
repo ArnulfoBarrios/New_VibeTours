@@ -210,9 +210,12 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final responseMessage = data['responseMessage'] as String? ?? '¡Excelente!';
+        final rawMsg = data['responseMessage'] ?? data['message'] ?? data['botMessage'];
+        final responseMessage = (rawMsg != null && rawMsg.toString().trim().isNotEmpty)
+            ? rawMsg.toString()
+            : '¡Excelente!';
         final actionChips = (data['actionChips'] as List?)?.map((e) => e.toString()).toList() ?? [];
-        final rawPrefs = data['preferences'] as Map<String, dynamic>? ?? {};
+        final rawPrefs = (data['preferences'] ?? data['updatedPreferences']) as Map<String, dynamic>? ?? {};
         final updatedPreferences = Map<String, dynamic>.from(state.preferences)..addAll(rawPrefs);
         final readyToBuild = data['readyToBuild'] == true;
         final webSearchDone = data['webSearchDone'] == true;

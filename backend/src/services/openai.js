@@ -687,6 +687,22 @@ function getNextMissingPreference(known = {}) {
 }
 
 function getDefaultActionChips(known = {}, lastMessage = '') {
+  const destName = known.city || known.destination
+  const hasCity = Boolean(destName)
+  const isAskingRestaurants = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|gastronom[íi]a|comida)\b/i.test(lastMessage)
+  const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|concierto|eventos locales)\b/i.test(lastMessage)
+  const isAskingHotel = hasCity && /\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastMessage)
+
+  if (isAskingRestaurants) {
+    return [`🚀 Generar tour en ${destName}`, '🏨 Ver opciones de hotel', '🎉 Consultar eventos']
+  }
+  if (isAskingEvents) {
+    return [`🚀 Generar tour en ${destName}`, '🍽️ Ver restaurantes', '🏨 Ver opciones de hotel']
+  }
+  if (isAskingHotel) {
+    return [`🚀 Generar tour en ${destName}`, '🍽️ Ver restaurantes', '🎯 Ver actividades']
+  }
+
   const nextMissing = getNextMissingPreference(known)
 
   if (nextMissing === 'city') {
@@ -708,7 +724,7 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
   if (nextMissing === 'accommodationStatus') return ['Tengo mi propio hospedaje', 'Recomiéndame hoteles']
 
   // ¡CUANDO YA SE RESPONDIERON TODAS LAS PREGUNTAS!
-  return ['🚀 ¡Sí, generar tour ahora!', '✏️ Cambiar un detalle']
+  return [`🚀 Generar tour en ${destName || 'mi destino'}`, '✏️ Cambiar un detalle']
 }
 
 export async function generateChatResponse(state, backendInstruction, webSearchSummary = '', currentPreferences = {}) {
@@ -729,7 +745,7 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   const isAskingHotelRecommendations = hasCity && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje)\b/i.test(lastUserMsg)
   const isAskingActivities = hasCity && /\b(actividad|actividades|qu[eé] hacer|que hacer|atracciones|lugares|ver|visitar|imperdibles)\b/i.test(lastUserMsg)
   const isAskingRestaurants = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|donde comer|gastronom[íi]a|comida|cenar|desayuno|almuerzo|cena)\b/i.test(lastUserMsg)
-  const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|fiesta|concierto|agenda|carnaval)\b/i.test(lastUserMsg)
+  const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|fiesta|concierto|agenda|carnaval|eventos locales)\b/i.test(lastUserMsg)
   const isExplicitBuild = /\b(generar tour|crear tour|construir tour|listo genera|haz el tour|arma el tour|generar itinerario|crear itinerario|construir itinerario|empezar tour|comenzar tour|sí genera|sí armalo|crealo|hazlo|armalo|armar el tour|armar tour|generar tour ahora)\b/i.test(lastUserMsg)
 
   const nextMissing = getNextMissingPreference(known)
@@ -831,7 +847,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       return {
         responseMessage: '¡Hola! Con mucho gusto te ayudo a planear tu viaje. ¿A qué ciudad o lugar te gustaría viajar?',
         actionChips: getDefaultActionChips(known, lastUserMsg),
-        destinationSuggestions: (nextMissing === 'city') ? await buildVisualDestinationSuggestions(getDefaultActionChips(known, lastUserMsg)).catch(() => []) : [],
+        destinationSuggestions: (!hasCity && nextMissing === 'city') ? await buildVisualDestinationSuggestions(getDefaultActionChips(known, lastUserMsg)).catch(() => []) : [],
         readyToBuild: false
       }
     }
@@ -867,8 +883,8 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     }
 
     // REGLA ABSOLUTA DE TARJETAS VISUALES:
-    // SOLO mostrar destinationSuggestions si la pregunta actual es la Ciudad (nextMissing === 'city') O si es Hospedaje (nextMissing === 'accommodationStatus')
-    if (nextMissing === 'city') {
+    // SOLO mostrar destinationSuggestions si NO hay ciudad y la pregunta actual es la Ciudad (nextMissing === 'city') O si es Hospedaje (nextMissing === 'accommodationStatus')
+    if (!hasCity && nextMissing === 'city') {
       parsed.destinationSuggestions = await buildVisualDestinationSuggestions(chips, '')
     } else if (nextMissing === 'accommodationStatus' && !known.accommodationStatus) {
       parsed.destinationSuggestions = [
@@ -903,7 +919,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
   } catch (err) {
     console.error('[openai] chat response error:', err)
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
-    const fallbackSuggs = (nextMissing === 'city') ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : []
+    const fallbackSuggs = (!hasCity && nextMissing === 'city') ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : []
     return {
       responseMessage: '¡Hola! Es un placer saludarte. Cuéntame, ¿a qué ciudad te gustaría viajar hoy?',
       actionChips: fallbackChips,
@@ -914,11 +930,13 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
 }
 
 export async function buildVisualDestinationSuggestions(cityList = [], defaultCity = '') {
+  const nonCityKeywords = /🚀|✏️|🌟|➕|🍽️|🏨|🎉|🎯|generar|arma|armar|cambiar|detalle|opción|opcion|sugerencia|tour|restaurante|restaurantes|evento|eventos|concierto|conciertos|festival|festivales|actividad|actividades|hospedaje|alojamiento|hotel|hoteles|comida|gastronom/i
+
   const filteredList = cityList.filter(c => {
     if (typeof c !== 'string') return false
     const clean = c.trim().toLowerCase()
     if (clean.length < 2) return false
-    if (/🚀|✏️|🌟|➕|generar|arma|armar|cambiar|detalle|opción|opcion|sugerencia|tour/i.test(clean)) return false
+    if (nonCityKeywords.test(clean)) return false
     return true
   })
 

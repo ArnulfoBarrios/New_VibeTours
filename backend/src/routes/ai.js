@@ -90,13 +90,18 @@ aiRouter.post('/chat', async (req, res, next) => {
     if (extracted?.isAmbiguousInput && extracted?.intentEval?.needsClarification) {
       const promptText = extracted.intentEval.clarificationPrompt
       const options = extracted.intentEval.options || []
+      const chips = options.map(o => (typeof o === 'string' ? o : (o.label || o.id || '')))
       return res.json({
+        responseMessage: promptText,
         message: promptText,
         botMessage: promptText,
         intentEval: extracted.intentEval,
+        preferences: currentPreferences,
         updatedPreferences: currentPreferences,
         options,
-        actionChips: options.map(o => o.label),
+        actionChips: chips.filter(Boolean),
+        destinationSuggestions: [],
+        readyToBuild: false,
         needsClarification: true
       })
     }

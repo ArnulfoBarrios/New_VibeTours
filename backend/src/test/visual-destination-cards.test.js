@@ -39,4 +39,10 @@ describe('Visual Destination Cards Unit Tests', () => {
     const bcnCover = destinationCoverImage('Barcelona', 'España')
     assert.ok(bcnCover && !bcnCover.includes('.svg'), 'Barcelona cover must be scenic photo')
   })
+
+  it('should filter out non-destination terms like Restaurantes, Eventos locales, Conciertos and action buttons', async () => {
+    const list = ['Restaurantes...', 'Eventos locales', 'Conciertos', 'Festivales culinarios', '🚀 Generar tour en Miami', '🏨 Ver opciones de hotel']
+    const suggestions = await buildVisualDestinationSuggestions(list)
+    assert.equal(suggestions.length, 0, 'No non-destination categories should be converted into destination cards')
+  })
 })

@@ -4,13 +4,32 @@ import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.j
 import { extractChatInformationFallback } from '../services/openai.js'
 
 describe('Intent Classification Unit Tests', () => {
-  it('should classify "presupuesto" as ambiguous and request clarification without inferring transport', () => {
+  it('should classify "presupuesto" as ambiguous without city and provide actionable budget options', () => {
     const result = classifyUserIntent('presupuesto')
     assert.equal(result.intent, INTENT_TYPES.AMBIGUOUS)
     assert.equal(result.needsClarification, true)
     assert.ok(result.confidence < 0.70)
     assert.ok(result.options && result.options.length > 0)
-    assert.equal(result.options[0].label, 'Presupuesto')
+    assert.equal(result.options[0].label, 'Económico')
+  })
+
+  it('should classify "Alojamiento", "Restaurantes", "Eventos" as contextual non-ambiguous inquiries when destination is known', () => {
+    const context = { city: 'Miami', destination: 'Miami, EE. UU.' }
+    
+    const hotelResult = classifyUserIntent('Alojamiento', context)
+    assert.equal(hotelResult.intent, INTENT_TYPES.LODGING_INQUIRY)
+    assert.equal(hotelResult.needsClarification, false)
+    assert.ok(hotelResult.confidence >= 0.70)
+
+    const restaurantResult = classifyUserIntent('Restaurantes', context)
+    assert.equal(restaurantResult.intent, INTENT_TYPES.RESTAURANT_INQUIRY)
+    assert.equal(restaurantResult.needsClarification, false)
+    assert.ok(restaurantResult.confidence >= 0.70)
+
+    const eventResult = classifyUserIntent('Eventos', context)
+    assert.equal(eventResult.intent, INTENT_TYPES.EVENT_INQUIRY)
+    assert.equal(eventResult.needsClarification, false)
+    assert.ok(eventResult.confidence >= 0.70)
   })
 
   it('should NOT infer auto rentado or budget from single word "presupuesto"', () => {
