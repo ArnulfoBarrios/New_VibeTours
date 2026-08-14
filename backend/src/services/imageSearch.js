@@ -1,29 +1,36 @@
-export async function imageForPlace(placeName, city, category = '', indexSeed = 0, options = {}) {
-  const result = await imageForPlaceWithStatus(placeName, city, category, indexSeed, options)
+export async function imageForPlace(placeName, city, countryOrCategory = 'Colombia', indexSeed = 0, options = {}) {
+  // Support both imageForPlace(place, city, country) and imageForPlace(place, city, category, seed, opts)
+  const isCountry = typeof countryOrCategory === 'string' && /colombia|m[ée]xico|espa[ñn]a|per[úu]|argentina|chile|brasil|estados unidos|francia|italia/i.test(countryOrCategory)
+  const category = isCountry ? '' : countryOrCategory
+  const country = options?.country || (isCountry ? countryOrCategory : 'Colombia')
+  const mergedOptions = { ...options, country }
+  const result = await imageForPlaceWithStatus(placeName, city, category, indexSeed, mergedOptions)
   return result.url
 }
 
 export async function imageForPlaceWithStatus(placeName, city, category = '', indexSeed = 0, options = {}) {
   const normalizedCategory = String(category || '').toLowerCase()
   const seed = Number(indexSeed || 0)
+  const country = options?.country || 'Colombia'
   const latitude = options?.latitude ?? options?.lat ?? null
   const longitude = options?.longitude ?? options?.lon ?? null
+  const contextualQuery = [placeName, city, country].filter(Boolean).join(', ')
 
-  // 1A. Consulta prioritaria a Wikipedia Summary API (Foto principal oficial del monumento/lugar)
-  const wikiSummary = await wikipediaSummaryImage(placeName)
+  // 1A. Consulta prioritaria a Wikipedia Summary API (Foto principal oficial del monumento/lugar con desambiguación local)
+  const wikiSummary = await wikipediaSummaryImage(placeName, city)
   if (wikiSummary) return { url: wikiSummary, isFallback: false }
 
-  // 1B. Búsqueda estricta por texto del lugar en Wikimedia Commons (Prioridad sobre GeoSearch para evitar fotos de centro de ciudad duplicadas)
-  const wiki = await wikimediaImage(placeName, null, seed)
+  // 1B. Búsqueda contextual estricta por texto del lugar en Wikimedia Commons (ej: "Getsemaní, Cartagena, Colombia")
+  const wiki = await wikimediaImage(contextualQuery, null, seed) || await wikimediaImage(placeName, null, seed)
   if (wiki) return { url: wiki, isFallback: false }
 
-  // 1C. Búsqueda estricta en Openverse por nombre del lugar
-  const openverse = await openverseImage(`${placeName} ${city}`, null, seed)
+  // 1C. Búsqueda estricta contextual en Openverse por nombre del lugar
+  const openverse = await openverseImage(contextualQuery, null, seed) || await openverseImage(`${placeName} ${city}`, null, seed)
   if (openverse) return { url: openverse, isFallback: false }
 
   // 1D. Consulta a Pexels API (si existe PEXELS_API_KEY configurada en .env)
   if (process.env.PEXELS_API_KEY) {
-    const pexels = await pexelsImage(`${placeName} ${city}`, seed)
+    const pexels = await pexelsImage(contextualQuery, seed) || await pexelsImage(`${placeName} ${city}`, seed)
     if (pexels) return { url: pexels, isFallback: false }
   }
 
@@ -58,13 +65,18 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   return { url: curatedImage(`${placeName} ${city} travel`, normalizedCategory, seed), isFallback: true }
 }
 
-async function wikipediaSummaryImage(placeName) {
+async function wikipediaSummaryImage(placeName, city = '') {
   if (!placeName || typeof placeName !== 'string') return null
   const raw = placeName.trim()
   if (raw.length < 3) return null
 
   const cleaned = raw.replace(/\(.*?\)/g, '').replace(/_/g, ' ').trim()
-  const variations = [...new Set([raw, cleaned].filter(v => v.length >= 3))]
+  const cleanCity = String(city || '').replace(/_/g, ' ').trim()
+  const variations = [
+    ...(cleanCity ? [`${cleaned} (${cleanCity})`, `${cleaned}, ${cleanCity}`] : []),
+    raw,
+    cleaned
+  ].filter((v, i, arr) => v && v.length >= 3 && arr.indexOf(v) === i)
   const languages = ['en', 'es']
 
   for (const varName of variations) {
@@ -97,13 +109,18 @@ async function wikipediaSummaryImage(placeName) {
   return null
 }
 
-export async function wikipediaSummaryText(placeName) {
+export async function wikipediaSummaryText(placeName, city = '') {
   if (!placeName || typeof placeName !== 'string') return null
   const raw = placeName.trim()
   if (raw.length < 3) return null
 
   const cleaned = raw.replace(/\(.*?\)/g, '').replace(/_/g, ' ').trim()
-  const variations = [...new Set([raw, cleaned].filter(v => v.length >= 3))]
+  const cleanCity = String(city || '').replace(/_/g, ' ').trim()
+  const variations = [
+    ...(cleanCity ? [`${cleaned} (${cleanCity})`, `${cleaned}, ${cleanCity}`] : []),
+    raw,
+    cleaned
+  ].filter((v, i, arr) => v && v.length >= 3 && arr.indexOf(v) === i)
   const languages = ['es', 'en']
 
   for (const varName of variations) {

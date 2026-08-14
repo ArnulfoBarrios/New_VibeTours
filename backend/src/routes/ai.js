@@ -60,6 +60,29 @@ const requestSchema = z.object({
   specificPlaces: z.array(z.string()).optional().default([])
 })
 
+// Filtro estricto que descarta encabezados de días, horas, formatos markdown, metadatos y ciudades puras
+export function isValidSpecificPlace(placeName) {
+  if (!placeName || typeof placeName !== 'string') return false
+  
+  // Limpiar markdown, viñetas y espacios
+  const clean = placeName.replace(/[*_#•\-]/g, '').trim()
+  if (clean.length < 3) return false
+  // 1. Descartar encabezados de días y momentos del día
+  const isTimeHeader = /^(d[íi]a\s*\d+|day\s*\d+|mañana|tarde|noche|almuerzo|cena|desayuno|madrugada|atardecer)/i.test(clean)
+  if (isTimeHeader) return false
+  // 2. Descartar comodidades, hoteles y frases meta
+  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|paseo|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a)\b/i.test(clean)
+  if (isMetaOrAmenity) return false
+  // 3. Descartar si es país o "Ciudad, País"
+  if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(clean)) {
+    return false
+  }
+  // 4. Descartar nombres de ciudades puras
+  const isCityOnly = /^(cartagena|barranquilla|medell[íi]n|bogot[áa]|santa marta|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|toledo|cusco|orlando|nueva york|new york|cali)$/i.test(clean.toLowerCase())
+  if (isCityOnly) return false
+  return true
+}
+
 aiRouter.post('/chat', async (req, res, next) => {
   try {
     const chatSchema = z.object({
@@ -215,25 +238,6 @@ aiRouter.post('/chat', async (req, res, next) => {
       webSearchResult?.summary || '',
       updatedPreferences
     )
-
-    // Función validadora para que NUNCA entren nombres de hoteles, comodidades, precios, ciudades, países o formatos en specificPlaces
-    function isValidSpecificPlace(placeName) {
-      if (!placeName || typeof placeName !== 'string') return false
-      const clean = placeName.replace(/[*_#]/g, '').trim()
-      if (clean.length < 3) return false
-      // Descartar hoteles, hostales, alojamientos, comodidades, precios y frases meta
-      if (/\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|por d[íi]a|restaurante por d[íi]a|ver men[uú]|sugerir|consultar|men[uú]|itinerario|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|actividades|restaurantes|destinos)\b/i.test(clean)) {
-        return false
-      }
-      // Descartar si es país o "Ciudad, País"
-      if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(clean)) {
-        return false
-      }
-      // Descartar si es un nombre de ciudad/destino
-      const isCityName = /^(canc[úu]n|barcelona|miami|cartagena|medell[íi]n|bogot[áa]|santa marta|roma|par[íi]s|madrid|toledo|cusco|orlando|nueva york|new york|cali|barranquilla)$/i.test(clean)
-      if (isCityName) return false
-      return true
-    }
 
     if (/\b(agregar 1 restaurante por d[íi]a|agregar restaurante por d[íi]a)\b/i.test(message)) {
       const defaultRests = ['Restaurante La Cevicheria', 'Restaurante Celele', 'Restaurante El Boliche Cebichería']
@@ -2609,7 +2613,22 @@ function ollamaSkipReason(input, planner) {
 }
 
 function isValidTourPlan(value) {
-  return Boolean(value && typeof value === 'object' && Array.isArray(value.itinerario) && value.itinerario.length >= 3)
+  if (!value || typeof value !== 'object') return false
+  if (Array.isArray(value.itinerario) && value.itinerario.length >= 2) return true
+  if (Array.isArray(value.itinerario_dias) && value.itinerario_dias.length > 0) {
+    const flat = value.itinerario_dias.flatMap(d => (d.paradas || []).map(p => ({
+      ...p,
+      nombre: p.nombre_lugar || p.nombre || p.name,
+      descripcion: p.descripcion_guia || p.descripcion || p.description,
+      duracion_estimada: p.duracion_minutos ? `${p.duracion_minutos} minutos` : (p.duracion_estimada || '45 minutos'),
+      dia: d.dia || 1
+    })))
+    if (flat.length >= 2) {
+      value.itinerario = flat
+      return true
+    }
+  }
+  return false
 }
 
 function validateTourQuality(tour, planner, input) {
@@ -2651,10 +2670,12 @@ function validateTourQuality(tour, planner, input) {
     return stop
   })
 
-  // Detectar y eliminar paradas repetidas en todo el itinerario (no solo consecutivas)
+  // Detectar y eliminar paradas no válidas (metadatos/encabezados de días) y repetidas en todo el itinerario
   const seenKeys = new Set()
   tour.itinerario = tour.itinerario.filter((stop) => {
-    let key = normalizeKey(stop.nombre || '')
+    const name = stop.nombre || stop.name || ''
+    if (!isValidSpecificPlace(name)) return false
+    let key = normalizeKey(name)
     key = key.replace(/\b(septiembre|september|9\s*11|11\s*s)\b/g, '911memorial')
     if (!key || seenKeys.has(key)) return false
     seenKeys.add(key)
@@ -2861,7 +2882,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
                          description.includes('destacado de la zona');
 
   if (isGenericDesc) {
-    const wikiText = await wikipediaSummaryText(resolvedName).catch(() => null)
+    const wikiText = await wikipediaSummaryText(resolvedName, input.city || input.destination).catch(() => null)
     if (wikiText) {
       description = wikiText
     } else {

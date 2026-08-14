@@ -112,6 +112,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _isOffRoute = false;
   bool _locationStreamRequested = false;
   bool _noLandRouteAvailable = false;
+  bool _isPreviewMode = false;
   // Live navigation opens in follow mode. The full-route view remains
   // available from the map menu, but is not useful while driving or walking.
   bool _isTrackingMode = true;
@@ -644,6 +645,55 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   icon: const Icon(Icons.close_rounded),
                 ),
               ),
+              if (_isPreviewMode)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  top: MediaQuery.of(context).padding.top + 52,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppTheme.primary.withValues(alpha: 0.3),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primaryContainer,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.preview_rounded,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Estás en modo vista previa. Tu tour comenzará cuando estés en el punto de partida en ${tour.city.isNotEmpty ? tour.city : (tour.country.isNotEmpty ? tour.country : "la ciudad")}.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               Positioned(
                 left: 16,
                 right: 16,
@@ -866,6 +916,20 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
       }
     }
+    // If the user's distance to tour start changes between distant and local, trigger recalculation
+    final startPoint = tour.stops.first.location;
+    final distanceToTourStart = Geolocator.distanceBetween(
+      point.latitude,
+      point.longitude,
+      startPoint.latitude,
+      startPoint.longitude,
+    );
+    final isDistant = distanceToTourStart > 15000;
+    if (isDistant != _isPreviewMode) {
+      unawaited(_recalculateRoute(tour, force: true));
+      return;
+    }
+
     final route = _liveRoute;
     final distanceToRoute = route == null
         ? double.infinity
@@ -873,12 +937,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final now = DateTime.now();
     final refreshTraffic =
         route != null &&
+        !_isPreviewMode &&
         _routeService.hasLiveTrafficProvider &&
         now.difference(
               _lastTrafficRefreshAt ?? DateTime.fromMillisecondsSinceEpoch(0),
             ) >
             const Duration(minutes: 2);
-    final deviated = distanceToRoute > 35;
+    final deviated = !_isPreviewMode && distanceToRoute > 35;
     if (deviated || refreshTraffic || route == null) {
       if (_canReroute(now, isOffRoute: deviated)) {
         if (deviated) {
@@ -924,6 +989,48 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             
     final hotelStop = _findHotelStop(tour);
     if (_navigatingToHotel && hotelStop == null) return;
+
+    final startPoint = tour.stops.first.location;
+    final distanceToTourStart = Geolocator.distanceBetween(
+      origin.latitude,
+      origin.longitude,
+      startPoint.latitude,
+      startPoint.longitude,
+    );
+
+    final isDistantGps = distanceToTourStart > 15000;
+
+    // Distant GPS (>15km): trace clean city tour route between stops without breaking route
+    if (isDistantGps && _selectedVoicePlace == null && !_navigatingToHotel) {
+      setState(() {
+        _isRouting = true;
+        _isOffRoute = false;
+        _isPreviewMode = true;
+      });
+
+      final stopPoints = tour.stops.map((s) => s.location).toList();
+      final previewRoute = await _routeService.resolveRoute(
+        stopPoints,
+        preferLiveTraffic: false,
+        forceRefresh: force,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _liveRoute = previewRoute;
+        _liveRouteStopIndex = stopIndex;
+        _lastRerouteAt = DateTime.now();
+        _lastTrafficRefreshAt = DateTime.now();
+        _isRouting = false;
+        _isOffRoute = false;
+        _noLandRouteAvailable = false;
+        _isPreviewMode = true;
+      });
+      return;
+    }
+
+    _isPreviewMode = false;
     
     final GeoPoint destination;
     if (_selectedVoicePlace != null) {
