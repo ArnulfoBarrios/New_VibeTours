@@ -1606,6 +1606,21 @@ export function buildTourPlanner(input, location, places) {
       }
 
       selectedPlaces = orderPlacesAlongRoute(selectedPlaces, startLoc, endLoc)
+    } else if (selectedPlaces.length > 1) {
+      const totalDays = Math.max(1, Math.ceil((input.durationHours || 24) / 24))
+      if (totalDays <= 1) {
+        selectedPlaces = sortPlacesByProximity(selectedPlaces, origin)
+      } else {
+        const chunkSize = Math.ceil(selectedPlaces.length / totalDays)
+        const chunked = []
+        for (let d = 0; d < totalDays; d++) {
+          const chunk = selectedPlaces.slice(d * chunkSize, (d + 1) * chunkSize)
+          if (chunk.length > 0) {
+            chunked.push(...sortPlacesByProximity(chunk, d === 0 ? origin : null))
+          }
+        }
+        selectedPlaces = chunked.length > 0 ? chunked : selectedPlaces
+      }
     }
   }
 
@@ -3317,6 +3332,46 @@ export function isWithinCorridor(place, startPlace, endPlace, relaxed = false) {
   }
 
   return true
+}
+
+export function sortPlacesByProximity(places, origin = null) {
+  if (!Array.isArray(places) || places.length <= 2) return places
+  const unvisited = [...places]
+  const ordered = []
+
+  let current = null
+  if (origin && origin.latitude && origin.longitude) {
+    let nearestIndex = 0
+    let minDistance = Infinity
+    for (let i = 0; i < unvisited.length; i++) {
+      const d = haversineMeters(origin.latitude, origin.longitude, unvisited[i].latitude, unvisited[i].longitude)
+      if (d < minDistance) {
+        minDistance = d
+        nearestIndex = i
+      }
+    }
+    current = unvisited.splice(nearestIndex, 1)[0]
+    ordered.push(current)
+  } else {
+    current = unvisited.shift()
+    ordered.push(current)
+  }
+
+  while (unvisited.length > 0) {
+    let nearestIndex = 0
+    let minDistance = Infinity
+    for (let i = 0; i < unvisited.length; i++) {
+      const d = haversineMeters(current.latitude, current.longitude, unvisited[i].latitude, unvisited[i].longitude)
+      if (d < minDistance) {
+        minDistance = d
+        nearestIndex = i
+      }
+    }
+    current = unvisited.splice(nearestIndex, 1)[0]
+    ordered.push(current)
+  }
+
+  return ordered
 }
 
 export function orderPlacesAlongRoute(places, startLoc, endLoc) {
