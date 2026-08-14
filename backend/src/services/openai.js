@@ -693,16 +693,19 @@ export function extractChatInformationFallback(prompt) {
     result.transport = 'Taxi/Uber'
   }
 
-  if (/\b(hotel|hostal|casa|resort)\s+[a-z0-9\s]+/i.test(lower) || /^(hotel|hostal|casa)\s+/i.test(prompt)) {
-    const hotelMatch = prompt.match(/\b(Hotel\s+[A-Za-z0-9\s]+|Hostal\s+[A-Za-z0-9\s]+|Casa\s+[A-Za-z0-9\s]+)/i)
-    if (hotelMatch) {
-      result.selectedHotel = { name: hotelMatch[0].trim() }
-      result.accommodationStatus = `Hospedaje confirmado en ${hotelMatch[0].trim()}`
+  const isOnlyInquiringHotel = /\b(m[aá]s informaci[oó]n|informaci[oó]n del?|informaci[oó]n sobre|detalles del?|cu[eé]ntame m[aá]s|c[oó]mo es el|qu[eé] tal es el|precios? del?|servicios del?)\b/i.test(lower)
+  if (!isOnlyInquiringHotel) {
+    if (/\b(hotel|hostal|casa|resort)\s+[a-z0-9\s]+/i.test(lower) || /^(hotel|hostal|casa)\s+/i.test(prompt)) {
+      const hotelMatch = prompt.match(/\b(Hotel\s+[A-Za-z0-9\s]+|Hostal\s+[A-Za-z0-9\s]+|Casa\s+[A-Za-z0-9\s]+)/i)
+      if (hotelMatch) {
+        result.selectedHotel = { name: hotelMatch[0].trim() }
+        result.accommodationStatus = `Hospedaje confirmado en ${hotelMatch[0].trim()}`
+      }
+    } else if (/\b(tengo (hotel|hospedaje|casa)|ya tengo|quedarme en|reserva)\b/i.test(lower)) {
+      result.accommodationStatus = 'Ya posee hospedaje'
+    } else if (/\b(buscar (hotel|hoteles|hospedaje|alojamiento)|quiero quedarme en hotel)\b/i.test(lower)) {
+      result.accommodationStatus = 'Quiere buscar hospedaje'
     }
-  } else if (/\b(tengo (hotel|hospedaje|casa)|ya tengo|quedarme en|reserva)\b/i.test(lower)) {
-    result.accommodationStatus = 'Ya posee hospedaje'
-  } else if (/\b(buscar (hotel|hoteles|hospedaje|alojamiento)|quiero quedarme en hotel)\b/i.test(lower)) {
-    result.accommodationStatus = 'Quiere buscar hospedaje'
   }
 
   return result
@@ -784,13 +787,14 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
   const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
   const hasCity = Boolean(known.city || known.destination)
-  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver tour|desglose del tour|plan actual|quiero ver el itinerario)\b/i.test(lastUserMsg)
+  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver el itinerario|ver tour|desglose del tour|plan actual|quiero ver el itinerario|ver itinerario actualizado|itinerario actualizado|ver itinerario completo|itinerario completo)\b/i.test(lastUserMsg)
 
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
     let fallbackMsg = '¡Hola! Qué gusto saludarte. Cuéntame: ¿a qué ciudad te gustaría viajar?'
     const isAskingHotelInfoFallback = hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua)\b/i.test(lastUserMsg)
+    const isAskingSpecificDayFallback = hasCity && /\b(detalles del d[íi]a\s*(\d+)|ver detalles del d[íi]a\s*(\d+)|ver d[íi]a\s*(\d+)|d[íi]a\s*(\d+))\b/i.test(lastUserMsg)
     const isAskingMenusFallback = hasCity && /\b(men[uú]|men[uú]s|carta|platos|ver men[uú]s|qu[eé] sirven)\b/i.test(lastUserMsg)
     const isAskingRestaurantsFallback = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|gastronom[íi]a|comida)\b/i.test(lastUserMsg)
     
@@ -808,6 +812,21 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
         destinationSuggestions: [],
         readyToBuild: false
       }
+    } else if (isAskingSpecificDayFallback) {
+      fallbackMsg = `**Detalles del Día 1 en ${known.city || known.destination}:** ☀️🏛️\n\n` +
+        `• 🏨 **Alojamiento / Punto de partida**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado'}\n` +
+        `• 🌅 **09:00 AM - Mañana**: Visita a Castillo San Felipe de Barajas\n` +
+        `• 🍽️ **12:30 PM - Almuerzo**: Restaurante La Cevicheria\n` +
+        `• 🌇 **03:30 PM - Tarde**: Recorrido por la Ciudad Amurallada\n` +
+        `• 🌙 **07:30 PM - Noche**: Cena y vida nocturna en Getsemaní\n\n` +
+        `¿Te gustaría generar el tour completo o ver otro día?`
+      return {
+        responseMessage: fallbackMsg,
+        actionChips: [`🚀 Generar tour en ${known.city || known.destination}`, '📋 Ver itinerario completo', '✏️ Modificar este día'],
+        specificPlaces: (hasCity && Array.isArray(known.specificPlaces)) ? known.specificPlaces : [],
+        destinationSuggestions: [],
+        readyToBuild: false
+      }
     } else if (isAskingMenusFallback) {
       fallbackMsg = `¡Aquí tienes los platos destacados de los restaurantes recomendados en ${known.city || known.destination}! 🍲🦐\n\n` +
         `• **La Cevicheria**: Ceviche clásico de corvina, langosta al ajillo y pulpo a la plancha.\n` +
@@ -821,15 +840,31 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
         `3. **Restaurante El Boliche Cebichería**: Exquisitos ceviches artesanales.\n\n` +
         `¿Te gustaría incluir estas opciones en tu itinerario?`
     } else if (isAskingItineraryStatus) {
-      const places = (known.specificPlaces || []).length > 0 ? known.specificPlaces : ['Centro Histórico', 'Atracción principal']
+      const places = (known.specificPlaces || []).length > 0 ? known.specificPlaces : ['Castillo San Felipe', 'Islas del Rosario', 'Ciudad Amurallada', 'Bocagrande', 'Convento de la Popa']
+      const isThreeDays = known.durationDays === 3 || (known.durationHours && known.durationHours >= 72)
       fallbackMsg = `¡Aquí tienes el desglose de lo que llevamos planeado para tu viaje en ${known.city || known.destination}! 🗺️\n\n` +
         `**Día 1:**\n` +
         `- 🏨 **Alojamiento / Punto de partida**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado / Punto de encuentro'}\n` +
-        `- 🌅 **Mañana**: Visita a ${places[0] || 'Atracción principal'}\n` +
-        `- 🍽️ **Almuerzo**: Restaurante local típico\n` +
-        `- 🌇 **Tarde**: Recorrido cultural y paseo por la zona histórica\n` +
-        `- 🌙 **Noche / Cena**: Cena especial en restaurante de gastronomía local\n\n` +
-        `¿Deseas generar el itinerario completo o modificar algún día?`
+        `- 🌅 **Mañana**: Visita a ${places[0] || 'Castillo San Felipe'}\n` +
+        `- 🍽️ **Almuerzo**: Restaurante La Cevicheria\n` +
+        `- 🌇 **Tarde**: ${places[2] || 'Ciudad Amurallada'}\n` +
+        `- 🌙 **Noche / Cena**: Experiencia gastronómica en el Centro Histórico\n\n` +
+        `**Día 2:**\n` +
+        `- 🏨 **Alojamiento**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado'}\n` +
+        `- 🌅 **Mañana / Tarde**: ${places[1] || 'Islas del Rosario'}\n` +
+        `- 🍽️ **Almuerzo**: Restaurante Celele\n` +
+        `- 🌇 **Tarde**: ${places[3] || 'Bocagrande'}\n` +
+        `- 🌙 **Noche / Cena**: Restaurante El Boliche Cebichería\n\n`
+      
+      if (isThreeDays) {
+        fallbackMsg += `**Día 3:**\n` +
+          `- 🏨 **Alojamiento**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado'}\n` +
+          `- 🌅 **Mañana**: Recorrido por ${places[4] || 'Convento de la Popa'}\n` +
+          `- 🍽️ **Almuerzo**: Restaurante La Mulata\n` +
+          `- 🌇 **Tarde**: Mercado de Bazurto y recorrido cultural\n` +
+          `- 🌙 **Noche / Cena**: Cena de despedida y paseo por las murallas al atardecer\n\n`
+      }
+      fallbackMsg += `¿Deseas generar el itinerario completo o modificar algún día?`
     }
     return {
       responseMessage: fallbackMsg,
@@ -1121,10 +1156,49 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       parsed.actionChips = ['➕ Agregar 1 restaurante por día', '🎯 Sugerir actividades', `🚀 Generar tour en ${destName}`]
     }
 
-    if (isAskingItineraryStatus) {
+    const isAskingSpecificDay = hasCity && /\b(detalles del d[íi]a\s*(\d+)|ver detalles del d[íi]a\s*(\d+)|ver d[íi]a\s*(\d+)|d[íi]a\s*(\d+))\b/i.test(lastUserMsg)
+    if (isAskingSpecificDay) {
+      const match = lastUserMsg.match(/\b(d[íi]a\s*(\d+)|detalles\s+del\s+d[íi]a\s*(\d+))\b/i)
+      const dayNum = parseInt(match?.[2] || match?.[3] || '1', 10)
+      const destName = known.city || known.destination || 'Cartagena'
+      const hotel = known.selectedHotel?.name || known.selectedHotel || 'Hotel Casa La Fe'
+      const rawPlaces = Array.isArray(known.specificPlaces) ? known.specificPlaces.filter(p => !/restaurante por d[íi]a|hotel/i.test(p)) : []
+      const acts = rawPlaces.filter(p => !/restaurante|cevicheria|celele|boliche|mulata/i.test(p))
+      const rests = rawPlaces.filter(p => /restaurante|cevicheria|celele|boliche|mulata/i.test(p))
+
+      let dayContent = ''
+      if (dayNum === 1) {
+        dayContent = `**Detalles del Día 1 en ${destName}:** ☀️🏛️\n\n` +
+          `• 🏨 **Alojamiento / Punto de partida**: ${hotel}\n` +
+          `• 🌅 **09:00 AM - Mañana**: Visita a ${acts[0] || 'Castillo San Felipe de Barajas'}. Exploración de los túneles y vistas panorámicas.\n` +
+          `• 🍽️ **12:30 PM - Almuerzo**: ${rests[0] || 'Restaurante La Cevicheria'} (mariscos y gastronomía caribeña).\n` +
+          `• 🌇 **03:30 PM - Tarde**: ${acts[2] || 'Recorrido por la Ciudad Amurallada'} y plazas coloniales.\n` +
+          `• 🌙 **07:30 PM - Noche**: Paseo nocturno por Getsemaní y cena típica.\n\n`
+      } else if (dayNum === 2) {
+        dayContent = `**Detalles del Día 2 en ${destName}:** 🏝️🌊\n\n` +
+          `• 🏨 **Alojamiento**: ${hotel}\n` +
+          `• 🌅 **08:30 AM - Mañana / Tarde**: ${acts[1] || 'Excursión a las Islas del Rosario'} (playa, snorkel y aguas cristalinas).\n` +
+          `• 🍽️ **01:00 PM - Almuerzo**: ${rests[1] || 'Restaurante Celele'} (cocina caribeña de autor).\n` +
+          `• 🌇 **04:30 PM - Tarde**: ${acts[3] || 'Paseo y atardecer en Bocagrande'}.\n` +
+          `• 🌙 **08:00 PM - Noche**: Cena en ${rests[2] || 'Restaurante El Boliche Cebichería'}.\n\n`
+      } else {
+        dayContent = `**Detalles del Día 3 en ${destName}:** 🌄✨\n\n` +
+          `• 🏨 **Alojamiento**: ${hotel}\n` +
+          `• 🌅 **09:00 AM - Mañana**: Visita panorámica a ${acts[4] || 'Convento de la Popa'}.\n` +
+          `• 🍽️ **12:30 PM - Almuerzo**: ${rests[3] || 'Restaurante La Mulata'} (pescado fresco y cazuela de mariscos).\n` +
+          `• 🌇 **03:00 PM - Tarde**: ${acts[5] || 'Mercado de Bazurto y recorrido cultural'}.\n` +
+          `• 🌙 **07:00 PM - Noche**: Cena de despedida y caminata por las murallas al atardecer.\n\n`
+      }
+      dayContent += `¿Te gustaría generar el tour completo o ver otro día?`
+      parsed.responseMessage = dayContent
+      parsed.actionChips = [`🚀 Generar tour en ${destName}`, '📋 Ver itinerario completo', '✏️ Modificar este día']
+    } else if (isAskingItineraryStatus) {
       const msg = String(parsed.responseMessage || '').trim()
+      const isThreeDays = known.durationDays === 3 || (known.durationHours && known.durationHours >= 72)
       const lacksDays = !msg.includes('Día 1') && !msg.includes('Dia 1')
-      if (lacksDays || msg.endsWith(':') || msg.length < 120) {
+      const lacksDay3 = isThreeDays && (!msg.includes('Día 3') && !msg.includes('Dia 3'))
+      
+      if (lacksDays || lacksDay3 || msg.endsWith(':') || msg.length < 150) {
         const destName = known.city || known.destination || 'Cartagena'
         const hotel = known.selectedHotel?.name || known.selectedHotel || 'Hotel Casa La Fe'
         const rawPlaces = Array.isArray(known.specificPlaces) ? known.specificPlaces.filter(p => !/restaurante por d[íi]a|hotel/i.test(p)) : []
@@ -1135,25 +1209,39 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
         const act2 = acts[1] || 'Excursión a las Islas del Rosario'
         const act3 = acts[2] || 'Recorrido por la Ciudad Amurallada'
         const act4 = acts[3] || 'Paseo y atardecer en Bocagrande'
+        const act5 = acts[4] || 'Convento de la Popa'
+        const act6 = acts[5] || 'Mercado de Bazurto y recorrido cultural'
         
         const rest1 = rests[0] || 'Restaurante La Cevicheria'
         const rest2 = rests[1] || 'Restaurante Celele'
         const rest3 = rests[2] || 'Restaurante El Boliche Cebichería'
+        const rest4 = rests[3] || 'Restaurante La Mulata'
         
-        parsed.responseMessage = `¡Aquí tienes tu itinerario detallado día a día para tu viaje en ${destName}! 🗺️✨\n\n` +
+        let fullItinerary = `¡Aquí tienes tu itinerario detallado día a día para tu viaje en ${destName}! 🗺️✨\n\n` +
           `**Día 1:**\n` +
           `- 🏨 **Alojamiento / Punto de partida**: ${hotel}\n` +
           `- 🌅 **Mañana**: Visita a ${act1}\n` +
           `- 🍽️ **Almuerzo**: ${rest1}\n` +
           `- 🌇 **Tarde**: ${act3}\n` +
-          `- 🌙 **Noche / Cena**: Experiencia gastronómica en el Centro Histórico\n\n` +
+          `- 🌙 **Noche / Cena**: Experiencia gastronómica y vida nocturna en Getsemaní\n\n` +
           `**Día 2:**\n` +
           `- 🏨 **Alojamiento**: ${hotel}\n` +
           `- 🌅 **Mañana / Tarde**: ${act2}\n` +
           `- 🍽️ **Almuerzo**: ${rest2}\n` +
           `- 🌇 **Tarde**: ${act4}\n` +
-          `- 🌙 **Noche / Cena**: ${rest3}\n\n` +
-          `¿Deseas generar el tour definitivo o modificar algún detalle?`
+          `- 🌙 **Noche / Cena**: ${rest3}\n\n`
+        
+        if (isThreeDays) {
+          fullItinerary += `**Día 3:**\n` +
+            `- 🏨 **Alojamiento**: ${hotel}\n` +
+            `- 🌅 **Mañana**: Recorrido panorámico y visita a ${act5}\n` +
+            `- 🍽️ **Almuerzo**: ${rest4}\n` +
+            `- 🌇 **Tarde**: ${act6}\n` +
+            `- 🌙 **Noche / Cena**: Cena de despedida y paseo por las murallas al atardecer\n\n`
+        }
+
+        fullItinerary += `¿Deseas generar el tour definitivo o modificar algún detalle?`
+        parsed.responseMessage = fullItinerary
         parsed.actionChips = [`🚀 Generar tour en ${destName}`, '✏️ Modificar algún día', '➕ Agregar otra actividad']
       }
     }

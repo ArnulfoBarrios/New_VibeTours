@@ -173,4 +173,62 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.ok(res.responseMessage.includes('Ubicación') || res.responseMessage.includes('Piscina') || res.responseMessage.includes('Instalaciones'))
     assert.notEqual(res.responseMessage.trim(), '¡Excelente!')
   })
+
+  it('should not lock in accommodation when user only asks for hotel information', async () => {
+    const { extractChatInformationFallback } = await import('../services/openai.js')
+    const extracted = extractChatInformationFallback('Dame más información sobre Hotel Casa La Fe')
+    assert.equal(extracted.selectedHotel, undefined)
+    assert.equal(extracted.accommodationStatus, undefined)
+  })
+
+  it('should return 3 complete days when itinerary status is requested for a 3-day tour', async () => {
+    const state = {
+      history: [
+        { role: 'user', content: 'Ver el itinerario' }
+      ]
+    }
+    const currentPreferences = {
+      city: 'Cartagena',
+      destination: 'Cartagena, Colombia',
+      durationDays: 3,
+      durationHours: 72,
+      specificPlaces: ['Castillo San Felipe', 'Islas del Rosario', 'Ciudad Amurallada', 'Bocagrande', 'Convento de la Popa']
+    }
+    const res = await generateChatResponse(state, '', '', currentPreferences)
+    assert.ok(res.responseMessage.includes('Día 1:'))
+    assert.ok(res.responseMessage.includes('Día 2:'))
+    assert.ok(res.responseMessage.includes('Día 3:'))
+  })
+
+  it('should return specific day breakdown when user asks for "Detalles del Día 1"', async () => {
+    const state = {
+      history: [
+        { role: 'user', content: 'Ver detalles del día 1' }
+      ]
+    }
+    const currentPreferences = {
+      city: 'Cartagena',
+      destination: 'Cartagena, Colombia',
+      durationDays: 3,
+      durationHours: 72,
+      specificPlaces: ['Castillo San Felipe', 'Islas del Rosario', 'Ciudad Amurallada']
+    }
+    const res = await generateChatResponse(state, '', '', currentPreferences)
+    assert.ok(res.responseMessage.includes('Día 1 en Cartagena'))
+    assert.ok(res.responseMessage.includes('Mañana'))
+    assert.ok(res.responseMessage.includes('Almuerzo'))
+  })
+
+  it('should return exact high precision verified coordinates for Islas del Rosario and Castillo San Felipe', async () => {
+    const { geocodePlace } = await import('../services/osm.js')
+    const geoRosario = await geocodePlace('Islas del Rosario')
+    assert.ok(geoRosario)
+    assert.equal(geoRosario.latitude, 10.1772)
+    assert.equal(geoRosario.longitude, -75.7428)
+
+    const geoCastillo = await geocodePlace('Castillo San Felipe de Barajas')
+    assert.ok(geoCastillo)
+    assert.equal(geoCastillo.latitude, 10.4237)
+    assert.equal(geoCastillo.longitude, -75.5398)
+  })
 })
