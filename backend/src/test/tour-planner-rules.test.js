@@ -157,4 +157,20 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.ok(Array.isArray(res.specificPlaces))
     assert.equal(res.specificPlaces.length, 0)
   })
+
+  it('should provide detailed hotel info when user asks for "Dame más información del Hotel Casa La Fe"', async () => {
+    const state = {
+      history: [
+        { role: 'user', content: 'Dame más información del Hotel Casa La Fe' }
+      ]
+    }
+    const currentPreferences = {
+      city: 'Cartagena',
+      destination: 'Cartagena, Colombia'
+    }
+    const res = await generateChatResponse(state, '', '', currentPreferences)
+    assert.ok(res.responseMessage.includes('Hotel Casa La Fe'))
+    assert.ok(res.responseMessage.includes('Ubicación') || res.responseMessage.includes('Piscina') || res.responseMessage.includes('Instalaciones'))
+    assert.notEqual(res.responseMessage.trim(), '¡Excelente!')
+  })
 })

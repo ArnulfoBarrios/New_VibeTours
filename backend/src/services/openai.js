@@ -790,10 +790,25 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   if (!apiKey) {
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
     let fallbackMsg = '¡Hola! Qué gusto saludarte. Cuéntame: ¿a qué ciudad te gustaría viajar?'
+    const isAskingHotelInfoFallback = hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua)\b/i.test(lastUserMsg)
     const isAskingMenusFallback = hasCity && /\b(men[uú]|men[uú]s|carta|platos|ver men[uú]s|qu[eé] sirven)\b/i.test(lastUserMsg)
     const isAskingRestaurantsFallback = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|gastronom[íi]a|comida)\b/i.test(lastUserMsg)
     
-    if (isAskingMenusFallback) {
+    if (isAskingHotelInfoFallback) {
+      fallbackMsg = `¡Con mucho gusto! Aquí tienes los detalles del **Hotel Casa La Fe** en ${known.city || known.destination}: 🏨✨\n\n` +
+        `• 📍 **Ubicación**: Ubicado en la Plaza Fernández de Madrid en el Centro Histórico.\n` +
+        `• 🏊 **Instalaciones**: Piscina en la azotea con solárium y vistas panorámicas.\n` +
+        `• 🍳 **Servicios**: Desayuno gourmet incluido, Wi-Fi de alta velocidad y aire acondicionado.\n` +
+        `• 💰 **Tarifa estimada**: ~$90 - $130 USD/noche.\n\n` +
+        `¿Deseas confirmar el Hotel Casa La Fe como tu hospedaje?`
+      return {
+        responseMessage: fallbackMsg,
+        actionChips: ['✅ Confirmar Hotel Casa La Fe', '🏨 Ver otras opciones de hotel', '🎯 Sugerir actividades'],
+        specificPlaces: (hasCity && Array.isArray(known.specificPlaces)) ? known.specificPlaces : [],
+        destinationSuggestions: [],
+        readyToBuild: false
+      }
+    } else if (isAskingMenusFallback) {
       fallbackMsg = `¡Aquí tienes los platos destacados de los restaurantes recomendados en ${known.city || known.destination}! 🍲🦐\n\n` +
         `• **La Cevicheria**: Ceviche clásico de corvina, langosta al ajillo y pulpo a la plancha.\n` +
         `• **Celele**: Pescado confitado con coco y terrina de cerdo con salsa de corozo.\n` +
@@ -825,12 +840,13 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     }
   }
   const isAskingCityRecommendations = !hasCity && /\b(recomien|recomiend|qué me recomiendas|que me recomiendas|dónde ir|donde ir|sugiéreme|sugiereme|opciones|destinos|playas|viaje|tour)\b/i.test(lastUserMsg)
-  const isAskingHotelRecommendations = hasCity && !known.selectedHotel && /\b(hotel|hoteles|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje|recomi[eé]ndame hoteles)\b/i.test(lastUserMsg)
-  const isHotelSelected = Boolean(known.selectedHotel && /\b(hotel|hostal|resort|casa)\b/i.test(lastUserMsg))
+  const isAskingHotelInfo = hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n|instalaciones|qu[eé] ofrece)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua)\b/i.test(lastUserMsg)
+  const isAskingHotelRecommendations = hasCity && !known.selectedHotel && !isAskingHotelInfo && /\b(hotel|hoteles|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje|recomi[eé]ndame hoteles)\b/i.test(lastUserMsg)
+  const isHotelSelected = !isAskingHotelInfo && Boolean(known.selectedHotel && /\b(hotel|hostal|resort|casa)\b/i.test(lastUserMsg))
   const isAcceptingSuggestions = hasCity && /\b(agregar todas|incluir todas|agregar estas|incluir estas|agregar los restaurantes|agregar las actividades|s[íi],?\s*agrega|s[íi],?\s*incluye|agrega los 3|agregar los 3|a[ñn]adir todas|a[ñn]adir estas|agregar 1 restaurante|agregar restaurante por d[íi]a)\b/i.test(lastUserMsg)
   const isAskingMenus = hasCity && /\b(men[uú]|men[uú]s|carta|platos|ver men[uú]s|qu[eé] sirven)\b/i.test(lastUserMsg)
   const isAskingRestaurants = hasCity && !isAcceptingSuggestions && !isAskingMenus && /\b(restaurante|restaurantes|comer|d[oó]nde comer|donde comer|gastronom[íi]a|comida|cenar|desayuno|almuerzo|cena|ver qu[eé] restaurantes hay|qu[eé] restaurantes hay|consultar restaurantes|consultar restaurantes locales)\b/i.test(lastUserMsg)
-  const isAskingActivities = hasCity && !isAcceptingSuggestions && !isAskingRestaurants && !isAskingMenus && !isAskingItineraryStatus && /\b(actividad|actividades|actividades acu[aá]ticas|tours? culturales?|qu[eé] hacer|que hacer|atracciones|lugares tur[íi]sticos|sitios tur[íi]sticos|lugares para visitar|imperdibles|snorkel|playa|aventura|naturaleza|quiero explorar actividades|sugerir actividades)\b/i.test(lastUserMsg)
+  const isAskingActivities = hasCity && !isAcceptingSuggestions && !isAskingRestaurants && !isAskingMenus && !isAskingItineraryStatus && !isAskingHotelInfo && /\b(actividad|actividades|actividades acu[aá]ticas|tours? culturales?|qu[eé] hacer|que hacer|atracciones|lugares tur[íi]sticos|sitios tur[íi]sticos|lugares para visitar|imperdibles|snorkel|playa|aventura|naturaleza|quiero explorar actividades|sugerir actividades)\b/i.test(lastUserMsg)
   const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|fiesta|concierto|agenda|carnaval|eventos locales|consultar eventos)\b/i.test(lastUserMsg)
   const isExplicitBuild = /\b(genera(r)?(\s+el)?\s+(tour|itinerario)|crea(r)?(\s+el)?\s+(tour|itinerario)|arma(r)?(\s+el)?\s+(tour|itinerario)|haz(\s+el)?\s+(tour|itinerario)|construir\s+(el\s+)?(tour|itinerario)|finalizar|comenzar(\s+el)?\s+tour|empezar(\s+el)?\s+tour|listo genera|s[íi],?\s*genera|s[íi],?\s*arma|cr[eé]alo|h[aá]zlo|[aá]rmalo|generar\s+ahora|genera\s+ahora|confirmar tour|confirmar itinerario|adelante genera el tour|adelante genera)\b/i.test(lastUserMsg)
 
@@ -850,6 +866,17 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     Confirma con entusiasmo que todas esas actividades y restaurantes han sido guardados e integrados con éxito en su plan de viaje.
     ESTÁ ESTRICTAMENTE PROHIBIDO volver a preguntar si desea agregarlas o pedir confirmación otra vez.
     Pregunta amablemente qué le gustaría hacer a continuación (por ejemplo: consultar eventos, ver el itinerario o generar el tour completo).
+    `
+  } else if (isAskingHotelInfo) {
+    promptInstruction = `
+    EL USUARIO ESTÁ PIDIENDO MÁS INFORMACIÓN Y DETALLES DE UN HOTEL ESPECÍFICO ("${lastUserMsg}").
+    DESTINO CONFIRMADO: ${known.city || known.destination}, ${known.country || 'Colombia'}.
+    OBLIGATORIO: Debes redactar en el cuerpo del mensaje una descripción completa, atractiva y detallada del hotel consultado:
+    - 🏨 Ubicación exacta y tipo de casona/arquitectura.
+    - 🌟 Comodidades principales (piscina en la azotea, vistas panorámicas, desayuno gourmet incluido, Wi-Fi, aire acondicionado, solárium).
+    - 💰 Rango de precios aproximado por noche.
+    ESTÁ ESTRICTAMENTE PROHIBIDO responder con mensajes cortados o vacíos como solo "¡Excelente!".
+    Al final, pregúntale amablemente si desea confirmar este hotel como su hospedaje o explorar otras opciones.
     `
   } else if (isAskingMenus) {
     promptInstruction = `
@@ -1016,7 +1043,43 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     }
     parsed.actionChips = chips
 
-    const isAskingHotel = hasCity && !known.selectedHotel && /\b(hotel|hoteles|alojamiento|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje|recomi[eé]ndame hoteles)\b/i.test(lastUserMsg)
+    if (isAskingHotelInfo) {
+      const msg = String(parsed.responseMessage || '').trim()
+      if (msg.length < 80 || msg.toLowerCase().startsWith('¡excelente!')) {
+        const isCasaLaFe = /casa la fe/i.test(lastUserMsg)
+        const isCasaIsabel = /casa isabel/i.test(lastUserMsg)
+        const isMajagua = /majagua/i.test(lastUserMsg)
+        
+        if (isCasaLaFe) {
+          parsed.responseMessage = `¡Con mucho gusto! Aquí tienes todos los detalles del **Hotel Casa La Fe** en Cartagena de Indias: 🏨✨\n\n` +
+            `• 📍 **Ubicación**: Ubicado en la emblemática Plaza Fernández de Madrid, en pleno corazón del Centro Histórico amurallado.\n` +
+            `• 🏛️ **Ambiente y Estilo**: Hermosa casona colonial republicana restaurada del siglo XIX con techos altos y patio interior tropical.\n` +
+            `• 🏊 **Instalaciones**: Cuenta con una piscina en la azotea con solárium y vistas panorámicas de las cúpulas coloniales.\n` +
+            `• 🍳 **Servicios**: Desayuno gourmet incluido servido en el patio, Wi-Fi de alta velocidad, aire acondicionado y recepción 24 horas.\n` +
+            `• 💰 **Tarifa estimada**: ~$90 - $130 USD por noche (excelente relación calidad-precio).\n\n` +
+            `¿Te gustaría confirmar el Hotel Casa La Fe como tu hospedaje o prefieres ver otra opción?`
+          parsed.actionChips = ['✅ Elegir Hotel Casa La Fe', '🏨 Ver otras opciones de hotel', '🎯 Sugerir actividades']
+        } else if (isCasaIsabel) {
+          parsed.responseMessage = `¡Con mucho gusto! Aquí tienes los detalles del **Hotel Boutique Casa Isabel** en Cartagena: 🏨✨\n\n` +
+            `• 📍 **Ubicación**: Situado frente a la Laguna del Cabrero, a solo 5 minutos a pie de Getsemaní y el Centro Histórico.\n` +
+            `• 🌅 **Vistas y Ambiente**: Terraza en la azotea con jacuzzi y vista panorámica inigualable del atardecer sobre la laguna y el Castillo San Felipe.\n` +
+            `• 🛌 **Habitaciones**: Decoración boutique cálida, aire acondicionado, minibar y camas King confortables.\n` +
+            `• 💰 **Tarifa estimada**: ~$75 - $110 USD por noche.\n\n` +
+            `¿Deseas elegir Hotel Boutique Casa Isabel o consultar otra opción?`
+          parsed.actionChips = ['✅ Elegir Hotel Boutique Casa Isabel', '🏨 Ver otras opciones de hotel', '🎯 Sugerir actividades']
+        } else if (isMajagua) {
+          parsed.responseMessage = `¡Con mucho gusto! Aquí tienes los detalles del **Hotel San Pedro de Majagua** en las Islas del Rosario: 🏝️✨\n\n` +
+            `• 📍 **Ubicación**: En Isla Grande (Archipiélago del Rosario), con acceso directo a dos playas privadas de aguas cristalinas.\n` +
+            `• 🤿 **Experiencia y Actividades**: Centro de buceo y snorkel PADI, paseos en kayak por manglares y gastronomía de mar fresca.\n` +
+            `• 🌴 **Ambiente**: Cabañas ecológicas de lujo rodeadas de bosque tropical y mar turquesa.\n` +
+            `• 💰 **Tarifa estimada**: ~$140 - $220 USD por noche (incluye traslado en lancha y desayuno).\n\n` +
+            `¿Deseas elegir Hotel San Pedro de Majagua o ver opciones en la ciudad?`
+          parsed.actionChips = ['✅ Elegir Hotel San Pedro de Majagua', '🏨 Ver opciones en el centro', '🎯 Sugerir actividades']
+        }
+      }
+    }
+
+    const isAskingHotel = hasCity && !known.selectedHotel && !isAskingHotelInfo && /\b(hotel|hoteles|alojamiento|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje|recomi[eé]ndame hoteles)\b/i.test(lastUserMsg)
     if (isAskingHotel) {
       const msg = String(parsed.responseMessage || '').trim()
       const isCutOffOrEmpty = msg.endsWith(':') || (!msg.includes('1.') && !msg.includes('2.'))

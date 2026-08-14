@@ -199,13 +199,13 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences
     )
 
-    // Función validadora para que NUNCA entren nombres de ciudades, países, formatos o textos meta en specificPlaces
+    // Función validadora para que NUNCA entren nombres de hoteles, alojamientos, ciudades, países o formatos en specificPlaces
     function isValidSpecificPlace(placeName) {
       if (!placeName || typeof placeName !== 'string') return false
       const clean = placeName.replace(/[*_#]/g, '').trim()
       if (clean.length < 3) return false
-      // Descartar frases meta como "Restaurante por día", "Ver menús", "Opciones de hotel"
-      if (/\b(por d[íi]a|restaurante por d[íi]a|ver men[uú]|sugerir|consultar|men[uú]|itinerario|alojamiento|hospedaje|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|actividades|restaurantes|destinos)\b/i.test(clean)) {
+      // Descartar hoteles, hostales, alojamientos y frases meta
+      if (/\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|por d[íi]a|restaurante por d[íi]a|ver men[uú]|sugerir|consultar|men[uú]|itinerario|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|actividades|restaurantes|destinos)\b/i.test(clean)) {
         return false
       }
       // Descartar si es país o "Ciudad, País"
@@ -234,8 +234,12 @@ aiRouter.post('/chat', async (req, res, next) => {
     if (hasConfirmedCity && !isAskingCityRecomms) {
       const lines = (aiResponse.responseMessage || '').split('\n')
       for (const line of lines) {
+        // Ignorar líneas de recomendación de hoteles
+        if (/\b(hotel|hostal|resort|alojamiento|hospedaje|casa la fe|casa isabel|majagua)\b/i.test(line)) {
+          continue
+        }
         // 1. Extraer viñetas de itinerario (ej. "- 🌅 Mañana: Castillo San Felipe")
-        const match = line.match(/^[-*•]\s*(?:🏨|🌅|🍽️|🌇|🌙)?\s*(?:Alojamiento|Mañana|Almuerzo|Tarde|Noche|Cena|Visita|Recorrido|Punto de partida)?\s*:\s*(.+)/i)
+        const match = line.match(/^[-*•]\s*(?:🌅|🍽️|🌇|🌙)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita|Recorrido)?\s*:\s*(.+)/i)
         if (match) {
           let placeCandidate = match[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita)\b/gi, '').trim()
           placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
@@ -244,7 +248,7 @@ aiRouter.post('/chat', async (req, res, next) => {
           }
         }
         // 2. Extraer listas numeradas de actividades o restaurantes
-        const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Hotel\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
+        const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
         if (numMatch) {
           let placeCandidate = numMatch[1].trim()
           placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
@@ -261,7 +265,8 @@ aiRouter.post('/chat', async (req, res, next) => {
         for (const aMsg of recentAssistantMsgs) {
           const aLines = (aMsg.content || aMsg.text || '').split('\n')
           for (const line of aLines) {
-            const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Hotel\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
+            if (/\b(hotel|hostal|resort|alojamiento|hospedaje)\b/i.test(line)) continue
+            const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
             if (numMatch) {
               let placeCandidate = numMatch[1].trim()
               placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
