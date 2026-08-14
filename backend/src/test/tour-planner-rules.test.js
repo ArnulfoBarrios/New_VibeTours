@@ -68,4 +68,19 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.ok(Array.isArray(res.actionChips))
     assert.ok(!res.actionChips.includes('🏨 Ver opciones de hotel'))
   })
+
+  it('should extract 3 days for "un puente festivo"', async () => {
+    const { extractChatInformationFallback } = await import('../services/openai.js')
+    const extracted = extractChatInformationFallback('un puente festivo')
+    assert.equal(extracted.durationDays, 3)
+    assert.equal(extracted.durationHours, 72)
+  })
+
+  it('should resolve Cartagena to Colombia by default', async () => {
+    const { resolveCanonicalDestination } = await import('../services/destinationService.js')
+    const canonical = await resolveCanonicalDestination('Cartagena')
+    assert.ok(canonical)
+    assert.equal(canonical.country, 'Colombia')
+    assert.equal(canonical.countryCode, 'CO')
+  })
 })

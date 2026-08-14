@@ -548,16 +548,16 @@ export async function extractChatInformation(userMessage, currentData = {}, hist
 Devuelve ÚNICAMENTE un objeto JSON válido con los campos que logres identificar con ALTA CONFIANZA. NO INFIERAS campos de frases de una sola palabra o sin contexto (mantén los campos no mencionados como null).
 
 CAMPOS Y REGLAS DE INTERPRETACIÓN:
-1. "destination" / "city": Nombre de la ciudad o lugar de destino. SI es una región o frase vaga ("Playa en el Caribe", "Montaña", "Europa"), asígnala a "destination" pero mantén "city" como null.
+1. "destination" / "city": Nombre de la ciudad o lugar de destino (ej: "Cartagena", "Medellín", "Bogotá", "Santa Marta"). Si el usuario dice "Cartagena", el país es "Colombia".
 2. "datesSeason": Fechas, mes o época del viaje (ej: "Próximo mes", "15 al 20 de Septiembre", "Vacaciones de fin de año", "Este fin de semana").
-3. "durationDays" (número): Días de duración del tour.
+3. "durationDays" (número): Días de duración del tour. Si el usuario dice "un puente festivo", "puente festivo", "un puente", "puente", "fin de semana largo", asigna durationDays = 3 y durationHours = 72. Si dice "fin de semana" o "2 días", asigna durationDays = 2 y durationHours = 48. Si dice "1 día", asigna durationDays = 1 y durationHours = 8. Si dice "una semana", asigna durationDays = 7 y durationHours = 168.
 4. "companions": "Solo", "Pareja", "Familia con niños", "Amigos", "Grupo".
 5. "hasChildren" (boolean): true si viaja con niños.
 6. "budget": "Económico", "Moderado", "Lujo". Solo extraer si hay contexto claro (ej. "mi presupuesto es económico").
 7. "transport": "Caminando", "Transporte público", "Auto rentado", "Taxi/Uber". Solo extraer si hay intención explícita de medio de transporte.
 8. "selectedHotel": Objeto { "name": "Nombre del hotel" } si el usuario seleccionó o mencionó un hotel específico (ej: "Hotel Casa La Fe", "Hotel San Pedro de Majagua").
 9. "accommodationStatus": "Ya posee hospedaje", "Quiere buscar hospedaje", o "Hospedaje confirmado en <nombre del hotel>".
-10. "specificPlaces" (array de strings): Nombres de atracciones o lugares específicos.
+10. "specificPlaces" (array de strings): Nombres de atracciones o restaurantes específicos dentro de la ciudad (NUNCA nombres de ciudades ni países).
 11. "interests" (array de strings): Intereses.
 
 HISTORIAL DE CONVERSACIÓN RECIENTE:
@@ -591,7 +591,14 @@ ${recentHistoryText}
       }
     })
 
-    if (typeof parsed.durationDays === 'number' && parsed.durationDays > 0) {
+    // Normalización de duración por expresiones idiomáticas
+    if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo)\b/i.test(userMessage)) {
+      parsed.durationDays = 3
+      parsed.durationHours = 72
+    } else if (/\b(fin de semana|2 d[íi]as)\b/i.test(userMessage) && !parsed.durationDays) {
+      parsed.durationDays = 2
+      parsed.durationHours = 48
+    } else if (typeof parsed.durationDays === 'number' && parsed.durationDays > 0) {
       parsed.durationHours = parsed.durationDays >= 2 ? parsed.durationDays * 24 : 8
     }
 
@@ -643,13 +650,16 @@ export function extractChatInformationFallback(prompt) {
     result.datesSeason = 'Este fin de semana'
   }
 
-  if (/\b(fin de semana con puente|puente festivo|fin de semana largo)\b/i.test(lower)) {
+  if (/\b(fin de semana con puente|puente festivo|un puente festivo|un puente|puente|fin de semana largo|3 d[íi]as)\b/i.test(lower)) {
     result.durationDays = 3
     result.durationHours = 72
-  } else if (/\b(fin de semana|un par de d[íi]as)\b/i.test(lower)) {
+  } else if (/\b(fin de semana|un par de d[íi]as|2 d[íi]as)\b/i.test(lower)) {
     result.durationDays = 2
     result.durationHours = 48
-  } else if (/\b(semanita|una semana)\b/i.test(lower)) {
+  } else if (/\b(1 d[íi]a|un d[íi]a)\b/i.test(lower)) {
+    result.durationDays = 1
+    result.durationHours = 8
+  } else if (/\b(semanita|una semana|7 d[íi]as)\b/i.test(lower)) {
     result.durationDays = 7
     result.durationHours = 168
   }
@@ -982,6 +992,21 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     }
     parsed.actionChips = chips
 
+    const isAskingHotel = hasCity && !known.selectedHotel && /\b(hotel|hoteles|alojamiento|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje|recomi[eé]ndame hoteles)\b/i.test(lastUserMsg)
+    if (isAskingHotel) {
+      const msg = String(parsed.responseMessage || '').trim()
+      const isCutOffOrEmpty = msg.endsWith(':') || (!msg.includes('1.') && !msg.includes('2.'))
+      if (isCutOffOrEmpty) {
+        const destName = known.city || known.destination || 'Cartagena'
+        parsed.responseMessage = `¡Qué emoción que busques opciones de hospedaje en ${destName}, Colombia! 🎉 Aquí te dejo tres excelentes recomendaciones adaptadas a tu presupuesto (${known.budget || 'Moderado'}):\n\n` +
+          `1. **Hotel Casa La Fe**: Encantador hotel boutique en el centro histórico, con piscina en la azotea y arquitectura colonial.\n` +
+          `2. **Hotel Boutique Casa Isabel**: Con hermosa vista panorámica a la laguna del Cabrero, a solo unos pasos de Getsemaní.\n` +
+          `3. **Hotel San Pedro de Majagua**: Opción idílica para desconectar con ambiente colonial y excelente ubicación.\n\n` +
+          `¿Cuál de estos te gustaría elegir como tu hospedaje?`
+        parsed.actionChips = ['Hotel Casa La Fe', 'Hotel Boutique Casa Isabel', 'Hotel San Pedro de Majagua']
+      }
+    }
+
     // REGLA ESTRICTA DE INTENCIÓN DE GENERACIÓN: Si el usuario solicitó generar o finalizar el tour
     const userExplicitBuildIntent = /\b(genera(r)?(\s+el)?\s+(tour|itinerario)|crea(r)?(\s+el)?\s+(tour|itinerario)|arma(r)?(\s+el)?\s+(tour|itinerario)|haz(\s+el)?\s+(tour|itinerario)|construir\s+(el\s+)?(tour|itinerario)|finalizar|comenzar(\s+el)?\s+tour|empezar(\s+el)?\s+tour|listo genera|s[íi],?\s*genera|s[íi],?\s*arma|cr[eé]alo|h[aá]zlo|[aá]rmalo|generar\s+ahora|genera\s+ahora|confirmar tour|confirmar itinerario)\b/i.test(lastUserMsg)
     if (userExplicitBuildIntent) {
@@ -996,10 +1021,10 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     }
 
     // REGLA ABSOLUTA DE TARJETAS VISUALES:
-    // SOLO mostrar destinationSuggestions si NO hay ciudad y la pregunta actual es la Ciudad (nextMissing === 'city') O si es Hospedaje (nextMissing === 'accommodationStatus')
+    // SOLO mostrar destinationSuggestions si NO hay ciudad y la pregunta actual es la Ciudad (nextMissing === 'city') O si es la pregunta inicial de Hospedaje (nextMissing === 'accommodationStatus' y NO se están pidiendo opciones de hotel)
     if (!hasCity && nextMissing === 'city') {
       parsed.destinationSuggestions = await buildVisualDestinationSuggestions(chips, '')
-    } else if (nextMissing === 'accommodationStatus' && !known.accommodationStatus) {
+    } else if (nextMissing === 'accommodationStatus' && !known.accommodationStatus && !isAskingHotel) {
       parsed.destinationSuggestions = [
         {
           name: 'Recomiéndame hoteles',

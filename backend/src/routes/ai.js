@@ -113,6 +113,21 @@ aiRouter.post('/chat', async (req, res, next) => {
     delete updatedPreferences.intentEval
     delete updatedPreferences.isAmbiguousInput
 
+    // Normalización determinística de duración por expresiones clave
+    if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo|3 d[íi]as)\b/i.test(message)) {
+      updatedPreferences.durationDays = 3
+      updatedPreferences.durationHours = 72
+    } else if (/\b(fin de semana|un par de d[íi]as|2 d[íi]as)\b/i.test(message) && !updatedPreferences.durationDays) {
+      updatedPreferences.durationDays = 2
+      updatedPreferences.durationHours = 48
+    } else if (/\b(1 d[íi]a|un d[íi]a)\b/i.test(message) && !updatedPreferences.durationDays) {
+      updatedPreferences.durationDays = 1
+      updatedPreferences.durationHours = 8
+    } else if (/\b(semanita|una semana|7 d[íi]as)\b/i.test(message)) {
+      updatedPreferences.durationDays = 7
+      updatedPreferences.durationHours = 168
+    }
+
     // Si hay objetos vacíos o nulos, limpiarlos
     Object.keys(updatedPreferences).forEach(key => {
       if (updatedPreferences[key] === null || updatedPreferences[key] === undefined) {
@@ -138,6 +153,13 @@ aiRouter.post('/chat', async (req, res, next) => {
         updatedPreferences.region = canonical.region
         updatedPreferences.destination = canonical.displayName
       }
+    }
+
+    // Desambiguación estricta para Cartagena -> Colombia
+    if (updatedPreferences.city && /^cartagena$/i.test(updatedPreferences.city.trim()) && (!updatedPreferences.country || /españa|spain/i.test(updatedPreferences.country))) {
+      updatedPreferences.city = 'Cartagena'
+      updatedPreferences.country = 'Colombia'
+      updatedPreferences.destination = 'Cartagena, Bolívar, Colombia'
     }
 
     // 2. Realizar búsqueda en vivo en la web (Tavily/DDG) si hay destino O si la consulta incluye preguntas sobre fechas, festivos, clima o eventos
@@ -177,43 +199,67 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences
     )
 
-    // Extraer lugares mencionados o planificados en la respuesta de la IA para retención acumulativa
-    const extractedFromMsg = []
-    const lines = (aiResponse.responseMessage || '').split('\n')
-    for (const line of lines) {
-      // 1. Extraer viñetas de itinerario (ej. "- 🌅 Mañana: Castillo San Felipe")
-      const match = line.match(/^[-*•]\s*(?:🏨|🌅|🍽️|🌇|🌙)?\s*(?:Alojamiento|Mañana|Almuerzo|Tarde|Noche|Cena|Visita|Recorrido|Punto de partida)?\s*:\s*(.+)/i)
-      if (match) {
-        let placeCandidate = match[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita)\b/gi, '').trim()
-        placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
-        if (placeCandidate.length >= 3 && !/hotel elegido|hotel acordado|punto de encuentro|restaurante local/i.test(placeCandidate)) {
-          extractedFromMsg.push(placeCandidate)
-        }
+    // Función validadora para que NUNCA entren nombres de ciudades, países o formatos en specificPlaces
+    function isValidSpecificPlace(placeName) {
+      if (!placeName || typeof placeName !== 'string') return false
+      const clean = placeName.replace(/[*_#]/g, '').trim()
+      if (clean.length < 3) return false
+      // Descartar si es país o "Ciudad, País"
+      if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(clean)) {
+        return false
       }
-      // 2. Extraer listas numeradas de actividades o restaurantes (ej. "1. Castillo San Felipe - ...", "1. Restaurante 1: La Cevicheria - ...")
-      const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Hotel\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
-      if (numMatch) {
-        let placeCandidate = numMatch[1].trim()
-        placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
-        if (placeCandidate.length >= 3 && !/opci[oó]n|sugerencia|hotel elegido|restaurante local/i.test(placeCandidate)) {
-          extractedFromMsg.push(placeCandidate)
-        }
+      // Descartar si es un nombre de ciudad/destino
+      const isCityName = /^(canc[úu]n|barcelona|miami|cartagena|medell[íi]n|bogot[áa]|santa marta|roma|par[íi]s|madrid|toledo|cusco|orlando|nueva york|new york|cali|barranquilla)$/i.test(clean)
+      if (isCityName) return false
+      // Descartar etiquetas o textos meta
+      if (/^(opci[oó]n|sugerencia|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|actividades|restaurantes|destinos|hospedaje|alojamiento)$/i.test(clean)) {
+        return false
       }
+      return true
     }
 
-    // 3. Si el usuario aceptó en lote ("agregar todas las actividades", "agregar los 3 restaurantes", etc.), extraer del mensaje anterior del asistente
-    const isUserAcceptingAll = /\b(agregar todas|incluir todas|agregar estas|incluir estas|agregar los restaurantes|agregar las actividades|s[íi],?\s*agrega|s[íi],?\s*incluye|agrega los 3|agregar los 3|a[ñn]adir todas|a[ñn]adir estas|agregar 1 restaurante)\b/i.test(message)
-    if (isUserAcceptingAll) {
-      const recentAssistantMsgs = (history || []).filter(m => m.role === 'assistant' || m.type === 'ai').slice(-3)
-      for (const aMsg of recentAssistantMsgs) {
-        const aLines = (aMsg.content || aMsg.text || '').split('\n')
-        for (const line of aLines) {
-          const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Hotel\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
-          if (numMatch) {
-            let placeCandidate = numMatch[1].trim()
-            placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
-            if (placeCandidate.length >= 3 && !/opci[oó]n|sugerencia|hotel elegido|restaurante local/i.test(placeCandidate)) {
-              extractedFromMsg.push(placeCandidate)
+    // Extraer lugares mencionados o planificados en la respuesta de la IA para retención acumulativa SOLO si ya se eligió la ciudad destino
+    const hasConfirmedCity = Boolean(updatedPreferences.city || updatedPreferences.destination)
+    const isAskingCityRecomms = !hasConfirmedCity && /\b(recomien|recomiend|qué me recomiendas|dónde ir|opciones|destinos)\b/i.test(message)
+    const extractedFromMsg = []
+
+    if (hasConfirmedCity && !isAskingCityRecomms) {
+      const lines = (aiResponse.responseMessage || '').split('\n')
+      for (const line of lines) {
+        // 1. Extraer viñetas de itinerario (ej. "- 🌅 Mañana: Castillo San Felipe")
+        const match = line.match(/^[-*•]\s*(?:🏨|🌅|🍽️|🌇|🌙)?\s*(?:Alojamiento|Mañana|Almuerzo|Tarde|Noche|Cena|Visita|Recorrido|Punto de partida)?\s*:\s*(.+)/i)
+        if (match) {
+          let placeCandidate = match[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita)\b/gi, '').trim()
+          placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
+          if (isValidSpecificPlace(placeCandidate)) {
+            extractedFromMsg.push(placeCandidate)
+          }
+        }
+        // 2. Extraer listas numeradas de actividades o restaurantes
+        const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Hotel\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
+        if (numMatch) {
+          let placeCandidate = numMatch[1].trim()
+          placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
+          if (isValidSpecificPlace(placeCandidate)) {
+            extractedFromMsg.push(placeCandidate)
+          }
+        }
+      }
+
+      // 3. Si el usuario aceptó en lote ("agregar todas las actividades", "agregar los 3 restaurantes", etc.), extraer del mensaje anterior del asistente
+      const isUserAcceptingAll = /\b(agregar todas|incluir todas|agregar estas|incluir estas|agregar los restaurantes|agregar las actividades|s[íi],?\s*agrega|s[íi],?\s*incluye|agrega los 3|agregar los 3|a[ñn]adir todas|a[ñn]adir estas|agregar 1 restaurante)\b/i.test(message)
+      if (isUserAcceptingAll) {
+        const recentAssistantMsgs = (history || []).filter(m => m.role === 'assistant' || m.type === 'ai').slice(-3)
+        for (const aMsg of recentAssistantMsgs) {
+          const aLines = (aMsg.content || aMsg.text || '').split('\n')
+          for (const line of aLines) {
+            const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Hotel\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
+            if (numMatch) {
+              let placeCandidate = numMatch[1].trim()
+              placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
+              if (isValidSpecificPlace(placeCandidate)) {
+                extractedFromMsg.push(placeCandidate)
+              }
             }
           }
         }
@@ -224,10 +270,12 @@ aiRouter.post('/chat', async (req, res, next) => {
       ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
       ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
       ...extractedFromMsg
-    ])).filter(p => typeof p === 'string' && p.trim().length >= 3)
+    ])).filter(isValidSpecificPlace)
 
     if (combinedSpecifics.length > 0) {
       updatedPreferences.specificPlaces = combinedSpecifics
+    } else {
+      delete updatedPreferences.specificPlaces
     }
 
     res.json({

@@ -103,6 +103,10 @@ export async function resolveCanonicalDestination(query, options = {}) {
     .replace(/\b(españa|espana)\b/gi, 'Spain')
     .replace(/\b(reino\s+unido|uk)\b/gi, 'United Kingdom')
 
+  if (/^cartagena$/i.test(normalizedQuery.trim()) || /^cartagena de indias$/i.test(normalizedQuery.trim())) {
+    normalizedQuery = 'Cartagena, Colombia'
+  }
+
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.searchParams.set('format', 'jsonv2')
   url.searchParams.set('limit', '5')
@@ -124,7 +128,7 @@ export async function resolveCanonicalDestination(query, options = {}) {
           const lat = Number(item.lat)
           const lon = Number(item.lon)
 
-          // Format clean displayName e.g. "Malibu, California, Estados Unidos"
+          // Format clean displayName e.g. "Cartagena, Bolívar, Colombia"
           const displayParts = [city || item.name?.split(',')[0], region !== city ? region : '', country].filter(Boolean)
           const displayName = displayParts.join(', ')
 
@@ -142,7 +146,11 @@ export async function resolveCanonicalDestination(query, options = {}) {
         }).filter(c => c.city && Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
 
         if (candidateObjects.length > 0) {
-          const primary = candidateObjects[0]
+          let primary = candidateObjects[0]
+          if (/^cartagena$/i.test(cleaned) && !/españa|spain|murcia/i.test(cleaned)) {
+            const colMatch = candidateObjects.find(c => c.countryCode === 'CO' || c.country === 'Colombia')
+            if (colMatch) primary = colMatch
+          }
 
           // Check for ambiguity across candidates with distinct countries/regions
           const distinctDestinations = []
