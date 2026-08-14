@@ -231,4 +231,45 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.equal(geoCastillo.latitude, 10.4237)
     assert.equal(geoCastillo.longitude, -75.5398)
   })
+
+  it('should not duplicate activities on any day in a 3-day itinerary', async () => {
+    const state = {
+      history: [
+        { role: 'user', content: 'Ver el itinerario' }
+      ]
+    }
+    const currentPreferences = {
+      city: 'Cartagena',
+      destination: 'Cartagena, Colombia',
+      durationDays: 3,
+      durationHours: 72,
+      specificPlaces: ['Paseo en Chiva', 'Convento de la Popa', 'Mercado de Bazurto', 'Café del Mar']
+    }
+    const res = await generateChatResponse(state, '', '', currentPreferences)
+    assert.ok(res.responseMessage.includes('Día 1:'))
+    assert.ok(res.responseMessage.includes('Día 2:'))
+    assert.ok(res.responseMessage.includes('Día 3:'))
+    
+    // Check for 0 duplicates
+    const day1Match = res.responseMessage.match(/Día 1:([\s\S]*?)Día 2:/)?.[1] || ''
+    const day2Match = res.responseMessage.match(/Día 2:([\s\S]*?)Día 3:/)?.[1] || ''
+    const day3Match = res.responseMessage.match(/Día 3:([\s\S]*?)(?:¿|$)/)?.[1] || ''
+
+    assert.ok(day1Match.includes('Paseo en Chiva'))
+    assert.ok(!day3Match.includes('Recorrido panorámico y visita a Convento de la Popa') || !day2Match.includes('Convento de la Popa'))
+  })
+
+  it('should map Paseo en Chiva to the terrestrial boarding station on land', async () => {
+    const { geocodePlace } = await import('../services/osm.js')
+    const geoChiva = await geocodePlace('Paseo en Chiva')
+    assert.ok(geoChiva)
+    assert.equal(geoChiva.latitude, 10.4223)
+    assert.equal(geoChiva.longitude, -75.5475)
+    assert.ok(geoChiva.name.includes('Muelle de los Pegasos'))
+
+    const geoCafe = await geocodePlace('Café del Mar')
+    assert.ok(geoCafe)
+    assert.equal(geoCafe.latitude, 10.4215)
+    assert.equal(geoCafe.longitude, -75.5539)
+  })
 })

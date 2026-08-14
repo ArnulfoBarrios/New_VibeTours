@@ -106,9 +106,16 @@ aiRouter.post('/chat', async (req, res, next) => {
       })
     }
 
+    const prevSpecifics = Array.isArray(currentPreferences.specificPlaces) ? currentPreferences.specificPlaces : []
+    const extractedSpecifics = Array.isArray(extracted?.specificPlaces) ? extracted.specificPlaces : []
+    const initialCombinedSpecifics = Array.from(new Set([...prevSpecifics, ...extractedSpecifics])).filter(Boolean)
+
     const updatedPreferences = {
       ...currentPreferences,
       ...(extracted || {})
+    }
+    if (initialCombinedSpecifics.length > 0) {
+      updatedPreferences.specificPlaces = initialCombinedSpecifics
     }
     delete updatedPreferences.intentEval
     delete updatedPreferences.isAmbiguousInput
@@ -242,49 +249,31 @@ aiRouter.post('/chat', async (req, res, next) => {
     const extractedFromMsg = []
 
     if (hasConfirmedCity && !isAskingCityRecomms) {
-      const lines = (aiResponse.responseMessage || '').split('\n')
-      for (const line of lines) {
-        // Ignorar líneas de recomendación de hoteles
-        if (/\b(hotel|hostal|resort|alojamiento|hospedaje|casa la fe|casa isabel|majagua)\b/i.test(line)) {
-          continue
-        }
-        // 1. Extraer viñetas de itinerario (ej. "- 🌅 Mañana: Castillo San Felipe")
-        const match = line.match(/^[-*•]\s*(?:🌅|🍽️|🌇|🌙)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita|Recorrido)?\s*:\s*(.+)/i)
-        if (match) {
-          let placeCandidate = match[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita)\b/gi, '').trim()
-          placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
-          if (isValidSpecificPlace(placeCandidate)) {
-            extractedFromMsg.push(placeCandidate)
+      function extractPoisFromText(text) {
+        if (!text || typeof text !== 'string') return []
+        const found = []
+        const regex = /(?:^|\s|\n)(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/gi
+        let m
+        while ((m = regex.exec(text)) !== null) {
+          let candidate = m[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita|Paseo en)\b/gi, '').trim()
+          candidate = candidate.replace(/[.,;!*]+$/, '').trim()
+          if (isValidSpecificPlace(candidate)) {
+            found.push(candidate)
           }
         }
-        // 2. Extraer listas numeradas de actividades o restaurantes
-        const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
-        if (numMatch) {
-          let placeCandidate = numMatch[1].trim()
-          placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
-          if (isValidSpecificPlace(placeCandidate)) {
-            extractedFromMsg.push(placeCandidate)
-          }
-        }
+        return found
       }
 
-      // 3. Si el usuario aceptó en lote ("agregar todas las actividades", "agregar los 3 restaurantes", etc.), extraer del mensaje anterior del asistente
-      const isUserAcceptingAll = /\b(agregar todas|incluir todas|agregar estas|incluir estas|agregar los restaurantes|agregar las actividades|s[íi],?\s*agrega|s[íi],?\s*incluye|agrega los 3|agregar los 3|a[ñn]adir todas|a[ñn]adir estas|agregar 1 restaurante)\b/i.test(message)
+      extractedFromMsg.push(...extractPoisFromText(aiResponse.responseMessage || ''))
+
+      // Si el usuario aceptó en lote ("agregar todas las actividades", "Ok quiero agregar estás actividades al itinerario", etc.), extraer de mensajes recientes del asistente
+      const isUserAcceptingAll = /\b(agregar|incluir|a[ñn]adir)\s+(todas|estas|est[aá]s|los|las|mis)?\s*(actividades|lugares|atracciones|restaurantes|recomendaciones|opciones|paradas)/i.test(message) ||
+        /\b(s[íi],?\s*(agrega|incluye|a[ñn]ade)|agrega(r)?\s*(todas|estas|est[aá]s)|agregar 1 restaurante)\b/i.test(message)
+
       if (isUserAcceptingAll) {
         const recentAssistantMsgs = (history || []).filter(m => m.role === 'assistant' || m.type === 'ai').slice(-3)
         for (const aMsg of recentAssistantMsgs) {
-          const aLines = (aMsg.content || aMsg.text || '').split('\n')
-          for (const line of aLines) {
-            if (/\b(hotel|hostal|resort|alojamiento|hospedaje)\b/i.test(line)) continue
-            const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
-            if (numMatch) {
-              let placeCandidate = numMatch[1].trim()
-              placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
-              if (isValidSpecificPlace(placeCandidate)) {
-                extractedFromMsg.push(placeCandidate)
-              }
-            }
-          }
+          extractedFromMsg.push(...extractPoisFromText(aMsg.content || aMsg.text || ''))
         }
       }
     }

@@ -1210,18 +1210,51 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
         const rawPlaces = Array.isArray(known.specificPlaces) ? known.specificPlaces.filter(p => !/restaurante por d[íi]a|hotel/i.test(p)) : []
         const acts = rawPlaces.filter(p => !/restaurante|cevicheria|celele|boliche|mulata/i.test(p))
         const rests = rawPlaces.filter(p => /restaurante|cevicheria|celele|boliche|mulata/i.test(p))
-        
-        const act1 = acts[0] || 'Castillo San Felipe de Barajas'
-        const act2 = acts[1] || 'Excursión a las Islas del Rosario'
-        const act3 = acts[2] || 'Recorrido por la Ciudad Amurallada'
-        const act4 = acts[3] || 'Paseo y atardecer en Bocagrande'
-        const act5 = acts[4] || 'Convento de la Popa'
-        const act6 = acts[5] || 'Mercado de Bazurto y recorrido cultural'
-        
-        const rest1 = rests[0] || 'Restaurante La Cevicheria'
-        const rest2 = rests[1] || 'Restaurante Celele'
-        const rest3 = rests[2] || 'Restaurante El Boliche Cebichería'
-        const rest4 = rests[3] || 'Restaurante La Mulata'
+
+        const distinctActs = Array.from(new Set(acts))
+        const defaultPool = [
+          'Castillo San Felipe de Barajas',
+          'Excursión a las Islas del Rosario',
+          'Recorrido por la Ciudad Amurallada',
+          'Paseo y atardecer en Bocagrande',
+          'Convento de la Popa',
+          'Mercado de Bazurto y recorrido cultural',
+          'Paseo en Chiva',
+          'Café del Mar',
+          'Plaza de Santo Domingo y Getsemaní'
+        ]
+        for (const def of defaultPool) {
+          if (!distinctActs.some(a => a.toLowerCase().includes(def.toLowerCase()) || def.toLowerCase().includes(a.toLowerCase()))) {
+            distinctActs.push(def)
+          }
+        }
+
+        const distinctRests = Array.from(new Set(rests))
+        const defaultRestPool = [
+          'Restaurante La Cevicheria',
+          'Restaurante Celele',
+          'Restaurante El Boliche Cebichería',
+          'Restaurante La Mulata',
+          'Restaurante Candé',
+          'Restaurante Carmen Cartagena'
+        ]
+        for (const def of defaultRestPool) {
+          if (!distinctRests.some(r => r.toLowerCase().includes(def.toLowerCase()) || def.toLowerCase().includes(r.toLowerCase()))) {
+            distinctRests.push(def)
+          }
+        }
+
+        const act1 = distinctActs[0]
+        const act2 = distinctActs[1]
+        const act3 = distinctActs[2]
+        const act4 = distinctActs[3]
+        const act5 = distinctActs[4]
+        const act6 = distinctActs[5]
+
+        const rest1 = distinctRests[0]
+        const rest2 = distinctRests[1]
+        const rest3 = distinctRests[2]
+        const rest4 = distinctRests[3]
         
         let fullItinerary = `¡Aquí tienes tu itinerario detallado día a día para tu viaje en ${destName}! 🗺️✨\n\n` +
           `**Día 1:**\n` +
