@@ -790,7 +790,22 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   if (!apiKey) {
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
     let fallbackMsg = '¡Hola! Qué gusto saludarte. Cuéntame: ¿a qué ciudad te gustaría viajar?'
-    if (isAskingItineraryStatus) {
+    const isAskingMenusFallback = hasCity && /\b(men[uú]|men[uú]s|carta|platos|ver men[uú]s|qu[eé] sirven)\b/i.test(lastUserMsg)
+    const isAskingRestaurantsFallback = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|gastronom[íi]a|comida)\b/i.test(lastUserMsg)
+    
+    if (isAskingMenusFallback) {
+      fallbackMsg = `¡Aquí tienes los platos destacados de los restaurantes recomendados en ${known.city || known.destination}! 🍲🦐\n\n` +
+        `• **La Cevicheria**: Ceviche clásico de corvina, langosta al ajillo y pulpo a la plancha.\n` +
+        `• **Celele**: Pescado confitado con coco y terrina de cerdo con salsa de corozo.\n` +
+        `• **El Boliche Cebichería**: Ceviche de langostinos con tamarindo y leche de tigre.\n\n` +
+        `¿Deseas agregar estos restaurantes a tu itinerario?`
+    } else if (isAskingRestaurantsFallback) {
+      fallbackMsg = `¡Aquí tienes excelentes opciones de restaurantes en ${known.city || known.destination}! 🍽️✨\n\n` +
+        `1. **Restaurante La Cevicheria**: Especialidad en mariscos frescos y ceviches.\n` +
+        `2. **Restaurante Celele**: Cocina caribeña contemporánea con sabores locales.\n` +
+        `3. **Restaurante El Boliche Cebichería**: Exquisitos ceviches artesanales.\n\n` +
+        `¿Te gustaría incluir estas opciones en tu itinerario?`
+    } else if (isAskingItineraryStatus) {
       const places = (known.specificPlaces || []).length > 0 ? known.specificPlaces : ['Centro Histórico', 'Atracción principal']
       fallbackMsg = `¡Aquí tienes el desglose de lo que llevamos planeado para tu viaje en ${known.city || known.destination}! 🗺️\n\n` +
         `**Día 1:**\n` +
@@ -809,11 +824,12 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     }
   }
   const isAskingCityRecommendations = !hasCity && /\b(recomien|recomiend|qué me recomiendas|que me recomiendas|dónde ir|donde ir|sugiéreme|sugiereme|opciones|destinos|playas|viaje|tour)\b/i.test(lastUserMsg)
-  const isAskingHotelRecommendations = hasCity && !known.selectedHotel && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje)\b/i.test(lastUserMsg)
+  const isAskingHotelRecommendations = hasCity && !known.selectedHotel && /\b(hotel|hoteles|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje|recomi[eé]ndame hoteles)\b/i.test(lastUserMsg)
   const isHotelSelected = Boolean(known.selectedHotel && /\b(hotel|hostal|resort|casa)\b/i.test(lastUserMsg))
-  const isAcceptingSuggestions = hasCity && /\b(agregar todas|incluir todas|agregar estas|incluir estas|agregar los restaurantes|agregar las actividades|s[íi],?\s*agrega|s[íi],?\s*incluye|agrega los 3|agregar los 3|a[ñn]adir todas|a[ñn]adir estas|agregar 1 restaurante)\b/i.test(lastUserMsg)
-  const isAskingActivities = hasCity && !isAcceptingSuggestions && /\b(actividad|actividades|actividades acu[aá]ticas|tours? culturales?|qu[eé] hacer|que hacer|atracciones|lugares|ver|visitar|imperdibles|snorkel|playa|aventura|naturaleza|quiero explorar actividades)\b/i.test(lastUserMsg)
-  const isAskingRestaurants = hasCity && !isAcceptingSuggestions && /\b(restaurante|restaurantes|comer|d[oó]nde comer|donde comer|gastronom[íi]a|comida|cenar|desayuno|almuerzo|cena|ver qu[eé] restaurantes hay|qu[eé] restaurantes hay)\b/i.test(lastUserMsg)
+  const isAcceptingSuggestions = hasCity && /\b(agregar todas|incluir todas|agregar estas|incluir estas|agregar los restaurantes|agregar las actividades|s[íi],?\s*agrega|s[íi],?\s*incluye|agrega los 3|agregar los 3|a[ñn]adir todas|a[ñn]adir estas|agregar 1 restaurante|agregar restaurante por d[íi]a)\b/i.test(lastUserMsg)
+  const isAskingMenus = hasCity && /\b(men[uú]|men[uú]s|carta|platos|ver men[uú]s|qu[eé] sirven)\b/i.test(lastUserMsg)
+  const isAskingRestaurants = hasCity && !isAcceptingSuggestions && !isAskingMenus && /\b(restaurante|restaurantes|comer|d[oó]nde comer|donde comer|gastronom[íi]a|comida|cenar|desayuno|almuerzo|cena|ver qu[eé] restaurantes hay|qu[eé] restaurantes hay|consultar restaurantes|consultar restaurantes locales)\b/i.test(lastUserMsg)
+  const isAskingActivities = hasCity && !isAcceptingSuggestions && !isAskingRestaurants && !isAskingMenus && !isAskingItineraryStatus && /\b(actividad|actividades|actividades acu[aá]ticas|tours? culturales?|qu[eé] hacer|que hacer|atracciones|lugares tur[íi]sticos|sitios tur[íi]sticos|lugares para visitar|imperdibles|snorkel|playa|aventura|naturaleza|quiero explorar actividades|sugerir actividades)\b/i.test(lastUserMsg)
   const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|fiesta|concierto|agenda|carnaval|eventos locales|consultar eventos)\b/i.test(lastUserMsg)
   const isExplicitBuild = /\b(genera(r)?(\s+el)?\s+(tour|itinerario)|crea(r)?(\s+el)?\s+(tour|itinerario)|arma(r)?(\s+el)?\s+(tour|itinerario)|haz(\s+el)?\s+(tour|itinerario)|construir\s+(el\s+)?(tour|itinerario)|finalizar|comenzar(\s+el)?\s+tour|empezar(\s+el)?\s+tour|listo genera|s[íi],?\s*genera|s[íi],?\s*arma|cr[eé]alo|h[aá]zlo|[aá]rmalo|generar\s+ahora|genera\s+ahora|confirmar tour|confirmar itinerario|adelante genera el tour|adelante genera)\b/i.test(lastUserMsg)
 
@@ -833,6 +849,13 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     Confirma con entusiasmo que todas esas actividades y restaurantes han sido guardados e integrados con éxito en su plan de viaje.
     ESTÁ ESTRICTAMENTE PROHIBIDO volver a preguntar si desea agregarlas o pedir confirmación otra vez.
     Pregunta amablemente qué le gustaría hacer a continuación (por ejemplo: consultar eventos, ver el itinerario o generar el tour completo).
+    `
+  } else if (isAskingMenus) {
+    promptInstruction = `
+    EL USUARIO SOLICITÓ INFORMACIÓN DE LOS MENÚS Y ESPECIALIDADES DE LOS RESTAURANTES ("${lastUserMsg}").
+    DESTINO CONFIRMADO: ${known.city || known.destination}, ${known.country || 'Colombia'}.
+    OBLIGATORIO: Debes redactar en el cuerpo del mensaje los platos emblemáticos y especialidades de los mejores restaurantes de la ciudad (La Cevicheria, Celele, El Boliche Cebichería, La Mulata).
+    ESTÁ TERMINANTEMENTE PROHIBIDO hablar de atracciones turísticas o tours en esta respuesta. Habla EXCLUSIVAMENTE de gastronomía, platos y menús.
     `
   } else if (isHotelSelected) {
     promptInstruction = `
@@ -1004,6 +1027,70 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
           `3. **Hotel San Pedro de Majagua**: Opción idílica para desconectar con ambiente colonial y excelente ubicación.\n\n` +
           `¿Cuál de estos te gustaría elegir como tu hospedaje?`
         parsed.actionChips = ['Hotel Casa La Fe', 'Hotel Boutique Casa Isabel', 'Hotel San Pedro de Majagua']
+      }
+    }
+
+    if (isAskingRestaurants) {
+      const msg = String(parsed.responseMessage || '').trim()
+      const isCutOffOrEmpty = msg.endsWith(':') || (!msg.includes('1.') && !msg.includes('2.'))
+      if (isCutOffOrEmpty) {
+        const destName = known.city || known.destination || 'Cartagena'
+        parsed.responseMessage = `¡Perfecto! Aquí tienes las mejores recomendaciones gastronómicas en ${destName} que no te puedes perder! 🍽️✨\n\n` +
+          `1. **Restaurante La Cevicheria**: Legendario lugar en el centro histórico famoso por sus mariscos frescos, ceviches caribeños y pulpo al carbón.\n` +
+          `2. **Restaurante Celele**: Alta cocina caribeña contemporánea con sabores innovadores y productos locales autóctonos.\n` +
+          `3. **Restaurante El Boliche Cebichería**: Acogedor y exclusivo rincón donde disfrutarás de exquisitos ceviches con leche de tigre de tamarindo y coco.\n` +
+          `4. **Restaurante La Mulata**: Auténtica comida típica cartagenera con cazuelas de mariscos, pescado frito y arroz con coco en un ambiente colorido.\n\n` +
+          `¿Te gustaría incluir estas opciones gastronómicas en tu itinerario?`
+        parsed.actionChips = ['➕ Agregar 1 restaurante por día', '📋 Ver menús', `🚀 Generar tour en ${destName}`]
+        parsed.specificPlaces = ['Restaurante La Cevicheria', 'Restaurante Celele', 'Restaurante El Boliche Cebichería', 'Restaurante La Mulata']
+      }
+    }
+
+    if (isAskingMenus) {
+      const destName = known.city || known.destination || 'Cartagena'
+      parsed.responseMessage = `¡Aquí tienes los platos y especialidades destacadas de los restaurantes recomendados en ${destName}! 🍲🦐\n\n` +
+        `• **La Cevicheria**: Ceviche clásico de corvina, langosta al ajillo, pulpo a la plancha con patacones y arroz marinero.\n` +
+        `• **Celele**: Terrina de cerdo con salsa de corozo, pescado confitado con coco y puré de yuca, flores comestibles y postre de zapote.\n` +
+        `• **El Boliche Cebichería**: Ceviche de langostinos con tamarindo, ceviche mixto con leche de tigre y chips de plátano verde.\n` +
+        `• **La Mulata**: Cazuela de mariscos cremosa, pargo rojo frito con ensalada de aguacate y limonada de coco.\n\n` +
+        `¿Deseas agregar estos restaurantes a los días de tu tour o consultar actividades?`
+      parsed.actionChips = ['➕ Agregar 1 restaurante por día', '🎯 Sugerir actividades', `🚀 Generar tour en ${destName}`]
+    }
+
+    if (isAskingItineraryStatus) {
+      const msg = String(parsed.responseMessage || '').trim()
+      const lacksDays = !msg.includes('Día 1') && !msg.includes('Dia 1')
+      if (lacksDays || msg.endsWith(':') || msg.length < 120) {
+        const destName = known.city || known.destination || 'Cartagena'
+        const hotel = known.selectedHotel?.name || known.selectedHotel || 'Hotel Casa La Fe'
+        const rawPlaces = Array.isArray(known.specificPlaces) ? known.specificPlaces.filter(p => !/restaurante por d[íi]a|hotel/i.test(p)) : []
+        const acts = rawPlaces.filter(p => !/restaurante|cevicheria|celele|boliche|mulata/i.test(p))
+        const rests = rawPlaces.filter(p => /restaurante|cevicheria|celele|boliche|mulata/i.test(p))
+        
+        const act1 = acts[0] || 'Castillo San Felipe de Barajas'
+        const act2 = acts[1] || 'Excursión a las Islas del Rosario'
+        const act3 = acts[2] || 'Recorrido por la Ciudad Amurallada'
+        const act4 = acts[3] || 'Paseo y atardecer en Bocagrande'
+        
+        const rest1 = rests[0] || 'Restaurante La Cevicheria'
+        const rest2 = rests[1] || 'Restaurante Celele'
+        const rest3 = rests[2] || 'Restaurante El Boliche Cebichería'
+        
+        parsed.responseMessage = `¡Aquí tienes tu itinerario detallado día a día para tu viaje en ${destName}! 🗺️✨\n\n` +
+          `**Día 1:**\n` +
+          `- 🏨 **Alojamiento / Punto de partida**: ${hotel}\n` +
+          `- 🌅 **Mañana**: Visita a ${act1}\n` +
+          `- 🍽️ **Almuerzo**: ${rest1}\n` +
+          `- 🌇 **Tarde**: ${act3}\n` +
+          `- 🌙 **Noche / Cena**: Experiencia gastronómica en el Centro Histórico\n\n` +
+          `**Día 2:**\n` +
+          `- 🏨 **Alojamiento**: ${hotel}\n` +
+          `- 🌅 **Mañana / Tarde**: ${act2}\n` +
+          `- 🍽️ **Almuerzo**: ${rest2}\n` +
+          `- 🌇 **Tarde**: ${act4}\n` +
+          `- 🌙 **Noche / Cena**: ${rest3}\n\n` +
+          `¿Deseas generar el tour definitivo o modificar algún detalle?`
+        parsed.actionChips = [`🚀 Generar tour en ${destName}`, '✏️ Modificar algún día', '➕ Agregar otra actividad']
       }
     }
 

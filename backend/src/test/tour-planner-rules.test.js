@@ -83,4 +83,66 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.equal(canonical.country, 'Colombia')
     assert.equal(canonical.countryCode, 'CO')
   })
+
+  it('should return menu dishes when user asks for "Ver menús" instead of activities', async () => {
+    const state = {
+      history: [
+        { role: 'user', content: 'Ver menús' }
+      ]
+    }
+    const currentPreferences = {
+      city: 'Cartagena',
+      destination: 'Cartagena, Colombia'
+    }
+    const res = await generateChatResponse(state, '', '', currentPreferences)
+    assert.ok(res.responseMessage.includes('Cevicheria') || res.responseMessage.includes('Celele') || res.responseMessage.includes('platos'))
+    assert.ok(!res.responseMessage.includes('Castillo San Felipe'))
+  })
+
+  it('should include 100% of chat-agreed places in buildTourPlanner', async () => {
+    const { collectTourCandidates, buildTourPlanner } = await import('../routes/ai.js')
+    const chatPlaces = [
+      'Castillo San Felipe de Barajas',
+      'Islas del Rosario',
+      'Ciudad Amurallada',
+      'Bocagrande',
+      'Restaurante La Cevicheria',
+      'Restaurante Celele',
+      'Restaurante El Boliche Cebichería'
+    ]
+
+    const input = {
+      destination: 'Cartagena, Colombia',
+      city: 'Cartagena',
+      country: 'Colombia',
+      durationHours: 72,
+      type: 'custom',
+      touristInterests: ['cultural', 'gastronomy'],
+      specificPlaces: chatPlaces,
+      selectedPlaces: chatPlaces
+    }
+
+    const location = {
+      name: 'Cartagena',
+      latitude: 10.4230,
+      longitude: -75.5500,
+      city: 'Cartagena',
+      country: 'Colombia'
+    }
+
+    const candidatePack = await collectTourCandidates(input, location)
+    assert.ok(candidatePack.places.length >= chatPlaces.length)
+
+    const planner = buildTourPlanner(input, location, candidatePack.places)
+    const selectedNames = planner.selectedPlaces.map(p => p.name.toLowerCase())
+
+    for (const place of chatPlaces) {
+      const found = selectedNames.some(n => n.includes(place.toLowerCase()) || place.toLowerCase().includes(n))
+      assert.ok(found, `Expected ${place} to be included in tour stops, but it was missing.`)
+    }
+
+    // Ensure no fake stop like "Restaurante por día" exists
+    const hasFake = selectedNames.some(n => n.includes('por día') || n.includes('por dia'))
+    assert.equal(hasFake, false, 'Did not expect fake "Restaurante por día" stop in tour.')
+  })
 })

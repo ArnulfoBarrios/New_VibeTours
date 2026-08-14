@@ -199,11 +199,15 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences
     )
 
-    // Función validadora para que NUNCA entren nombres de ciudades, países o formatos en specificPlaces
+    // Función validadora para que NUNCA entren nombres de ciudades, países, formatos o textos meta en specificPlaces
     function isValidSpecificPlace(placeName) {
       if (!placeName || typeof placeName !== 'string') return false
       const clean = placeName.replace(/[*_#]/g, '').trim()
       if (clean.length < 3) return false
+      // Descartar frases meta como "Restaurante por día", "Ver menús", "Opciones de hotel"
+      if (/\b(por d[íi]a|restaurante por d[íi]a|ver men[uú]|sugerir|consultar|men[uú]|itinerario|alojamiento|hospedaje|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|actividades|restaurantes|destinos)\b/i.test(clean)) {
+        return false
+      }
       // Descartar si es país o "Ciudad, País"
       if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(clean)) {
         return false
@@ -211,11 +215,15 @@ aiRouter.post('/chat', async (req, res, next) => {
       // Descartar si es un nombre de ciudad/destino
       const isCityName = /^(canc[úu]n|barcelona|miami|cartagena|medell[íi]n|bogot[áa]|santa marta|roma|par[íi]s|madrid|toledo|cusco|orlando|nueva york|new york|cali|barranquilla)$/i.test(clean)
       if (isCityName) return false
-      // Descartar etiquetas o textos meta
-      if (/^(opci[oó]n|sugerencia|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|actividades|restaurantes|destinos|hospedaje|alojamiento)$/i.test(clean)) {
-        return false
-      }
       return true
+    }
+
+    if (/\b(agregar 1 restaurante por d[íi]a|agregar restaurante por d[íi]a)\b/i.test(message)) {
+      const defaultRests = ['Restaurante La Cevicheria', 'Restaurante Celele', 'Restaurante El Boliche Cebichería']
+      updatedPreferences.specificPlaces = Array.from(new Set([
+        ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
+        ...defaultRests
+      ])).filter(isValidSpecificPlace)
     }
 
     // Extraer lugares mencionados o planificados en la respuesta de la IA para retención acumulativa SOLO si ya se eligió la ciudad destino
@@ -1483,7 +1491,7 @@ async function buildFallbackTour(planner, input) {
   }
 }
 
-function buildTourPlanner(input, location, places) {
+export function buildTourPlanner(input, location, places) {
   const origin = location ? { latitude: location.latitude, longitude: location.longitude } : null
   const normalized = uniqueByName(
     places.map((place, index) => normalizeCandidate(place, index, input, origin)),
@@ -3619,7 +3627,7 @@ export async function collectTourCandidates(input, location) {
   const mergedSpecifics = Array.from(new Set([
     ...(Array.isArray(input.specificPlaces) ? input.specificPlaces : []),
     ...(Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
-  ])).filter(p => typeof p === 'string' && p.trim().length >= 3)
+  ])).filter(p => typeof p === 'string' && p.trim().length >= 3 && !/\b(por d[íi]a|restaurante por d[íi]a|hotel|hostal|hospedaje|alojamiento|ver men[uú]|consultar)\b/i.test(p))
 
   let geocodedSpecifics = []
   if (mergedSpecifics.length > 0) {
@@ -3707,8 +3715,14 @@ export async function collectTourCandidates(input, location) {
     const result = []
     for (const p of places) {
       if (!p || !p.name) continue
+      const isPRequested = p.tags?.requested_place === 'true' || p.category === 'requested'
       const exists = result.some(item => {
         if (normalizeKey(item.name) === normalizeKey(p.name)) return true
+        const isItemRequested = item.tags?.requested_place === 'true' || item.category === 'requested'
+        // Si son lugares acordados distintos solicitados en chat, NUNCA descartar por proximidad
+        if (isPRequested || isItemRequested) {
+          return false
+        }
         if (hasUsableCoordinates(item.latitude, item.longitude) && hasUsableCoordinates(p.latitude, p.longitude)) {
           return haversineMeters(item.latitude, item.longitude, p.latitude, p.longitude) < minDistanceMeters
         }
@@ -3792,13 +3806,25 @@ export async function collectTourCandidates(input, location) {
 
 function isValidTouristAttraction(place, input) {
   if (!place || !place.name) return false
-  
+
   const name = place.name.trim()
   const nameKey = normalizeKey(name)
   const nameLower = name.toLowerCase()
-  const cityKey = normalizeKey(input.city)
-  const destKey = normalizeKey(input.destination)
-  const countryKey = normalizeKey(input.country)
+
+  // 0. EXCEPCIÓN DE ORO: Si es un lugar o restaurante acordado en el chat / seleccionado por el usuario, SIEMPRE es válido
+  const isRequestedByChat = place.rawTags?.requested_place === 'true' || 
+                           place.category === 'requested' || 
+                           place.isUserSelected === true ||
+                           (Array.isArray(input?.specificPlaces) && input.specificPlaces.some(sp => normalizeKey(sp) === nameKey || nameKey.includes(normalizeKey(sp)) || normalizeKey(sp).includes(nameKey))) ||
+                           (Array.isArray(input?.selectedPlaces) && input.selectedPlaces.some(sp => normalizeKey(sp) === nameKey || nameKey.includes(normalizeKey(sp)) || normalizeKey(sp).includes(nameKey)))
+
+  if (isRequestedByChat) {
+    return true
+  }
+
+  const cityKey = normalizeKey(input?.city)
+  const destKey = normalizeKey(input?.destination)
+  const countryKey = normalizeKey(input?.country)
   
   // 1. Exclude if name matches city, destination or country exactly
   if (nameKey === cityKey || nameKey === destKey || nameKey === countryKey) return false
@@ -3924,6 +3950,9 @@ function isValidTouristAttraction(place, input) {
 
 function isCandidateNearDestination(place, input, location) {
   if (!location) return true
+  if (place.tags?.requested_place === 'true' || place.category === 'requested' || place.isUserSelected === true) {
+    return true
+  }
   const canonicalDest = input.canonicalDestination || (location.latitude && location.longitude ? {
     displayName: location.name || `${location.city}, ${location.country}`,
     city: location.city || input.city,
