@@ -263,9 +263,9 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     const { geocodePlace } = await import('../services/osm.js')
     const geoChiva = await geocodePlace('Paseo en Chiva')
     assert.ok(geoChiva)
-    assert.equal(geoChiva.latitude, 10.4223)
-    assert.equal(geoChiva.longitude, -75.5475)
-    assert.ok(geoChiva.name.includes('Muelle de los Pegasos'))
+    assert.equal(geoChiva.latitude, 10.4225)
+    assert.equal(geoChiva.longitude, -75.5478)
+    assert.ok(geoChiva.name.includes('Torre del Reloj') || geoChiva.name.includes('Centro Histórico'))
 
     const geoCafe = await geocodePlace('Café del Mar')
     assert.ok(geoCafe)

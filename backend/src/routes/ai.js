@@ -216,13 +216,13 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences
     )
 
-    // Función validadora para que NUNCA entren nombres de hoteles, alojamientos, ciudades, países o formatos en specificPlaces
+    // Función validadora para que NUNCA entren nombres de hoteles, comodidades, precios, ciudades, países o formatos en specificPlaces
     function isValidSpecificPlace(placeName) {
       if (!placeName || typeof placeName !== 'string') return false
       const clean = placeName.replace(/[*_#]/g, '').trim()
       if (clean.length < 3) return false
-      // Descartar hoteles, hostales, alojamientos y frases meta
-      if (/\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|por d[íi]a|restaurante por d[íi]a|ver men[uú]|sugerir|consultar|men[uú]|itinerario|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|actividades|restaurantes|destinos)\b/i.test(clean)) {
+      // Descartar hoteles, hostales, alojamientos, comodidades, precios y frases meta
+      if (/\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|por d[íi]a|restaurante por d[íi]a|ver men[uú]|sugerir|consultar|men[uú]|itinerario|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|actividades|restaurantes|destinos)\b/i.test(clean)) {
         return false
       }
       // Descartar si es país o "Ciudad, País"
@@ -252,7 +252,8 @@ aiRouter.post('/chat', async (req, res, next) => {
       function extractPoisFromText(text) {
         if (!text || typeof text !== 'string') return []
         const found = []
-        const regex = /(?:^|\s|\n)(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/gi
+        // Only extract actual items from numbered lists (1. Name:) or bulleted itineraries (- Mañana: Name)
+        const regex = /(?:^|\n)\s*(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/gi
         let m
         while ((m = regex.exec(text)) !== null) {
           let candidate = m[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita|Paseo en)\b/gi, '').trim()
@@ -3819,7 +3820,12 @@ function isValidTouristAttraction(place, input) {
   const nameKey = normalizeKey(name)
   const nameLower = name.toLowerCase()
 
-  // 0. EXCEPCIÓN DE ORO: Si es un lugar o restaurante acordado en el chat / seleccionado por el usuario, SIEMPRE es válido
+  // 0. Bloqueo estricto de comodidades, precios y metadatos de hotel
+  if (/\b(comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|hotel|hostal|resort|alojamiento|hospedaje)\b/i.test(nameLower)) {
+    return false
+  }
+
+  // 0.1 EXCEPCIÓN DE ORO: Si es un lugar o restaurante acordado en el chat / seleccionado por el usuario, SIEMPRE es válido
   const isRequestedByChat = place.rawTags?.requested_place === 'true' || 
                            place.category === 'requested' || 
                            place.isUserSelected === true ||

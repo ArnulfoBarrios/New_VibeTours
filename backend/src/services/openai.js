@@ -745,7 +745,7 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
   const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|concierto|eventos locales)\b/i.test(lastMessage)
   const isAskingActivities = hasCity && /\b(actividad|actividades|qu[eé] hacer|atracciones|lugares|ver|visitar)\b/i.test(lastMessage)
   const isAskingHotel = hasCity && /\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastMessage)
-  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver tour|desglose del tour|plan actual|quiero ver el itinerario)\b/i.test(lastMessage)
+  const isAskingItineraryStatus = hasCity && /\b(itinerario|revisar itinerario|revisar el itinerario|revisa itinerario|ver itinerario|ver el itinerario|c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver tour|desglose del tour|plan actual|quiero ver el itinerario|ver itinerario actualizado|itinerario actualizado|ver itinerario completo|itinerario completo)\b/i.test(lastMessage)
 
   if (isAskingItineraryStatus) {
     return ['🚀 Generar itinerario completo', '✏️ Modificar algún día', '➕ Agregar otra actividad']
@@ -793,7 +793,7 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
   const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
   const hasCity = Boolean(known.city || known.destination)
-  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver el itinerario|ver tour|desglose del tour|plan actual|quiero ver el itinerario|ver itinerario actualizado|itinerario actualizado|ver itinerario completo|itinerario completo)\b/i.test(lastUserMsg)
+  const isAskingItineraryStatus = hasCity && /\b(itinerario|revisar itinerario|revisar el itinerario|revisa itinerario|ver itinerario|ver el itinerario|c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver tour|desglose del tour|plan actual|quiero ver el itinerario|ver itinerario actualizado|itinerario actualizado|ver itinerario completo|itinerario completo)\b/i.test(lastUserMsg)
 
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
