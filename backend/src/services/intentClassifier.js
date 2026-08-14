@@ -86,8 +86,17 @@ export function classifyUserIntent(userMessage = '', currentContext = {}) {
     }
   }
 
-  // 2. Single word or incomplete vague query WITHOUT destination
+  // 2. Single word or incomplete query
   if (words.length <= 1) {
+    // Recognized destination or answer names should never be ambiguous
+    if (/^(cartagena|medellin|medellín|bogota|bogotá|cali|cancun|cancún|paris|parís|roma|madrid|barcelona|lima|cusco|toledo|miami|orlando|tokio|londres|buenos aires)$/i.test(lower)) {
+      return {
+        intent: INTENT_TYPES.PLAN_TRIP,
+        confidence: 0.95,
+        needsClarification: false
+      }
+    }
+
     if (/^(presupuesto|budget)$/i.test(lower)) {
       return {
         intent: INTENT_TYPES.AMBIGUOUS,
@@ -181,78 +190,21 @@ export function classifyUserIntent(userMessage = '', currentContext = {}) {
     }
   }
 
-  // 4. Clear Intent Detection Patterns
-  if (/\b(quiero ir a|viajar a|conocer|visitar|armar un tour|planear viaje|itinerario para|crea un tour|tour por)\b/i.test(lower)) {
+  // 4. Destination or Trip Planning Detection
+  // Common destination names or answers containing geographical/travel terms
+  const isPotentialDestination = /^[a-záéíóúñ\s,.-]+$/i.test(text) && !/^(si|no|ok|hola|buenas|que|como|cuando|donde)$/i.test(lower)
+  if (isPotentialDestination && words.length <= 5) {
     return {
       intent: INTENT_TYPES.PLAN_TRIP,
-      confidence: 0.92,
-      needsClarification: false
-    }
-  }
-
-  if (/\b(evento|eventos|festival|festivales|concierto|festivos|agenda cultural|que hay para hacer el)\b/i.test(lower)) {
-    return {
-      intent: INTENT_TYPES.EVENT_INQUIRY,
       confidence: 0.88,
       needsClarification: false
     }
   }
 
-  if (/\b(dónde hospedarme|buscar hotel|opciones de hotel|reserva de hotel|hospedaje|alojamiento)\b/i.test(lower)) {
-    return {
-      intent: INTENT_TYPES.LODGING_INQUIRY,
-      confidence: 0.85,
-      needsClarification: false
-    }
-  }
-
-  if (/\b(cuanto cuesta|presupuesto de|presupuesto economico|presupuesto moderado|presupuesto de lujo|costo estimado|mi presupuesto es)\b/i.test(lower)) {
-    return {
-      intent: INTENT_TYPES.BUDGET_INQUIRY,
-      confidence: 0.82,
-      needsClarification: false
-    }
-  }
-
-  if (/\b(como moverme|rentar auto|alquilar coche|transporte publico|ir en metro|ir en bus|tomar taxi|ir caminando)\b/i.test(lower)) {
-    return {
-      intent: INTENT_TYPES.TRANSPORT_INQUIRY,
-      confidence: 0.85,
-      needsClarification: false
-    }
-  }
-
-  if (/\b(donde comer|restaurantes|comida tipica|gastronomia|platos tipicos|mejores cafes)\b/i.test(lower)) {
-    return {
-      intent: INTENT_TYPES.RESTAURANT_INQUIRY,
-      confidence: 0.86,
-      needsClarification: false
-    }
-  }
-
-  if (/\b(que hacer|atracciones|museos|parques|lugares imperdibles|sitios turisticos)\b/i.test(lower)) {
-    return {
-      intent: INTENT_TYPES.ACTIVITY_INQUIRY,
-      confidence: 0.85,
-      needsClarification: false
-    }
-  }
-
-  // Default fallback check with thresholding
-  const estimatedConfidence = words.length >= 3 ? 0.72 : 0.45
-  if (estimatedConfidence < CONFIDENCE_THRESHOLD) {
-    return {
-      intent: INTENT_TYPES.AMBIGUOUS,
-      confidence: estimatedConfidence,
-      needsClarification: true,
-      clarificationPrompt: '¿En qué aspecto de tu viaje te gustaría concentrarte ahora?',
-      options: CLARIFICATION_OPTIONS
-    }
-  }
-
+  // Default: Proceed with planning rather than blocking with clarification
   return {
     intent: INTENT_TYPES.PLAN_TRIP,
-    confidence: estimatedConfidence,
+    confidence: 0.80,
     needsClarification: false
   }
 }
