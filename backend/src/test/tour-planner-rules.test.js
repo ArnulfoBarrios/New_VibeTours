@@ -145,4 +145,16 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     const hasFake = selectedNames.some(n => n.includes('por día') || n.includes('por dia'))
     assert.equal(hasFake, false, 'Did not expect fake "Restaurante por día" stop in tour.')
   })
+
+  it('should not set specificPlaces when destination city is not yet chosen', async () => {
+    const state = {
+      history: [
+        { role: 'user', content: 'Mis intereses son: Vida nocturna, Naturaleza, Playas, Aventuras' }
+      ]
+    }
+    const currentPreferences = {}
+    const res = await generateChatResponse(state, '', '', currentPreferences)
+    assert.ok(Array.isArray(res.specificPlaces))
+    assert.equal(res.specificPlaces.length, 0)
+  })
 })

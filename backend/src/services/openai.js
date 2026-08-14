@@ -819,6 +819,7 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     return {
       responseMessage: fallbackMsg,
       actionChips: fallbackChips,
+      specificPlaces: (hasCity && Array.isArray(known.specificPlaces)) ? known.specificPlaces : [],
       destinationSuggestions: (!known.city && !known.destination) ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : [],
       readyToBuild: false
     }
@@ -1107,8 +1108,10 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
         : []
     }
 
-    // REGLA ABSOLUTA DE TARJETAS VISUALES:
-    // SOLO mostrar destinationSuggestions si NO hay ciudad y la pregunta actual es la Ciudad (nextMissing === 'city') O si es la pregunta inicial de Hospedaje (nextMissing === 'accommodationStatus' y NO se están pidiendo opciones de hotel)
+    if (!hasCity || nextMissing === 'city') {
+      parsed.specificPlaces = []
+    }
+
     if (!hasCity && nextMissing === 'city') {
       parsed.destinationSuggestions = await buildVisualDestinationSuggestions(chips, '')
     } else if (nextMissing === 'accommodationStatus' && !known.accommodationStatus && !isAskingHotel) {

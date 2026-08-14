@@ -274,16 +274,20 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     }
 
-    const combinedSpecifics = Array.from(new Set([
-      ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
-      ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
-      ...extractedFromMsg
-    ])).filter(isValidSpecificPlace)
-
-    if (combinedSpecifics.length > 0) {
-      updatedPreferences.specificPlaces = combinedSpecifics
-    } else {
+    if (!hasConfirmedCity || isAskingCityRecomms) {
       delete updatedPreferences.specificPlaces
+    } else {
+      const combinedSpecifics = Array.from(new Set([
+        ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
+        ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
+        ...extractedFromMsg
+      ])).filter(isValidSpecificPlace)
+
+      if (combinedSpecifics.length > 0) {
+        updatedPreferences.specificPlaces = combinedSpecifics
+      } else {
+        delete updatedPreferences.specificPlaces
+      }
     }
 
     res.json({
