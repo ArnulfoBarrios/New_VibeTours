@@ -181,12 +181,41 @@ aiRouter.post('/chat', async (req, res, next) => {
     const extractedFromMsg = []
     const lines = (aiResponse.responseMessage || '').split('\n')
     for (const line of lines) {
+      // 1. Extraer viñetas de itinerario (ej. "- 🌅 Mañana: Castillo San Felipe")
       const match = line.match(/^[-*•]\s*(?:🏨|🌅|🍽️|🌇|🌙)?\s*(?:Alojamiento|Mañana|Almuerzo|Tarde|Noche|Cena|Visita|Recorrido|Punto de partida)?\s*:\s*(.+)/i)
       if (match) {
         let placeCandidate = match[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita)\b/gi, '').trim()
         placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
         if (placeCandidate.length >= 3 && !/hotel elegido|hotel acordado|punto de encuentro|restaurante local/i.test(placeCandidate)) {
           extractedFromMsg.push(placeCandidate)
+        }
+      }
+      // 2. Extraer listas numeradas de actividades o restaurantes (ej. "1. Castillo San Felipe - ...", "1. Restaurante 1: La Cevicheria - ...")
+      const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Hotel\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
+      if (numMatch) {
+        let placeCandidate = numMatch[1].trim()
+        placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
+        if (placeCandidate.length >= 3 && !/opci[oó]n|sugerencia|hotel elegido|restaurante local/i.test(placeCandidate)) {
+          extractedFromMsg.push(placeCandidate)
+        }
+      }
+    }
+
+    // 3. Si el usuario aceptó en lote ("agregar todas las actividades", "agregar los 3 restaurantes", etc.), extraer del mensaje anterior del asistente
+    const isUserAcceptingAll = /\b(agregar todas|incluir todas|agregar estas|incluir estas|agregar los restaurantes|agregar las actividades|s[íi],?\s*agrega|s[íi],?\s*incluye|agrega los 3|agregar los 3|a[ñn]adir todas|a[ñn]adir estas|agregar 1 restaurante)\b/i.test(message)
+    if (isUserAcceptingAll) {
+      const recentAssistantMsgs = (history || []).filter(m => m.role === 'assistant' || m.type === 'ai').slice(-3)
+      for (const aMsg of recentAssistantMsgs) {
+        const aLines = (aMsg.content || aMsg.text || '').split('\n')
+        for (const line of aLines) {
+          const numMatch = line.match(/^\d+[\.\)]\s*(?:Restaurante\s*\d*:\s*|Hotel\s*\d*:\s*|Actividad\s*\d*:\s*)?\s*([^-\n—:]+)/i)
+          if (numMatch) {
+            let placeCandidate = numMatch[1].trim()
+            placeCandidate = placeCandidate.replace(/[.,;!]+$/, '').trim()
+            if (placeCandidate.length >= 3 && !/opci[oó]n|sugerencia|hotel elegido|restaurante local/i.test(placeCandidate)) {
+              extractedFromMsg.push(placeCandidate)
+            }
+          }
         }
       }
     }
@@ -1414,7 +1443,14 @@ function buildTourPlanner(input, location, places) {
 
   const isCorridorRoute = Boolean(input.originPlace || input.destinationPlace)
   let selectedPlaces = []
-  const stopTarget = stopCountForDuration(input.durationHours)
+  const requestedCount = normalized.filter(p => 
+    p.rawTags?.requested_place === 'true' || 
+    p.category === 'requested' || 
+    (Array.isArray(input.specificPlaces) && input.specificPlaces.some(sp => normalizeKey(sp) === normalizeKey(p.name) || normalizeKey(p.name).includes(normalizeKey(sp)))) ||
+    (Array.isArray(input.selectedPlaces) && input.selectedPlaces.some(sp => normalizeKey(sp) === normalizeKey(p.name) || normalizeKey(p.name).includes(normalizeKey(sp))))
+  ).length
+  const baseStopTarget = stopCountForDuration(input.durationHours)
+  const stopTarget = Math.max(baseStopTarget, requestedCount + (input.durationHours >= 48 ? 3 : 1))
 
   if (isCorridorRoute) {
     const startPlaceCandidate = normalized.find(p => p.rawTags?.start_point === 'true' || p.type === 'start_point' || (input.originPlace && normalizeKey(p.name) === normalizeKey(input.originPlace)))

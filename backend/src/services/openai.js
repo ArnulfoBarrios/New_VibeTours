@@ -724,17 +724,21 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
   const hasCity = Boolean(destName)
   const isAskingRestaurants = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|gastronom[íi]a|comida)\b/i.test(lastMessage)
   const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|concierto|eventos locales)\b/i.test(lastMessage)
+  const isAskingActivities = hasCity && /\b(actividad|actividades|qu[eé] hacer|atracciones|lugares|ver|visitar)\b/i.test(lastMessage)
   const isAskingHotel = hasCity && /\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastMessage)
-  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver tour|desglose del tour|plan actual)\b/i.test(lastMessage)
+  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver tour|desglose del tour|plan actual|quiero ver el itinerario)\b/i.test(lastMessage)
 
   if (isAskingItineraryStatus) {
     return ['🚀 Generar itinerario completo', '✏️ Modificar algún día', '➕ Agregar otra actividad']
   }
   if (isAskingRestaurants) {
-    return [`🚀 Generar tour en ${destName}`, '🏨 Ver opciones de hotel', '🎉 Consultar eventos']
+    return ['➕ Agregar 1 restaurante por día', `🚀 Generar tour en ${destName}`, '🎯 Ver actividades']
+  }
+  if (isAskingActivities) {
+    return ['➕ Agregar todas las actividades', `🚀 Generar tour en ${destName}`, '🍽️ Ver restaurantes']
   }
   if (isAskingEvents) {
-    return [`🚀 Generar tour en ${destName}`, '🍽️ Ver restaurantes', '🏨 Ver opciones de hotel']
+    return [`🚀 Generar tour en ${destName}`, '🍽️ Ver restaurantes', '🎯 Ver actividades']
   }
   if (isAskingHotel) {
     return [`🚀 Generar tour en ${destName}`, '🍽️ Ver restaurantes', '🎯 Ver actividades']
@@ -770,7 +774,7 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
   const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
   const hasCity = Boolean(known.city || known.destination)
-  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver tour|desglose del tour|plan actual)\b/i.test(lastUserMsg)
+  const isAskingItineraryStatus = hasCity && /\b(c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver itinerario|ver tour|desglose del tour|plan actual|quiero ver el itinerario)\b/i.test(lastUserMsg)
 
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
@@ -797,10 +801,11 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   const isAskingCityRecommendations = !hasCity && /\b(recomien|recomiend|qué me recomiendas|que me recomiendas|dónde ir|donde ir|sugiéreme|sugiereme|opciones|destinos|playas|viaje|tour)\b/i.test(lastUserMsg)
   const isAskingHotelRecommendations = hasCity && !known.selectedHotel && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje)\b/i.test(lastUserMsg)
   const isHotelSelected = Boolean(known.selectedHotel && /\b(hotel|hostal|resort|casa)\b/i.test(lastUserMsg))
-  const isAskingActivities = hasCity && /\b(actividad|actividades|actividades acu[aá]ticas|tours? culturales?|qu[eé] hacer|que hacer|atracciones|lugares|ver|visitar|imperdibles|snorkel|playa|aventura|naturaleza)\b/i.test(lastUserMsg)
-  const isAskingRestaurants = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|donde comer|gastronom[íi]a|comida|cenar|desayuno|almuerzo|cena)\b/i.test(lastUserMsg)
-  const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|fiesta|concierto|agenda|carnaval|eventos locales)\b/i.test(lastUserMsg)
-  const isExplicitBuild = /\b(genera(r)?(\s+el)?\s+(tour|itinerario)|crea(r)?(\s+el)?\s+(tour|itinerario)|arma(r)?(\s+el)?\s+(tour|itinerario)|haz(\s+el)?\s+(tour|itinerario)|construir\s+(el\s+)?(tour|itinerario)|finalizar|comenzar(\s+el)?\s+tour|empezar(\s+el)?\s+tour|listo genera|s[íi],?\s*genera|s[íi],?\s*arma|cr[eé]alo|h[aá]zlo|[aá]rmalo|generar\s+ahora|genera\s+ahora|confirmar tour|confirmar itinerario)\b/i.test(lastUserMsg)
+  const isAcceptingSuggestions = hasCity && /\b(agregar todas|incluir todas|agregar estas|incluir estas|agregar los restaurantes|agregar las actividades|s[íi],?\s*agrega|s[íi],?\s*incluye|agrega los 3|agregar los 3|a[ñn]adir todas|a[ñn]adir estas|agregar 1 restaurante)\b/i.test(lastUserMsg)
+  const isAskingActivities = hasCity && !isAcceptingSuggestions && /\b(actividad|actividades|actividades acu[aá]ticas|tours? culturales?|qu[eé] hacer|que hacer|atracciones|lugares|ver|visitar|imperdibles|snorkel|playa|aventura|naturaleza|quiero explorar actividades)\b/i.test(lastUserMsg)
+  const isAskingRestaurants = hasCity && !isAcceptingSuggestions && /\b(restaurante|restaurantes|comer|d[oó]nde comer|donde comer|gastronom[íi]a|comida|cenar|desayuno|almuerzo|cena|ver qu[eé] restaurantes hay|qu[eé] restaurantes hay)\b/i.test(lastUserMsg)
+  const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|fiesta|concierto|agenda|carnaval|eventos locales|consultar eventos)\b/i.test(lastUserMsg)
+  const isExplicitBuild = /\b(genera(r)?(\s+el)?\s+(tour|itinerario)|crea(r)?(\s+el)?\s+(tour|itinerario)|arma(r)?(\s+el)?\s+(tour|itinerario)|haz(\s+el)?\s+(tour|itinerario)|construir\s+(el\s+)?(tour|itinerario)|finalizar|comenzar(\s+el)?\s+tour|empezar(\s+el)?\s+tour|listo genera|s[íi],?\s*genera|s[íi],?\s*arma|cr[eé]alo|h[aá]zlo|[aá]rmalo|generar\s+ahora|genera\s+ahora|confirmar tour|confirmar itinerario|adelante genera el tour|adelante genera)\b/i.test(lastUserMsg)
 
   const nextMissing = getNextMissingPreference(known)
 
@@ -812,6 +817,13 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     Confirma con entusiasmo que su tour está siendo generado y preparado a la perfección.
     PROHIBIDO incluir preguntas redundantes o listas vacías de confirmación.
     `
+  } else if (isAcceptingSuggestions) {
+    promptInstruction = `
+    EL USUARIO ACABA DE ACEPTAR O SOLICITAR AGREGAR LAS SUGERENCIAS RECIENTES A SU TOUR ("${lastUserMsg}").
+    Confirma con entusiasmo que todas esas actividades y restaurantes han sido guardados e integrados con éxito en su plan de viaje.
+    ESTÁ ESTRICTAMENTE PROHIBIDO volver a preguntar si desea agregarlas o pedir confirmación otra vez.
+    Pregunta amablemente qué le gustaría hacer a continuación (por ejemplo: consultar eventos, ver el itinerario o generar el tour completo).
+    `
   } else if (isHotelSelected) {
     promptInstruction = `
     EL USUARIO ACABA DE CONFIRMAR SU HOTEL: "${known.selectedHotel?.name || known.selectedHotel}".
@@ -820,17 +832,18 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     Invítalo a generar su tour o a agregar alguna actividad o restaurante si lo desea.
     `
   } else if (isAskingItineraryStatus) {
+    const placesList = Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0 ? known.specificPlaces : ['Centro Histórico', 'Castillo San Felipe', 'Ciudad Amurallada']
     promptInstruction = `
-    EL USUARIO SOLICITÓ CONSULTAR EL ESTADO DEL ITINERARIO ("${lastUserMsg}").
-    ESTÁ ESTRICTAMENTE PROHIBIDO responder con mensajes preliminares vacíos como "Aquí tienes un esbozo..." esperando confirmación.
+    EL USUARIO SOLICITÓ CONSULTAR EL ESTADO DEL ITINERARIO O VER SU TOUR ("${lastUserMsg}").
+    ESTÁ ESTRICTAMENTE PROHIBIDO responder con mensajes preliminares vacíos o sólo introductorios esperando confirmación.
     DEBES generar y mostrar INMEDIATAMENTE el desglose completo organizado por días (Día 1, Día 2, Día 3...) con viñetas claras que especifiquen:
     - 🏨 **Alojamiento / Punto de partida**: Hotel elegido (${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado / Punto de encuentro'}).
-    - 🌅 **Mañana**: Actividad o atracción confirmada de la lista acumulada de lugares acordados (${(known.specificPlaces || []).join(', ') || 'Atracciones principales'}).
-    - 🍽️ **Almuerzo**: Restaurante seleccionado para ese día (diferente en cada día, PROHIBIDO DUPLICAR RESTAURANTES EN EL MISMO DÍA).
-    - 🌇 **Tarde**: Actividad o paseo cultural/aventura confirmado.
+    - 🌅 **Mañana**: Actividad o atracción confirmada de la lista acumulada de lugares acordados (${placesList.join(', ') || 'Atracciones principales'}).
+    - 🍽️ **Almuerzo**: Restaurante seleccionado para ese día (diferente en cada día, asignar 1 restaurante por día de los acordados).
+    - 🌇 **Tarde**: Actividad o paseo cultural/playa confirmado.
     - 🌙 **Noche / Cena**: Restaurante o experiencia de vida nocturna.
 
-    PROHIBIDO OMITIR atracciones principales acordadas en chat: ${JSON.stringify(known.specificPlaces || [])}.
+    PROHIBIDO OMITIR atracciones y restaurantes acordados en chat: ${JSON.stringify(known.specificPlaces || [])}.
     Al final del desglose, incluye una invitación a continuar con los botones de acción rápida.
     `
   } else if (isAskingCityRecommendations) {
@@ -849,14 +862,32 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     OBLIGATORIO: Debes redactar en el cuerpo del mensaje la lista numerada con los 3 hoteles y una breve descripción de cada uno. ESTÁ ESTRICTAMENTE PROHIBIDO dejar el mensaje cortado en dos puntos ":" sin listar los hoteles.
     OBLIGATORIO: En "actionChips" debes incluir los nombres exactos de los 3 hoteles recomendados (ej: ["Hotel Casa La Fe", "Hotel Boutique Casa Isabel", "Hotel San Pedro de Majagua"]).
     `
-  } else if (isAskingActivities || isAskingRestaurants || isAskingEvents) {
-    const categoryLabel = isAskingRestaurants ? 'RESTAURANTES Y GASTRONOMÍA' : (isAskingActivities ? 'ACTIVIDADES Y LUGARES IMPERDIBLES' : 'EVENTOS Y FESTIVALES')
+  } else if (isAskingEvents) {
     promptInstruction = `
-    EL USUARIO SOLICITÓ RECOMENDACIONES DE ${categoryLabel} EN ${known.city || known.destination}: "${lastUserMsg}".
+    EL USUARIO CONSULTÓ POR EVENTOS Y FESTIVALES EN ${known.city || known.destination}, ${known.country || 'Colombia'} PARA SUS FECHAS (${known.datesSeason || 'su viaje'}): "${lastUserMsg}".
+    DESTINO CONFIRMADO: ${known.city || known.destination}, ${known.country || 'Colombia'}.
+    
+    REGLAS ESTRICTAS PARA EVENTOS:
+    1. OBLIGATORIO: Debes redactar un mensaje COMPLETO. ESTÁ PROHIBIDO dejar el mensaje cortado en dos puntos ":" sin texto.
+    2. EVALUACIÓN DE FECHAS:
+       - Si en las fechas del viaje (${known.datesSeason || 'próximamente'}) HAY festivales o eventos especiales reales en la ciudad: lístalos con fecha exacta, nombre y descripción breve.
+       - Si en esas fechas NO hay eventos o festivales especiales programados: INFÓRMALO con total amabilidad y honestidad ("Para estas fechas no hay festivales especiales programados..."), y a continuación INFORMA cuáles son los festivales y eventos más emblemáticos de la ciudad a lo largo del año con sus meses (por ejemplo en Cartagena: Festival Internacional de Cine y Música en marzo, Fiestas de Independencia en noviembre, Hay Festival en enero/febrero).
+    3. Invita al usuario a continuar con el armado de su tour o a explorar la gastronomía y actividades.
+    `
+  } else if (isAskingActivities) {
+    promptInstruction = `
+    EL USUARIO SOLICITÓ RECOMENDACIONES DE ACTIVIDADES EN ${known.city || known.destination}: "${lastUserMsg}".
     DESTINO CONFIRMADO: ${known.city || known.destination}.
-    PROHIBIDO VOLVER A PREGUNTAR A QUÉ CIUDAD O LUGAR DESEA IR.
-    Menciona con entusiasmo 3 a 4 excelentes opciones reales en ${known.city || known.destination} especificando sus nombres exactos.
-    Pregunta amablemente al final si desea incluir estas opciones en su itinerario o si prefiere proceder a generar su tour ahora.
+    OBLIGATORIO: Debes redactar en el texto del mensaje una lista numerada con 3 a 4 actividades y lugares imperdibles (ej: 1. Castillo San Felipe de Barajas, 2. Islas del Rosario, 3. Ciudad Amurallada, 4. Bocagrande) con una breve descripción de cada una.
+    ESTÁ ESTRICTAMENTE PROHIBIDO terminar el mensaje cortado en dos puntos ":".
+    `
+  } else if (isAskingRestaurants) {
+    promptInstruction = `
+    EL USUARIO SOLICITÓ RECOMENDACIONES DE RESTAURANTES EN ${known.city || known.destination}: "${lastUserMsg}".
+    DESTINO CONFIRMADO: ${known.city || known.destination}.
+    OBLIGATORIO: Debes redactar en el texto del mensaje una lista numerada con 3 a 4 restaurantes emblemáticos reales (ej: 1. Restaurante La Cevicheria, 2. Restaurante Celele, 3. Restaurante El Boliche Cebichería) con su especialidad culinaria.
+    ESTÁ ESTRICTAMENTE PROHIBIDO terminar el mensaje cortado en dos puntos ":".
+    OBLIGATORIO: Mantén consistencia exacta de los nombres de los restaurantes en el texto y en las opciones.
     `
   } else if (nextMissing === 'city') {
     promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 📍 ¿A qué ciudad o lugar te gustaría ir?'

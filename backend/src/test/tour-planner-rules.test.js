@@ -50,4 +50,22 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.ok(Array.isArray(res.actionChips))
     assert.ok(res.actionChips.includes('Próximo mes') || res.actionChips.includes('Este fin de semana'))
   })
+
+  it('should not offer hotel chips when hotel is already confirmed during event inquiry', async () => {
+    const state = {
+      history: [
+        { role: 'user', content: 'Consultar eventos' }
+      ]
+    }
+    const currentPreferences = {
+      city: 'Cartagena',
+      destination: 'Cartagena, Colombia',
+      selectedHotel: { name: 'Hotel Casa La Fe' },
+      accommodationStatus: 'Hospedaje confirmado en Hotel Casa La Fe'
+    }
+
+    const res = await generateChatResponse(state, '', '', currentPreferences)
+    assert.ok(Array.isArray(res.actionChips))
+    assert.ok(!res.actionChips.includes('🏨 Ver opciones de hotel'))
+  })
 })
