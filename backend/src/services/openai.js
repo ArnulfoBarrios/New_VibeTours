@@ -555,9 +555,9 @@ CAMPOS Y REGLAS DE INTERPRETACIÓN:
 5. "hasChildren" (boolean): true si viaja con niños.
 6. "budget": "Económico", "Moderado", "Lujo". Solo extraer si hay contexto claro (ej. "mi presupuesto es económico").
 7. "transport": "Caminando", "Transporte público", "Auto rentado", "Taxi/Uber". Solo extraer si hay intención explícita de medio de transporte.
-8. "selectedHotel": Objeto { "name": "Nombre del hotel" } si el usuario seleccionó o mencionó un hotel específico (ej: "Hotel Casa La Fe", "Hotel San Pedro de Majagua").
-9. "accommodationStatus": "Ya posee hospedaje", "Quiere buscar hospedaje", o "Hospedaje confirmado en <nombre del hotel>".
-10. "specificPlaces" (array de strings): Nombres de atracciones o restaurantes específicos dentro de la ciudad (NUNCA nombres de ciudades ni países).
+8. "selectedHotel": Objeto { "name": "Nombre del hotel" } ÚNICAMENTE si el usuario EXPLÍCITAMENTE ELIGE, RESERVA o CONFIRMA hospedarse en ese hotel (ej: "Elijo Hotel Casa La Fe", "Confirmo Hotel Casa La Fe", "Me quedo en Hotel Casa La Fe", "Quiero hospedarme en Hotel Casa La Fe"). Si el usuario SOLO ESTÁ PIDIENDO INFORMACIÓN, DETALLES, SERVICIOS O PRECIOS (ej: "Dame más información sobre...", "Dame información sobre...", "Cuéntame del...", "Qué tal es el..."), "selectedHotel" DEBE SER NULL.
+9. "accommodationStatus": "Ya posee hospedaje", "Quiere buscar hospedaje", o "Hospedaje confirmado en <nombre del hotel>" (ÚNICAMENTE si el usuario lo confirmó explícitamente).
+10. "specificPlaces" (array de strings): Nombres de atracciones o restaurantes específicos dentro de la ciudad (NUNCA nombres de ciudades ni países ni hoteles).
 11. "interests" (array de strings): Intereses.
 
 HISTORIAL DE CONVERSACIÓN RECIENTE:
@@ -606,7 +606,13 @@ ${recentHistoryText}
       parsed.hasChildren = true
     }
 
-    if (parsed.selectedHotel) {
+    const isOnlyInquiringHotel = /\b(m[aá]s informaci[oó]n|informaci[oó]n del?|informaci[oó]n sobre|detalles del?|cu[eé]ntame m[aá]s|cu[eé]ntame sobre|c[oó]mo es el|qu[eé] tal es el|precios? del?|servicios del?)\b/i.test(userMessage)
+    const isExplicitlyChoosingHotel = /\b(confirmar|confirmo|elegir|elijo|escoger|escojo|seleccionar|selecciono|me quedo en|quiero hospedarme en|me hospedo en|este hotel)\b/i.test(userMessage)
+
+    if (isOnlyInquiringHotel && !isExplicitlyChoosingHotel) {
+      delete parsed.selectedHotel
+      delete parsed.accommodationStatus
+    } else if (parsed.selectedHotel) {
       const hotelName = typeof parsed.selectedHotel === 'string' ? parsed.selectedHotel : parsed.selectedHotel.name
       if (hotelName) {
         parsed.selectedHotel = { name: hotelName }

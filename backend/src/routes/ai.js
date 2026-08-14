@@ -113,6 +113,16 @@ aiRouter.post('/chat', async (req, res, next) => {
     delete updatedPreferences.intentEval
     delete updatedPreferences.isAmbiguousInput
 
+    const isOnlyInquiringHotel = /\b(m[aá]s informaci[oó]n|informaci[oó]n del?|informaci[oó]n sobre|detalles del?|cu[eé]ntame m[aá]s|cu[eé]ntame sobre|c[oó]mo es el|qu[eé] tal es el|precios? del?|servicios del?)\b/i.test(message)
+    const isExplicitlyChoosingHotel = /\b(confirmar|confirmo|elegir|elijo|escoger|escojo|seleccionar|selecciono|me quedo en|quiero hospedarme en|me hospedo en|este hotel)\b/i.test(message)
+
+    if (isOnlyInquiringHotel && !isExplicitlyChoosingHotel) {
+      if (!currentPreferences.selectedHotel) {
+        delete updatedPreferences.selectedHotel
+        delete updatedPreferences.accommodationStatus
+      }
+    }
+
     // Normalización determinística de duración por expresiones clave
     if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo|3 d[íi]as)\b/i.test(message)) {
       updatedPreferences.durationDays = 3
