@@ -34,4 +34,20 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.ok(preferences.specificPlaces.includes('Islas del Rosario'))
     assert.ok(preferences.specificPlaces.includes('Restaurante Celele'))
   })
+
+  it('should ask for travel dates and season after destination is known', async () => {
+    const state = {
+      history: [
+        { role: 'user', content: 'Quiero viajar a Cartagena' }
+      ]
+    }
+    const currentPreferences = {
+      city: 'Cartagena',
+      destination: 'Cartagena, Colombia'
+    }
+
+    const res = await generateChatResponse(state, '', '', currentPreferences)
+    assert.ok(Array.isArray(res.actionChips))
+    assert.ok(res.actionChips.includes('Próximo mes') || res.actionChips.includes('Este fin de semana'))
+  })
 })

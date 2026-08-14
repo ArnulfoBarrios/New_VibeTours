@@ -549,15 +549,16 @@ Devuelve ÚNICAMENTE un objeto JSON válido con los campos que logres identifica
 
 CAMPOS Y REGLAS DE INTERPRETACIÓN:
 1. "destination" / "city": Nombre de la ciudad o lugar de destino. SI es una región o frase vaga ("Playa en el Caribe", "Montaña", "Europa"), asígnala a "destination" pero mantén "city" como null.
-2. "datesSeason": Fechas, mes o época del viaje (incluye el año si se menciona).
+2. "datesSeason": Fechas, mes o época del viaje (ej: "Próximo mes", "15 al 20 de Septiembre", "Vacaciones de fin de año", "Este fin de semana").
 3. "durationDays" (número): Días de duración del tour.
 4. "companions": "Solo", "Pareja", "Familia con niños", "Amigos", "Grupo".
 5. "hasChildren" (boolean): true si viaja con niños.
 6. "budget": "Económico", "Moderado", "Lujo". Solo extraer si hay contexto claro (ej. "mi presupuesto es económico").
 7. "transport": "Caminando", "Transporte público", "Auto rentado", "Taxi/Uber". Solo extraer si hay intención explícita de medio de transporte.
-8. "accommodationStatus": "Ya posee hospedaje", "Quiere buscar hospedaje".
-9. "specificPlaces" (array de strings): Nombres de atracciones o lugares específicos.
-10. "interests" (array de strings): Intereses.
+8. "selectedHotel": Objeto { "name": "Nombre del hotel" } si el usuario seleccionó o mencionó un hotel específico (ej: "Hotel Casa La Fe", "Hotel San Pedro de Majagua").
+9. "accommodationStatus": "Ya posee hospedaje", "Quiere buscar hospedaje", o "Hospedaje confirmado en <nombre del hotel>".
+10. "specificPlaces" (array de strings): Nombres de atracciones o lugares específicos.
+11. "interests" (array de strings): Intereses.
 
 HISTORIAL DE CONVERSACIÓN RECIENTE:
 ${recentHistoryText}
@@ -598,6 +599,14 @@ ${recentHistoryText}
       parsed.hasChildren = true
     }
 
+    if (parsed.selectedHotel) {
+      const hotelName = typeof parsed.selectedHotel === 'string' ? parsed.selectedHotel : parsed.selectedHotel.name
+      if (hotelName) {
+        parsed.selectedHotel = { name: hotelName }
+        parsed.accommodationStatus = `Hospedaje confirmado en ${hotelName}`
+      }
+    }
+
     return { ...parsed, intentEval }
   } catch (err) {
     console.error('[openai] extract error:', err)
@@ -614,7 +623,24 @@ export function extractChatInformationFallback(prompt) {
 
   // If input is ambiguous or a single keyword like "presupuesto", do not infer transport or budget values blindly
   if (words.length <= 1) {
+    if (/^(hotel|hostal|casa)\s+/i.test(prompt)) {
+      result.selectedHotel = { name: prompt.trim() }
+      result.accommodationStatus = `Hospedaje confirmado en ${prompt.trim()}`
+    }
     return result
+  }
+
+  // Dates / Season extraction
+  if (/\b(pr[oó]ximo mes|siguiente mes)\b/i.test(lower)) {
+    result.datesSeason = 'Próximo mes'
+  } else if (/\b(vacaciones de fin de a[ñn]o|fin de a[ñn]o|diciembre|enero)\b/i.test(lower)) {
+    result.datesSeason = 'Fin de año'
+  } else if (/\b(vacaciones de mitad de a[ñn]o|mitad de a[ñn]o|junio|julio)\b/i.test(lower)) {
+    result.datesSeason = 'Vacaciones de mitad de año'
+  } else if (/\b(semana santa|pascua)\b/i.test(lower)) {
+    result.datesSeason = 'Semana Santa'
+  } else if (/\b(este fin de semana)\b/i.test(lower)) {
+    result.datesSeason = 'Este fin de semana'
   }
 
   if (/\b(fin de semana con puente|puente festivo|fin de semana largo)\b/i.test(lower)) {
@@ -657,7 +683,13 @@ export function extractChatInformationFallback(prompt) {
     result.transport = 'Taxi/Uber'
   }
 
-  if (/\b(tengo (hotel|hospedaje|casa)|ya tengo|quedarme en|reserva)\b/i.test(lower)) {
+  if (/\b(hotel|hostal|casa|resort)\s+[a-z0-9\s]+/i.test(lower) || /^(hotel|hostal|casa)\s+/i.test(prompt)) {
+    const hotelMatch = prompt.match(/\b(Hotel\s+[A-Za-z0-9\s]+|Hostal\s+[A-Za-z0-9\s]+|Casa\s+[A-Za-z0-9\s]+)/i)
+    if (hotelMatch) {
+      result.selectedHotel = { name: hotelMatch[0].trim() }
+      result.accommodationStatus = `Hospedaje confirmado en ${hotelMatch[0].trim()}`
+    }
+  } else if (/\b(tengo (hotel|hospedaje|casa)|ya tengo|quedarme en|reserva)\b/i.test(lower)) {
     result.accommodationStatus = 'Ya posee hospedaje'
   } else if (/\b(buscar (hotel|hoteles|hospedaje|alojamiento)|quiero quedarme en hotel)\b/i.test(lower)) {
     result.accommodationStatus = 'Quiere buscar hospedaje'
@@ -678,6 +710,7 @@ export function isVagueDestination(dest, known = {}) {
 function getNextMissingPreference(known = {}) {
   const dest = known.city || known.destination
   if (!dest || isVagueDestination(dest, known)) return 'city'
+  if (!known.datesSeason) return 'datesSeason'
   if (!known.durationDays && !known.durationHours) return 'duration'
   if (!known.companions) return 'companions'
   if (!known.budget) return 'budget'
@@ -721,6 +754,7 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
     return ['Cartagena', 'Medellín', 'Santa Marta', 'Bogotá']
   }
 
+  if (nextMissing === 'datesSeason') return ['Próximo mes', 'Este fin de semana', 'Vacaciones de mitad de año', 'Fin de año']
   if (nextMissing === 'duration') return ['Un fin de semana (2-3 días)', '3 días', '1 día completo']
   if (nextMissing === 'companions') return ['En familia con niños', 'Solo', 'En pareja', 'Con amigos']
   if (nextMissing === 'budget') return ['Económico', 'Moderado', 'Lujo']
@@ -761,7 +795,8 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     }
   }
   const isAskingCityRecommendations = !hasCity && /\b(recomien|recomiend|qué me recomiendas|que me recomiendas|dónde ir|donde ir|sugiéreme|sugiereme|opciones|destinos|playas|viaje|tour)\b/i.test(lastUserMsg)
-  const isAskingHotelRecommendations = hasCity && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje)\b/i.test(lastUserMsg)
+  const isAskingHotelRecommendations = hasCity && !known.selectedHotel && /\b(recomien|recomiend|hoteles|hotel|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje)\b/i.test(lastUserMsg)
+  const isHotelSelected = Boolean(known.selectedHotel && /\b(hotel|hostal|resort|casa)\b/i.test(lastUserMsg))
   const isAskingActivities = hasCity && /\b(actividad|actividades|actividades acu[aá]ticas|tours? culturales?|qu[eé] hacer|que hacer|atracciones|lugares|ver|visitar|imperdibles|snorkel|playa|aventura|naturaleza)\b/i.test(lastUserMsg)
   const isAskingRestaurants = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|donde comer|gastronom[íi]a|comida|cenar|desayuno|almuerzo|cena)\b/i.test(lastUserMsg)
   const isAskingEvents = hasCity && /\b(evento|eventos|festival|festivales|fiesta|concierto|agenda|carnaval|eventos locales)\b/i.test(lastUserMsg)
@@ -776,6 +811,13 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     ESTÁ ESTRICTAMENTE PROHIBIDO volver a preguntar si desea generar el tour o hacer preguntas redundantes.
     Confirma con entusiasmo que su tour está siendo generado y preparado a la perfección.
     PROHIBIDO incluir preguntas redundantes o listas vacías de confirmación.
+    `
+  } else if (isHotelSelected) {
+    promptInstruction = `
+    EL USUARIO ACABA DE CONFIRMAR SU HOTEL: "${known.selectedHotel?.name || known.selectedHotel}".
+    Confirma alegremente que el ${known.selectedHotel?.name || known.selectedHotel} ha sido guardado como su punto de partida y hospedaje en ${known.city || known.destination}.
+    ESTÁ ESTRICTAMENTE PROHIBIDO volver a recomendar hoteles.
+    Invítalo a generar su tour o a agregar alguna actividad o restaurante si lo desea.
     `
   } else if (isAskingItineraryStatus) {
     promptInstruction = `
@@ -801,9 +843,11 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     `
   } else if (isAskingHotelRecommendations) {
     promptInstruction = `
-    EL USUARIO SOLICITÓ RECOMENDACIONES DE HOTELES EN ${known.city || known.destination}: "${lastUserMsg}".
-    Proporciona 3 excelentes opciones reales de hospedaje en ${known.city || known.destination} acordes a sus preferencias (${known.budget || 'Económico'}).
-    AL FINAL DE TU MENSAJE, PREGUNTA SI CON ESTAS OPCIONES REVISADAS YA DESEA PROCEDER A ARMAR SU TOUR AHORA MISMO.
+    EL USUARIO SOLICITÓ RECOMENDACIONES DE HOTELES EN ${known.city || known.destination}, ${known.country || 'Colombia'}: "${lastUserMsg}".
+    DESTINO CONFIRMADO: ${known.city || known.destination}, ${known.country || 'Colombia'}.
+    Proporciona 3 excelentes opciones reales de hospedaje en ${known.city || known.destination}, ${known.country || 'Colombia'} acordes a su presupuesto (${known.budget || 'Moderado'}).
+    OBLIGATORIO: Debes redactar en el cuerpo del mensaje la lista numerada con los 3 hoteles y una breve descripción de cada uno. ESTÁ ESTRICTAMENTE PROHIBIDO dejar el mensaje cortado en dos puntos ":" sin listar los hoteles.
+    OBLIGATORIO: En "actionChips" debes incluir los nombres exactos de los 3 hoteles recomendados (ej: ["Hotel Casa La Fe", "Hotel Boutique Casa Isabel", "Hotel San Pedro de Majagua"]).
     `
   } else if (isAskingActivities || isAskingRestaurants || isAskingEvents) {
     const categoryLabel = isAskingRestaurants ? 'RESTAURANTES Y GASTRONOMÍA' : (isAskingActivities ? 'ACTIVIDADES Y LUGARES IMPERDIBLES' : 'EVENTOS Y FESTIVALES')
@@ -816,6 +860,8 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     `
   } else if (nextMissing === 'city') {
     promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 📍 ¿A qué ciudad o lugar te gustaría ir?'
+  } else if (nextMissing === 'datesSeason') {
+    promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - 📅 ¿En qué fechas, mes o época del año tienes planeado realizar tu viaje?'
   } else if (nextMissing === 'duration') {
     promptInstruction = 'Realiza ÚNICAMENTE la siguiente pregunta al usuario: - ⏳ ¿Cuántos días va a durar tu tour?'
   } else if (nextMissing === 'companions') {
@@ -830,7 +876,7 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     promptInstruction = `
     ¡YA TENEMOS TODAS LAS PREFERENCIAS COMPLETAS DE CADA PREGUNTA!
     PROHIBIDO hacer más preguntas.
-    CONFIRMA alegremente la información guardada (${known.city || known.destination}, ${known.durationDays || known.durationHours} días, ${known.companions || 'Solo'}, ${known.budget || 'Económico'}, ${known.transport || 'Auto rentado'})
+    CONFIRMA alegremente la información guardada (${known.city || known.destination}, fechas: ${known.datesSeason || 'Por definir'}, ${known.durationDays || known.durationHours} días, ${known.companions || 'Solo'}, ${known.budget || 'Económico'}, ${known.transport || 'Auto rentado'})
     Y PREGUNTA EXPLÍCITAMENTE AL USUARIO SI YA DESEA GENERAR EL TOUR AHORA MISMO.
     Ejemplo: "¡Excelente! Ya tenemos toda tu información completa para tu viaje en ${known.city || known.destination} (${known.durationDays || known.durationHours} días). 🎉 ¿Deseas que generemos tu tour ahora mismo?"
     `
