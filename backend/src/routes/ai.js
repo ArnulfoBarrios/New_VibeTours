@@ -97,6 +97,22 @@ aiRouter.post('/chat', async (req, res, next) => {
     })
     const { message, history, currentPreferences, latitude, longitude } = chatSchema.parse(req.body)
 
+    // Filtro inmediato de consultas no turísticas: congelar estado, no generar tarjetas ni avanzar tour
+    if (isNonTouristicInput(message)) {
+      const rejectionMsg = 'Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas.'
+      return res.json({
+        responseMessage: rejectionMsg,
+        message: rejectionMsg,
+        botMessage: rejectionMsg,
+        actionChips: ['Explorar ciudades', 'Aventura y naturaleza', 'Cultura e historia'],
+        destinationSuggestions: [],
+        readyToBuild: false,
+        preferences: currentPreferences,
+        updatedPreferences: currentPreferences,
+        isUnrelatedToTravel: true
+      })
+    }
+
     if (latitude && longitude) {
       currentPreferences.latitude = latitude
       currentPreferences.longitude = longitude
@@ -1071,28 +1087,42 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     updateJob({ status: 'validating', message: 'Validando estructura y calidad del recorrido...' })
     
     // We reuse the assembly logic
-    const stopsTarget = planner.selectedPlaces.length
-    const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
+    const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
+      ? sourceTour.itinerario
+      : sourceTour.stops ?? []
+    const stopsTarget = plannedStops.length > 0 ? plannedStops.length : planner.selectedPlaces.length
+    const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
     const settledStops = await Promise.allSettled(
       Array.from({ length: stopsTarget }, (_, index) => {
-        const sourceStop = Array.isArray(sourceTour.itinerario) ? sourceTour.itinerario[index] : null
-        const anchorPlace = planner.selectedPlaces[index]
-        const calculatedDay = Math.floor((index * totalDays) / stopsTarget) + 1
+        const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
+        const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
+        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : null
+        const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopsTarget) + 1)
         return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
       })
     )
     const rawStops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
-    const hotelNameLower = String(input.selectedHotel?.name || plannerContext?.selectedHotel?.name || '').toLowerCase()
-    const stops = rawStops.filter(s => {
-      const nameLower = (s.routeStop?.name || s.publicStop?.nombre || '').toLowerCase()
-      if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
-        return false
-      }
-      return true
-    })
     
-    const publicStops = stops.map(s => s.publicStop)
-    const routeStops = stops.map(s => s.routeStop)
+    // Preservar estrictamente el orden secuencial cronológico por días
+    const seenNames = new Set()
+    const normalizedStops = []
+    const hotelNameLower = String(input.selectedHotel?.name || plannerContext?.selectedHotel?.name || '').toLowerCase()
+    
+    for (const item of rawStops) {
+      const name = item.publicStop.nombre
+      const nameLower = (item.routeStop?.name || name || '').toLowerCase()
+      if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
+        continue
+      }
+      const nameKey = normalizeKey(name)
+      if (!seenNames.has(nameKey)) {
+        seenNames.add(nameKey)
+        normalizedStops.push(item)
+      }
+    }
+    
+    const publicStops = normalizedStops.map(s => s.publicStop)
+    const routeStops = normalizedStops.map(s => s.routeStop)
     const coverUrl = await imageForPlace(input.city || input.destination, input.country || "").catch(() => fallbackCover(input.destination))
     
     const tour = {
@@ -1282,29 +1312,37 @@ async function processTourGeneration(jobId, input) {
       const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
         ? sourceTour.itinerario
         : sourceTour.stops ?? []
-      const stopTarget = Math.min(30, Math.max(3, plannedStops.length, planner.selectedPlaces.length))
-      const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
+      const stopTarget = plannedStops.length > 0 ? plannedStops.length : Math.min(30, Math.max(3, planner.selectedPlaces.length))
+      const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
       const settledStops = await Promise.allSettled(
         Array.from({ length: stopTarget }, (_, index) => {
           const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
           const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-          const calculatedDay = Math.floor((index * totalDays) / stopTarget) + 1
+          const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : null
+          const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopTarget) + 1)
           return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
         }),
       )
       const rawNormalized = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
-      const uniquePublicStops = uniqueByName(rawNormalized.map(s => s.publicStop))
+      
+      // Preservar estrictamente el orden secuencial cronológico por días
+      const seenNames = new Set()
+      const normalizedStops = []
       const hotelNameLower = String(input.selectedHotel?.name || plannerContext?.selectedHotel?.name || '').toLowerCase()
-      const normalizedStops = uniquePublicStops
-        .map(pub => rawNormalized.find(r => r.publicStop.nombre === pub.nombre))
-        .filter(Boolean)
-        .filter(s => {
-          const nameLower = (s.routeStop?.name || s.publicStop?.nombre || '').toLowerCase()
-          if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
-            return false
-          }
-          return true
-        })
+      
+      for (const item of rawNormalized) {
+        const name = item.publicStop.nombre
+        const nameLower = (item.routeStop?.name || name || '').toLowerCase()
+        if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
+          continue
+        }
+        const nameKey = normalizeKey(name)
+        if (!seenNames.has(nameKey)) {
+          seenNames.add(nameKey)
+          normalizedStops.push(item)
+        }
+      }
+      
       const stops = normalizedStops.map((stop) => stop.publicStop)
       const routeStops = normalizedStops.map((stop) => stop.routeStop)
       const coverUrl = await imageForPlace(input.city || input.destination, input.country || "").catch(() => fallbackCover(input.destination))
@@ -2985,9 +3023,12 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     rawTips = generateDynamicTips(resolvedName, rawCategory, input.city || input.destination)
   }
 
+  const sourceDay = Number(source.dia ?? source.day ?? 0)
+  const stopDay = (sourceDay > 0) ? sourceDay : (calculatedDay !== null ? calculatedDay : 1)
+
   const publicStop = {
     parada: index + 1,
-    dia: calculatedDay !== null ? calculatedDay : Number(source.dia ?? 1),
+    dia: stopDay,
     nombre: resolvedName,
     isFallbackImage: imageStatus.isFallback && !images[0] && !source.imageUrl,
     descripcion: description,

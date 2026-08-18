@@ -98,4 +98,35 @@ test('isValidSpecificPlace must reject category words and accept authentic POI n
   assert.equal(isValidSpecificPlace('Museo del Oro Tairona'), true)
 })
 
+test('isNonTouristicInput must detect coding commands, math, and unrelated input and block cards', async () => {
+  const { isNonTouristicInput } = await import('../services/openai.js')
+  assert.equal(isNonTouristicInput('Flutter run'), true)
+  assert.equal(isNonTouristicInput('npm run dev'), true)
+  assert.equal(isNonTouristicInput('git status'), true)
+  assert.equal(isNonTouristicInput('2 + 2'), true)
+  assert.equal(isNonTouristicInput('cuanto es 100 / 4'), true)
+  assert.equal(isNonTouristicInput('console.log("test")'), true)
+
+  // Tourist messages must be accepted
+  assert.equal(isNonTouristicInput('Quiero viajar a Santa Marta'), false)
+  assert.equal(isNonTouristicInput('Playas y aventura con amigos'), false)
+  assert.equal(isNonTouristicInput('Fiesta del mar'), false)
+
+  // generateChatResponse should reject Flutter run with 0 cards and empty preferences
+  const state = { history: [{ role: 'user', content: 'Flutter run' }] }
+  const res = await generateChatResponse(state, '', '', {})
+  assert.equal(res.isUnrelatedToTravel, true)
+  assert.equal(res.destinationSuggestions.length, 0)
+  assert.ok(res.responseMessage.includes('no está relacionada con la planificación de viajes'))
+})
+
+test('imageForPlaceWithStatus must serve culinary/restaurant image for restaurants and NOT city port cover', async () => {
+  const { imageForPlaceWithStatus } = await import('../services/imageSearch.js')
+  const res = await imageForPlaceWithStatus('Restaurante Guásimo', 'Santa Marta', 'restaurant', 0)
+  assert.ok(res.url)
+  // Must NOT be the Santa Marta port/bay photo (photo-1596436889106-be35e843f974)
+  assert.ok(!res.url.includes('photo-1596436889106-be35e843f974'), 'Restaurant image should be a gourmet food/dining photo, not the port of Santa Marta')
+})
+
+
 

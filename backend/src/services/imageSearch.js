@@ -56,9 +56,12 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
     const openverseCity = await openverseImage(searchQuery, requiredGroups, seed)
     if (openverseCity) return { url: openverseCity, isFallback: true }
 
-    // Fallback secundario de la ciudad
-    const wikiJustCity = await wikimediaImage(city, [cityWords], seed)
-    if (wikiJustCity) return { url: wikiJustCity, isFallback: true }
+    // Fallback secundario de la ciudad únicamente para vistas generales o categorías por defecto
+    const isSpecialCategory = ['restaurant', 'cafe', 'market', 'nightlife', 'museum', 'sports'].includes(normalizedCategory)
+    if (!isSpecialCategory) {
+      const wikiJustCity = await wikimediaImage(city, [cityWords], seed)
+      if (wikiJustCity) return { url: wikiJustCity, isFallback: true }
+    }
   }
 
   // 3. Último recurso: Imagen curada según la categoría (rotada con la semilla)
@@ -429,6 +432,17 @@ function curatedImage(seed, category, indexSeed = 0) {
     ]
   }
 
+  // 1. Si la categoría es específica (restaurante, café, museo, etc.), servir foto temática de alta calidad
+  const specificCategories = ['restaurant', 'cafe', 'market', 'nightlife', 'museum', 'religious', 'sports', 'nature', 'historic']
+  const targetCategory = specificCategories.includes(category) ? category : 'default'
+  
+  if (targetCategory !== 'default') {
+    const list = categoryImages[targetCategory]
+    const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0) + indexSeed
+    return list[Math.abs(hash) % list.length]
+  }
+
+  // 2. Solo para vistas panorámicas generales o portadas, verificar la ciudad
   const cityLower = String(seed || '').toLowerCase()
   if (cityLower.includes('tulum')) {
     return 'https://images.unsplash.com/photo-1518638150340-f706e86654de?auto=format&fit=crop&w=1200&q=80' // Tulum Mayan cliff & turquoise sea
@@ -468,7 +482,7 @@ function curatedImage(seed, category, indexSeed = 0) {
     return 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80' // San Andres Island
   }
 
-  const list = categoryImages[category] || categoryImages.default
+  const list = categoryImages.default
   const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0) + indexSeed
   return list[Math.abs(hash) % list.length]
 }

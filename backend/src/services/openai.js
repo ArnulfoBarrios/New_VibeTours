@@ -522,6 +522,16 @@ export function getDefaultActionChips(known = {}, lastMessage = '') {
  * Connects the LLM directly with live real grounding (OSM + WebSearch)
  * without fragile regex interceptors or synthetic string fallbacks.
  */
+export function isNonTouristicInput(text = '') {
+  if (!text || typeof text !== 'string') return false
+  const trimmed = text.trim()
+  if (/^(flutter\s+run|npm\s+|git\s+|cd\s+|ls\b|node\s+|pip\s+|cargo\s+|docker\s+|python\s+|sudo\s+|yarn\s+|pnpm\s+)/i.test(trimmed)) return true
+  if (/(flutter run|npm run|npm test|git commit|git push|node index)/i.test(trimmed)) return true
+  if (/^(console\.log|function\s*\(|def\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|import\s+.*from|class\s+\w+)/i.test(trimmed)) return true
+  if (/^(\d+\s*[\+\-\*\/]\s*\d+|\bcu[aá]nto es\s+\d+)/i.test(trimmed)) return true
+  return false
+}
+
 export async function generateChatResponse(state, backendInstruction = '', webSearchSummary = '', currentPreferences = {}) {
   const known = { ...(currentPreferences || {}) }
   const rawDestName = known.city || known.destination || ''
@@ -531,6 +541,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
 
   const history = state.history || []
   const lastUserMsg = history[history.length - 1]?.content || ''
+
+  if (isNonTouristicInput(lastUserMsg)) {
+    return {
+      responseMessage: 'Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas.',
+      actionChips: ['Explorar ciudades', 'Aventura y naturaleza', 'Cultura e historia'],
+      extractedPreferences: {},
+      specificPlaces: known.specificPlaces || [],
+      destinationSuggestions: [],
+      readyToBuild: false,
+      isUnrelatedToTravel: true
+    }
+  }
 
   // Grounding Data
   let realCatalog = null
@@ -551,32 +573,29 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
-    const preset = getDestinationPresets(destName, destCountry)
-    let fallbackMsg = '¡Hola! Qué gusto saludarte. Soy Tour Planner AI. Cuéntame: ¿a qué ciudad o destino te gustaría viajar?'
-
+    let fallbackMsg = ''
     if (!hasCity) {
-      if (/playa|mar|costa/i.test(lastUserMsg)) {
+      if (/playa|playas|mar|costa|aventura/i.test(lastUserMsg)) {
         fallbackMsg = '¡Excelente! Para disfrutar de sol, playas y vida nocturna, te recomiendo destinos increíbles como **Santa Marta**, **Cartagena**, **San Andrés** o **Cancún**. ¿Cuál de estos te llama más la atención o tienes otra ciudad en mente?'
-      } else if (/naturaleza|aventura/i.test(lastUserMsg)) {
+      } else if (/naturaleza/i.test(lastUserMsg)) {
         fallbackMsg = '¡Genial! Para conectar con la naturaleza y la aventura te sugiero destinos como **Santa Marta (Parque Tayrona y Minca)**, **Cusco** o **Medellín**. ¿Cuál de ellos prefieres?'
+      } else {
+        fallbackMsg = `¡Hola! Qué gusto saludarte. Soy Tour Planner AI 🤖, tu asistente personal de viajes en VibeTours.\n\nEstoy aquí para diseñar un tour increíble adaptado a tus fechas, acompañantes, presupuesto y gustos. Cuéntame: ¿a qué ciudad o lugar te gustaría viajar hoy?`
       }
     } else {
-      if (/\b(actividad|actividades|lugares|qu[eé] hacer|atracciones)\b/i.test(lastUserMsg)) {
-        fallbackMsg = `¡Aquí tienes las actividades y lugares más recomendados en ${destName}! 🌟\n\n` +
-          preset.places.slice(0, 4).map((p, i) => `${i + 1}. **${p}**: Visita imperdible con gran riqueza turística y cultural.`).join('\n') +
-          `\n\n¿Te gustaría agregar estas actividades a tu tour o ver opciones gastronómicas?`
-      } else if (/\b(restaurante|restaurantes|comer|comida|gastronom[íi]a)\b/i.test(lastUserMsg)) {
-        fallbackMsg = `¡Aquí tienes excelentes opciones gastronómicas en ${destName}! 🍽️\n\n` +
+      const preset = realCatalog || getDestinationPresets('Cartagena', 'Colombia')
+      if (/\b(actividad|actividades|qu[ée] hacer|lugares|atracciones|visitar)\b/i.test(lastUserMsg)) {
+        fallbackMsg = `¡En ${destName} hay experiencias y lugares fascinantes para descubrir! 🌟\n\n` +
+          preset.places.map((p, i) => `${i + 1}. **${p}**`).join('\n') +
+          `\n\n¿Te gustaría que organicemos tu itinerario visitando estos lugares?`
+      } else if (/\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar)\b/i.test(lastUserMsg)) {
+        fallbackMsg = `¡La gastronomía en ${destName} es espectacular! 🍽️ Aquí tienes restaurantes recomendados:\n\n` +
           preset.restaurants.map((r, i) => `${i + 1}. **${r.name}**: ${r.specialty}.`).join('\n') +
           `\n\n¿Deseas incluir estas paradas culinarias en tu itinerario?`
       } else if (/\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastUserMsg)) {
         fallbackMsg = `¡Aquí tienes opciones de hospedaje recomendadas en ${destName}! 🏨\n\n` +
           preset.hotels.map((h, i) => `${i + 1}. **${h.name}**: ${h.desc}`).join('\n') +
           `\n\n¿Cuál de estos te gustaría elegir como tu hospedaje?`
-      } else if (/\b(evento|eventos|festival|festivales)\b/i.test(lastUserMsg)) {
-        fallbackMsg = (preset.events && preset.events.length > 0)
-          ? `¡Eventos emblemáticos en ${destName}! 🎉\n\n` + preset.events.map(e => `• **${e.name}** (${e.month}): ${e.desc}`).join('\n')
-          : `Para las fechas de tu viaje no hay festivales especiales masivos programados en ${destName}.`
       } else {
         fallbackMsg = `¡Excelente elección viajar a ${destName}! Cuéntame, ¿en qué fechas planeas realizar tu tour y por cuántos días?`
       }
@@ -587,17 +606,22 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       actionChips: fallbackChips,
       specificPlaces: Array.isArray(known.specificPlaces) ? known.specificPlaces : [],
       destinationSuggestions: (!hasCity) ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : [],
-      readyToBuild: false
+      readyToBuild: false,
+      isUnrelatedToTravel: false
     }
   }
 
-  // SYSTEM PROMPT FOR GPT-4O-MINI
   const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual y organizador experto de tours de VibeTours.
 Tu personalidad es CÁLIDA, EMPÁTICA, ENTUSIASTA Y ALTAMENTE PROFESIONAL.
 
-ALCANCE ESTRICTO DE TURISMO:
+ALCANCE ESTRICTO DE TURISMO Y RECHAZO DE MENSAJES AJENOS:
 - Tu única misión es crear, asesorar y planificar tours turísticos inolvidables.
-- Si el usuario te hace consultas no relacionadas con viajes (programación, matemáticas, política, recetas fuera de contexto o palabras aleatorias), responde de forma muy amable indicando que tu especialidad es planificar viajes y tours increíbles, e invítalo a continuar con su itinerario.
+- Si el mensaje del usuario no está relacionado con turismo o viajes (por ejemplo: comandos de programación como "Flutter run", código fuente, fórmulas matemáticas, consultas políticas o palabras sin sentido):
+  1. Marca "isUnrelatedToTravel": true en el JSON de salida.
+  2. Responde con un mensaje educado y directo indicando que no estás especializado en ese tema y recordando que eres un asistente de viajes: "Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas."
+  3. En "actionChips", devuelve únicamente sugerencias de exploración turística como ["Explorar ciudades", "Aventura y naturaleza", "Cultura e historia"].
+  4. En "extractedPreferences", devuelve un objeto vacío {} sin mutar ninguna preferencia.
+  5. En "readyToBuild", devuelve false.
 
 ESTADO ACTUAL DE PREFERENCIAS CONFIRMADAS DEL VIAJERO:
 ${JSON.stringify(known, null, 2)}
@@ -611,41 +635,24 @@ ${realCatalog ? `DATOS REALES Y VERIFICADOS DEL DESTINO (${destName}, ${destCoun
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}` : ''}
 
 REGLAS CRÍTICAS DE ASESORÍA Y FLUJO CONVERSACIONAL:
-1. SI EL USUARIO NO HA INDICADO UN DESTINO O CIUDAD EN SU MENSAJE NI EN SUS PREFERENCIAS (o la ciudad no está confirmada):
-   - Queda TERMINANTEMENTE PROHIBIDO inventar, asumir o autoasignar una ciudad por tu cuenta (como Bogotá u otra).
-   - En "extractedPreferences.city" y "extractedPreferences.country" DEBES devolver null.
-   - Queda TERMINANTEMENTE PROHIBIDO generar un itinerario de paradas (Día 1, Día 2, etc.) antes de que el destino esté confirmado por el usuario.
-   - Tu respuesta conversacional DEBE:
-     a) Reconocer con entusiasmo los intereses y preferencias recibidas (ejemplo: si busca Playas, Naturaleza, Aventuras o Vida nocturna).
-     b) Recomendarle 2 a 4 destinos ideales que se adapten a la perfección a sus gustos (ejemplo: si busca playas y aventura, sugiere Santa Marta, Cartagena, San Andrés o Cancún).
-     c) Preguntarle a cuál de esos destinos le gustaría viajar o si tiene en mente otra ciudad.
-     d) Preguntarle cuántas personas/amigos viajan en total, en qué fechas y cuántos días planean para su viaje.
-   - En "actionChips", devuelve los nombres de los 2 a 4 destinos recomendados.
+1. SI EL USUARIO NO HA INDICADO UN DESTINO O CIUDAD:
+   - NO inventes ciudades. En "extractedPreferences.city" y "extractedPreferences.country" DEBES devolver null.
+   - Recomienda 2 a 4 destinos ideales que se adapten a los gustos (ej: playas -> Santa Marta, Cartagena).
+   - Pregunta por acompañantes, fechas y días de viaje.
 
-2. SI EL DESTINO YA ESTÁ CONFIRMADO POR EL USUARIO (${destName || 'sin confirmar'}):
+2. SI EL DESTINO YA ESTÁ CONFIRMADO (${destName || 'sin confirmar'}):
    - Proporciona asesoría guiada para ${destName}.
-   - Utiliza OBLIGATORIAMENTE los lugares reales del catálogo. ESTÁ TERMINANTEMENTE PROHIBIDO inventar nombres sintéticos como "Hotel en el Centro de...".
-   - Pregunta por las fechas, eventos locales, actividades preferidas, restaurantes, transporte, presupuesto, acompañantes (especificando si hay niños o adultos mayores) y hospedaje.
+   - Usa lugares reales del catálogo. NO inventes nombres.
 
-3. REGLA ESTRICTA SOBRE HOTELES Y HOSPEDAJE (SOLO INFORMATIVO):
-   - VibeTours es EXCLUSIVAMENTE un diseñador de tours e itinerarios, NO procesa reservas ni pagos de hoteles.
-   - Queda TERMINANTEMENTE PROHIBIDO pedir datos personales, documentos o fingir que vas a realizar la reserva del hotel.
-   - Tu labor con el hospedaje es únicamente recomendar hoteles reales, dar tarifas estimadas y destacar su cercanía con las actividades del tour. Al elegir un hotel, regístralo como punto de partida y sigue con el itinerario.
-
-4. DURACIÓN Y FECHAS:
-   - Si el usuario NO especificó explícitamente cuántos días o en qué fechas viaja, "durationDays" y "datesSeason" DEBEN ser null. Queda PROHIBIDO asumir 3 días u otra duración por defecto.
-
-5. NO REPETICIÓN:
-   - NO repitas preguntas que ya tengan un valor asignado en el JSON de preferencias confirmadas.
-
-6. ACTION CHIPS:
-   - En "actionChips", genera 2 a 4 botones rápidos y relevantes con nombres de lugares reales discutidos, destinos sugeridos o la siguiente acción lógica.
+3. REGLA DE HOSPEDAJE (SOLO INFORMATIVO):
+   - NO proceses reservas ni pagos. Solo recomienda y destaca cercanía.
 
 FORMATO DE SALIDA (JSON):
 Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
 {
   "responseMessage": "Tu mensaje conversacional completo en español...",
   "actionChips": ["Opción 1", "Opción 2", "Opción 3"],
+  "isUnrelatedToTravel": false,
   "extractedPreferences": {
     "city": null,
     "country": null,
@@ -694,14 +701,26 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     const rawContent = data.choices?.[0]?.message?.content ?? '{}'
     const parsed = JSON.parse(rawContent)
 
+    if (parsed.isUnrelatedToTravel) {
+      return {
+        responseMessage: parsed.responseMessage || 'Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas.',
+        actionChips: ['Explorar ciudades', 'Aventura y naturaleza', 'Cultura e historia'],
+        extractedPreferences: {},
+        specificPlaces: known.specificPlaces || [],
+        destinationSuggestions: [],
+        readyToBuild: false,
+        isUnrelatedToTravel: true
+      }
+    }
+
     const responseMessage = parsed.responseMessage || '¡Con mucho gusto! Continuemos organizando tu tour.'
     const actionChips = Array.isArray(parsed.actionChips) && parsed.actionChips.length > 0
       ? parsed.actionChips
       : getDefaultActionChips(known, lastUserMsg)
 
-    // Visual cards are ONLY shown during initial destination exploration (when no city is selected yet)
+    // Visual cards are ONLY shown during initial destination exploration (when no city is selected yet and not unrelated)
     let destinationSuggestions = []
-    if (!hasCity && !parsed.extractedPreferences?.city) {
+    if (!hasCity && !parsed.extractedPreferences?.city && !parsed.isUnrelatedToTravel) {
       destinationSuggestions = await buildVisualDestinationSuggestions(actionChips).catch(() => [])
     }
 
@@ -711,7 +730,8 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
       extractedPreferences: parsed.extractedPreferences || {},
       specificPlaces: parsed.extractedPreferences?.specificPlaces || known.specificPlaces || [],
       destinationSuggestions,
-      readyToBuild: Boolean(parsed.readyToBuild)
+      readyToBuild: Boolean(parsed.readyToBuild),
+      isUnrelatedToTravel: false
     }
   } catch (err) {
     console.error('[generateChatResponse] Error calling OpenAI:', err)
@@ -730,6 +750,10 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
  * Information extractor for backward compatibility with existing route parsers.
  */
 export async function extractChatInformation(userMessage, currentData = {}, history = []) {
+  if (isNonTouristicInput(userMessage)) {
+    return {}
+  }
+
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     return extractChatInformationFallback(userMessage)
