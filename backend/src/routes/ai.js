@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse, isNonTouristicInput } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -64,17 +64,17 @@ const requestSchema = z.object({
 export function isValidSpecificPlace(placeName) {
   if (!placeName || typeof placeName !== 'string') return false
   
-  // Limpiar markdown, viñetas y espacios
-  const clean = placeName.replace(/[*_#•\-]/g, '').trim()
+  // Limpiar markdown, viñetas y espacios conservando guiones internos
+  const clean = placeName.replace(/[*_#•]/g, '').trim()
   if (clean.length < 3) return false
   // 1. Descartar encabezados de días y momentos del día
   const isTimeHeader = /^(d[íi]a\s*\d+|day\s*\d+|mañana|tarde|noche|almuerzo|cena|desayuno|madrugada|atardecer)/i.test(clean)
   if (isTimeHeader) return false
-  // 2. Descartar comodidades, hoteles y frases meta
-  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|paseo|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a)\b/i.test(clean)
+  // 2. Descartar comodidades, hoteles, acciones y frases meta de viaje
+  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|paseo|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport)\b/i.test(clean)
   if (isMetaOrAmenity) return false
   // 3. Descartar categorías de turismo generales y etiquetas temáticas
-  const isCategoryOrTheme = /^(gastronom[íi]a|cultura|historia|naturaleza|aventura|aventuras|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|paseo|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check-in|check-out)$/i.test(clean)
+  const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|paseo|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto)$/i.test(clean.toLowerCase())
   if (isCategoryOrTheme) return false
   // 4. Descartar si es país o "Ciudad, País"
   if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(clean)) {
@@ -300,10 +300,10 @@ aiRouter.post('/chat', async (req, res, next) => {
         }
 
         // 2. Extract numbered or bulleted items
-        const regex = /(?:^|\n)\s*(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/gi
+        const regex = /(?:^|\n)\s*(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/gi
         let m
         while ((m = regex.exec(text)) !== null) {
-          let candidate = m[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita|Paseo en)\b/gi, '').trim()
+          let candidate = m[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita|Paseo en|Check-in en el|Check-in en|Check-out en|Check-in|Check-out|Check)\b/gi, '').trim()
           candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
           if (isValidSpecificPlace(candidate)) {
             found.push(candidate)
@@ -837,46 +837,61 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       }
     }
 
-    const currentNamesAndIds = new Set([
-      ...currentPlaces.map(p => (p.name || '').toLowerCase().trim()),
-      ...currentPlaces.map(p => (p.id || p.placeId || '').toLowerCase().trim()),
-      ...excludeIds.map(id => (id || '').toLowerCase().trim())
-    ])
+    const currentKeys = new Set(
+      currentPlaces.map(p => normalizeKey(p.name || '')).filter(Boolean)
+    )
+    const currentIds = new Set(
+      [
+        ...currentPlaces.map(p => (p.id || p.placeId || '').toLowerCase().trim()),
+        ...excludeIds.map(id => (id || '').toLowerCase().trim())
+      ].filter(Boolean)
+    )
 
     const isDuplicatePlace = (name, pId) => {
-      const normName = (name || '').toLowerCase().trim().replace(/^(el|la|los|las|del)\s+/, '')
-      const normId = (pId || '').toLowerCase().trim()
-
-      if (!normName && !normId) return true
-      if (normId && currentNamesAndIds.has(normId)) return true
-      if (normName && currentNamesAndIds.has(normName)) return true
-
-      const words = normName.split(/\s+/).filter(w => w.length > 3)
-      for (const existing of currentNamesAndIds) {
-        const normExisting = existing.replace(/^(el|la|los|las|del)\s+/, '')
-        if (normExisting.length > 3 && normName.length > 3) {
-          if (normExisting === normName || normExisting.includes(normName) || normName.includes(normExisting)) {
-            return true
-          }
-          if (words.length >= 2) {
-            const matchingWords = words.filter(w => normExisting.includes(w))
-            if (matchingWords.length >= 2) {
-              return true
-            }
-          }
-        }
-      }
+      if (!name && !pId) return true
+      const normKey = normalizeKey(name || '')
+      if (normKey && currentKeys.has(normKey)) return true
+      if (pId && currentIds.has(String(pId).toLowerCase().trim())) return true
       return false
     }
 
+    const isQualityTouristPlace = (p) => {
+      if (!p || !p.name) return false
+      const n = (p.name || '').toLowerCase().trim()
+      if (n.length < 3) return false
+      if (n === city.toLowerCase() || n === `${city.toLowerCase()}, ${country.toLowerCase()}` || n.includes(`${city.toLowerCase()} ${city.toLowerCase()}`)) {
+        return false
+      }
+      if (/\b(aeropuerto|airport|terminal de transporte|terminal de buses|estaci[oó]n de servicio|gasolinera|hospital|cl[íi]nica|parqueadero|parking|alcald[íi]a|gobernaci[oó]n|cementerio|carulla|éxito|olímpica|d1|ara|banco|cajero)\b/i.test(n)) {
+        return false
+      }
+      return isValidSpecificPlace(p.name)
+    }
+
     let available = (candidatePack.places || []).filter(place => {
-      return !isDuplicatePlace(place.name, place.placeId || place.id)
+      return isQualityTouristPlace(place) && !isDuplicatePlace(place.name, place.placeId || place.id)
     })
 
-    // 4. If OSM doesn't return enough unique real places, query OpenAI for REAL physical attractions in this exact city!
-    if (available.length < 5) {
+    // Si OSM no tiene suficientes lugares turísticos únicos, enriquecer con presets de la ciudad y OpenAI
+    if (available.length < 6) {
+      const preset = getDestinationPresets(city, country)
+      if (preset && Array.isArray(preset.places)) {
+        for (const presetName of preset.places) {
+          if (!isDuplicatePlace(presetName, null) && isQualityTouristPlace({ name: presetName })) {
+            available.push({
+              name: presetName,
+              category: 'tourism',
+              city,
+              country
+            })
+          }
+        }
+      }
+    }
+
+    if (available.length < 6) {
       console.info('[alternatives] Querying OpenAI for REAL places in:', city)
-      const excludeNameList = Array.from(currentNamesAndIds).filter(n => n.length > 2)
+      const excludeNameList = Array.from(currentKeys).filter(n => n.length > 2)
       const aiSuggestions = await suggestFallbackPlacesWithOpenAI({
         destination,
         city,
@@ -891,8 +906,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
 
         for (let i = 0; i < aiSuggestions.length; i++) {
           const item = aiSuggestions[i]
-          if (item.name && !isDuplicatePlace(item.name, null)) {
-            // Geocode the exact physical landmark to place marker accurately on the map
+          if (item?.name && !isDuplicatePlace(item.name, null) && isQualityTouristPlace(item)) {
             const geo = await geocodePlace(`${item.name} ${city} ${country}`, centerLat, centerLon).catch(() => null)
             const realLat = geo?.latitude ?? (centerLat + (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1))
             const realLon = geo?.longitude ?? (centerLon + (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1))

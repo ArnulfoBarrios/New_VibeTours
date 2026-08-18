@@ -640,11 +640,22 @@ REGLAS CRÍTICAS DE ASESORÍA Y FLUJO CONVERSACIONAL:
    - Recomienda 2 a 4 destinos ideales que se adapten a los gustos (ej: playas -> Santa Marta, Cartagena).
    - Pregunta por acompañantes, fechas y días de viaje.
 
-2. SI EL DESTINO YA ESTÁ CONFIRMADO (${destName || 'sin confirmar'}):
-   - Proporciona asesoría guiada para ${destName}.
-   - Usa lugares reales del catálogo. NO inventes nombres.
+2. REGLA ESTRICTA DE FECHAS, DURACIÓN E ITINERARIOS:
+   - Queda TERMINANTEMENTE PROHIBIDO generar un desglose por días ("Día 1", "Día 2", "Día 3", etc.) si el usuario NO ha indicado explícitamente las fechas o los días de duración de su viaje en el chat.
+   - Si el usuario dice "agrega todo al itinerario", "arma el itinerario" o "quiero armar el plan", pero aún NO se han definido las fechas o duración:
+     1. Confirma amablemente los lugares y experiencias seleccionados.
+     2. Pregúntale OBLIGATORIAMENTE: "¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName || 'el destino'}?"
+     3. Devuelve "readyToBuild": false.
 
-3. REGLA DE HOSPEDAJE (SOLO INFORMATIVO):
+3. REGLA ESTRICTA DE GENERACIÓN ("readyToBuild"):
+   - "readyToBuild" SOLO puede ser true cuando se cumplan TODAS estas condiciones:
+     a) Destino/ciudad confirmado.
+     b) Fechas o días de duración confirmados por el usuario.
+     c) Tipo de acompañantes confirmado.
+     d) El usuario pide explícitamente generar o finalizar el tour.
+   - Si falta cualquiera de estos datos (por ejemplo, si faltan las fechas o los días), "readyToBuild" DEBE ser false y debes preguntarle amablemente por el dato faltante en responseMessage.
+
+4. REGLA DE HOSPEDAJE (SOLO INFORMATIVO):
    - NO proceses reservas ni pagos. Solo recomienda y destaca cercanía.
 
 FORMATO DE SALIDA (JSON):
@@ -684,21 +695,21 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: systemPrompt },
           ...formattedHistory
         ],
-        temperature: 0.5
+        temperature: 0.5,
+        response_format: { type: 'json_object' }
       })
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`)
+      throw new Error(`OpenAI API error: ${response.statusText}`)
     }
 
     const data = await response.json()
-    const rawContent = data.choices?.[0]?.message?.content ?? '{}'
+    const rawContent = data.choices?.[0]?.message?.content || '{}'
     const parsed = JSON.parse(rawContent)
 
     if (parsed.isUnrelatedToTravel) {
@@ -713,7 +724,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
       }
     }
 
-    const responseMessage = parsed.responseMessage || '¡Con mucho gusto! Continuemos organizando tu tour.'
+    const responseMessage = parsed.responseMessage || `¡Genial! Continuemos organizando tu viaje.`
     const actionChips = Array.isArray(parsed.actionChips) && parsed.actionChips.length > 0
       ? parsed.actionChips
       : getDefaultActionChips(known, lastUserMsg)
@@ -723,6 +734,14 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     if (!hasCity && !parsed.extractedPreferences?.city && !parsed.isUnrelatedToTravel) {
       destinationSuggestions = await buildVisualDestinationSuggestions(actionChips).catch(() => [])
     }
+
+    const hasDurationOrDates = Boolean(
+      known.durationDays ||
+      parsed.extractedPreferences?.durationDays ||
+      known.datesSeason ||
+      parsed.extractedPreferences?.datesSeason
+    )
+    const effectiveReadyToBuild = Boolean(parsed.readyToBuild && hasDurationOrDates && hasCity)
 
     return {
       responseMessage,

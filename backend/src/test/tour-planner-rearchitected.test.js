@@ -88,6 +88,18 @@ test('isValidSpecificPlace must reject category words and accept authentic POI n
   assert.equal(isValidSpecificPlace('Día 1'), false)
   assert.equal(isValidSpecificPlace('Hotel Casa La Fe'), false)
 
+  // Actions, metadata and check words must be rejected
+  assert.equal(isValidSpecificPlace('Check'), false)
+  assert.equal(isValidSpecificPlace('Check-in'), false)
+  assert.equal(isValidSpecificPlace('Check-out'), false)
+  assert.equal(isValidSpecificPlace('Check-in en el hotel'), false)
+  assert.equal(isValidSpecificPlace('Check-out y regreso a casa'), false)
+  assert.equal(isValidSpecificPlace('Llegada'), false)
+  assert.equal(isValidSpecificPlace('Despedida'), false)
+  assert.equal(isValidSpecificPlace('Gastronomía local'), false)
+  assert.equal(isValidSpecificPlace('Vida nocturna'), false)
+  assert.equal(isValidSpecificPlace('Aeropuerto'), false)
+
   // Real POIs must be accepted
   assert.equal(isValidSpecificPlace('Catedral Basílica de Santa Marta'), true)
   assert.equal(isValidSpecificPlace('Parque de Los Novios'), true)
@@ -127,6 +139,7 @@ test('imageForPlaceWithStatus must serve culinary/restaurant image for restauran
   // Must NOT be the Santa Marta port/bay photo (photo-1596436889106-be35e843f974)
   assert.ok(!res.url.includes('photo-1596436889106-be35e843f974'), 'Restaurant image should be a gourmet food/dining photo, not the port of Santa Marta')
 })
+
 
 
 

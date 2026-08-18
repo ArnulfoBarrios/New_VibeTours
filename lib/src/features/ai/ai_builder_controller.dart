@@ -241,21 +241,8 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           webSearchDone: webSearchDone,
         );
 
-        // Si el backend considera que ya tenemos la información suficiente o el usuario lo pide
-        final isExplicitBuild = RegExp(r'\b(genera(r)?|crea(r)?|construir|arma(r)?|haz|listo|adelante)\s+(el\s+)?(tour|itinerario)\b', caseSensitive: false).hasMatch(text) ||
-            text.toLowerCase().contains('generar tour') ||
-            text.toLowerCase().contains('genera el tour') ||
-            text.toLowerCase().contains('adelante genera') ||
-            text.toLowerCase().contains('crear tour') ||
-            text.toLowerCase().contains('generar itinerario') ||
-            text.toLowerCase().contains('genera el itinerario') ||
-            text.toLowerCase().contains('sí, genera') ||
-            text.toLowerCase().contains('si, genera') ||
-            text.toLowerCase().contains('finalizar') ||
-            text.toLowerCase().contains('generar tour ahora') ||
-            text.toLowerCase().contains('generar itinerario completo');
-
-        if (readyToBuild || isExplicitBuild) {
+        // Construir el tour ÚNICAMENTE si el backend confirmó que tenemos todos los datos necesarios (readyToBuild == true)
+        if (readyToBuild) {
           final rawDest = (updatedPreferences['city'] ?? updatedPreferences['destination'] ?? '').toString();
           final dest = rawDest.replaceFirst(RegExp(r'^(destino|lugar|ciudad|ubicación|ubicacion|location|destination|pais|país)\s*:\s*', caseSensitive: false), '').trim();
           if (dest.isNotEmpty) {
