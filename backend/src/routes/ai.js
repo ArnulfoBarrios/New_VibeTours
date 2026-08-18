@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse, isNonTouristicInput } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
