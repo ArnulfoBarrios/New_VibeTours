@@ -73,13 +73,6 @@ chatRouter.post('/message', async (req, res, next) => {
         if (location?.latitude && location?.longitude) {
           state.collectedData.latitude = location.latitude
           state.collectedData.longitude = location.longitude
-          if (!state.collectedData.city) {
-            const revGeo = await reverseGeocodeLocation(location.latitude, location.longitude).catch(() => null)
-            if (revGeo?.city) {
-              state.collectedData.city = cleanAdministrativeCityName(revGeo.city)
-              if (revGeo.country) state.collectedData.country = revGeo.country
-            }
-          }
         }
 
         // Normalizar destino si viene en city

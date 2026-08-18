@@ -482,11 +482,15 @@ export function getDefaultActionChips(known = {}, lastMessage = '') {
     if (isInternational) {
       return ['París', 'Roma', 'Nueva York', 'Madrid']
     }
-    if (/playa|mar|costa|brisa/i.test(lastMessage)) {
+    const hasBeach = /playa|mar|costa|brisa/i.test(lastMessage) || (Array.isArray(known.interests) && known.interests.includes('Playas'))
+    if (hasBeach) {
       return ['Santa Marta', 'Cartagena', 'San Andrés', 'Cancún']
     }
     if (/hist[óo]rica|historia|cultura/i.test(lastMessage)) {
       return ['Cartagena', 'Bogotá', 'Cusco', 'Roma']
+    }
+    if (/naturaleza|aventura/i.test(lastMessage)) {
+      return ['Santa Marta', 'Cusco', 'Cancún', 'Medellín']
     }
     return ['Santa Marta', 'Cartagena', 'Medellín', 'Bogotá']
   }
@@ -548,9 +552,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   if (!apiKey) {
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
     const preset = getDestinationPresets(destName, destCountry)
-    let fallbackMsg = '¡Hola! Qué gusto saludarte. Soy Tour Planner AI. Cuéntame: ¿a qué ciudad te gustaría viajar?'
+    let fallbackMsg = '¡Hola! Qué gusto saludarte. Soy Tour Planner AI. Cuéntame: ¿a qué ciudad o destino te gustaría viajar?'
 
-    if (hasCity) {
+    if (!hasCity) {
+      if (/playa|mar|costa/i.test(lastUserMsg)) {
+        fallbackMsg = '¡Excelente! Para disfrutar de sol, playas y vida nocturna, te recomiendo destinos increíbles como **Santa Marta**, **Cartagena**, **San Andrés** o **Cancún**. ¿Cuál de estos te llama más la atención o tienes otra ciudad en mente?'
+      } else if (/naturaleza|aventura/i.test(lastUserMsg)) {
+        fallbackMsg = '¡Genial! Para conectar con la naturaleza y la aventura te sugiero destinos como **Santa Marta (Parque Tayrona y Minca)**, **Cusco** o **Medellín**. ¿Cuál de ellos prefieres?'
+      }
+    } else {
       if (/\b(actividad|actividades|lugares|qu[eé] hacer|atracciones)\b/i.test(lastUserMsg)) {
         fallbackMsg = `¡Aquí tienes las actividades y lugares más recomendados en ${destName}! 🌟\n\n` +
           preset.places.slice(0, 4).map((p, i) => `${i + 1}. **${p}**: Visita imperdible con gran riqueza turística y cultural.`).join('\n') +
@@ -568,7 +578,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           ? `¡Eventos emblemáticos en ${destName}! 🎉\n\n` + preset.events.map(e => `• **${e.name}** (${e.month}): ${e.desc}`).join('\n')
           : `Para las fechas de tu viaje no hay festivales especiales masivos programados en ${destName}.`
       } else {
-        fallbackMsg = `¡Excelente elección viajar a ${destName}! Cuéntame, ¿en qué fechas planeas realizar tu tour?`
+        fallbackMsg = `¡Excelente elección viajar a ${destName}! Cuéntame, ¿en qué fechas planeas realizar tu tour y por cuántos días?`
       }
     }
 
@@ -600,30 +610,50 @@ ${realCatalog ? `DATOS REALES Y VERIFICADOS DEL DESTINO (${destName}, ${destCoun
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}` : ''}
 
-INSTRUCCIONES DE CONVERSACIÓN Y GUÍA:
-1. Responde SIEMPRE de manera completa, atractiva, estructurada y sin dejar mensajes cortados.
-2. Si el usuario pregunta por actividades, hoteles, restaurantes o eventos, utiliza OBLIGATORIAMENTE los lugares reales listados arriba. ESTÁ TERMINANTEMENTE PROHIBIDO inventar nombres sintéticos como "Hotel en el Centro de...".
-3. Si el usuario pregunta por eventos: menciona los eventos reales que coincidan con sus fechas. Si para sus fechas no hay festivales especiales programados, dilo con total honestidad y menciona únicamente los eventos emblemáticos anuales reales de la ciudad.
-4. Si el usuario confirma un hotel, actividad o restaurante, guárdalo y avanza amablemente al siguiente paso (fechas, presupuesto, transporte, acompañantes, o generación del tour).
-5. NO repitas preguntas que ya tengan valor en el JSON de preferencias confirmadas.
-6. En "actionChips", genera 2 a 4 botones rápidos y relevantes con nombres de lugares reales discutidos o la siguiente acción lógica.
+REGLAS CRÍTICAS DE ASESORÍA Y FLUJO CONVERSACIONAL:
+1. SI EL USUARIO NO HA INDICADO UN DESTINO O CIUDAD EN SU MENSAJE NI EN SUS PREFERENCIAS (o la ciudad no está confirmada):
+   - Queda TERMINANTEMENTE PROHIBIDO inventar, asumir o autoasignar una ciudad por tu cuenta (como Bogotá u otra).
+   - En "extractedPreferences.city" y "extractedPreferences.country" DEBES devolver null.
+   - Queda TERMINANTEMENTE PROHIBIDO generar un itinerario de paradas (Día 1, Día 2, etc.) antes de que el destino esté confirmado por el usuario.
+   - Tu respuesta conversacional DEBE:
+     a) Reconocer con entusiasmo los intereses y preferencias recibidas (ejemplo: si busca Playas, Naturaleza, Aventuras o Vida nocturna).
+     b) Recomendarle 2 a 4 destinos ideales que se adapten a la perfección a sus gustos (ejemplo: si busca playas y aventura, sugiere Santa Marta, Cartagena, San Andrés o Cancún).
+     c) Preguntarle a cuál de esos destinos le gustaría viajar o si tiene en mente otra ciudad.
+     d) Preguntarle cuántas personas/amigos viajan en total, en qué fechas y cuántos días planean para su viaje.
+   - En "actionChips", devuelve los nombres de los 2 a 4 destinos recomendados.
 
-FORMATO DE SALIDA:
+2. SI EL DESTINO YA ESTÁ CONFIRMADO POR EL USUARIO (${destName || 'sin confirmar'}):
+   - Proporciona asesoría guiada para ${destName}.
+   - Utiliza OBLIGATORIAMENTE los lugares reales del catálogo. ESTÁ TERMINANTEMENTE PROHIBIDO inventar nombres sintéticos como "Hotel en el Centro de...".
+   - Pregunta por las fechas, eventos locales, actividades preferidas, restaurantes, transporte, presupuesto, acompañantes (especificando si hay niños o adultos mayores) y hospedaje.
+
+3. DURACIÓN Y FECHAS:
+   - Si el usuario NO especificó explícitamente cuántos días o en qué fechas viaja, "durationDays" y "datesSeason" DEBEN ser null. Queda PROHIBIDO asumir 3 días u otra duración por defecto.
+
+4. NO REPETICIÓN:
+   - NO repitas preguntas que ya tengan un valor asignado en el JSON de preferencias confirmadas.
+
+5. ACTION CHIPS:
+   - En "actionChips", genera 2 a 4 botones rápidos y relevantes con nombres de lugares reales discutidos, destinos sugeridos o la siguiente acción lógica.
+
+FORMATO DE SALIDA (JSON):
 Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
 {
   "responseMessage": "Tu mensaje conversacional completo en español...",
   "actionChips": ["Opción 1", "Opción 2", "Opción 3"],
   "extractedPreferences": {
-    "city": "Nombre limpio de la ciudad si se mencionó",
-    "country": "País",
-    "datesSeason": "Fechas si se mencionaron",
-    "durationDays": 3,
-    "companions": "Solo | Pareja | Amigos | Familia con niños",
+    "city": null,
+    "country": null,
+    "datesSeason": null,
+    "durationDays": null,
+    "companions": null,
+    "groupSize": null,
     "hasChildren": false,
-    "budget": "Económico | Moderado | Lujo",
-    "transport": "Caminando | Transporte público | Auto rentado | Taxi",
-    "selectedHotel": { "name": "Nombre exacto del hotel" },
-    "specificPlaces": ["Atracción 1", "Restaurante 1"]
+    "budget": null,
+    "transport": null,
+    "interests": [],
+    "selectedHotel": null,
+    "specificPlaces": []
   },
   "readyToBuild": false
 }`
@@ -700,17 +730,18 @@ export async function extractChatInformation(userMessage, currentData = {}, hist
     return extractChatInformationFallback(userMessage)
   }
 
-  const prompt = `Analiza el mensaje del usuario y extrae ÚNICAMENTE los datos turísticos explícitos en un JSON:
-Campos:
-- "city" / "destination": ciudad limpia
-- "country": país
-- "datesSeason": fechas
-- "durationDays": número de días (si dice puente festivo = 3, fin de semana = 2, una semana = 7)
-- "companions": "Solo", "Pareja", "Amigos", "Familia con niños"
-- "budget": "Económico", "Moderado", "Lujo"
-- "transport": "Caminando", "Transporte público", "Auto rentado", "Taxi"
-- "selectedHotel": { "name": "Nombre del hotel" } (solo si lo confirma explícitamente)
-- "specificPlaces": array con nombres de atracciones o restaurantes
+  const prompt = `Analiza el mensaje del usuario y extrae ÚNICAMENTE los datos turísticos explícitamente indicados por el usuario en un JSON:
+REGLAS ESTRICTAS:
+- "city" / "destination": ciudad limpia SOLO si el usuario la escribió explícitamente. Si no la mencionó, pon null (PROHIBIDO asumir o inferir una ciudad).
+- "country": país SOLO si se mencionó o se deduce de una ciudad explícita. Si no, null.
+- "datesSeason": fechas SOLO si se mencionaron. Si no, null.
+- "durationDays": número de días SOLO si el usuario especificó la duración (ej: "3 días", "un fin de semana" -> 2, "puente festivo" -> 3, "una semana" -> 7). Si no especificó duración ni fechas, DEBE ser null.
+- "companions": "Solo" | "Pareja" | "Amigos" | "Familia con niños" (si se mencionó).
+- "budget": "Económico" | "Moderado" | "Lujo" (si se mencionó).
+- "transport": "Caminando" | "Transporte público" | "Auto rentado" | "Taxi" (si se mencionó).
+- "interests": array con los intereses o gustos mencionados (ej: ["Playas", "Naturaleza", "Aventuras", "Vida nocturna"]).
+- "selectedHotel": { "name": "Nombre del hotel" } (solo si lo confirma explícitamente).
+- "specificPlaces": array con nombres de atracciones o restaurantes específicos mencionados.
 Mensaje: "${userMessage}"`
 
   try {
@@ -768,6 +799,15 @@ export function extractChatInformationFallback(prompt) {
   else if (/caminando|a pie/i.test(lower)) res.transport = 'Caminando'
   else if (/transporte p[úu]blico|bus|metro/i.test(lower)) res.transport = 'Transporte público'
   else if (/taxi|uber/i.test(lower)) res.transport = 'Taxi'
+
+  const interests = []
+  if (/playa/i.test(lower)) interests.push('Playas')
+  if (/naturaleza/i.test(lower)) interests.push('Naturaleza')
+  if (/aventura/i.test(lower)) interests.push('Aventuras')
+  if (/vida nocturna|fiesta|rumba|bares/i.test(lower)) interests.push('Vida nocturna')
+  if (/cultura|historia|museos/i.test(lower)) interests.push('Cultura')
+  if (/gastronom[íi]a|comida|restaurantes/i.test(lower)) interests.push('Gastronomía')
+  if (interests.length > 0) res.interests = interests
 
   return res
 }

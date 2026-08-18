@@ -57,3 +57,21 @@ test('planWithOpenAI template output schema conforms to official JSON specificat
 
   assert.ok(samplePlaces.length >= 3)
 })
+
+test('user prompt with interests but without explicit city must recommend beach/adventure destinations and NOT assume Bogota or 3 days', async () => {
+  const prompt = 'Hola. Me gustaría que me diseñes un viaje para amigos, manejando un presupuesto moderado. Prefiero llevar un ritmo equilibrado y me gustaría moverme principalmente en auto rentado. El momento ideal para mis actividades sería por las tardes. Mis intereses principales son: Playas, Naturaleza, Aventuras, Vida nocturna.'
+  const state = {
+    history: [{ role: 'user', content: prompt }]
+  }
+
+  const res = await generateChatResponse(state, '', '', {})
+  assert.ok(res.responseMessage)
+  // Should NOT assume Bogota or generate day-by-day stops for Bogota
+  assert.ok(!res.responseMessage.includes('Jardín Botánico de Bogotá'))
+  assert.ok(!res.responseMessage.includes('Día 1:'))
+  // Should recommend beach destinations
+  assert.ok(/Santa Marta|Cartagena|San Andrés|Cancún/i.test(res.responseMessage))
+  // Should have action chips for beach destinations
+  assert.ok(res.actionChips.some(c => /Santa Marta|Cartagena|San Andrés|Cancún/i.test(c)))
+})
+
