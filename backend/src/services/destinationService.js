@@ -88,9 +88,29 @@ export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
   return R * c
 }
 
+export function cleanAdministrativeCityName(rawName = '') {
+  if (!rawName || typeof rawName !== 'string') return ''
+  let cleaned = rawName.trim()
+
+  cleaned = cleaned.replace(/^(per[íi]metro\s+urbano\s+(de\s+)?)/i, '')
+  cleaned = cleaned.replace(/^(distrito\s+tur[íi]stico[,\s]+cultural\s+e\s+hist[óo]rico\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/^(distrito\s+especial[,\s]+industrial\s+y\s+portuario\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/^(distrito\s+capital\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/^(distrito\s+especial\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/^(municipio\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/^(comuna\s+\d+\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/^(ciudad\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/^(área\s+metropolitana\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/^(area\s+metropolitana\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/,\s*(distrito\s+capital|d\.?\s*c\.?|per[íi]metro\s+urbano)$/i, '')
+
+  return cleaned.trim()
+}
+
 export async function resolveCanonicalDestination(query, options = {}) {
   if (!query || typeof query !== 'string') return null
   let cleaned = query.trim().replace(/^(destino|lugar|ciudad|ubicaci[oó]n|location|destination|pais|pa[íi]s)\s*:\s*/i, '').trim()
+  cleaned = cleanAdministrativeCityName(cleaned)
   if (!cleaned) return null
 
   const cacheKey = `canonical_${cleaned.toLowerCase()}`
@@ -120,7 +140,8 @@ export async function resolveCanonicalDestination(query, options = {}) {
       if (Array.isArray(results) && results.length > 0) {
         const candidateObjects = results.map(item => {
           const address = item.address || {}
-          const city = address.city || address.town || address.village || address.municipality || address.county || address.state_district || ''
+          let rawCity = address.city || address.town || address.village || address.municipality || address.county || address.state_district || ''
+          const city = cleanAdministrativeCityName(rawCity) || cleanAdministrativeCityName(cleaned)
           const region = address.state || address.region || address.county || ''
           const countryRaw = address.country || ''
           const countryCode = (address.country_code || '').toUpperCase()
@@ -128,8 +149,8 @@ export async function resolveCanonicalDestination(query, options = {}) {
           const lat = Number(item.lat)
           const lon = Number(item.lon)
 
-          // Format clean displayName e.g. "Cartagena, Bolívar, Colombia"
-          const displayParts = [city || item.name?.split(',')[0], region !== city ? region : '', country].filter(Boolean)
+          // Format clean displayName e.g. "Santa Marta, Magdalena, Colombia"
+          const displayParts = [city || cleanAdministrativeCityName(item.name?.split(',')[0]), region !== city ? region : '', country].filter(Boolean)
           const displayName = displayParts.join(', ')
 
           return {

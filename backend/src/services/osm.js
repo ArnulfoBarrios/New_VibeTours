@@ -1,4 +1,5 @@
 import { GeoCache } from './geoCache.js'
+import { cleanAdministrativeCityName, formatCountryName } from './destinationService.js'
 
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
 
@@ -25,7 +26,7 @@ export async function reverseGeocodeUserCountry(lat, lon) {
     if (response.ok) {
       const data = await response.json()
       if (data && data.address && data.address.country) {
-        const country = data.address.country
+        const country = formatCountryName(data.address.country, data.address.country_code)
         reverseCache.set(key, country)
         return country
       }
@@ -53,14 +54,13 @@ export async function reverseGeocodeLocation(lat, lon) {
       const data = await response.json()
       if (data && data.address) {
         let city = data.address.city || data.address.town || data.address.village || data.address.municipality || data.address.county || data.address.state || ''
-        if (city.toLowerCase().includes('perímetro urbano')) {
-          city = city.replace(/perímetro urbano\s*/i, '').trim()
-        }
-        const country = data.address.country || ''
+        city = cleanAdministrativeCityName(city)
+        const countryRaw = data.address.country || ''
+        const country = formatCountryName(countryRaw, data.address.country_code)
         const res = {
           city,
           country,
-          name: data.display_name || city
+          name: city ? (country ? `${city}, ${country}` : city) : cleanAdministrativeCityName(data.display_name)
         }
         reverseCache.set(key, res)
         return res

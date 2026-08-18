@@ -6,7 +6,7 @@ import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, revers
 import { getWikipediaContext } from '../services/wikipedia.js'
 import { optimizeRoute } from '../services/tomtom.js'
 import { collectTourCandidates } from './ai.js'
-import { resolveCanonicalDestination } from '../services/destinationService.js'
+import { resolveCanonicalDestination, cleanAdministrativeCityName } from '../services/destinationService.js'
 
 export const chatRouter = Router()
 
@@ -66,6 +66,8 @@ chatRouter.post('/message', async (req, res, next) => {
         // Extraer info con OpenAI
         const extracted = await extractChatInformation(message, state.collectedData, state.history)
         if (extracted) {
+          if (extracted.city) extracted.city = cleanAdministrativeCityName(extracted.city)
+          if (extracted.destination) extracted.destination = cleanAdministrativeCityName(extracted.destination)
           Object.assign(state.collectedData, extracted)
         }
         if (location?.latitude && location?.longitude) {
@@ -74,15 +76,18 @@ chatRouter.post('/message', async (req, res, next) => {
           if (!state.collectedData.city) {
             const revGeo = await reverseGeocodeLocation(location.latitude, location.longitude).catch(() => null)
             if (revGeo?.city) {
-              state.collectedData.city = revGeo.city
+              state.collectedData.city = cleanAdministrativeCityName(revGeo.city)
               if (revGeo.country) state.collectedData.country = revGeo.country
             }
           }
         }
 
         // Normalizar destino si viene en city
-        if (state.collectedData.city && !state.collectedData.destination) {
-          state.collectedData.destination = state.collectedData.city
+        if (state.collectedData.city) {
+          state.collectedData.city = cleanAdministrativeCityName(state.collectedData.city)
+          if (!state.collectedData.destination) {
+            state.collectedData.destination = state.collectedData.city
+          }
         }
 
         // Verificar campos faltantes

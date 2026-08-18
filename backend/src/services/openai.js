@@ -1,6 +1,8 @@
 import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus } from './imageSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from './intentClassifier.js'
+import { cleanAdministrativeCityName } from './destinationService.js'
+import { searchWebForTravel } from './webSearch.js'
 
 const locationExtractCache = new GeoCache(12 * 60 * 60 * 1000, 300)
 const planCache = new GeoCache(6 * 60 * 60 * 1000, 200)
@@ -761,7 +763,7 @@ function getNextMissingPreference(known = {}) {
   return 'all_completed'
 }
 
-function getDefaultActionChips(known = {}, lastMessage = '') {
+export function getDefaultActionChips(known = {}, lastMessage = '') {
   const destName = known.city || known.destination
   const hasCity = Boolean(destName)
   const isAskingRestaurants = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|gastronom[íi]a|comida)\b/i.test(lastMessage)
@@ -789,15 +791,26 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
   const nextMissing = getNextMissingPreference(known)
 
   if (nextMissing === 'city') {
+    const isDomesticOrNearby = /cercan|cerca|en mi zona|mi zona|mi ciudad|mi pa[íi]s|propio pa[íi]s|dentro del pa[íi]s|nacional|colombia/i.test(lastMessage)
     const isHistory = /hist[óo]rica|historia|patrimonio|monumento|antigua|museo|cultural/i.test(lastMessage) || /hist[óo]rica/i.test(String(known.destination || '')) || /hist[óo]rica/i.test(String(known.city || ''))
-    if (isHistory) return ['Cartagena', 'Cusco', 'Roma', 'Toledo']
     const isInternational = /internacional|exterior|otro país|fuera del país|europa|asia|eeuu|usa|extranjero|fuera|viaje internacional/i.test(lastMessage)
-    if (isInternational) return ['París', 'Madrid', 'Nueva York', 'Cancún']
     const isBeach = /playa|mar|costa|brisa|isla|relajarme|relajar/i.test(lastMessage)
-    if (isBeach) return ['Cartagena', 'Santa Marta', 'San Andrés', 'Cancún']
     const isNature = /naturaleza|bosque|senderismo|ecoturismo|montaña/i.test(lastMessage)
-    if (isNature) return ['Eje Cafetero', 'Medellín', 'Santa Marta', 'San Gil']
-    return ['Cartagena', 'Medellín', 'Santa Marta', 'Bogotá']
+
+    if (isDomesticOrNearby && !isInternational) {
+      const userLat = Number(known.latitude)
+      const userLon = Number(known.longitude)
+      if (userLat > 10 && userLat < 12 && userLon > -76 && userLon < -72) {
+        return ['Santa Marta', 'Taganga', 'Minca', 'Cartagena']
+      }
+      return ['Santa Marta', 'Cartagena', 'Medellín', 'Bogotá']
+    }
+
+    if (isInternational) return ['París', 'Madrid', 'Nueva York', 'Cancún']
+    if (isBeach) return ['Santa Marta', 'Cartagena', 'San Andrés', 'Taganga']
+    if (isNature) return ['Minca', 'Parque Tayrona', 'Eje Cafetero', 'Medellín']
+    if (isHistory) return ['Cartagena', 'Santa Marta', 'Bogotá', 'Villa de Leyva']
+    return ['Santa Marta', 'Cartagena', 'Medellín', 'Bogotá']
   }
 
   if (nextMissing === 'datesSeason') return ['Próximo mes', 'Este fin de semana', 'Vacaciones de mitad de año', 'Fin de año']
@@ -836,6 +849,40 @@ export const DESTINATION_LOCAL_PRESETS = {
       'Paseo en Chiva',
       'Café del Mar',
       'Plaza de Santo Domingo y Getsemaní'
+    ],
+    events: [
+      { name: 'Hay Festival Cartagena', month: 'Enero/Febrero', desc: 'Prestigioso encuentro internacional de literatura, arte, ciencia y pensamiento en el Centro Histórico.' },
+      { name: 'Festival Internacional de Cine de Cartagena (FICCI)', month: 'Marzo/Abril', desc: 'El festival de cine más antiguo de América Latina dedicado a la cinematografía iberoamericana.' },
+      { name: 'Fiestas de la Independencia de Cartagena', month: 'Noviembre', desc: 'Gran celebración popular con desfiles de comparsas, música caribeña y reinados tradicionales.' }
+    ]
+  },
+  'santa marta': {
+    name: 'Santa Marta',
+    country: 'Colombia',
+    hotels: [
+      { name: 'Hotel Irotama Resort', desc: 'Icónico resort frente al mar en Bello Horizonte con amplias piscinas tropicales, spa, acceso directo a la playa y múltiples restaurantes.', price: '~$120 - $190 USD/noche' },
+      { name: 'Hotel Boutique Don Pepe', desc: 'Elegante y exclusivo hotel boutique en el Centro Histórico de Santa Marta con spa de hidroterapia, terraza gourmet y arquitectura colonial refinada.', price: '~$100 - $160 USD/noche' },
+      { name: 'Santa Marta Marriott Resort Playa Dormida', desc: 'Lujo contemporáneo frente al mar con acceso directo a playa virgen, piscina infinita y gastronomía caribeña.', price: '~$140 - $220 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante Donde Chucho', specialty: 'Legendaria cazuela de mariscos cremosa, pargo rojo frito al estilo caribeño y ceviches frescos en El Rodadero y Centro' },
+      { name: 'Restaurante Guásimo', specialty: 'Alta cocina contemporánea del Gran Caribe inspirada en los saberes ancestrales de la Sierra Nevada y pesca del día' },
+      { name: 'Restaurante Ostrería Mary', specialty: 'Auténticos ceviches artesanales de ostras, camarón y pulpo fresco en el Centro Histórico' },
+      { name: 'Restaurante El Bistró Santa Marta', specialty: 'Bistronomía artesanal con panes horneados en casa, tapas mediterráneas y pescados a la plancha' }
+    ],
+    places: [
+      'Parque Nacional Natural Tayrona',
+      'Quinta de San Pedro Alejandrino',
+      'Bahía de Taganga',
+      'Catedral Basílica de Santa Marta',
+      'Centro Histórico y Parque de Los Novios',
+      'Playa Blanca y Acuario de El Rodadero',
+      'Minca y cascadas de la Sierra Nevada',
+      'Museo del Oro Tairona - Casa de la Aduana'
+    ],
+    events: [
+      { name: 'Fiesta del Mar', month: 'Julio (último fin de semana)', desc: 'La máxima festividad de Santa Marta que celebra el aniversario de la ciudad con competencias náuticas internacionales, conciertos masivos en la playa y desfiles folclóricos.' },
+      { name: 'Festival Internacional de Teatro del Caribe (Festicaribe)', month: 'Septiembre', desc: 'Encuentro cultural con compañías teatrales y presentaciones al aire libre en plazas históricas.' }
     ]
   },
   medellin: {
@@ -859,6 +906,9 @@ export const DESTINATION_LOCAL_PRESETS = {
       'Jardín Botánico de Medellín',
       'Barrio Provenza y El Poblado',
       'Pueblito Paisa en el Cerro Nutibara'
+    ],
+    events: [
+      { name: 'Feria de las Flores', month: 'Agosto (primera semana)', desc: 'El evento cultural más emblemático de Medellín con el Desfile de Silleteros, conciertos y exhibición floral.' }
     ]
   },
   bogota: {
@@ -882,6 +932,10 @@ export const DESTINATION_LOCAL_PRESETS = {
       'Museo Botero',
       'Parque de la 93 y Zona Rosa',
       'Jardín Botánico de Bogotá'
+    ],
+    events: [
+      { name: 'Festival Estéreo Picnic', month: 'Marzo/Abril', desc: 'Uno de los festivales de música alternativa y pop más grandes de Sudamérica.' },
+      { name: 'Feria Internacional del Libro de Bogotá (FILBo)', month: 'Abril/Mayo', desc: 'Gran encuentro literario y cultural en Corferias con autores de todo el mundo.' }
     ]
   },
   miami: {
@@ -905,6 +959,9 @@ export const DESTINATION_LOCAL_PRESETS = {
       'Vizcaya Museum and Gardens',
       'Bayside Marketplace y Bahía de Biscayne',
       'Miami Design District'
+    ],
+    events: [
+      { name: 'Art Basel Miami Beach', month: 'Diciembre', desc: 'La feria de arte contemporáneo internacional más importante de Norteamérica.' }
     ]
   },
   roma: {
@@ -928,6 +985,9 @@ export const DESTINATION_LOCAL_PRESETS = {
       'Basílica de San Pedro y Museos Vaticanos',
       'Barrio de Trastevere',
       'Piazza di Spagna'
+    ],
+    events: [
+      { name: 'Festa di Noantri en Trastevere', month: 'Julio', desc: 'Tradicional procesión religiosa y fiesta popular en las calles de Trastevere.' }
     ]
   },
   paris: {
@@ -951,6 +1011,9 @@ export const DESTINATION_LOCAL_PRESETS = {
       'Barrio de Montmartre y Basílica del Sagrado Corazón',
       'Paseo por el Río Sena y Jardines de Luxemburgo',
       'Arco de Triunfo y Campos Elíseos'
+    ],
+    events: [
+      { name: 'Nuit Blanche', month: 'Octubre/Junio', desc: 'Noche cultural en toda la ciudad con museos abiertos y exhibiciones artísticas al aire libre.' }
     ]
   },
   tokio: {
@@ -974,12 +1037,89 @@ export const DESTINATION_LOCAL_PRESETS = {
       'Santuario Meiji y Barrio Harajuku',
       'Torre de Tokio y Roppongi Hills',
       'Distrito de Neón de Akihabara'
+    ],
+    events: [
+      { name: 'Sanja Matsuri en Asakusa', month: 'Mayo', desc: 'Uno de los festivales sintoístas más grandes y coloridos de Tokio con santuarios portátiles Mikoshi.' }
+    ]
+  },
+  barcelona: {
+    name: 'Barcelona',
+    country: 'España',
+    hotels: [
+      { name: 'Hotel Arts Barcelona', desc: 'Lujo frente a la playa de la Barceloneta con vistas panorámicas al mar Mediterráneo y restaurantes con estrellas Michelin.', price: '~$380 - $650 USD/noche' },
+      { name: 'W Barcelona', desc: 'Diseño vanguardista icónico en forma de vela frente al mar con piscina infinity en la terraza.', price: '~$320 - $580 USD/noche' },
+      { name: 'Hotel Casa Fuster', desc: 'Monumento modernista en Passeig de Gràcia con terraza mirador y club de jazz.', price: '~$250 - $420 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante Cervecería Catalana', specialty: 'Famosas tapas gourmet catalanas, montaditos y mariscos frescos al momento' },
+      { name: 'Restaurante Disfrutar', specialty: 'Cocina vanguardista y creativa galardonada entre los mejores del mundo' },
+      { name: 'Restaurante Can Majó', specialty: 'Auténtica paella marinera, fideuá y pescados frescos frente a la Barceloneta' }
+    ],
+    places: [
+      'Basílica de la Sagrada Familia',
+      'Park Güell',
+      'Barrio Gótico y Catedral de Barcelona',
+      'Casa Batlló y Passeig de Gràcia',
+      'Paseo por Las Ramblas y Mercado de La Boquería',
+      'Playa de la Barceloneta'
+    ],
+    events: [
+      { name: 'Fiestas de La Mercè', month: 'Septiembre', desc: 'La fiesta mayor de Barcelona con espectáculos pirotécnicos, correfocs y castellers tradicionales.' }
+    ]
+  },
+  cancun: {
+    name: 'Cancún',
+    country: 'México',
+    hotels: [
+      { name: 'Grand Fiesta Americana Coral Beach', desc: 'Resort de lujo familiar con playa privada de aguas tranquilas y spa de hidroterapia en la Zona Hotelera.', price: '~$320 - $550 USD/noche' },
+      { name: 'Hyatt Ziva Cancun', desc: 'Exclusivo resort todo incluido rodeado por el mar Caribe con delfinario privado y piscinas frente al mar.', price: '~$400 - $700 USD/noche' },
+      { name: 'Nizuc Resort & Spa', desc: 'Elegancia contemporánea en Punta Nizuc con suites privadas y arrecifes de coral.', price: '~$450 - $800 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante Lorenzillo\'s', specialty: 'Langosta viva cocinada al gusto sobre la laguna Nichupté con vista al atardecer' },
+      { name: 'Restaurante La Habichuela Downtown', specialty: 'Cocina mexicana y caribeña tradicional en un jardín con réplicas de arte maya' },
+      { name: 'Porfirio\'s Cancún', specialty: 'Alta cocina mexicana contemporánea, cortes y mariachi en vivo' }
+    ],
+    places: [
+      'Playa Delfines y Mirador Cancún',
+      'Excursión a Isla Mujeres en catamarán',
+      'Zona Arqueológica El Rey',
+      'Museo Subacuático de Arte (MUSA)',
+      'Paseo en Laguna Nichupté'
+    ],
+    events: [
+      { name: 'Festival de Tradiciones de Vida y Muerte', month: 'Octubre/Noviembre', desc: 'Conmovedora e impresionante celebración del Día de Muertos con altares, gastronomía y danzas tradicionales.' }
+    ]
+  },
+  cusco: {
+    name: 'Cusco',
+    country: 'Perú',
+    hotels: [
+      { name: 'Belmond Hotel Monasterio', desc: 'Antiguo monasterio del siglo XVI en la Plaza Nazarenas con patio colonial y suites con oxígeno.', price: '~$450 - $800 USD/noche' },
+      { name: 'JW Marriott El Convento Cusco', desc: 'Lujo colonial restaurado en el centro histórico con spa andino y arquitectura incaica.', price: '~$250 - $420 USD/noche' },
+      { name: 'Palacio del Inka', desc: 'Mansión histórica de cinco siglos frente al Templo del Sol Qorikancha.', price: '~$200 - $350 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante Cicciolina', specialty: 'Tapas de autor andinas y mediterráneas con panadería artesanal y vinos selectos' },
+      { name: 'Restaurante Chicha por Gastón Acurio', specialty: 'Cocina cusqueña regional de alta gama, trucha del lago y lechón crocante' },
+      { name: 'Restaurante Morena Peruvian Kitchen', specialty: 'Clásicos peruanos refinados: lomo saltado, ají de gallina y ceviches frescos' }
+    ],
+    places: [
+      'Plaza de Armas de Cusco',
+      'Fortaleza de Sacsayhuamán',
+      'Templo del Sol Qorikancha',
+      'Barrio Tradicional de San Blas',
+      'Mercado Central de San Pedro',
+      'Excursión al Valle Sagrado de los Incas'
+    ],
+    events: [
+      { name: 'Inti Raymi (Fiesta del Sol)', month: '24 de Junio', desc: 'La ceremonia inca más importante del año con representaciones sagradas en Sacsayhuamán y el Qorikancha.' }
     ]
   }
 }
 
 export function getDestinationPresets(destName = '', countryName = '') {
-  const clean = String(destName || '').trim().toLowerCase()
+  const clean = cleanAdministrativeCityName(destName).toLowerCase()
   const baseKey = clean.split(',')[0].trim().replace(/^(ciudad de|san|santa)\s+/i, '').trim()
   
   if (DESTINATION_LOCAL_PRESETS[clean]) return DESTINATION_LOCAL_PRESETS[clean]
@@ -991,31 +1131,29 @@ export function getDestinationPresets(destName = '', countryName = '') {
     }
   }
 
-  const capitalCity = destName ? destName.charAt(0).toUpperCase() + destName.slice(1) : 'Destino'
+  const capitalCity = clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : 'Destino'
   const targetCountry = countryName || 'Local'
 
   return {
     name: capitalCity,
     country: targetCountry,
     hotels: [
-      { name: `Hotel Boutique ${capitalCity}`, desc: `Confortable hotel boutique ubicado en el corazón de ${capitalCity} con excelente acceso a las principales atracciones.`, price: '~$80 - $130 USD/noche' },
-      { name: `Gran Hotel ${capitalCity}`, desc: `Alojamiento de primer nivel con terraza panorámica, desayuno gourmet y atención personalizada en ${capitalCity}.`, price: '~$110 - $170 USD/noche' },
-      { name: `Suites & Spa ${capitalCity}`, desc: `Espacios modernos y relajantes ideales para una estancia inolvidable en ${capitalCity}.`, price: '~$70 - $110 USD/noche' }
+      { name: `Hotel en el Centro de ${capitalCity}`, desc: `Alojamiento céntrico y confortable en ${capitalCity} con fácil acceso a los principales atractivos.`, price: '~$70 - $120 USD/noche' },
+      { name: `Gran Alojamiento ${capitalCity}`, desc: `Estancia de primer nivel con atención de calidad y desayuno en ${capitalCity}.`, price: '~$90 - $150 USD/noche' },
+      { name: `Hospedaje Familiar ${capitalCity}`, desc: `Ambiente acogedor ideal para descansar en ${capitalCity}.`, price: '~$50 - $90 USD/noche' }
     ],
     restaurants: [
-      { name: `Restaurante Tradicional ${capitalCity}`, specialty: `Especialidades gastronómicas y sabores típicos representativos de ${capitalCity}` },
-      { name: `Bistró Gourmet ${capitalCity}`, specialty: `Cocina de autor y platos destacados con ingredientes locales frescos` },
-      { name: `Sabores de ${capitalCity}`, specialty: `Variedad de recetas clásicas y experiencias culinarias locales` },
-      { name: `Mercado Gastronómico ${capitalCity}`, specialty: `Platos típicos, degustaciones y postres tradicionales de la región` }
+      { name: `Restaurante Típico en ${capitalCity}`, specialty: `Especialidades culinarias y recetas tradicionales de ${capitalCity}` },
+      { name: `Bistró Local de ${capitalCity}`, specialty: `Platos destacados con ingredientes frescos de la región` },
+      { name: `Sabores Auténticos de ${capitalCity}`, specialty: `Variedad de recetas y platos locales tradicionales` }
     ],
     places: [
       `Centro Histórico de ${capitalCity}`,
-      `Plaza Principal de ${capitalCity}`,
-      `Mirador Panorámico de ${capitalCity}`,
-      `Museo Cultural de ${capitalCity}`,
-      `Paseo Peatonal de ${capitalCity}`,
-      `Parque Emblemático de ${capitalCity}`
-    ]
+      `Plaza Mayor de ${capitalCity}`,
+      `Mirador de ${capitalCity}`,
+      `Parque Principal de ${capitalCity}`
+    ],
+    events: []
   }
 }
 
@@ -1024,7 +1162,8 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
   const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
   const hasCity = Boolean(known.city || known.destination)
-  const destName = known.city || known.destination || ''
+  const rawDestName = known.city || known.destination || ''
+  const destName = cleanAdministrativeCityName(rawDestName)
   const destCountry = known.country || ''
   const presets = getDestinationPresets(destName, destCountry)
 
@@ -1581,12 +1720,18 @@ export async function buildVisualDestinationSuggestions(cityList = [], defaultCi
     'london': { name: 'Londres, Reino Unido', city: 'Londres', country: 'Reino Unido', countryCode: 'GB', flagEmoji: '🇬🇧', description: 'El Big Ben, el London Eye, palacios reales y museos de talla mundial.', imageUrl: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '19°C', isDemoImage: false },
     'cusco': { name: 'Cusco, Perú', city: 'Cusco', country: 'Perú', countryCode: 'PE', flagEmoji: '🇵🇪', description: 'Capital del imperio Inca, puerta de entrada a Machu Picchu y plazas coloniales andinas.', imageUrl: 'https://images.unsplash.com/photo-1526392060635-9d6019884377?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '18°C', isDemoImage: false },
     'cartagena': { name: 'Cartagena, Colombia', city: 'Cartagena', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Ciudad amurallada del Caribe con encanto colonial, playas y ambiente vibrante.', imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '30°C', isDemoImage: false },
-    'santa marta': { name: 'Santa Marta, Colombia', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Puerta de entrada al Parque Tayrona con playas vírgenes y bahías tranquilas.', imageUrl: 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '29°C', isDemoImage: false },
+    'santa marta': { name: 'Santa Marta, Colombia', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Puerta de entrada al Parque Tayrona con playas vírgenes, Sierra Nevada y bahías tranquilas.', imageUrl: 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '29°C', isDemoImage: false },
+    'taganga': { name: 'Taganga, Colombia', city: 'Taganga', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Pueblo tradicional de pescadores en una hermosa bahía con atardeceres mágicos y buceo.', imageUrl: 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=800&q=80', suggestedDays: 2, temperature: '30°C', isDemoImage: false },
+    'minca': { name: 'Minca, Colombia', city: 'Minca', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital ecológica de la Sierra Nevada con cascadas cristalinas, avistamiento de aves y café artesanal.', imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80', suggestedDays: 2, temperature: '22°C', isDemoImage: false },
+    'parque tayrona': { name: 'Parque Tayrona, Colombia', city: 'Santa Marta', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Playas paradisíacas de arena dorada rodeadas de exuberante selva tropical y senderos naturales.', imageUrl: 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=800&q=80', suggestedDays: 2, temperature: '29°C', isDemoImage: false },
     'medellín': { name: 'Medellín, Colombia', city: 'Medellín', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'La ciudad de la eterna primavera con parques ecológicos, cultura y gastronomía.', imageUrl: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '24°C', isDemoImage: false },
     'medellin': { name: 'Medellín, Colombia', city: 'Medellín', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'La ciudad de la eterna primavera con parques ecológicos, cultura y gastronomía.', imageUrl: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '24°C', isDemoImage: false },
     'san andrés': { name: 'San Andrés, Colombia', city: 'San Andrés', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Isla del mar de los siete colores, perfecta para snorkel, relax y descanso en familia.', imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '29°C', isDemoImage: false },
     'bogotá': { name: 'Bogotá, Colombia', city: 'Bogotá', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital cultural con arquitectura histórica en La Candelaria y museos de oro.', imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '18°C', isDemoImage: false },
-    'bogota': { name: 'Bogotá, Colombia', city: 'Bogotá', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital cultural con arquitectura histórica en La Candelaria y museos de oro.', imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '18°C', isDemoImage: false }
+    'bogota': { name: 'Bogotá, Colombia', city: 'Bogotá', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital cultural con arquitectura histórica en La Candelaria y museos de oro.', imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '18°C', isDemoImage: false },
+    'villa de leyva': { name: 'Villa de Leyva, Colombia', city: 'Villa de Leyva', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Pueblo colonial con la plaza empedrada más grande de Sudamérica y viñedos.', imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=800&q=80', suggestedDays: 2, temperature: '19°C', isDemoImage: false },
+    'eje cafetero': { name: 'Eje Cafetero, Colombia', city: 'Eje Cafetero', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Paisajes de cafetales, el Valle del Cocora con sus palmas de cera gigantes y pueblos coloridos.', imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80', suggestedDays: 4, temperature: '23°C', isDemoImage: false },
+    'san gil': { name: 'San Gil, Colombia', city: 'San Gil', country: 'Colombia', countryCode: 'CO', flagEmoji: '🇨🇴', description: 'Capital del turismo de aventura con rafting en el río Fonce y senderos ecológicos.', imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80', suggestedDays: 3, temperature: '26°C', isDemoImage: false }
   }
 
   const result = await Promise.all(

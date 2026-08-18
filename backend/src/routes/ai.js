@@ -7,7 +7,7 @@ import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpa
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
-import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm } from '../services/destinationService.js'
+import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
 
 export const aiRouter = Router()
 
@@ -94,13 +94,19 @@ aiRouter.post('/chat', async (req, res, next) => {
     })
     const { message, history, currentPreferences, latitude, longitude } = chatSchema.parse(req.body)
 
+    if (latitude && longitude) {
+      currentPreferences.latitude = latitude
+      currentPreferences.longitude = longitude
+    }
+
     // Si el usuario pide atracciones "cerca de mi zona / cerca de mí" y tenemos GPS, geocodificar su ciudad actual
-    if (latitude && longitude && /\b(cerca de mi|cerca de m[íi]|mi zona|mi ubicaci[óo]n|mi ciudad|aqu[íi])\b/i.test(message)) {
+    if (latitude && longitude && /\b(cerca de mi|cerca de m[íi]|mi zona|mi ubicaci[óo]n|mi ciudad|aqu[íi]|propio pa[íi]s|en mi pa[íi]s|cercano|cercanos)\b/i.test(message)) {
       try {
-        const geoResult = await reverseGeocode(latitude, longitude)
+        const geoResult = await reverseGeocodeLocation(latitude, longitude)
         if (geoResult?.city) {
-          currentPreferences.city = geoResult.city
-          currentPreferences.destination = geoResult.city
+          const cleanCity = cleanAdministrativeCityName(geoResult.city)
+          currentPreferences.city = cleanCity
+          currentPreferences.destination = cleanCity
           if (geoResult.country) currentPreferences.country = geoResult.country
         }
       } catch (_) {}
@@ -136,6 +142,10 @@ aiRouter.post('/chat', async (req, res, next) => {
     const updatedPreferences = {
       ...currentPreferences,
       ...(extracted || {})
+    }
+    if (latitude && longitude) {
+      updatedPreferences.latitude = latitude
+      updatedPreferences.longitude = longitude
     }
     if (initialCombinedSpecifics.length > 0) {
       updatedPreferences.specificPlaces = initialCombinedSpecifics
@@ -176,8 +186,9 @@ aiRouter.post('/chat', async (req, res, next) => {
     })
 
     // Resolve Canonical Destination if city/destination is present
-    const rawDest = updatedPreferences.city || updatedPreferences.destination
+    let rawDest = updatedPreferences.city || updatedPreferences.destination
     if (rawDest && typeof rawDest === 'string' && rawDest.trim().length > 0) {
+      rawDest = cleanAdministrativeCityName(rawDest)
       const canonical = await resolveCanonicalDestination(rawDest)
       if (canonical) {
         // If destination changed, clear previous specific places and hotel to prevent cross-destination pollution
@@ -188,10 +199,12 @@ aiRouter.post('/chat', async (req, res, next) => {
           delete updatedPreferences.selectedHotel
         }
         updatedPreferences.canonicalDestination = canonical
-        updatedPreferences.city = canonical.city
+        updatedPreferences.city = cleanAdministrativeCityName(canonical.city)
         updatedPreferences.country = canonical.country
         updatedPreferences.region = canonical.region
         updatedPreferences.destination = canonical.displayName
+      } else {
+        updatedPreferences.city = cleanAdministrativeCityName(rawDest)
       }
     }
 

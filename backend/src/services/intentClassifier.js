@@ -190,6 +190,15 @@ export function classifyUserIntent(userMessage = '', currentContext = {}) {
     }
   }
 
+  // 3.5 Explicit Transport intent
+  if (/\b(rentar auto|alquilar auto|rentar carro|alquilar carro|ir en auto|ir en carro|transporte p[úu]blico|caminando|taxi|uber)\b/i.test(lower)) {
+    return {
+      intent: INTENT_TYPES.TRANSPORT_INQUIRY,
+      confidence: 0.90,
+      needsClarification: false
+    }
+  }
+
   // 4. Destination or Trip Planning Detection
   // Common destination names or answers containing geographical/travel terms
   const isPotentialDestination = /^[a-záéíóúñ\s,.-]+$/i.test(text) && !/^(si|no|ok|hola|buenas|que|como|cuando|donde)$/i.test(lower)
