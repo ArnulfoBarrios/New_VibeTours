@@ -782,14 +782,14 @@ export async function extractChatInformation(userMessage, currentData = {}, hist
 REGLAS ESTRICTAS:
 - "city" / "destination": ciudad limpia SOLO si el usuario la escribió explícitamente. Si no la mencionó, pon null (PROHIBIDO asumir o inferir una ciudad).
 - "country": país SOLO si se mencionó o se deduce de una ciudad explícita. Si no, null.
-- "datesSeason": fechas SOLO si se mencionaron. Si no, null.
-- "durationDays": número de días SOLO si el usuario especificó la duración (ej: "3 días", "un fin de semana" -> 2, "puente festivo" -> 3, "una semana" -> 7). Si no especificó duración ni fechas, DEBE ser null.
+- "datesSeason": fechas SOLO si se mencionaron (ej: "octubre desde el 9 hasta el 12"). Si no, null.
+- "durationDays": número de días explícito O calculado a partir del rango de fechas (ej: del 9 al 12 de octubre son 4 días -> 4, "3 días" -> 3). Si no hay fechas ni duración, DEBE ser null.
 - "companions": "Solo" | "Pareja" | "Amigos" | "Familia con niños" (si se mencionó).
 - "budget": "Económico" | "Moderado" | "Lujo" (si se mencionó).
 - "transport": "Caminando" | "Transporte público" | "Auto rentado" | "Taxi" (si se mencionó).
 - "interests": array con los intereses o gustos mencionados (ej: ["Playas", "Naturaleza", "Aventuras", "Vida nocturna"]).
 - "selectedHotel": { "name": "Nombre del hotel" } (solo si lo confirma explícitamente).
-- "specificPlaces": array con nombres de atracciones o restaurantes específicos mencionados.
+- "specificPlaces": array con nombres de atracciones o restaurantes físicos específicos mencionados por el usuario (NUNCA eventos ni festividades).
 Mensaje: "${userMessage}"`
 
   try {
@@ -807,6 +807,9 @@ Mensaje: "${userMessage}"`
       const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
       if (parsed.city) parsed.city = cleanAdministrativeCityName(parsed.city)
       if (parsed.destination) parsed.destination = cleanAdministrativeCityName(parsed.destination)
+      if (parsed.durationDays && !parsed.durationHours) {
+        parsed.durationHours = Number(parsed.durationDays) * 24
+      }
       return parsed
     }
   } catch (_) {}
@@ -817,7 +820,16 @@ Mensaje: "${userMessage}"`
 export function extractChatInformationFallback(prompt) {
   const lower = String(prompt || '').toLowerCase()
   const res = {}
-  if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo)\b/i.test(lower)) {
+  
+  const dateRangeMatch = lower.match(/\b(?:del\s+|desde\s+(?:el\s+)?)?(\d{1,2})\s+(?:al|hasta(?:\s+el)?)\s+(\d{1,2})\b/i)
+  if (dateRangeMatch) {
+    const startD = parseInt(dateRangeMatch[1], 10)
+    const endD = parseInt(dateRangeMatch[2], 10)
+    if (endD >= startD && (endD - startD) <= 30) {
+      res.durationDays = endD - startD + 1
+      res.durationHours = res.durationDays * 24
+    }
+  } else if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo)\b/i.test(lower)) {
     res.durationDays = 3
     res.durationHours = 72
   } else if (/\b(fin de semana|2 d[íi]as)\b/i.test(lower)) {

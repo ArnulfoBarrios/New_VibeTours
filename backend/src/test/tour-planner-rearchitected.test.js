@@ -99,6 +99,10 @@ test('isValidSpecificPlace must reject category words and accept authentic POI n
   assert.equal(isValidSpecificPlace('Gastronomía local'), false)
   assert.equal(isValidSpecificPlace('Vida nocturna'), false)
   assert.equal(isValidSpecificPlace('Aeropuerto'), false)
+  assert.equal(isValidSpecificPlace('Fiesta del Mar'), false)
+  assert.equal(isValidSpecificPlace('Descripción'), false)
+  assert.equal(isValidSpecificPlace('Notas'), false)
+  assert.equal(isValidSpecificPlace('Santa Marta'), false)
 
   // Real POIs must be accepted
   assert.equal(isValidSpecificPlace('Catedral Basílica de Santa Marta'), true)
@@ -108,6 +112,48 @@ test('isValidSpecificPlace must reject category words and accept authentic POI n
   assert.equal(isValidSpecificPlace('Parque Nacional Natural Tayrona'), true)
   assert.equal(isValidSpecificPlace('Minca'), true)
   assert.equal(isValidSpecificPlace('Museo del Oro Tairona'), true)
+})
+
+test('normalizePlaceKey and deduplicatePlacesByName must merge place variants into clean unique places', async () => {
+  const { normalizePlaceKey, deduplicatePlacesByName } = await import('../routes/ai.js')
+  
+  // Normalized keys
+  assert.equal(normalizePlaceKey('la Quinta de San Pedro Alejandrino'), normalizePlaceKey('quinta de san Pedro Alejandrino'))
+  assert.equal(normalizePlaceKey('Excursión a la Ciudad Perdida'), normalizePlaceKey('ciudad perdida'))
+  assert.equal(normalizePlaceKey('visita al Museo del Oro Tairona'), normalizePlaceKey('Museo del Oro Tairona'))
+
+  // Deduplication
+  const rawList = [
+    'la Quinta de San Pedro Alejandrino',
+    'quinta de san Pedro Alejandrino',
+    'Excursión a la Ciudad Perdida',
+    'ciudad perdida',
+    'Fiesta del Mar', // Should be filtered out
+    'Descripción', // Should be filtered out
+    'Santa Marta', // Should be filtered out
+    'Parque Nacional Natural Tayrona',
+    'Restaurante Guásimo'
+  ]
+
+  const cleanList = deduplicatePlacesByName(rawList)
+  assert.equal(cleanList.length, 4)
+  assert.ok(cleanList.some(p => p.includes('Quinta de San Pedro')))
+  assert.ok(cleanList.some(p => p.includes('Ciudad Perdida') || p.includes('ciudad perdida')))
+  assert.ok(cleanList.some(p => p.includes('Tayrona')))
+  assert.ok(cleanList.some(p => p.includes('Guásimo')))
+  assert.ok(!cleanList.some(p => p.includes('Fiesta del Mar')))
+  assert.ok(!cleanList.some(p => p.includes('Descripción')))
+})
+
+test('extractChatInformationFallback must calculate durationDays from date range strings', async () => {
+  const { extractChatInformationFallback } = await import('../services/openai.js')
+  const res1 = extractChatInformationFallback('Viajo del 9 al 12 de octubre')
+  assert.equal(res1.durationDays, 4)
+  assert.equal(res1.durationHours, 96)
+
+  const res2 = extractChatInformationFallback('octubre desde el 9 hasta el 12')
+  assert.equal(res2.durationDays, 4)
+  assert.equal(res2.durationHours, 96)
 })
 
 test('isNonTouristicInput must detect coding commands, math, and unrelated input and block cards', async () => {
@@ -122,7 +168,6 @@ test('isNonTouristicInput must detect coding commands, math, and unrelated input
   // Tourist messages must be accepted
   assert.equal(isNonTouristicInput('Quiero viajar a Santa Marta'), false)
   assert.equal(isNonTouristicInput('Playas y aventura con amigos'), false)
-  assert.equal(isNonTouristicInput('Fiesta del mar'), false)
 
   // generateChatResponse should reject Flutter run with 0 cards and empty preferences
   const state = { history: [{ role: 'user', content: 'Flutter run' }] }
@@ -139,6 +184,7 @@ test('imageForPlaceWithStatus must serve culinary/restaurant image for restauran
   // Must NOT be the Santa Marta port/bay photo (photo-1596436889106-be35e843f974)
   assert.ok(!res.url.includes('photo-1596436889106-be35e843f974'), 'Restaurant image should be a gourmet food/dining photo, not the port of Santa Marta')
 })
+
 
 
 

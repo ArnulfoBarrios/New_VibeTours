@@ -60,7 +60,44 @@ const requestSchema = z.object({
   specificPlaces: z.array(z.string()).optional().default([])
 })
 
-// Filtro estricto que descarta encabezados de días, horas, formatos markdown, metadatos, categorías y ciudades puras
+// Normalizador de clave canónica para fusionar variantes de un mismo lugar (ej: "la Quinta de..." vs "quinta de...")
+export function normalizePlaceKey(placeName) {
+  if (!placeName || typeof placeName !== 'string') return ''
+  return placeName
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove accents
+    .replace(/[*_#•\-]/g, ' ') // remove markdown
+    .replace(/\b(la|el|los|las|un|una|unos|unas|del|de|de la|de los)\b/g, ' ') // remove articles
+    .replace(/\b(visita a|visita al|recorrido por|paseo en|paseo por|excursion a|excursión a|ir a|entrada a|parada en|caminar por|recorrer el|visitar la|visitar el)\b/g, ' ') // remove action prefixes
+    .replace(/[^\w\s]/g, '') // remove punctuation
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Deduplica una lista de nombres u objetos de lugares usando su clave canónica
+export function deduplicatePlacesByName(places = []) {
+  const seen = new Map()
+  for (const p of places) {
+    if (!p) continue
+    const name = typeof p === 'string' ? p : (p.name || '')
+    if (!name || !isValidSpecificPlace(name)) continue
+    const key = normalizePlaceKey(name)
+    if (!key) continue
+    if (!seen.has(key)) {
+      seen.set(key, p)
+    } else {
+      const existing = seen.get(key)
+      const existingName = typeof existing === 'string' ? existing : (existing.name || '')
+      if (name.length > existingName.length && /[A-Z]/.test(name)) {
+        seen.set(key, p)
+      }
+    }
+  }
+  return Array.from(seen.values())
+}
+
+// Filtro estricto que descarta encabezados de días, horas, formatos markdown, metadatos, categorías, eventos temporales y ciudades puras
 export function isValidSpecificPlace(placeName) {
   if (!placeName || typeof placeName !== 'string') return false
   
@@ -71,17 +108,17 @@ export function isValidSpecificPlace(placeName) {
   const isTimeHeader = /^(d[íi]a\s*\d+|day\s*\d+|mañana|tarde|noche|almuerzo|cena|desayuno|madrugada|atardecer)/i.test(clean)
   if (isTimeHeader) return false
   // 2. Descartar comodidades, hoteles, acciones y frases meta de viaje
-  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|paseo|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport)\b/i.test(clean)
+  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|paseo|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones)\b/i.test(clean)
   if (isMetaOrAmenity) return false
-  // 3. Descartar categorías de turismo generales y etiquetas temáticas
-  const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|paseo|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto)$/i.test(clean.toLowerCase())
+  // 3. Descartar categorías de turismo generales, eventos/festivales y etiquetas temáticas
+  const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|paseo|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto|fiesta del mar|fiestas del mar|carnaval|carnavales|festival|festivales|feria|ferias|desfile|desfiles|semana santa|evento|eventos|descripci[óo]n|resumen|notas?)$/i.test(clean.toLowerCase())
   if (isCategoryOrTheme) return false
   // 4. Descartar si es país o "Ciudad, País"
   if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(clean)) {
     return false
   }
-  // 5. Descartar nombres de ciudades puras
-  const isCityOnly = /^(cartagena|barranquilla|medell[íi]n|bogot[áa]|santa marta|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|toledo|cusco|orlando|nueva york|new york|cali)$/i.test(clean.toLowerCase())
+  // 5. Descartar nombres de ciudades o regiones puras
+  const isCityOnly = /^(cartagena|barranquilla|medell[íi]n|bogot[áa]|santa marta|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|toledo|cusco|orlando|nueva york|new york|cali|colombia|magdalena|bol[íi]var|antioquia)$/i.test(clean.toLowerCase())
   if (isCityOnly) return false
   return true
 }
@@ -182,8 +219,18 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     }
 
-    // Normalización determinística de duración por expresiones clave
-    if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo|3 d[íi]as)\b/i.test(message)) {
+    // Normalización determinística de duración por expresiones clave y rangos de fechas
+    const datesString = `${updatedPreferences.datesSeason || ''} ${message || ''}`
+    const dateRangeMatch = datesString.match(/\b(?:del\s+|desde\s+(?:el\s+)?)?(\d{1,2})\s+(?:al|hasta(?:\s+el)?)\s+(\d{1,2})\b/i)
+    if (dateRangeMatch) {
+      const startD = parseInt(dateRangeMatch[1], 10)
+      const endD = parseInt(dateRangeMatch[2], 10)
+      if (endD >= startD && (endD - startD) <= 30) {
+        const calculatedDays = endD - startD + 1
+        updatedPreferences.durationDays = calculatedDays
+        updatedPreferences.durationHours = calculatedDays * 24
+      }
+    } else if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo|3 d[íi]as)\b/i.test(message)) {
       updatedPreferences.durationDays = 3
       updatedPreferences.durationHours = 72
     } else if (/\b(fin de semana|un par de d[íi]as|2 d[íi]as)\b/i.test(message) && !updatedPreferences.durationDays) {
@@ -273,13 +320,13 @@ aiRouter.post('/chat', async (req, res, next) => {
 
     if (/\b(agregar 1 restaurante por d[íi]a|agregar restaurante por d[íi]a)\b/i.test(message)) {
       const defaultRests = ['Restaurante La Cevicheria', 'Restaurante Celele', 'Restaurante El Boliche Cebichería']
-      updatedPreferences.specificPlaces = Array.from(new Set([
+      updatedPreferences.specificPlaces = deduplicatePlacesByName([
         ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
         ...defaultRests
-      ])).filter(isValidSpecificPlace)
+      ])
     }
 
-    // Extraer lugares mencionados o planificados en la respuesta de la IA para retención acumulativa SOLO si ya se eligió la ciudad destino
+    // Extraer lugares SOLO si ya se eligió la ciudad destino y provienen de elecciones explícitas o de un itinerario estructurado confirmado
     const hasConfirmedCity = Boolean(updatedPreferences.city || updatedPreferences.destination)
     const isAskingCityRecomms = !hasConfirmedCity && /\b(recomien|recomiend|qué me recomiendas|dónde ir|opciones|destinos)\b/i.test(message)
     const extractedFromMsg = []
@@ -309,10 +356,18 @@ aiRouter.post('/chat', async (req, res, next) => {
             found.push(candidate)
           }
         }
-        return Array.from(new Set(found))
+        return deduplicatePlacesByName(found)
       }
 
-      extractedFromMsg.push(...extractPoisFromText(aiResponse.responseMessage || ''))
+      // Extraer de la respuesta del asistente ÚNICAMENTE si es un itinerario estructurado confirmado
+      const isConfirmedItineraryMsg = Boolean(
+        aiResponse.readyToBuild ||
+        (aiResponse.responseMessage && /\b(itinerario de viaje|itinerario finalizado|itinerario actualizado|d[íi]a 1:)\b/i.test(aiResponse.responseMessage))
+      )
+
+      if (isConfirmedItineraryMsg) {
+        extractedFromMsg.push(...extractPoisFromText(aiResponse.responseMessage || ''))
+      }
 
       // Si el usuario aceptó en lote ("agregar todas las actividades", "Ok quiero agregar estás actividades al itinerario", etc.), extraer de mensajes recientes del asistente
       const isUserAcceptingAll = /\b(agregar|incluir|a[ñn]adir)\s+(todas|estas|est[aá]s|los|las|mis)?\s*(actividades|lugares|atracciones|restaurantes|recomendaciones|opciones|paradas)/i.test(message) ||
@@ -344,11 +399,11 @@ aiRouter.post('/chat', async (req, res, next) => {
     if (!hasConfirmedCity || isAskingCityRecomms) {
       delete updatedPreferences.specificPlaces
     } else {
-      const combinedSpecifics = Array.from(new Set([
+      const combinedSpecifics = deduplicatePlacesByName([
         ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
         ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
         ...extractedFromMsg
-      ])).filter(isValidSpecificPlace)
+      ])
 
       if (combinedSpecifics.length > 0) {
         updatedPreferences.specificPlaces = combinedSpecifics
@@ -3805,10 +3860,10 @@ export async function collectTourCandidates(input, location) {
   }
 
   // Geocode any specific places requested or discussed in chat
-  const mergedSpecifics = Array.from(new Set([
+  const mergedSpecifics = deduplicatePlacesByName([
     ...(Array.isArray(input.specificPlaces) ? input.specificPlaces : []),
     ...(Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
-  ])).filter(isValidSpecificPlace)
+  ])
 
   let geocodedSpecifics = []
   if (mergedSpecifics.length > 0) {
