@@ -296,6 +296,21 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     }
 
+    if (aiResponse.extractedPreferences && typeof aiResponse.extractedPreferences === 'object') {
+      Object.entries(aiResponse.extractedPreferences).forEach(([k, v]) => {
+        if (v !== null && v !== undefined && v !== '' && !updatedPreferences[k]) {
+          updatedPreferences[k] = v
+        }
+      })
+    }
+
+    if (updatedPreferences.city) {
+      updatedPreferences.city = cleanAdministrativeCityName(updatedPreferences.city)
+    }
+    if (updatedPreferences.destination) {
+      updatedPreferences.destination = cleanAdministrativeCityName(updatedPreferences.destination)
+    }
+
     if (!hasConfirmedCity || isAskingCityRecomms) {
       delete updatedPreferences.specificPlaces
     } else {
