@@ -60,7 +60,7 @@ const requestSchema = z.object({
   specificPlaces: z.array(z.string()).optional().default([])
 })
 
-// Filtro estricto que descarta encabezados de días, horas, formatos markdown, metadatos y ciudades puras
+// Filtro estricto que descarta encabezados de días, horas, formatos markdown, metadatos, categorías y ciudades puras
 export function isValidSpecificPlace(placeName) {
   if (!placeName || typeof placeName !== 'string') return false
   
@@ -73,11 +73,14 @@ export function isValidSpecificPlace(placeName) {
   // 2. Descartar comodidades, hoteles y frases meta
   const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|paseo|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a)\b/i.test(clean)
   if (isMetaOrAmenity) return false
-  // 3. Descartar si es país o "Ciudad, País"
+  // 3. Descartar categorías de turismo generales y etiquetas temáticas
+  const isCategoryOrTheme = /^(gastronom[íi]a|cultura|historia|naturaleza|aventura|aventuras|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|paseo|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check-in|check-out)$/i.test(clean)
+  if (isCategoryOrTheme) return false
+  // 4. Descartar si es país o "Ciudad, País"
   if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(clean)) {
     return false
   }
-  // 4. Descartar nombres de ciudades puras
+  // 5. Descartar nombres de ciudades puras
   const isCityOnly = /^(cartagena|barranquilla|medell[íi]n|bogot[áa]|santa marta|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|toledo|cusco|orlando|nueva york|new york|cali)$/i.test(clean.toLowerCase())
   if (isCityOnly) return false
   return true
@@ -269,17 +272,28 @@ aiRouter.post('/chat', async (req, res, next) => {
       function extractPoisFromText(text) {
         if (!text || typeof text !== 'string') return []
         const found = []
-        // Only extract actual items from numbered lists (1. Name:) or bulleted itineraries (- Mañana: Name)
-        const regex = /(?:^|\n)\s*(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/gi
-        let m
-        while ((m = regex.exec(text)) !== null) {
-          let candidate = m[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita|Paseo en)\b/gi, '').trim()
-          candidate = candidate.replace(/[.,;!*]+$/, '').trim()
+        // 1. Extract bold names (**Nombre del Lugar**)
+        const boldRegex = /\*\*([^*\n]{3,60})\*\*/g
+        let bm
+        while ((bm = boldRegex.exec(text)) !== null) {
+          let candidate = bm[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita|Paseo en)\b/gi, '').trim()
+          candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
           if (isValidSpecificPlace(candidate)) {
             found.push(candidate)
           }
         }
-        return found
+
+        // 2. Extract numbered or bulleted items
+        const regex = /(?:^|\n)\s*(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/gi
+        let m
+        while ((m = regex.exec(text)) !== null) {
+          let candidate = m[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita|Paseo en)\b/gi, '').trim()
+          candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
+          if (isValidSpecificPlace(candidate)) {
+            found.push(candidate)
+          }
+        }
+        return Array.from(new Set(found))
       }
 
       extractedFromMsg.push(...extractPoisFromText(aiResponse.responseMessage || ''))
@@ -3012,46 +3026,59 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
   const sourceLongitude = numberValue(source.longitude ?? source.ubicacion?.longitud, NaN)
 
   const isCorridor = Boolean(startPlace && endPlace)
+  const canonicalDest = input.canonicalDestination || (hasUsableCoordinates(input.latitude, input.longitude) ? {
+    latitude: input.latitude,
+    longitude: input.longitude,
+    displayName: input.city || input.destination,
+    city: input.city,
+    country: input.country
+  } : null)
 
+  // 1. Validar si las coordenadas de origen ya son válidas y están dentro del área metropolitana
   if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
-    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude }
-    if (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace)) {
+    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude, name }
+    const isNearby = !canonicalDest || validateCandidateLocation(candidateCoord, canonicalDest, 50)
+    if (isNearby && (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace))) {
       return candidateCoord
     }
-    console.warn('[resolveStopCoordinates] Source coordinates rejected by geofence:', { name, candidateCoord })
   }
 
-  if (fallbackPlace && hasUsableCoordinates(fallbackPlace.latitude, fallbackPlace.longitude)) {
-    const geocoded = await geocodePlace(`${name} ${input.city} ${input.country}`.trim(), input.latitude, input.longitude)
-    if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
-      if (!isCorridor || isWithinCorridor(geocoded, startPlace, endPlace)) {
-        return { latitude: geocoded.latitude, longitude: geocoded.longitude }
-      }
-      console.warn('[resolveStopCoordinates] Geocoded name rejected by geofence, using fallbackPlace:', { name, geocoded, fallbackName: fallbackPlace.name })
-    }
-    return {
-      latitude: fallbackPlace.latitude,
-      longitude: fallbackPlace.longitude,
-      wasFallback: true
-    }
-  }
+  // 2. Geocodificar nombre de parada anclado al destino
+  const cleanCity = cleanAdministrativeCityName(input.city || input.destination || '')
+  const searchQuery = `${name}, ${cleanCity}, ${input.country || ''}`.trim().replace(/,\s*$/, '')
+  const geocoded = await geocodePlace(searchQuery, input.latitude, input.longitude).catch(() => null)
 
-  const geocoded = await geocodePlace(`${name} ${input.city} ${input.country}`.trim(), input.latitude, input.longitude)
   if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
-    if (!isCorridor || isWithinCorridor(geocoded, startPlace, endPlace)) {
+    const isNearby = !canonicalDest || validateCandidateLocation(geocoded, canonicalDest, 50)
+    if (isNearby && (!isCorridor || isWithinCorridor(geocoded, startPlace, endPlace))) {
       return {
         latitude: geocoded.latitude,
         longitude: geocoded.longitude,
+        place_id: geocoded.place_id || ''
       }
     }
   }
 
-  const defaultLat = hasUsableCoordinates(input.latitude, input.longitude) ? input.latitude : (fallbackPlace?.latitude ?? sourceLatitude)
-  const defaultLon = hasUsableCoordinates(input.longitude, input.latitude) ? input.longitude : (fallbackPlace?.longitude ?? sourceLongitude)
+  // 3. Si existe fallbackPlace y está en la misma ciudad
+  if (fallbackPlace && hasUsableCoordinates(fallbackPlace.latitude, fallbackPlace.longitude)) {
+    const isNearby = !canonicalDest || validateCandidateLocation(fallbackPlace, canonicalDest, 50)
+    if (isNearby && (!isCorridor || isWithinCorridor(fallbackPlace, startPlace, endPlace))) {
+      return {
+        latitude: fallbackPlace.latitude,
+        longitude: fallbackPlace.longitude,
+        place_id: fallbackPlace.place_id || '',
+        wasFallback: true
+      }
+    }
+  }
+
+  // 4. Centro oficial verificado de la ciudad destino
+  const cityCenterLat = canonicalDest?.latitude || input.latitude || (cleanCity.toLowerCase() === 'santa marta' ? 11.2408 : 10.4230)
+  const cityCenterLon = canonicalDest?.longitude || input.longitude || (cleanCity.toLowerCase() === 'santa marta' ? -74.2122 : -75.5500)
 
   return {
-    latitude: hasUsableCoordinates(defaultLat, defaultLon) ? defaultLat : (input.latitude || 41.3851),
-    longitude: hasUsableCoordinates(defaultLon, defaultLat) ? defaultLon : (input.longitude || 2.1734),
+    latitude: cityCenterLat,
+    longitude: cityCenterLon,
     wasFallback: true
   }
 }
@@ -3726,27 +3753,38 @@ export async function collectTourCandidates(input, location) {
   const mergedSpecifics = Array.from(new Set([
     ...(Array.isArray(input.specificPlaces) ? input.specificPlaces : []),
     ...(Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
-  ])).filter(p => typeof p === 'string' && p.trim().length >= 3 && !/\b(por d[íi]a|restaurante por d[íi]a|hotel|hostal|hospedaje|alojamiento|ver men[uú]|consultar)\b/i.test(p))
+  ])).filter(isValidSpecificPlace)
 
   let geocodedSpecifics = []
   if (mergedSpecifics.length > 0) {
+    const canonicalDest = input.canonicalDestination || (cityCenterLat ? {
+      latitude: cityCenterLat,
+      longitude: cityCenterLon,
+      displayName: city,
+      city,
+      country
+    } : null)
+
     const specificSettled = await Promise.allSettled(
       mergedSpecifics.map(async (placeName) => {
-        if (!placeName || typeof placeName !== 'string' || placeName.length < 3) return null
-        const searchQuery = `${placeName} ${city} ${country}`.trim()
+        if (!isValidSpecificPlace(placeName)) return null
+        const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
         const geo = await geocodePlace(searchQuery).catch(() => null)
-        return {
-          name: placeName,
-          latitude: geo?.latitude || cityCenterLat || 10.4230,
-          longitude: geo?.longitude || cityCenterLon || -75.5500,
-          type: 'tourism',
-          category: 'requested',
-          city,
-          country,
-          address: geo?.name || `${city}, ${placeName}`,
-          description: `Atracción/Restaurante: ${placeName}`,
-          tags: { requested_place: 'true' }
+        if (geo && validateCandidateLocation(geo, canonicalDest, 50)) {
+          return {
+            name: placeName,
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            type: 'tourism',
+            category: 'requested',
+            city,
+            country,
+            address: geo.name || `${city}, ${placeName}`,
+            description: `Atracción/Restaurante: ${placeName}`,
+            tags: { requested_place: 'true' }
+          }
         }
+        return null
       })
     )
     geocodedSpecifics = specificSettled

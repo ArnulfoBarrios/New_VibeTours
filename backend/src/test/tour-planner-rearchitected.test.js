@@ -75,3 +75,27 @@ test('user prompt with interests but without explicit city must recommend beach/
   assert.ok(res.actionChips.some(c => /Santa Marta|Cartagena|San Andrés|Cancún/i.test(c)))
 })
 
+test('isValidSpecificPlace must reject category words and accept authentic POI names', async () => {
+  const { isValidSpecificPlace } = await import('../routes/ai.js')
+  // Categories must be rejected
+  assert.equal(isValidSpecificPlace('Gastronomía'), false)
+  assert.equal(isValidSpecificPlace('Cultura'), false)
+  assert.equal(isValidSpecificPlace('Naturaleza'), false)
+  assert.equal(isValidSpecificPlace('Aventura'), false)
+  assert.equal(isValidSpecificPlace('Playas'), false)
+  assert.equal(isValidSpecificPlace('Tour de café'), false)
+  assert.equal(isValidSpecificPlace('Vida nocturna'), false)
+  assert.equal(isValidSpecificPlace('Día 1'), false)
+  assert.equal(isValidSpecificPlace('Hotel Casa La Fe'), false)
+
+  // Real POIs must be accepted
+  assert.equal(isValidSpecificPlace('Catedral Basílica de Santa Marta'), true)
+  assert.equal(isValidSpecificPlace('Parque de Los Novios'), true)
+  assert.equal(isValidSpecificPlace('Restaurante Donde Chucho'), true)
+  assert.equal(isValidSpecificPlace('Quinta de San Pedro Alejandrino'), true)
+  assert.equal(isValidSpecificPlace('Parque Nacional Natural Tayrona'), true)
+  assert.equal(isValidSpecificPlace('Minca'), true)
+  assert.equal(isValidSpecificPlace('Museo del Oro Tairona'), true)
+})
+
+
