@@ -356,14 +356,14 @@ REGLAS DE CONTENIDO:
 - PROHIBIDO INVENTAR: No alucines lugares inexistentes.
 - CRÍTICO LÍMITES TURÍSTICOS REGIONALES UNIVERSALES: Puedes incluir atracciones icónicas, parques naturales, playas o excursiones de un día ubicadas dentro del área metropolitana o región turística habitual de "${city || destination}, ${country || ''}" (hasta ~40 km, como Parque Tayrona o Minca para Santa Marta, Guatapé para Medellín, Islas del Rosario para Cartagena). Queda PROHIBIDO incluir atracciones ubicadas en un centro urbano o metrópoli DISTANTE totalmente diferente (ej: no incluir atracciones de Cartagena en un tour de Barranquilla, ni atracciones de Bogotá en un tour de Medellín).
 - Escribe en ${language}.
-- CRÍTICO GUÍA DE VOZ INMERSIVA: Cada descripción de parada ("descripcion") DEBE ser una guía de voz completa y envolvente de 80 a 120 palabras. Escribe como si fueras un guía local experto hablando en vivo al oído del turista. Narra la historia fascinante del sitio, los detalles arquitectónicos o naturales que tiene enfrente, anécdotas culturales únicas y sugerencias de 'Qué hacer o qué probar aquí'.
+- CRÍTICO GUÍA DE VOZ INMERSIVA: Cada descripción de parada ("descripcion") DEBE ser una guía de voz completa y envolvente de 120 a 180 palabras. Escribe como si fueras un guía local experto hablando en vivo al oído del turista. Narra la historia fascinante del sitio, los detalles arquitectónicos o naturales que tiene enfrente, anécdotas culturales únicas y sugerencias de 'Qué hacer o qué probar aquí'.
 - CRÍTICO CADA PARADA ES ÚNICA: PROHIBIDO copiar y pegar descripciones o consejos genéricos.
 - CRÍTICO DURACIONES REALISTAS: Queda estrictamente PROHIBIDO asignar duraciones de menos de 20 minutos a cualquier parada. Para museos, galerías, castillos y recintos históricos (ej: Palacio de la Inquisición, Museo del Oro, Cerro de la Popa, Museo Naval), asigna entre 45 y 90 minutos de visita. Para monumentos o plazas al aire libre, asigna entre 25 y 40 minutos.
 - CRÍTICO LOGÍSTICA DE ISLAS Y EXCURSIONES MARÍTIMAS: Si el itinerario incluye una atracción insular o marítima alejada (ej: Islas del Rosario, Isla Barú o Playa Blanca desde Cartagena), esta actividad representa una excursión de medio día o día completo. Asigna a esta actividad suficiente tiempo (mínimo 4 a 6 horas en el itinerario del día) y detalla que la partida se realiza desde el muelle de embarque (ej: Muelle de la Bodeguita). Queda PROHIBIDO asignarle duraciones relámpago de 20 o 30 minutos intercaladas en caminatas urbanas del mismo día.
 - El array de salida "itinerario" debe tener EXACTAMENTE la misma longitud que la lista de lugares seleccionados (selectedPlaces) que recibes.`
 
   if (selectedHotel && selectedHotel.name) {
-    system += `\n- CRÍTICO: El turista se hospedará o iniciará en el hotel: "${selectedHotel.name}". El "punto_encuentro" (meetingPoint) del tour DEBE ser obligatoriamente este hotel y debes integrarlo de manera relevante al inicio del itinerario.`
+    system += `\n- CRÍTICO: El turista se hospedará o iniciará en el hotel: "${selectedHotel.name}". El "punto_encuentro" (meetingPoint) del tour DEBE ser obligatoriamente este hotel.`
   }
 
   system += `\n- CRÍTICO RUTA CON INICIO Y FIN: Si el usuario especificó un punto de partida y un punto de llegada, la Parada 1 del itinerario DEBE ser el punto de partida especificado y la última Parada DEBE ser el destino final especificado. Las paradas intermedias deben integrarse de forma fluida de camino hacia la meta final.`
@@ -453,7 +453,6 @@ REGLAS DE CONTENIDO:
         "place_id": "",
         "url_mapa": ""
       },
-      "dia": 1,
       "imagenes": []
     }
   ],
@@ -812,87 +811,314 @@ function getDefaultActionChips(known = {}, lastMessage = '') {
   return [`🚀 Generar tour en ${destName || 'mi destino'}`, '✏️ Cambiar un detalle']
 }
 
+export const DESTINATION_LOCAL_PRESETS = {
+  cartagena: {
+    name: 'Cartagena',
+    country: 'Colombia',
+    hotels: [
+      { name: 'Hotel Casa La Fe', desc: 'Hermosa casona colonial republicana restaurada del siglo XIX con piscina en la azotea, solárium y vistas panorámicas de las cúpulas coloniales en la Plaza Fernández de Madrid (Centro Histórico).', price: '~$90 - $130 USD/noche' },
+      { name: 'Hotel Boutique Casa Isabel', desc: 'Situado frente a la Laguna del Cabrero con terraza en la azotea, jacuzzi y vista panorámica inigualable del atardecer sobre la laguna y el Castillo San Felipe.', price: '~$75 - $110 USD/noche' },
+      { name: 'Hotel San Pedro de Majagua', desc: 'Cabañas ecológicas de lujo en Isla Grande (Archipiélago del Rosario) con acceso directo a dos playas privadas de aguas cristalinas y centro de buceo PADI.', price: '~$140 - $220 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante La Cevicheria', specialty: 'Ceviche clásico de corvina, langosta al ajillo, pulpo a la plancha con patacones y arroz marinero' },
+      { name: 'Restaurante Celele', specialty: 'Terrina de cerdo con salsa de corozo, pescado confitado con coco y puré de yuca con flores comestibles' },
+      { name: 'Restaurante El Boliche Cebichería', specialty: 'Ceviche de langostinos con tamarindo, ceviche mixto con leche de tigre y chips de plátano verde' },
+      { name: 'Restaurante La Mulata', specialty: 'Cazuela de mariscos cremosa, pargo rojo frito con ensalada de aguacate y limonada de coco' }
+    ],
+    places: [
+      'Castillo San Felipe de Barajas',
+      'Excursión a las Islas del Rosario',
+      'Recorrido por la Ciudad Amurallada',
+      'Paseo y atardecer en Bocagrande',
+      'Convento de la Popa',
+      'Mercado de Bazurto y recorrido cultural',
+      'Paseo en Chiva',
+      'Café del Mar',
+      'Plaza de Santo Domingo y Getsemaní'
+    ]
+  },
+  medellin: {
+    name: 'Medellín',
+    country: 'Colombia',
+    hotels: [
+      { name: 'The Click Clack Hotel Medellín', desc: 'Diseño vanguardista en El Poblado con terraza panorámica, coctelería botánica y habitaciones contemporáneas.', price: '~$110 - $160 USD/noche' },
+      { name: 'Hotel Dann Carlton Medellín', desc: 'Lujo y confort clásico en El Poblado con piscina climatizada, spa y restaurante giratorio.', price: '~$90 - $140 USD/noche' },
+      { name: 'Marquee Medellín', desc: 'Hotel boutique exclusivo en Parque Lleras con piscina en la azotea y acabados italianos de lujo.', price: '~$130 - $190 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante El Cielo', specialty: 'Experiencia gastronómica sensorial y creativa de alta cocina colombiana' },
+      { name: 'Restaurante Carmen Medellín', specialty: 'Platos contemporáneos de autor con ingredientes nativos y pesca fresca' },
+      { name: 'Mondongo\'s El Poblado', specialty: 'Auténtica bandeja paisa, mondongo tradicional y arepas de chócolo' },
+      { name: 'Alambique', specialty: 'Cocina artesanal de autor servida en un ambiente bohemio con coctelería botánica' }
+    ],
+    places: [
+      'Comuna 13 y Graffitour',
+      'Parque Arví y Metrocable',
+      'Plaza Botero y Museo de Antioquia',
+      'Jardín Botánico de Medellín',
+      'Barrio Provenza y El Poblado',
+      'Pueblito Paisa en el Cerro Nutibara'
+    ]
+  },
+  bogota: {
+    name: 'Bogotá',
+    country: 'Colombia',
+    hotels: [
+      { name: 'Four Seasons Hotel Casa Medina', desc: 'Casona histórica declarada monumento nacional en Zona G con arquitectura colonial.', price: '~$250 - $380 USD/noche' },
+      { name: 'The Click Clack Hotel Bogotá', desc: 'Concepto boutique urbano e innovador cerca del Parque de la 93.', price: '~$100 - $150 USD/noche' },
+      { name: 'Hotel de la Opera', desc: 'Elegancia colonial y spa en el corazón histórico del barrio La Candelaria.', price: '~$90 - $130 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante Leo', specialty: 'Cocina colombiana de ecosistemas por la reconocida chef Leonor Espinosa' },
+      { name: 'Harry Sasson', specialty: 'Alta gastronomía internacional y parrilla en una mansión clásica restaurada' },
+      { name: 'Andrés DC', specialty: 'Gastronomía típica colombiana, carnes a la brasa y fiesta tradicional' },
+      { name: 'Prudencia La Candelaria', specialty: 'Menú degustación artesanal de temporada cocinado a la leña' }
+    ],
+    places: [
+      'Cerro de Monserrate',
+      'Museo del Oro',
+      'Barrio La Candelaria y Plaza de Bolívar',
+      'Museo Botero',
+      'Parque de la 93 y Zona Rosa',
+      'Jardín Botánico de Bogotá'
+    ]
+  },
+  miami: {
+    name: 'Miami',
+    country: 'Estados Unidos',
+    hotels: [
+      { name: 'The Miami Beach EDITION', desc: 'Lujo frente al mar en South Beach con diseño sofisticado, spa y pistas de bowling.', price: '~$350 - $600 USD/noche' },
+      { name: '1 Hotel South Beach', desc: 'Retiro ecológico de 5 estrellas frente al océano con 4 piscinas y terraza panorámica.', price: '~$400 - $700 USD/noche' },
+      { name: 'Faena Hotel Miami Beach', desc: 'Espectacular arte teatral, glamour y gastronomía de clase mundial frente a la playa.', price: '~$500 - $850 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Joe\'s Stone Crab', specialty: 'Legendarios cangrejos moros de Florida, hash browns y key lime pie' },
+      { name: 'La Mar by Gastón Acurio', specialty: 'Ceviches peruanos de alta gama con terraza frente a la bahía de Biscayne' },
+      { name: 'Versailles Restaurant', specialty: 'Auténtica comida cubana, sándwich cubano y café con leche en Little Havana' },
+      { name: 'Zuma Miami', specialty: 'Izakaya japonesa contemporánea de alta cocina en Downtown Miami' }
+    ],
+    places: [
+      'South Beach y Ocean Drive',
+      'Distrito de Arte de Wynwood',
+      'Little Havana y Calle Ocho',
+      'Vizcaya Museum and Gardens',
+      'Bayside Marketplace y Bahía de Biscayne',
+      'Miami Design District'
+    ]
+  },
+  roma: {
+    name: 'Roma',
+    country: 'Italia',
+    hotels: [
+      { name: 'Hotel de Russie', desc: 'Elegancia clásica junto a Piazza del Popolo con jardines secretos y terraza gastronómica.', price: '~$450 - $800 USD/noche' },
+      { name: 'The St. Regis Rome', desc: 'Lujo aristocrático del siglo XIX en el corazón histórico de Roma.', price: '~$500 - $900 USD/noche' },
+      { name: 'Hotel Artemide', desc: 'Confort moderno, spa y terraza panorámica en Via Nazionale.', price: '~$180 - $280 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Roscioli Salumeria con Cucina', specialty: 'La mejor pasta Carbonara clásica y quesos artesanales italianos' },
+      { name: 'Trattoria Da Enzo al 29', specialty: 'Auténtica Cacio e Pepe y alcachofas a la romana en el corazón de Trastevere' },
+      { name: 'Armando al Pantheon', specialty: 'Clásicos romanos refinados junto al Panteón de Agripa' },
+      { name: 'Pizzarium Bonci', specialty: 'Pizza al taglio crujiente con masas de fermentación natural y toppings gourmet' }
+    ],
+    places: [
+      'Coliseo Romano y Foro Romano',
+      'Fontana di Trevi',
+      'Panteón de Agripa y Piazza Navona',
+      'Basílica de San Pedro y Museos Vaticanos',
+      'Barrio de Trastevere',
+      'Piazza di Spagna'
+    ]
+  },
+  paris: {
+    name: 'París',
+    country: 'Francia',
+    hotels: [
+      { name: 'Le Bristol Paris', desc: 'Palacio de lujo clásico francés con jardín privado y restaurante con estrellas Michelin.', price: '~$900 - $1500 USD/noche' },
+      { name: 'Hôtel Plaza Athénée', desc: 'Ícono de la alta costura parisina en Avenue Montaigne con vistas a la Torre Eiffel.', price: '~$950 - $1600 USD/noche' },
+      { name: 'Hôtel Fabric', desc: 'Boutique contemporáneo con estilo industrial chic en el vibrante barrio de Oberkampf.', price: '~$200 - $320 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Le Comptoir du Relais', specialty: 'Bistronomía parisina clásica, pato confitado y quesos selectos en Saint-Germain' },
+      { name: 'Bouillon Pigalle', specialty: 'Tradición francesa, boeuf bourguignon y profiteroles a precios accesibles' },
+      { name: 'Septime', specialty: 'Cocina francesa moderna de temporada con estrella Michelin' },
+      { name: 'L\'As du Fallafel', specialty: 'Famoso falafel artesanal en el histórico barrio de Le Marais' }
+    ],
+    places: [
+      'Torre Eiffel y Campo de Marte',
+      'Museo del Louvre',
+      'Catedral de Notre-Dame y Sainte-Chapelle',
+      'Barrio de Montmartre y Basílica del Sagrado Corazón',
+      'Paseo por el Río Sena y Jardines de Luxemburgo',
+      'Arco de Triunfo y Campos Elíseos'
+    ]
+  },
+  tokio: {
+    name: 'Tokio',
+    country: 'Japón',
+    hotels: [
+      { name: 'Aman Tokyo', desc: 'Santuario de lujo zen en las alturas de Otemachi con vistas panorámicas al Palacio Imperial.', price: '~$800 - $1400 USD/noche' },
+      { name: 'Park Hyatt Tokyo', desc: 'Vistas icónicas de Shinjuku y el Monte Fuji con diseño contemporáneo y spa de altura.', price: '~$450 - $800 USD/noche' },
+      { name: 'The Tokyo Station Hotel', desc: 'Encanto clásico y arquitectura europea dentro del histórico edificio de la estación de Tokio.', price: '~$350 - $550 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Sukiyabashi Jiro Roppongi', specialty: 'Sushi Edomae tradicional de máxima maestría y pescado fresco' },
+      { name: 'Ichiran Shibuya', specialty: 'Ramen Tonkotsu artesanal servido en cabinas individuales de concentración' },
+      { name: 'Rokurinsha', specialty: 'Famoso Tsukemen con fideos gruesos y caldo concentrado en Tokyo Station' },
+      { name: 'Gyukatsu Motomura', specialty: 'Carne de res empanizada servida en piedra caliente personal' }
+    ],
+    places: [
+      'Cruce de Shibuya y Estatua de Hachiko',
+      'Templo Senso-ji en Asakusa',
+      'Parque Shinjuku Gyoen',
+      'Santuario Meiji y Barrio Harajuku',
+      'Torre de Tokio y Roppongi Hills',
+      'Distrito de Neón de Akihabara'
+    ]
+  }
+}
+
+export function getDestinationPresets(destName = '', countryName = '') {
+  const clean = String(destName || '').trim().toLowerCase()
+  const baseKey = clean.split(',')[0].trim().replace(/^(ciudad de|san|santa)\s+/i, '').trim()
+  
+  if (DESTINATION_LOCAL_PRESETS[clean]) return DESTINATION_LOCAL_PRESETS[clean]
+  if (DESTINATION_LOCAL_PRESETS[baseKey]) return DESTINATION_LOCAL_PRESETS[baseKey]
+
+  for (const [k, preset] of Object.entries(DESTINATION_LOCAL_PRESETS)) {
+    if (clean.includes(k) || k.includes(baseKey) || (preset.name && preset.name.toLowerCase() === clean)) {
+      return preset
+    }
+  }
+
+  const capitalCity = destName ? destName.charAt(0).toUpperCase() + destName.slice(1) : 'Destino'
+  const targetCountry = countryName || 'Local'
+
+  return {
+    name: capitalCity,
+    country: targetCountry,
+    hotels: [
+      { name: `Hotel Boutique ${capitalCity}`, desc: `Confortable hotel boutique ubicado en el corazón de ${capitalCity} con excelente acceso a las principales atracciones.`, price: '~$80 - $130 USD/noche' },
+      { name: `Gran Hotel ${capitalCity}`, desc: `Alojamiento de primer nivel con terraza panorámica, desayuno gourmet y atención personalizada en ${capitalCity}.`, price: '~$110 - $170 USD/noche' },
+      { name: `Suites & Spa ${capitalCity}`, desc: `Espacios modernos y relajantes ideales para una estancia inolvidable en ${capitalCity}.`, price: '~$70 - $110 USD/noche' }
+    ],
+    restaurants: [
+      { name: `Restaurante Tradicional ${capitalCity}`, specialty: `Especialidades gastronómicas y sabores típicos representativos de ${capitalCity}` },
+      { name: `Bistró Gourmet ${capitalCity}`, specialty: `Cocina de autor y platos destacados con ingredientes locales frescos` },
+      { name: `Sabores de ${capitalCity}`, specialty: `Variedad de recetas clásicas y experiencias culinarias locales` },
+      { name: `Mercado Gastronómico ${capitalCity}`, specialty: `Platos típicos, degustaciones y postres tradicionales de la región` }
+    ],
+    places: [
+      `Centro Histórico de ${capitalCity}`,
+      `Plaza Principal de ${capitalCity}`,
+      `Mirador Panorámico de ${capitalCity}`,
+      `Museo Cultural de ${capitalCity}`,
+      `Paseo Peatonal de ${capitalCity}`,
+      `Parque Emblemático de ${capitalCity}`
+    ]
+  }
+}
+
 export async function generateChatResponse(state, backendInstruction, webSearchSummary = '', currentPreferences = {}) {
   const known = currentPreferences || {}
   const recentHistory = (state.history || []).slice(-6).map(m => ({ role: m.role, content: m.content }))
   const lastUserMsg = state.history?.[state.history.length - 1]?.content || ''
   const hasCity = Boolean(known.city || known.destination)
+  const destName = known.city || known.destination || ''
+  const destCountry = known.country || ''
+  const presets = getDestinationPresets(destName, destCountry)
+
   const isAskingItineraryStatus = hasCity && /\b(itinerario|revisar itinerario|revisar el itinerario|revisa itinerario|ver itinerario|ver el itinerario|c[oó]mo va el itinerario|mu[eé]strame el tour|mu[eé]strame el itinerario|qu[eé] llevamos planeado|qu[eé] llevamos|c[oó]mo vamos|resumen del itinerario|ver tour|desglose del tour|plan actual|quiero ver el itinerario|ver itinerario actualizado|itinerario actualizado|ver itinerario completo|itinerario completo)\b/i.test(lastUserMsg)
 
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
     let fallbackMsg = '¡Hola! Qué gusto saludarte. Cuéntame: ¿a qué ciudad te gustaría viajar?'
-    const isAskingHotelInfoFallback = hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua)\b/i.test(lastUserMsg)
+    const isAskingHotelInfoFallback = hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua|edition|faena|st\.?\s*regis|artemide|bristol|ath[ée]n[ée]e|fabric|aman|hyatt)\b/i.test(lastUserMsg)
+    const isAskingHotelRecommendationsFallback = hasCity && !known.selectedHotel && !isAskingHotelInfoFallback && /\b(hotel|hoteles|alojamiento|d[oó]nde hospedarme|d[oó]nde quedarme|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje|recomi[eé]ndame hoteles|qu[eé] hoteles)\b/i.test(lastUserMsg)
     const isAskingSpecificDayFallback = hasCity && /\b(detalles del d[íi]a\s*(\d+)|ver detalles del d[íi]a\s*(\d+)|ver d[íi]a\s*(\d+)|d[íi]a\s*(\d+))\b/i.test(lastUserMsg)
     const isAskingMenusFallback = hasCity && /\b(men[uú]|men[uú]s|carta|platos|ver men[uú]s|qu[eé] sirven)\b/i.test(lastUserMsg)
     const isAskingRestaurantsFallback = hasCity && /\b(restaurante|restaurantes|comer|d[oó]nde comer|gastronom[íi]a|comida)\b/i.test(lastUserMsg)
     
     if (isAskingHotelInfoFallback) {
-      fallbackMsg = `¡Con mucho gusto! Aquí tienes los detalles del **Hotel Casa La Fe** en ${known.city || known.destination}: 🏨✨\n\n` +
-        `• 📍 **Ubicación**: Ubicado en la Plaza Fernández de Madrid en el Centro Histórico.\n` +
-        `• 🏊 **Instalaciones**: Piscina en la azotea con solárium y vistas panorámicas.\n` +
-        `• 🍳 **Servicios**: Desayuno gourmet incluido, Wi-Fi de alta velocidad y aire acondicionado.\n` +
-        `• 💰 **Tarifa estimada**: ~$90 - $130 USD/noche.\n\n` +
-        `¿Deseas confirmar el Hotel Casa La Fe como tu hospedaje?`
+      const hotelObj = presets.hotels[0]
+      fallbackMsg = `¡Con mucho gusto! Aquí tienes los detalles del **${hotelObj.name}** en ${destName}: 🏨✨\n\n` +
+        `• 📍 **Ubicación y Estilo**: ${hotelObj.desc}\n` +
+        `• 🍳 **Servicios**: Desayuno gourmet incluido, Wi-Fi de alta velocidad, aire acondicionado y recepción 24 horas.\n` +
+        `• 💰 **Tarifa estimada**: ${hotelObj.price}.\n\n` +
+        `¿Deseas confirmar el ${hotelObj.name} como tu hospedaje?`
       return {
         responseMessage: fallbackMsg,
-        actionChips: ['✅ Confirmar Hotel Casa La Fe', '🏨 Ver otras opciones de hotel', '🎯 Sugerir actividades'],
+        actionChips: [`✅ Confirmar ${hotelObj.name}`, '🏨 Ver otras opciones de hotel', '🎯 Sugerir actividades'],
+        specificPlaces: (hasCity && Array.isArray(known.specificPlaces)) ? known.specificPlaces : [],
+        destinationSuggestions: [],
+        readyToBuild: false
+      }
+    } else if (isAskingHotelRecommendationsFallback) {
+      fallbackMsg = `¡Qué emoción que busques opciones de hospedaje en ${destName}! 🎉 Aquí te dejo tres excelentes recomendaciones adaptadas a tu presupuesto (${known.budget || 'Moderado'}):\n\n` +
+        presets.hotels.map((h, i) => `${i + 1}. **${h.name}**: ${h.desc}`).join('\n') +
+        `\n\n¿Cuál de estos te gustaría elegir como tu hospedaje?`
+      return {
+        responseMessage: fallbackMsg,
+        actionChips: presets.hotels.map(h => h.name),
         specificPlaces: (hasCity && Array.isArray(known.specificPlaces)) ? known.specificPlaces : [],
         destinationSuggestions: [],
         readyToBuild: false
       }
     } else if (isAskingSpecificDayFallback) {
-      fallbackMsg = `**Detalles del Día 1 en ${known.city || known.destination}:** ☀️🏛️\n\n` +
-        `• 🏨 **Alojamiento / Punto de partida**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado'}\n` +
-        `• 🌅 **09:00 AM - Mañana**: Visita a Castillo San Felipe de Barajas\n` +
-        `• 🍽️ **12:30 PM - Almuerzo**: Restaurante La Cevicheria\n` +
-        `• 🌇 **03:30 PM - Tarde**: Recorrido por la Ciudad Amurallada\n` +
-        `• 🌙 **07:30 PM - Noche**: Cena y vida nocturna en Getsemaní\n\n` +
+      const match = lastUserMsg.match(/\b(d[íi]a\s*(\d+)|detalles\s+del\s+d[íi]a\s*(\d+))\b/i)
+      const dayNum = parseInt(match?.[2] || match?.[3] || '1', 10)
+      const hotel = known.selectedHotel?.name || known.selectedHotel || presets.hotels[0].name
+      const acts = presets.places
+      const rests = presets.restaurants
+
+      fallbackMsg = `**Detalles del Día ${dayNum} en ${destName}:** ☀️🏛️\n\n` +
+        `• 🏨 **Alojamiento / Punto de partida**: ${hotel}\n` +
+        `• 🌅 **09:00 AM - Mañana**: Visita a ${acts[0] || 'Atracción principal'}\n` +
+        `• 🍽️ **12:30 PM - Almuerzo**: ${rests[0]?.name || 'Restaurante local'} (${rests[0]?.specialty || 'Gastronomía típica'})\n` +
+        `• 🌇 **03:30 PM - Tarde**: Recorrido por ${acts[2] || acts[1] || 'Paseo cultural'}\n` +
+        `• 🌙 **07:30 PM - Noche**: Cena y recorrido nocturno por ${acts[3] || 'Centro histórico'}\n\n` +
         `¿Te gustaría generar el tour completo o ver otro día?`
       return {
         responseMessage: fallbackMsg,
-        actionChips: [`🚀 Generar tour en ${known.city || known.destination}`, '📋 Ver itinerario completo', '✏️ Modificar este día'],
+        actionChips: [`🚀 Generar tour en ${destName}`, '📋 Ver itinerario completo', '✏️ Modificar este día'],
         specificPlaces: (hasCity && Array.isArray(known.specificPlaces)) ? known.specificPlaces : [],
         destinationSuggestions: [],
         readyToBuild: false
       }
     } else if (isAskingMenusFallback) {
-      fallbackMsg = `¡Aquí tienes los platos destacados de los restaurantes recomendados en ${known.city || known.destination}! 🍲🦐\n\n` +
-        `• **La Cevicheria**: Ceviche clásico de corvina, langosta al ajillo y pulpo a la plancha.\n` +
-        `• **Celele**: Pescado confitado con coco y terrina de cerdo con salsa de corozo.\n` +
-        `• **El Boliche Cebichería**: Ceviche de langostinos con tamarindo y leche de tigre.\n\n` +
-        `¿Deseas agregar estos restaurantes a tu itinerario?`
+      fallbackMsg = `¡Aquí tienes los platos destacados de los restaurantes recomendados en ${destName}! 🍲✨\n\n` +
+        presets.restaurants.map(r => `• **${r.name.replace(/^Restaurante\s+/i, '')}**: ${r.specialty}.`).join('\n') +
+        `\n\n¿Deseas agregar estos restaurantes a tu itinerario?`
     } else if (isAskingRestaurantsFallback) {
-      fallbackMsg = `¡Aquí tienes excelentes opciones de restaurantes en ${known.city || known.destination}! 🍽️✨\n\n` +
-        `1. **Restaurante La Cevicheria**: Especialidad en mariscos frescos y ceviches.\n` +
-        `2. **Restaurante Celele**: Cocina caribeña contemporánea con sabores locales.\n` +
-        `3. **Restaurante El Boliche Cebichería**: Exquisitos ceviches artesanales.\n\n` +
-        `¿Te gustaría incluir estas opciones en tu itinerario?`
+      fallbackMsg = `¡Aquí tienes excelentes opciones de restaurantes en ${destName}! 🍽️✨\n\n` +
+        presets.restaurants.map((r, i) => `${i + 1}. **${r.name}**: ${r.specialty}.`).join('\n') +
+        `\n\n¿Te gustaría incluir estas opciones en tu itinerario?`
     } else if (isAskingItineraryStatus) {
-      const places = (known.specificPlaces || []).length > 0 ? known.specificPlaces : ['Castillo San Felipe', 'Islas del Rosario', 'Ciudad Amurallada', 'Bocagrande', 'Convento de la Popa']
+      const places = (known.specificPlaces || []).length > 0 ? known.specificPlaces : presets.places
       const isThreeDays = known.durationDays === 3 || (known.durationHours && known.durationHours >= 72)
-      fallbackMsg = `¡Aquí tienes el desglose de lo que llevamos planeado para tu viaje en ${known.city || known.destination}! 🗺️\n\n` +
+      const hotel = known.selectedHotel?.name || known.selectedHotel || presets.hotels[0].name
+      fallbackMsg = `¡Aquí tienes el desglose de lo que llevamos planeado para tu viaje en ${destName}! 🗺️\n\n` +
         `**Día 1:**\n` +
-        `- 🏨 **Alojamiento / Punto de partida**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado / Punto de encuentro'}\n` +
-        `- 🌅 **Mañana**: Visita a ${places[0] || 'Castillo San Felipe'}\n` +
-        `- 🍽️ **Almuerzo**: Restaurante La Cevicheria\n` +
-        `- 🌇 **Tarde**: ${places[2] || 'Ciudad Amurallada'}\n` +
-        `- 🌙 **Noche / Cena**: Experiencia gastronómica en el Centro Histórico\n\n` +
+        `- 🏨 **Alojamiento / Punto de partida**: ${hotel}\n` +
+        `- 🌅 **Mañana**: Visita a ${places[0] || presets.places[0]}\n` +
+        `- 🍽️ **Almuerzo**: ${presets.restaurants[0]?.name || 'Restaurante Local'}\n` +
+        `- 🌇 **Tarde**: ${places[2] || presets.places[2] || presets.places[1]}\n` +
+        `- 🌙 **Noche / Cena**: Experiencia gastronómica y vida nocturna\n\n` +
         `**Día 2:**\n` +
-        `- 🏨 **Alojamiento**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado'}\n` +
-        `- 🌅 **Mañana / Tarde**: ${places[1] || 'Islas del Rosario'}\n` +
-        `- 🍽️ **Almuerzo**: Restaurante Celele\n` +
-        `- 🌇 **Tarde**: ${places[3] || 'Bocagrande'}\n` +
-        `- 🌙 **Noche / Cena**: Restaurante El Boliche Cebichería\n\n`
+        `- 🏨 **Alojamiento**: ${hotel}\n` +
+        `- 🌅 **Mañana / Tarde**: ${places[1] || presets.places[1]}\n` +
+        `- 🍽️ **Almuerzo**: ${presets.restaurants[1]?.name || 'Restaurante Gourmet'}\n` +
+        `- 🌇 **Tarde**: ${places[3] || presets.places[3] || presets.places[2]}\n` +
+        `- 🌙 **Noche / Cena**: ${presets.restaurants[2]?.name || 'Restaurante Destacado'}\n\n`
       
       if (isThreeDays) {
         fallbackMsg += `**Día 3:**\n` +
-          `- 🏨 **Alojamiento**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado'}\n` +
-          `- 🌅 **Mañana**: Recorrido por ${places[4] || 'Convento de la Popa'}\n` +
-          `- 🍽️ **Almuerzo**: Restaurante La Mulata\n` +
-          `- 🌇 **Tarde**: Mercado de Bazurto y recorrido cultural\n` +
-          `- 🌙 **Noche / Cena**: Cena de despedida y paseo por las murallas al atardecer\n\n`
+          `- 🏨 **Alojamiento**: ${hotel}\n` +
+          `- 🌅 **Mañana**: Recorrido por ${places[4] || presets.places[4] || presets.places[0]}\n` +
+          `- 🍽️ **Almuerzo**: ${presets.restaurants[3]?.name || presets.restaurants[0]?.name}\n` +
+          `- 🌇 **Tarde**: Recorrido cultural y de compras\n` +
+          `- 🌙 **Noche / Cena**: Cena de despedida y paseo nocturno\n\n`
       }
       fallbackMsg += `¿Deseas generar el itinerario completo o modificar algún día?`
     }
@@ -904,8 +1130,9 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
       readyToBuild: false
     }
   }
+
   const isAskingCityRecommendations = !hasCity && /\b(recomien|recomiend|qué me recomiendas|que me recomiendas|dónde ir|donde ir|sugiéreme|sugiereme|opciones|destinos|playas|viaje|tour)\b/i.test(lastUserMsg)
-  const isAskingHotelInfo = hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n|instalaciones|qu[eé] ofrece)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua)\b/i.test(lastUserMsg)
+  const isAskingHotelInfo = hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n|instalaciones|qu[eé] ofrece)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua|edition|faena|st\.?\s*regis|artemide|bristol|ath[ée]n[ée]e|fabric|aman|hyatt)\b/i.test(lastUserMsg)
   const isAskingHotelRecommendations = hasCity && !known.selectedHotel && !isAskingHotelInfo && /\b(hotel|hoteles|alojamiento|dónde hospedarme|dónde quedarme|hospedaje|opciones de hotel|opciones de hospedaje|buscar hotel|buscar hospedaje|recomi[eé]ndame hoteles)\b/i.test(lastUserMsg)
   const isHotelSelected = !isAskingHotelInfo && Boolean(known.selectedHotel && /\b(hotel|hostal|resort|casa)\b/i.test(lastUserMsg))
   const isAcceptingSuggestions = hasCity && /\b(agregar todas|incluir todas|agregar estas|incluir estas|agregar los restaurantes|agregar las actividades|s[íi],?\s*agrega|s[íi],?\s*incluye|agrega los 3|agregar los 3|a[ñn]adir todas|a[ñn]adir estas|agregar 1 restaurante|agregar restaurante por d[íi]a)\b/i.test(lastUserMsg)
@@ -935,7 +1162,7 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   } else if (isAskingHotelInfo) {
     promptInstruction = `
     EL USUARIO ESTÁ PIDIENDO MÁS INFORMACIÓN Y DETALLES DE UN HOTEL ESPECÍFICO ("${lastUserMsg}").
-    DESTINO CONFIRMADO: ${known.city || known.destination}, ${known.country || 'Colombia'}.
+    DESTINO CONFIRMADO: ${destName}, ${destCountry || presets.country}.
     OBLIGATORIO: Debes redactar en el cuerpo del mensaje una descripción completa, atractiva y detallada del hotel consultado:
     - 🏨 Ubicación exacta y tipo de casona/arquitectura.
     - 🌟 Comodidades principales (piscina en la azotea, vistas panorámicas, desayuno gourmet incluido, Wi-Fi, aire acondicionado, solárium).
@@ -946,19 +1173,19 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
   } else if (isAskingMenus) {
     promptInstruction = `
     EL USUARIO SOLICITÓ INFORMACIÓN DE LOS MENÚS Y ESPECIALIDADES DE LOS RESTAURANTES ("${lastUserMsg}").
-    DESTINO CONFIRMADO: ${known.city || known.destination}, ${known.country || 'Colombia'}.
-    OBLIGATORIO: Debes redactar en el cuerpo del mensaje los platos emblemáticos y especialidades de los mejores restaurantes de la ciudad (La Cevicheria, Celele, El Boliche Cebichería, La Mulata).
+    DESTINO CONFIRMADO: ${destName}, ${destCountry || presets.country}.
+    OBLIGATORIO: Debes redactar en el cuerpo del mensaje los platos emblemáticos y especialidades de los mejores restaurantes de la ciudad (${presets.restaurants.map(r => r.name).join(', ')}).
     ESTÁ TERMINANTEMENTE PROHIBIDO hablar de atracciones turísticas o tours en esta respuesta. Habla EXCLUSIVAMENTE de gastronomía, platos y menús.
     `
   } else if (isHotelSelected) {
     promptInstruction = `
     EL USUARIO ACABA DE CONFIRMAR SU HOTEL: "${known.selectedHotel?.name || known.selectedHotel}".
-    Confirma alegremente que el ${known.selectedHotel?.name || known.selectedHotel} ha sido guardado como su punto de partida y hospedaje en ${known.city || known.destination}.
+    Confirma alegremente que el ${known.selectedHotel?.name || known.selectedHotel} ha sido guardado como su punto de partida y hospedaje en ${destName}.
     ESTÁ ESTRICTAMENTE PROHIBIDO volver a recomendar hoteles.
     Invítalo a generar su tour o a agregar alguna actividad o restaurante si lo desea.
     `
   } else if (isAskingItineraryStatus) {
-    const placesList = Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0 ? known.specificPlaces : ['Centro Histórico', 'Castillo San Felipe', 'Ciudad Amurallada']
+    const placesList = Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0 ? known.specificPlaces : presets.places.slice(0, 5)
     promptInstruction = `
     EL USUARIO SOLICITÓ CONSULTAR EL ESTADO DEL ITINERARIO O VER SU TOUR ("${lastUserMsg}").
     ESTÁ ESTRICTAMENTE PROHIBIDO responder con mensajes preliminares vacíos o sólo introductorios esperando confirmación.
@@ -982,36 +1209,36 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     `
   } else if (isAskingHotelRecommendations) {
     promptInstruction = `
-    EL USUARIO SOLICITÓ RECOMENDACIONES DE HOTELES EN ${known.city || known.destination}, ${known.country || 'Colombia'}: "${lastUserMsg}".
-    DESTINO CONFIRMADO: ${known.city || known.destination}, ${known.country || 'Colombia'}.
-    Proporciona 3 excelentes opciones reales de hospedaje en ${known.city || known.destination}, ${known.country || 'Colombia'} acordes a su presupuesto (${known.budget || 'Moderado'}).
-    OBLIGATORIO: Debes redactar en el cuerpo del mensaje la lista numerada con los 3 hoteles y una breve descripción de cada uno. ESTÁ ESTRICTAMENTE PROHIBIDO dejar el mensaje cortado en dos puntos ":" sin listar los hoteles.
-    OBLIGATORIO: En "actionChips" debes incluir los nombres exactos de los 3 hoteles recomendados (ej: ["Hotel Casa La Fe", "Hotel Boutique Casa Isabel", "Hotel San Pedro de Majagua"]).
+    EL USUARIO SOLICITÓ RECOMENDACIONES DE HOTELES EN ${destName}, ${destCountry || presets.country}: "${lastUserMsg}".
+    DESTINO CONFIRMADO: ${destName}, ${destCountry || presets.country}.
+    Proporciona 3 excelentes opciones reales de hospedaje en ${destName}, ${destCountry || presets.country} acordes a su presupuesto (${known.budget || 'Moderado'}).
+    OBLIGATORIO: Debes redactar en el cuerpo del mensaje la lista numerada con los 3 hoteles y una breve descripción de cada uno (${presets.hotels.map(h => h.name).join(', ')}). ESTÁ ESTRICTAMENTE PROHIBIDO dejar el mensaje cortado en dos puntos ":" sin listar los hoteles.
+    OBLIGATORIO: En "actionChips" debes incluir los nombres exactos de los 3 hoteles recomendados (ej: ${JSON.stringify(presets.hotels.map(h => h.name))}).
     `
   } else if (isAskingEvents) {
     promptInstruction = `
-    EL USUARIO CONSULTÓ POR EVENTOS Y FESTIVALES EN ${known.city || known.destination}, ${known.country || 'Colombia'} PARA SUS FECHAS (${known.datesSeason || 'su viaje'}): "${lastUserMsg}".
-    DESTINO CONFIRMADO: ${known.city || known.destination}, ${known.country || 'Colombia'}.
+    EL USUARIO CONSULTÓ POR EVENTOS Y FESTIVALES EN ${destName}, ${destCountry || presets.country} PARA SUS FECHAS (${known.datesSeason || 'su viaje'}): "${lastUserMsg}".
+    DESTINO CONFIRMADO: ${destName}, ${destCountry || presets.country}.
     
     REGLAS ESTRICTAS PARA EVENTOS:
     1. OBLIGATORIO: Debes redactar un mensaje COMPLETO. ESTÁ PROHIBIDO dejar el mensaje cortado en dos puntos ":" sin texto.
     2. EVALUACIÓN DE FECHAS:
        - Si en las fechas del viaje (${known.datesSeason || 'próximamente'}) HAY festivales o eventos especiales reales en la ciudad: lístalos con fecha exacta, nombre y descripción breve.
-       - Si en esas fechas NO hay eventos o festivales especiales programados: INFÓRMALO con total amabilidad y honestidad ("Para estas fechas no hay festivales especiales programados..."), y a continuación INFORMA cuáles son los festivales y eventos más emblemáticos de la ciudad a lo largo del año con sus meses (por ejemplo en Cartagena: Festival Internacional de Cine y Música en marzo, Fiestas de Independencia en noviembre, Hay Festival en enero/febrero).
+       - Si en esas fechas NO hay eventos o festivales especiales programados: INFÓRMALO con total amabilidad y honestidad ("Para estas fechas no hay festivales especiales programados..."), y a continuación INFORMA cuáles son los festivales y eventos más emblemáticos de la ciudad a lo largo del año con sus meses.
     3. Invita al usuario a continuar con el armado de su tour o a explorar la gastronomía y actividades.
     `
   } else if (isAskingActivities) {
     promptInstruction = `
-    EL USUARIO SOLICITÓ RECOMENDACIONES DE ACTIVIDADES EN ${known.city || known.destination}: "${lastUserMsg}".
-    DESTINO CONFIRMADO: ${known.city || known.destination}.
-    OBLIGATORIO: Debes redactar en el texto del mensaje una lista numerada con 3 a 4 actividades y lugares imperdibles (ej: 1. Castillo San Felipe de Barajas, 2. Islas del Rosario, 3. Ciudad Amurallada, 4. Bocagrande) con una breve descripción de cada una.
+    EL USUARIO SOLICITÓ RECOMENDACIONES DE ACTIVIDADES EN ${destName}: "${lastUserMsg}".
+    DESTINO CONFIRMADO: ${destName}.
+    OBLIGATORIO: Debes redactar en el texto del mensaje una lista numerada con 3 a 4 actividades y lugares imperdibles (${presets.places.slice(0, 4).join(', ')}) con una breve descripción de cada una.
     ESTÁ ESTRICTAMENTE PROHIBIDO terminar el mensaje cortado en dos puntos ":".
     `
   } else if (isAskingRestaurants) {
     promptInstruction = `
-    EL USUARIO SOLICITÓ RECOMENDACIONES DE RESTAURANTES EN ${known.city || known.destination}: "${lastUserMsg}".
-    DESTINO CONFIRMADO: ${known.city || known.destination}.
-    OBLIGATORIO: Debes redactar en el texto del mensaje una lista numerada con 3 a 4 restaurantes emblemáticos reales (ej: 1. Restaurante La Cevicheria, 2. Restaurante Celele, 3. Restaurante El Boliche Cebichería) con su especialidad culinaria.
+    EL USUARIO SOLICITÓ RECOMENDACIONES DE RESTAURANTES EN ${destName}: "${lastUserMsg}".
+    DESTINO CONFIRMADO: ${destName}.
+    OBLIGATORIO: Debes redactar en el texto del mensaje una lista numerada con 3 a 4 restaurantes emblemáticos reales (${presets.restaurants.map(r => r.name).join(', ')}) con su especialidad culinaria.
     ESTÁ ESTRICTAMENTE PROHIBIDO terminar el mensaje cortado en dos puntos ":".
     OBLIGATORIO: Mantén consistencia exacta de los nombres de los restaurantes en el texto y en las opciones.
     `
@@ -1033,9 +1260,9 @@ export async function generateChatResponse(state, backendInstruction, webSearchS
     promptInstruction = `
     ¡YA TENEMOS TODAS LAS PREFERENCIAS COMPLETAS DE CADA PREGUNTA!
     PROHIBIDO hacer más preguntas.
-    CONFIRMA alegremente la información guardada (${known.city || known.destination}, fechas: ${known.datesSeason || 'Por definir'}, ${known.durationDays || known.durationHours} días, ${known.companions || 'Solo'}, ${known.budget || 'Económico'}, ${known.transport || 'Auto rentado'})
+    CONFIRMA alegremente la información guardada (${destName}, fechas: ${known.datesSeason || 'Por definir'}, ${known.durationDays || known.durationHours} días, ${known.companions || 'Solo'}, ${known.budget || 'Económico'}, ${known.transport || 'Auto rentado'})
     Y PREGUNTA EXPLÍCITAMENTE AL USUARIO SI YA DESEA GENERAR EL TOUR AHORA MISMO.
-    Ejemplo: "¡Excelente! Ya tenemos toda tu información completa para tu viaje en ${known.city || known.destination} (${known.durationDays || known.durationHours} días). 🎉 ¿Deseas que generemos tu tour ahora mismo?"
+    Ejemplo: "¡Excelente! Ya tenemos toda tu información completa para tu viaje en ${destName} (${known.durationDays || known.durationHours} días). 🎉 ¿Deseas que generemos tu tour ahora mismo?"
     `
   }
 
@@ -1111,36 +1338,15 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     if (isAskingHotelInfo) {
       const msg = String(parsed.responseMessage || '').trim()
       if (msg.length < 80 || msg.toLowerCase().startsWith('¡excelente!')) {
-        const isCasaLaFe = /casa la fe/i.test(lastUserMsg)
-        const isCasaIsabel = /casa isabel/i.test(lastUserMsg)
-        const isMajagua = /majagua/i.test(lastUserMsg)
-        
-        if (isCasaLaFe) {
-          parsed.responseMessage = `¡Con mucho gusto! Aquí tienes todos los detalles del **Hotel Casa La Fe** en Cartagena de Indias: 🏨✨\n\n` +
-            `• 📍 **Ubicación**: Ubicado en la emblemática Plaza Fernández de Madrid, en pleno corazón del Centro Histórico amurallado.\n` +
-            `• 🏛️ **Ambiente y Estilo**: Hermosa casona colonial republicana restaurada del siglo XIX con techos altos y patio interior tropical.\n` +
-            `• 🏊 **Instalaciones**: Cuenta con una piscina en la azotea con solárium y vistas panorámicas de las cúpulas coloniales.\n` +
-            `• 🍳 **Servicios**: Desayuno gourmet incluido servido en el patio, Wi-Fi de alta velocidad, aire acondicionado y recepción 24 horas.\n` +
-            `• 💰 **Tarifa estimada**: ~$90 - $130 USD por noche (excelente relación calidad-precio).\n\n` +
-            `¿Te gustaría confirmar el Hotel Casa La Fe como tu hospedaje o prefieres ver otra opción?`
-          parsed.actionChips = ['✅ Elegir Hotel Casa La Fe', '🏨 Ver otras opciones de hotel', '🎯 Sugerir actividades']
-        } else if (isCasaIsabel) {
-          parsed.responseMessage = `¡Con mucho gusto! Aquí tienes los detalles del **Hotel Boutique Casa Isabel** en Cartagena: 🏨✨\n\n` +
-            `• 📍 **Ubicación**: Situado frente a la Laguna del Cabrero, a solo 5 minutos a pie de Getsemaní y el Centro Histórico.\n` +
-            `• 🌅 **Vistas y Ambiente**: Terraza en la azotea con jacuzzi y vista panorámica inigualable del atardecer sobre la laguna y el Castillo San Felipe.\n` +
-            `• 🛌 **Habitaciones**: Decoración boutique cálida, aire acondicionado, minibar y camas King confortables.\n` +
-            `• 💰 **Tarifa estimada**: ~$75 - $110 USD por noche.\n\n` +
-            `¿Deseas elegir Hotel Boutique Casa Isabel o consultar otra opción?`
-          parsed.actionChips = ['✅ Elegir Hotel Boutique Casa Isabel', '🏨 Ver otras opciones de hotel', '🎯 Sugerir actividades']
-        } else if (isMajagua) {
-          parsed.responseMessage = `¡Con mucho gusto! Aquí tienes los detalles del **Hotel San Pedro de Majagua** en las Islas del Rosario: 🏝️✨\n\n` +
-            `• 📍 **Ubicación**: En Isla Grande (Archipiélago del Rosario), con acceso directo a dos playas privadas de aguas cristalinas.\n` +
-            `• 🤿 **Experiencia y Actividades**: Centro de buceo y snorkel PADI, paseos en kayak por manglares y gastronomía de mar fresca.\n` +
-            `• 🌴 **Ambiente**: Cabañas ecológicas de lujo rodeadas de bosque tropical y mar turquesa.\n` +
-            `• 💰 **Tarifa estimada**: ~$140 - $220 USD por noche (incluye traslado en lancha y desayuno).\n\n` +
-            `¿Deseas elegir Hotel San Pedro de Majagua o ver opciones en la ciudad?`
-          parsed.actionChips = ['✅ Elegir Hotel San Pedro de Majagua', '🏨 Ver opciones en el centro', '🎯 Sugerir actividades']
-        }
+        let matchedHotel = presets.hotels.find(h => new RegExp(h.name.replace(/hotel\s+|boutique\s+/gi, '').trim(), 'i').test(lastUserMsg))
+        if (!matchedHotel) matchedHotel = presets.hotels[0]
+
+        parsed.responseMessage = `¡Con mucho gusto! Aquí tienes todos los detalles del **${matchedHotel.name}** en ${destName}: 🏨✨\n\n` +
+          `• 📍 **Ubicación y Estilo**: ${matchedHotel.desc}\n` +
+          `• 🏊 **Instalaciones y Servicios**: Desayuno gourmet incluido, Wi-Fi de alta velocidad, aire acondicionado y recepción 24 horas.\n` +
+          `• 💰 **Tarifa estimada**: ${matchedHotel.price}.\n\n` +
+          `¿Te gustaría confirmar el ${matchedHotel.name} como tu hospedaje o prefieres ver otra opción?`
+        parsed.actionChips = [`✅ Elegir ${matchedHotel.name}`, '🏨 Ver otras opciones de hotel', '🎯 Sugerir actividades']
       }
     }
 
@@ -1149,13 +1355,10 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       const msg = String(parsed.responseMessage || '').trim()
       const isCutOffOrEmpty = msg.endsWith(':') || (!msg.includes('1.') && !msg.includes('2.'))
       if (isCutOffOrEmpty) {
-        const destName = known.city || known.destination || 'Cartagena'
-        parsed.responseMessage = `¡Qué emoción que busques opciones de hospedaje en ${destName}, Colombia! 🎉 Aquí te dejo tres excelentes recomendaciones adaptadas a tu presupuesto (${known.budget || 'Moderado'}):\n\n` +
-          `1. **Hotel Casa La Fe**: Encantador hotel boutique en el centro histórico, con piscina en la azotea y arquitectura colonial.\n` +
-          `2. **Hotel Boutique Casa Isabel**: Con hermosa vista panorámica a la laguna del Cabrero, a solo unos pasos de Getsemaní.\n` +
-          `3. **Hotel San Pedro de Majagua**: Opción idílica para desconectar con ambiente colonial y excelente ubicación.\n\n` +
-          `¿Cuál de estos te gustaría elegir como tu hospedaje?`
-        parsed.actionChips = ['Hotel Casa La Fe', 'Hotel Boutique Casa Isabel', 'Hotel San Pedro de Majagua']
+        parsed.responseMessage = `¡Qué emoción que busques opciones de hospedaje en ${destName}! 🎉 Aquí te dejo tres excelentes recomendaciones adaptadas a tu presupuesto (${known.budget || 'Moderado'}):\n\n` +
+          presets.hotels.map((h, i) => `${i + 1}. **${h.name}**: ${h.desc}`).join('\n') +
+          `\n\n¿Cuál de estos te gustaría elegir como tu hospedaje?`
+        parsed.actionChips = presets.hotels.map(h => h.name)
       }
     }
 
@@ -1163,26 +1366,18 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       const msg = String(parsed.responseMessage || '').trim()
       const isCutOffOrEmpty = msg.endsWith(':') || (!msg.includes('1.') && !msg.includes('2.'))
       if (isCutOffOrEmpty) {
-        const destName = known.city || known.destination || 'Cartagena'
         parsed.responseMessage = `¡Perfecto! Aquí tienes las mejores recomendaciones gastronómicas en ${destName} que no te puedes perder! 🍽️✨\n\n` +
-          `1. **Restaurante La Cevicheria**: Legendario lugar en el centro histórico famoso por sus mariscos frescos, ceviches caribeños y pulpo al carbón.\n` +
-          `2. **Restaurante Celele**: Alta cocina caribeña contemporánea con sabores innovadores y productos locales autóctonos.\n` +
-          `3. **Restaurante El Boliche Cebichería**: Acogedor y exclusivo rincón donde disfrutarás de exquisitos ceviches con leche de tigre de tamarindo y coco.\n` +
-          `4. **Restaurante La Mulata**: Auténtica comida típica cartagenera con cazuelas de mariscos, pescado frito y arroz con coco en un ambiente colorido.\n\n` +
-          `¿Te gustaría incluir estas opciones gastronómicas en tu itinerario?`
+          presets.restaurants.map((r, i) => `${i + 1}. **${r.name}**: ${r.specialty}.`).join('\n') +
+          `\n\n¿Te gustaría incluir estas opciones gastronómicas en tu itinerario?`
         parsed.actionChips = ['➕ Agregar 1 restaurante por día', '📋 Ver menús', `🚀 Generar tour en ${destName}`]
-        parsed.specificPlaces = ['Restaurante La Cevicheria', 'Restaurante Celele', 'Restaurante El Boliche Cebichería', 'Restaurante La Mulata']
+        parsed.specificPlaces = presets.restaurants.map(r => r.name)
       }
     }
 
     if (isAskingMenus) {
-      const destName = known.city || known.destination || 'Cartagena'
-      parsed.responseMessage = `¡Aquí tienes los platos y especialidades destacadas de los restaurantes recomendados en ${destName}! 🍲🦐\n\n` +
-        `• **La Cevicheria**: Ceviche clásico de corvina, langosta al ajillo, pulpo a la plancha con patacones y arroz marinero.\n` +
-        `• **Celele**: Terrina de cerdo con salsa de corozo, pescado confitado con coco y puré de yuca, flores comestibles y postre de zapote.\n` +
-        `• **El Boliche Cebichería**: Ceviche de langostinos con tamarindo, ceviche mixto con leche de tigre y chips de plátano verde.\n` +
-        `• **La Mulata**: Cazuela de mariscos cremosa, pargo rojo frito con ensalada de aguacate y limonada de coco.\n\n` +
-        `¿Deseas agregar estos restaurantes a los días de tu tour o consultar actividades?`
+      parsed.responseMessage = `¡Aquí tienes los platos y especialidades destacadas de los restaurantes recomendados en ${destName}! 🍲✨\n\n` +
+        presets.restaurants.map(r => `• **${r.name.replace(/^Restaurante\s+/i, '')}**: ${r.specialty}.`).join('\n') +
+        `\n\n¿Deseas agregar estos restaurantes a los días de tu tour o consultar actividades?`
       parsed.actionChips = ['➕ Agregar 1 restaurante por día', '🎯 Sugerir actividades', `🚀 Generar tour en ${destName}`]
     }
 
@@ -1190,34 +1385,36 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
     if (isAskingSpecificDay) {
       const match = lastUserMsg.match(/\b(d[íi]a\s*(\d+)|detalles\s+del\s+d[íi]a\s*(\d+))\b/i)
       const dayNum = parseInt(match?.[2] || match?.[3] || '1', 10)
-      const destName = known.city || known.destination || 'Cartagena'
-      const hotel = known.selectedHotel?.name || known.selectedHotel || 'Hotel Casa La Fe'
+      const hotel = known.selectedHotel?.name || known.selectedHotel || presets.hotels[0].name
       const rawPlaces = Array.isArray(known.specificPlaces) ? known.specificPlaces.filter(p => !/restaurante por d[íi]a|hotel/i.test(p)) : []
-      const acts = rawPlaces.filter(p => !/restaurante|cevicheria|celele|boliche|mulata/i.test(p))
-      const rests = rawPlaces.filter(p => /restaurante|cevicheria|celele|boliche|mulata/i.test(p))
+      const acts = rawPlaces.filter(p => !/restaurante|cevicheria|celele|boliche|mulata|bistr[oó]|trattoria|boulangerie|izakaya|bar/i.test(p))
+      const rests = rawPlaces.filter(p => /restaurante|cevicheria|celele|boliche|mulata|bistr[oó]|trattoria|boulangerie|izakaya|bar/i.test(p))
+
+      const poolActs = acts.length >= 2 ? acts : presets.places
+      const poolRests = rests.length >= 2 ? rests : presets.restaurants.map(r => r.name)
 
       let dayContent = ''
       if (dayNum === 1) {
         dayContent = `**Detalles del Día 1 en ${destName}:** ☀️🏛️\n\n` +
           `• 🏨 **Alojamiento / Punto de partida**: ${hotel}\n` +
-          `• 🌅 **09:00 AM - Mañana**: Visita a ${acts[0] || 'Castillo San Felipe de Barajas'}. Exploración de los túneles y vistas panorámicas.\n` +
-          `• 🍽️ **12:30 PM - Almuerzo**: ${rests[0] || 'Restaurante La Cevicheria'} (mariscos y gastronomía caribeña).\n` +
-          `• 🌇 **03:30 PM - Tarde**: ${acts[2] || 'Recorrido por la Ciudad Amurallada'} y plazas coloniales.\n` +
-          `• 🌙 **07:30 PM - Noche**: Paseo nocturno por Getsemaní y cena típica.\n\n`
+          `• 🌅 **09:00 AM - Mañana**: Visita a ${poolActs[0] || presets.places[0]}\n` +
+          `• 🍽️ **12:30 PM - Almuerzo**: ${poolRests[0] || presets.restaurants[0]?.name}\n` +
+          `• 🌇 **03:30 PM - Tarde**: ${poolActs[2] || poolActs[1] || presets.places[2] || 'Recorrido cultural'}\n` +
+          `• 🌙 **07:30 PM - Noche**: Cena y recorrido nocturno\n\n`
       } else if (dayNum === 2) {
         dayContent = `**Detalles del Día 2 en ${destName}:** 🏝️🌊\n\n` +
           `• 🏨 **Alojamiento**: ${hotel}\n` +
-          `• 🌅 **08:30 AM - Mañana / Tarde**: ${acts[1] || 'Excursión a las Islas del Rosario'} (playa, snorkel y aguas cristalinas).\n` +
-          `• 🍽️ **01:00 PM - Almuerzo**: ${rests[1] || 'Restaurante Celele'} (cocina caribeña de autor).\n` +
-          `• 🌇 **04:30 PM - Tarde**: ${acts[3] || 'Paseo y atardecer en Bocagrande'}.\n` +
-          `• 🌙 **08:00 PM - Noche**: Cena en ${rests[2] || 'Restaurante El Boliche Cebichería'}.\n\n`
+          `• 🌅 **08:30 AM - Mañana / Tarde**: ${poolActs[1] || presets.places[1]}\n` +
+          `• 🍽️ **01:00 PM - Almuerzo**: ${poolRests[1] || presets.restaurants[1]?.name}\n` +
+          `• 🌇 **04:30 PM - Tarde**: ${poolActs[3] || poolActs[2] || presets.places[3] || 'Paseo panorámico'}\n` +
+          `• 🌙 **08:00 PM - Noche**: Cena en ${poolRests[2] || presets.restaurants[2]?.name}\n\n`
       } else {
         dayContent = `**Detalles del Día 3 en ${destName}:** 🌄✨\n\n` +
           `• 🏨 **Alojamiento**: ${hotel}\n` +
-          `• 🌅 **09:00 AM - Mañana**: Visita panorámica a ${acts[4] || 'Convento de la Popa'}.\n` +
-          `• 🍽️ **12:30 PM - Almuerzo**: ${rests[3] || 'Restaurante La Mulata'} (pescado fresco y cazuela de mariscos).\n` +
-          `• 🌇 **03:00 PM - Tarde**: ${acts[5] || 'Mercado de Bazurto y recorrido cultural'}.\n` +
-          `• 🌙 **07:00 PM - Noche**: Cena de despedida y caminata por las murallas al atardecer.\n\n`
+          `• 🌅 **09:00 AM - Mañana**: Visita panorámica a ${poolActs[4] || presets.places[4] || presets.places[0]}\n` +
+          `• 🍽️ **12:30 PM - Almuerzo**: ${poolRests[3] || poolRests[0] || presets.restaurants[0]?.name}\n` +
+          `• 🌇 **03:00 PM - Tarde**: ${poolActs[5] || presets.places[5] || 'Recorrido cultural y compras'}\n` +
+          `• 🌙 **07:00 PM - Noche**: Cena de despedida y paseo nocturno\n\n`
       }
       dayContent += `¿Te gustaría generar el tour completo o ver otro día?`
       parsed.responseMessage = dayContent
@@ -1229,56 +1426,36 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
       const lacksDay3 = isThreeDays && (!msg.includes('Día 3') && !msg.includes('Dia 3'))
       
       if (lacksDays || lacksDay3 || msg.endsWith(':') || msg.length < 150) {
-        const destName = known.city || known.destination || 'Cartagena'
-        const hotel = known.selectedHotel?.name || known.selectedHotel || 'Hotel Casa La Fe'
+        const hotel = known.selectedHotel?.name || known.selectedHotel || presets.hotels[0].name
         const rawPlaces = Array.isArray(known.specificPlaces) ? known.specificPlaces.filter(p => !/restaurante por d[íi]a|hotel/i.test(p)) : []
-        const acts = rawPlaces.filter(p => !/restaurante|cevicheria|celele|boliche|mulata/i.test(p))
-        const rests = rawPlaces.filter(p => /restaurante|cevicheria|celele|boliche|mulata/i.test(p))
+        const acts = rawPlaces.filter(p => !/restaurante|cevicheria|celele|boliche|mulata|bistr[oó]|trattoria|boulangerie|izakaya|bar/i.test(p))
+        const rests = rawPlaces.filter(p => /restaurante|cevicheria|celele|boliche|mulata|bistr[oó]|trattoria|boulangerie|izakaya|bar/i.test(p))
 
         const distinctActs = Array.from(new Set(acts))
-        const defaultPool = [
-          'Castillo San Felipe de Barajas',
-          'Excursión a las Islas del Rosario',
-          'Recorrido por la Ciudad Amurallada',
-          'Paseo y atardecer en Bocagrande',
-          'Convento de la Popa',
-          'Mercado de Bazurto y recorrido cultural',
-          'Paseo en Chiva',
-          'Café del Mar',
-          'Plaza de Santo Domingo y Getsemaní'
-        ]
-        for (const def of defaultPool) {
+        for (const def of presets.places) {
           if (!distinctActs.some(a => a.toLowerCase().includes(def.toLowerCase()) || def.toLowerCase().includes(a.toLowerCase()))) {
             distinctActs.push(def)
           }
         }
 
         const distinctRests = Array.from(new Set(rests))
-        const defaultRestPool = [
-          'Restaurante La Cevicheria',
-          'Restaurante Celele',
-          'Restaurante El Boliche Cebichería',
-          'Restaurante La Mulata',
-          'Restaurante Candé',
-          'Restaurante Carmen Cartagena'
-        ]
-        for (const def of defaultRestPool) {
+        for (const def of presets.restaurants.map(r => r.name)) {
           if (!distinctRests.some(r => r.toLowerCase().includes(def.toLowerCase()) || def.toLowerCase().includes(r.toLowerCase()))) {
             distinctRests.push(def)
           }
         }
 
-        const act1 = distinctActs[0]
-        const act2 = distinctActs[1]
-        const act3 = distinctActs[2]
-        const act4 = distinctActs[3]
-        const act5 = distinctActs[4]
-        const act6 = distinctActs[5]
+        const act1 = distinctActs[0] || presets.places[0]
+        const act2 = distinctActs[1] || presets.places[1]
+        const act3 = distinctActs[2] || presets.places[2]
+        const act4 = distinctActs[3] || presets.places[3] || presets.places[0]
+        const act5 = distinctActs[4] || presets.places[4] || presets.places[1]
+        const act6 = distinctActs[5] || presets.places[5] || presets.places[2]
 
-        const rest1 = distinctRests[0]
-        const rest2 = distinctRests[1]
-        const rest3 = distinctRests[2]
-        const rest4 = distinctRests[3]
+        const rest1 = distinctRests[0] || presets.restaurants[0]?.name
+        const rest2 = distinctRests[1] || presets.restaurants[1]?.name
+        const rest3 = distinctRests[2] || presets.restaurants[2]?.name
+        const rest4 = distinctRests[3] || presets.restaurants[3]?.name || presets.restaurants[0]?.name
         
         let fullItinerary = `¡Aquí tienes tu itinerario detallado día a día para tu viaje en ${destName}! 🗺️✨\n\n` +
           `**Día 1:**\n` +
@@ -1286,7 +1463,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
           `- 🌅 **Mañana**: Visita a ${act1}\n` +
           `- 🍽️ **Almuerzo**: ${rest1}\n` +
           `- 🌇 **Tarde**: ${act3}\n` +
-          `- 🌙 **Noche / Cena**: Experiencia gastronómica y vida nocturna en Getsemaní\n\n` +
+          `- 🌙 **Noche / Cena**: Experiencia gastronómica y vida nocturna\n\n` +
           `**Día 2:**\n` +
           `- 🏨 **Alojamiento**: ${hotel}\n` +
           `- 🌅 **Mañana / Tarde**: ${act2}\n` +
@@ -1300,7 +1477,7 @@ IMPORTANTE: Devuelve un objeto JSON con este formato exacto:
             `- 🌅 **Mañana**: Recorrido panorámico y visita a ${act5}\n` +
             `- 🍽️ **Almuerzo**: ${rest4}\n` +
             `- 🌇 **Tarde**: ${act6}\n` +
-            `- 🌙 **Noche / Cena**: Cena de despedida y paseo por las murallas al atardecer\n\n`
+            `- 🌙 **Noche / Cena**: Cena de despedida y paseo nocturno al atardecer\n\n`
         }
 
         fullItinerary += `¿Deseas generar el tour definitivo o modificar algún detalle?`

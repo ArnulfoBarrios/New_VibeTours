@@ -2,7 +2,7 @@ import { Router } from 'express'
 import crypto from 'crypto'
 import { getSession, saveSession, initializeSession } from '../services/chatSession.js'
 import { extractChatInformation, generateChatResponse, planWithOpenAI } from '../services/openai.js'
-import { geocodePlace, photonSearch, overpassAttractions, overpassHotels } from '../services/osm.js'
+import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, reverseGeocodeLocation } from '../services/osm.js'
 import { getWikipediaContext } from '../services/wikipedia.js'
 import { optimizeRoute } from '../services/tomtom.js'
 import { collectTourCandidates } from './ai.js'
@@ -10,16 +10,15 @@ import { resolveCanonicalDestination } from '../services/destinationService.js'
 
 export const chatRouter = Router()
 
-// Constantes de campos obligatorios
+// Constantes de campos obligatorios canónicos
 const REQUIRED_FIELDS = [
   'city',
+  'datesSeason',
+  'durationDays',
+  'companions',
   'budget',
-  'travelers',
-  'duration',
-  'pace',
-  'schedule',
-  'transportation',
-  'interests'
+  'transport',
+  'accommodationStatus'
 ]
 
 chatRouter.post('/start', async (req, res, next) => {
@@ -58,15 +57,15 @@ chatRouter.post('/message', async (req, res, next) => {
     state.history.push({ role: 'user', content: message || 'Ubicación enviada.' })
 
     let responseText = ''
+    let actionChips = []
 
-    // MÁQUINA DE ESTADOS
+    // MÁQUINA DE ESTADOS UNIFICADA
     switch (state.currentState) {
       case 'WELCOME':
       case 'COLLECT_INFORMATION': {
         // Extraer info con OpenAI
-        const extracted = await extractChatInformation(message, state.collectedData)
+        const extracted = await extractChatInformation(message, state.collectedData, state.history)
         if (extracted) {
-          // Merge datos
           Object.assign(state.collectedData, extracted)
         }
         if (location?.latitude && location?.longitude) {
@@ -81,19 +80,26 @@ chatRouter.post('/message', async (req, res, next) => {
           }
         }
 
+        // Normalizar destino si viene en city
+        if (state.collectedData.city && !state.collectedData.destination) {
+          state.collectedData.destination = state.collectedData.city
+        }
+
         // Verificar campos faltantes
         const missing = REQUIRED_FIELDS.filter(f => !state.collectedData[f])
-        if (state.collectedData.travelers === 'Familia' && state.collectedData.hasMinors === null) {
-          missing.push('hasMinors')
-        }
 
         if (missing.length > 0) {
           state.currentState = 'COLLECT_INFORMATION'
-          // Pedir al modelo que pregunte el PRIMER campo faltante
           const fieldToAsk = missing[0]
-          responseText = await generateChatResponse(state, `Falta el campo: ${fieldToAsk}. Pregúntale al usuario por este dato específico sin pedir más de una cosa a la vez. No inventes lugares ni hables de cosas no turísticas.`)
+          const chatRes = await generateChatResponse(
+            state,
+            `Falta el campo: ${fieldToAsk}. Pregúntale al usuario por este dato específico de manera cordial sin pedir más de una cosa a la vez.`,
+            '',
+            state.collectedData
+          )
+          responseText = typeof chatRes === 'string' ? chatRes : (chatRes.responseMessage || chatRes.message || '')
+          actionChips = chatRes.actionChips || []
         } else {
-          // Ya tenemos todo, transicionar a GENERATE_STOPS
           state.currentState = 'GENERATE_STOPS'
           responseText = "¡Perfecto! Tengo toda la información necesaria. Dame un momento mientras busco los mejores lugares reales para tu tour..."
         }
@@ -101,14 +107,18 @@ chatRouter.post('/message', async (req, res, next) => {
       }
 
       case 'SUGGEST_CITY': {
-        // El usuario respondió a una sugerencia
-        const extracted = await extractChatInformation(message, state.collectedData)
+        const extracted = await extractChatInformation(message, state.collectedData, state.history)
         if (extracted?.city) {
           state.collectedData.city = extracted.city
+          state.collectedData.destination = extracted.city
           state.currentState = 'COLLECT_INFORMATION'
-          responseText = await generateChatResponse(state, `El usuario seleccionó la ciudad ${extracted.city}. Evalúa si faltan datos y pregúntalos, o confirma.`)
+          const chatRes = await generateChatResponse(state, `El usuario seleccionó la ciudad ${extracted.city}. Evalúa si faltan datos y pregúntalos, o confirma.`, '', state.collectedData)
+          responseText = typeof chatRes === 'string' ? chatRes : (chatRes.responseMessage || chatRes.message || '')
+          actionChips = chatRes.actionChips || []
         } else {
-          responseText = await generateChatResponse(state, 'El usuario no seleccionó ninguna ciudad clara. Vuelve a preguntarle a qué ciudad quiere ir.')
+          const chatRes = await generateChatResponse(state, 'El usuario no seleccionó ninguna ciudad clara. Vuelve a preguntarle a qué ciudad quiere ir.', '', state.collectedData)
+          responseText = typeof chatRes === 'string' ? chatRes : (chatRes.responseMessage || chatRes.message || '')
+          actionChips = chatRes.actionChips || []
         }
         break
       }
@@ -127,7 +137,7 @@ chatRouter.post('/message', async (req, res, next) => {
         state.collectedData.country = canonical.country
         state.collectedData.destination = canonical.displayName
 
-        const location = {
+        const locationData = {
           name: canonical.displayName,
           latitude: canonical.latitude,
           longitude: canonical.longitude,
@@ -137,7 +147,7 @@ chatRouter.post('/message', async (req, res, next) => {
         }
 
         // Obtener lugares reales filtrados turísticamente
-        const candidatePack = await collectTourCandidates(state.collectedData, location)
+        const candidatePack = await collectTourCandidates(state.collectedData, locationData)
         state.places = (candidatePack.places || []).slice(0, 10)
         
         // Enriquecer con Wikipedia
@@ -152,23 +162,26 @@ chatRouter.post('/message', async (req, res, next) => {
       }
 
       case 'GENERATE_ROUTE': {
-        // Optimizar ruta
         const optimized = await optimizeRoute(state.places)
         state.places = optimized
 
         state.currentState = 'GENERATE_JSON'
         responseText = "Generando el documento final del tour..."
-        // Trigger de la generación final
         break
       }
 
       case 'GENERATE_JSON': {
-        // Aquí llamaríamos a planWithOpenAI con la data final recolectada
+        const durHours = state.collectedData.durationHours || (state.collectedData.durationDays ? state.collectedData.durationDays * 24 : 8)
         const finalTour = await planWithOpenAI({
-          destination: state.collectedData.city,
-          budget: state.collectedData.budget,
+          destination: state.collectedData.destination || state.collectedData.city,
+          city: state.collectedData.city,
+          country: state.collectedData.country,
+          durationHours: durHours,
+          type: state.collectedData.type || 'cultural',
+          language: 'es',
           places: state.places,
-          // ... otros campos recolectados
+          selectedHotel: state.collectedData.selectedHotel,
+          userPreferences: state.collectedData
         })
         state.finalTour = finalTour
         state.currentState = 'FINISHED'
@@ -188,6 +201,7 @@ chatRouter.post('/message', async (req, res, next) => {
       sessionId,
       state: state.currentState,
       message: responseText,
+      actionChips,
       tour: state.finalTour
     })
   } catch (error) {

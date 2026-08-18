@@ -987,12 +987,12 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       }
     }
 
-    let ollama = null
-    let ollamaError = null
-    const shouldAskOllama = shouldUseOllama(input, planner)
+    let aiTour = null
+    let aiError = null
+    const shouldAskAiPlanner = shouldUseAiPlanner(input, planner)
     try {
-      if (!shouldAskOllama) {
-        console.info('[tour-ai] openai-skipped (build)')
+      if (!shouldAskAiPlanner) {
+        console.info('[tour-ai] ai-planner-skipped (build)')
       } else {
         const dest = input.city || input.destination
         const webSearchResult = await searchWebForTravel({
@@ -1002,7 +1002,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
           dates: plannerContext?.datesSeason || ''
         }).catch(() => null)
 
-        ollama = await planWithOpenAI({
+        aiTour = await planWithOpenAI({
           ...input,
           places: planner.selectedPlaces,
           recommendedSchedule: planner.recommendedSchedule,
@@ -1014,15 +1014,15 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         })
       }
     } catch (error) {
-      ollamaError = error
+      aiError = error
     }
 
     let sourceTour
     let fallbackReason = null
-    if (isValidTourPlan(ollama) && planner.selectedPlaces.length >= 2) {
-      sourceTour = validateTourQuality(ollama, planner, input)
+    if (isValidTourPlan(aiTour) && planner.selectedPlaces.length >= 2) {
+      sourceTour = validateTourQuality(aiTour, planner, input)
     } else {
-      fallbackReason = 'ollama_unavailable'
+      fallbackReason = 'ai_planner_unavailable'
       sourceTour = await buildFallbackTour(planner, input)
     }
     
@@ -1194,14 +1194,14 @@ async function processTourGeneration(jobId, input) {
 
     updateJob({ status: 'generating_narrative', message: 'Creando narración única del tour con IA...' })
 
-    let ollama = null
-    let ollamaError = null
-    const shouldAskOllama = shouldUseOllama(input, planner)
+    let aiTour = null
+    let aiError = null
+    const shouldAskAiPlanner = shouldUseAiPlanner(input, planner)
     try {
-      if (!shouldAskOllama) {
-        console.info('[tour-ai] openai-skipped', { reason: ollamaSkipReason(input, planner), durationHours: input.durationHours, selectedPlaces: planner.selectedPlaces.length })
+      if (!shouldAskAiPlanner) {
+        console.info('[tour-ai] ai-planner-skipped', { reason: aiPlannerSkipReason(input, planner), durationHours: input.durationHours, selectedPlaces: planner.selectedPlaces.length })
       } else {
-        ollama = await planWithOpenAI({
+        aiTour = await planWithOpenAI({
           ...input,
           places: planner.selectedPlaces,
           recommendedSchedule: planner.recommendedSchedule,
@@ -1209,29 +1209,29 @@ async function processTourGeneration(jobId, input) {
           sourceSummary: { location: location ? { latitude: location.latitude, longitude: location.longitude } : null, candidateSource: candidatePack.source, candidateCount: candidatePack.rawCount, selectedCount: planner.selectedPlaces.length },
         })
       }
-      console.info('[tour-ai] openai', { ok: true, skipped: !shouldAskOllama, hasItinerary: Array.isArray(ollama?.itinerario), itinerary: Array.isArray(ollama?.itinerario) ? ollama.itinerario.length : 0 })
+      console.info('[tour-ai] openai', { ok: true, skipped: !shouldAskAiPlanner, hasItinerary: Array.isArray(aiTour?.itinerario), itinerary: Array.isArray(aiTour?.itinerario) ? aiTour.itinerario.length : 0 })
     } catch (error) {
-      ollamaError = error
-      console.warn('[tour-ai] ollama', { ok: false, message: error?.message ?? String(error) })
+      aiError = error
+      console.warn('[tour-ai] openai-error', { ok: false, message: error?.message ?? String(error) })
     }
 
     let sourceTour
     let fallbackReason = null
-    if (isValidTourPlan(ollama) && planner.selectedPlaces.length >= 3) {
-      sourceTour = validateTourQuality(ollama, planner, input)
+    if (isValidTourPlan(aiTour) && planner.selectedPlaces.length >= 3) {
+      sourceTour = validateTourQuality(aiTour, planner, input)
     } else {
-      fallbackReason = !ollama
-        ? 'ollama_unavailable'
-        : !Array.isArray(ollama?.itinerario)
-          ? 'ollama_missing_itinerary'
-          : ollama.itinerario.length < 3
-            ? 'ollama_too_few_stops'
+      fallbackReason = !aiTour
+        ? 'ai_planner_unavailable'
+        : !Array.isArray(aiTour?.itinerario)
+          ? 'ai_missing_itinerary'
+          : aiTour.itinerario.length < 3
+            ? 'ai_too_few_stops'
             : planner.selectedPlaces.length < 3
               ? 'too_few_real_candidates'
               : 'unknown_fallback'
       sourceTour = await buildFallbackTour(planner, input)
     }
-    console.info('[tour-ai] plan-source', { usedFallback: sourceTour.id?.toString?.()?.startsWith('ai-') ?? false, itinerary: Array.isArray(sourceTour.itinerario) ? sourceTour.itinerario.length : 0, fallbackReason, ollamaError: ollamaError ? (ollamaError.message ?? String(ollamaError)) : null })
+    console.info('[tour-ai] plan-source', { usedFallback: sourceTour.id?.toString?.()?.startsWith('ai-') ?? false, itinerary: Array.isArray(sourceTour.itinerario) ? sourceTour.itinerario.length : 0, fallbackReason, aiError: aiError ? (aiError.message ?? String(aiError)) : null })
     
     updateJob({ status: 'validating', message: 'Validando estructura y calidad del recorrido...' })
     
@@ -2613,17 +2613,17 @@ function stopFocusFor(type, category, seed) {
   return selectDeterministic(options, seed)
 }
 
-function shouldUseOllama(input, planner) {
-  if (process.env.DISABLE_OLLAMA === 'true') return false
+function shouldUseAiPlanner(input, planner) {
+  if (process.env.DISABLE_AI_PLANNER === 'true') return false
   if (input.durationHours > 168) return false
   if (planner.selectedPlaces.length > 30) return false
   return true
 }
 
-function ollamaSkipReason(input, planner) {
-  if (process.env.DISABLE_OLLAMA === 'true') return 'disabled_by_env'
+function aiPlannerSkipReason(input, planner) {
+  if (process.env.DISABLE_AI_PLANNER === 'true') return 'disabled_by_env'
   if (input.durationHours > 168) return 'long_tour_uses_deterministic_planner'
-  if (planner.selectedPlaces.length > 30) return 'too_many_places_for_local_model'
+  if (planner.selectedPlaces.length > 30) return 'too_many_places_for_ai_planner'
   return 'not_skipped'
 }
 
@@ -2646,40 +2646,26 @@ function isValidTourPlan(value) {
   return false
 }
 
-function validateTourQuality(tour, planner, input) {
+export function validateTourQuality(tour, planner, input) {
   if (!tour || !Array.isArray(tour.itinerario)) return tour
 
-  // Verificar frases genéricas prohibidas y descripciones cortas
-  const forbiddenPhrases = [
-    'en esta parada', 'aqui puedes', 'ahora llegamos', 
-    'continuamos nuestro', 'el proximo destino', 'llegamos a'
-  ]
-
   tour.itinerario = tour.itinerario.map((stop, index) => {
-    let description = stop.descripcion || ''
+    let description = String(stop.descripcion || '').trim()
     let isBadQuality = false
 
-    // Solo considerar baja calidad si está vacía o tiene menos de 15 palabras
-    if (!description || description.trim().split(/\s+/).length < 15) {
+    // Solo considerar baja calidad si está vacía o tiene menos de 20 palabras
+    if (!description || description.split(/\s+/).filter(Boolean).length < 20) {
       isBadQuality = true
     }
 
-    const lowerDesc = description.toLowerCase()
-    for (const phrase of forbiddenPhrases) {
-      if (lowerDesc.includes(phrase)) {
-        // Remover la frase si es posible
-        description = description.replace(new RegExp(phrase, 'gi'), '')
-      }
-    }
-
     if (isBadQuality) {
-      // Reemplazar descripción con fallback dinámico específico si Ollama/OpenAI falló
+      // Reemplazar descripción con fallback dinámico específico si OpenAI falló
       const fallbackPlace = planner.selectedPlaces[index] || planner.selectedPlaces[0]
       if (fallbackPlace) {
         stop.descripcion = buildStopDescription(fallbackPlace, input)
       }
     } else {
-      stop.descripcion = description.trim()
+      stop.descripcion = description
     }
 
     return stop
