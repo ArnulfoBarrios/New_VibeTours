@@ -356,6 +356,22 @@ test('buildTourPlanner must preserve exact chat requested places and their chron
   assert.ok(!planner.selectedPlaces.slice(0, 5).some(p => p.name === 'Parque Cancha Barranquilla'))
 })
 
+test('isValidSpecificPlace must reject metadata terms (Presupuesto, Transporte) and generic non-tourist structures (La Pérgola, Cancha)', async () => {
+  const { isValidSpecificPlace } = await import('../routes/ai.js')
+  
+  assert.equal(isValidSpecificPlace('Presupuesto'), false)
+  assert.equal(isValidSpecificPlace('Transporte'), false)
+  assert.equal(isValidSpecificPlace('Alojamiento'), false)
+  assert.equal(isValidSpecificPlace('Hospedaje'), false)
+  assert.equal(isValidSpecificPlace('Acompañantes'), false)
+  assert.equal(isValidSpecificPlace('La Pérgola'), false)
+  assert.equal(isValidSpecificPlace('Pérgola'), false)
+  assert.equal(isValidSpecificPlace('Parque Cancha'), false)
+  assert.equal(isValidSpecificPlace('Cancha sintética'), false)
+  assert.equal(isValidSpecificPlace('Catedral Metropolitana'), true)
+  assert.equal(isValidSpecificPlace('Restaurante La Cueva'), true)
+})
+
 
 
 

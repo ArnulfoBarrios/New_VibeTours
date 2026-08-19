@@ -501,14 +501,18 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: const Icon(Icons.rocket_launch_rounded, size: 16, color: Colors.white),
-                    label: const Text(
-                      'Crear tour',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                    icon: builderState.isBuilding
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.rocket_launch_rounded, size: 16, color: Colors.white),
+                    label: Text(
+                      builderState.isBuilding ? 'Creando tour...' : 'Crear tour',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
-                    onPressed: () {
-                      ref.read(aiBuilderProvider.notifier).buildTour();
-                    },
+                    onPressed: builderState.isBuilding
+                        ? null
+                        : () {
+                            ref.read(aiBuilderProvider.notifier).buildTour();
+                          },
                   ),
                 ),
               ],

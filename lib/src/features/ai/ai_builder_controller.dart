@@ -635,7 +635,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
   }
 
   Future<void> buildTour() async {
-    if (state.request == null || state.recommendations.isEmpty) return;
+    if (state.isBuilding || state.request == null || state.recommendations.isEmpty) return;
     state = state.copyWith(isBuilding: true, error: null);
 
     try {

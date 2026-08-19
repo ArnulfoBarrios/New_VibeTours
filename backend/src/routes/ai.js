@@ -111,9 +111,15 @@ export function isValidSpecificPlace(placeName) {
   const isTimeHeader = /^(d[íi]a\s*\d+|day\s*\d+|mañana|tarde|noche|almuerzo|cena|desayuno|madrugada|atardecer)/i.test(clean)
   if (isTimeHeader) return false
 
-  // 2. Descartar comodidades, hoteles, acciones y frases meta de viaje
-  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones)\b/i.test(cleanLower)
+  // 2. Descartar comodidades, hoteles, metadatos (Presupuesto, Transporte, Alojamiento), acciones y frases meta de viaje
+  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
   if (isMetaOrAmenity) return false
+
+  // 2.1 Descartar estructuras físicas genéricas o no turísticas que no son atracciones (pérgolas, canchas de barrio, paradas de bus)
+  if (/^(la\s+)?(p[ée]rgola|cancha|cancha sint[ée]tica|cancha de f[uú]tbol|cancha de microf[uú]tbol|parada de bus|estaci[óo]n de bus|quiosco|kiosco|grader[íi]as)$/i.test(cleanLower) ||
+      /\b(cancha sint[ée]tica|cancha de f[uú]tbol|parque cancha)\b/i.test(cleanLower)) {
+    return false
+  }
 
   // 3. Descartar cementerios y servicios funerarios
   if (/cementerio|camposanto|jardines de cartagena|jardines del recuerdo|jardines de paz|jardin de paz|parque cementerio|graveyard|cemetery|funeraria|morgue|crematorio|mausoleo/i.test(cleanLower)) {
@@ -126,7 +132,7 @@ export function isValidSpecificPlace(placeName) {
   }
 
   // 5. Descartar categorías de turismo generales, eventos/festivales y etiquetas temáticas
-  const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto|fiesta del mar|fiestas del mar|carnaval|carnavales|festival|festivales|feria|ferias|desfile|desfiles|semana santa|evento|eventos|descripci[óo]n|resumen|notas?)$/i.test(cleanLower)
+  const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto|fiesta del mar|fiestas del mar|carnaval|carnavales|festival|festivales|feria|ferias|desfile|desfiles|semana santa|evento|eventos|descripci[óo]n|resumen|notas?|presupuesto|transporte|alojamiento|hospedaje|acompañantes|fechas|duraci[oó]n|destino)$/i.test(cleanLower)
   if (isCategoryOrTheme) return false
 
   // 6. Descartar si es país o "Ciudad, País"
@@ -361,25 +367,35 @@ aiRouter.post('/chat', async (req, res, next) => {
         const found = []
         const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r)?\s+(?:el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|cenar\s+en\s+el?|cenar\s+en|almorzar\s+en\s+el?|almorzar\s+en|cena\s+en\s+el?|cena\s+en|almuerzo\s+en\s+el?|almuerzo\s+en|check-in\s+en\s+el?|check-in\s+en|check-out\s+en\s+el?|check-out\s+en|llegada\s+a|llegada)\s+/i
 
-        // 1. Extract bold names (**Nombre del Lugar**)
-        const boldRegex = /\*\*([^*\n]{3,60})\*\*/g
-        let bm
-        while ((bm = boldRegex.exec(text)) !== null) {
-          let candidate = bm[1].replace(ACTION_PREFIX_REGEX, '').trim()
-          candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
-          if (isValidSpecificPlace(candidate)) {
-            found.push(candidate)
+        const lines = text.split('\n')
+        for (const rawLine of lines) {
+          const line = rawLine.trim()
+          if (!line) continue
+          // Omitir líneas de metadatos o parámetros de viaje
+          if (/^(?:•|\-|\*|\d+[\.\)])?\s*(?:alojamiento|hospedaje|hotel|transporte|presupuesto|acompañantes|fechas|duraci[óo]n|destino|resumen|notas|gastos|itinerario)\s*:/i.test(line)) {
+            continue
           }
-        }
 
-        // 2. Extract numbered or bulleted items
-        const regex = /(?:^|\n)\s*(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/gi
-        let m
-        while ((m = regex.exec(text)) !== null) {
-          let candidate = m[1].replace(ACTION_PREFIX_REGEX, '').trim()
-          candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
-          if (isValidSpecificPlace(candidate)) {
-            found.push(candidate)
+          // 1. Extract bold names (**Nombre del Lugar**)
+          const boldRegex = /\*\*([^*\n]{3,60})\*\*/g
+          let bm
+          while ((bm = boldRegex.exec(line)) !== null) {
+            let candidate = bm[1].replace(ACTION_PREFIX_REGEX, '').trim()
+            candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
+            if (isValidSpecificPlace(candidate)) {
+              found.push(candidate)
+            }
+          }
+
+          // 2. Extract numbered or bulleted items
+          const regex = /^(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/i
+          const m = line.match(regex)
+          if (m) {
+            let candidate = m[1].replace(ACTION_PREFIX_REGEX, '').trim()
+            candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
+            if (isValidSpecificPlace(candidate)) {
+              found.push(candidate)
+            }
           }
         }
         return deduplicatePlacesByName(found)
@@ -4123,8 +4139,14 @@ function isValidTouristAttraction(place, input) {
   const nameKey = normalizeKey(name)
   const nameLower = name.toLowerCase()
 
-  // 0. Bloqueo estricto de comodidades, precios y metadatos de hotel
-  if (/\b(comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|hotel|hostal|resort|alojamiento|hospedaje)\b/i.test(nameLower)) {
+  // 0. Bloqueo estricto de metadatos (Presupuesto, Transporte, Alojamiento), comodidades y metadatos de hotel
+  if (/\b(presupuesto|transporte|alojamiento|hospedaje|acompañantes|duraci[oó]n|fechas|destino|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|hotel|hostal|resort)\b/i.test(nameLower)) {
+    return false
+  }
+
+  // 0.001 Bloqueo de estructuras físicas genéricas o no turísticas (pérgolas, canchas de barrio, paradas de bus)
+  if (/^(la\s+)?(p[ée]rgola|cancha|cancha sint[ée]tica|cancha de f[uú]tbol|cancha de microf[uú]tbol|parada de bus|estaci[óo]n de bus|quiosco|kiosco|grader[íi]as)$/i.test(nameLower) ||
+      /\b(cancha sint[ée]tica|cancha de f[uú]tbol|parque cancha)\b/i.test(nameLower)) {
     return false
   }
 
