@@ -781,7 +781,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           ),
           if (points.isNotEmpty) ...[
             ClipRRect(
-              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12)),
+              borderRadius: BorderRadius.circular(0),
               child: SizedBox(
                 height: 160,
                 width: double.infinity,
@@ -801,6 +801,47 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               ),
             ),
           ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      side: BorderSide(color: Colors.blue.shade300),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: Icon(Icons.edit_location_alt_outlined, size: 16, color: Colors.blue.shade700),
+                    label: Text(
+                      'Modificar paradas',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
+                    ),
+                    onPressed: () => context.push('/ai/builder'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.blue.shade600,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.map_outlined, size: 16, color: Colors.white),
+                    label: const Text(
+                      'Ver tour completo',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    onPressed: () {
+                      ref.read(selectedTourProvider.notifier).state = tour;
+                      context.push('/tours/${tour.id}', extra: tour);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

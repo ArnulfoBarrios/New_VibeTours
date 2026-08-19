@@ -379,20 +379,12 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       name: h.name,
       desc: `Alojamiento verificado ubicado en ${capitalCity}.`,
       price: '~$75 - $140 USD/noche'
-    })) : [
-      { name: `Hotel Central de ${capitalCity}`, desc: `Alojamiento céntrico en ${capitalCity} con fácil acceso a los principales atractivos.`, price: '~$70 - $120 USD/noche' }
-    ],
+    })) : [],
     restaurants: realRests.length > 0 ? realRests.map(r => ({
       name: r.name,
       specialty: r.cuisine ? `Especialidad en cocina ${r.cuisine}` : `Platos y sabores representativos de ${capitalCity}`
-    })) : [
-      { name: `Restaurante Típico de ${capitalCity}`, specialty: `Especialidades gastronómicas locales de ${capitalCity}` }
-    ],
-    places: realPlaces.length > 0 ? realPlaces.map(p => p.name) : [
-      `Centro Histórico de ${capitalCity}`,
-      `Plaza Mayor de ${capitalCity}`,
-      `Mirador de ${capitalCity}`
-    ],
+    })) : [],
+    places: realPlaces.length > 0 ? realPlaces.map(p => p.name) : [],
     events: []
   }
 
@@ -653,6 +645,14 @@ ${realCatalog ? `DATOS REALES Y VERIFICADOS DEL DESTINO (${destName}, ${destCoun
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}` : ''}
 
+PROHIBICIÓN ABSOLUTA DE LUGARES Y RESTAURANTES INVENTADOS O GENÉRICOS:
+- Está TERMINANTEMENTE PROHIBIDO inventar o sugerir nombres ficticios o genéricos como "Restaurante Típico de [Ciudad]", "Hotel Central de [Ciudad]", "Bar La Cueva", "Restaurante Local", "Comida típica", etc.
+- Todos los restaurantes, bares, hoteles y atractivos que menciones DEBEN SER LUGARES REALES Y EXISTENTES con sus nombres auténticos y verificables del destino.
+
+RESPETO ESTRICTO A LAS ACTIVIDADES APROBADAS POR EL USUARIO:
+- Si el usuario selecciona o aprueba ciertas actividades o números de la lista (por ejemplo: "1 y 3", "quiero El Rodadero y Taganga", "agrega esas actividades"), DEBES incluir obligatoriamente esas paradas elegidas en el itinerario por días.
+- NUNCA reemplaces las actividades que el usuario aprobó por otras no discutidas.
+
 REGLAS CRÍTICAS DEL FLUJO CONVERSACIONAL EN ETAPAS OBLIGATORIAS (NUNCA SALTES ETAPAS):
 
 ETAPA 1: DESTINO, FECHAS/DURACIÓN Y ACOMPAÑANTES
@@ -662,7 +662,7 @@ ETAPA 1: DESTINO, FECHAS/DURACIÓN Y ACOMPAÑANTES
 
 ETAPA 2: RECOMENDACIÓN DE ACTIVIDADES Y EXPERIENCIAS
 - Una vez conocidos destino, fechas y acompañantes (ej: familia con niños o amigos):
-  1. Recomienda 4 a 6 actividades o lugares auténticos adaptados a ese grupo.
+  1. Recomienda 4 a 6 actividades o lugares auténticos y reales adaptados a ese grupo.
   2. Pregunta amablemente qué actividades desean incluir o si tienen alguna otra en mente.
 - "readyToBuild" DEBE ser false.
 
@@ -673,26 +673,28 @@ ETAPA 3: HOSPEDAJE, TRANSPORTE Y PRESUPUESTO
 
 ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
 - SOLO puedes presentar un itinerario estructurado por días si el usuario YA DEFINIÓ las fechas o la cantidad de días de su viaje.
-- Si ya están definidas las fechas/duración, presenta el itinerario:
+- Si ya están definidas las fechas/duración y actividades, presenta el itinerario estructurado integrando las actividades aprobadas por el usuario:
   "Itinerario de Viaje a ${destName} (${known.datesSeason || `${known.durationDays || 3} días`}):"
-  • Día 1: [Llegada / Hotel] -> [Actividad/Lugar] -> [Cena en Restaurante]
+  • Día 1: [Llegada / Hotel] -> [Actividad/Lugar aprobado] -> [Cena en Restaurante real]
   • Día 2: ...
-  Alojamiento: [Hotel]
-  Transporte: [Medio de transporte]
+  Alojamiento: [Hotel elegido o por definir]
+  Transporte: [Medio de transporte elegido o por definir]
+  Presupuesto: [Presupuesto elegido o por definir]
 - Pregunta: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está todo listo para generar tu tour?"
 - "readyToBuild" DEBE ser false.
 
 ETAPA 5: GENERACIÓN DEL TOUR ("readyToBuild": true)
-- Si el usuario pide generar el tour pero FALTA algún dato (como las fechas o la cantidad de días):
+- Si el usuario pide generar el tour pero FALTA algún dato (como hospedaje, transporte, fechas o presupuesto):
   1. "readyToBuild" DEBE ser false.
-  2. En "responseMessage", explica con claridad: "Para poder generar tu tour en el mapa y armar la ruta, aún necesito que me indiques en qué fechas viajarás y cuántos días durará tu estadía."
+  2. En "responseMessage", pregunta por los datos faltantes: "Para poder generar tu tour en el mapa y armar la ruta, aún necesito que me indiques dónde planeas hospedarte y cómo prefieres moverte (auto rentado, taxi, transporte público o caminando). ¿Tienes algún presupuesto estimado (económico, moderado o lujo)?"
 - "readyToBuild" SOLO Y ÚNICAMENTE puede ser true cuando se cumplan TODAS estas condiciones:
   1. Destino/ciudad confirmado.
   2. Fechas o días de duración confirmados por el usuario en el chat.
   3. Acompañantes confirmados.
   4. Se ha presentado el itinerario estructurado por días.
-  5. El usuario pide EXPLÍCITAMENTE generar el tour (ej: "adelante genera el tour", "está perfecto genera el tour", "listo crea el tour", "genera el tour").
-- Si el usuario NO ha pedido explícitamente generar el tour (por ejemplo, si acaba de indicar sus fechas o de elegir actividades), "readyToBuild" TIENE QUE SER FALSE.
+  5. Hospedaje, transporte y presupuesto definidos o confirmados por el usuario.
+  6. El usuario pide EXPLÍCITAMENTE generar el tour (ej: "adelante genera el tour", "está perfecto genera el tour", "listo crea el tour", "genera el tour", "vale genera el tour").
+- Si el usuario NO ha pedido explícitamente generar el tour, "readyToBuild" TIENE QUE SER FALSE.
 
 FORMATO DE SALIDA (JSON):
 Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
@@ -780,11 +782,16 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
 
     const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar)\b/i.test(lastUserMsg)
 
+    const isBotAskingMissingInfo = /\b(hospedar|alojamiento|hotel|moverte|transporte|presupuesto|económico|moderado|lujo)\b/i.test(responseMessage) &&
+      !responseMessage.includes('Aquí tienes tu tour generado') &&
+      !responseMessage.includes('Procedo a generar tu tour')
+
     const effectiveReadyToBuild = Boolean(
-      (parsed.readyToBuild || isExplicitBuildRequestedByUser) &&
+      parsed.readyToBuild &&
       hasDurationOrDates &&
       hasCity &&
-      isExplicitBuildRequestedByUser
+      isExplicitBuildRequestedByUser &&
+      !isBotAskingMissingInfo
     )
 
     return {
