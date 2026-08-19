@@ -102,7 +102,12 @@ test('isValidSpecificPlace must reject category words and accept authentic POI n
   assert.equal(isValidSpecificPlace('Fiesta del Mar'), false)
   assert.equal(isValidSpecificPlace('Descripción'), false)
   assert.equal(isValidSpecificPlace('Notas'), false)
-  assert.equal(isValidSpecificPlace('Santa Marta'), false)
+  // Cemeteries, funeral services, canals and water bodies must be rejected
+  assert.equal(isValidSpecificPlace('Cementerio San Miguel'), false)
+  assert.equal(isValidSpecificPlace('Jardines de Paz'), false)
+  assert.equal(isValidSpecificPlace('Funeraria Los Olivos'), false)
+  assert.equal(isValidSpecificPlace('Canal Santa Marta'), false)
+  assert.equal(isValidSpecificPlace('Ciénaga Grande'), false)
 
   // Real POIs must be accepted
   assert.equal(isValidSpecificPlace('Catedral Basílica de Santa Marta'), true)
@@ -112,6 +117,7 @@ test('isValidSpecificPlace must reject category words and accept authentic POI n
   assert.equal(isValidSpecificPlace('Parque Nacional Natural Tayrona'), true)
   assert.equal(isValidSpecificPlace('Minca'), true)
   assert.equal(isValidSpecificPlace('Museo del Oro Tairona'), true)
+  assert.equal(isValidSpecificPlace('Playa Blanca'), true)
 })
 
 test('normalizePlaceKey and deduplicatePlacesByName must merge place variants into clean unique places', async () => {
@@ -121,6 +127,7 @@ test('normalizePlaceKey and deduplicatePlacesByName must merge place variants in
   assert.equal(normalizePlaceKey('la Quinta de San Pedro Alejandrino'), normalizePlaceKey('quinta de san Pedro Alejandrino'))
   assert.equal(normalizePlaceKey('Excursión a la Ciudad Perdida'), normalizePlaceKey('ciudad perdida'))
   assert.equal(normalizePlaceKey('visita al Museo del Oro Tairona'), normalizePlaceKey('Museo del Oro Tairona'))
+  assert.equal(normalizePlaceKey('Playa de El Rodadero'), normalizePlaceKey('El Rodadero'))
 
   // Deduplication
   const rawList = [
@@ -128,21 +135,28 @@ test('normalizePlaceKey and deduplicatePlacesByName must merge place variants in
     'quinta de san Pedro Alejandrino',
     'Excursión a la Ciudad Perdida',
     'ciudad perdida',
+    'Playa de El Rodadero',
+    'El Rodadero',
     'Fiesta del Mar', // Should be filtered out
     'Descripción', // Should be filtered out
     'Santa Marta', // Should be filtered out
+    'Cementerio Central', // Should be filtered out
+    'Canal Santa Marta', // Should be filtered out
     'Parque Nacional Natural Tayrona',
     'Restaurante Guásimo'
   ]
 
   const cleanList = deduplicatePlacesByName(rawList)
-  assert.equal(cleanList.length, 4)
+  assert.equal(cleanList.length, 5)
   assert.ok(cleanList.some(p => p.includes('Quinta de San Pedro')))
   assert.ok(cleanList.some(p => p.includes('Ciudad Perdida') || p.includes('ciudad perdida')))
+  assert.ok(cleanList.some(p => p.includes('Rodadero')))
   assert.ok(cleanList.some(p => p.includes('Tayrona')))
   assert.ok(cleanList.some(p => p.includes('Guásimo')))
   assert.ok(!cleanList.some(p => p.includes('Fiesta del Mar')))
   assert.ok(!cleanList.some(p => p.includes('Descripción')))
+  assert.ok(!cleanList.some(p => p.includes('Cementerio')))
+  assert.ok(!cleanList.some(p => p.includes('Canal')))
 })
 
 test('extractChatInformationFallback must calculate durationDays from date range strings', async () => {

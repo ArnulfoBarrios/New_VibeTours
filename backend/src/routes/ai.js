@@ -60,7 +60,7 @@ const requestSchema = z.object({
   specificPlaces: z.array(z.string()).optional().default([])
 })
 
-// Normalizador de clave canónica para fusionar variantes de un mismo lugar (ej: "la Quinta de..." vs "quinta de...")
+// Normalizador de clave canónica para fusionar variantes de un mismo lugar (ej: "Playa de El Rodadero" vs "El Rodadero")
 export function normalizePlaceKey(placeName) {
   if (!placeName || typeof placeName !== 'string') return ''
   return placeName
@@ -68,8 +68,9 @@ export function normalizePlaceKey(placeName) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // remove accents
     .replace(/[*_#•\-]/g, ' ') // remove markdown
+    .replace(/\b(playa de la|playa de el|playa de|playa del|playa|parque nacional natural|parque nacional|parque natural|parque|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|ciudad perdida|camino a|sendero de|sendero)\b/g, ' ')
     .replace(/\b(la|el|los|las|un|una|unos|unas|del|de|de la|de los)\b/g, ' ') // remove articles
-    .replace(/\b(visita a|visita al|recorrido por|paseo en|paseo por|excursion a|excursión a|ir a|entrada a|parada en|caminar por|recorrer el|visitar la|visitar el)\b/g, ' ') // remove action prefixes
+    .replace(/\b(visita a la|visita a|visita al|recorrido por el|recorrido por la|recorrido por|paseo en lancha a|paseo en lancha por|paseo en barco a|paseo en|paseo por|excursion a la|excursion a|excursión a|excursion al|ir a|entrada a|parada en|caminar por|recorrer el|visitar la|visitar el)\b/g, ' ') // remove action prefixes
     .replace(/[^\w\s]/g, '') // remove punctuation
     .replace(/\s+/g, ' ')
     .trim()
@@ -97,29 +98,46 @@ export function deduplicatePlacesByName(places = []) {
   return Array.from(seen.values())
 }
 
-// Filtro estricto que descarta encabezados de días, horas, formatos markdown, metadatos, categorías, eventos temporales y ciudades puras
+// Filtro estricto que descarta encabezados de días, horas, formatos markdown, metadatos, categorías, eventos temporales, cementerios, canales inaccesibles y ciudades puras
 export function isValidSpecificPlace(placeName) {
   if (!placeName || typeof placeName !== 'string') return false
   
   // Limpiar markdown, viñetas y espacios conservando guiones internos
   const clean = placeName.replace(/[*_#•]/g, '').trim()
   if (clean.length < 3) return false
+  const cleanLower = clean.toLowerCase()
+
   // 1. Descartar encabezados de días y momentos del día
   const isTimeHeader = /^(d[íi]a\s*\d+|day\s*\d+|mañana|tarde|noche|almuerzo|cena|desayuno|madrugada|atardecer)/i.test(clean)
   if (isTimeHeader) return false
+
   // 2. Descartar comodidades, hoteles, acciones y frases meta de viaje
-  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|paseo|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones)\b/i.test(clean)
+  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones)\b/i.test(cleanLower)
   if (isMetaOrAmenity) return false
-  // 3. Descartar categorías de turismo generales, eventos/festivales y etiquetas temáticas
-  const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|paseo|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto|fiesta del mar|fiestas del mar|carnaval|carnavales|festival|festivales|feria|ferias|desfile|desfiles|semana santa|evento|eventos|descripci[óo]n|resumen|notas?)$/i.test(clean.toLowerCase())
-  if (isCategoryOrTheme) return false
-  // 4. Descartar si es país o "Ciudad, País"
-  if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(clean)) {
+
+  // 3. Descartar cementerios y servicios funerarios
+  if (/cementerio|camposanto|jardines de cartagena|jardines del recuerdo|jardines de paz|jardin de paz|parque cementerio|graveyard|cemetery|funeraria|morgue|crematorio|mausoleo/i.test(cleanLower)) {
     return false
   }
-  // 5. Descartar nombres de ciudades o regiones puras
-  const isCityOnly = /^(cartagena|barranquilla|medell[íi]n|bogot[áa]|santa marta|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|toledo|cusco|orlando|nueva york|new york|cali|colombia|magdalena|bol[íi]var|antioquia)$/i.test(clean.toLowerCase())
+
+  // 4. Descartar canales de drenaje, ciénagas inaccesibles en agua y acequias
+  if (/canal santa marta|canal del dique|ci[ée]naga grande|ci[ée]naga de la virgen|drenaje|acequia|quebrada|rio frio|r[íi]o fr[íi]o|rio sevilla|r[íi]o sevilla/i.test(cleanLower)) {
+    return false
+  }
+
+  // 5. Descartar categorías de turismo generales, eventos/festivales y etiquetas temáticas
+  const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto|fiesta del mar|fiestas del mar|carnaval|carnavales|festival|festivales|feria|ferias|desfile|desfiles|semana santa|evento|eventos|descripci[óo]n|resumen|notas?)$/i.test(cleanLower)
+  if (isCategoryOrTheme) return false
+
+  // 6. Descartar si es país o "Ciudad, País"
+  if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(cleanLower)) {
+    return false
+  }
+
+  // 7. Descartar nombres de ciudades, regiones o departamentos puros
+  const isCityOnly = /^(cartagena|barranquilla|medell[íi]n|bogot[áa]|santa marta|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|toledo|cusco|orlando|nueva york|new york|cali|colombia|magdalena|bol[íi]var|antioquia|distrito tur[íi]stico|distrito)$/i.test(cleanLower)
   if (isCityOnly) return false
+
   return true
 }
 
@@ -4060,6 +4078,20 @@ function isValidTouristAttraction(place, input) {
 
   // 0. Bloqueo estricto de comodidades, precios y metadatos de hotel
   if (/\b(comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|hotel|hostal|resort|alojamiento|hospedaje)\b/i.test(nameLower)) {
+    return false
+  }
+
+  // 0.0 Bloqueo absoluto de cementerios, funerarias, canales inaccesibles y ciudades puras (aplica incluso si vino de chat)
+  if (/cementerio|camposanto|jardines de cartagena|jardines del recuerdo|jardines de paz|jardin de paz|parque cementerio|graveyard|cemetery|funeraria|morgue|crematorio|mausoleo/i.test(nameLower)) {
+    return false
+  }
+  if (/canal santa marta|canal del dique|ci[ée]naga grande|ci[ée]naga de la virgen|drenaje|acequia|quebrada|rio frio|r[íi]o fr[íi]o|rio sevilla|r[íi]o sevilla/i.test(nameLower) ||
+      place.tags?.waterway === 'canal' ||
+      place.tags?.waterway === 'drain' ||
+      place.tags?.waterway === 'ditch') {
+    return false
+  }
+  if (/^(santa marta|cartagena|barranquilla|medell[íi]n|bogot[áa]|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|cusco|cali|colombia|magdalena|bol[íi]var|antioquia|distrito tur[íi]stico|distrito)$/i.test(nameLower)) {
     return false
   }
 

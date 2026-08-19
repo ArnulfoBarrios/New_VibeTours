@@ -492,13 +492,22 @@ function isNonTouristFacility(tags = {}) {
     name.includes('camara de comercio') ||
     name.includes('tránsito') ||
     name.includes('subestacion') ||
-    name.includes('gas natural')
+    name.includes('gas natural') ||
+    name.includes('cementerio') ||
+    name.includes('camposanto') ||
+    name.includes('jardines de paz') ||
+    name.includes('funeraria') ||
+    name.includes('canal santa marta') ||
+    name.includes('ciénaga grande') ||
+    name.includes('cienaga grande') ||
+    name.includes('drenaje') ||
+    name.includes('acequia')
   ) {
     return true
   }
 
   const landuse = String(tags.landuse ?? '').toLowerCase()
-  if (['industrial', 'residential', 'commercial', 'construction', 'quarry'].includes(landuse)) {
+  if (['industrial', 'residential', 'commercial', 'construction', 'quarry', 'cemetery'].includes(landuse)) {
     return true
   }
 
@@ -507,10 +516,22 @@ function isNonTouristFacility(tags = {}) {
     'university', 'school', 'college', 'kindergarten',
     'bank', 'atm', 'pharmacy', 'dentist', 'doctors', 'hospital', 'clinic',
     'police', 'post_office', 'townhall', 'courthouse', 'embassy',
-    'fuel', 'car_wash', 'parking', 'bus_station', 'utility', 'waste_disposal'
+    'fuel', 'car_wash', 'parking', 'bus_station', 'utility', 'waste_disposal',
+    'grave_yard', 'crematorium', 'funeral_hall', 'mortuary'
   ].includes(amenity)) {
     return true
   }
+
+  const waterway = String(tags.waterway ?? '').toLowerCase()
+  if (['canal', 'drain', 'ditch', 'stream', 'waste_disposal'].includes(waterway)) {
+    return true
+  }
+
+  const natural = String(tags.natural ?? '').toLowerCase()
+  if (['water', 'wetland', 'bay', 'shoal'].includes(natural) && tags.tourism !== 'attraction' && tags.leisure !== 'beach_resort' && tags.natural !== 'beach') {
+    return true
+  }
+
   const building = String(tags.building ?? '').toLowerCase()
   if (['office', 'industrial', 'commercial', 'residential', 'warehouse'].includes(building)) return true
   return false
