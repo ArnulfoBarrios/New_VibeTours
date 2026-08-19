@@ -235,11 +235,39 @@ test('effectiveReadyToBuild must trigger when user requests tour generation and 
     country: 'Colombia',
     datesSeason: 'octubre del 9 al 12',
     durationDays: 4,
-    companions: '6 amigos'
+    companions: '6 amigos',
+    selectedHotel: 'Hotel Irotama',
+    transport: 'Auto rentado',
+    budget: 'Moderado'
   }
 
   const res = await generateChatResponse(state, '', '', known)
   assert.equal(res.readyToBuild, true)
+})
+
+test('effectiveReadyToBuild must reject and ask for missing key info when lodging is missing', async () => {
+  const state = {
+    history: [
+      { role: 'user', content: 'Quiero viajar a Cartagena' },
+      { role: 'assistant', content: 'Alojamiento: Por definir...' },
+      { role: 'user', content: 'Ok quiero generar el tour' }
+    ]
+  }
+
+  const knownWithMissingLodging = {
+    city: 'Cartagena',
+    country: 'Colombia',
+    datesSeason: 'octubre del 9 al 12',
+    durationDays: 4,
+    companions: '6 amigos',
+    transport: 'Auto rentado',
+    budget: 'Moderado',
+    accommodationStatus: 'Por definir'
+  }
+
+  const res = await generateChatResponse(state, '', '', knownWithMissingLodging)
+  assert.equal(res.readyToBuild, false)
+  assert.ok(/alojamiento|hotel/i.test(res.responseMessage))
 })
 
 

@@ -442,10 +442,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
     return Container(
       key: const ValueKey('ai_planner_map_card_stable'),
-      height: 250,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -454,19 +454,67 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           )
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: OpenFreeRouteMap(
-          key: const ValueKey('ai_planner_openfree_map_stable'),
-          points: points,
-          labels: labels,
-          styleUrl: ref.watch(mapStyleProvider),
-          activeIndex: -1,
-          height: 250,
-          borderRadius: 0,
-          showNumbers: true,
-          useRoadRouting: true,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+            child: SizedBox(
+              height: 200,
+              child: OpenFreeRouteMap(
+                key: const ValueKey('ai_planner_openfree_map_stable'),
+                points: points,
+                labels: labels,
+                styleUrl: ref.watch(mapStyleProvider),
+                activeIndex: -1,
+                height: 200,
+                borderRadius: 0,
+                showNumbers: true,
+                useRoadRouting: true,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      side: BorderSide(color: Colors.blue.shade300),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: Icon(Icons.edit_location_alt_outlined, size: 16, color: Colors.blue.shade700),
+                    label: Text(
+                      'Modificar paradas',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
+                    ),
+                    onPressed: () => context.push('/ai/builder'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.blue.shade600,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.rocket_launch_rounded, size: 16, color: Colors.white),
+                    label: const Text(
+                      'Crear tour',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    onPressed: () {
+                      ref.read(aiBuilderProvider.notifier).buildTour();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

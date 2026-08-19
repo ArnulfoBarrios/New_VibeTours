@@ -568,10 +568,27 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     } else {
       const preset = realCatalog || getDestinationPresets('Cartagena', 'Colombia')
-      const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar)\b/i.test(lastUserMsg)
-      effectiveReadyToBuild = Boolean(hasDurationOrDates && hasCity && isExplicitBuildRequestedByUser)
+      const isPendingVal = (val) => !val || typeof val !== 'string' || /^(por definir|pendiente|null|undefined)$/i.test(val.trim())
+      const fbHasLodging = Boolean(known.selectedHotel?.name || (typeof known.selectedHotel === 'string' && !isPendingVal(known.selectedHotel)) || (!isPendingVal(known.accommodationStatus)))
+      const fbHasTransport = Boolean(!isPendingVal(known.transport))
+      const fbHasBudget = Boolean(!isPendingVal(known.budget))
+      const fbHasCompanions = Boolean(!isPendingVal(known.companions))
+      const fbAllKeyInfoComplete = Boolean(hasCity && hasDurationOrDates && fbHasCompanions && fbHasLodging && fbHasTransport && fbHasBudget)
 
-      if (effectiveReadyToBuild) {
+      const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+generar\s+el\s+tour|ok\s+quiero\s+generar)\b/i.test(lastUserMsg)
+      effectiveReadyToBuild = Boolean(fbAllKeyInfoComplete && isExplicitBuildRequestedByUser)
+
+      if (isExplicitBuildRequestedByUser && !fbAllKeyInfoComplete) {
+        const missing = []
+        if (!hasCity) missing.push('el destino')
+        if (!hasDurationOrDates) missing.push('las fechas o días de viaje')
+        if (!fbHasCompanions) missing.push('tus acompañantes')
+        if (!fbHasLodging) missing.push('tu alojamiento u hotel')
+        if (!fbHasTransport) missing.push('tu medio de transporte')
+        if (!fbHasBudget) missing.push('tu presupuesto estimado')
+
+        fallbackMsg = `Para poder generar tu tour en el mapa y armar la ruta con precisión, aún necesitamos definir: **${missing.join(', ')}**. Por favor indícame este detalle para continuar.`
+      } else if (effectiveReadyToBuild) {
         fallbackMsg = `¡Perfecto! Todo está listo para tu viaje a ${destName} (${known.datesSeason || `${known.durationDays} días`}). Procedo a generar tu tour en el mapa.`
       } else if (/\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|muestres el itinerario)\b/i.test(lastUserMsg)) {
         if (hasDurationOrDates) {
@@ -614,9 +631,14 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
   }
 
-  const hasLodging = Boolean(known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus)
-  const hasTransport = Boolean(known.transport)
-  const hasBudget = Boolean(known.budget)
+  const isPendingVal = (val) => !val || typeof val !== 'string' || /^(por definir|pendiente|null|undefined)$/i.test(val.trim())
+
+  const hasLodging = Boolean(
+    (known.selectedHotel?.name || (typeof known.selectedHotel === 'string' && !isPendingVal(known.selectedHotel)) || (!isPendingVal(known.accommodationStatus)))
+  )
+  const hasTransport = Boolean(!isPendingVal(known.transport))
+  const hasBudget = Boolean(!isPendingVal(known.budget))
+  const hasCompanions = Boolean(!isPendingVal(known.companions))
 
   const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual y organizador experto de tours de VibeTours.
 Tu personalidad es CÁLIDA, EMPÁTICA, ENTUSIASTA Y ALTAMENTE PROFESIONAL.
@@ -636,11 +658,11 @@ ${JSON.stringify(known, null, 2)}
 
 ESTADO DE REQUISITOS DEL VIAJE:
 • DESTINO: ${hasCity ? `CONFIRMADO (${destName}, ${destCountry})` : 'PENDIENTE'}
-• FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADAS (${known.datesSeason || ''} | ${known.durationDays ? `${known.durationDays} días` : ''}) -> ESTÁ ESTRICTAMENTE PROHIBIDO VOLVER A PREGUNTAR POR FECHAS O DÍAS.` : 'PENDIENTE -> Pregunta en qué fechas viajará y cuántos días durará.'}
-• ACOMPAÑANTES: ${known.companions ? `CONFIRMADOS (${known.companions})` : 'PENDIENTE'}
-• HOSPEDAJE: ${hasLodging ? `CONFIRMADO (${known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus})` : 'PENDIENTE'}
-• TRANSPORTE: ${hasTransport ? `CONFIRMADO (${known.transport})` : 'PENDIENTE'}
-• PRESUPUESTO: ${hasBudget ? `CONFIRMADO (${known.budget})` : 'PENDIENTE'}
+• FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADAS (${known.datesSeason || ''} | ${known.durationDays ? `${known.durationDays} días` : ''}) -> ESTÁ ESTRICTAMENTE PROHIBIDO VOLVER A PREGUNTAR POR FECHAS O DÍAS.` : 'PENDIENTE'}
+• ACOMPAÑANTES: ${hasCompanions ? `CONFIRMADOS (${known.companions})` : 'PENDIENTE'}
+• HOSPEDAJE: ${hasLodging ? `CONFIRMADO (${known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus})` : 'PENDIENTE (No confirmado)'}
+• TRANSPORTE: ${hasTransport ? `CONFIRMADO (${known.transport})` : 'PENDIENTE (No confirmado)'}
+• PRESUPUESTO: ${hasBudget ? `CONFIRMADO (${known.budget})` : 'PENDIENTE (No confirmado)'}
 
 ${hasDurationOrDates ? `⚠️ ADVERTENCIA CRÍTICA DE FECHAS: El usuario YA confirmó sus fechas (${known.datesSeason || ''}) y duración (${known.durationDays ? `${known.durationDays} días` : ''}). NUNCA vuelvas a preguntar cuándo viajará ni cuántos días durará su estadía. Si el usuario pide el itinerario ("muéstrame el itinerario", "cómo va quedando"), PRESENTA DE INMEDIATO el itinerario estructurado por días.` : `⚠️ FECHAS PENDIENTES: Si el usuario pide estructurar el itinerario o generar el tour sin haber indicado fechas, pregúntale: "¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName || 'el destino'}?"`}
 
@@ -689,14 +711,14 @@ ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
 - "readyToBuild" DEBE ser false.
 
 ETAPA 5: GENERACIÓN DEL TOUR ("readyToBuild": true)
-- Si el usuario pide generar o crear el tour (ej: "si genera el tour porfa", "crea el tour", "genera el tour", "vale genera el tour", "adelante genera el tour", "está perfecto genera el tour"):
-  - SI DESTINO Y FECHAS YA ESTÁN CONFIRMADOS:
+- Si el usuario pide generar o crear el tour (ej: "si genera el tour porfa", "crea el tour", "genera el tour", "vale genera el tour", "adelante genera el tour", "ok quiero generar el tour", "quiero generar el tour"):
+  - SI FALTA ALGÚN DATO CLAVE (Destino, Fechas, Acompañantes, Hospedaje, Transporte o Presupuesto):
+    1. "readyToBuild" DEBE SER FALSE (nunca generar el mapa si falta información clave).
+    2. En "responseMessage", pregunta AMABLEMENTE Y DE MANERA ESPECÍFICA únicamente por el dato o datos clave que siguen en PENDIENTE. NUNCA preguntes por datos que ya están CONFIRMADOS.
+  - SI TODOS LOS DATOS CLAVE ESTÁN CONFIRMADOS:
     1. "readyToBuild" DEBE SER TRUE.
-    2. En "responseMessage", responde confirmando entusiastamente: "¡Excelente! Procedo a generar tu tour personalizado en ${destName} en el mapa. ¡Prepárate para disfrutar tu viaje!"
+    2. En "responseMessage", responde confirmando: "¡Excelente! Todo está listo para tu viaje a ${destName}. Procedo a generar tu tour personalizado en el mapa. ¡Prepárate para disfrutarlo!"
     3. ESTÁ TERMINANTEMENTE PROHIBIDO volver a preguntar por hospedaje, transporte, presupuesto o fechas si el usuario ya ordenó generar el tour.
-  - SI FALTA EL DESTINO O LAS FECHAS:
-    1. "readyToBuild" DEBE ser false.
-    2. En "responseMessage", solicita amablemente el destino o las fechas faltantes.
 
 FORMATO DE SALIDA (JSON):
 Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
@@ -775,23 +797,51 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
       destinationSuggestions = await buildVisualDestinationSuggestions(actionChips).catch(() => [])
     }
 
-    const hasDurationOrDates = Boolean(
-      known.durationDays ||
-      parsed.extractedPreferences?.durationDays ||
-      known.datesSeason ||
-      parsed.extractedPreferences?.datesSeason
+    const parsedExtracted = parsed.extractedPreferences || {}
+    const finalHasLodging = Boolean(
+      hasLodging ||
+      parsedExtracted.selectedHotel?.name ||
+      (typeof parsedExtracted.selectedHotel === 'string' && !isPendingVal(parsedExtracted.selectedHotel)) ||
+      (!isPendingVal(parsedExtracted.accommodationStatus))
+    )
+    const finalHasTransport = Boolean(hasTransport || !isPendingVal(parsedExtracted.transport))
+    const finalHasBudget = Boolean(hasBudget || !isPendingVal(parsedExtracted.budget))
+    const finalHasCompanions = Boolean(hasCompanions || !isPendingVal(parsedExtracted.companions))
+    const finalHasCity = Boolean(hasCity || !isPendingVal(parsedExtracted.city))
+    const finalHasDates = Boolean(
+      hasDurationOrDates ||
+      !isPendingVal(parsedExtracted.datesSeason) ||
+      parsedExtracted.durationDays
     )
 
-    const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour)\b/i.test(lastUserMsg)
+    const isAllKeyInfoComplete = Boolean(
+      finalHasCity &&
+      finalHasDates &&
+      finalHasCompanions &&
+      finalHasLodging &&
+      finalHasTransport &&
+      finalHasBudget
+    )
 
+    const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+generar\s+el\s+tour|ok\s+quiero\s+generar)\b/i.test(lastUserMsg)
+
+    // Solo se activa readyToBuild si TODA la información clave está completa Y el usuario lo pide explícitamente
     const effectiveReadyToBuild = Boolean(
-      (parsed.readyToBuild || isExplicitBuildRequestedByUser) &&
-      hasDurationOrDates &&
-      hasCity &&
+      isAllKeyInfoComplete &&
       isExplicitBuildRequestedByUser
     )
 
-    if (effectiveReadyToBuild && /\b(aún necesito|necesito que me indiques|dónde planeas hospedarte|cómo prefieres moverte|tienes algún presupuesto)\b/i.test(responseMessage)) {
+    if (isExplicitBuildRequestedByUser && !isAllKeyInfoComplete) {
+      const missing = []
+      if (!finalHasCity) missing.push('el destino')
+      if (!finalHasDates) missing.push('las fechas o días de viaje')
+      if (!finalHasCompanions) missing.push('tus acompañantes')
+      if (!finalHasLodging) missing.push('tu alojamiento u hotel')
+      if (!finalHasTransport) missing.push('tu medio de transporte')
+      if (!finalHasBudget) missing.push('tu presupuesto estimado')
+
+      responseMessage = `Para poder generar tu tour en el mapa y armar la ruta con precisión, aún necesitamos definir: **${missing.join(', ')}**. Por favor indícame este detalle para continuar.`
+    } else if (effectiveReadyToBuild && /\b(aún necesito|necesito que me indiques|dónde planeas hospedarte|cómo prefieres moverte|tienes algún presupuesto)\b/i.test(responseMessage)) {
       responseMessage = `¡Excelente! Procedo a generar tu tour personalizado en ${destName} en el mapa. ¡Prepárate para disfrutar tu viaje!`
     }
 
