@@ -338,17 +338,6 @@ export const DESTINATION_LOCAL_PRESETS = {
  */
 export async function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null) {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
-  const baseKey = clean.split(',')[0].trim()
-
-  if (DESTINATION_LOCAL_PRESETS[clean]) return DESTINATION_LOCAL_PRESETS[clean]
-  if (DESTINATION_LOCAL_PRESETS[baseKey]) return DESTINATION_LOCAL_PRESETS[baseKey]
-
-  for (const [k, preset] of Object.entries(DESTINATION_LOCAL_PRESETS)) {
-    if (clean.includes(k) || k.includes(baseKey) || (preset.name && preset.name.toLowerCase() === clean)) {
-      return preset
-    }
-  }
-
   const cacheKey = `catalog_${clean}_${countryName}`
   const cached = destinationCatalogCache.get(cacheKey)
   if (cached) return cached
@@ -538,6 +527,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const destName = cleanAdministrativeCityName(rawDestName)
   const hasCity = Boolean(destName && !isVagueDestination(destName))
   const destCountry = known.country || (destName.toLowerCase() === 'cartagena' || destName.toLowerCase() === 'santa marta' || destName.toLowerCase() === 'medellín' || destName.toLowerCase() === 'bogotá' ? 'Colombia' : '')
+  const hasDurationOrDates = Boolean(known.durationDays || known.datesSeason)
 
   const history = state.history || []
   const lastUserMsg = history[history.length - 1]?.content || ''
@@ -584,7 +574,19 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     } else {
       const preset = realCatalog || getDestinationPresets('Cartagena', 'Colombia')
-      if (/\b(actividad|actividades|qu[ée] hacer|lugares|atracciones|visitar)\b/i.test(lastUserMsg)) {
+      if (/\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|muestres el itinerario)\b/i.test(lastUserMsg)) {
+        if (hasDurationOrDates) {
+          const numDays = known.durationDays || 4
+          fallbackMsg = `¡Aquí tienes la propuesta de itinerario para tu viaje a ${destName} (${known.datesSeason || `${numDays} días`})! 🗺️\n\n` +
+            `• **Día 1**: Llegada, check-in y recorrido por el Centro Histórico\n` +
+            `• **Día 2**: Visita a ${preset.places[0] || 'atracciones principales'}\n` +
+            (numDays >= 3 ? `• **Día 3**: Excursión a ${preset.places[1] || 'lugares icónicos'}\n` : '') +
+            (numDays >= 4 ? `• **Día 4**: Día de relax y gastronomía local\n` : '') +
+            `\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está todo listo para generar tu tour?`
+        } else {
+          fallbackMsg = `Para poder organizar tu itinerario día a día en ${destName}, ¿en qué fechas planeas viajar y cuántos días durará tu estadía?`
+        }
+      } else if (/\b(actividad|actividades|qu[ée] hacer|lugares|atracciones|visitar)\b/i.test(lastUserMsg)) {
         fallbackMsg = `¡En ${destName} hay experiencias y lugares fascinantes para descubrir! 🌟\n\n` +
           preset.places.map((p, i) => `${i + 1}. **${p}**`).join('\n') +
           `\n\n¿Te gustaría que organicemos tu itinerario visitando estos lugares?`
@@ -596,6 +598,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = `¡Aquí tienes opciones de hospedaje recomendadas en ${destName}! 🏨\n\n` +
           preset.hotels.map((h, i) => `${i + 1}. **${h.name}**: ${h.desc}`).join('\n') +
           `\n\n¿Cuál de estos te gustaría elegir como tu hospedaje?`
+      } else if (hasDurationOrDates) {
+        fallbackMsg = `¡Perfecto! Ya tenemos tu viaje a ${destName} para ${known.datesSeason || `${known.durationDays} días`}. ¿Qué tipo de actividades o experiencias te gustaría incluir en tu itinerario?`
       } else {
         fallbackMsg = `¡Excelente elección viajar a ${destName}! Cuéntame, ¿en qué fechas planeas realizar tu tour y por cuántos días?`
       }
@@ -627,6 +631,13 @@ ALCANCE ESTRICTO DE TURISMO Y RECHAZO DE MENSAJES AJENOS:
 ESTADO ACTUAL DE PREFERENCIAS CONFIRMADAS DEL VIAJERO:
 ${JSON.stringify(known, null, 2)}
 
+ESTADO DE REQUISITOS DEL VIAJE:
+• DESTINO: ${hasCity ? `CONFIRMADO (${destName}, ${destCountry})` : 'PENDIENTE'}
+• FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADAS (${known.datesSeason || ''} | ${known.durationDays ? `${known.durationDays} días` : ''}) -> ESTÁ ESTRICTAMENTE PROHIBIDO VOLVER A PREGUNTAR POR FECHAS O DÍAS.` : 'PENDIENTE -> Pregunta en qué fechas viajará y cuántos días durará.'}
+• ACOMPAÑANTES: ${known.companions ? `CONFIRMADOS (${known.companions})` : 'PENDIENTE'}
+
+${hasDurationOrDates ? `⚠️ ADVERTENCIA CRÍTICA DE FECHAS: El usuario YA confirmó sus fechas (${known.datesSeason || ''}) y duración (${known.durationDays ? `${known.durationDays} días` : ''}). NUNCA vuelvas a preguntar cuándo viajará ni cuántos días durará su estadía. Si el usuario pide el itinerario ("muéstrame el itinerario", "cómo va quedando"), PRESENTA DE INMEDIATO el itinerario estructurado por días.` : `⚠️ FECHAS PENDIENTES: Si el usuario pide estructurar el itinerario o generar el tour sin haber indicado fechas, pregúntale: "¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName || 'el destino'}?"`}
+
 ${realCatalog ? `DATOS REALES Y VERIFICADOS DEL DESTINO (${destName}, ${destCountry || realCatalog.country}):
 • HOTELES REALES: ${JSON.stringify(realCatalog.hotels)}
 • RESTAURANTES REALES: ${JSON.stringify(realCatalog.restaurants)}
@@ -634,14 +645,6 @@ ${realCatalog ? `DATOS REALES Y VERIFICADOS DEL DESTINO (${destName}, ${destCoun
 • EVENTOS REALES: ${JSON.stringify(realCatalog.events)}` : ''}
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}` : ''}
-
-REGLA INQUEBRANTABLE SOBRE FECHAS Y DURACIÓN (PROHIBIDO ASUMIR DÍAS):
-- NUNCA inventes o asumas días de duración ni fechas (NUNCA uses 3 días, 4 días ni ningún número a menos que el usuario lo haya escrito explícitamente).
-- Si el usuario dice "cómo va quedando el itinerario", "agrega estas actividades al itinerario", "arma el plan" o "genera el tour", pero aún NO se han confirmado las fechas o duración:
-  1. NO desgloses días ("Día 1", "Día 2", etc.).
-  2. NUNCA digas "Aquí tienes tu tour generado" ni pretendas que el tour está listo.
-  3. Responde amablemente: "¡Excelente selección de actividades! Para poder organizar tu itinerario día a día y generar tu tour personalizado en el mapa, ¿en qué fechas planeas viajar y cuántos días durará tu estadía en ${destName || 'el destino'}?"
-  4. En "readyToBuild" DEBES devolver false.
 
 REGLAS CRÍTICAS DEL FLUJO CONVERSACIONAL EN ETAPAS OBLIGATORIAS (NUNCA SALTES ETAPAS):
 

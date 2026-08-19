@@ -318,14 +318,6 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences
     )
 
-    if (/\b(agregar 1 restaurante por d[íi]a|agregar restaurante por d[íi]a)\b/i.test(message)) {
-      const defaultRests = ['Restaurante La Cevicheria', 'Restaurante Celele', 'Restaurante El Boliche Cebichería']
-      updatedPreferences.specificPlaces = deduplicatePlacesByName([
-        ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
-        ...defaultRests
-      ])
-    }
-
     // Extraer lugares SOLO si ya se eligió la ciudad destino y provienen de elecciones explícitas o de un itinerario estructurado confirmado
     const hasConfirmedCity = Boolean(updatedPreferences.city || updatedPreferences.destination)
     const isAskingCityRecomms = !hasConfirmedCity && /\b(recomien|recomiend|qué me recomiendas|dónde ir|opciones|destinos)\b/i.test(message)
@@ -927,25 +919,9 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       return isQualityTouristPlace(place) && !isDuplicatePlace(place.name, place.placeId || place.id)
     })
 
-    // Si OSM no tiene suficientes lugares turísticos únicos, enriquecer con presets de la ciudad y OpenAI
+    // Si OSM no tiene suficientes lugares turísticos únicos, enriquecer dinámicamente con OpenAI
     if (available.length < 6) {
-      const preset = getDestinationPresets(city, country)
-      if (preset && Array.isArray(preset.places)) {
-        for (const presetName of preset.places) {
-          if (!isDuplicatePlace(presetName, null) && isQualityTouristPlace({ name: presetName })) {
-            available.push({
-              name: presetName,
-              category: 'tourism',
-              city,
-              country
-            })
-          }
-        }
-      }
-    }
-
-    if (available.length < 6) {
-      console.info('[alternatives] Querying OpenAI for REAL places in:', city)
+      console.info('[alternatives] Querying OpenAI dynamically for REAL places in:', city)
       const excludeNameList = Array.from(currentKeys).filter(n => n.length > 2)
       const aiSuggestions = await suggestFallbackPlacesWithOpenAI({
         destination,
@@ -3963,19 +3939,31 @@ export async function collectTourCandidates(input, location) {
     for (const p of places) {
       if (!p || !p.name) continue
       const isPRequested = p.tags?.requested_place === 'true' || p.category === 'requested'
-      const exists = result.some(item => {
-        if (normalizeKey(item.name) === normalizeKey(p.name)) return true
+      const pKey = normalizePlaceKey(p.name)
+      
+      const existingIdx = result.findIndex(item => {
+        const itemKey = normalizePlaceKey(item.name)
+        if (pKey === itemKey) return true
         const isItemRequested = item.tags?.requested_place === 'true' || item.category === 'requested'
-        // Si son lugares acordados distintos solicitados en chat, NUNCA descartar por proximidad
-        if (isPRequested || isItemRequested) {
+        if (isPRequested && isItemRequested && pKey !== itemKey) {
           return false
         }
         if (hasUsableCoordinates(item.latitude, item.longitude) && hasUsableCoordinates(p.latitude, p.longitude)) {
-          return haversineMeters(item.latitude, item.longitude, p.latitude, p.longitude) < minDistanceMeters
+          const dist = haversineMeters(item.latitude, item.longitude, p.latitude, p.longitude)
+          if (dist < minDistanceMeters) return true
+          if (dist < 400 && (itemKey.includes(pKey) || pKey.includes(itemKey))) return true
         }
         return false
       })
-      if (!exists) result.push(p)
+
+      if (existingIdx === -1) {
+        result.push(p)
+      } else {
+        const existing = result[existingIdx]
+        if (p.name.length > existing.name.length && /[A-Z]/.test(p.name)) {
+          result[existingIdx] = p
+        }
+      }
     }
     return result
   }
@@ -4154,7 +4142,12 @@ function isValidTouristAttraction(place, input) {
   }
 
   // 13. Exclude cemeteries and graveyards
-  if (/cementerio|camposanto|jardines de cartagena|jardines del recuerdo|parque cementerio|graveyard|cemetery/i.test(nameLower)) {
+  if (/cementerio|camposanto|jardines de cartagena|jardines del recuerdo|jardines de paz|jardin de paz|parque cementerio|graveyard|cemetery|funeraria|morgue/i.test(nameLower)) {
+    return false
+  }
+
+  // 14. Exclude inaccessible waterways, drainage canals, raw swamps, irrigation canals
+  if (/canal santa marta|ci[ée]naga grande|drenaje|acequia|quebrada|rio frio|r[íi]o fr[íi]o|rio sevilla|r[íi]o sevilla/i.test(nameLower)) {
     return false
   }
 
