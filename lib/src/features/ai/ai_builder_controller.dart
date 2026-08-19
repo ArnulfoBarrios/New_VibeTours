@@ -695,10 +695,15 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
               );
             }).toList();
 
-            if (state.selectedHotel != null) {
-              final hotelName = state.selectedHotel!['name']?.toString() ?? 'Hotel';
-              final hotelLat = double.tryParse(state.selectedHotel!['latitude']?.toString() ?? '') ?? 0.0;
-              final hotelLon = double.tryParse(state.selectedHotel!['longitude']?.toString() ?? '') ?? 0.0;
+            final hotelLat = double.tryParse(state.selectedHotel?['latitude']?.toString() ?? '') ?? 0.0;
+            final hotelLon = double.tryParse(state.selectedHotel?['longitude']?.toString() ?? '') ?? 0.0;
+            final hotelName = state.selectedHotel?['name']?.toString() ?? '';
+            final hasValidHotelCoords = state.selectedHotel != null &&
+                hotelLat != 0.0 &&
+                hotelLon != 0.0 &&
+                !hotelName.toLowerCase().contains('casa propia');
+
+            if (hasValidHotelCoords) {
               final hotelAddress = state.selectedHotel!['address']?.toString() ?? state.selectedHotel!['direccion']?.toString() ?? '';
 
               final hotelStart = TourStop(

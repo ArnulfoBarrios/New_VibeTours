@@ -1039,6 +1039,7 @@ export async function planWithOpenAI({
   }
 
   const selectedPlaces = summarizePlaces(places).slice(0, 25)
+  const totalDays = Math.max(1, Number(userPreferences?.durationDays || Math.ceil((durationHours || 24) / 24) || 1))
 
   const system = `Eres Tour Planner AI 🤖, el motor oficial de diseño de itinerarios turísticos de VibeTours.
 Tu misión es diseñar un tour profesional, inmersivo, geográficamente viable y 100% fiel al destino "${cleanCity}, ${targetCountry}".
@@ -1120,10 +1121,11 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
 }
 
 REGLAS DE CALIDAD:
-1. Utiliza exactamente la lista de lugares seleccionados recibida (${selectedPlaces.map(p => p.name).join(', ')}).
+1. Utiliza exactamente la lista de lugares seleccionados recibida (${selectedPlaces.map((p, i) => `${i + 1}. ${p.name}`).join(', ')}). Respeta fielmente su orden secuencial.
 2. Cada parada del itinerario debe corresponder a un lugar físico real de la lista.
-3. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras.
-4. Integra notas dinámicas de consejos y datos curiosos específicos por parada.`
+3. El tour dura ${totalDays} días. Debes estructurar el itinerario distribuyendo las paradas secuencialmente del Día 1 al Día ${totalDays}, asegurando que existan paradas para cada uno de los ${totalDays} días ("dia": 1..${totalDays}).
+4. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras.
+5. Integra notas dinámicas de consejos y datos curiosos específicos por parada.`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

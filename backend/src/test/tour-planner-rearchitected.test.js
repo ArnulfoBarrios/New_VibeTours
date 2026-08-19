@@ -311,6 +311,51 @@ test('effectiveReadyToBuild must accept when lodging is at home or with relative
   assert.equal(res.readyToBuild, true)
 })
 
+test('buildTourPlanner must preserve exact chat requested places and their chronological order', async () => {
+  const { buildTourPlanner } = await import('../routes/ai.js')
+  const input = {
+    destination: 'Barranquilla',
+    city: 'Barranquilla',
+    country: 'Colombia',
+    durationHours: 96,
+    durationDays: 4,
+    type: 'cultural',
+    specificPlaces: [
+      'Catedral Metropolitana',
+      'Puente Pumarejo',
+      'Restaurante La Cueva',
+      'La Troja',
+      'Museo del Caribe',
+      'Playa de Puerto Colombia',
+      'Ciénaga de Mallorquín',
+      'Zoológico de Barranquilla',
+      'Malecón del Río Magdalena',
+      'Restaurante El Corral'
+    ]
+  }
+
+  const location = { latitude: 10.9685, longitude: -74.7813 }
+  const mockCandidates = [
+    { name: 'Parque Cancha Barranquilla', latitude: 10.97, longitude: -74.79, category: 'sports' },
+    { name: 'Restaurante La Cueva', latitude: 10.98, longitude: -74.79, category: 'requested', rawTags: { requested_place: 'true' } },
+    { name: 'Catedral Metropolitana', latitude: 10.99, longitude: -74.78, category: 'requested', rawTags: { requested_place: 'true' } },
+    { name: 'La Troja', latitude: 10.99, longitude: -74.80, category: 'requested', rawTags: { requested_place: 'true' } },
+    { name: 'Museo del Caribe', latitude: 10.98, longitude: -74.77, category: 'requested', rawTags: { requested_place: 'true' } },
+    { name: 'Zoológico de Barranquilla', latitude: 11.00, longitude: -74.79, category: 'requested', rawTags: { requested_place: 'true' } },
+    { name: 'Malecón del Río Magdalena', latitude: 11.01, longitude: -74.76, category: 'requested', rawTags: { requested_place: 'true' } },
+    { name: 'Restaurante El Corral', latitude: 11.00, longitude: -74.81, category: 'requested', rawTags: { requested_place: 'true' } }
+  ]
+
+  const planner = buildTourPlanner(input, location, mockCandidates)
+  assert.ok(planner.selectedPlaces.length >= 6)
+  // First place must be Catedral Metropolitana (index 0 in specificPlaces)
+  assert.equal(planner.selectedPlaces[0].name, 'Catedral Metropolitana')
+  // Second requested place must be Restaurante La Cueva (index 2 in specificPlaces)
+  assert.equal(planner.selectedPlaces[1].name, 'Restaurante La Cueva')
+  // No random sports court should displace requested places
+  assert.ok(!planner.selectedPlaces.slice(0, 5).some(p => p.name === 'Parque Cancha Barranquilla'))
+})
+
 
 
 

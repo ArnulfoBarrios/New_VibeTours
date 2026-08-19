@@ -1737,11 +1737,44 @@ export function buildTourPlanner(input, location, places) {
         ...place,
         score: scorePlace(place, input),
       }))
-      .sort((a, b) => b.score - a.score)
-    selectedPlaces = selectPlaces(scored, stopTarget, input)
-    if (selectedPlaces.length < Math.min(3, scored.length) && scored.length >= 3) {
-      const expanded = scored.filter((place) => !selectedPlaces.some((picked) => normalizeKey(picked.name) === normalizeKey(place.name)))
-      selectedPlaces.push(...expanded.slice(0, Math.max(0, Math.min(stopTarget, 3) - selectedPlaces.length)))
+
+    const refList = (Array.isArray(input.specificPlaces) && input.specificPlaces.length > 0)
+      ? input.specificPlaces
+      : (Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
+
+    const requestedPlaces = []
+    const otherPlaces = []
+
+    for (const p of scored) {
+      const isRequested = p.rawTags?.requested_place === 'true' || 
+                          p.category === 'requested' || 
+                          (refList.length > 0 && refList.some(sp => normalizeKey(sp) === normalizeKey(p.name) || normalizeKey(p.name).includes(normalizeKey(sp)) || normalizeKey(sp).includes(normalizeKey(p.name))))
+      if (isRequested) {
+        requestedPlaces.push(p)
+      } else {
+        otherPlaces.push(p)
+      }
+    }
+
+    if (requestedPlaces.length >= 2) {
+      requestedPlaces.sort((a, b) => {
+        const idxA = refList.findIndex(name => normalizeKey(name) === normalizeKey(a.name) || normalizeKey(a.name).includes(normalizeKey(name)) || normalizeKey(name).includes(normalizeKey(a.name)))
+        const idxB = refList.findIndex(name => normalizeKey(name) === normalizeKey(b.name) || normalizeKey(b.name).includes(normalizeKey(name)) || normalizeKey(name).includes(normalizeKey(b.name)))
+        return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
+      })
+
+      selectedPlaces = [...requestedPlaces]
+      if (selectedPlaces.length < stopTarget && otherPlaces.length > 0) {
+        otherPlaces.sort((a, b) => b.score - a.score)
+        selectedPlaces.push(...otherPlaces.slice(0, stopTarget - selectedPlaces.length))
+      }
+    } else {
+      scored.sort((a, b) => b.score - a.score)
+      selectedPlaces = selectPlaces(scored, stopTarget, input)
+      if (selectedPlaces.length < Math.min(3, scored.length) && scored.length >= 3) {
+        const expanded = scored.filter((place) => !selectedPlaces.some((picked) => normalizeKey(picked.name) === normalizeKey(place.name)))
+        selectedPlaces.push(...expanded.slice(0, Math.max(0, Math.min(stopTarget, 3) - selectedPlaces.length)))
+      }
     }
 
     const isMultiCityRoute = input.isMultiCity || (Array.isArray(input.cities) && input.cities.length > 1)
@@ -1809,7 +1842,7 @@ export function buildTourPlanner(input, location, places) {
       durationHours: input.durationHours,
       stopTarget,
       pace: input.touristPace,
-      hasProfile: Boolean(input.touristProfileSummary || input.touristInterests.length),
+      hasProfile: Boolean(input?.touristProfileSummary || (Array.isArray(input?.touristInterests) && input.touristInterests.length)),
     },
   }
 }
@@ -2321,7 +2354,7 @@ function importantPlaceScore(place, input) {
 }
 
 function profileScoreFor(input, place) {
-  const summary = `${input.touristProfileSummary} ${input.touristInterests.join(' ')}`.toLowerCase()
+  const summary = `${input?.touristProfileSummary || ''} ${(Array.isArray(input?.touristInterests) ? input.touristInterests : []).join(' ')}`.toLowerCase()
   if (!summary.trim()) return 0
   const terms = {
     historia: ['historic', 'museum', 'heritage', 'monument', 'religious'],
@@ -2353,13 +2386,13 @@ function bestSeasonFor(type) {
   }
 }
 
-function audienceFor(type, interests) {
+function audienceFor(type, interests = []) {
   const base = ['Viajeros curiosos', 'Parejas']
   if (type === 'family') return ['Familias', 'Viajeros curiosos', ...base]
   if (type === 'night') return ['Adultos', 'Parejas', 'Grupos de amigos']
   if (type === 'gastronomic') return ['Foodies', 'Parejas', 'Grupos de amigos']
   if (type === 'ecological') return ['Amantes de la naturaleza', 'Parejas', 'Viajeros activos']
-  if (interests.length) return ['Viajeros curiosos', ...interests.slice(0, 3)]
+  if (Array.isArray(interests) && interests.length) return ['Viajeros curiosos', ...interests.slice(0, 3)]
   return base
 }
 
@@ -4012,6 +4045,16 @@ export async function collectTourCandidates(input, location) {
   let source = normalizedPool.length >= 3 
     ? (location ? 'overpass+photon' : 'photon') 
     : 'synthetic-fallback'
+
+  if (geocodedSpecifics.length >= 3) {
+    selected = dedupeByProximity(geocodedSpecifics)
+    source = 'chat-confirmed-places'
+  } else if (geocodedSpecifics.length > 0) {
+    const specificKeys = new Set(geocodedSpecifics.map(p => normalizePlaceKey(p.name)))
+    const remainder = normalizedPool.filter(p => !specificKeys.has(normalizePlaceKey(p.name)))
+    selected = dedupeByProximity([...geocodedSpecifics, ...remainder])
+    source = 'chat-augmented-places'
+  }
 
   if (normalizedPool.length < 3) {
     console.info('[tour-ai] Lack of geodata candidates. Fetching real suggestions from OpenAI...', { destination: input.destination, city, country })
