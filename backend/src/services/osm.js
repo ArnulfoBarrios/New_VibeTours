@@ -516,6 +516,17 @@ function isNonTouristFacility(tags = {}) {
   return false
 }
 
+export function isValidHotelCandidate(name, tags = {}) {
+  if (!name || typeof name !== 'string') return false
+  const clean = name.trim()
+  if (clean.length < 4) return false
+  const lower = clean.toLowerCase()
+  if (/^(hotel|hostel|resort|posada|cabaña|cabañas|alojamiento|motel)$/i.test(lower)) return false
+  if (/abandonado|abandoned|cerrado|closed|demolido|ruinas|disused|antiguo|ex\s*hotel|antiguo\s*hotel|en\s*desuso|fuera\s*de\s*servicio/i.test(lower)) return false
+  if (tags.abandoned === 'yes' || tags.disused === 'yes' || tags.historic === 'ruins' || tags.status === 'abandoned') return false
+  return true
+}
+
 export async function overpassHotels(latitude, longitude, budget = 'moderate', radius = 4500) {
   const query = `
     [out:json][timeout:25];
@@ -533,7 +544,7 @@ export async function overpassHotels(latitude, longitude, budget = 'moderate', r
           const lat = element.lat ?? element.center?.lat
           const lon = element.lon ?? element.center?.lon
           const name = element.tags?.name
-          if (lat == null || lon == null || !name) return null
+          if (lat == null || lon == null || !name || !isValidHotelCandidate(name, element.tags)) return null
           
           let stars = element.tags?.stars
           if (!stars) {
@@ -624,7 +635,7 @@ async function photonHotelsFallback(latitude, longitude, budget) {
         const name = feature.properties.name
         const lat = feature.geometry.coordinates[1]
         const lon = feature.geometry.coordinates[0]
-        if (!name || lat == null || lon == null) return null
+        if (!name || lat == null || lon == null || !isValidHotelCandidate(name, feature.properties)) return null
         
         let stars = feature.properties.stars
         if (!stars) {
