@@ -678,9 +678,18 @@ PROHIBICIÓN ABSOLUTA DE LUGARES Y RESTAURANTES INVENTADOS O GENÉRICOS:
 - Está TERMINANTEMENTE PROHIBIDO inventar o sugerir nombres ficticios o genéricos como "Restaurante Típico de [Ciudad]", "Hotel Central de [Ciudad]", "Bar La Cueva", "Restaurante Local", "Comida típica", etc.
 - Todos los restaurantes, bares, hoteles y atractivos que menciones DEBEN SER LUGARES REALES Y EXISTENTES con sus nombres auténticos y verificables del destino.
 
-RESPETO ESTRICTO A LAS ACTIVIDADES APROBADAS POR EL USUARIO:
-- Si el usuario selecciona o aprueba ciertas actividades o números de la lista (por ejemplo: "1 y 3", "quiero El Rodadero y Taganga", "agrega esas actividades"), DEBES incluir obligatoriamente esas paradas elegidas en el itinerario por días.
-- NUNCA reemplaces las actividades que el usuario aprobó por otras no discutidas.
+LISTA ACUMULADA DE ACTIVIDADES Y LUGARES APROBADOS POR EL VIAJERO:
+${Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0 ? JSON.stringify(known.specificPlaces) : 'Ninguno por ahora'}
+
+REGLA ESTRICTA DE PRESERVACIÓN DE ACTIVIDADES EN EL ITINERARIO:
+- Si el usuario selecciona o aprueba actividades (ej: "1 y 3", "quiero incluir todas estas actividades", "agrega estas actividades también"):
+  1. Extrae todas las actividades en "extractedPreferences.specificPlaces" acumulándolas con las anteriores.
+  2. Al estructurar o actualizar el itinerario día por día, DEBES INCLUIR TODAS las actividades aprobadas (${JSON.stringify(known.specificPlaces || [])}) distribuidas equilibradamente entre los ${known.durationDays || 4} días.
+  3. ESTÁ ESTRICTAMENTE PROHIBIDO omitir, recortar o borrar actividades aprobadas cuando se confirma un dato nuevo (como el hotel o el transporte).
+
+FACTIBILIDAD GEOGRÁFICA Y TEMPORAL (0 EXCURSIONES MULTIDÍA EN TOURS DE 1 DÍA):
+- Cada actividad asignada a un día debe ser realizable en esa jornada con regreso al hotel en ${destName}.
+- NUNCA pongas expediciones de trekking multi-día (como "Caminata a Ciudad Perdida", que requiere 4 a 5 días completos de trekking en selva) como una actividad de 1 solo día dentro de un tour de 4 días. Para excursiones a la naturaleza de 1 día en Santa Marta / Sierra Nevada, utiliza destinos realizables en el día como Minca (Pozo Azul, Cascadas de Marinka) o Parque Tayrona.
 
 REGLAS CRÍTICAS DEL FLUJO CONVERSACIONAL EN ETAPAS OBLIGATORIAS:
 
@@ -700,7 +709,7 @@ ETAPA 3: HOSPEDAJE, TRANSPORTE Y PRESUPUESTO
 - "readyToBuild" DEBE ser false.
 
 ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
-- Presenta el itinerario estructurado integrando las actividades aprobadas por el usuario:
+- Presenta el itinerario estructurado integrando TODAS las actividades aprobadas por el usuario:
   "Itinerario de Viaje a ${destName} (${known.datesSeason || `${known.durationDays || 3} días`}):"
   • Día 1: [Llegada / Hotel] -> [Actividad/Lugar aprobado] -> [Cena en Restaurante real]
   • Día 2: ...

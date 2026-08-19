@@ -337,11 +337,13 @@ aiRouter.post('/chat', async (req, res, next) => {
       function extractPoisFromText(text) {
         if (!text || typeof text !== 'string') return []
         const found = []
+        const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r)?\s+(?:el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|cenar\s+en\s+el?|cenar\s+en|almorzar\s+en\s+el?|almorzar\s+en|cena\s+en\s+el?|cena\s+en|almuerzo\s+en\s+el?|almuerzo\s+en|check-in\s+en\s+el?|check-in\s+en|check-out\s+en\s+el?|check-out\s+en|llegada\s+a|llegada)\s+/i
+
         // 1. Extract bold names (**Nombre del Lugar**)
         const boldRegex = /\*\*([^*\n]{3,60})\*\*/g
         let bm
         while ((bm = boldRegex.exec(text)) !== null) {
-          let candidate = bm[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita|Paseo en)\b/gi, '').trim()
+          let candidate = bm[1].replace(ACTION_PREFIX_REGEX, '').trim()
           candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
           if (isValidSpecificPlace(candidate)) {
             found.push(candidate)
@@ -352,7 +354,7 @@ aiRouter.post('/chat', async (req, res, next) => {
         const regex = /(?:^|\n)\s*(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/gi
         let m
         while ((m = regex.exec(text)) !== null) {
-          let candidate = m[1].replace(/\b(Recorre el|Visita al?|Explora el?|Cena en el?|Almuerzo en el?|Almuerzo en|Cena en|Explora|Recorre|Visita|Paseo en|Check-in en el|Check-in en|Check-out en|Check-in|Check-out|Check)\b/gi, '').trim()
+          let candidate = m[1].replace(ACTION_PREFIX_REGEX, '').trim()
           candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
           if (isValidSpecificPlace(candidate)) {
             found.push(candidate)
@@ -373,10 +375,10 @@ aiRouter.post('/chat', async (req, res, next) => {
 
       // Si el usuario aceptó en lote ("agregar todas las actividades", "Ok quiero agregar estás actividades al itinerario", etc.), extraer de mensajes recientes del asistente
       const isUserAcceptingAll = /\b(agregar|incluir|a[ñn]adir)\s+(todas|estas|est[aá]s|los|las|mis)?\s*(actividades|lugares|atracciones|restaurantes|recomendaciones|opciones|paradas)/i.test(message) ||
-        /\b(s[íi],?\s*(agrega|incluye|a[ñn]ade)|agrega(r)?\s*(todas|estas|est[aá]s)|agregar 1 restaurante)\b/i.test(message)
+        /\b(s[íi],?\s*(agrega|incluye|a[ñn]ade)|agrega(r)?\s*(todas|estas|est[aá]s)|incluir\s+todas\s+estas\s+actividades|agregar\s+est[aá]s\s+actividades|agregar\s+estas\s+actividades)\b/i.test(message)
 
       if (isUserAcceptingAll) {
-        const recentAssistantMsgs = (history || []).filter(m => m.role === 'assistant' || m.type === 'ai').slice(-3)
+        const recentAssistantMsgs = (history || []).filter(m => m.role === 'assistant' || m.type === 'ai')
         for (const aMsg of recentAssistantMsgs) {
           extractedFromMsg.push(...extractPoisFromText(aMsg.content || aMsg.text || ''))
         }
