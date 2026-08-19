@@ -634,29 +634,44 @@ ${realCatalog ? `DATOS REALES Y VERIFICADOS DEL DESTINO (${destName}, ${destCoun
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}` : ''}
 
-REGLAS CRÍTICAS DE ASESORÍA Y FLUJO CONVERSACIONAL:
-1. SI EL USUARIO NO HA INDICADO UN DESTINO O CIUDAD:
-   - NO inventes ciudades. En "extractedPreferences.city" y "extractedPreferences.country" DEBES devolver null.
-   - Recomienda 2 a 4 destinos ideales que se adapten a los gustos (ej: playas -> Santa Marta, Cartagena).
-   - Pregunta por acompañantes, fechas y días de viaje.
+REGLAS CRÍTICAS DEL FLUJO CONVERSACIONAL EN ETAPAS OBLIGATORIAS (NUNCA SALTES ETAPAS):
 
-2. REGLA ESTRICTA DE FECHAS, DURACIÓN E ITINERARIOS:
-   - Queda TERMINANTEMENTE PROHIBIDO generar un desglose por días ("Día 1", "Día 2", "Día 3", etc.) si el usuario NO ha indicado explícitamente las fechas o los días de duración de su viaje en el chat.
-   - Si el usuario dice "agrega todo al itinerario", "arma el itinerario" o "quiero armar el plan", pero aún NO se han definido las fechas o duración:
-     1. Confirma amablemente los lugares y experiencias seleccionados.
-     2. Pregúntale OBLIGATORIAMENTE: "¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName || 'el destino'}?"
-     3. Devuelve "readyToBuild": false.
+ETAPA 1: DESTINO, FECHAS/DURACIÓN Y ACOMPAÑANTES
+- Si no hay destino: Recomienda 2 a 4 destinos ideales y pregunta cuál prefiere, en qué fechas viajará y con quiénes.
+- Si hay destino pero faltan fechas o acompañantes: Pregunta por las fechas de viaje, cuántos días durará su estadía y quiénes lo acompañan.
+- "readyToBuild" DEBE ser false.
 
-3. REGLA ESTRICTA DE GENERACIÓN ("readyToBuild"):
-   - "readyToBuild" SOLO puede ser true cuando se cumplan TODAS estas condiciones:
-     a) Destino/ciudad confirmado.
-     b) Fechas o días de duración confirmados por el usuario.
-     c) Tipo de acompañantes confirmado.
-     d) El usuario pide explícitamente generar o finalizar el tour.
-   - Si falta cualquiera de estos datos (por ejemplo, si faltan las fechas o los días), "readyToBuild" DEBE ser false y debes preguntarle amablemente por el dato faltante en responseMessage.
+ETAPA 2: RECOMENDACIÓN DE ACTIVIDADES Y EXPERIENCIAS
+- Una vez conocidos destino, fechas y acompañantes (ej: familia con niños):
+  1. Recomienda 4 a 6 actividades o lugares auténticos adaptados a ese grupo.
+  2. Pregunta amablemente qué actividades desean incluir o si tienen alguna otra en mente.
+- "readyToBuild" DEBE ser false.
 
-4. REGLA DE HOSPEDAJE (SOLO INFORMATIVO):
-   - NO proceses reservas ni pagos. Solo recomienda y destaca cercanía.
+ETAPA 3: HOSPEDAJE, TRANSPORTE Y PRESUPUESTO
+- Recomienda 2 o 3 opciones de hoteles/alojamiento reales y pregunta:
+  "¿Dónde planeas hospedarte y cómo prefieres moverte (auto rentado, taxi, transporte público o caminando)? ¿Tienes algún presupuesto estimado (económico, moderado o lujo)?"
+- "readyToBuild" DEBE ser false.
+
+ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
+- Una vez conversadas las actividades, hospedaje y transporte, presenta el itinerario estructurado por días:
+  "Itinerario de Viaje a ${destName} (${known.datesSeason || '4 días'}):"
+  • Día 1: [Llegada / Hotel] -> [Actividad/Lugar] -> [Cena en Restaurante]
+  • Día 2: ...
+  • Día 3: ...
+  • Día 4: ...
+  Alojamiento: [Hotel]
+  Transporte: [Medio de transporte]
+- Pregunta: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está todo listo para generar tu tour?"
+- "readyToBuild" DEBE ser false.
+
+ETAPA 5: GENERACIÓN DEL TOUR ("readyToBuild": true)
+- "readyToBuild" SOLO Y ÚNICAMENTE puede ser true cuando se cumplan TODAS estas condiciones:
+  1. Destino/ciudad confirmado.
+  2. Fechas o días de duración confirmados.
+  3. Acompañantes confirmados.
+  4. Se ha presentado el itinerario estructurado por días.
+  5. El usuario pide EXPLÍCITAMENTE generar el tour (ej: "adelante genera el tour", "está perfecto genera el tour", "listo crea el tour", "genera el tour").
+- Si el usuario NO ha pedido explícitamente generar el tour (por ejemplo, si acaba de indicar sus fechas o acompañantes o de elegir actividades), "readyToBuild" TIENE QUE SER FALSE.
 
 FORMATO DE SALIDA (JSON):
 Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
@@ -741,7 +756,15 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
       known.datesSeason ||
       parsed.extractedPreferences?.datesSeason
     )
-    const effectiveReadyToBuild = Boolean(parsed.readyToBuild && hasDurationOrDates && hasCity)
+
+    const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera)\b/i.test(lastUserMsg)
+
+    const effectiveReadyToBuild = Boolean(
+      parsed.readyToBuild &&
+      hasDurationOrDates &&
+      hasCity &&
+      isExplicitBuildRequestedByUser
+    )
 
     return {
       responseMessage,
@@ -749,7 +772,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
       extractedPreferences: parsed.extractedPreferences || {},
       specificPlaces: parsed.extractedPreferences?.specificPlaces || known.specificPlaces || [],
       destinationSuggestions,
-      readyToBuild: Boolean(parsed.readyToBuild),
+      readyToBuild: effectiveReadyToBuild,
       isUnrelatedToTravel: false
     }
   } catch (err) {
