@@ -564,6 +564,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   if (!apiKey) {
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
     let fallbackMsg = ''
+    let effectiveReadyToBuild = false
+
     if (!hasCity) {
       if (/playa|playas|mar|costa|aventura/i.test(lastUserMsg)) {
         fallbackMsg = '¡Excelente! Para disfrutar de sol, playas y vida nocturna, te recomiendo destinos increíbles como **Santa Marta**, **Cartagena**, **San Andrés** o **Cancún**. ¿Cuál de estos te llama más la atención o tienes otra ciudad en mente?'
@@ -574,7 +576,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     } else {
       const preset = realCatalog || getDestinationPresets('Cartagena', 'Colombia')
-      if (/\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|muestres el itinerario)\b/i.test(lastUserMsg)) {
+      const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar)\b/i.test(lastUserMsg)
+      effectiveReadyToBuild = Boolean(hasDurationOrDates && hasCity && isExplicitBuildRequestedByUser)
+
+      if (effectiveReadyToBuild) {
+        fallbackMsg = `¡Perfecto! Todo está listo para tu viaje a ${destName} (${known.datesSeason || `${known.durationDays} días`}). Procedo a generar tu tour en el mapa.`
+      } else if (/\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|muestres el itinerario)\b/i.test(lastUserMsg)) {
         if (hasDurationOrDates) {
           const numDays = known.durationDays || 4
           fallbackMsg = `¡Aquí tienes la propuesta de itinerario para tu viaje a ${destName} (${known.datesSeason || `${numDays} días`})! 🗺️\n\n` +
@@ -610,7 +617,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       actionChips: fallbackChips,
       specificPlaces: Array.isArray(known.specificPlaces) ? known.specificPlaces : [],
       destinationSuggestions: (!hasCity) ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : [],
-      readyToBuild: false,
+      readyToBuild: Boolean(effectiveReadyToBuild),
       isUnrelatedToTravel: false
     }
   }
@@ -771,10 +778,10 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
       parsed.extractedPreferences?.datesSeason
     )
 
-    const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera)\b/i.test(lastUserMsg)
+    const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar)\b/i.test(lastUserMsg)
 
     const effectiveReadyToBuild = Boolean(
-      parsed.readyToBuild &&
+      (parsed.readyToBuild || isExplicitBuildRequestedByUser) &&
       hasDurationOrDates &&
       hasCity &&
       isExplicitBuildRequestedByUser
@@ -841,7 +848,13 @@ Mensaje: "${userMessage}"`
     })
     if (response.ok) {
       const data = await response.json()
-      const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
+      const rawParsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
+      const parsed = {}
+      Object.entries(rawParsed).forEach(([k, v]) => {
+        if (v !== null && v !== undefined && v !== '') {
+          parsed[k] = v
+        }
+      })
       if (parsed.city) parsed.city = cleanAdministrativeCityName(parsed.city)
       if (parsed.destination) parsed.destination = cleanAdministrativeCityName(parsed.destination)
       if (parsed.durationDays && !parsed.durationHours) {

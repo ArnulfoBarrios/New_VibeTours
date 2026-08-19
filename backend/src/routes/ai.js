@@ -195,9 +195,19 @@ aiRouter.post('/chat', async (req, res, next) => {
     const extractedSpecifics = Array.isArray(extracted?.specificPlaces) ? extracted.specificPlaces : []
     const initialCombinedSpecifics = Array.from(new Set([...prevSpecifics, ...extractedSpecifics])).filter(Boolean)
 
+    // Fusionar de forma estrictamente acumulativa: NUNCA sobreescribir valores válidos con null o undefined
+    const validExtracted = {}
+    if (extracted && typeof extracted === 'object') {
+      Object.entries(extracted).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && value !== '') {
+          validExtracted[key] = value
+        }
+      })
+    }
+
     const updatedPreferences = {
       ...currentPreferences,
-      ...(extracted || {})
+      ...validExtracted
     }
     if (latitude && longitude) {
       updatedPreferences.latitude = latitude

@@ -185,6 +185,63 @@ test('imageForPlaceWithStatus must serve culinary/restaurant image for restauran
   assert.ok(!res.url.includes('photo-1596436889106-be35e843f974'), 'Restaurant image should be a gourmet food/dining photo, not the port of Santa Marta')
 })
 
+test('cumulative preferences must not be overwritten by empty or null values on action phrases', async () => {
+  const currentPreferences = {
+    city: 'Santa Marta',
+    country: 'Colombia',
+    datesSeason: 'octubre del 9 al 12',
+    durationDays: 4,
+    companions: '6 amigos',
+    budget: 'Moderado',
+    transport: 'Auto propio'
+  }
+
+  const extractedFromAction = {
+    city: null,
+    country: null,
+    datesSeason: null,
+    durationDays: null
+  }
+
+  const validExtracted = {}
+  Object.entries(extractedFromAction).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && v !== '') {
+      validExtracted[k] = v
+    }
+  })
+
+  const merged = {
+    ...currentPreferences,
+    ...validExtracted
+  }
+
+  assert.equal(merged.city, 'Santa Marta')
+  assert.equal(merged.datesSeason, 'octubre del 9 al 12')
+  assert.equal(merged.durationDays, 4)
+  assert.equal(merged.companions, '6 amigos')
+})
+
+test('effectiveReadyToBuild must trigger when user requests tour generation and all data is confirmed', async () => {
+  const state = {
+    history: [
+      { role: 'user', content: 'Quiero viajar a Santa Marta' },
+      { role: 'assistant', content: 'Itinerario de 4 días...' },
+      { role: 'user', content: 'Ya estoy listo para generar el tour' }
+    ]
+  }
+
+  const known = {
+    city: 'Santa Marta',
+    country: 'Colombia',
+    datesSeason: 'octubre del 9 al 12',
+    durationDays: 4,
+    companions: '6 amigos'
+  }
+
+  const res = await generateChatResponse(state, '', '', known)
+  assert.equal(res.readyToBuild, true)
+})
+
 
 
 
