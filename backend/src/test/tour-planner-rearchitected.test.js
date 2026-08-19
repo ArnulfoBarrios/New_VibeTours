@@ -284,6 +284,33 @@ test('effectiveReadyToBuild must reject and ask for missing key info when lodgin
   assert.ok(/alojamiento|hotel/i.test(res.responseMessage))
 })
 
+test('effectiveReadyToBuild must accept when lodging is at home or with relatives and user requests tour generation', async () => {
+  const state = {
+    history: [
+      { role: 'user', content: 'Quiero viajar a Cartagena' },
+      { role: 'assistant', content: 'Itinerario de 4 días...' },
+      { role: 'user', content: 'me voy a alojar en mi casa' },
+      { role: 'assistant', content: 'Alojamiento: Tu casa' },
+      { role: 'user', content: 'adelante genera el tour' }
+    ]
+  }
+
+  const knownWithHomeLodging = {
+    city: 'Cartagena',
+    country: 'Colombia',
+    datesSeason: 'octubre del 9 al 12',
+    durationDays: 4,
+    companions: '6 amigos',
+    transport: 'Auto rentado',
+    budget: 'Moderado',
+    accommodationStatus: 'Casa propia / familiar',
+    selectedHotel: { name: 'Casa propia / Alojamiento particular' }
+  }
+
+  const res = await generateChatResponse(state, '', '', knownWithHomeLodging)
+  assert.equal(res.readyToBuild, true)
+})
+
 
 
 

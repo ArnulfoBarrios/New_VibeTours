@@ -569,6 +569,11 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     } else {
       const preset = realCatalog || getDestinationPresets('Cartagena', 'Colombia')
       const isPendingVal = (val) => !val || typeof val !== 'string' || /^(por definir|pendiente|null|undefined)$/i.test(val.trim())
+      const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
+      if (isHomeOrLocalLodging) {
+        known.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
+        known.accommodationStatus = 'Casa propia / familiar'
+      }
       const fbHasLodging = Boolean(known.selectedHotel?.name || (typeof known.selectedHotel === 'string' && !isPendingVal(known.selectedHotel)) || (!isPendingVal(known.accommodationStatus)))
       const fbHasTransport = Boolean(!isPendingVal(known.transport))
       const fbHasBudget = Boolean(!isPendingVal(known.budget))
@@ -706,6 +711,9 @@ ETAPA 2: RECOMENDACIÓN DE ACTIVIDADES Y EXPERIENCIAS
 
 ETAPA 3: HOSPEDAJE, TRANSPORTE Y PRESUPUESTO
 - Recomienda 2 o 3 opciones de hoteles reales y pregunta ÚNICAMENTE por los datos de hospedaje/transporte/presupuesto que sigan en PENDIENTE. NUNCA repitas preguntas sobre datos ya CONFIRMADOS.
+- Si el usuario indica que se aloja en su casa, casa de familiares o amigos, o que no necesita hotel (ej: "en mi casa", "casa de un familiar", "vivo aquí", "ya tengo hospedaje"):
+  1. Marca HOSPEDAJE como CONFIRMADO ("accommodationStatus": "Casa propia / familiar", "selectedHotel": { "name": "Casa propia / Alojamiento particular" }).
+  2. NUNCA vuelvas a pedir hotel o alojamiento.
 - "readyToBuild" DEBE ser false.
 
 ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
@@ -713,7 +721,7 @@ ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
   "Itinerario de Viaje a ${destName} (${known.datesSeason || `${known.durationDays || 3} días`}):"
   • Día 1: [Llegada / Hotel] -> [Actividad/Lugar aprobado] -> [Cena en Restaurante real]
   • Día 2: ...
-  Alojamiento: [Hotel elegido o por definir]
+  Alojamiento: [Hotel elegido, casa propia o por definir]
   Transporte: [Medio de transporte elegido o por definir]
   Presupuesto: [Presupuesto elegido o por definir]
 - Pregunta: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está todo listo para generar tu tour?"
@@ -747,6 +755,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     "transport": null,
     "interests": [],
     "selectedHotel": null,
+    "accommodationStatus": null,
     "specificPlaces": []
   },
   "readyToBuild": false
@@ -807,6 +816,14 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     }
 
     const parsedExtracted = parsed.extractedPreferences || {}
+    const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
+    if (isHomeOrLocalLodging) {
+      if (!parsedExtracted.selectedHotel) {
+        parsedExtracted.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
+      }
+      parsedExtracted.accommodationStatus = 'Casa propia / familiar'
+    }
+
     const finalHasLodging = Boolean(
       hasLodging ||
       parsedExtracted.selectedHotel?.name ||
@@ -899,7 +916,8 @@ REGLAS ESTRICTAS:
 - "budget": "Económico" | "Moderado" | "Lujo" (si se mencionó).
 - "transport": "Caminando" | "Transporte público" | "Auto rentado" | "Taxi" (si se mencionó).
 - "interests": array con los intereses o gustos mencionados (ej: ["Playas", "Naturaleza", "Aventuras", "Vida nocturna"]).
-- "selectedHotel": { "name": "Nombre del hotel" } (solo si lo confirma explícitamente).
+- "selectedHotel": { "name": "Nombre del hotel" } O { "name": "Casa propia / Alojamiento particular" } si el usuario indica que se queda en su casa, casa de familiares o amigos, o no requiere hotel.
+- "accommodationStatus": "Casa propia / familiar" | "Hotel confirmado" | null (si el usuario dice "me voy a alojar en mi casa", "en mi casa", "casa de un familiar", "vivo aquí", "ya tengo hospedaje" -> pon "Casa propia / familiar" y en selectedHotel { "name": "Casa propia / Alojamiento particular" }).
 - "specificPlaces": array con nombres de atracciones o restaurantes físicos específicos mencionados por el usuario (NUNCA eventos ni festividades).
 Mensaje: "${userMessage}"`
 
@@ -976,6 +994,11 @@ export function extractChatInformationFallback(prompt) {
   else if (/caminando|a pie/i.test(lower)) res.transport = 'Caminando'
   else if (/transporte p[úu]blico|bus|metro/i.test(lower)) res.transport = 'Transporte público'
   else if (/taxi|uber/i.test(lower)) res.transport = 'Taxi'
+
+  if (/\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lower)) {
+    res.accommodationStatus = 'Casa propia / familiar'
+    res.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
+  }
 
   const interests = []
   if (/playa/i.test(lower)) interests.push('Playas')

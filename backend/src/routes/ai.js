@@ -68,7 +68,7 @@ export function normalizePlaceKey(placeName) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // remove accents
     .replace(/[*_#•\-]/g, ' ') // remove markdown
-    .replace(/\b(playa de la|playa de el|playa de|playa del|playa|parque nacional natural|parque nacional|parque natural|parque|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|ciudad perdida|camino a|sendero de|sendero)\b/g, ' ')
+    .replace(/\b(playa de la|playa de el|playa de|playa del|playa|parque nacional natural|parque nacional|parque natural|parque|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|camino a|sendero de|sendero)\b/g, ' ')
     .replace(/\b(la|el|los|las|un|una|unos|unas|del|de|de la|de los)\b/g, ' ') // remove articles
     .replace(/\b(visita a la|visita a|visita al|recorrido por el|recorrido por la|recorrido por|paseo en lancha a|paseo en lancha por|paseo en barco a|paseo en|paseo por|excursion a la|excursion a|excursión a|excursion al|ir a|entrada a|parada en|caminar por|recorrer el|visitar la|visitar el)\b/g, ' ') // remove action prefixes
     .replace(/[^\w\s]/g, '') // remove punctuation
@@ -239,8 +239,12 @@ aiRouter.post('/chat', async (req, res, next) => {
 
     const isOnlyInquiringHotel = /\b(m[aá]s informaci[oó]n|informaci[oó]n del?|informaci[oó]n sobre|detalles del?|cu[eé]ntame m[aá]s|cu[eé]ntame sobre|c[oó]mo es el|qu[eé] tal es el|precios? del?|servicios del?)\b/i.test(message)
     const isExplicitlyChoosingHotel = /\b(confirmar|confirmo|elegir|elijo|escoger|escojo|seleccionar|selecciono|me quedo en|quiero hospedarme en|me hospedo en|este hotel)\b/i.test(message)
+    const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(message)
 
-    if (isOnlyInquiringHotel && !isExplicitlyChoosingHotel) {
+    if (isHomeOrLocalLodging) {
+      updatedPreferences.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
+      updatedPreferences.accommodationStatus = 'Casa propia / familiar'
+    } else if (isOnlyInquiringHotel && !isExplicitlyChoosingHotel) {
       if (!currentPreferences.selectedHotel) {
         delete updatedPreferences.selectedHotel
         delete updatedPreferences.accommodationStatus
