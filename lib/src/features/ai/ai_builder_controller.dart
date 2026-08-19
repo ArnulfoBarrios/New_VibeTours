@@ -214,24 +214,16 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         final responseMessage = (rawMsg != null && rawMsg.toString().trim().isNotEmpty)
             ? rawMsg.toString()
             : '¡Excelente!';
-        final actionChips = (data['actionChips'] as List?)?.map((e) => e.toString()).toList() ?? [];
         final rawPrefs = (data['preferences'] ?? data['updatedPreferences']) as Map<String, dynamic>? ?? {};
         final updatedPreferences = Map<String, dynamic>.from(state.preferences)..addAll(rawPrefs);
         final readyToBuild = data['readyToBuild'] == true;
         final webSearchDone = data['webSearchDone'] == true;
-
-        final suggs = data['destinationSuggestions'] as List? ?? [];
-        final suggestions = suggs.map((e) {
-          return DestinationSuggestion.fromJson(Map<String, dynamic>.from(e as Map));
-        }).toList();
 
         final aiMsg = ChatMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           text: responseMessage,
           type: ChatMessageType.ai,
           timestamp: DateTime.now(),
-          actionChips: actionChips.isNotEmpty ? actionChips : null,
-          destinationSuggestions: suggestions.isNotEmpty ? suggestions : null,
         );
 
         state = state.copyWith(
