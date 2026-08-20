@@ -1038,8 +1038,13 @@ export async function planWithOpenAI({
     return null
   }
 
-  const selectedPlaces = summarizePlaces(places).slice(0, 25)
   const totalDays = Math.max(1, Number(userPreferences?.durationDays || Math.ceil((durationHours || 24) / 24) || 1))
+  const selectedPlaces = places.map((p, i) => ({
+    name: p.name,
+    dia: Number(p.dia || p.day || (Math.floor((i * totalDays) / places.length) + 1)),
+    category: p.category || 'historic',
+    description: p.description || ''
+  })).slice(0, 25)
 
   const system = `Eres Tour Planner AI 🤖, el motor oficial de diseño de itinerarios turísticos de VibeTours.
 Tu misión es diseñar un tour profesional, inmersivo, geográficamente viable y 100% fiel al destino "${cleanCity}, ${targetCountry}".
@@ -1121,11 +1126,12 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
 }
 
 REGLAS DE CALIDAD:
-1. Utiliza exactamente la lista de lugares seleccionados recibida (${selectedPlaces.map((p, i) => `${i + 1}. ${p.name}`).join(', ')}). Respeta fielmente su orden secuencial.
+1. Utiliza exactamente la lista de lugares seleccionados recibida (${selectedPlaces.map((p, i) => `${i + 1}. ${p.name} (Día ${p.dia})`).join(', ')}). Respeta fielmente su orden secuencial y asigna cada parada a su día indicado ("dia": ${p.dia}).
 2. Cada parada del itinerario debe corresponder a un lugar físico real de la lista.
-3. El tour dura ${totalDays} días. Debes estructurar el itinerario distribuyendo las paradas secuencialmente del Día 1 al Día ${totalDays}, asegurando que existan paradas para cada uno de los ${totalDays} días ("dia": 1..${totalDays}).
-4. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras.
-5. Integra notas dinámicas de consejos y datos curiosos específicos por parada.`
+3. El tour dura ${totalDays} días. Debes estructurar el itinerario distribuyendo las paradas según los días indicados, asegurando que existan paradas para cada uno de los ${totalDays} días ("dia": 1..${totalDays}).
+4. NO agregues hoteles ni alojamientos como paradas de actividad dentro del itinerario.
+5. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras.
+6. Integra notas dinámicas de consejos y datos curiosos específicos por parada.`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

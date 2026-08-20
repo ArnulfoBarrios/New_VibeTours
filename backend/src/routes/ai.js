@@ -60,7 +60,7 @@ const requestSchema = z.object({
   specificPlaces: z.array(z.string()).optional().default([])
 })
 
-// Normalizador de clave canónica para fusionar variantes de un mismo lugar (ej: "Playa de El Rodadero" vs "El Rodadero")
+// Normalizador de clave canónica para fusionar variantes de un mismo lugar (ej: "Restaurante El Bistro" vs "Bistro", "Playa de El Rodadero" vs "El Rodadero")
 export function normalizePlaceKey(placeName) {
   if (!placeName || typeof placeName !== 'string') return ''
   return placeName
@@ -68,7 +68,7 @@ export function normalizePlaceKey(placeName) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // remove accents
     .replace(/[*_#•\-]/g, ' ') // remove markdown
-    .replace(/\b(playa de la|playa de el|playa de|playa del|playa|parque nacional natural|parque nacional|parque natural|parque|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|camino a|sendero de|sendero)\b/g, ' ')
+    .replace(/\b(restaurante de la|restaurante del|restaurante de|restaurante el|restaurante la|restaurante los|restaurante las|restaurante|gastrobar de|gastrobar|bar de|bar el|bar la|bar|cafe de|cafe el|cafe la|cafe|discoteca de|discoteca la|discoteca el|discoteca|club de|club|pub de|pub|playa de la|playa de el|playa de|playa del|playa|parque nacional natural|parque nacional|parque natural|parque|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|camino a|sendero de|sendero)\b/g, ' ')
     .replace(/\b(la|el|los|las|un|una|unos|unas|del|de|de la|de los)\b/g, ' ') // remove articles
     .replace(/\b(visita a la|visita a|visita al|recorrido por el|recorrido por la|recorrido por|paseo en lancha a|paseo en lancha por|paseo en barco a|paseo en|paseo por|excursion a la|excursion a|excursión a|excursion al|ir a|entrada a|parada en|caminar por|recorrer el|visitar la|visitar el)\b/g, ' ') // remove action prefixes
     .replace(/[^\w\s]/g, '') // remove punctuation
@@ -76,26 +76,37 @@ export function normalizePlaceKey(placeName) {
     .trim()
 }
 
-// Deduplica una lista de nombres u objetos de lugares usando su clave canónica
+// Deduplica una lista de nombres u objetos de lugares usando su clave canónica y similitud de subcadenas
 export function deduplicatePlacesByName(places = []) {
-  const seen = new Map()
+  const result = []
   for (const p of places) {
     if (!p) continue
     const name = typeof p === 'string' ? p : (p.name || '')
     if (!name || !isValidSpecificPlace(name)) continue
     const key = normalizePlaceKey(name)
     if (!key) continue
-    if (!seen.has(key)) {
-      seen.set(key, p)
+
+    const existingIdx = result.findIndex(item => {
+      const existingName = typeof item === 'string' ? item : (item.name || '')
+      const existingKey = normalizePlaceKey(existingName)
+      if (key === existingKey) return true
+      if (key.length >= 4 && existingKey.length >= 4) {
+        if (key.includes(existingKey) || existingKey.includes(key)) return true
+      }
+      return false
+    })
+
+    if (existingIdx === -1) {
+      result.push(p)
     } else {
-      const existing = seen.get(key)
+      const existing = result[existingIdx]
       const existingName = typeof existing === 'string' ? existing : (existing.name || '')
       if (name.length > existingName.length && /[A-Z]/.test(name)) {
-        seen.set(key, p)
+        result[existingIdx] = p
       }
     }
   }
-  return Array.from(seen.values())
+  return result
 }
 
 // Filtro estricto que descarta encabezados de días, horas, formatos markdown, metadatos, categorías, eventos temporales, cementerios, canales inaccesibles y ciudades puras
@@ -365,12 +376,19 @@ aiRouter.post('/chat', async (req, res, next) => {
       function extractPoisFromText(text) {
         if (!text || typeof text !== 'string') return []
         const found = []
-        const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r)?\s+(?:el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|cenar\s+en\s+el?|cenar\s+en|almorzar\s+en\s+el?|almorzar\s+en|cena\s+en\s+el?|cena\s+en|almuerzo\s+en\s+el?|almuerzo\s+en|check-in\s+en\s+el?|check-in\s+en|check-out\s+en\s+el?|check-out\s+en|llegada\s+a|llegada)\s+/i
+        const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r)?\s+(?:el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|cenar\s+en\s+el?|cenar\s+en|almorzar\s+en\s+el?|almorzar\s+en|cena\s+en\s+el?|cena\s+en|almuerzo\s+en\s+el?|almuerzo\s+en|noche\s+en\s+el?|noche\s+en|d[íi]a\s+de\s+playa\s+en\s+el?|d[íi]a\s+de\s+playa\s+en|check-in\s+en\s+el?|check-in\s+en|check-out\s+en\s+el?|check-out\s+en|llegada\s+a|llegada)\s+/i
 
         const lines = text.split('\n')
+        let currentDay = 1
         for (const rawLine of lines) {
           const line = rawLine.trim()
           if (!line) continue
+
+          const dayMatch = line.match(/(?:•|\-|\*|\d+[\.\)])?\s*D[íi]a\s*(\d+)/i)
+          if (dayMatch) {
+            currentDay = parseInt(dayMatch[1], 10) || currentDay
+          }
+
           // Omitir líneas de metadatos o parámetros de viaje
           if (/^(?:•|\-|\*|\d+[\.\)])?\s*(?:alojamiento|hospedaje|hotel|transporte|presupuesto|acompañantes|fechas|duraci[óo]n|destino|resumen|notas|gastos|itinerario)\s*:/i.test(line)) {
             continue
@@ -383,18 +401,18 @@ aiRouter.post('/chat', async (req, res, next) => {
             let candidate = bm[1].replace(ACTION_PREFIX_REGEX, '').trim()
             candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
             if (isValidSpecificPlace(candidate)) {
-              found.push(candidate)
+              found.push({ name: candidate, day: currentDay })
             }
           }
 
           // 2. Extract numbered or bulleted items
-          const regex = /^(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]/i
+          const regex = /^(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,50})\*{0,2}\s*[:—\-]?/i
           const m = line.match(regex)
-          if (m) {
+          if (m && !dayMatch) {
             let candidate = m[1].replace(ACTION_PREFIX_REGEX, '').trim()
             candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
             if (isValidSpecificPlace(candidate)) {
-              found.push(candidate)
+              found.push({ name: candidate, day: currentDay })
             }
           }
         }
@@ -441,11 +459,18 @@ aiRouter.post('/chat', async (req, res, next) => {
     if (!hasConfirmedCity || isAskingCityRecomms) {
       delete updatedPreferences.specificPlaces
     } else {
-      const combinedSpecifics = deduplicatePlacesByName([
-        ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
-        ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
-        ...extractedFromMsg
-      ])
+      const isConfirmedItineraryMsg = Boolean(
+        aiResponse.readyToBuild ||
+        (aiResponse.responseMessage && /\b(itinerario de viaje|itinerario finalizado|itinerario actualizado|d[íi]a 1:)\b/i.test(aiResponse.responseMessage))
+      )
+
+      const combinedSpecifics = isConfirmedItineraryMsg && extractedFromMsg.length >= 2
+        ? deduplicatePlacesByName(extractedFromMsg)
+        : deduplicatePlacesByName([
+            ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
+            ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
+            ...extractedFromMsg
+          ])
 
       if (combinedSpecifics.length > 0) {
         updatedPreferences.specificPlaces = combinedSpecifics
@@ -1773,13 +1798,37 @@ export function buildTourPlanner(input, location, places) {
     }
 
     if (requestedPlaces.length >= 2) {
+      const getName = (x) => typeof x === 'string' ? x : (x?.name || '')
       requestedPlaces.sort((a, b) => {
-        const idxA = refList.findIndex(name => normalizeKey(name) === normalizeKey(a.name) || normalizeKey(a.name).includes(normalizeKey(name)) || normalizeKey(name).includes(normalizeKey(a.name)))
-        const idxB = refList.findIndex(name => normalizeKey(name) === normalizeKey(b.name) || normalizeKey(b.name).includes(normalizeKey(name)) || normalizeKey(name).includes(normalizeKey(b.name)))
+        const idxA = refList.findIndex(item => {
+          const itemKey = normalizePlaceKey(getName(item))
+          const aKey = normalizePlaceKey(a.name)
+          return itemKey === aKey || itemKey.includes(aKey) || aKey.includes(itemKey)
+        })
+        const idxB = refList.findIndex(item => {
+          const itemKey = normalizePlaceKey(getName(item))
+          const bKey = normalizePlaceKey(b.name)
+          return itemKey === bKey || itemKey.includes(bKey) || bKey.includes(itemKey)
+        })
         return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
       })
 
-      selectedPlaces = [...requestedPlaces]
+      const totalDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
+      selectedPlaces = requestedPlaces.map((p, i) => {
+        const matchedRef = refList.find(item => {
+          const itemKey = normalizePlaceKey(getName(item))
+          const pKey = normalizePlaceKey(p.name)
+          return itemKey === pKey || itemKey.includes(pKey) || pKey.includes(itemKey)
+        })
+        const dayFromRef = typeof matchedRef === 'object' ? (matchedRef?.day || matchedRef?.dia) : null
+        const assignedDay = dayFromRef || p.dia || p.day || (Math.floor((i * totalDays) / requestedPlaces.length) + 1)
+        return {
+          ...p,
+          dia: assignedDay,
+          day: assignedDay
+        }
+      })
+
       if (selectedPlaces.length < stopTarget && otherPlaces.length > 0) {
         otherPlaces.sort((a, b) => b.score - a.score)
         selectedPlaces.push(...otherPlaces.slice(0, stopTarget - selectedPlaces.length))
@@ -1791,6 +1840,15 @@ export function buildTourPlanner(input, location, places) {
         const expanded = scored.filter((place) => !selectedPlaces.some((picked) => normalizeKey(picked.name) === normalizeKey(place.name)))
         selectedPlaces.push(...expanded.slice(0, Math.max(0, Math.min(stopTarget, 3) - selectedPlaces.length)))
       }
+    }
+
+    // Filtrar cualquier coincidencia con el hotel/alojamiento para que no aparezca como parada turística
+    const hotelName = String(input.selectedHotel?.name || '').toLowerCase()
+    if (hotelName && hotelName.length >= 3) {
+      selectedPlaces = selectedPlaces.filter(p => {
+        const pNameLower = (p.name || '').toLowerCase()
+        return !pNameLower.includes(hotelName) && !hotelName.includes(pNameLower)
+      })
     }
 
     const isMultiCityRoute = input.isMultiCity || (Array.isArray(input.cities) && input.cities.length > 1)
@@ -1814,7 +1872,7 @@ export function buildTourPlanner(input, location, places) {
       }
 
       selectedPlaces = orderPlacesAlongRoute(selectedPlaces, startLoc, endLoc)
-    } else if (selectedPlaces.length > 1) {
+    } else if (selectedPlaces.length > 1 && requestedPlaces.length < 2) {
       const totalDays = Math.max(1, Math.ceil((input.durationHours || 24) / 24))
       if (totalDays <= 1) {
         selectedPlaces = sortPlacesByProximity(selectedPlaces, origin)
@@ -3151,7 +3209,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     rawTips = generateDynamicTips(resolvedName, rawCategory, input.city || input.destination)
   }
 
-  const sourceDay = Number(source.dia ?? source.day ?? 0)
+  const sourceDay = Number(source.dia ?? source.day ?? fallbackPlace?.dia ?? fallbackPlace?.day ?? anchorPlace?.dia ?? anchorPlace?.day ?? 0)
   const stopDay = (sourceDay > 0) ? sourceDay : (calculatedDay !== null ? calculatedDay : 1)
 
   const publicStop = {
@@ -3935,10 +3993,27 @@ export async function collectTourCandidates(input, location) {
     } : null)
 
     const specificSettled = await Promise.allSettled(
-      mergedSpecifics.map(async (placeName) => {
+      mergedSpecifics.map(async (rawPlace) => {
+        const placeName = typeof rawPlace === 'string' ? rawPlace : (rawPlace?.name || '')
+        const placeDay = typeof rawPlace === 'object' ? (rawPlace?.day || rawPlace?.dia) : null
         if (!isValidSpecificPlace(placeName)) return null
+        
+        let geo = null
         const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
-        const geo = await geocodePlace(searchQuery).catch(() => null)
+        geo = await geocodePlace(searchQuery).catch(() => null)
+        
+        // Si no se encuentra o la ubicación es dudosa, intentar con prefijos contextuales de categoría
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, 50)) {
+          const isNightlife = /barbados|la brisa loca|discoteca|bar|club|pub|rumba/i.test(placeName)
+          const isFood = /ouzo|bistro|restaurante|cafe|comida/i.test(placeName)
+          if (isNightlife) {
+            geo = await geocodePlace(`Bar ${placeName}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Discoteca ${placeName}, ${city}, ${country}`).catch(() => null)
+          } else if (isFood) {
+            geo = await geocodePlace(`Restaurante ${placeName}, ${city}, ${country}`).catch(() => null)
+          }
+        }
+
         if (geo && validateCandidateLocation(geo, canonicalDest, 50)) {
           return {
             name: placeName,
@@ -3946,6 +4021,8 @@ export async function collectTourCandidates(input, location) {
             longitude: geo.longitude,
             type: 'tourism',
             category: 'requested',
+            dia: placeDay,
+            day: placeDay,
             city,
             country,
             address: geo.name || `${city}, ${placeName}`,
@@ -4021,15 +4098,13 @@ export async function collectTourCandidates(input, location) {
     const result = []
     for (const p of places) {
       if (!p || !p.name) continue
-      const isPRequested = p.tags?.requested_place === 'true' || p.category === 'requested'
       const pKey = normalizePlaceKey(p.name)
       
       const existingIdx = result.findIndex(item => {
         const itemKey = normalizePlaceKey(item.name)
         if (pKey === itemKey) return true
-        const isItemRequested = item.tags?.requested_place === 'true' || item.category === 'requested'
-        if (isPRequested && isItemRequested && pKey !== itemKey) {
-          return false
+        if (pKey.length >= 4 && itemKey.length >= 4 && (pKey.includes(itemKey) || itemKey.includes(pKey))) {
+          return true
         }
         if (hasUsableCoordinates(item.latitude, item.longitude) && hasUsableCoordinates(p.latitude, p.longitude)) {
           const dist = haversineMeters(item.latitude, item.longitude, p.latitude, p.longitude)
@@ -4044,7 +4119,11 @@ export async function collectTourCandidates(input, location) {
       } else {
         const existing = result[existingIdx]
         if (p.name.length > existing.name.length && /[A-Z]/.test(p.name)) {
-          result[existingIdx] = p
+          result[existingIdx] = {
+            ...p,
+            dia: p.dia || existing.dia,
+            day: p.day || existing.day
+          }
         }
       }
     }

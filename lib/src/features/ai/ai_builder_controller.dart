@@ -688,75 +688,14 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
                 activities: List<String>.from(s['actividades'] ?? []),
                 tips: List<String>.from(s['consejos'] ?? []),
                 suggestedMinutes: int.tryParse(s['duracion_estimada'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 25,
-                order: state.selectedHotel != null ? entry.key + 1 : entry.key,
+                order: entry.key,
                 day: int.tryParse(s['dia']?.toString() ?? '1') ?? 1,
                 curiousFacts: List<String>.from(s['datos_curiosos'] ?? []),
                 isFallbackImage: s['isFallbackImage'] == true,
               );
             }).toList();
 
-            final hotelLat = double.tryParse(state.selectedHotel?['latitude']?.toString() ?? '') ?? 0.0;
-            final hotelLon = double.tryParse(state.selectedHotel?['longitude']?.toString() ?? '') ?? 0.0;
-            final hotelName = state.selectedHotel?['name']?.toString() ?? '';
-            final hasValidHotelCoords = state.selectedHotel != null &&
-                hotelLat != 0.0 &&
-                hotelLon != 0.0 &&
-                !hotelName.toLowerCase().contains('casa propia');
-
-            if (hasValidHotelCoords) {
-              final hotelAddress = state.selectedHotel!['address']?.toString() ?? state.selectedHotel!['direccion']?.toString() ?? '';
-
-              final hotelStart = TourStop(
-                id: 'hotel_start',
-                name: '$hotelName (Salida)',
-                location: GeoPoint(latitude: hotelLat, longitude: hotelLon),
-                imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500',
-                description: 'Punto de partida y alojamiento en $hotelName.',
-                activities: const ['Check-in', 'Salida del tour'],
-                tips: const ['Llevar agua y calzado cómodo'],
-                suggestedMinutes: 15,
-                order: 0,
-                day: 1,
-                locationInfo: TourLocationInfo(
-                  nombreLugar: hotelName,
-                  direccion: hotelAddress,
-                  ciudad: tourData['city']?.toString() ?? state.request?.city ?? '',
-                  region: '',
-                  pais: tourData['country']?.toString() ?? state.request?.country ?? '',
-                  placeId: state.selectedHotel!['id']?.toString() ?? 'hotel-start',
-                  urlMapa: 'https://maps.google.com/?q=$hotelLat,$hotelLon',
-                ),
-              );
-
-              final maxDay = rawStops.isEmpty ? 1 : rawStops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
-              final hotelEnd = TourStop(
-                id: 'hotel_end',
-                name: '$hotelName (Retorno)',
-                location: GeoPoint(latitude: hotelLat, longitude: hotelLon),
-                imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500',
-                description: 'Fin del recorrido y retorno a tu alojamiento en $hotelName.',
-                activities: const ['Retorno', 'Descanso'],
-                tips: const ['Planifica tu cena y descanso'],
-                suggestedMinutes: 15,
-                order: rawStops.length + 1,
-                day: maxDay,
-                locationInfo: TourLocationInfo(
-                  nombreLugar: hotelName,
-                  direccion: hotelAddress,
-                  ciudad: tourData['city']?.toString() ?? state.request?.city ?? '',
-                  region: '',
-                  pais: tourData['country']?.toString() ?? state.request?.country ?? '',
-                  placeId: state.selectedHotel!['id']?.toString() ?? 'hotel-end',
-                  urlMapa: 'https://maps.google.com/?q=$hotelLat,$hotelLon',
-                ),
-              );
-
-              stops.add(hotelStart);
-              stops.addAll(rawStops);
-              stops.add(hotelEnd);
-            } else {
-              stops.addAll(rawStops);
-            }
+            stops.addAll(rawStops);
 
             final currentUser = ref.read(authServiceProvider).currentUser;
             final tour = Tour(

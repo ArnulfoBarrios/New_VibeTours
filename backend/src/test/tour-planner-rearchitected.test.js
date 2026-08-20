@@ -372,6 +372,32 @@ test('isValidSpecificPlace must reject metadata terms (Presupuesto, Transporte) 
   assert.equal(isValidSpecificPlace('Restaurante La Cueva'), true)
 })
 
+test('deduplicatePlacesByName must merge restaurant prefixes like Bistro/Restaurante El Bistro and Ouzo/Restaurante Ouzo', async () => {
+  const { deduplicatePlacesByName, normalizePlaceKey } = await import('../routes/ai.js')
+  
+  assert.equal(normalizePlaceKey('Restaurante El Bistro'), 'bistro')
+  assert.equal(normalizePlaceKey('Bistro'), 'bistro')
+  assert.equal(normalizePlaceKey('Restaurante Ouzo'), 'ouzo')
+  assert.equal(normalizePlaceKey('Ouzo'), 'ouzo')
+
+  const places = [
+    'Parque Tayrona',
+    'Bistro',
+    'Restaurante El Bistro',
+    'Ouzo',
+    'Restaurante Ouzo',
+    'La Brisa Loca',
+    'Barbados'
+  ]
+
+  const deduplicated = deduplicatePlacesByName(places)
+  assert.equal(deduplicated.length, 5)
+  assert.ok(deduplicated.includes('Restaurante El Bistro'))
+  assert.ok(deduplicated.includes('Restaurante Ouzo'))
+  assert.ok(!deduplicated.includes('Bistro'))
+  assert.ok(!deduplicated.includes('Ouzo'))
+})
+
 
 
 
