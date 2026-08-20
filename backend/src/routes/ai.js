@@ -45,6 +45,7 @@ const requestSchema = z.object({
   cities: z.array(z.string()).optional().default([]),
   isMultiCity: z.boolean().optional().default(false),
   durationHours: z.number().min(1).max(720).optional(),
+  durationDays: z.number().min(1).max(30).optional(),
   type: z.string().optional().default('cultural'),
   language: z.string().optional().default('es'),
   prompt: z.string().optional().default(''),
@@ -56,8 +57,8 @@ const requestSchema = z.object({
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   budget: z.string().optional(),
-  selectedPlaces: z.array(z.string()).optional().default([]),
-  specificPlaces: z.array(z.string()).optional().default([])
+  selectedPlaces: z.array(z.any()).optional().default([]),
+  specificPlaces: z.array(z.any()).optional().default([])
 })
 
 // Normalizador de clave canónica para fusionar variantes de un mismo lugar (ej: "Restaurante El Bistro" vs "Bistro", "Playa de El Rodadero" vs "El Rodadero")
@@ -82,6 +83,7 @@ export function deduplicatePlacesByName(places = []) {
   for (const p of places) {
     if (!p) continue
     const name = typeof p === 'string' ? p.trim() : (p.name || '').trim()
+    const dia = typeof p === 'object' ? (p.dia || p.day) : null
     if (!name || !isValidSpecificPlace(name)) continue
     const key = normalizePlaceKey(name)
     if (!key) continue
@@ -96,13 +98,19 @@ export function deduplicatePlacesByName(places = []) {
       return false
     })
 
+    const entry = typeof p === 'object' && dia ? { name, dia: Number(dia), day: Number(dia) } : name
+
     if (existingIdx === -1) {
-      result.push(name)
+      result.push(entry)
     } else {
       const existing = result[existingIdx]
       const existingName = typeof existing === 'string' ? existing : (existing.name || '')
+      const existingDia = typeof existing === 'object' ? (existing.dia || existing.day) : null
+      const finalDia = dia || existingDia
       if (name.length > existingName.length && /[A-Z]/.test(name)) {
-        result[existingIdx] = name
+        result[existingIdx] = finalDia ? { name, dia: Number(finalDia), day: Number(finalDia) } : name
+      } else if (finalDia && typeof result[existingIdx] === 'string') {
+        result[existingIdx] = { name: existingName, dia: Number(finalDia), day: Number(finalDia) }
       }
     }
   }
@@ -379,11 +387,15 @@ aiRouter.post('/chat', async (req, res, next) => {
         const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r)?\s+(?:el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|al?|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|vida\s+nocturna|cenar\s+en\s+el?|cenar\s+en|almorzar\s+en\s+el?|almorzar\s+en|cena\s+en\s+un\s+restaurante\s+en\s+el?|cena\s+en\s+un\s+restaurante\s+en\s+la?|cena\s+en\s+un\s+restaurante\s+en|cena\s+en\s+un\s+restaurante|cena\s+en\s+un\s+bar\s+local|cena\s+en\s+un\s+bar|cena\s+en\s+el?|cena\s+en|almuerzo\s+en\s+el?|almuerzo\s+en|noche\s+en\s+el?|noche\s+en|d[íi]a\s+de\s+playa\s+en\s+el?|d[íi]a\s+de\s+playa\s+en|d[íi]a\s+en\s+el?|d[íi]a\s+en|check-in\s+en\s+el?|check-in\s+en|check-out\s+en\s+el?|check-out\s+en|llegada\s+a\s+la|llegada\s+al?|llegada\s+a|llegada|salida\s+a|salida\s+de|salida|regreso\s+y\s+cena\s+de\s+despedida|regreso\s+y\s+cena\s+de|regreso\s+y\s+cena|regreso\s+a|regreso|despedida)\s+/i
 
         const lines = text.split('\n')
+        let currentDay = null
         for (const rawLine of lines) {
           const line = rawLine.trim()
           if (!line) continue
 
           const dayMatch = line.match(/(?:•|\-|\*|\d+[\.\)])?\s*D[íi]a\s*(\d+)/i)
+          if (dayMatch) {
+            currentDay = parseInt(dayMatch[1], 10)
+          }
 
           // Omitir líneas de metadatos o parámetros de viaje
           if (/^(?:•|\-|\*|\d+[\.\)])?\s*(?:alojamiento|hospedaje|hotel|transporte|presupuesto|acompañantes|fechas|duraci[óo]n|destino|resumen|notas|gastos|itinerario)\s*:/i.test(line)) {
@@ -398,7 +410,7 @@ aiRouter.post('/chat', async (req, res, next) => {
             candidate = candidate.replace(/\s*\([^)]*\)/g, '').trim()
             candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
             if (isValidSpecificPlace(candidate)) {
-              found.push(candidate)
+              found.push(currentDay ? { name: candidate, dia: currentDay, day: currentDay } : candidate)
             }
           }
 
@@ -410,7 +422,7 @@ aiRouter.post('/chat', async (req, res, next) => {
             candidate = candidate.replace(/\s*\([^)]*\)/g, '').trim()
             candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
             if (isValidSpecificPlace(candidate)) {
-              found.push(candidate)
+              found.push(currentDay ? { name: candidate, dia: currentDay, day: currentDay } : candidate)
             }
           }
         }
@@ -424,7 +436,20 @@ aiRouter.post('/chat', async (req, res, next) => {
       )
 
       if (isConfirmedItineraryMsg) {
-        extractedFromMsg.push(...extractPoisFromText(aiResponse.responseMessage || ''))
+        let pois = extractPoisFromText(aiResponse.responseMessage || '')
+        if (pois.length < 2) {
+          const recentAssistantMsgs = (history || []).filter(m => m.role === 'assistant' || m.type === 'ai').reverse()
+          for (const aMsg of recentAssistantMsgs) {
+            const historyPois = extractPoisFromText(aMsg.content || aMsg.text || '')
+            if (historyPois.length >= 2) {
+              pois = historyPois
+              break
+            }
+          }
+        }
+        if (pois.length > 0) {
+          extractedFromMsg.push(...pois)
+        }
       }
 
       // Si el usuario aceptó en lote ("agregar todas las actividades", "Ok quiero agregar estás actividades al itinerario", etc.), extraer de mensajes recientes del asistente
@@ -1798,17 +1823,38 @@ export function buildTourPlanner(input, location, places) {
           return itemKey === pKey || itemKey.includes(pKey) || pKey.includes(itemKey)
         })
         const dayFromRef = typeof matchedRef === 'object' ? (matchedRef?.day || matchedRef?.dia) : null
-        const assignedDay = dayFromRef || p.dia || p.day || (Math.floor((i * totalDays) / requestedPlaces.length) + 1)
+        const assignedDay = dayFromRef
+          ? Number(dayFromRef)
+          : (p.dia || p.day || Math.min(totalDays, Math.floor((i * totalDays) / requestedPlaces.length) + 1))
         return {
           ...p,
-          dia: assignedDay,
-          day: assignedDay
+          dia: Number(assignedDay),
+          day: Number(assignedDay)
         }
       })
 
+      // Ensure that for multi-day tours, every day from 1 to totalDays has stops
+      if (totalDays >= 2) {
+        for (let d = 1; d <= totalDays; d++) {
+          const placesForDay = selectedPlaces.filter(p => (p.dia === d || p.day === d))
+          if (placesForDay.length === 0 && otherPlaces.length > 0) {
+            const nextBest = otherPlaces.find(p => !selectedPlaces.some(sp => normalizePlaceKey(sp.name) === normalizePlaceKey(p.name)))
+            if (nextBest) {
+              selectedPlaces.push({
+                ...nextBest,
+                dia: d,
+                day: d
+              })
+            }
+          }
+        }
+        selectedPlaces.sort((a, b) => (Number(a.dia || a.day || 1)) - (Number(b.dia || b.day || 1)))
+      }
+
       if (selectedPlaces.length < stopTarget && otherPlaces.length > 0) {
         otherPlaces.sort((a, b) => b.score - a.score)
-        selectedPlaces.push(...otherPlaces.slice(0, stopTarget - selectedPlaces.length))
+        const toAdd = otherPlaces.filter(p => !selectedPlaces.some(sp => normalizePlaceKey(sp.name) === normalizePlaceKey(p.name))).slice(0, stopTarget - selectedPlaces.length)
+        selectedPlaces.push(...toAdd)
       }
     } else {
       scored.sort((a, b) => b.score - a.score)
@@ -2461,20 +2507,21 @@ function accessibilityFor(type) {
 }
 
 function buildTourTitle(input, planner) {
-  const place = planner.selectedPlaces[0]?.name ?? input.destination
+  const city = cleanAdministrativeCityName(input.city || input.destination || 'Destino')
   const labels = {
-    historical: 'Historico',
+    historical: 'Histórico por',
     gastronomic: 'Sabores de',
-    ecological: 'Ruta Verde',
-    night: 'Nocturno',
-    family: 'Familiar',
-    cultural: 'Cultural',
-    romantic: 'Romantico',
-    sports: 'Activo',
-    urban: 'Urbano',
-    custom: 'Experiencia',
+    ecological: 'Ruta Verde por',
+    night: 'Nocturno por',
+    family: 'Familiar por',
+    cultural: 'Cultural por',
+    romantic: 'Romántico por',
+    sports: 'Activo por',
+    urban: 'Urbano por',
+    custom: 'Personalizado por',
   }
-  return `${labels[input.type] ?? 'Experiencia'} ${place}`.trim()
+  const prefix = labels[input.type] || 'Personalizado por'
+  return `Tour ${prefix} ${city}`.replace(/\s+/g, ' ').trim()
 }
 
 function buildShortSummary(input, planner) {

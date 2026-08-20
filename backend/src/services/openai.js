@@ -715,17 +715,15 @@ REGLA ESTRICTA DE PRESERVACIÓN DE ACTIVIDADES EN EL ITINERARIO:
 - Si el usuario selecciona o aprueba actividades (ej: "1 y 3", "quiero incluir todas estas actividades", "agrega estas actividades también"):
   1. Extrae todas las actividades en "extractedPreferences.specificPlaces" acumulándolas con las anteriores.
   2. Al estructurar o actualizar el itinerario día por día, DEBES INCLUIR TODAS las actividades aprobadas (${JSON.stringify(known.specificPlaces || [])}) distribuidas equilibradamente entre los ${known.durationDays || 4} días.
-  3. ESTÁ ESTRICTAMENTE PROHIBIDO omitir, recortar o borrar actividades aprobadas cuando se confirma un dato nuevo (como el hotel o el transporte).
-
 FACTIBILIDAD GEOGRÁFICA Y TEMPORAL (0 EXCURSIONES MULTIDÍA EN TOURS DE 1 DÍA):
 - Cada actividad asignada a un día debe ser realizable en esa jornada con regreso al hotel en ${destName}.
-- NUNCA pongas expediciones de trekking multi-día (como "Caminata a Ciudad Perdida", que requiere 4 a 5 días completos de trekking en selva) como una actividad de 1 solo día dentro de un tour de 4 días. Para excursiones a la naturaleza de 1 día en Santa Marta / Sierra Nevada, utiliza destinos realizables en el día como Minca (Pozo Azul, Cascadas de Marinka) o Parque Tayrona.
+- NUNCA pongas expediciones de trekking multi-día (como "Caminata a Ciudad Perdida") como una actividad de 1 solo día dentro de un tour general.
 
 REGLAS CRÍTICAS DEL FLUJO CONVERSACIONAL EN ETAPAS OBLIGATORIAS:
 
 ETAPA 1: DESTINO, FECHAS/DURACIÓN Y ACOMPAÑANTES
-- Si no hay destino: Recomienda 2 a 4 destinos ideales y pregunta cuál prefiere, en qué fechas viajará y con quiénes.
 - Si hay destino pero faltan fechas o acompañantes: Pregunta por las fechas de viaje, cuántos días durará su estadía y quiénes lo acompañan.
+- PROHIBICIÓN ESTRICTA: NUNCA inventes o asumas una duración en días (como 3 o 5 días) si el usuario no la ha especificado. Si el usuario indicó el mes (ej: "julio") pero no cuántos días durará su viaje, PREGÚNTALE: "¿Cuántos días durará tu estadía en ${destName}?". NUNCA generes un itinerario día por día antes de conocer los días exactos.
 - "readyToBuild" DEBE ser false.
 
 ETAPA 2: RECOMENDACIÓN DE ACTIVIDADES Y EXPERIENCIAS
@@ -742,13 +740,15 @@ ETAPA 3: HOSPEDAJE, TRANSPORTE Y PRESUPUESTO
 - "readyToBuild" DEBE ser false.
 
 ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
-- Presenta el itinerario estructurado integrando TODAS las actividades aprobadas por el usuario:
+- Si el usuario YA confirmó sus días de viaje (${known.durationDays ? `${known.durationDays} días` : 'duración'}):
+  Presenta el itinerario estructurado integrando TODAS las actividades aprobadas distribuidas exactamente a lo largo de los ${known.durationDays || 3} días (Día 1 a Día ${known.durationDays || 3}):
   "Itinerario de Viaje a ${destName} (${known.datesSeason || `${known.durationDays || 3} días`}):"
   • Día 1: [Llegada / Hotel] -> [Actividad/Lugar aprobado] -> [Cena en Restaurante real]
   • Día 2: ...
   Alojamiento: [Hotel elegido, casa propia o por definir]
   Transporte: [Medio de transporte elegido o por definir]
   Presupuesto: [Presupuesto elegido o por definir]
+- Si NO se han confirmado los días de viaje, NO presentes un itinerario por días; pregunta cuántos días durará su estadía.
 - Pregunta: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está todo listo para generar tu tour?"
 - "readyToBuild" DEBE ser false.
 
@@ -884,20 +884,19 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     return {
       responseMessage,
       actionChips,
-      extractedPreferences: parsed.extractedPreferences || {},
-      specificPlaces: parsed.extractedPreferences?.specificPlaces || known.specificPlaces || [],
+      extractedPreferences: parsedExtracted,
+      specificPlaces: known.specificPlaces || [],
       destinationSuggestions,
-      readyToBuild: effectiveReadyToBuild,
-      isUnrelatedToTravel: false
+      readyToBuild: Boolean(effectiveReadyToBuild)
     }
   } catch (err) {
-    console.error('[generateChatResponse] Error calling OpenAI:', err)
-    const fallbackChips = getDefaultActionChips(known, lastUserMsg)
+    console.error('[generateChatResponse] Error calling OpenAI API:', err)
     return {
       responseMessage: `¡Excelente! Sigamos diseñando tu experiencia turística en ${destName || 'tu próximo destino'}. ¿Qué te gustaría planear a continuación?`,
-      actionChips: fallbackChips,
+      actionChips: getDefaultActionChips(known, lastUserMsg),
+      extractedPreferences: {},
       specificPlaces: known.specificPlaces || [],
-      destinationSuggestions: (!hasCity) ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : [],
+      destinationSuggestions: [],
       readyToBuild: false
     }
   }
@@ -907,66 +906,66 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
  * Information extractor for backward compatibility with existing route parsers.
  */
 export async function extractChatInformation(userMessage, currentData = {}, history = []) {
-  if (isNonTouristicInput(userMessage)) {
-    return {}
-  }
-
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     return extractChatInformationFallback(userMessage)
   }
 
-  const prompt = `Analiza el mensaje del usuario y extrae ÚNICAMENTE los datos turísticos explícitamente indicados por el usuario en un JSON:
-REGLAS ESTRICTAS:
-- "city" / "destination": ciudad limpia SOLO si el usuario la escribió explícitamente. Si no la mencionó, pon null (PROHIBIDO asumir o inferir una ciudad).
-- "country": país SOLO si se mencionó o se deduce de una ciudad explícita. Si no, null.
-- "datesSeason": fechas SOLO si se mencionaron (ej: "octubre desde el 9 hasta el 12"). Si no, null.
+  const prompt = `Eres un extractor de preferencias de viaje para VIBETOURS.
+Analiza el último mensaje del usuario y el historial reciente para extraer datos estructurados.
+Mensaje actual del usuario: "${userMessage}"
+Datos ya conocidos: ${JSON.stringify(currentData)}
+
+Devuelve ÚNICAMENTE un JSON con:
+- "city": ciudad destino explícita (ej: "Santa Marta", "Cartagena", "Medellín") o null si no se menciona.
+- "country": país o null.
+- "datesSeason": fechas o temporada (ej: "del 9 al 12 de octubre", "julio", "puente de noviembre").
 - "durationDays": número de días explícito O calculado a partir del rango de fechas (ej: del 9 al 12 de octubre son 4 días -> 4, "3 días" -> 3). Si no hay fechas ni duración, DEBE ser null.
-- "companions": "Solo" | "Pareja" | "Amigos" | "Familia con niños" (si se mencionó).
-- "budget": "Económico" | "Moderado" | "Lujo" (si se mencionó).
-- "transport": "Caminando" | "Transporte público" | "Auto rentado" | "Taxi" (si se mencionó).
-- "interests": array con los intereses o gustos mencionados (ej: ["Playas", "Naturaleza", "Aventuras", "Vida nocturna"]).
-- "selectedHotel": { "name": "Nombre del hotel" } O { "name": "Casa propia / Alojamiento particular" } si el usuario indica que se queda en su casa, casa de familiares o amigos, o no requiere hotel.
-- "accommodationStatus": "Casa propia / familiar" | "Hotel confirmado" | null (si el usuario dice "me voy a alojar en mi casa", "en mi casa", "casa de un familiar", "vivo aquí", "ya tengo hospedaje" -> pon "Casa propia / familiar" y en selectedHotel { "name": "Casa propia / Alojamiento particular" }).
-- "specificPlaces": array con nombres de atracciones o restaurantes físicos específicos mencionados por el usuario (NUNCA eventos ni festividades).
-Mensaje: "${userMessage}"`
+- "companions": acompañantes (ej: "solo", "en pareja", "con amigos", "en familia").
+- "groupSize": número de personas si se menciona.
+- "hasChildren": true si viaja con niños, false si no.
+- "budget": "Económico", "Moderado", "Lujo", "Ajustado" o null.
+- "transport": "Caminando", "Auto rentado", "Transporte público", "Bicicleta", "Taxi / Uber" o null.
+- "interests": lista de intereses mencionados (ej: ["playa", "gastronomía", "cultura"]).
+- "selectedHotel": { "name": "Nombre del hotel" } o null si no se ha elegido.
+- "accommodationStatus": "Casa propia / familiar", "Hotel elegido", "Por definir" o null.
+- "specificPlaces": lista de atracciones o lugares específicos que el usuario quiere visitar.`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        response_format: { type: 'json_object' },
-        messages: [{ role: 'system', content: prompt }]
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        response_format: { type: 'json_object' }
       })
     })
+
     if (response.ok) {
       const data = await response.json()
-      const rawParsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
-      const parsed = {}
-      Object.entries(rawParsed).forEach(([k, v]) => {
-        if (v !== null && v !== undefined && v !== '') {
-          parsed[k] = v
-        }
-      })
-      if (parsed.city) parsed.city = cleanAdministrativeCityName(parsed.city)
-      if (parsed.destination) parsed.destination = cleanAdministrativeCityName(parsed.destination)
+      const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
       if (parsed.durationDays && !parsed.durationHours) {
         parsed.durationHours = Number(parsed.durationDays) * 24
       }
       return parsed
     }
-  } catch (_) {}
+  } catch (err) {
+    console.error('[extractChatInformation] Error:', err)
+  }
 
   return extractChatInformationFallback(userMessage)
 }
 
 export function extractChatInformationFallback(prompt) {
-  const lower = String(prompt || '').toLowerCase()
   const res = {}
-  
-  const dateRangeMatch = lower.match(/\b(?:del\s+|desde\s+(?:el\s+)?)?(\d{1,2})\s+(?:al|hasta(?:\s+el)?)\s+(\d{1,2})\b/i)
+  const text = (prompt || '').toLowerCase()
+
+  const dateRangeMatch = text.match(/\b(?:del\s+|desde\s+(?:el\s+)?)?(\d{1,2})\s+(?:al|hasta(?:\s+el)?)\s+(\d{1,2})\b/i)
   if (dateRangeMatch) {
     const startD = parseInt(dateRangeMatch[1], 10)
     const endD = parseInt(dateRangeMatch[2], 10)
@@ -974,50 +973,52 @@ export function extractChatInformationFallback(prompt) {
       res.durationDays = endD - startD + 1
       res.durationHours = res.durationDays * 24
     }
-  } else if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo)\b/i.test(lower)) {
+  } else if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo|3 d[íi]as)\b/i.test(text)) {
     res.durationDays = 3
     res.durationHours = 72
-  } else if (/\b(fin de semana|2 d[íi]as)\b/i.test(lower)) {
+  } else if (/\b(fin de semana|un par de d[íi]as|2 d[íi]as)\b/i.test(text)) {
     res.durationDays = 2
     res.durationHours = 48
-  } else if (/\b(1 d[íi]a|un d[íi]a)\b/i.test(lower)) {
+  } else if (/\b(1 d[íi]a|un d[íi]a)\b/i.test(text)) {
     res.durationDays = 1
     res.durationHours = 8
-  } else if (/\b(7 d[íi]as|una semana)\b/i.test(lower)) {
+  } else if (/\b(semanita|una semana|7 d[íi]as)\b/i.test(text)) {
     res.durationDays = 7
     res.durationHours = 168
   }
 
-  if (/solo/i.test(lower)) res.companions = 'Solo'
-  else if (/pareja/i.test(lower)) res.companions = 'Pareja'
-  else if (/amigos/i.test(lower)) res.companions = 'Amigos'
-  else if (/familia|niños/i.test(lower)) {
-    res.companions = 'Familia con niños'
-    res.hasChildren = true
+  if (/\b(pareja|con mi novia|con mi novio|con mi esposa|con mi esposo)\b/i.test(text)) {
+    res.companions = 'En pareja'
+    res.groupSize = 2
+  } else if (/\b(familia|con mis hijos|con mis padres|con mi familia)\b/i.test(text)) {
+    res.companions = 'En familia'
+    if (/\b(niño|niña|hijo|bebe|pequeño)/i.test(text)) res.hasChildren = true
+  } else if (/\b(amigos|con amigos|con parceros|con amigas|grupo)\b/i.test(text)) {
+    res.companions = 'Con amigos'
+  } else if (/\b(solo|sola|viajo solo|viajo sola)\b/i.test(text)) {
+    res.companions = 'Solo'
+    res.groupSize = 1
   }
 
-  if (/econ[óo]mico|mochilero|bajo/i.test(lower)) res.budget = 'Económico'
-  else if (/lujo|premium|alto/i.test(lower)) res.budget = 'Lujo'
-  else if (/moderado|medio/i.test(lower)) res.budget = 'Moderado'
-
-  if (/auto|carro|coche/i.test(lower)) res.transport = 'Auto rentado'
-  else if (/caminando|a pie/i.test(lower)) res.transport = 'Caminando'
-  else if (/transporte p[úu]blico|bus|metro/i.test(lower)) res.transport = 'Transporte público'
-  else if (/taxi|uber/i.test(lower)) res.transport = 'Taxi'
-
-  if (/\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lower)) {
-    res.accommodationStatus = 'Casa propia / familiar'
-    res.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
+  if (/\b(econ[oó]mico|mochilero|barato|ajustado|bajo presupuesto)\b/i.test(text)) {
+    res.budget = 'Económico'
+  } else if (/\b(lujo|premium|alto|cinco estrellas)\b/i.test(text)) {
+    res.budget = 'Lujo'
+  } else if (/\b(moderado|medio|est[aá]ndar)\b/i.test(text)) {
+    res.budget = 'Moderado'
   }
 
-  const interests = []
-  if (/playa/i.test(lower)) interests.push('Playas')
-  if (/naturaleza/i.test(lower)) interests.push('Naturaleza')
-  if (/aventura/i.test(lower)) interests.push('Aventuras')
-  if (/vida nocturna|fiesta|rumba|bares/i.test(lower)) interests.push('Vida nocturna')
-  if (/cultura|historia|museos/i.test(lower)) interests.push('Cultura')
-  if (/gastronom[íi]a|comida|restaurantes/i.test(lower)) interests.push('Gastronomía')
-  if (interests.length > 0) res.interests = interests
+  if (/\b(caminando|a pie|pie)\b/i.test(text)) {
+    res.transport = 'Caminando'
+  } else if (/\b(auto|carro|coche|veh[íi]culo|alquiler|rentado|rentar)\b/i.test(text)) {
+    res.transport = 'Auto rentado'
+  } else if (/\b(bici|bicicleta)\b/i.test(text)) {
+    res.transport = 'Bicicleta'
+  } else if (/\b(transporte p[úu]blico|bus|metro)\b/i.test(text)) {
+    res.transport = 'Transporte público'
+  } else if (/\b(taxi|uber|cabify|inDrive)\b/i.test(text)) {
+    res.transport = 'Taxi / Uber'
+  }
 
   return res
 }
@@ -1033,20 +1034,19 @@ export async function planWithOpenAI({
   durationHours,
   type,
   language = 'es',
-  prompt,
+  prompt = '',
+  touristProfileSummary = '',
+  touristInterests = [],
+  touristPace = 'balanced',
   places = [],
-  selectedHotel = null,
-  webSearchSummary = '',
-  userPreferences = {}
+  userPreferences = {},
+  selectedHotel = null
 }) {
-  const cleanCity = cleanAdministrativeCityName(city || destination || '')
-  const targetCountry = country || (cleanCity.toLowerCase() === 'cartagena' || cleanCity.toLowerCase() === 'santa marta' ? 'Colombia' : '')
   const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) return null
 
-  if (!apiKey) {
-    console.warn('[planWithOpenAI] OPENAI_API_KEY no configurada')
-    return null
-  }
+  const cleanCity = cleanAdministrativeCityName(city || destination || '')
+  const targetCountry = country || 'Colombia'
 
   const totalDays = Math.max(1, Number(userPreferences?.durationDays || Math.ceil((durationHours || 24) / 24) || 1))
   const selectedPlaces = places.map((p, i) => ({
@@ -1054,7 +1054,7 @@ export async function planWithOpenAI({
     dia: Number(p.dia || p.day || (Math.floor((i * totalDays) / places.length) + 1)),
     category: p.category || 'historic',
     description: p.description || ''
-  })).slice(0, 25)
+  })).slice(0, 30)
 
   const system = `Eres Tour Planner AI 🤖, el motor oficial de diseño de itinerarios turísticos de VibeTours.
 Tu misión es diseñar un tour profesional, inmersivo, geográficamente viable y 100% fiel al destino "${cleanCity}, ${targetCountry}".
@@ -1062,7 +1062,7 @@ Tu misión es diseñar un tour profesional, inmersivo, geográficamente viable y
 ESQUEMA OFICIAL OBLIGATORIO DE SALIDA:
 Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
 {
-  "nombre_tour": "Título atractivo y profesional del tour",
+  "nombre_tour": "Tour Personalizado por ${cleanCity}",
   "resumen_corto": "Resumen conciso y vendedor de la experiencia (1 oración)",
   "tipo_tour": "${type || 'cultural'}",
   "subcategorias": ["Cultura", "Gastronomía", "Historia"],
@@ -1070,7 +1070,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
   "experiencia_destacada": "El momento cumbre o vivencia más memorable del tour",
   "historia_del_lugar": "Reseña histórica verídica de ${cleanCity}",
   "contexto_cultural": "Tradiciones, folclore y ambiente local",
-  "duracion_estimada": "${durationHours || 8} horas",
+  "duracion_estimada": "${totalDays} días",
   "distancia_total": "5.5 km",
   "idiomas_disponibles": ["Español", "Inglés"],
   "publico_recomendado": ["Adultos", "Familias", "Parejas"],
@@ -1136,12 +1136,13 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
 }
 
 REGLAS DE CALIDAD:
-1. Utiliza exactamente la lista de lugares seleccionados recibida (${selectedPlaces.map((p, i) => `${i + 1}. ${p.name} (Día ${p.dia})`).join(', ')}). Respeta fielmente su orden secuencial y asigna cada parada a su día indicado ("dia": ${p.dia}).
+1. Utiliza exactamente la lista de lugares seleccionados recibida (${selectedPlaces.map((item, i) => `${i + 1}. ${item.name} (Día ${item.dia})`).join(', ')}). Respeta fielmente su orden secuencial y asigna cada parada a su día indicado en el itinerario ("dia": 1..${totalDays}).
 2. Cada parada del itinerario debe corresponder a un lugar físico real de la lista.
 3. El tour dura ${totalDays} días. Debes estructurar el itinerario distribuyendo las paradas según los días indicados, asegurando que existan paradas para cada uno de los ${totalDays} días ("dia": 1..${totalDays}).
-4. NO agregues hoteles ni alojamientos como paradas de actividad dentro del itinerario.
-5. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras.
-6. Integra notas dinámicas de consejos y datos curiosos específicos por parada.`
+4. El título "nombre_tour" DEBE ser sobre ${cleanCity} (ej: "Tour Cultural por ${cleanCity}" o "Experiencia por ${cleanCity}"). NUNCA nombres el tour con el nombre de una sola tienda, restaurante o parada individual.
+5. NO agregues hoteles ni alojamientos como paradas de actividad dentro del itinerario.
+6. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras.
+7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

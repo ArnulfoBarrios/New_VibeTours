@@ -451,6 +451,63 @@ test('generateChatResponse must accept queries about dates, festivals, and cultu
   assert.ok(!res.responseMessage.includes('no está relacionada con la planificación'))
 })
 
+test('deduplicatePlacesByName must preserve day tags and buildTourPlanner must maintain multi-day itinerary', async () => {
+  const { deduplicatePlacesByName, buildTourPlanner } = await import('../routes/ai.js')
+
+  const rawPois = [
+    { name: 'Centro Histórico de Santa Marta', dia: 1 },
+    { name: 'Restaurante El Bistro', dia: 1 },
+    { name: 'El Rodadero', dia: 2 },
+    { name: 'Restaurante Donde Chucho', dia: 2 },
+    { name: 'Cascadas de Marinka', dia: 3 },
+    { name: 'Cafe Minca', dia: 3 },
+    { name: 'Parque Nacional Natural Tayrona', dia: 4 },
+    { name: 'Restaurante Ouzo', dia: 4 },
+    { name: 'Playa Blanca', dia: 5 },
+    { name: 'Restaurante La Casa del Mar', dia: 5 },
+    { name: 'Bahía Concha', dia: 6 },
+    { name: 'Centro Comercial Zazue', dia: 7 }
+  ]
+
+  const deduped = deduplicatePlacesByName(rawPois)
+  assert.equal(deduped.length, 12)
+  assert.equal(deduped[0].dia, 1)
+  assert.equal(deduped[11].name, 'Centro Comercial Zazue')
+  assert.equal(deduped[11].dia, 7)
+
+  const planner = buildTourPlanner(
+    {
+      destination: 'Santa Marta',
+      city: 'Santa Marta',
+      country: 'Colombia',
+      durationDays: 7,
+      durationHours: 168,
+      type: 'cultural',
+      specificPlaces: deduped
+    },
+    null,
+    deduped.map(p => ({
+      name: p.name,
+      dia: p.dia,
+      latitude: 11.24,
+      longitude: -74.21,
+      category: 'requested',
+      rawTags: { requested_place: 'true' }
+    }))
+  )
+
+  assert.ok(planner.selectedPlaces.length >= 7)
+  const daysInTour = new Set(planner.selectedPlaces.map(p => p.dia || p.day))
+  assert.ok(daysInTour.has(1))
+  assert.ok(daysInTour.has(7))
+  // The first place in Day 1 must NOT be Centro Comercial Zazue
+  assert.notEqual(planner.selectedPlaces[0].name, 'Centro Comercial Zazue')
+  // Centro Comercial Zazue must be on Day 7
+  const zazue = planner.selectedPlaces.find(p => p.name.includes('Zazue'))
+  assert.ok(zazue)
+  assert.equal(zazue.dia, 7)
+})
+
 
 
 
