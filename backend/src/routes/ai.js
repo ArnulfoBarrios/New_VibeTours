@@ -490,27 +490,6 @@ aiRouter.post('/chat', async (req, res, next) => {
   }
 })
 
-aiRouter.post('/tours/confirm', async (req, res, next) => {
-  try {
-    const input = requestSchema.parse(req.body)
-    if (input.city && input.city.trim().length > 0) {
-      input.destination = input.city.trim()
-    }
-    const geocode = await geocodePlace(`${input.destination} ${input.city} ${input.country}`)
-    res.json({
-      detected: {
-        city: input.city || geocode?.name?.split(',')[0] || input.destination,
-        country: input.country || 'Detectado por Nominatim',
-        type: input.type,
-        durationHours: input.durationHours,
-        center: geocode,
-      },
-    })
-  } catch (error) {
-    next(error)
-  }
-})
-
 aiRouter.post('/tours/generate', async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)

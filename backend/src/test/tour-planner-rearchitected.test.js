@@ -429,6 +429,18 @@ test('generateChatResponse must block readyToBuild and request missing lodging w
   assert.ok(result.responseMessage.includes('alojamiento') || result.responseMessage.includes('hotel'))
 })
 
+test('isNonTouristicInput and generateChatResponse must reject actor tributes and off-topic topics', async () => {
+  const { isNonTouristicInput, generateChatResponse } = await import('../services/openai.js')
+
+  const tributeMsg = 'Se fue, pero jamás será olvidado. Haruma Miura continúa inspirando a fans del manga.'
+  assert.equal(isNonTouristicInput(tributeMsg), true)
+
+  const res = await generateChatResponse({ history: [{ role: 'user', content: tributeMsg }] }, '', '', {})
+  assert.equal(res.isUnrelatedToTravel, true)
+  assert.equal(res.readyToBuild, false)
+  assert.ok(res.responseMessage.includes('no está relacionada con la planificación de viajes'))
+})
+
 
 
 

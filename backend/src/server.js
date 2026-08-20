@@ -8,7 +8,6 @@ import morgan from 'morgan'
 import path from 'path'
 
 import { aiRouter } from './routes/ai.js'
-import { chatRouter } from './routes/chat.js'
 import { discoveryRouter } from './routes/discovery.js'
 import { toursRouter } from './routes/tours.js'
 
@@ -45,7 +44,6 @@ app.get(['/health', '/api/health'], (req, res) => {
 
 app.use('/api/tours', toursRouter)
 app.use('/api/ai', aiRouter)
-app.use('/api/chat', chatRouter)
 app.use('/api/discovery', discoveryRouter)
 
 app.use((req, res) => {
