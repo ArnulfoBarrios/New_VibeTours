@@ -1811,13 +1811,18 @@ export function buildTourPlanner(input, location, places) {
       ? input.specificPlaces
       : (Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
 
+    const getName = (x) => typeof x === 'string' ? x : (x?.name || '')
     const requestedPlaces = []
     const otherPlaces = []
 
     for (const p of scored) {
+      const pKey = normalizePlaceKey(p.name)
       const isRequested = p.rawTags?.requested_place === 'true' || 
                           p.category === 'requested' || 
-                          (refList.length > 0 && refList.some(sp => normalizeKey(sp) === normalizeKey(p.name) || normalizeKey(p.name).includes(normalizeKey(sp)) || normalizeKey(sp).includes(normalizeKey(p.name))))
+                          (refList.length > 0 && refList.some(sp => {
+                            const spKey = normalizePlaceKey(getName(sp))
+                            return spKey && (spKey === pKey || pKey.includes(spKey) || spKey.includes(pKey))
+                          }))
       if (isRequested) {
         requestedPlaces.push(p)
       } else {
@@ -1826,32 +1831,31 @@ export function buildTourPlanner(input, location, places) {
     }
 
     if (requestedPlaces.length >= 2) {
-      const getName = (x) => typeof x === 'string' ? x : (x?.name || '')
       requestedPlaces.sort((a, b) => {
+        const aKey = normalizePlaceKey(a.name)
+        const bKey = normalizePlaceKey(b.name)
         const idxA = refList.findIndex(item => {
           const itemKey = normalizePlaceKey(getName(item))
-          const aKey = normalizePlaceKey(a.name)
-          return itemKey === aKey || itemKey.includes(aKey) || aKey.includes(itemKey)
+          return itemKey && aKey && (itemKey === aKey || itemKey.includes(aKey) || aKey.includes(itemKey))
         })
         const idxB = refList.findIndex(item => {
           const itemKey = normalizePlaceKey(getName(item))
-          const bKey = normalizePlaceKey(b.name)
-          return itemKey === bKey || itemKey.includes(bKey) || bKey.includes(itemKey)
+          return itemKey && bKey && (itemKey === bKey || itemKey.includes(bKey) || bKey.includes(itemKey))
         })
         return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
       })
 
       const totalDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
       selectedPlaces = requestedPlaces.map((p, i) => {
+        const pKey = normalizePlaceKey(p.name)
         const matchedRef = refList.find(item => {
           const itemKey = normalizePlaceKey(getName(item))
-          const pKey = normalizePlaceKey(p.name)
-          return itemKey === pKey || itemKey.includes(pKey) || pKey.includes(itemKey)
+          return itemKey && pKey && (itemKey === pKey || itemKey.includes(pKey) || pKey.includes(itemKey))
         })
         const dayFromRef = typeof matchedRef === 'object' ? (matchedRef?.day || matchedRef?.dia) : null
-        const assignedDay = dayFromRef
+        const assignedDay = dayFromRef != null
           ? Number(dayFromRef)
-          : (p.dia || p.day || Math.min(totalDays, Math.floor((i * totalDays) / requestedPlaces.length) + 1))
+          : (p.dia != null ? Number(p.dia) : (p.day != null ? Number(p.day) : Math.min(totalDays, Math.floor((i * totalDays) / requestedPlaces.length) + 1)))
         return {
           ...p,
           dia: Number(assignedDay),
@@ -4068,13 +4072,19 @@ export async function collectTourCandidates(input, location) {
         
         // Si no se encuentra o la ubicación es dudosa, intentar con prefijos contextuales de categoría
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 50)) {
-          const isNightlife = /barbados|la brisa loca|discoteca|bar|club|pub|rumba/i.test(placeName)
-          const isFood = /ouzo|bistro|restaurante|cafe|comida/i.test(placeName)
-          if (isNightlife) {
+          const isNightlife = /barbados|la brisa loca|discoteca|bar|club|pub|rumba|puerta|cava/i.test(placeName)
+          const isFood = /ouzo|bistro|cucho|donde chucho|restaurante|cafe|comida|asador|mirador|cava|marinka/i.test(placeName)
+          const isHistoricOrPedestrian = /callej[oó]n|correo|centro hist[oó]rico|catedral|plaza|parque|quinta/i.test(placeName)
+          if (isFood) {
+            geo = await geocodePlace(`Restaurante ${placeName}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Donde Chucho, ${city}, ${country}`).catch(() => null)
+            if (!geo && isNightlife) geo = await geocodePlace(`Bar ${placeName}, ${city}, ${country}`).catch(() => null)
+          } else if (isNightlife) {
             geo = await geocodePlace(`Bar ${placeName}, ${city}, ${country}`).catch(() => null)
             if (!geo) geo = await geocodePlace(`Discoteca ${placeName}, ${city}, ${country}`).catch(() => null)
-          } else if (isFood) {
-            geo = await geocodePlace(`Restaurante ${placeName}, ${city}, ${country}`).catch(() => null)
+          } else if (isHistoricOrPedestrian) {
+            geo = await geocodePlace(`${placeName}, ${city}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`${placeName}, Centro, ${city}`).catch(() => null)
           }
         }
 
@@ -4311,8 +4321,16 @@ export function isValidTouristAttraction(place, input) {
   const isRequestedByChat = place.rawTags?.requested_place === 'true' || 
                            place.category === 'requested' || 
                            place.isUserSelected === true ||
-                           (Array.isArray(input?.specificPlaces) && input.specificPlaces.some(sp => normalizeKey(sp) === nameKey || nameKey.includes(normalizeKey(sp)) || normalizeKey(sp).includes(nameKey))) ||
-                           (Array.isArray(input?.selectedPlaces) && input.selectedPlaces.some(sp => normalizeKey(sp) === nameKey || nameKey.includes(normalizeKey(sp)) || normalizeKey(sp).includes(nameKey)))
+                           (Array.isArray(input?.specificPlaces) && input.specificPlaces.some(sp => {
+                             const spName = typeof sp === 'string' ? sp : (sp?.name || '')
+                             const k = normalizePlaceKey(spName)
+                             return k && (k === nameKey || nameKey.includes(k) || k.includes(nameKey))
+                           })) ||
+                           (Array.isArray(input?.selectedPlaces) && input.selectedPlaces.some(sp => {
+                             const spName = typeof sp === 'string' ? sp : (sp?.name || '')
+                             const k = normalizePlaceKey(spName)
+                             return k && (k === nameKey || nameKey.includes(k) || k.includes(nameKey))
+                           }))
 
   if (isRequestedByChat) {
     return true

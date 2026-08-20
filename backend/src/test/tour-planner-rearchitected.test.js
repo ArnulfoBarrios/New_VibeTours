@@ -562,6 +562,68 @@ Itinerario de Viaje a Santa Marta (7 días):
   assert.equal(cerveza.dia, 7)
 })
 
+test('buildTourPlanner must strictly preserve days when selectedPlaces contains day-tagged objects', async () => {
+  const { buildTourPlanner } = await import('../routes/ai.js')
+
+  const input = {
+    destination: 'Santa Marta',
+    durationDays: 7,
+    durationHours: 168,
+    type: 'custom',
+    selectedPlaces: [
+      { name: 'Centro Histórico', dia: 1, day: 1 },
+      { name: 'Bistro', dia: 1, day: 1 },
+      { name: 'Minca', dia: 2, day: 2 },
+      { name: 'Cucho', dia: 2, day: 2 },
+      { name: 'Parque Nacional Natural Tayrona', dia: 3, day: 3 },
+      { name: 'Ouzo', dia: 3, day: 3 },
+      { name: 'Bahía Concha', dia: 4, day: 4 },
+      { name: 'Taganga', dia: 5, day: 5 },
+      { name: 'Playa Cristal', dia: 5, day: 5 },
+      { name: 'Quinta de San Pedro Alejandrino', dia: 6, day: 6 },
+      { name: 'Callejón del Correo', dia: 6, day: 6 },
+      { name: 'Playa El Rodadero', dia: 7, day: 7 },
+      { name: 'La Puerta', dia: 7, day: 7 }
+    ]
+  }
+
+  const location = { name: 'Santa Marta', latitude: 11.24, longitude: -74.21 }
+  const pool = input.selectedPlaces.map(p => ({
+    name: p.name,
+    dia: p.dia,
+    day: p.day,
+    latitude: 11.24,
+    longitude: -74.21,
+    category: 'requested',
+    rawTags: { requested_place: 'true' }
+  }))
+
+  const planner = buildTourPlanner(input, location, pool)
+  assert.equal(planner.selectedPlaces.length, 13)
+
+  // Verify that every place kept its EXACT day and was not mathematically grouped into 1-4 days
+  const minca = planner.selectedPlaces.find(p => p.name === 'Minca')
+  assert.equal(minca.dia, 2)
+
+  const tayrona = planner.selectedPlaces.find(p => p.name.includes('Tayrona'))
+  assert.equal(tayrona.dia, 3)
+
+  const bahiaConcha = planner.selectedPlaces.find(p => p.name === 'Bahía Concha')
+  assert.equal(bahiaConcha.dia, 4)
+
+  const taganga = planner.selectedPlaces.find(p => p.name === 'Taganga')
+  assert.equal(taganga.dia, 5)
+
+  const quinta = planner.selectedPlaces.find(p => p.name.includes('Quinta'))
+  assert.equal(quinta.dia, 6)
+
+  const rodadero = planner.selectedPlaces.find(p => p.name.includes('Rodadero'))
+  assert.equal(rodadero.dia, 7)
+
+  const puerta = planner.selectedPlaces.find(p => p.name === 'La Puerta')
+  assert.equal(puerta.dia, 7)
+})
+
 
 
 

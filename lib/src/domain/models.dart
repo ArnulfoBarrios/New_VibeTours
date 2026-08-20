@@ -834,7 +834,7 @@ class AiTourRequest {
   final double? latitude;
   final double? longitude;
   final String? budget;
-  final List<String> selectedPlaces;
+  final List<dynamic> selectedPlaces;
 
   Map<String, dynamic> toJson() => {
     'destination': destination,
@@ -882,7 +882,7 @@ class AiTourRequest {
     double? latitude,
     double? longitude,
     String? budget,
-    List<String>? selectedPlaces,
+    List<dynamic>? selectedPlaces,
   }) {
     return AiTourRequest(
       destination: destination ?? this.destination,

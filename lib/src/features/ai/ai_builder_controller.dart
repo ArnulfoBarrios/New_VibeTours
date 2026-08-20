@@ -252,14 +252,30 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             final durHours = (updatedPreferences['durationHours'] as num?)?.toDouble() ?? (numDays >= 2 ? numDays * 24 : 8.0);
             final rawSpecPlaces = updatedPreferences['specificPlaces'] as List? ?? [];
             final specPlaces = rawSpecPlaces.map((e) {
-              if (e is Map) return (e['name'] ?? '').toString().trim();
+              if (e is Map) {
+                final name = (e['name'] ?? '').toString().trim();
+                final dia = e['dia'] ?? e['day'];
+                if (name.isNotEmpty && dia != null) {
+                  return {'name': name, 'dia': dia, 'day': dia};
+                }
+                return name;
+              }
               final str = e.toString().trim();
               if (str.startsWith('{') && str.contains('name:')) {
-                final match = RegExp(r'name\s*:\s*([^,\}]+)').firstMatch(str);
-                if (match != null) return match.group(1)?.trim() ?? str;
+                final mName = RegExp(r'name\s*:\s*([^,\}]+)').firstMatch(str);
+                final mDia = RegExp(r'(?:dia|day)\s*:\s*(\d+)').firstMatch(str);
+                final name = mName?.group(1)?.trim() ?? '';
+                final dia = mDia != null ? int.tryParse(mDia.group(1)!) : null;
+                if (name.isNotEmpty && dia != null) {
+                  return {'name': name, 'dia': dia, 'day': dia};
+                }
+                if (name.isNotEmpty) return name;
               }
               return str;
-            }).where((name) => name.isNotEmpty).toList();
+            }).where((item) {
+              if (item is Map) return (item['name'] as String? ?? '').isNotEmpty;
+              return (item as String).isNotEmpty;
+            }).toList();
 
             CanonicalDestination? canonical;
             if (updatedPreferences['canonicalDestination'] != null) {
