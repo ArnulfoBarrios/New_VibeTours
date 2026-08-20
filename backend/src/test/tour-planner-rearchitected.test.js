@@ -436,19 +436,18 @@ test('isNonTouristicInput and generateChatResponse must reject actor tributes an
   assert.equal(isNonTouristicInput(tributeMsg), true)
 
   const res = await generateChatResponse({ history: [{ role: 'user', content: tributeMsg }] }, '', '', {})
-  assert.equal(res.isUnrelatedToTravel, true)
   assert.equal(res.readyToBuild, false)
   assert.ok(res.responseMessage.includes('no está relacionada con la planificación de viajes'))
 })
 
-test('generateChatResponse must accept queries about dates and cultural events in destination', async () => {
+test('generateChatResponse must accept queries about dates, festivals, and cultural events', async () => {
   const { isNonTouristicInput, generateChatResponse } = await import('../services/openai.js')
 
-  const eventQuery = 'Pues que fecha me recomiendas para ir? si se puede quiero una fecha donde vaya a pasar algún evento especial en Cartagena'
+  const eventQuery = 'Santa Marta está bien, en qué fecha me recomiendas ir? hay algún evento especial que podría ver?'
   assert.equal(isNonTouristicInput(eventQuery), false)
 
-  const res = await generateChatResponse({ history: [{ role: 'user', content: eventQuery }] }, '', '', { city: 'Cartagena', country: 'Colombia' })
-  assert.equal(res.isUnrelatedToTravel, false)
+  const res = await generateChatResponse({ history: [{ role: 'user', content: eventQuery }] }, '', '', { city: 'Santa Marta', country: 'Colombia' })
+  assert.equal(res.readyToBuild, false)
   assert.ok(!res.responseMessage.includes('no está relacionada con la planificación'))
 })
 

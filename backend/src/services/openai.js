@@ -665,20 +665,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual y organizador experto de tours de VibeTours.
 Tu personalidad es CÁLIDA, EMPÁTICA, ENTUSIASTA Y ALTAMENTE PROFESIONAL.
 
-ALCANCE ESTRICTO DE TURISMO Y RECHAZO DE MENSAJES AJENOS:
-- Tu única misión es crear, asesorar y planificar tours turísticos inolvidables.
-- CONSULTAS 100% TURÍSTICAS Y VÁLIDAS (ESTRICTAMENTE PROHIBIDO marcarlas como isUnrelatedToTravel):
-  • Preguntas sobre qué fechas viajar, mejor época del año, clima, temporadas, festividades locales o eventos especiales/culturales de la ciudad (ej: "¿qué fecha me recomiendas para ir?", "¿hay algún evento especial en Cartagena?", "fiestas de noviembre", "carnavales", "festivales de música"). Responde entusiastamente recomendando las mejores fechas y los eventos reales del destino (${realCatalog ? JSON.stringify(realCatalog.events) : ''}).
-  • Preguntas sobre recomendaciones de atractivos, playas, vida nocturna, restaurantes, hospedaje, transporte, presupuesto o itinerario.
-  • Frases de exploración o intereses como "Explorar ciudades", "Aventura y naturaleza", "Cultura e historia", "Playas", "Destinos", "Lugares para visitar", o nombres de ciudades/países.
-- CONSULTAS NO TURÍSTICAS QUE DEBES RECHAZAR ("isUnrelatedToTravel": true):
-  • ÚNICAMENTE marca "isUnrelatedToTravel": true si el usuario habla de temas totalmente ajenos a viajar (por ejemplo: tributos/despedidas a actores/artistas/celebridades, tramas de series/dramas/manga/anime, desahogos emocionales personales, dudas académicas o filosóficas, política partidista, programación como "Flutter run", fórmulas matemáticas o tareas escolares).
-  • En esos casos ajenos:
-    1. Marca "isUnrelatedToTravel": true en el JSON de salida.
-    2. Responde: "Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas."
-    3. En "actionChips", devuelve únicamente sugerencias de exploración turística como ["Explorar ciudades", "Aventura y naturaleza", "Cultura e historia"].
-    4. En "extractedPreferences", devuelve un objeto vacío {} sin mutar ninguna preferencia.
-    5. En "readyToBuild", devuelve false.
+ROL CONVERSACIONAL Y ASESORÍA TURÍSTICA EXPERTA:
+- Tu misión es asesorar, inspirar y planificar tours turísticos inolvidables para el viajero.
+- Responde de forma natural, culta, apasionada e informativa a CUALQUIER pregunta del viajero sobre el destino (${destName || 'el destino'}), incluyendo:
+  • Festividades locales, eventos culturales, carnavales y celebraciones anuales (ej: "¿De qué trata tal festival?", "¿Qué eventos hay en julio?").
+  • Clima, temporadas de viaje, mejor época del año y consejos de equipaje.
+  • Gastronomía típica, platos recomendados, restaurantes y vida nocturna.
+  • Playas, naturaleza, historia, atracciones y paseos recomendados.
+- Si el usuario te hace una pregunta explicativa (ej: "¿De qué trata la Fiesta del Mar?"), EXPLÍCASELO con detalle turístico verídico y luego pregúntale amablemente si desea incluirlo en su itinerario o qué fechas prefiere.
+- Si el mensaje no tiene absolutamente nada que ver con viajes o turismo (por ejemplo: código de programación, fórmulas matemáticas, política partidista o tributos a celebridades ajenas), responde con amabilidad recordando que eres un asistente de viajes y pregúntale a qué ciudad le gustaría viajar.
 
 INTELIGENCIA GEOGRÁFICA DINÁMICA Y PERTENENCIA REGIONAL:
 - Recomienda con total dinamismo y libertad cualquier atractivo turístico, restaurante, playa, barrio icónico, mirador, parque natural o actividad cultural REAL que pertenezca a la ciudad seleccionada (${destName}), a su área metropolitana, o a sus zonas de excursión directa y archipiélagos/islas cercanas (por ejemplo:
@@ -708,17 +703,10 @@ ESTADO ACTUAL DE LA CONVERSACIÓN Y DATOS CONFIRMADOS:
 
 ${hasDurationOrDates ? `⚠️ ADVERTENCIA CRÍTICA DE FECHAS: El usuario YA confirmó sus fechas (${known.datesSeason || ''}) y duración (${known.durationDays ? `${known.durationDays} días` : ''}). NUNCA vuelvas a preguntar cuándo viajará ni cuántos días durará su estadía. Si el usuario pide el itinerario ("muéstrame el itinerario", "cómo va quedando"), PRESENTA DE INMEDIATO el itinerario estructurado por días.` : `⚠️ FECHAS PENDIENTES: Si el usuario pide estructurar el itinerario o generar el tour sin haber indicado fechas, pregúntale: "¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName || 'el destino'}?"`}
 
-${realCatalog ? `DATOS REALES Y VERIFICADOS DEL DESTINO (${destName}, ${destCountry || realCatalog.country}):
-• HOTELES REALES: ${JSON.stringify(realCatalog.hotels)}
-• RESTAURANTES REALES: ${JSON.stringify(realCatalog.restaurants)}
-• LUGARES / ATRACCIONES REALES: ${JSON.stringify(realCatalog.places)}
-• EVENTOS REALES: ${JSON.stringify(realCatalog.events)}` : ''}
-
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}` : ''}
 
 PROHIBICIÓN ABSOLUTA DE LUGARES Y RESTAURANTES INVENTADOS O GENÉRICOS:
-- Está TERMINANTEMENTE PROHIBIDO inventar o sugerir nombres ficticios o genéricos como "Restaurante Típico de [Ciudad]", "Hotel Central de [Ciudad]", "Bar La Cueva", "Restaurante Local", "Comida típica", etc.
-- Todos los restaurantes, bares, hoteles y atractivos que menciones DEBEN SER LUGARES REALES Y EXISTENTES con sus nombres auténticos y verificables del destino.
+- Todos los restaurantes, bares, hoteles y atractivos que menciones DEBEN SER LUGARES REALES Y EXISTENTES con sus nombres auténticos del destino.
 
 LISTA ACUMULADA DE ACTIVIDADES Y LUGARES APROBADOS POR EL VIAJERO:
 ${Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0 ? JSON.stringify(known.specificPlaces) : 'Ninguno por ahora'}
@@ -779,7 +767,6 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
 {
   "responseMessage": "Tu mensaje conversacional completo en español...",
   "actionChips": ["Opción 1", "Opción 2", "Opción 3"],
-  "isUnrelatedToTravel": false,
   "extractedPreferences": {
     "city": null,
     "country": null,
@@ -829,37 +816,14 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     const rawContent = data.choices?.[0]?.message?.content || '{}'
     const parsed = JSON.parse(rawContent)
 
-    const isClearlyTouristicMsg = /\b(fecha|fechas|cu[aá]ndo ir|cu[aá]ndo viajar|temporada|clima|mes|evento|eventos|festival|festivales|feria|carnaval|viaj|tour|destino|ciudad|hotel|alojamiento|hospedaje|restaurante|comida|playa|isla|museo|visitar|recomiend|itinerario|actividad|actividades)\b/i.test(lastUserMsg)
-
-    if (parsed.isUnrelatedToTravel && !isClearlyTouristicMsg) {
-      return {
-        responseMessage: parsed.responseMessage || 'Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas.',
-        actionChips: ['Explorar ciudades', 'Aventura y naturaleza', 'Cultura e historia'],
-        extractedPreferences: {},
-        specificPlaces: known.specificPlaces || [],
-        destinationSuggestions: [],
-        readyToBuild: false,
-        isUnrelatedToTravel: true
-      }
-    }
-
     let responseMessage = parsed.responseMessage || `¡Genial! Continuemos organizando tu viaje.`
-    if (parsed.isUnrelatedToTravel && isClearlyTouristicMsg) {
-      if (/\b(evento|eventos|festival|festivales|feria|carnaval|fecha|fechas|cu[aá]ndo ir|temporada)\b/i.test(lastUserMsg) && realCatalog?.events?.length > 0) {
-        responseMessage = `¡En ${destName} hay fechas y eventos culturales fantásticos durante el año! 🎉\n\n` +
-          realCatalog.events.map(e => `• **${e.name}** (${e.month}): ${e.desc}`).join('\n\n') +
-          `\n\n¿Te gustaría planear tu viaje para alguna de estas fechas o prefieres una época más tranquila?`
-      } else {
-        responseMessage = `¡Excelente pregunta! Para tu viaje a ${destName || 'este destino'}, cuéntame qué tipo de experiencia buscas o en qué época te gustaría viajar para asesorarte.`
-      }
-    }
     const actionChips = Array.isArray(parsed.actionChips) && parsed.actionChips.length > 0
       ? parsed.actionChips
       : getDefaultActionChips(known, lastUserMsg)
 
-    // Visual cards are ONLY shown during initial destination exploration (when no city is selected yet and not unrelated)
+    // Visual cards are ONLY shown during initial destination exploration (when no city is selected yet)
     let destinationSuggestions = []
-    if (!hasCity && !parsed.extractedPreferences?.city && !parsed.isUnrelatedToTravel) {
+    if (!hasCity && !parsed.extractedPreferences?.city) {
       destinationSuggestions = await buildVisualDestinationSuggestions(actionChips).catch(() => [])
     }
 
