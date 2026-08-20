@@ -727,6 +727,75 @@ Itinerario de Viaje a Barranquilla (la otra semana):
   assert.ok(d7.some(p => p.name.includes('Buenavista')))
 })
 
+test('getPlaceEntityType and deduplicatePlacesByName must preserve distinct entities with shared words', async () => {
+  const { getPlaceEntityType, deduplicatePlacesByName, buildTourPlanner } = await import('../routes/ai.js')
+
+  // 1. Entity type verification
+  assert.equal(getPlaceEntityType('Museo del Caribe'), 'cultural')
+  assert.equal(getPlaceEntityType('Parque Cultural del Caribe'), 'park_nature')
+  assert.equal(getPlaceEntityType('Centro Comercial Viva'), 'shopping')
+  assert.equal(getPlaceEntityType('Restaurante El Buen Gusto'), 'food')
+  assert.equal(getPlaceEntityType('Playa de Puerto Colombia'), 'beach_coastal')
+  assert.equal(getPlaceEntityType('Catedral Metropolitana María Reina'), 'religious')
+  assert.equal(getPlaceEntityType('Zoológico de Barranquilla'), 'entertainment_sports')
+  assert.equal(getPlaceEntityType('Paseo Bolívar'), 'urban_promenade')
+
+  // 2. Typed deduplication: Museo del Caribe vs Parque Cultural del Caribe MUST NOT be merged
+  const places = [
+    { name: 'Museo del Caribe', dia: 2 },
+    { name: 'Parque Cultural del Caribe', dia: 2 },
+    { name: 'Restaurante El Bistro', dia: 1 },
+    { name: 'El Bistro', dia: 1 } // same entity -> merged
+  ]
+
+  const deduped = deduplicatePlacesByName(places)
+  assert.equal(deduped.length, 3)
+  assert.ok(deduped.some(p => p.name === 'Museo del Caribe'))
+  assert.ok(deduped.some(p => p.name === 'Parque Cultural del Caribe'))
+
+  // 3. 8-Day, 16-Stop Zero-Drop Planner Verification
+  const eightDayPlaces = [
+    { name: 'La Ventana al Mundo', dia: 1, latitude: 11.02, longitude: -74.83 },
+    { name: 'Restaurante La Cueva', dia: 1, latitude: 10.98, longitude: -74.79 },
+    { name: 'Museo del Caribe', dia: 2, latitude: 10.98, longitude: -74.78 },
+    { name: 'Restaurante El Buen Gusto', dia: 2, latitude: 10.98, longitude: -74.78 },
+    { name: 'Parque Cultural del Caribe', dia: 2, latitude: 10.98, longitude: -74.78 },
+    { name: 'Bocas de Ceniza', dia: 3, latitude: 11.05, longitude: -74.85 },
+    { name: 'Restaurante El Tropezón', dia: 3, latitude: 10.96, longitude: -74.79 },
+    { name: 'Catedral Metropolitana María Reina', dia: 4, latitude: 10.99, longitude: -74.79 },
+    { name: 'Centro Comercial Buenavista', dia: 4, latitude: 11.01, longitude: -74.82 },
+    { name: 'Playa de Puerto Colombia', dia: 5, latitude: 11.02, longitude: -74.96 },
+    { name: 'Restaurante El Cielo', dia: 5, latitude: 10.99, longitude: -74.80 },
+    { name: 'Paseo Bolívar', dia: 6, latitude: 10.98, longitude: -74.78 },
+    { name: 'el Malecón del Río Magdalena', dia: 6, latitude: 11.01, longitude: -74.79 },
+    { name: 'Zoológico de Barranquilla', dia: 7, latitude: 11.00, longitude: -74.80 },
+    { name: 'Restaurante La Casa de la Cerveza', dia: 7, latitude: 11.01, longitude: -74.82 },
+    { name: 'Centro Comercial Viva', dia: 8, latitude: 11.00, longitude: -74.82 }
+  ]
+
+  const input = {
+    durationDays: 8,
+    durationHours: 64,
+    destination: 'Barranquilla',
+    specificPlaces: eightDayPlaces
+  }
+
+  const planner = buildTourPlanner(input, null, eightDayPlaces)
+  assert.equal(planner.selectedPlaces.length, 16)
+
+  // Verify that all 8 days exist and match
+  for (let d = 1; d <= 8; d++) {
+    const stopsInDay = planner.selectedPlaces.filter(p => (p.dia === d || p.day === d))
+    assert.ok(stopsInDay.length >= 1, `Día ${d} must exist and have at least 1 stop`)
+  }
+
+  const viva = planner.selectedPlaces.find(p => p.name.includes('Viva'))
+  assert.equal(viva.dia, 8)
+
+  const puertoCol = planner.selectedPlaces.find(p => p.name.includes('Puerto Colombia'))
+  assert.equal(puertoCol.dia, 5)
+})
+
 
 
 

@@ -57,7 +57,8 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
     if (openverseCity) return { url: openverseCity, isFallback: true }
 
     // Fallback secundario de la ciudad únicamente para vistas generales o categorías por defecto
-    const isSpecialCategory = ['restaurant', 'cafe', 'market', 'nightlife', 'museum', 'sports'].includes(normalizedCategory)
+    const isSpecialCategory = ['restaurant', 'cafe', 'market', 'nightlife', 'museum', 'sports', 'shopping', 'mall', 'beach', 'church', 'cathedral', 'park', 'nature'].includes(normalizedCategory) ||
+      /comercial|mall|shopping|tienda|restaurante|playa|catedral|parque|jard[íi]n|museo|estadio|zool[óo]gico/i.test(placeName)
     if (!isSpecialCategory) {
       const wikiJustCity = await wikimediaImage(city, [cityWords], seed)
       if (wikiJustCity) return { url: wikiJustCity, isFallback: true }

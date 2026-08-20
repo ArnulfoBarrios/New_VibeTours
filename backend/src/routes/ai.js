@@ -61,6 +61,21 @@ const requestSchema = z.object({
   specificPlaces: z.array(z.any()).optional().default([])
 })
 
+// Clasificador de tipos de entidad universal para evitar que lugares de distinta categoría se confundan entre sí
+export function getPlaceEntityType(placeName) {
+  if (!placeName || typeof placeName !== 'string') return 'generic'
+  const lower = placeName.toLowerCase()
+  if (/\b(museo|museum|galer[íi]a de arte|teatro|monumento|estatua|escultura|castillo|fuerte|muralla|bastion|palacio)\b/i.test(lower)) return 'cultural'
+  if (/\b(parque|jard[íi]n|jardin|bosque|reserva|sendero|cascada|laguna|lago|mirador|bot[áa]nico|botanico)\b/i.test(lower)) return 'park_nature'
+  if (/\b(playa|beach|bah[íi]a|bahia|cala|isla|island|cayo|arrecife|muelle|puerto)\b/i.test(lower)) return 'beach_coastal'
+  if (/\b(catedral|bas[íi]lica|basilica|iglesia|capilla|templo|mezquita|sinagoga|santuario)\b/i.test(lower)) return 'religious'
+  if (/\b(restaurante|restaurant|bistro|caf[ée]|coffee|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|panader[íi]a|pasteler[íi]a|comida|helader[íi]a)\b/i.test(lower)) return 'food'
+  if (/\b(centro comercial|mall|shopping|plaza comercial|mercado|bazar)\b/i.test(lower)) return 'shopping'
+  if (/\b(estadio|coliseo|arena|zool[óo]gico|zoologico|acuario|parque de diversiones|parque tem[áa]tico)\b/i.test(lower)) return 'entertainment_sports'
+  if (/\b(paseo|malec[oó]n|malecon|rambla|avenida|bulevar|callej[oó]n|callejon|plaza|plazoleta)\b/i.test(lower)) return 'urban_promenade'
+  return 'generic'
+}
+
 // Normalizador de clave canónica para fusionar variantes de un mismo lugar (ej: "Restaurante El Bistro" vs "Bistro", "Playa de El Rodadero" vs "El Rodadero")
 export function normalizePlaceKey(placeName) {
   if (!placeName || typeof placeName !== 'string') return ''
@@ -74,7 +89,7 @@ export function normalizePlaceKey(placeName) {
     .trim()
 
   const stripped = base
-    .replace(/\b(restaurante de la|restaurante del|restaurante de|restaurante el|restaurante la|restaurante los|restaurante las|restaurante|gastrobar de|gastrobar|bar de|bar el|bar la|bar|cafe de|cafe el|cafe la|cafe|discoteca de|discoteca la|discoteca el|discoteca|club de|club|pub de|pub|playa de la|playa de el|playa de|playa del|playa|parque nacional natural|parque nacional|parque natural|parque|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|camino a|sendero de|sendero)\b/g, ' ')
+    .replace(/\b(restaurante de la|restaurante del|restaurante de|restaurante el|restaurante la|restaurante los|restaurante las|restaurante|gastrobar de|gastrobar|bar de|bar el|bar la|bar|cafe de|cafe el|cafe la|cafe|discoteca de|discoteca la|discoteca el|discoteca|club de|club|pub de|pub|playa de la|playa de el|playa de|playa del|playa|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|camino a|sendero de|sendero)\b/g, ' ')
     .replace(/\b(la|el|los|las|un|una|unos|unas|del|de|de la|de los)\b/g, ' ') // remove articles
     .replace(/\b(visita a la|visita a|visita al|recorrido por el|recorrido por la|recorrido por|paseo en lancha a|paseo en lancha por|paseo en barco a|paseo en|paseo por|excursion a la|excursion a|excursión a|excursion al|ir a|entrada a|parada en|caminar por|recorrer el|visitar la|visitar el)\b/g, ' ') // remove action prefixes
     .replace(/\s+/g, ' ')
@@ -93,10 +108,18 @@ export function deduplicatePlacesByName(places = []) {
     if (!name || !isValidSpecificPlace(name)) continue
     const key = normalizePlaceKey(name)
     if (!key) continue
+    const type = getPlaceEntityType(name)
 
     const existingIdx = result.findIndex(item => {
       const existingName = typeof item === 'string' ? item : (item.name || '')
       const existingKey = normalizePlaceKey(existingName)
+      const existingType = getPlaceEntityType(existingName)
+
+      // Si tienen categorías explícitas incompatibles (ej: Museo vs Parque, Centro Comercial vs Restaurante), NUNCA son duplicados
+      if (type !== 'generic' && existingType !== 'generic' && type !== existingType) {
+        return false
+      }
+
       if (key === existingKey) return true
       if (key.length >= 4 && existingKey.length >= 4) {
         if (key.includes(existingKey) || existingKey.includes(key)) return true
@@ -1256,17 +1279,19 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     
     updateJob({ status: 'validating', message: 'Validando estructura y calidad del recorrido...' })
     
-    // We reuse the assembly logic
-    const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
-      ? sourceTour.itinerario
-      : sourceTour.stops ?? []
+    const hasSpecificChatPlaces = Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length > 0 &&
+      (planner.selectedPlaces.some(p => p.category === 'requested' || p.tags?.requested_place === 'true') || planner.selectedPlaces.length >= (sourceTour.itinerario?.length || 0))
+
+    const plannedStops = hasSpecificChatPlaces
+      ? planner.selectedPlaces
+      : (Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length ? sourceTour.itinerario : (sourceTour.stops ?? planner.selectedPlaces))
     const stopsTarget = plannedStops.length > 0 ? plannedStops.length : planner.selectedPlaces.length
     const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
     const settledStops = await Promise.allSettled(
       Array.from({ length: stopsTarget }, (_, index) => {
         const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
         const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : null
+        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (anchorPlace?.dia ? Number(anchorPlace.dia) : null)
         const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopsTarget) + 1)
         return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
       })
@@ -1274,7 +1299,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     const rawStops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
     
     // Preservar estrictamente el orden secuencial cronológico por días
-    const seenNames = new Set()
+    const seenKeys = new Set()
     const normalizedStops = []
     const hotelNameLower = String(input.selectedHotel?.name || plannerContext?.selectedHotel?.name || '').toLowerCase()
     
@@ -1284,9 +1309,11 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
         continue
       }
-      const nameKey = normalizeKey(name)
-      if (!seenNames.has(nameKey)) {
-        seenNames.add(nameKey)
+      const itemDay = item.publicStop.dia || 1
+      const itemType = getPlaceEntityType(name)
+      const nameKey = `${normalizeKey(name)}__${itemType}__d${itemDay}`
+      if (!seenKeys.has(nameKey)) {
+        seenKeys.add(nameKey)
         normalizedStops.push(item)
       }
     }
@@ -1479,16 +1506,19 @@ async function processTourGeneration(jobId, input) {
     
     let tour = null
     try {
-      const plannedStops = Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length
-        ? sourceTour.itinerario
-        : sourceTour.stops ?? []
+      const hasSpecificChatPlaces = Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length > 0 &&
+        (planner.selectedPlaces.some(p => p.category === 'requested' || p.tags?.requested_place === 'true') || planner.selectedPlaces.length >= (sourceTour.itinerario?.length || 0))
+
+      const plannedStops = hasSpecificChatPlaces
+        ? planner.selectedPlaces
+        : (Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length ? sourceTour.itinerario : (sourceTour.stops ?? planner.selectedPlaces))
       const stopTarget = plannedStops.length > 0 ? plannedStops.length : Math.min(30, Math.max(3, planner.selectedPlaces.length))
       const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
       const settledStops = await Promise.allSettled(
         Array.from({ length: stopTarget }, (_, index) => {
           const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
           const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-          const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : null
+          const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (anchorPlace?.dia ? Number(anchorPlace.dia) : null)
           const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopTarget) + 1)
           return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
         }),
@@ -1496,7 +1526,7 @@ async function processTourGeneration(jobId, input) {
       const rawNormalized = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
       
       // Preservar estrictamente el orden secuencial cronológico por días
-      const seenNames = new Set()
+      const seenKeys = new Set()
       const normalizedStops = []
       const hotelNameLower = String(input.selectedHotel?.name || plannerContext?.selectedHotel?.name || '').toLowerCase()
       
@@ -1506,9 +1536,11 @@ async function processTourGeneration(jobId, input) {
         if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
           continue
         }
-        const nameKey = normalizeKey(name)
-        if (!seenNames.has(nameKey)) {
-          seenNames.add(nameKey)
+        const itemDay = item.publicStop.dia || 1
+        const itemType = getPlaceEntityType(name)
+        const nameKey = `${normalizeKey(name)}__${itemType}__d${itemDay}`
+        if (!seenKeys.has(nameKey)) {
+          seenKeys.add(nameKey)
           normalizedStops.push(item)
         }
       }
@@ -4111,7 +4143,7 @@ export async function collectTourCandidates(input, location) {
     } : null)
 
     const specificSettled = await Promise.allSettled(
-      mergedSpecifics.map(async (rawPlace) => {
+      mergedSpecifics.map(async (rawPlace, index) => {
         let placeName = ''
         let placeDay = null
         if (typeof rawPlace === 'string') {
@@ -4129,53 +4161,81 @@ export async function collectTourCandidates(input, location) {
           placeDay = rawPlace.dia || rawPlace.day || null
         }
         if (!isValidSpecificPlace(placeName)) return null
+
+        const entityType = getPlaceEntityType(placeName)
+        const isRestaurant = entityType === 'food' || /restaurante|bistro|cafe|comida|asador|gourmet|bar|pub/i.test(placeName)
         
         let geo = null
+        // Tier 1: Consulta directa con contexto de ciudad y país
         const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
         geo = await geocodePlace(searchQuery).catch(() => null)
-        
-        // Si no se encuentra o la ubicación es dudosa, intentar con prefijos contextuales de categoría
+
+        // Tier 2: Búsqueda con clasificador canónico universal según el tipo de entidad
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
-          const isNightlife = /barbados|la brisa loca|discoteca|bar|club|pub|rumba|puerta|cava|troja/i.test(placeName)
-          const isFood = /ouzo|bistro|cucho|donde chucho|restaurante|cafe|comida|asador|mirador|cava|marinka|cielo|gourmet/i.test(placeName)
-          const isHistoricOrPedestrian = /callej[oó]n|correo|centro hist[oó]rico|catedral|plaza|parque|quinta|museo|carnaval|estadio|boca|ceniza|malec[oó]n|bot[áa]nico/i.test(placeName)
-          if (isFood) {
-            geo = await geocodePlace(`Restaurante ${placeName}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Donde Chucho, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Gastrobar ${placeName}, ${city}, ${country}`).catch(() => null)
-            if (!geo && isNightlife) geo = await geocodePlace(`Bar ${placeName}, ${city}, ${country}`).catch(() => null)
-          } else if (isNightlife) {
-            geo = await geocodePlace(`Bar ${placeName}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Establecimiento ${placeName}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Discoteca ${placeName}, ${city}, ${country}`).catch(() => null)
-          } else if (isHistoricOrPedestrian) {
-            if (/boca.*ceniza/i.test(placeName)) {
-              geo = await geocodePlace(`Bocas de Ceniza, ${city}, ${country}`).catch(() => null)
-            } else if (/carnaval/i.test(placeName)) {
-              geo = await geocodePlace(`Casa del Carnaval, ${city}, ${country}`).catch(() => null)
-            } else if (/estadio/i.test(placeName)) {
-              geo = await geocodePlace(`Estadio Metropolitano Roberto Meléndez, ${city}, ${country}`).catch(() => null)
-            } else if (/malec[oó]n/i.test(placeName)) {
-              geo = await geocodePlace(`Gran Malecón del Río, ${city}, ${country}`).catch(() => null)
-            }
-            if (!geo) geo = await geocodePlace(`${placeName}, ${city}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`${placeName}, Centro, ${city}`).catch(() => null)
+          const cleanedPlace = placeName.replace(/^(?:el|la|los|las)\s+/i, '').trim()
+          
+          if (entityType === 'shopping') {
+            geo = await geocodePlace(`Centro Comercial ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`${cleanedPlace} Mall, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+          } else if (entityType === 'food') {
+            geo = await geocodePlace(`Restaurante ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Bar ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Café ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Gastrobar ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+          } else if (entityType === 'beach_coastal') {
+            geo = await geocodePlace(`Playa ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Playas de ${cleanedPlace}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Malecón ${cleanedPlace}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${country}`).catch(() => null)
+          } else if (entityType === 'cultural') {
+            geo = await geocodePlace(`Museo ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Teatro ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+          } else if (entityType === 'religious') {
+            geo = await geocodePlace(`Catedral ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Iglesia ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+          } else if (entityType === 'urban_promenade' || entityType === 'park_nature') {
+            geo = await geocodePlace(`Parque ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Paseo ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Plaza ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Gran Malecón ${cleanedPlace}, ${city}`).catch(() => null)
+          } else if (entityType === 'entertainment_sports') {
+            geo = await geocodePlace(`Estadio ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Zoológico ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+          }
+
+          if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}`).catch(() => null)
+          if (!geo) geo = await geocodePlace(`${cleanedPlace}, Centro, ${city}`).catch(() => null)
+        }
+
+        // Tier 3: Zero-Drop Policy con anclaje geográfico
+        // Si no se encuentra en OSM (ej. restaurante pequeño o local nuevo), anclarlo al cuadrante de la ciudad
+        // garantizando que NUNCA se pierda ninguna parada acordada en el chat.
+        let finalLat = geo?.latitude
+        let finalLon = geo?.longitude
+
+        if (!finalLat || !finalLon || !validateCandidateLocation(geo, canonicalDest, 70)) {
+          if (cityCenterLat && cityCenterLon) {
+            const angle = (index * 1.37) % (2 * Math.PI)
+            const offsetDist = 0.003 + (index % 5) * 0.001
+            finalLat = cityCenterLat + Math.sin(angle) * offsetDist
+            finalLon = cityCenterLon + Math.cos(angle) * offsetDist
           }
         }
 
-        if (geo && validateCandidateLocation(geo, canonicalDest, 70)) {
-          const isRestaurant = /ouzo|bistro|cucho|donde chucho|restaurante|cafe|comida|cielo|cava|puerta|gourmet/i.test(placeName)
+        if (finalLat && finalLon) {
           return {
             name: placeName,
-            latitude: geo.latitude,
-            longitude: geo.longitude,
+            latitude: finalLat,
+            longitude: finalLon,
             type: isRestaurant ? 'restaurant' : 'tourism',
             category: isRestaurant ? 'restaurant' : 'requested',
             dia: placeDay,
             day: placeDay,
             city,
             country,
-            address: geo.name || `${city}, ${placeName}`,
+            address: geo?.name || `${placeName}, ${city}`,
             description: `Atracción/Restaurante: ${placeName}`,
             tags: { requested_place: 'true' }
           }
@@ -4183,9 +4243,22 @@ export async function collectTourCandidates(input, location) {
         return null
       })
     )
+
     geocodedSpecifics = specificSettled
       .map(r => r.status === 'fulfilled' ? r.value : null)
       .filter(Boolean)
+
+    // Day Anchor Alignment: Si una parada usó fallback de cuadrante y su compañera de día tiene coordenadas precisas,
+    // ajustar el pin hacia la zona de su compañera
+    for (const p of geocodedSpecifics) {
+      if (p.address.startsWith(`${p.name}, ${city}`) && p.dia) {
+        const anchorMate = geocodedSpecifics.find(other => other !== p && other.dia === p.dia && !other.address.startsWith(`${other.name}, ${city}`))
+        if (anchorMate) {
+          p.latitude = anchorMate.latitude + 0.0015
+          p.longitude = anchorMate.longitude + 0.0015
+        }
+      }
+    }
   }
 
   // 1. Fetch top iconic landmarks from OpenAI global geography knowledge
