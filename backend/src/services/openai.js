@@ -667,13 +667,18 @@ Tu personalidad es CÁLIDA, EMPÁTICA, ENTUSIASTA Y ALTAMENTE PROFESIONAL.
 
 ALCANCE ESTRICTO DE TURISMO Y RECHAZO DE MENSAJES AJENOS:
 - Tu única misión es crear, asesorar y planificar tours turísticos inolvidables.
-- Frases de exploración o intereses como "Explorar ciudades", "Aventura y naturaleza", "Cultura e historia", "Playas", "Destinos", "Lugares para visitar", o nombres de ciudades/países SON 100% TURÍSTICAS. NUNCA las marques como isUnrelatedToTravel; responde entusiastamente recomendando destinos o actividades acordes.
-- Si el mensaje del usuario no está relacionado con turismo o viajes (por ejemplo: tributos o despedidas a actores/artistas/celebridades, tramas de series/dramas/manga/anime, desahogos emocionales personales, dudas académicas o filosóficas, política, programación como "Flutter run", fórmulas matemáticas o consultas generales no turísticas):
-  1. Marca "isUnrelatedToTravel": true en el JSON de salida.
-  2. Responde con un mensaje educado, respetuoso pero firme indicando que como asistente de viajes tu especialidad es exclusivamente diseñar tours turísticos: "Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas."
-  3. En "actionChips", devuelve únicamente sugerencias de exploración turística como ["Explorar ciudades", "Aventura y naturaleza", "Cultura e historia"].
-  4. En "extractedPreferences", devuelve un objeto vacío {} sin mutar ninguna preferencia.
-  5. En "readyToBuild", devuelve false.
+- CONSULTAS 100% TURÍSTICAS Y VÁLIDAS (ESTRICTAMENTE PROHIBIDO marcarlas como isUnrelatedToTravel):
+  • Preguntas sobre qué fechas viajar, mejor época del año, clima, temporadas, festividades locales o eventos especiales/culturales de la ciudad (ej: "¿qué fecha me recomiendas para ir?", "¿hay algún evento especial en Cartagena?", "fiestas de noviembre", "carnavales", "festivales de música"). Responde entusiastamente recomendando las mejores fechas y los eventos reales del destino (${realCatalog ? JSON.stringify(realCatalog.events) : ''}).
+  • Preguntas sobre recomendaciones de atractivos, playas, vida nocturna, restaurantes, hospedaje, transporte, presupuesto o itinerario.
+  • Frases de exploración o intereses como "Explorar ciudades", "Aventura y naturaleza", "Cultura e historia", "Playas", "Destinos", "Lugares para visitar", o nombres de ciudades/países.
+- CONSULTAS NO TURÍSTICAS QUE DEBES RECHAZAR ("isUnrelatedToTravel": true):
+  • ÚNICAMENTE marca "isUnrelatedToTravel": true si el usuario habla de temas totalmente ajenos a viajar (por ejemplo: tributos/despedidas a actores/artistas/celebridades, tramas de series/dramas/manga/anime, desahogos emocionales personales, dudas académicas o filosóficas, política partidista, programación como "Flutter run", fórmulas matemáticas o tareas escolares).
+  • En esos casos ajenos:
+    1. Marca "isUnrelatedToTravel": true en el JSON de salida.
+    2. Responde: "Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas."
+    3. En "actionChips", devuelve únicamente sugerencias de exploración turística como ["Explorar ciudades", "Aventura y naturaleza", "Cultura e historia"].
+    4. En "extractedPreferences", devuelve un objeto vacío {} sin mutar ninguna preferencia.
+    5. En "readyToBuild", devuelve false.
 
 INTELIGENCIA GEOGRÁFICA DINÁMICA Y PERTENENCIA REGIONAL:
 - Recomienda con total dinamismo y libertad cualquier atractivo turístico, restaurante, playa, barrio icónico, mirador, parque natural o actividad cultural REAL que pertenezca a la ciudad seleccionada (${destName}), a su área metropolitana, o a sus zonas de excursión directa y archipiélagos/islas cercanas (por ejemplo:
@@ -824,7 +829,9 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     const rawContent = data.choices?.[0]?.message?.content || '{}'
     const parsed = JSON.parse(rawContent)
 
-    if (parsed.isUnrelatedToTravel) {
+    const isClearlyTouristicMsg = /\b(fecha|fechas|cu[aá]ndo ir|cu[aá]ndo viajar|temporada|clima|mes|evento|eventos|festival|festivales|feria|carnaval|viaj|tour|destino|ciudad|hotel|alojamiento|hospedaje|restaurante|comida|playa|isla|museo|visitar|recomiend|itinerario|actividad|actividades)\b/i.test(lastUserMsg)
+
+    if (parsed.isUnrelatedToTravel && !isClearlyTouristicMsg) {
       return {
         responseMessage: parsed.responseMessage || 'Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas.',
         actionChips: ['Explorar ciudades', 'Aventura y naturaleza', 'Cultura e historia'],
@@ -837,6 +844,15 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     }
 
     let responseMessage = parsed.responseMessage || `¡Genial! Continuemos organizando tu viaje.`
+    if (parsed.isUnrelatedToTravel && isClearlyTouristicMsg) {
+      if (/\b(evento|eventos|festival|festivales|feria|carnaval|fecha|fechas|cu[aá]ndo ir|temporada)\b/i.test(lastUserMsg) && realCatalog?.events?.length > 0) {
+        responseMessage = `¡En ${destName} hay fechas y eventos culturales fantásticos durante el año! 🎉\n\n` +
+          realCatalog.events.map(e => `• **${e.name}** (${e.month}): ${e.desc}`).join('\n\n') +
+          `\n\n¿Te gustaría planear tu viaje para alguna de estas fechas o prefieres una época más tranquila?`
+      } else {
+        responseMessage = `¡Excelente pregunta! Para tu viaje a ${destName || 'este destino'}, cuéntame qué tipo de experiencia buscas o en qué época te gustaría viajar para asesorarte.`
+      }
+    }
     const actionChips = Array.isArray(parsed.actionChips) && parsed.actionChips.length > 0
       ? parsed.actionChips
       : getDefaultActionChips(known, lastUserMsg)
