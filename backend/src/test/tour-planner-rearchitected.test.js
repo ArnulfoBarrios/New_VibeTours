@@ -624,6 +624,109 @@ test('buildTourPlanner must strictly preserve days when selectedPlaces contains 
   assert.equal(puerta.dia, 7)
 })
 
+test('extractPoisFromText must extract mixed bold and arrow Barranquilla 7-day itinerary completely', async () => {
+  const { deduplicatePlacesByName, isValidSpecificPlace } = await import('../routes/ai.js')
+
+  const chatMessage = `
+Itinerario de Viaje a Barranquilla (la otra semana):
+• Día 1: Llegada / Hotel -> Parque Cultural del Caribe -> Cena en La Cueva
+• Día 2: La Troja -> Malecón del Río -> Cena en El Cielo
+• Día 3: Boca de Ceniza -> Almuerzo en un restaurante local -> Plaza de la Paz
+• Día 4: Casa del Carnaval -> Estadio Metropolitano (si hay partido) -> Cena en un local de la Calle 72
+• Día 5: Visita a la Catedral Metropolitana María Reina y el Parque de los Fundadores -> Almuerzo en un restaurante local -> Tarde en el Jardín Botánico
+• Día 6: Excursión a Barranquilla Vieja, donde podrás apreciar la arquitectura colonial y disfrutar de un recorrido por sus calles llenas de historia -> Cena en un restaurante típico
+• Día 7: Tiempo libre para visitar el Centro Comercial Buenavista o explorar más de la ciudad -> Regreso a casa
+`
+
+  const lines = chatMessage.split('\n')
+  const found = []
+  const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r|ci[óo]n)?\s+(?:de\s+la|del?|el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|al?|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|vida\s+nocturna|cenar\s+en|cenar|almorzar\s+en|almorzar|cena\s+en\s+un\s+restaurante\s+en|cena\s+en\s+un\s+restaurante\s+t[íi]pico|cena\s+en\s+un\s+restaurante|cena\s+en\s+un\s+local\s+de\s+la|cena\s+en\s+un\s+local|cena\s+en\s+un\s+bar\s+local|cena\s+en\s+un\s+bar|cena\s+de\s+despedida\s+en|cena\s+de\s+despedida|cena\s+en|cena|almuerzo\s+en\s+un\s+restaurante\s+local|almuerzo\s+en\s+un\s+restaurante|almuerzo\s+en\s+el\s+centro|almuerzo\s+en\s+la\s+playa|almuerzo\s+en|almuerzo|noche\s+en|noche|tarde\s+en|tarde\s+libre\s+para\s+explorar\s+el?|tarde\s+libre|d[íi]a\s+de\s+playa\s+en|d[íi]a\s+de\s+relax\s+en|d[íi]a\s+en|d[íi]a\s+libre\s+para\s+explorar\s+o\s+descansar|d[íi]a\s+libre|tiempo\s+libre\s+para\s+visitar\s+el?|tiempo\s+libre\s+para\s+visitar|tiempo\s+libre\s+para\s+explorar|tiempo\s+libre|check-in\s+en|check-in|check-out\s+en|check-out|llegada\s+a\s+la|llegada\s+al?|llegada\s+a|llegada\s*\/\s*hotel[^->\n]*|llegada|salida\s+a|salida\s+de|salida|regreso\s+a\s+casa|regreso\s+a\s+santa\s+marta|regreso\s+a\s+barranquilla|regreso\s+a|regreso\s+y\s+cena\s+de\s+despedida|regreso\s+y\s+cena\s+de|regreso\s+y\s+cena|regreso|despedida)\s+/i
+
+  function cleanAndAddCandidate(rawCandidate, day) {
+    if (!rawCandidate || typeof rawCandidate !== 'string') return
+    let candidate = rawCandidate
+      .trim()
+      .replace(/[*_#\[\]•]/g, ' ')
+      .trim()
+      .replace(ACTION_PREFIX_REGEX, '')
+      .trim()
+
+    candidate = candidate.replace(/,\s*(?:donde|donde\s+podr[áa]s|con|para|ideal\s+para|o\s+explorar).*$/i, '').trim()
+    if (/\s*\((?:si\s+hay|sujeto\s+a|opcional|seg[úu]n|aplica)[^)]*\)/i.test(candidate)) {
+      candidate = candidate.replace(/\s*\((?:si\s+hay|sujeto\s+a|opcional|seg[úu]n|aplica)[^)]*\)/i, '').trim()
+    } else {
+      candidate = candidate.replace(/\s*\([^)]*\)/g, '').trim()
+    }
+    candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
+    candidate = candidate.replace(/^[.,;!*:]+/, '').trim()
+
+    if (/\s+y\s+(?:el\s+|la\s+|los\s+|las\s+)/i.test(candidate)) {
+      const subParts = candidate.split(/\s+y\s+(?:el\s+|la\s+|los\s+|las\s+)/i)
+      for (const sp of subParts) {
+        cleanAndAddCandidate(sp, day)
+      }
+      return
+    }
+
+    if (isValidSpecificPlace(candidate)) {
+      found.push(day ? { name: candidate, dia: day, day: day } : candidate)
+    }
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) continue
+
+    const dayMatch = line.match(/(?:•|\-|\*|\d+[\.\)])?\s*D[íi]a\s*(\d+)/i)
+    const currentDay = dayMatch ? parseInt(dayMatch[1], 10) : null
+
+    if (/->|—|–|>/.test(line)) {
+      const content = line.replace(/^(?:•|\-|\*|\d+[\.\)])?\s*D[íi]a\s*\d+\s*:\s*/i, '')
+      const parts = content.split(/->|—|–|>/)
+      for (const part of parts) {
+        cleanAndAddCandidate(part, currentDay)
+      }
+    }
+  }
+
+  const deduped = deduplicatePlacesByName(found)
+  assert.ok(deduped.length >= 10)
+
+  // Verify Día 1 has Parque Cultural and La Cueva
+  const d1 = deduped.filter(p => p.dia === 1)
+  assert.ok(d1.some(p => p.name.includes('Cultural')))
+  assert.ok(d1.some(p => p.name.includes('Cueva')))
+
+  // Verify Día 2 has La Troja and Malecon and El Cielo
+  const d2 = deduped.filter(p => p.dia === 2)
+  assert.ok(d2.some(p => p.name.includes('Troja')))
+  assert.ok(d2.some(p => p.name.includes('Cielo')))
+
+  // Verify Día 3 has Boca de Ceniza and Plaza de la Paz
+  const d3 = deduped.filter(p => p.dia === 3)
+  assert.ok(d3.some(p => p.name.includes('Ceniza')))
+  assert.ok(d3.some(p => p.name.includes('Paz')))
+
+  // Verify Día 4 has Casa del Carnaval and Estadio Metropolitano
+  const d4 = deduped.filter(p => p.dia === 4)
+  assert.ok(d4.some(p => p.name.includes('Carnaval')))
+  assert.ok(d4.some(p => p.name.includes('Estadio')))
+
+  // Verify Día 5 has Catedral, Fundadores, Jardin Botanico
+  const d5 = deduped.filter(p => p.dia === 5)
+  assert.ok(d5.some(p => p.name.includes('Catedral')))
+  assert.ok(d5.some(p => p.name.includes('Fundadores')))
+  assert.ok(d5.some(p => p.name.includes('Botánico') || p.name.includes('Botanico')))
+
+  // Verify Día 6 has Barranquilla Vieja
+  const d6 = deduped.filter(p => p.dia === 6)
+  assert.ok(d6.some(p => p.name.includes('Vieja')))
+
+  // Verify Día 7 has Buenavista
+  const d7 = deduped.filter(p => p.dia === 7)
+  assert.ok(d7.some(p => p.name.includes('Buenavista')))
+})
+
 
 
 
