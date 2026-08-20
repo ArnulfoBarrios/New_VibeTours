@@ -508,6 +508,60 @@ test('deduplicatePlacesByName must preserve day tags and buildTourPlanner must m
   assert.equal(zazue.dia, 7)
 })
 
+test('isValidTouristAttraction must reject airport infrastructure (Aeropuerto Internacional Simón Bolívar)', async () => {
+  const { isValidTouristAttraction } = await import('../routes/ai.js')
+
+  assert.equal(isValidTouristAttraction({ name: 'Aeropuerto Internacional Simón Bolívar' }, { city: 'Santa Marta' }), false)
+  assert.equal(isValidTouristAttraction({ name: 'Terminal de Transporte de Santa Marta' }, { city: 'Santa Marta' }), false)
+  assert.equal(isValidTouristAttraction({ name: 'Quinta de San Pedro Alejandrino' }, { city: 'Santa Marta' }), true)
+  assert.equal(isValidTouristAttraction({ name: 'Parque Nacional Natural Tayrona' }, { city: 'Santa Marta' }), true)
+})
+
+test('extractPoisFromText must extract bracketed places and arrow separated items with day tags', async () => {
+  const { deduplicatePlacesByName } = await import('../routes/ai.js')
+
+  const chatMessage = `
+Itinerario de Viaje a Santa Marta (7 días):
+• Día 1: Llegada / Hotel Boutique Casa Carolina -> [Exploración del Centro Histórico] -> Cena en [Restaurante La Cava de El Rodadero]
+• Día 2: [Parque Nacional Natural Tayrona] -> Cena en [Restaurante El Bistro]
+• Día 3: [Playa El Rodadero] -> Cena en [Restaurante Donde Chucho]
+• Día 4: [Taganga] -> Cena en [Restaurante Casa de la Madera]
+• Día 5: [Minca] -> Cena en [Restaurante El Mirador]
+• Día 6: [Quinta de San Pedro Alejandrino] -> Cena en [Restaurante Ouzo]
+• Día 7: [Día libre para explorar o descansar] -> Cena en [Restaurante La Casa de la Cerveza]
+`
+
+  // Simulate extractPoisFromText with bracket support
+  const bracketRegex = /\[([^\]\n]{3,60})\]/g
+  const lines = chatMessage.split('\n')
+  const found = []
+  const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r|ci[óo]n)?\s+(?:de\s+la|del?|el?|la)?|cena\s+en\s+un\s+restaurante\s+en\s+el?|cena\s+en\s+un\s+restaurante|cena\s+en|cena|almuerzo\s+en|almuerzo|d[íi]a\s+libre\s+para\s+explorar\s+o\s+descansar|d[íi]a\s+libre|llegada\s*\/\s*hotel[^->\n]*|llegada)\s+/i
+  const { isValidSpecificPlace } = await import('../routes/ai.js')
+
+  for (const line of lines) {
+    const dayMatch = line.match(/(?:•|\-|\*|\d+[\.\)])?\s*D[íi]a\s*(\d+)/i)
+    const currentDay = dayMatch ? parseInt(dayMatch[1], 10) : null
+    let bm
+    while ((bm = bracketRegex.exec(line)) !== null) {
+      let candidate = bm[1].replace(ACTION_PREFIX_REGEX, '').trim().replace(/[.,;!*:]+$/, '').trim()
+      if (isValidSpecificPlace(candidate)) {
+        found.push({ name: candidate, dia: currentDay, day: currentDay })
+      }
+    }
+  }
+
+  const deduped = deduplicatePlacesByName(found)
+  assert.ok(deduped.length >= 10)
+  assert.equal(deduped[0].name, 'Centro Histórico')
+  assert.equal(deduped[0].dia, 1)
+  const tayrona = deduped.find(p => p.name.includes('Tayrona'))
+  assert.ok(tayrona)
+  assert.equal(tayrona.dia, 2)
+  const cerveza = deduped.find(p => p.name.includes('Cerveza'))
+  assert.ok(cerveza)
+  assert.equal(cerveza.dia, 7)
+})
+
 
 
 

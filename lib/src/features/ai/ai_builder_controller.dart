@@ -250,7 +250,16 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
             final numDays = (updatedPreferences['durationDays'] as num?)?.toDouble() ?? 1.0;
             final durHours = (updatedPreferences['durationHours'] as num?)?.toDouble() ?? (numDays >= 2 ? numDays * 24 : 8.0);
-            final specPlaces = (updatedPreferences['specificPlaces'] as List?)?.map((e) => e.toString()).toList() ?? [];
+            final rawSpecPlaces = updatedPreferences['specificPlaces'] as List? ?? [];
+            final specPlaces = rawSpecPlaces.map((e) {
+              if (e is Map) return (e['name'] ?? '').toString().trim();
+              final str = e.toString().trim();
+              if (str.startsWith('{') && str.contains('name:')) {
+                final match = RegExp(r'name\s*:\s*([^,\}]+)').firstMatch(str);
+                if (match != null) return match.group(1)?.trim() ?? str;
+              }
+              return str;
+            }).where((name) => name.isNotEmpty).toList();
 
             CanonicalDestination? canonical;
             if (updatedPreferences['canonicalDestination'] != null) {
@@ -267,6 +276,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
               canonicalDestination: canonical,
               type: TourType.custom,
               durationHours: durHours,
+              durationDays: (updatedPreferences['durationDays'] as num?)?.toInt() ?? (numDays >= 1 ? numDays.toInt() : null),
               language: 'es',
               touristProfileSummary: summary,
               touristInterests: profile.interests.map((e) => e.translationKey).toList(),

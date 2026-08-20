@@ -64,17 +64,23 @@ const requestSchema = z.object({
 // Normalizador de clave canónica para fusionar variantes de un mismo lugar (ej: "Restaurante El Bistro" vs "Bistro", "Playa de El Rodadero" vs "El Rodadero")
 export function normalizePlaceKey(placeName) {
   if (!placeName || typeof placeName !== 'string') return ''
-  return placeName
+  const base = placeName
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // remove accents
     .replace(/[*_#•\-]/g, ' ') // remove markdown
-    .replace(/\b(restaurante de la|restaurante del|restaurante de|restaurante el|restaurante la|restaurante los|restaurante las|restaurante|gastrobar de|gastrobar|bar de|bar el|bar la|bar|cafe de|cafe el|cafe la|cafe|discoteca de|discoteca la|discoteca el|discoteca|club de|club|pub de|pub|playa de la|playa de el|playa de|playa del|playa|parque nacional natural|parque nacional|parque natural|parque|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|camino a|sendero de|sendero)\b/g, ' ')
-    .replace(/\b(la|el|los|las|un|una|unos|unas|del|de|de la|de los)\b/g, ' ') // remove articles
-    .replace(/\b(visita a la|visita a|visita al|recorrido por el|recorrido por la|recorrido por|paseo en lancha a|paseo en lancha por|paseo en barco a|paseo en|paseo por|excursion a la|excursion a|excursión a|excursion al|ir a|entrada a|parada en|caminar por|recorrer el|visitar la|visitar el)\b/g, ' ') // remove action prefixes
     .replace(/[^\w\s]/g, '') // remove punctuation
     .replace(/\s+/g, ' ')
     .trim()
+
+  const stripped = base
+    .replace(/\b(restaurante de la|restaurante del|restaurante de|restaurante el|restaurante la|restaurante los|restaurante las|restaurante|gastrobar de|gastrobar|bar de|bar el|bar la|bar|cafe de|cafe el|cafe la|cafe|discoteca de|discoteca la|discoteca el|discoteca|club de|club|pub de|pub|playa de la|playa de el|playa de|playa del|playa|parque nacional natural|parque nacional|parque natural|parque|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|camino a|sendero de|sendero)\b/g, ' ')
+    .replace(/\b(la|el|los|las|un|una|unos|unas|del|de|de la|de los)\b/g, ' ') // remove articles
+    .replace(/\b(visita a la|visita a|visita al|recorrido por el|recorrido por la|recorrido por|paseo en lancha a|paseo en lancha por|paseo en barco a|paseo en|paseo por|excursion a la|excursion a|excursión a|excursion al|ir a|entrada a|parada en|caminar por|recorrer el|visitar la|visitar el)\b/g, ' ') // remove action prefixes
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return stripped.length >= 2 ? stripped : base
 }
 
 // Deduplica una lista de nombres de lugares usando su clave canónica y similitud de subcadenas
@@ -384,7 +390,18 @@ aiRouter.post('/chat', async (req, res, next) => {
       function extractPoisFromText(text) {
         if (!text || typeof text !== 'string') return []
         const found = []
-        const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r)?\s+(?:el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|al?|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|vida\s+nocturna|cenar\s+en\s+el?|cenar\s+en|almorzar\s+en\s+el?|almorzar\s+en|cena\s+en\s+un\s+restaurante\s+en\s+el?|cena\s+en\s+un\s+restaurante\s+en\s+la?|cena\s+en\s+un\s+restaurante\s+en|cena\s+en\s+un\s+restaurante|cena\s+en\s+un\s+bar\s+local|cena\s+en\s+un\s+bar|cena\s+en\s+el?|cena\s+en|almuerzo\s+en\s+el?|almuerzo\s+en|noche\s+en\s+el?|noche\s+en|d[íi]a\s+de\s+playa\s+en\s+el?|d[íi]a\s+de\s+playa\s+en|d[íi]a\s+en\s+el?|d[íi]a\s+en|check-in\s+en\s+el?|check-in\s+en|check-out\s+en\s+el?|check-out\s+en|llegada\s+a\s+la|llegada\s+al?|llegada\s+a|llegada|salida\s+a|salida\s+de|salida|regreso\s+y\s+cena\s+de\s+despedida|regreso\s+y\s+cena\s+de|regreso\s+y\s+cena|regreso\s+a|regreso|despedida)\s+/i
+        const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r|ci[óo]n)?\s+(?:de\s+la|del?|el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|al?|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|vida\s+nocturna|cenar\s+en\s+el?|cenar\s+en|almorzar\s+en\s+el?|almorzar\s+en|cena\s+en\s+un\s+restaurante\s+en\s+el?|cena\s+en\s+un\s+restaurante\s+en\s+la?|cena\s+en\s+un\s+restaurante\s+en|cena\s+en\s+un\s+restaurante|cena\s+en\s+un\s+bar\s+local|cena\s+en\s+un\s+bar|cena\s+en\s+el?|cena\s+en|cena|almuerzo\s+en\s+el?|almuerzo\s+en|almuerzo|noche\s+en\s+el?|noche\s+en|d[íi]a\s+de\s+playa\s+en\s+el?|d[íi]a\s+de\s+playa\s+en|d[íi]a\s+en\s+el?|d[íi]a\s+en|d[íi]a\s+libre\s+para\s+explorar\s+o\s+descansar|d[íi]a\s+libre|check-in\s+en\s+el?|check-in\s+en|check-out\s+en\s+el?|check-out\s+en|llegada\s+a\s+la|llegada\s+al?|llegada\s+a|llegada\s*\/\s*hotel[^->\n]*|llegada|salida\s+a|salida\s+de|salida|regreso\s+y\s+cena\s+de\s+despedida|regreso\s+y\s+cena\s+de|regreso\s+y\s+cena|regreso\s+a|regreso|despedida)\s+/i
+
+        function cleanAndAddCandidate(rawCandidate, day) {
+          if (!rawCandidate || typeof rawCandidate !== 'string') return
+          let candidate = rawCandidate.replace(ACTION_PREFIX_REGEX, '').trim()
+          candidate = candidate.replace(/\s*\([^)]*\)/g, '').trim()
+          candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
+          candidate = candidate.replace(/^[.,;!*:]+/, '').trim()
+          if (isValidSpecificPlace(candidate)) {
+            found.push(day ? { name: candidate, dia: day, day: day } : candidate)
+          }
+        }
 
         const lines = text.split('\n')
         let currentDay = null
@@ -402,28 +419,37 @@ aiRouter.post('/chat', async (req, res, next) => {
             continue
           }
 
-          // 1. Extract bold names (**Nombre del Lugar**)
+          // 1. Extract square brackets ([Nombre del Lugar])
+          const bracketRegex = /\[([^\]\n]{3,60})\]/g
+          let brm
+          let hasBrackets = false
+          while ((brm = bracketRegex.exec(line)) !== null) {
+            hasBrackets = true
+            cleanAndAddCandidate(brm[1], currentDay)
+          }
+
+          // 2. Extract bold names (**Nombre del Lugar**)
           const boldRegex = /\*\*([^*\n]{3,60})\*\*/g
           let bm
+          let hasBold = false
           while ((bm = boldRegex.exec(line)) !== null) {
-            let candidate = bm[1].replace(ACTION_PREFIX_REGEX, '').trim()
-            candidate = candidate.replace(/\s*\([^)]*\)/g, '').trim()
-            candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
-            if (isValidSpecificPlace(candidate)) {
-              found.push(currentDay ? { name: candidate, dia: currentDay, day: currentDay } : candidate)
+            hasBold = true
+            cleanAndAddCandidate(bm[1], currentDay)
+          }
+
+          // 3. If line has arrow separators (-> or —)
+          if (!hasBrackets && !hasBold && /->|—|–/.test(line)) {
+            const parts = line.replace(/^(?:•|\-|\*|\d+[\.\)])?\s*D[íi]a\s*\d+\s*:\s*/i, '').split(/->|—|–/)
+            for (const part of parts) {
+              cleanAndAddCandidate(part, currentDay)
             }
           }
 
-          // 2. Extract numbered or bulleted items
+          // 4. Extract numbered or bulleted items
           const regex = /^(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,60})\*{0,2}\s*[:—\-]?/i
           const m = line.match(regex)
-          if (m && !dayMatch) {
-            let candidate = m[1].replace(ACTION_PREFIX_REGEX, '').trim()
-            candidate = candidate.replace(/\s*\([^)]*\)/g, '').trim()
-            candidate = candidate.replace(/[.,;!*:]+$/, '').trim()
-            if (isValidSpecificPlace(candidate)) {
-              found.push(currentDay ? { name: candidate, dia: currentDay, day: currentDay } : candidate)
-            }
+          if (m && !dayMatch && !hasBrackets && !hasBold) {
+            cleanAndAddCandidate(m[1], currentDay)
           }
         }
         return deduplicatePlacesByName(found)
@@ -4018,8 +4044,22 @@ export async function collectTourCandidates(input, location) {
 
     const specificSettled = await Promise.allSettled(
       mergedSpecifics.map(async (rawPlace) => {
-        const placeName = typeof rawPlace === 'string' ? rawPlace : (rawPlace?.name || '')
-        const placeDay = typeof rawPlace === 'object' ? (rawPlace?.day || rawPlace?.dia) : null
+        let placeName = ''
+        let placeDay = null
+        if (typeof rawPlace === 'string') {
+          const str = rawPlace.trim()
+          if (str.startsWith('{') && str.includes('name:')) {
+            const m = str.match(/name\s*:\s*([^,\}]+)/)
+            placeName = m ? m[1].trim() : str
+            const d = str.match(/(?:dia|day)\s*:\s*(\d+)/)
+            if (d) placeDay = parseInt(d[1], 10)
+          } else {
+            placeName = str
+          }
+        } else if (rawPlace && typeof rawPlace === 'object') {
+          placeName = (rawPlace.name || '').trim()
+          placeDay = rawPlace.dia || rawPlace.day || null
+        }
         if (!isValidSpecificPlace(placeName)) return null
         
         let geo = null
@@ -4235,7 +4275,7 @@ export async function collectTourCandidates(input, location) {
   return { rawCount: pool.length, places: selected, source }
 }
 
-function isValidTouristAttraction(place, input) {
+export function isValidTouristAttraction(place, input) {
   if (!place || !place.name) return false
 
   const name = place.name.trim()
@@ -4305,9 +4345,9 @@ function isValidTouristAttraction(place, input) {
   }
   if (osmVal === 'administrative') return false
 
-  // 5. Exclude transport infrastructure, roads, highways, corridors, bypasses or streets
+  // 5. Exclude transport infrastructure, airports, terminals, roads, highways, corridors, bypasses or streets
   if (
-    /corredor vial|variante|troncal|autopista|via |vía |calle |carrera |avenida |diagonal |transversal |puente |road |street |highway /i.test(nameLower) ||
+    /aeropuerto|airport|terminal de transporte|terminal de buses|terminal terrestre|corredor vial|variante|troncal|autopista|via |vía |calle |carrera |avenida |diagonal |transversal |puente |road |street |highway /i.test(nameLower) ||
     /^via |^vía |^calle |^carrera |^avenida |^diagonal |^transversal |^variante |^puente |^autopista |^road |^street |^highway /i.test(nameLower) ||
     /via$|vía$|calle$|carrera$|avenida$|diagonal$|transversal$|variante$|puente$|autopista$|road$|street$|highway$/i.test(nameLower)
   ) {

@@ -802,6 +802,7 @@ class AiTourRequest {
     this.cities = const [],
     this.isMultiCity = false,
     this.durationHours,
+    this.durationDays,
     required this.type,
     required this.language,
     required this.prompt,
@@ -823,6 +824,7 @@ class AiTourRequest {
   final List<String> cities;
   final bool isMultiCity;
   final double? durationHours;
+  final int? durationDays;
   final TourType type;
   final String language;
   final String prompt;
@@ -844,6 +846,7 @@ class AiTourRequest {
     if (cities.isNotEmpty) 'cities': cities,
     'isMultiCity': isMultiCity,
     if (durationHours != null) 'durationHours': durationHours,
+    if (durationDays != null) 'durationDays': durationDays,
     'type': type.name,
     'language': language,
     'prompt': prompt,
@@ -869,6 +872,7 @@ class AiTourRequest {
     List<String>? cities,
     bool? isMultiCity,
     double? durationHours,
+    int? durationDays,
     TourType? type,
     String? language,
     String? prompt,
@@ -890,6 +894,7 @@ class AiTourRequest {
       cities: cities ?? this.cities,
       isMultiCity: isMultiCity ?? this.isMultiCity,
       durationHours: durationHours ?? this.durationHours,
+      durationDays: durationDays ?? this.durationDays,
       type: type ?? this.type,
       language: language ?? this.language,
       prompt: prompt ?? this.prompt,
