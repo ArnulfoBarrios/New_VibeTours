@@ -552,6 +552,36 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
   }
 
+  function hasValidValue(val) {
+    if (!val) return false
+    if (typeof val === 'string') {
+      const trimmed = val.trim()
+      return trimmed.length > 0 && !/^(por definir|pendiente|a definir|por confirmar|sin definir|null|undefined)$/i.test(trimmed)
+    }
+    return true
+  }
+
+  function hasValidLodging(hotel, status) {
+    if (status && hasValidValue(status)) return true
+    if (!hotel) return false
+    if (typeof hotel === 'string') return hasValidValue(hotel)
+    if (typeof hotel === 'object') {
+      return hasValidValue(hotel.name) || hasValidValue(hotel.nombre)
+    }
+    return false
+  }
+
+  const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
+  if (isHomeOrLocalLodging) {
+    known.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
+    known.accommodationStatus = 'Casa propia / familiar'
+  }
+
+  const hasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
+  const hasTransport = hasValidValue(known.transport)
+  const hasBudget = hasValidValue(known.budget)
+  const hasCompanions = hasValidValue(known.companions)
+
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
@@ -568,19 +598,13 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     } else {
       const preset = realCatalog || getDestinationPresets('Cartagena', 'Colombia')
-      const isPendingVal = (val) => !val || typeof val !== 'string' || /^(por definir|pendiente|null|undefined)$/i.test(val.trim())
-      const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
-      if (isHomeOrLocalLodging) {
-        known.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
-        known.accommodationStatus = 'Casa propia / familiar'
-      }
-      const fbHasLodging = Boolean(known.selectedHotel?.name || (typeof known.selectedHotel === 'string' && !isPendingVal(known.selectedHotel)) || (!isPendingVal(known.accommodationStatus)))
-      const fbHasTransport = Boolean(!isPendingVal(known.transport))
-      const fbHasBudget = Boolean(!isPendingVal(known.budget))
-      const fbHasCompanions = Boolean(!isPendingVal(known.companions))
+      const fbHasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
+      const fbHasTransport = hasValidValue(known.transport)
+      const fbHasBudget = hasValidValue(known.budget)
+      const fbHasCompanions = hasValidValue(known.companions)
       const fbAllKeyInfoComplete = Boolean(hasCity && hasDurationOrDates && fbHasCompanions && fbHasLodging && fbHasTransport && fbHasBudget)
 
-      const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+generar\s+el\s+tour|ok\s+quiero\s+generar)\b/i.test(lastUserMsg)
+      const isExplicitBuildRequestedByUser = /\b(gener(ar|es|a|e|en)?\s+(el\s+)?tour|cre(ar|es|a|e|en)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn](ar|a|es|e)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?|ok\s+quiero\s+generar)\b/i.test(lastUserMsg)
       effectiveReadyToBuild = Boolean(fbAllKeyInfoComplete && isExplicitBuildRequestedByUser)
 
       if (isExplicitBuildRequestedByUser && !fbAllKeyInfoComplete) {
@@ -636,38 +660,17 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
   }
 
-  const isPendingVal = (val) => !val || typeof val !== 'string' || /^(por definir|pendiente|null|undefined)$/i.test(val.trim())
-
-  const hasLodging = Boolean(
-    (known.selectedHotel?.name || (typeof known.selectedHotel === 'string' && !isPendingVal(known.selectedHotel)) || (!isPendingVal(known.accommodationStatus)))
-  )
-  const hasTransport = Boolean(!isPendingVal(known.transport))
-  const hasBudget = Boolean(!isPendingVal(known.budget))
-  const hasCompanions = Boolean(!isPendingVal(known.companions))
-
   const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual y organizador experto de tours de VibeTours.
 Tu personalidad es CÁLIDA, EMPÁTICA, ENTUSIASTA Y ALTAMENTE PROFESIONAL.
 
-ALCANCE ESTRICTO DE TURISMO Y RECHAZO DE MENSAJES AJENOS:
-- Tu única misión es crear, asesorar y planificar tours turísticos inolvidables.
-- Frases de exploración o intereses como "Explorar ciudades", "Aventura y naturaleza", "Cultura e historia", "Playas", "Destinos", "Lugares para visitar", o nombres de ciudades/países SON 100% TURÍSTICAS. NUNCA las marques como isUnrelatedToTravel; responde entusiastamente recomendando destinos o actividades acordes.
-- Si el mensaje del usuario no está relacionado con turismo o viajes (por ejemplo: comandos de programación como "Flutter run", código fuente, fórmulas matemáticas, consultas políticas o palabras sin sentido como "waos"):
-  1. Marca "isUnrelatedToTravel": true en el JSON de salida.
-  2. Responde con un mensaje educado y directo indicando que no estás especializado en ese tema y recordando que eres un asistente de viajes: "Esa consulta no está relacionada con la planificación de viajes o turismo. Mi especialidad es exclusivamente diseñar tours personalizados y asesorarte en tus vacaciones. Por favor, indícame a qué ciudad te gustaría viajar o qué tipo de experiencia turística deseas."
-  3. En "actionChips", devuelve únicamente sugerencias de exploración turística como ["Explorar ciudades", "Aventura y naturaleza", "Cultura e historia"].
-  4. En "extractedPreferences", devuelve un objeto vacío {} sin mutar ninguna preferencia.
-  5. En "readyToBuild", devuelve false.
-
-ESTADO ACTUAL DE PREFERENCIAS CONFIRMADAS DEL VIAJERO:
-${JSON.stringify(known, null, 2)}
-
-ESTADO DE REQUISITOS DEL VIAJE:
-• DESTINO: ${hasCity ? `CONFIRMADO (${destName}, ${destCountry})` : 'PENDIENTE'}
-• FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADAS (${known.datesSeason || ''} | ${known.durationDays ? `${known.durationDays} días` : ''}) -> ESTÁ ESTRICTAMENTE PROHIBIDO VOLVER A PREGUNTAR POR FECHAS O DÍAS.` : 'PENDIENTE'}
-• ACOMPAÑANTES: ${hasCompanions ? `CONFIRMADOS (${known.companions})` : 'PENDIENTE'}
-• HOSPEDAJE: ${hasLodging ? `CONFIRMADO (${known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus})` : 'PENDIENTE (No confirmado)'}
-• TRANSPORTE: ${hasTransport ? `CONFIRMADO (${known.transport})` : 'PENDIENTE (No confirmado)'}
-• PRESUPUESTO: ${hasBudget ? `CONFIRMADO (${known.budget})` : 'PENDIENTE (No confirmado)'}
+ESTADO ACTUAL DE LA CONVERSACIÓN Y DATOS CONFIRMADOS:
+• DESTINO: ${hasCity ? `CONFIRMADO (${destName})` : 'PENDIENTE (No confirmado)'}
+• FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADO (${known.datesSeason || `${known.durationDays} días`})` : 'PENDIENTE (No confirmado)'}
+• ACOMPAÑANTES: ${hasCompanions ? `CONFIRMADO (${known.companions})` : 'PENDIENTE (No confirmado)'}
+• HOSPEDAJE: ${hasLodging ? `CONFIRMADO (${known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus})` : 'PENDIENTE (No confirmado / Por definir)'}
+• TRANSPORTE: ${hasTransport ? `CONFIRMADO (${known.transport})` : 'PENDIENTE (No confirmado / Por definir)'}
+• PRESUPUESTO: ${hasBudget ? `CONFIRMADO (${known.budget})` : 'PENDIENTE (No confirmado / Por definir)'}
+• LUGARES ESPECÍFICOS: ${(known.specificPlaces || []).length > 0 ? (known.specificPlaces || []).join(', ') : 'A definir'}
 
 ${hasDurationOrDates ? `⚠️ ADVERTENCIA CRÍTICA DE FECHAS: El usuario YA confirmó sus fechas (${known.datesSeason || ''}) y duración (${known.durationDays ? `${known.durationDays} días` : ''}). NUNCA vuelvas a preguntar cuándo viajará ni cuántos días durará su estadía. Si el usuario pide el itinerario ("muéstrame el itinerario", "cómo va quedando"), PRESENTA DE INMEDIATO el itinerario estructurado por días.` : `⚠️ FECHAS PENDIENTES: Si el usuario pide estructurar el itinerario o generar el tour sin haber indicado fechas, pregúntale: "¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName || 'el destino'}?"`}
 
@@ -825,19 +828,17 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     }
 
     const finalHasLodging = Boolean(
-      hasLodging ||
-      parsedExtracted.selectedHotel?.name ||
-      (typeof parsedExtracted.selectedHotel === 'string' && !isPendingVal(parsedExtracted.selectedHotel)) ||
-      (!isPendingVal(parsedExtracted.accommodationStatus))
+      hasValidLodging(known.selectedHotel, known.accommodationStatus) ||
+      hasValidLodging(parsedExtracted.selectedHotel, parsedExtracted.accommodationStatus)
     )
-    const finalHasTransport = Boolean(hasTransport || !isPendingVal(parsedExtracted.transport))
-    const finalHasBudget = Boolean(hasBudget || !isPendingVal(parsedExtracted.budget))
-    const finalHasCompanions = Boolean(hasCompanions || !isPendingVal(parsedExtracted.companions))
-    const finalHasCity = Boolean(hasCity || !isPendingVal(parsedExtracted.city))
+    const finalHasTransport = Boolean(hasValidValue(known.transport) || hasValidValue(parsedExtracted.transport))
+    const finalHasBudget = Boolean(hasValidValue(known.budget) || hasValidValue(parsedExtracted.budget))
+    const finalHasCompanions = Boolean(hasValidValue(known.companions) || hasValidValue(parsedExtracted.companions))
+    const finalHasCity = Boolean(hasCity || hasValidValue(parsedExtracted.city))
     const finalHasDates = Boolean(
       hasDurationOrDates ||
-      !isPendingVal(parsedExtracted.datesSeason) ||
-      parsedExtracted.durationDays
+      hasValidValue(parsedExtracted.datesSeason) ||
+      (parsedExtracted.durationDays && Number(parsedExtracted.durationDays) > 0)
     )
 
     const isAllKeyInfoComplete = Boolean(
@@ -849,7 +850,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
       finalHasBudget
     )
 
-    const isExplicitBuildRequestedByUser = /\b(genera(r)?\s+(el\s+)?tour|crea(r)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn]a(r)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+generar\s+el\s+tour|ok\s+quiero\s+generar)\b/i.test(lastUserMsg)
+    const isExplicitBuildRequestedByUser = /\b(gener(ar|es|a|e|en)?\s+(el\s+)?tour|cre(ar|es|a|e|en)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn](ar|a|es|e)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?|ok\s+quiero\s+generar)\b/i.test(lastUserMsg)
 
     // Solo se activa readyToBuild si TODA la información clave está completa Y el usuario lo pide explícitamente
     const effectiveReadyToBuild = Boolean(

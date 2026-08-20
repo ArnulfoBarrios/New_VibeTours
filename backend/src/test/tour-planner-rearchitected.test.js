@@ -398,6 +398,37 @@ test('deduplicatePlacesByName must merge restaurant prefixes like Bistro/Restaur
   assert.ok(!deduplicated.includes('Ouzo'))
 })
 
+test('isValidSpecificPlace must reject city names with prepositions (a Santa Marta, en Cartagena)', async () => {
+  const { isValidSpecificPlace } = await import('../routes/ai.js')
+  
+  assert.equal(isValidSpecificPlace('a Santa Marta'), false)
+  assert.equal(isValidSpecificPlace('en Cartagena'), false)
+  assert.equal(isValidSpecificPlace('hacia Barranquilla'), false)
+  assert.equal(isValidSpecificPlace('Playa Blanca'), true)
+  assert.equal(isValidSpecificPlace('Minca'), true)
+})
+
+test('generateChatResponse must block readyToBuild and request missing lodging when lodging is Por definir', async () => {
+  const { generateChatResponse } = await import('../services/openai.js')
+
+  const known = {
+    city: 'Santa Marta',
+    country: 'Colombia',
+    durationDays: 5,
+    datesSeason: '5 días',
+    companions: 'Amigos (3)',
+    transport: 'Auto rentado',
+    budget: 'Moderado',
+    selectedHotel: { name: 'Por definir' },
+    accommodationStatus: 'Por definir',
+    specificPlaces: ['Playa Blanca', 'Minca', 'Parque Tayrona']
+  }
+
+  const result = await generateChatResponse({ history: [{ role: 'user', content: 'Vale me parece bien quiero que generes el tour ahora' }] }, '', '', known)
+  assert.equal(result.readyToBuild, false)
+  assert.ok(result.responseMessage.includes('alojamiento') || result.responseMessage.includes('hotel'))
+})
+
 
 
 
