@@ -48,23 +48,38 @@ export const DESTINATION_LOCAL_PRESETS = {
     hotels: [
       { name: 'Hotel Irotama Resort', desc: 'Icónico resort frente al mar en Bello Horizonte con amplias piscinas tropicales, spa, acceso directo a la playa y múltiples restaurantes.', price: '~$120 - $190 USD/noche' },
       { name: 'Hotel Boutique Don Pepe', desc: 'Elegante y exclusivo hotel boutique en el Centro Histórico de Santa Marta con spa de hidroterapia, terraza gourmet y arquitectura colonial refinada.', price: '~$100 - $160 USD/noche' },
-      { name: 'Santa Marta Marriott Resort Playa Dormida', desc: 'Lujo contemporáneo frente al mar con acceso directo a playa virgen, piscina infinita y gastronomía caribeña.', price: '~$140 - $220 USD/noche' }
+      { name: 'Santa Marta Marriott Resort Playa Dormida', desc: 'Lujo contemporáneo frente al mar con acceso directo a playa virgen, piscina infinita y gastronomía caribeña.', price: '~$140 - $220 USD/noche' },
+      { name: 'Hotel San Marcos', desc: 'Alojamiento acogedor y céntrico a pasos de la bahía y el Parque de Los Novios.', price: '~$50 - $90 USD/noche' }
     ],
     restaurants: [
+      { name: 'Restaurante Ouzo', specialty: 'Exquisita cocina mediterránea de autor y mariscos frescos en el Parque de Los Novios' },
       { name: 'Restaurante Donde Chucho', specialty: 'Legendaria cazuela de mariscos cremosa, pargo rojo frito al estilo caribeño y ceviches frescos en El Rodadero y Centro' },
       { name: 'Restaurante Guásimo', specialty: 'Alta cocina contemporánea del Gran Caribe inspirada en los saberes ancestrales de la Sierra Nevada y pesca del día' },
+      { name: 'Restaurante Burukuka', specialty: 'Gastronomía caribeña fusión y coctelería con vista panorámica espectacular a la bahía de El Rodadero' },
+      { name: 'Discoteca La Puerta', specialty: 'Música en vivo, cocteles tropicales y el mejor ambiente festivo del Centro Histórico' },
+      { name: 'Restaurante y Bar El Cielo', specialty: 'Pescados frescos, cocteles y comida tradicional caribeña frente a la playa de El Rodadero' },
+      { name: 'Restaurante La Roca', specialty: 'Comida de mar fresca, patacones y ambiente relajado en la zona costera de Palomino' },
+      { name: 'Bares en la Calle 22', specialty: 'Ambiente nocturno vibrante con coctelería artesanal y terrazas alrededor del Parque de Los Novios' },
       { name: 'Restaurante Ostrería Mary', specialty: 'Auténticos ceviches artesanales de ostras, camarón y pulpo fresco en el Centro Histórico' },
       { name: 'Restaurante El Bistró Santa Marta', specialty: 'Bistronomía artesanal con panes horneados en casa, tapas mediterráneas y pescados a la plancha' }
     ],
     places: [
-      'Parque Nacional Natural Tayrona',
-      'Quinta de San Pedro Alejandrino',
+      'Playa El Rodadero',
       'Bahía de Taganga',
-      'Catedral Basílica de Santa Marta',
+      'Playa Blanca Santa Marta',
+      'Parque Nacional Natural Tayrona',
+      'Cabo San Juan del Guía',
+      'Bahía Concha',
+      'Playa Cristal',
+      'Quinta de San Pedro Alejandrino',
+      'Minca',
       'Centro Histórico y Parque de Los Novios',
-      'Playa Blanca y Acuario de El Rodadero',
-      'Minca y cascadas de la Sierra Nevada',
-      'Museo del Oro Tairona - Casa de la Aduana'
+      'Catedral Basílica de Santa Marta',
+      'Museo del Oro Tairona - Casa de la Aduana',
+      'Acuario y Museo del Mar del Rodadero',
+      'Playa de Palomino',
+      'Marina de Santa Marta',
+      'Centro Comercial Buenavista'
     ],
     events: [
       { name: 'Fiesta del Mar', month: 'Julio (último fin de semana)', desc: 'La máxima festividad de Santa Marta con competencias náuticas internacionales, conciertos masivos en la playa y desfiles folclóricos.' },
@@ -377,7 +392,14 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const cached = destinationCatalogCache.get(cacheKey)
   if (cached) return cached
 
-  // Dynamic Geocode & OSM Live Query
+  // 1. Curated Preset Check
+  const preset = getDestinationPresets(destName, countryName)
+  if (preset && preset.places && preset.places.length >= 4) {
+    destinationCatalogCache.set(cacheKey, preset)
+    return preset
+  }
+
+  // 2. Dynamic Geocode & OSM Live Query
   let lat = userLat
   let lon = userLon
   if (!lat || !lon) {
@@ -403,8 +425,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     ])
 
     realHotels = (osmHotels || []).filter(h => h.name && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 3)
-    realRests = (osmRests || []).filter(r => r.name && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 4)
-    realPlaces = (osmAttractions || []).filter(p => p.name && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 8)
+    realRests = (osmRests || []).filter(r => r.name && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 5)
+    realPlaces = (osmAttractions || []).filter(p => p.name && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 10)
   }
 
   const result = {
@@ -710,22 +732,25 @@ ROL CONVERSACIONAL Y ASESORÍA TURÍSTICA EXPERTA:
 - Si el usuario te hace una pregunta explicativa (ej: "¿De qué trata la Fiesta del Mar?"), EXPLÍCASELO con detalle turístico verídico y luego pregúntale amablemente si desea incluirlo en su itinerario o qué fechas prefiere.
 - Si el mensaje no tiene absolutamente nada que ver con viajes o turismo (por ejemplo: código de programación, fórmulas matemáticas, política partidista o tributos a celebridades ajenas), responde con amabilidad recordando que eres un asistente de viajes y pregúntale a qué ciudad le gustaría viajar.
 
-INTELIGENCIA GEOGRÁFICA DINÁMICA Y PERTENENCIA REGIONAL:
-- Recomienda con total dinamismo y libertad cualquier atractivo turístico, restaurante, playa, barrio icónico, mirador, parque natural o actividad cultural REAL que pertenezca a la ciudad seleccionada (${destName}), a su área metropolitana, o a sus zonas de excursión directa y archipiélagos/islas cercanas (por ejemplo:
-  • Para Cartagena: Centro Histórico, Getsemaní, Castillo San Felipe, Convento de la Popa, Bocagrande, Manga, Bazurto, y sus zonas insulares y costeras como las Islas del Rosario, Isla Barú (Playa Blanca de Barú), Isla Tierra Bomba, La Boquilla.
-  • Para Santa Marta: Centro Histórico, El Rodadero, Bahía de Taganga, Quinta de San Pedro Alejandrino, y sus parques y áreas naturales de la región como el Parque Nacional Natural Tayrona, Minca (Pozo Azul, Cascadas de Marinka), Bahía Concha, Palomino.
-  • Para Medellín: El Poblado, Comuna 13, Laureles, Plaza Botero, Parque Arví, Jardín Botánico, y excursiones regionales como Guatapé y la Piedra del Peñol.
-  • Para Bogotá: Cerro de Monserrate, La Candelaria, Museo del Oro, Parque de la 93, y excursiones cercanas como la Catedral de Sal de Zipaquirá o la Laguna de Guatavita).
-- PROHIBICIÓN ESTRICTA DE MEZCLAR CIUDADES DISTANTES:
-  - No debes asignar atractivos de otras ciudades o departamentos a horas de distancia (Cartagena está en Bolívar; Santa Marta está en Magdalena a más de 200 km).
-  - NUNCA pongas el Parque Tayrona, Minca o Taganga en un tour de Cartagena.
-  - NUNCA pongas el Castillo San Felipe o las Islas del Rosario en un tour de Santa Marta.
-  - NUNCA pongas Monserrate en Medellín, ni la Comuna 13 en Bogotá.
+${realCatalog && hasCity ? `
+CATÁLOGO OFICIAL Y VERIFICADO DE LUGARES EN ${destName.toUpperCase()} (${destCountry || 'DESTINO'}):
+• Hoteles recomendados: ${realCatalog.hotels?.map(h => h.name).join(', ') || 'N/A'}
+• Restaurantes y vida nocturna recomendados: ${realCatalog.restaurants?.map(r => r.name).join(', ') || 'N/A'}
+• Atractivos, playas y patrimonio verificados: ${realCatalog.places?.join(', ') || 'N/A'}
+` : ''}
+
+REGLA UNIVERSAL DE PERTENENCIA TERRITORIAL ESTRICTA PARA CUALQUIER DESTINO:
+1. Todos los atractivos, playas, museos, plazas, parques, miradores, bares y restaurantes que propongas, menciones o incluyas en el itinerario DEBEN pertenecer exclusivamente al municipio, ciudad y área metropolitana de ${destName || 'el destino'} (${destCountry || ''}).
+2. ESTÁ TERMINANTEMENTE PROHIBIDO incluir o recomendar lugares ubicados en otras ciudades, departamentos, provincias o países que se encuentren a más de 50-60 km de distancia (por ejemplo: si el destino es Santa Marta, NUNCA menciones lugares de Cartagena como Café del Mar o Isla de Barú; si el destino es Roma, NUNCA menciones lugares de Pisa o Florencia; si el destino es Tokio, NUNCA menciones lugares de Kioto; si el destino es Mendoza, NUNCA menciones lugares de Buenos Aires; si el destino es París, NUNCA menciones lugares de Niza).
+3. Utiliza preferentemente los lugares del CATÁLOGO OFICIAL VERIFICADO arriba indicado. Si el usuario propone o pregunta por un lugar que pertenece a otra ciudad, aclárale cortésmente a qué ciudad pertenece y su distancia real, y ofrécele alternativas dentro de ${destName}.
+
+INTELIGENCIA GEOGRÁFICA DINÁMICA:
+- Recomienda con total dinamismo y libertad atractivos turísticos, restaurantes, playas, barrios icónicos, miradores, parques naturales o actividades culturales REALES que pertenezcan a la ciudad seleccionada (${destName}), a su área metropolitana, o a sus zonas de excursión directa y archipiélagos/islas cercanas.
 - MANEJO DE PREGUNTAS Y DUDAS GEOGRÁFICAS DEL USUARIO:
   - Si el usuario pregunta o duda sobre la ubicación de un lugar (ej: "¿Playa blanca y el parque Tayrona en Cartagena?"):
     1. NUNCA digas "¡Así es!" ni confirmes falsedades geográficas.
     2. NUNCA agregues lugares de otras ciudades al itinerario de ${destName}.
-    3. ACLARA con conocimiento turístico preciso: explica qué parte sí pertenece a la zona (ej: "Playa Blanca en Isla Barú sí forma parte de la zona insular de Cartagena y es perfecta para un día de sol") y qué parte pertenece a otra ciudad (ej: "Sin embargo, el Parque Tayrona está ubicado en Santa Marta, a más de 4 horas por carretera. Para tu viaje a Cartagena, en su lugar te recomiendo visitar las Islas del Rosario o los manglares de La Boquilla").
+    3. ACLARA con conocimiento turístico preciso: explica qué parte sí pertenece a la zona y qué parte pertenece a otra ciudad con su distancia en carretera o vuelo.
 
 ESTADO ACTUAL DE LA CONVERSACIÓN Y DATOS CONFIRMADOS:
 • DESTINO: ${hasCity ? `CONFIRMADO (${destName})` : 'PENDIENTE (No confirmado)'}
@@ -747,7 +772,7 @@ LISTA ACUMULADA DE ACTIVIDADES Y LUGARES APROBADOS POR EL VIAJERO:
 ${Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0 ? JSON.stringify(known.specificPlaces) : 'Ninguno por ahora'}
 
 REGLA ESTRICTA DE PRESERVACIÓN DE ACTIVIDADES EN EL ITINERARIO:
-- Si el usuario selecciona o aprueba actividades (ej: "1 y 3", "quiero incluir todas estas actividades", "agrega estas actividades también"):
+- Si el usuario selecciona o aprueba actividades (ej: "1 y 3", "quiero incluir todas estas actividades", "agrega estas actividades también", "vale agrega todas esas actividades al itinerario y Muéstrame el itinerario"):
   1. Extrae todas las actividades en "extractedPreferences.specificPlaces" acumulándolas con las anteriores.
   2. Al estructurar o actualizar el itinerario día por día, DEBES INCLUIR TODAS las actividades aprobadas (${JSON.stringify(known.specificPlaces || [])}) distribuidas equilibradamente entre los ${known.durationDays || 4} días.
 FACTIBILIDAD GEOGRÁFICA Y TEMPORAL (0 EXCURSIONES MULTIDÍA EN TOURS DE 1 DÍA):
@@ -763,8 +788,11 @@ ETAPA 1: DESTINO, FECHAS/DURACIÓN Y ACOMPAÑANTES
 
 ETAPA 2: RECOMENDACIÓN DE ACTIVIDADES Y EXPERIENCIAS
 - Una vez conocidos destino, fechas y acompañantes:
-  1. Recomienda 4 a 6 actividades o lugares auténticos y reales adaptados a ese grupo.
-  2. Pregunta amablemente qué actividades desean incluir o si tienen alguna otra en mente.
+  1. Recomienda una cantidad proporcional de lugares y experiencias REALES según la duración del viaje:
+     - Para viajes de 1 a 3 días: Recomienda 6 a 8 lugares y restaurantes auténticos.
+     - Para viajes de 4 a 6 días: Recomienda 8 a 12 lugares y restaurantes auténticos.
+     - Para viajes de 7 a 10+ días: Recomienda 12 a 16 lugares y restaurantes auténticos (playas, sitios históricos, naturaleza, restaurantes y vida nocturna) para que CADA DÍA del tour tenga atractivos suficientes y no quede ningún día vacío.
+  2. Pregunta amablemente qué actividades desean incluir o si desean agregarlas todas al itinerario.
 - "readyToBuild" DEBE ser false.
 
 ETAPA 3: HOSPEDAJE, TRANSPORTE Y PRESUPUESTO
@@ -776,13 +804,16 @@ ETAPA 3: HOSPEDAJE, TRANSPORTE Y PRESUPUESTO
 
 ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
 - Si el usuario YA confirmó sus días de viaje (${known.durationDays ? `${known.durationDays} días` : 'duración'}):
-  Presenta el itinerario estructurado integrando TODAS las actividades aprobadas distribuidas exactamente a lo largo de los ${known.durationDays || 3} días (Día 1 a Día ${known.durationDays || 3}):
+  Presenta el itinerario estructurado integrando las actividades aprobadas a lo largo de los ${known.durationDays || 3} días (Día 1 a Día ${known.durationDays || 3}):
   "Itinerario de Viaje a ${destName} (${known.datesSeason || `${known.durationDays || 3} días`}):"
   • Día 1: [Llegada / Hotel] -> [Lugar físico real 1] -> [Cena en Restaurante real 1]
   • Día 2: [Lugar físico real 2] -> [Almuerzo en Restaurante real 2] -> [Lugar físico real 3]
   ...
-  REGLA DE ORO DE PARADAS EN FLECHAS: En las líneas con flechas (->), CADA ELEMENTO DEBE SER ÚNICAMENTE EL NOMBRE PROPIO DE UN LUGAR FÍSICO O RESTAURANTE REAL (ej: "• Día 2: Bahía de Taganga -> Restaurante Ouzo").
-  ESTÁ TERMINANTEMENTE PROHIBIDO poner frases de actividades como paradas en las flechas (NUNCA poner "-> Fiesta nocturna", "-> Tarde libre para explorar", "-> Tubbing en el río", "-> Las cascadas y visita a fincas de café", "-> Regreso al hotel y despedida").
+  REGLAS DE ORO DEL ITINERARIO:
+  1. CADA DÍA (del Día 1 al Día ${known.durationDays || 3}) DEBE TENER al menos 1 o 2 lugares físicos o restaurantes REALES y DIFERENTES.
+  2. ESTÁ TERMINANTEMENTE PROHIBIDO dejar días vacíos, días con descripciones abstractas o días de relleno ("Día libre", "Tarde libre", "Últimos momentos", "Visita opcional").
+  3. En las líneas con flechas (->), CADA ELEMENTO DEBE SER ÚNICAMENTE EL NOMBRE PROPIO DE UN LUGAR FÍSICO O RESTAURANTE REAL (ej: "• Día 2: Bahía de Taganga -> Restaurante Ouzo").
+  4. ESTÁ TERMINANTEMENTE PROHIBIDO poner frases de actividades como paradas en las flechas (NUNCA poner "-> Fiesta nocturna", "-> Tarde libre para explorar", "-> Tubbing en el río", "-> Las cascadas y visita a fincas de café", "-> Regreso al hotel y despedida").
   Alojamiento: [Hotel elegido, casa propia o por definir]
   Transporte: [Medio de transporte elegido o por definir]
   Presupuesto: [Presupuesto elegido o por definir]
@@ -791,7 +822,7 @@ ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
 - "readyToBuild" DEBE ser false.
 
 ETAPA 5: GENERACIÓN DEL TOUR ("readyToBuild": true)
-- Si el usuario pide generar o crear el tour (ej: "si genera el tour porfa", "crea el tour", "genera el tour", "vale genera el tour", "adelante genera el tour", "ok quiero generar el tour", "quiero generar el tour"):
+- Si el usuario pide generar o crear el tour (ej: "si genera el tour porfa", "crea el tour", "genera el tour", "vale genera el tour", "adelante genera el tour", "adelante general tour", "ok quiero generar el tour", "quiero generar el tour", "adelante"):
   - SI FALTA ALGÚN DATO CLAVE (Destino, Fechas, Acompañantes, Hospedaje, Transporte o Presupuesto):
     1. "readyToBuild" DEBE SER FALSE (nunca generar el mapa si falta información clave).
     2. En "responseMessage", pregunta AMABLEMENTE Y DE MANERA ESPECÍFICA únicamente por el dato o datos clave que siguen en PENDIENTE. NUNCA preguntes por datos que ya están CONFIRMADOS.
@@ -830,7 +861,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
   "readyToBuild": false
 }
 
-REGLAS ESTRICTAS PARA "specificPlaces":
+REGLAS ESTRITAS PARA "specificPlaces":
 1. DEBE contener ÚNICAMENTE lugares físicos y restaurantes reales con su nombre propio y su número de día exacto ('dia': 1, 2, ...).
 2. ESTÁ TERMINANTEMENTE PROHIBIDO incluir actividades genéricas o frases descriptivas como:
    - "Instalación en casa", "Llegada", "Despedida", "Regreso a casa", "Picnic o almuerzo en la zona", "Picnic en la zona", "Tiempo libre", "Día libre", "Tarde libre", "Tarde libre para explorar", "Fiesta nocturna", "Tubbing en el río", "Las cascadas y visita a fincas de café", "Últimos momentos para disfrutar de la ciudad", "Participación en algún evento cultural".
@@ -861,37 +892,21 @@ REGLAS ESTRICTAS PARA "specificPlaces":
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`)
+      const errText = await response.text().catch(() => '')
+      console.error('[generateChatResponse] OpenAI API error status:', response.status, errText)
+      throw new Error(`OpenAI HTTP ${response.status}: ${errText}`)
     }
 
-    const data = await response.json()
-    const rawContent = data.choices?.[0]?.message?.content || '{}'
+    const json = await response.json()
+    const rawContent = json.choices?.[0]?.message?.content || '{}'
     const parsed = JSON.parse(rawContent)
 
-    let responseMessage = parsed.responseMessage || `¡Genial! Continuemos organizando tu viaje.`
-    const actionChips = Array.isArray(parsed.actionChips) && parsed.actionChips.length > 0
-      ? parsed.actionChips
-      : getDefaultActionChips(known, lastUserMsg)
-
-    // Visual cards are ONLY shown during initial destination exploration (when no city is selected yet)
-    let destinationSuggestions = []
-    if (!hasCity && !parsed.extractedPreferences?.city) {
-      destinationSuggestions = await buildVisualDestinationSuggestions(actionChips).catch(() => [])
-    }
-
+    let responseMessage = parsed.responseMessage || '¿En qué más te puedo ayudar con tu itinerario?'
+    const actionChips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
     const parsedExtracted = parsed.extractedPreferences || {}
-    const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
-    if (isHomeOrLocalLodging) {
-      if (!parsedExtracted.selectedHotel) {
-        parsedExtracted.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
-      }
-      parsedExtracted.accommodationStatus = 'Casa propia / familiar'
-    }
 
-    const finalHasLodging = Boolean(
-      hasValidLodging(known.selectedHotel, known.accommodationStatus) ||
-      hasValidLodging(parsedExtracted.selectedHotel, parsedExtracted.accommodationStatus)
-    )
+    // Evaluar estado completo de información clave
+    const finalHasLodging = Boolean(hasLodging || hasValidValue(parsedExtracted.selectedHotel) || hasValidValue(parsedExtracted.accommodationStatus))
     const finalHasTransport = Boolean(hasValidValue(known.transport) || hasValidValue(parsedExtracted.transport))
     const finalHasBudget = Boolean(hasValidValue(known.budget) || hasValidValue(parsedExtracted.budget))
     const finalHasCompanions = Boolean(hasValidValue(known.companions) || hasValidValue(parsedExtracted.companions))
@@ -911,9 +926,11 @@ REGLAS ESTRICTAS PARA "specificPlaces":
       finalHasBudget
     )
 
-    const isExplicitBuildRequestedByUser = /\b(gener(ar|es|a|e|en)?\s+(el\s+)?tour|cre(ar|es|a|e|en)?\s+(el\s+)?tour|adelante\s+genera|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn](ar|a|es|e)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?|ok\s+quiero\s+generar)\b/i.test(lastUserMsg)
+    const isExplicitBuildRequestedByUser = parsed.readyToBuild === true ||
+      /\b(gener(ar|es|a|e|en|al)?\s+(el\s+)?tour|cre(ar|es|a|e|en)?\s+(el\s+)?tour|adelante(\s+(general|genera))?|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn](ar|a|es|e)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?|ok\s+quiero\s+generar|adelante\s+crea|adelante|procede|vamos|armar\s+tour)\b/i.test(lastUserMsg) ||
+      /\b(procedo a generar tu tour|procedo a generar)\b/i.test(responseMessage)
 
-    // Solo se activa readyToBuild si TODA la información clave está completa Y el usuario lo pide explícitamente
+    // Solo se activa readyToBuild si TODA la información clave está completa Y el usuario lo pide explícitamente o la IA confirma la creación
     const effectiveReadyToBuild = Boolean(
       isAllKeyInfoComplete &&
       isExplicitBuildRequestedByUser

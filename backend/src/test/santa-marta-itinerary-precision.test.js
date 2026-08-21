@@ -119,3 +119,24 @@ test('buildTourPlanner preserves Santa Marta day assignments without shifting Ta
   assert.equal(day8Places.length, 1)
   assert.equal(day8Places[0].name, 'Centro Comercial Buenavista')
 })
+
+test('Santa Marta preset contains extensive authentic POIs and nightlife', () => {
+  const sm = getDestinationPresets('Santa Marta', 'Colombia')
+  assert.ok(sm)
+  assert.ok(sm.places.includes('Playa Blanca Santa Marta'))
+  assert.ok(sm.places.includes('Playa El Rodadero'))
+  assert.ok(sm.places.includes('Parque Nacional Natural Tayrona'))
+  assert.ok(sm.places.some(p => p.includes('Minca')))
+  assert.ok(sm.restaurants.some(r => r.name.includes('Burukuka')))
+  assert.ok(sm.restaurants.some(r => r.name.includes('Discoteca La Puerta')))
+  assert.ok(sm.restaurants.some(r => r.name.includes('Ouzo')))
+})
+
+test('Playa Blanca Santa Marta geocodes to Santa Marta and not Cartagena/Baru', async () => {
+  const geo = await geocodePlace('Playa Blanca Santa Marta')
+  assert.ok(geo)
+  assert.equal(geo.city, 'Santa Marta')
+  assert.ok(geo.latitude > 11.15 && geo.latitude < 11.28)
+  assert.ok(geo.longitude < -74.15 && geo.longitude > -74.30)
+})
+

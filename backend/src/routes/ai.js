@@ -389,8 +389,8 @@ aiRouter.post('/chat', async (req, res, next) => {
 
     if (dest || isDateOrEventQuery) {
       const searchQuery = isDateOrEventQuery 
-        ? `${message} en ${dest || 'Colombia'}`
-        : `eventos turismo clima atracciones imperdibles en ${dest} ${updatedPreferences.datesSeason || ''}`.trim()
+        ? `${message} en el municipio de ${dest || 'Colombia'}`
+        : `eventos turismo clima atracciones imperdibles en el municipio de ${dest} ${updatedPreferences.datesSeason || ''}`.trim()
 
       webSearchResult = await searchWebForTravel({
         query: searchQuery,
@@ -565,9 +565,9 @@ aiRouter.post('/chat', async (req, res, next) => {
         }
       }
 
-      // Si el usuario aceptó en lote ("agregar todas las actividades", "Ok quiero agregar estás actividades al itinerario", etc.), extraer de mensajes recientes del asistente
-      const isUserAcceptingAll = /\b(agregar|incluir|a[ñn]adir)\s+(todas|estas|est[aá]s|los|las|mis)?\s*(actividades|lugares|atracciones|restaurantes|recomendaciones|opciones|paradas)/i.test(message) ||
-        /\b(s[íi],?\s*(agrega|incluye|a[ñn]ade)|agrega(r)?\s*(todas|estas|est[aá]s)|incluir\s+todas\s+estas\s+actividades|agregar\s+est[aá]s\s+actividades|agregar\s+estas\s+actividades)\b/i.test(message)
+      // Si el usuario aceptó en lote ("agregar todas las actividades", "vale agrega todas esas actividades", etc.), extraer de mensajes recientes del asistente
+      const isUserAcceptingAll = /\b(agregar|incluir|a[ñn]adir|agrega)\s+(todas|estas|est[aá]s|esas|los|las|mis)?\s*(actividades|lugares|atracciones|restaurantes|recomendaciones|opciones|paradas)?/i.test(message) ||
+        /\b(vale\s+agrega|s[íi],?\s*(agrega|incluye|a[ñn]ade)|agrega(r)?\s*(todas|estas|est[aá]s|esas)|incluir\s+todas|agregar\s+est[aá]s|agregar\s+estas)\b/i.test(message)
 
       if (isUserAcceptingAll) {
         const recentAssistantMsgs = (history || []).filter(m => m.role === 'assistant' || m.type === 'ai')
@@ -613,8 +613,25 @@ aiRouter.post('/chat', async (req, res, next) => {
         ? deduplicatePlacesByName(extractedFromMsg.filter(p => isValidSpecificPlace(typeof p === 'object' ? p.name : p)))
         : deduplicatePlacesByName(rawCombined)
 
-      if (combinedSpecifics.length > 0) {
-        updatedPreferences.specificPlaces = combinedSpecifics
+      let validatedSpecifics = combinedSpecifics
+      const canonicalDest = updatedPreferences.canonicalDestination || (hasConfirmedCity ? await resolveCanonicalDestination(updatedPreferences.city || updatedPreferences.destination).catch(() => null) : null)
+      if (canonicalDest && Number.isFinite(canonicalDest.latitude) && Number.isFinite(canonicalDest.longitude)) {
+        const geocodedCheck = await Promise.allSettled(
+          combinedSpecifics.map(async p => {
+            const pName = typeof p === 'object' ? (p.name || '') : String(p)
+            const geo = await geocodePlace(`${pName}, ${canonicalDest.city || updatedPreferences.city || ''}, ${canonicalDest.country || ''}`).catch(() => null)
+            if (geo && !validateCandidateLocation(geo, canonicalDest, 70)) {
+              console.warn(`[/ai/chat geofence] Dropping distant hallucinated place "${pName}" for destination "${canonicalDest.city}"`)
+              return null
+            }
+            return p
+          })
+        )
+        validatedSpecifics = geocodedCheck.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean)
+      }
+
+      if (validatedSpecifics.length > 0) {
+        updatedPreferences.specificPlaces = validatedSpecifics
       } else {
         delete updatedPreferences.specificPlaces
       }
