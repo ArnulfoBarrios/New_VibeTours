@@ -259,6 +259,29 @@ test('effectiveReadyToBuild must trigger when user requests tour generation and 
   assert.equal(res.readyToBuild, true)
 })
 
+test('effectiveReadyToBuild must stay FALSE when user sends full travel info on first prompt without ordering tour build', async () => {
+  const state = {
+    history: [
+      { role: 'user', content: 'vamos del 5 al 12 de octubre en carro a Santa Marta con 5 amigos en mi casa con presupuesto medio y queremos playas y vida nocturna' }
+    ]
+  }
+
+  const known = {
+    city: 'Santa Marta',
+    country: 'Colombia',
+    datesSeason: '5 al 12 de octubre',
+    durationDays: 8,
+    companions: '5 amigos',
+    selectedHotel: 'Casa propia',
+    accommodationStatus: 'Casa propia',
+    transport: 'Carro',
+    budget: 'Medio'
+  }
+
+  const res = await generateChatResponse(state, '', '', known)
+  assert.equal(res.readyToBuild, false, 'readyToBuild must NOT trigger prematurely on initial info submission')
+})
+
 test('effectiveReadyToBuild must reject and ask for missing key info when lodging is missing', async () => {
   const state = {
     history: [

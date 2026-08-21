@@ -926,17 +926,22 @@ REGLAS ESTRITAS PARA "specificPlaces":
       finalHasBudget
     )
 
-    const isExplicitBuildRequestedByUser = parsed.readyToBuild === true ||
-      /\b(gener(ar|es|a|e|en|al)?\s+(el\s+)?tour|cre(ar|es|a|e|en)?\s+(el\s+)?tour|adelante(\s+(general|genera))?|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn](ar|a|es|e)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?|ok\s+quiero\s+generar|adelante\s+crea|adelante|procede|vamos|armar\s+tour)\b/i.test(lastUserMsg) ||
-      /\b(procedo a generar tu tour|procedo a generar)\b/i.test(responseMessage)
+    // Detección explícita de comando de generación enviado por el usuario
+    const isUserExplicitlyOrderingBuild = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+)?tour|cre(ar|es|a|e|en)?\s+(el\s+)?tour|adelante(\s+(general|genera|crea|construye))?|inicia(r)?\s+tour|finaliza(r)?\s+tour|constru(ye|ir)\s+tour|dise[ñn](ar|a|es|e)?\s+(el\s+)?tour|est[aá]\s+perfecto\s+genera|listo\s+genera|listo\s+crea|ya\s+no\s+hay\s+nada\s+genera|listo\s+para\s+generar|vale\s+genera|procede\s+a\s+generar|si\s+genera\s+el\s+tour|s[íi]\s+genera\s+el\s+tour|genera\s+el\s+tour\s+porfa|crea\s+el\s+tour|haz\s+el\s+tour|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?|ok\s+quiero\s+generar|adelante\s+crea|adelante\s+procede|vamos\s+genera|armar\s+tour)\b/i.test(lastUserMsg)
 
-    // Solo se activa readyToBuild si TODA la información clave está completa Y el usuario lo pide explícitamente o la IA confirma la creación
+    // Detección de si la IA está en modo consulta/propuesta esperando opinión del usuario
+    const isBotAskingOrProposing = /\b(qu[ée]\s+te\s+parece|deseas\s+hacer\s+alg[uú]n\s+cambio|te\s+gustar[íi]a\s+incluir|qu[ée]\s+opinas|deseas\s+modificar|alguna\s+otra\s+preferencia|est[áa]\s+todo\s+listo\s+para\s+generar)\b/i.test(responseMessage) ||
+      /\?\s*$/i.test(responseMessage.trim())
+
+    const isBotConfirmingBuild = /\b(procedo a generar tu tour|procedo a generar|voy a generar tu tour)\b/i.test(responseMessage)
+
+    // Solo se activa readyToBuild si TODA la información clave está completa Y el usuario lo ordenó explícitamente (o la IA confirmó la creación sin estar preguntando)
     const effectiveReadyToBuild = Boolean(
       isAllKeyInfoComplete &&
-      isExplicitBuildRequestedByUser
+      (isUserExplicitlyOrderingBuild || (isBotConfirmingBuild && !isBotAskingOrProposing))
     )
 
-    if (isExplicitBuildRequestedByUser && !isAllKeyInfoComplete) {
+    if (isUserExplicitlyOrderingBuild && !isAllKeyInfoComplete) {
       const missing = []
       if (!finalHasCity) missing.push('el destino')
       if (!finalHasDates) missing.push('las fechas o días de viaje')
