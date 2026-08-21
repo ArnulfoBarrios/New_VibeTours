@@ -257,6 +257,16 @@ test('effectiveReadyToBuild must trigger when user requests tour generation and 
 
   const res = await generateChatResponse(state, '', '', known)
   assert.equal(res.readyToBuild, true)
+
+  const stateItinerario = {
+    history: [
+      { role: 'user', content: 'Quiero viajar a Barranquilla' },
+      { role: 'assistant', content: 'Itinerario de 3 días...' },
+      { role: 'user', content: 'Okay ahora sí genera el itinerario' }
+    ]
+  }
+  const resItinerario = await generateChatResponse(stateItinerario, '', '', known)
+  assert.equal(resItinerario.readyToBuild, true, 'genera el itinerario must trigger readyToBuild')
 })
 
 test('effectiveReadyToBuild must stay FALSE when user sends full travel info on first prompt without ordering tour build', async () => {

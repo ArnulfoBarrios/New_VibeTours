@@ -331,7 +331,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     final budget = prefs['budget'];
     final transport = prefs['transport'];
     final accommodation = prefs['accommodationStatus'];
-    final specificPlaces = prefs['specificPlaces'] is List ? (prefs['specificPlaces'] as List).join(', ') : prefs['specificPlaces'];
+    final rawSpecPlaces = prefs['specificPlaces'];
+    final specificPlaces = rawSpecPlaces is List
+        ? rawSpecPlaces.map((e) => e is Map ? (e['name'] ?? '').toString() : e.toString()).where((s) => s.isNotEmpty).join(', ')
+        : (rawSpecPlaces?.toString() ?? '');
 
     final items = <Map<String, dynamic>>[];
     if (city != null && city.toString().isNotEmpty) items.add({'icon': Icons.location_on_rounded, 'label': 'Destino: $city', 'color': Colors.blue});
@@ -341,7 +344,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     if (budget != null && budget.toString().isNotEmpty) items.add({'icon': Icons.account_balance_wallet_rounded, 'label': 'Presupuesto: $budget', 'color': Colors.green});
     if (transport != null && transport.toString().isNotEmpty) items.add({'icon': Icons.directions_car_rounded, 'label': '$transport', 'color': Colors.indigo});
     if (accommodation != null && accommodation.toString().isNotEmpty) items.add({'icon': Icons.hotel_rounded, 'label': '$accommodation', 'color': Colors.deepOrange});
-    if (specificPlaces != null && specificPlaces.toString().isNotEmpty) items.add({'icon': Icons.star_rounded, 'label': 'Paradas: $specificPlaces', 'color': Colors.pink});
+    if (specificPlaces.isNotEmpty) items.add({'icon': Icons.star_rounded, 'label': 'Paradas: $specificPlaces', 'color': Colors.pink});
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
