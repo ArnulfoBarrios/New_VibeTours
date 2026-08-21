@@ -159,16 +159,23 @@ export function isValidSpecificPlace(placeName) {
   const isTimeHeader = /^(d[íi]a\s*\d+|day\s*\d+|mañana|tarde|noche|almuerzo|cena|desayuno|madrugada|atardecer)/i.test(clean)
   if (isTimeHeader) return false
 
+  // 1.1 Descartar fragmentos que inician con preposiciones o verbos de propósito ("para explorar", "por la tarde", "hacia el centro")
+  if (/^(?:para|por|hacia|desde|hasta)\s+/i.test(cleanLower)) {
+    return false
+  }
+
   // 2. Descartar comodidades, hoteles, metadatos (Presupuesto, Transporte, Alojamiento), acciones y frases meta de viaje
-  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
+  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|regreso al hotel|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
   if (isMetaOrAmenity) return false
 
   // 2.1 Descartar actividades descriptivas de viaje, check-ins, ocio genérico, despedidas o momentos libres
-  const isDescriptiveActivity = /\b(instalaci[oó]n|instalacion en casa|en casa|llegada a|bienvenida|despedida de|regreso a|picnic|picnic o almuerzo|picnic en la zona|almuerzo en la zona|comida en la zona|tarde libre|tiempo libre|d[íi]a libre|dia libre|mañana libre|noche libre|compras o descanso|para compras|últimos momentos|ultimos momentos|disfrutar de la ciudad|a tu ritmo|participaci[oó]n en|evento cultural|si hay alguno|relax en|de relax|vida nocturna en|exploraci[oó]n de|descubrir la historia)\b/i.test(cleanLower)
-  if (isDescriptiveActivity) return false
+  const isDescriptiveActivity = /\b(instalaci[oó]n|instalacion en casa|en casa|llegada a|bienvenida|despedida de|despedida|regreso a|regreso al hotel|picnic|picnic o almuerzo|picnic en la zona|almuerzo en la zona|comida en la zona|tarde libre|tiempo libre|d[íi]a libre|dia libre|mañana libre|noche libre|compras o descanso|para compras|últimos momentos|ultimos momentos|disfrutar de la ciudad|a tu ritmo|participaci[oó]n en|evento cultural|si hay alguno|relax en|de relax|vida nocturna en|exploraci[oó]n de|descubrir la historia|fiesta nocturna|vida nocturna|noche de fiesta|noche de rumba|rumba|tubbing|tubing|careteo|rafting|canopy|kayak|paddle|senderismo|caminata|cascadas y visita|visita a fincas|fincas de caf[ée]|finca cafetera|fincas cafeteras)\b/i.test(cleanLower)
+  if (isDescriptiveActivity && !/\b(restaurante|bar|caf[ée]|museo|parque nacional|teatro|hotel|catedral|iglesia|bistr[oó]|calle\s+\d+|quinta de|playa\s+[a-z]+|bah[íi]a\s+[a-z]+|cabo\s+[a-z]+|centro comercial)\b/i.test(cleanLower)) {
+    return false
+  }
 
   // 2.2 Descartar palabras genéricas o fragmentos sueltos no identificables
-  const isGenericFragment = /^(local|un local|el local|restaurante local|un restaurante local|bar local|la zona|zona|en la zona|la ciudad|ciudad|en la ciudad|casa propia|alojamiento propio|en casa|casa|casa de un familiar|casa familiar)$/i.test(cleanLower)
+  const isGenericFragment = /^(local|un local|el local|restaurante local|un restaurante local|bar local|la zona|zona|en la zona|la ciudad|ciudad|en la ciudad|casa propia|alojamiento propio|en casa|casa|casa de un familiar|casa familiar|para explorar|explorar|fiesta nocturna|las cascadas|cascadas|el r[íi]o|r[íi]o|tubbing en el r[íi]o|tubbing|tubing)$/i.test(cleanLower)
   if (isGenericFragment) return false
 
   // 2.3 Descartar estructuras físicas genéricas o no turísticas que no son atracciones (canchas de barrio, paradas de bus)
@@ -935,6 +942,8 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
           description: place.description || place.history || '',
           reason: buildRecommendationReason(place, input, aiReason),
           durationMinutes: place.minutes || 25,
+          dia: Number(place.dia || place.day || 1),
+          day: Number(place.dia || place.day || 1),
           locationInfo: {
             nombre_lugar: place.name,
             direccion: place.address || '',
@@ -1331,7 +1340,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       Array.from({ length: stopsTarget }, (_, index) => {
         const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
         const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (anchorPlace?.dia ? Number(anchorPlace.dia) : null)
+        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (sourceStop?.day ? Number(sourceStop.day) : (anchorPlace?.dia ? Number(anchorPlace.dia) : (anchorPlace?.day ? Number(anchorPlace.day) : null)))
         const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopsTarget) + 1)
         return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
       })
@@ -4221,20 +4230,12 @@ export async function collectTourCandidates(input, location) {
           if (!geo) geo = await geocodePlace(`${cleanedPlace}, Centro, ${city}`).catch(() => null)
         }
 
-        // Tier 3: Zero-Drop Policy con anclaje geográfico
-        // Si no se encuentra en OSM (ej. restaurante pequeño o local nuevo), anclarlo al cuadrante de la ciudad
-        // garantizando que NUNCA se pierda ninguna parada acordada en el chat.
-        let finalLat = geo?.latitude
-        let finalLon = geo?.longitude
-
-        if (!finalLat || !finalLon || !validateCandidateLocation(geo, canonicalDest, 70)) {
-          if (cityCenterLat && cityCenterLon) {
-            const angle = (index * 1.37) % (2 * Math.PI)
-            const offsetDist = 0.003 + (index % 5) * 0.001
-            finalLat = cityCenterLat + Math.sin(angle) * offsetDist
-            finalLon = cityCenterLon + Math.cos(angle) * offsetDist
-          }
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+          return null
         }
+
+        const finalLat = geo.latitude
+        const finalLon = geo.longitude
 
         if (finalLat && finalLon) {
           return {

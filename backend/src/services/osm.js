@@ -231,7 +231,40 @@ const VERIFIED_HIGH_PRECISION_POIS = [
   { key: 'restaurante el pórtico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
   { key: 'el portico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
   { key: 'el pórtico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'hotel el prado', lat: 10.9990, lon: -74.8010, name: 'Hotel El Prado', city: 'Barranquilla', country: 'Colombia' }
+  { key: 'hotel el prado', lat: 10.9990, lon: -74.8010, name: 'Hotel El Prado', city: 'Barranquilla', country: 'Colombia' },
+
+  // Santa Marta
+  { key: 'playa el rodadero', lat: 11.2065, lon: -74.2272, name: 'Playa El Rodadero', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'el rodadero', lat: 11.2065, lon: -74.2272, name: 'Playa El Rodadero', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'bahia de taganga', lat: 11.2675, lon: -74.1925, name: 'Bahía de Taganga', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'bahía de taganga', lat: 11.2675, lon: -74.1925, name: 'Bahía de Taganga', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'taganga', lat: 11.2675, lon: -74.1925, name: 'Bahía de Taganga', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'restaurante ouzo', lat: 11.2420, lon: -74.2120, name: 'Restaurante Ouzo', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'ouzo', lat: 11.2420, lon: -74.2120, name: 'Restaurante Ouzo', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'parque nacional natural tayrona', lat: 11.3100, lon: -73.9600, name: 'Parque Nacional Natural Tayrona', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'parque tayrona', lat: 11.3100, lon: -73.9600, name: 'Parque Nacional Natural Tayrona', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'tayrona', lat: 11.3100, lon: -73.9600, name: 'Parque Nacional Natural Tayrona', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'cabo san juan', lat: 11.3280, lon: -73.9350, name: 'Cabo San Juan del Guía (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'cabo san juan del guia', lat: 11.3280, lon: -73.9350, name: 'Cabo San Juan del Guía (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'quinta de san pedro alejandrino', lat: 11.2330, lon: -74.1830, name: 'Quinta de San Pedro Alejandrino', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'quinta san pedro alejandrino', lat: 11.2330, lon: -74.1830, name: 'Quinta de San Pedro Alejandrino', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'playa concha', lat: 11.2950, lon: -74.1550, name: 'Bahía Concha (Playa Concha)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'bahia concha', lat: 11.2950, lon: -74.1550, name: 'Bahía Concha', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'bahía concha', lat: 11.2950, lon: -74.1550, name: 'Bahía Concha', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'bares en la calle 22', lat: 11.2425, lon: -74.2115, name: 'Bares en la Calle 22 (Parque de Los Novios)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'calle 22', lat: 11.2425, lon: -74.2115, name: 'Calle 22 / Parque de Los Novios', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'minca', lat: 11.1435, lon: -74.1165, name: 'Minca (Sierra Nevada)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'playa de palomino', lat: 11.2505, lon: -73.5650, name: 'Playa de Palomino', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'palomino', lat: 11.2505, lon: -73.5650, name: 'Playa de Palomino', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'restaurante la roca', lat: 11.2490, lon: -73.5640, name: 'Restaurante La Roca', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'centro comercial buenavista', lat: 11.2290, lon: -74.1850, name: 'Centro Comercial Buenavista Santa Marta', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'restaurante y bar el cielo', lat: 11.2055, lon: -74.2265, name: 'Restaurante y Bar El Cielo (El Rodadero)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'el cielo santa marta', lat: 11.2055, lon: -74.2265, name: 'Restaurante y Bar El Cielo (El Rodadero)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'parque de los novios', lat: 11.2423, lon: -74.2118, name: 'Parque de Los Novios', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'playa blanca santa marta', lat: 11.2185, lon: -74.2330, name: 'Playa Blanca Santa Marta', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'catedral basilica de santa marta', lat: 11.2435, lon: -74.2105, name: 'Catedral Basílica de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'museo del oro tairona', lat: 11.2440, lon: -74.2135, name: 'Museo del Oro Tairona - Casa de la Aduana', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'hotel san marcos', lat: 11.2430, lon: -74.2110, name: 'Hotel San Marcos', city: 'Santa Marta', country: 'Colombia' }
 ]
 
 export async function geocodePlace(query, lat = null, lon = null) {

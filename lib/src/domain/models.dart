@@ -921,6 +921,8 @@ class AiRecommendation {
     required this.reason,
     required this.durationMinutes,
     required this.locationInfo,
+    this.day = 1,
+    this.dia = 1,
   });
 
   final String id;
@@ -933,8 +935,11 @@ class AiRecommendation {
   final String reason;
   final int durationMinutes;
   final TourLocationInfo locationInfo;
+  final int day;
+  final int dia;
 
   factory AiRecommendation.fromJson(Map<String, dynamic> json) {
+    final parsedDay = int.tryParse(json['dia']?.toString() ?? json['day']?.toString() ?? '1') ?? 1;
     return AiRecommendation(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
@@ -945,6 +950,8 @@ class AiRecommendation {
       description: json['description'] as String? ?? '',
       reason: json['reason'] as String? ?? '',
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 25,
+      day: parsedDay,
+      dia: parsedDay,
       locationInfo: TourLocationInfo(
         nombreLugar: json['locationInfo']?['nombre_lugar'] ?? '',
         direccion: json['locationInfo']?['direccion'] ?? '',
@@ -967,6 +974,8 @@ class AiRecommendation {
     'description': description,
     'reason': reason,
     'durationMinutes': durationMinutes,
+    'dia': dia,
+    'day': day,
     'locationInfo': locationInfo.toCreationJson(),
   };
 }

@@ -778,8 +778,11 @@ ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
 - Si el usuario YA confirmó sus días de viaje (${known.durationDays ? `${known.durationDays} días` : 'duración'}):
   Presenta el itinerario estructurado integrando TODAS las actividades aprobadas distribuidas exactamente a lo largo de los ${known.durationDays || 3} días (Día 1 a Día ${known.durationDays || 3}):
   "Itinerario de Viaje a ${destName} (${known.datesSeason || `${known.durationDays || 3} días`}):"
-  • Día 1: [Llegada / Hotel] -> [Actividad/Lugar aprobado] -> [Cena en Restaurante real]
-  • Día 2: ...
+  • Día 1: [Llegada / Hotel] -> [Lugar físico real 1] -> [Cena en Restaurante real 1]
+  • Día 2: [Lugar físico real 2] -> [Almuerzo en Restaurante real 2] -> [Lugar físico real 3]
+  ...
+  REGLA DE ORO DE PARADAS EN FLECHAS: En las líneas con flechas (->), CADA ELEMENTO DEBE SER ÚNICAMENTE EL NOMBRE PROPIO DE UN LUGAR FÍSICO O RESTAURANTE REAL (ej: "• Día 2: Bahía de Taganga -> Restaurante Ouzo").
+  ESTÁ TERMINANTEMENTE PROHIBIDO poner frases de actividades como paradas en las flechas (NUNCA poner "-> Fiesta nocturna", "-> Tarde libre para explorar", "-> Tubbing en el río", "-> Las cascadas y visita a fincas de café", "-> Regreso al hotel y despedida").
   Alojamiento: [Hotel elegido, casa propia o por definir]
   Transporte: [Medio de transporte elegido o por definir]
   Presupuesto: [Presupuesto elegido o por definir]
@@ -830,8 +833,8 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
 REGLAS ESTRICTAS PARA "specificPlaces":
 1. DEBE contener ÚNICAMENTE lugares físicos y restaurantes reales con su nombre propio y su número de día exacto ('dia': 1, 2, ...).
 2. ESTÁ TERMINANTEMENTE PROHIBIDO incluir actividades genéricas o frases descriptivas como:
-   - "Instalación en casa", "Llegada", "Despedida", "Regreso a casa", "Picnic o almuerzo en la zona", "Picnic en la zona", "Tiempo libre", "Día libre", "Tarde libre", "Últimos momentos para disfrutar de la ciudad", "Participación en algún evento cultural".
-   - Palabras genéricas como "local", "restaurante local", "zona", "casa propia", "comida típica".
+   - "Instalación en casa", "Llegada", "Despedida", "Regreso a casa", "Picnic o almuerzo en la zona", "Picnic en la zona", "Tiempo libre", "Día libre", "Tarde libre", "Tarde libre para explorar", "Fiesta nocturna", "Tubbing en el río", "Las cascadas y visita a fincas de café", "Últimos momentos para disfrutar de la ciudad", "Participación en algún evento cultural".
+   - Palabras genéricas como "local", "restaurante local", "zona", "casa propia", "comida típica", "para explorar".
 3. Si el itinerario menciona una recomendación de restaurante (ej: "Cena en un restaurante local (recomiendo Restaurante El Celler)"), el lugar extraído DEBE SER "Restaurante El Celler" y NO "local".`
 
   try {
