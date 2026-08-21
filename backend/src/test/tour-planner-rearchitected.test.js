@@ -822,6 +822,16 @@ test('getPlaceEntityType and deduplicatePlacesByName must preserve distinct enti
   assert.equal(puertoCol.dia, 5)
 })
 
+test('Initial conversational message with full preferences asking for recommendations must NOT trigger premature readyToBuild', async () => {
+  const initialMsg = 'Hola Quiero crear un tour acá a Barranquilla en donde pueda haber lugares así bastantes interesantes voy a durar entre el 9 y el 11 de octubre me voy a quedar en mi casa me voy a mover en carro y voy a estar con tres amigos vamos a manejar un presupuesto moderado adelante Qué me'
+  const state = {
+    history: [{ role: 'user', content: initialMsg }]
+  }
+
+  const res = await generateChatResponse(state, initialMsg, '', {})
+  assert.equal(res.readyToBuild, false, 'Initial message asking for recommendations must NOT trigger readyToBuild: true')
+})
+
 
 
 
