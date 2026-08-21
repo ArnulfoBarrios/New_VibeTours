@@ -163,8 +163,16 @@ export function isValidSpecificPlace(placeName) {
   const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
   if (isMetaOrAmenity) return false
 
-  // 2.1 Descartar estructuras físicas genéricas o no turísticas que no son atracciones (pérgolas, canchas de barrio, paradas de bus)
-  if (/^(la\s+)?(p[ée]rgola|cancha|cancha sint[ée]tica|cancha de f[uú]tbol|cancha de microf[uú]tbol|parada de bus|estaci[óo]n de bus|quiosco|kiosco|grader[íi]as)$/i.test(cleanLower) ||
+  // 2.1 Descartar actividades descriptivas de viaje, check-ins, ocio genérico, despedidas o momentos libres
+  const isDescriptiveActivity = /\b(instalaci[oó]n|instalacion en casa|en casa|llegada a|bienvenida|despedida de|regreso a|picnic|picnic o almuerzo|picnic en la zona|almuerzo en la zona|comida en la zona|tarde libre|tiempo libre|d[íi]a libre|dia libre|mañana libre|noche libre|compras o descanso|para compras|últimos momentos|ultimos momentos|disfrutar de la ciudad|a tu ritmo|participaci[oó]n en|evento cultural|si hay alguno|relax en|de relax|vida nocturna en|exploraci[oó]n de|descubrir la historia)\b/i.test(cleanLower)
+  if (isDescriptiveActivity) return false
+
+  // 2.2 Descartar palabras genéricas o fragmentos sueltos no identificables
+  const isGenericFragment = /^(local|un local|el local|restaurante local|un restaurante local|bar local|la zona|zona|en la zona|la ciudad|ciudad|en la ciudad|casa propia|alojamiento propio|en casa|casa|casa de un familiar|casa familiar)$/i.test(cleanLower)
+  if (isGenericFragment) return false
+
+  // 2.3 Descartar estructuras físicas genéricas o no turísticas que no son atracciones (canchas de barrio, paradas de bus)
+  if (/^(la\s+)?(cancha|cancha sint[ée]tica|cancha de f[uú]tbol|cancha de microf[uú]tbol|parada de bus|estaci[óo]n de bus|quiosco|kiosco|grader[íi]as)$/i.test(cleanLower) ||
       /\b(cancha sint[ée]tica|cancha de f[uú]tbol|parque cancha)\b/i.test(cleanLower)) {
     return false
   }
@@ -413,19 +421,35 @@ aiRouter.post('/chat', async (req, res, next) => {
       function extractPoisFromText(text) {
         if (!text || typeof text !== 'string') return []
         const found = []
-        const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r|ci[óo]n)?\s+(?:de\s+la|del?|el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|al?|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|vida\s+nocturna|cenar\s+en|cenar|almorzar\s+en|almorzar|cena\s+en\s+un\s+restaurante\s+en|cena\s+en\s+un\s+restaurante\s+t[íi]pico|cena\s+en\s+un\s+restaurante|cena\s+en\s+un\s+local\s+de\s+la|cena\s+en\s+un\s+local|cena\s+en\s+un\s+bar\s+local|cena\s+en\s+un\s+bar|cena\s+de\s+despedida\s+en|cena\s+de\s+despedida|cena\s+en|cena|almuerzo\s+en\s+un\s+restaurante\s+local|almuerzo\s+en\s+un\s+restaurante|almuerzo\s+en\s+el\s+centro|almuerzo\s+en\s+la\s+playa|almuerzo\s+en|almuerzo|noche\s+en|noche|tarde\s+en|tarde\s+libre\s+para\s+explorar\s+el?|tarde\s+libre|d[íi]a\s+de\s+playa\s+en|d[íi]a\s+de\s+relax\s+en|d[íi]a\s+en|d[íi]a\s+libre\s+para\s+explorar\s+o\s+descansar|d[íi]a\s+libre|tiempo\s+libre\s+para\s+visitar\s+el?|tiempo\s+libre\s+para\s+visitar|tiempo\s+libre\s+para\s+explorar|tiempo\s+libre|check-in\s+en|check-in|check-out\s+en|check-out|llegada\s+a\s+la|llegada\s+al?|llegada\s+a|llegada\s*\/\s*hotel[^->\n]*|llegada|salida\s+a|salida\s+de|salida|regreso\s+a\s+casa|regreso\s+a\s+santa\s+marta|regreso\s+a\s+barranquilla|regreso\s+a|regreso\s+y\s+cena\s+de\s+despedida|regreso\s+y\s+cena\s+de|regreso\s+y\s+cena|regreso|despedida)\s+/i
+        const ACTION_PREFIX_REGEX = /^(?:visita\s+(?:a\s+la|al?|a)?|recorrid(?:o|a)\s+(?:por\s+el?|en\s+el?|por|en)?|explora(?:r|ci[óo]n)?\s+(?:de\s+la|del?|el?|la)?|paseo\s+(?:en\s+lancha\s+a\s+la|en\s+lancha\s+a|en\s+barco\s+a|en\s+lancha\s+por|en\s+lancha|en|por)?|excursi[óo]n\s+(?:a\s+la|al?|a|hacia|por)?|caminata\s+(?:hacia\s+la|hacia|a\s+la|al?|a|por)?|tour\s+(?:en\s+lancha\s+por|por\s+el?|de\s+snorkel\s+en|de\s+degustaci[óo]n\s+gastron[óo]mica|de|por|en)?|explorar\s+la\s+vida\s+nocturna\s+en\s+el?|explorar\s+la\s+vida\s+nocturna\s+en|vida\s+nocturna\s+en\s+el?|vida\s+nocturna\s+en|vida\s+nocturna|cenar\s+en|cenar|almorzar\s+en|almorzar|cena\s+y\s+diversi[oó]n\s+en|cena\s+en\s+un\s+restaurante\s+en|cena\s+en\s+un\s+restaurante\s+t[íi]pico|cena\s+en\s+un\s+restaurante|cena\s+en\s+un\s+local\s+de\s+la|cena\s+en\s+un\s+local|cena\s+en\s+un\s+bar\s+local|cena\s+en\s+un\s+bar|cena\s+de\s+despedida\s+en|cena\s+de\s+despedida|cena\s+en|cena|almuerzo\s+en\s+un\s+restaurante\s+local|almuerzo\s+en\s+un\s+restaurante|almuerzo\s+en\s+el\s+centro|almuerzo\s+en\s+la\s+playa|almuerzo\s+en|almuerzo|noche\s+en|noche|tarde\s+en|tarde\s+de\s+relax\s+en|tarde\s+libre\s+para\s+(?:compras\s+o\s+descanso|compras|descanso|explorar\s+el?|explorar)|tarde\s+libre|d[íi]a\s+de\s+playa\s+en|d[íi]a\s+de\s+relax\s+en|d[íi]a\s+en|d[íi]a\s+libre\s+para\s+explorar[^->\n]*|d[íi]a\s+libre|tiempo\s+libre\s+para\s+visitar\s+el?|tiempo\s+libre\s+para\s+visitar|tiempo\s+libre\s+para\s+explorar|tiempo\s+libre|check-in\s+en|check-in|check-out\s+en|check-out|instalaci[oó]n\s+en\s+(?:casa|el\s+hotel|el\s+alojamiento|hotel)|instalaci[oó]n|picnic\s+(?:o\s+almuerzo\s+en\s+la\s+zona|en\s+la\s+zona|en\s+la\s+playa|en)|[uú]ltimos\s+momentos\s+para\s+(?:disfrutar\s+de\s+la\s+ciudad|disfrutar|explorar)|participaci[oó]n\s+en\s+(?:alg[uú]n\s+)?evento\s+cultural|llegada\s+a\s+la|llegada\s+al?|llegada\s+a|llegada\s*\/\s*hotel[^->\n]*|llegada|salida\s+a|salida\s+de|salida|regreso\s+a\s+casa|regreso\s+a\s+santa\s+marta|regreso\s+a\s+barranquilla|regreso\s+a|regreso\s+y\s+cena\s+de\s+despedida|regreso\s+y\s+cena\s+de|regreso\s+y\s+cena|regreso|despedida\s+de\s+[^->\n]+|despedida)\s+/i
 
         function cleanAndAddCandidate(rawCandidate, day) {
           if (!rawCandidate || typeof rawCandidate !== 'string') return
-          let candidate = rawCandidate
-            .trim()
+          let raw = rawCandidate.trim()
+
+          // 1. Extraer recomendaciones específicas de restaurantes/lugares dentro de paréntesis
+          // ej: "Cena en un restaurante local (recomiendo Restaurante El Celler para disfrutar de comida típica)"
+          const parentheticalVenueMatch = raw.match(/\((?:recomiendo\s+|recomiendo\s*:\s*|sugiero\s+|como\s+|visita\s+|opci[oó]n\s+)?(Restaurante\s+[^,.)]+|Bar\s+[^,.)]+|Caf[ée]\s+[^,.)]+|Museo\s+[^,.)]+|La\s+[A-ZÁÉÍÓÚÑ][a-zA-ZáéíóúÁÉÍÓÚñÑ]+|El\s+[A-ZÁÉÍÓÚÑ][a-zA-ZáéíóúÁÉÍÓÚñÑ]+)/i)
+          if (parentheticalVenueMatch && parentheticalVenueMatch[1]) {
+            const venueName = parentheticalVenueMatch[1].trim()
+            if (isValidSpecificPlace(venueName)) {
+              found.push(day ? { name: venueName, dia: day, day: day } : venueName)
+              return
+            }
+          }
+
+          let candidate = raw
             .replace(/[*_#\[\]•]/g, ' ')
             .trim()
             .replace(ACTION_PREFIX_REGEX, '')
             .trim()
 
           // Si el texto tiene explicaciones adicionales tipo ", donde podrás apreciar...", quitarlo
-          candidate = candidate.replace(/,\s*(?:donde|donde\s+podr[áa]s|con|para|ideal\s+para|o\s+explorar).*$/i, '').trim()
+          candidate = candidate.replace(/,\s*(?:donde|donde\s+podr[áa]s|con|para|ideal\s+para|o\s+explorar|famoso\s+por|un\s+lugar\s+emblem[áa]tico).*$/i, '').trim()
+          candidate = candidate.replace(/\s+para\s+(?:disfrutar|degustar|conocer|apreciar|explorar|relajarse|descansar).*$/i, '').trim()
+          candidate = candidate.replace(/\s*\(famoso\s+por[^)]*\)/i, '').trim()
+          candidate = candidate.replace(/\s*\(un\s+lugar\s+emblem[áa]tico[^)]*\)/i, '').trim()
+
           // Quitar paréntesis explicativos tipo "(si hay partido)" pero preservar si es nombre de lugar
           if (/\s*\((?:si\s+hay|sujeto\s+a|opcional|seg[úu]n|aplica)[^)]*\)/i.test(candidate)) {
             candidate = candidate.replace(/\s*\((?:si\s+hay|sujeto\s+a|opcional|seg[úu]n|aplica)[^)]*\)/i, '').trim()
@@ -500,6 +524,17 @@ aiRouter.post('/chat', async (req, res, next) => {
         return deduplicatePlacesByName(found)
       }
 
+      // Extraer lugares estructurados devueltos por OpenAI si están disponibles
+      if (Array.isArray(aiResponse.extractedPreferences?.specificPlaces) && aiResponse.extractedPreferences.specificPlaces.length > 0) {
+        for (const sp of aiResponse.extractedPreferences.specificPlaces) {
+          const spName = typeof sp === 'object' ? (sp.name || '') : String(sp)
+          const spDay = typeof sp === 'object' ? (sp.dia || sp.day) : null
+          if (isValidSpecificPlace(spName)) {
+            extractedFromMsg.push(spDay ? { name: spName, dia: Number(spDay), day: Number(spDay) } : spName)
+          }
+        }
+      }
+
       // Extraer de la respuesta del asistente ÚNICAMENTE si es un itinerario estructurado confirmado
       const isConfirmedItineraryMsg = Boolean(
         aiResponse.readyToBuild ||
@@ -558,13 +593,18 @@ aiRouter.post('/chat', async (req, res, next) => {
         (aiResponse.responseMessage && /\b(itinerario de viaje|itinerario finalizado|itinerario actualizado|d[íi]a 1:)\b/i.test(aiResponse.responseMessage))
       )
 
+      const rawCombined = [
+        ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
+        ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
+        ...extractedFromMsg
+      ].filter(p => {
+        const pName = typeof p === 'object' ? (p.name || '') : String(p)
+        return isValidSpecificPlace(pName)
+      })
+
       const combinedSpecifics = isConfirmedItineraryMsg && extractedFromMsg.length >= 2
-        ? deduplicatePlacesByName(extractedFromMsg)
-        : deduplicatePlacesByName([
-            ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
-            ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
-            ...extractedFromMsg
-          ])
+        ? deduplicatePlacesByName(extractedFromMsg.filter(p => isValidSpecificPlace(typeof p === 'object' ? p.name : p)))
+        : deduplicatePlacesByName(rawCombined)
 
       if (combinedSpecifics.length > 0) {
         updatedPreferences.specificPlaces = combinedSpecifics
@@ -1884,7 +1924,7 @@ export function buildTourPlanner(input, location, places) {
       }
     }
 
-    if (requestedPlaces.length >= 2) {
+    if (requestedPlaces.length >= 1) {
       requestedPlaces.sort((a, b) => {
         const aKey = normalizePlaceKey(a.name)
         const bKey = normalizePlaceKey(b.name)
@@ -1917,43 +1957,21 @@ export function buildTourPlanner(input, location, places) {
         }
       })
 
-      // Ensure that for multi-day tours, every day from 1 to totalDays has stops and optimize intra-day route
+      // Ordenar estrictamente por día preservando la secuencia fiel acordada en el chat
+      selectedPlaces.sort((a, b) => (Number(a.dia || a.day || 1) - Number(b.dia || b.day || 1)))
+
+      // Intra-day ordering: organizar paradas dentro del MISMO día sin cambiar de día a ninguna parada
       if (totalDays >= 2) {
-        // 1. Fill completely empty days if any
-        for (let d = 1; d <= totalDays; d++) {
-          const placesForDay = selectedPlaces.filter(p => (p.dia === d || p.day === d))
-          if (placesForDay.length === 0) {
-            const dayWithSurplus = Array.from({ length: totalDays }, (_, idx) => idx + 1)
-              .map(dayNum => ({ day: dayNum, places: selectedPlaces.filter(p => (p.dia === dayNum || p.day === dayNum)) }))
-              .find(dp => dp.places.length >= 3)
-
-            if (dayWithSurplus) {
-              const placeToShift = dayWithSurplus.places[dayWithSurplus.places.length - 1]
-              placeToShift.dia = d
-              placeToShift.day = d
-            } else if (otherPlaces.length > 0) {
-              const nextBest = otherPlaces.find(p => !selectedPlaces.some(sp => normalizePlaceKey(sp.name) === normalizePlaceKey(p.name)))
-              if (nextBest) {
-                selectedPlaces.push({
-                  ...nextBest,
-                  dia: d,
-                  day: d
-                })
-              }
-            }
-          }
-        }
-
-        // 2. Intra-day nearest-neighbor routing: for each day, sort stops so consecutive stops are physically closest
         const optimizedByDay = []
-        for (let d = 1; d <= totalDays; d++) {
-          const dayPlaces = selectedPlaces.filter(p => (p.dia === d || p.day === d))
+        const uniqueDays = Array.from(new Set(selectedPlaces.map(p => Number(p.dia || p.day || 1)))).sort((a, b) => a - b)
+        for (const d of uniqueDays) {
+          const dayPlaces = selectedPlaces.filter(p => (Number(p.dia || p.day || 1) === d))
           if (dayPlaces.length <= 2) {
             optimizedByDay.push(...dayPlaces)
             continue
           }
 
-          // Nearest-neighbor ordering
+          // Nearest-neighbor ordering within the SAME day
           const ordered = [dayPlaces[0]]
           const remaining = dayPlaces.slice(1)
           while (remaining.length > 0) {
@@ -1974,12 +1992,6 @@ export function buildTourPlanner(input, location, places) {
           optimizedByDay.push(...ordered)
         }
         selectedPlaces = optimizedByDay
-      }
-
-      if (selectedPlaces.length < stopTarget && otherPlaces.length > 0) {
-        otherPlaces.sort((a, b) => b.score - a.score)
-        const toAdd = otherPlaces.filter(p => !selectedPlaces.some(sp => normalizePlaceKey(sp.name) === normalizePlaceKey(p.name))).slice(0, stopTarget - selectedPlaces.length)
-        selectedPlaces.push(...toAdd)
       }
     } else {
       scored.sort((a, b) => b.score - a.score)
@@ -4364,7 +4376,7 @@ export async function collectTourCandidates(input, location) {
     ? (location ? 'overpass+photon' : 'photon') 
     : 'synthetic-fallback'
 
-  if (geocodedSpecifics.length >= 3) {
+  if (geocodedSpecifics.length >= 2 || (geocodedSpecifics.length >= 1 && input.durationDays)) {
     selected = dedupeByProximity(geocodedSpecifics)
     source = 'chat-confirmed-places'
   } else if (geocodedSpecifics.length > 0) {

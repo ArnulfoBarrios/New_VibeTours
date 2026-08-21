@@ -124,6 +124,41 @@ export const DESTINATION_LOCAL_PRESETS = {
       { name: 'Feria Internacional del Libro de Bogotá (FILBo)', month: 'Abril/Mayo', desc: 'Gran encuentro literario y cultural en Corferias con autores de todo el mundo.' }
     ]
   },
+  barranquilla: {
+    name: 'Barranquilla',
+    country: 'Colombia',
+    hotels: [
+      { name: 'Hotel El Prado', desc: 'Monumento arquitectónico y patrimonio nacional con elegantes jardines tropicales, piscina histórica y estilo neoclásico republicano en el barrio El Prado.', price: '~$80 - $130 USD/noche' },
+      { name: 'Dann Carlton Barranquilla', desc: 'Hotel de gran categoría frente al centro comercial Buenavista con piscina, restaurante giratorio y spa de lujo.', price: '~$90 - $140 USD/noche' },
+      { name: 'Movich Buró 51', desc: 'Hotel moderno y confortable en el sector de Buenavista con piscina al aire libre, gastronomía de autor y diseño contemporáneo.', price: '~$85 - $135 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante La Cueva', specialty: 'El legendario bar-restaurante del Grupo de Barranquilla frecuentado por Gabriel García Márquez, con gastronomía típica caribeña y ambiente cultural único' },
+      { name: 'Restaurante El Celler', specialty: 'Cocina mediterránea y caribeña de autor con mariscos frescos, arroces y tapas de alta calidad' },
+      { name: 'Restaurante El Pulpo Paul', specialty: 'Ceviches frescos, arroces de mariscos y cazuelas al estilo del Caribe' },
+      { name: 'Restaurante El Tropezón', specialty: 'Auténtica gastronomía tradicional barranquillera, sancochos y asados típicos' },
+      { name: 'Restaurante La Marea', specialty: 'Pescados frescos, cazuela de mariscos y comida caribeña con vista al río' },
+      { name: 'Restaurante La Pérgola', specialty: 'Comida italiana y mediterránea artesanal en un ambiente acogedor' },
+      { name: 'Restaurante El Corralito', specialty: 'Platos tradicionales y carnes asadas al carbón' },
+      { name: 'Restaurante La Casa de la Cerveza', specialty: 'Cervezas artesanales y comida casual con ambiente frente al Gran Malecón' }
+    ],
+    places: [
+      'Gran Malecón del Río',
+      'Monumento Ventana al Mundo',
+      'Catedral Metropolitana María Reina',
+      'Restaurante La Cueva',
+      'Museo del Caribe y Parque Cultural',
+      'Bocas de Ceniza',
+      'Barrio El Prado',
+      'La Troja (Patrimonio Cultural y Musical)',
+      'Parque de los Fundadores',
+      'Monumento Ventana de Campeones'
+    ],
+    events: [
+      { name: 'Carnaval de Barranquilla', month: 'Febrero/Marzo', desc: 'Obra Maestra del Patrimonio Oral e Inmaterial de la Humanidad (UNESCO) con la Batalla de Flores y la Gran Parada.' },
+      { name: 'Barranquijazz', month: 'Septiembre', desc: 'El festival de jazz y música del Caribe más importante de Colombia con grandes exponentes internacionales.' }
+    ]
+  },
   'buenos aires': {
     name: 'Buenos Aires',
     country: 'Argentina',
@@ -780,10 +815,24 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     "interests": [],
     "selectedHotel": null,
     "accommodationStatus": null,
-    "specificPlaces": []
+    "specificPlaces": [
+      {
+        "name": "Nombre Real del Lugar o Restaurante",
+        "dia": 1,
+        "day": 1,
+        "type": "food|cultural|park|beach|shopping|generic"
+      }
+    ]
   },
   "readyToBuild": false
-}`
+}
+
+REGLAS ESTRICTAS PARA "specificPlaces":
+1. DEBE contener ÚNICAMENTE lugares físicos y restaurantes reales con su nombre propio y su número de día exacto ('dia': 1, 2, ...).
+2. ESTÁ TERMINANTEMENTE PROHIBIDO incluir actividades genéricas o frases descriptivas como:
+   - "Instalación en casa", "Llegada", "Despedida", "Regreso a casa", "Picnic o almuerzo en la zona", "Picnic en la zona", "Tiempo libre", "Día libre", "Tarde libre", "Últimos momentos para disfrutar de la ciudad", "Participación en algún evento cultural".
+   - Palabras genéricas como "local", "restaurante local", "zona", "casa propia", "comida típica".
+3. Si el itinerario menciona una recomendación de restaurante (ej: "Cena en un restaurante local (recomiendo Restaurante El Celler)"), el lugar extraído DEBE SER "Restaurante El Celler" y NO "local".`
 
   try {
     const formattedHistory = history.slice(-8).map(m => ({
@@ -929,7 +978,7 @@ Devuelve ÚNICAMENTE un JSON con:
 - "interests": lista de intereses mencionados (ej: ["playa", "gastronomía", "cultura"]).
 - "selectedHotel": { "name": "Nombre del hotel" } o null si no se ha elegido.
 - "accommodationStatus": "Casa propia / familiar", "Hotel elegido", "Por definir" o null.
-- "specificPlaces": lista de atracciones o lugares específicos que el usuario quiere visitar.`
+- "specificPlaces": lista de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Restaurante El Celler", "dia": 1 }, { "name": "Museo del Caribe", "dia": 2 }]). NUNCA incluir actividades genéricas ("Instalación en casa", "Llegada", "Despedida", "Picnic en la zona", "Tiempo libre", "Día libre", "Últimos momentos...", "local").`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

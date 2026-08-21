@@ -118,22 +118,48 @@ export function selectBestPoiResult(results, originalQuery = '') {
   if (!Array.isArray(results) || results.length === 0) return null
   const lowerQuery = String(originalQuery || '').toLowerCase()
   const isExplicitTransitQuery = /\b(estaci[oó]n|bus|metro|subway|parada|transit|train|railway|stop)\b/i.test(lowerQuery)
+  const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja)\b/i.test(lowerQuery)
 
-  if (!isExplicitTransitQuery && results.length > 1) {
-    const nonTransitMatch = results.find(r => {
+  let candidates = [...results]
+
+  if (isFoodQuery) {
+    candidates = candidates.filter(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || r.class || '').toLowerCase()
+      const name = String(r.name || '').toLowerCase()
+      const isInstitutionalOrSchool = ['school', 'college', 'kindergarten', 'university', 'hospital', 'clinic', 'pharmacy', 'cemetery', 'grave_yard', 'bus_stop', 'station', 'subway', 'railway', 'platform', 'highway', 'parking'].includes(type) ||
+        ['school', 'college', 'kindergarten', 'university', 'hospital', 'clinic', 'cemetery'].includes(key) ||
+        /\b(colegio|escuela|instituto|liceo|universidad|hospital|cl[íi]nica|cementerio|parroquia|parada de bus)\b/i.test(name)
+      return !isInstitutionalOrSchool
+    })
+  } else if (!isExplicitTransitQuery && candidates.length > 1) {
+    const nonTransitMatch = candidates.filter(r => {
       const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
       const key = String(r.tags?.osm_key || '').toLowerCase()
       const isTransit = ['bus_stop', 'tram_stop', 'station', 'subway', 'railway', 'platform', 'highway'].includes(type) || key === 'highway'
       return !isTransit
     })
-    if (nonTransitMatch) return nonTransitMatch
+    if (nonTransitMatch.length > 0) {
+      candidates = nonTransitMatch
+    }
   }
 
-  return results[0]
+  if (candidates.length === 0) return null
+
+  if (isFoodQuery && candidates.length > 1) {
+    const directFoodMatch = candidates.find(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      return ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'food_court', 'ice_cream', 'biergarten'].includes(type)
+    })
+    if (directFoodMatch) return directFoodMatch
+  }
+
+  return candidates[0]
 }
 
 
 const VERIFIED_HIGH_PRECISION_POIS = [
+  // Cartagena
   { key: 'castillo san felipe', lat: 10.4237, lon: -75.5398, name: 'Castillo San Felipe de Barajas', city: 'Cartagena', country: 'Colombia' },
   { key: 'islas del rosario', lat: 10.1772, lon: -75.7428, name: 'Islas del Rosario (Isla Grande)', city: 'Cartagena', country: 'Colombia' },
   { key: 'isla del rosario', lat: 10.1772, lon: -75.7428, name: 'Islas del Rosario (Isla Grande)', city: 'Cartagena', country: 'Colombia' },
@@ -165,7 +191,47 @@ const VERIFIED_HIGH_PRECISION_POIS = [
   { key: 'restaurante la mulata', lat: 10.4247, lon: -75.5482, name: 'Restaurante La Mulata', city: 'Cartagena', country: 'Colombia' },
   { key: 'hotel casa la fe', lat: 10.4258, lon: -75.5480, name: 'Hotel Casa La Fe', city: 'Cartagena', country: 'Colombia' },
   { key: 'hotel boutique casa isabel', lat: 10.4265, lon: -75.5395, name: 'Hotel Boutique Casa Isabel', city: 'Cartagena', country: 'Colombia' },
-  { key: 'hotel san pedro de majagua', lat: 10.1755, lon: -75.7360, name: 'Hotel San Pedro de Majagua', city: 'Cartagena', country: 'Colombia' }
+  { key: 'hotel san pedro de majagua', lat: 10.1755, lon: -75.7360, name: 'Hotel San Pedro de Majagua', city: 'Cartagena', country: 'Colombia' },
+
+  // Barranquilla
+  { key: 'museo del caribe', lat: 10.9823, lon: -74.7801, name: 'Museo del Caribe', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'parque cultural del caribe', lat: 10.9823, lon: -74.7801, name: 'Parque Cultural del Caribe', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'la cueva', lat: 10.9892, lon: -74.7937, name: 'Restaurante La Cueva', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante la cueva', lat: 10.9892, lon: -74.7937, name: 'Restaurante La Cueva', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'bocas de ceniza', lat: 11.0850, lon: -74.8550, name: 'Bocas de Ceniza', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'catedral metropolitana maria reina', lat: 10.9856, lon: -74.7903, name: 'Catedral Metropolitana María Reina', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'catedral metropolitana maría reina', lat: 10.9856, lon: -74.7903, name: 'Catedral Metropolitana María Reina', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'catedral maria reina', lat: 10.9856, lon: -74.7903, name: 'Catedral Metropolitana María Reina', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'barrio el prado', lat: 10.9995, lon: -74.8015, name: 'Barrio El Prado', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'gran malecon', lat: 11.0180, lon: -74.7870, name: 'Gran Malecón del Río', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'gran malecón', lat: 11.0180, lon: -74.7870, name: 'Gran Malecón del Río', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'ventana al mundo', lat: 11.0345, lon: -74.8360, name: 'Monumento Ventana al Mundo', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'ventana de campeones', lat: 11.0020, lon: -74.7730, name: 'Monumento Ventana de Campeones', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'la troja', lat: 10.9975, lon: -74.8035, name: 'La Troja', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'parque de los fundadores', lat: 10.9985, lon: -74.8020, name: 'Parque de los Fundadores', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante el celler', lat: 11.0062, lon: -74.8078, name: 'Restaurante El Celler', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'el celler', lat: 11.0062, lon: -74.8078, name: 'Restaurante El Celler', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante la pergola', lat: 11.0025, lon: -74.8040, name: 'Restaurante La Pérgola', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante la pérgola', lat: 11.0025, lon: -74.8040, name: 'Restaurante La Pérgola', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante el corralito', lat: 11.0070, lon: -74.8180, name: 'Restaurante El Corralito', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'el corralito', lat: 11.0070, lon: -74.8180, name: 'Restaurante El Corralito', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante la marea', lat: 11.0150, lon: -74.8210, name: 'Restaurante La Marea', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'la marea', lat: 11.0150, lon: -74.8210, name: 'Restaurante La Marea', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante el tropezon', lat: 10.9880, lon: -74.7950, name: 'Restaurante El Tropezón', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante el tropezón', lat: 10.9880, lon: -74.7950, name: 'Restaurante El Tropezón', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'el tropezon', lat: 10.9880, lon: -74.7950, name: 'Restaurante El Tropezón', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'el tropezón', lat: 10.9880, lon: -74.7950, name: 'Restaurante El Tropezón', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante la casa de la cerveza', lat: 11.0165, lon: -74.7915, name: 'Restaurante La Casa de la Cerveza', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'la casa de la cerveza', lat: 11.0165, lon: -74.7915, name: 'Restaurante La Casa de la Cerveza', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'el buen sazon', lat: 10.9950, lon: -74.8050, name: 'Restaurante El Buen Sazón', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'el buen sazón', lat: 10.9950, lon: -74.8050, name: 'Restaurante El Buen Sazón', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante el buen sazon', lat: 10.9950, lon: -74.8050, name: 'Restaurante El Buen Sazón', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante el buen sazón', lat: 10.9950, lon: -74.8050, name: 'Restaurante El Buen Sazón', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante el portico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'restaurante el pórtico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'el portico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'el pórtico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
+  { key: 'hotel el prado', lat: 10.9990, lon: -74.8010, name: 'Hotel El Prado', city: 'Barranquilla', country: 'Colombia' }
 ]
 
 export async function geocodePlace(query, lat = null, lon = null) {
