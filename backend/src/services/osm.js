@@ -239,34 +239,38 @@ const VERIFIED_HIGH_PRECISION_POIS = [
   { key: 'bahia de taganga', lat: 11.2675, lon: -74.1925, name: 'Bahía de Taganga', city: 'Santa Marta', country: 'Colombia' },
   { key: 'bahía de taganga', lat: 11.2675, lon: -74.1925, name: 'Bahía de Taganga', city: 'Santa Marta', country: 'Colombia' },
   { key: 'taganga', lat: 11.2675, lon: -74.1925, name: 'Bahía de Taganga', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante ouzo', lat: 11.2420, lon: -74.2120, name: 'Restaurante Ouzo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'ouzo', lat: 11.2420, lon: -74.2120, name: 'Restaurante Ouzo', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'restaurante ouzo', lat: 11.2421, lon: -74.2134, name: 'Restaurante Ouzo', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'ouzo', lat: 11.2421, lon: -74.2134, name: 'Restaurante Ouzo', city: 'Santa Marta', country: 'Colombia' },
   { key: 'parque nacional natural tayrona', lat: 11.3100, lon: -73.9600, name: 'Parque Nacional Natural Tayrona', city: 'Santa Marta', country: 'Colombia' },
   { key: 'parque tayrona', lat: 11.3100, lon: -73.9600, name: 'Parque Nacional Natural Tayrona', city: 'Santa Marta', country: 'Colombia' },
   { key: 'tayrona', lat: 11.3100, lon: -73.9600, name: 'Parque Nacional Natural Tayrona', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante donde chucho', lat: 11.2050, lon: -74.2260, name: 'Restaurante Donde Chucho', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'donde chucho', lat: 11.2050, lon: -74.2260, name: 'Restaurante Donde Chucho', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'restaurante donde chucho', lat: 11.2058, lon: -74.2275, name: 'Restaurante Donde Chucho', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'donde chucho', lat: 11.2058, lon: -74.2275, name: 'Restaurante Donde Chucho', city: 'Santa Marta', country: 'Colombia' },
   { key: 'cabo san juan', lat: 11.3280, lon: -73.9350, name: 'Cabo San Juan del Guía (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
   { key: 'cabo san juan del guia', lat: 11.3280, lon: -73.9350, name: 'Cabo San Juan del Guía (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
   { key: 'cabo san juan del guía', lat: 11.3280, lon: -73.9350, name: 'Cabo San Juan del Guía (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'playa cristal', lat: 11.3050, lon: -74.0500, name: 'Playa Cristal', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'playa cristal', lat: 11.3128, lon: -74.0845, name: 'Playa Cristal (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
   { key: 'restaurante burukuka', lat: 11.2110, lon: -74.2300, name: 'Restaurante Burukuka', city: 'Santa Marta', country: 'Colombia' },
   { key: 'burukuka', lat: 11.2110, lon: -74.2300, name: 'Restaurante Burukuka', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'discoteca la puerta', lat: 11.2430, lon: -74.2115, name: 'Discoteca La Puerta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'la puerta', lat: 11.2430, lon: -74.2115, name: 'Discoteca La Puerta', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'discoteca la puerta', lat: 11.24434, lon: -74.21235, name: 'Discoteca La Puerta', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'la puerta', lat: 11.24434, lon: -74.21235, name: 'Discoteca La Puerta', city: 'Santa Marta', country: 'Colombia' },
   { key: 'quinta de san pedro alejandrino', lat: 11.2330, lon: -74.1830, name: 'Quinta de San Pedro Alejandrino', city: 'Santa Marta', country: 'Colombia' },
   { key: 'quinta san pedro alejandrino', lat: 11.2330, lon: -74.1830, name: 'Quinta de San Pedro Alejandrino', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'playa concha', lat: 11.2950, lon: -74.1550, name: 'Bahía Concha (Playa Concha)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'bahia concha', lat: 11.2950, lon: -74.1550, name: 'Bahía Concha', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'bahía concha', lat: 11.2950, lon: -74.1550, name: 'Bahía Concha', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'bares en la calle 22', lat: 11.2425, lon: -74.2115, name: 'Bares en la Calle 22 (Parque de Los Novios)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'calle 22', lat: 11.2425, lon: -74.2115, name: 'Calle 22 / Parque de Los Novios', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'playa concha', lat: 11.2985, lon: -74.1528, name: 'Bahía Concha (Playa Concha)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'bahia concha', lat: 11.2985, lon: -74.1528, name: 'Bahía Concha', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'bahía concha', lat: 11.2985, lon: -74.1528, name: 'Bahía Concha', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'la azotea', lat: 11.2426, lon: -74.2134, name: 'La Azotea Disco Lounge', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'la azotea disco lounge', lat: 11.2426, lon: -74.2134, name: 'La Azotea Disco Lounge', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'el callejon', lat: 11.2415, lon: -74.2125, name: 'El Callejón Gastrobar', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'el callejón', lat: 11.2415, lon: -74.2125, name: 'El Callejón Gastrobar', city: 'Santa Marta', country: 'Colombia' },
   { key: 'minca', lat: 11.1435, lon: -74.1165, name: 'Minca (Sierra Nevada)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante guasimo', lat: 11.2425, lon: -74.2125, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante guásimo', lat: 11.2425, lon: -74.2125, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'guasimo', lat: 11.2425, lon: -74.2125, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'guásimo', lat: 11.2425, lon: -74.2125, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'parque de los novios', lat: 11.2423, lon: -74.2118, name: 'Parque de Los Novios', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'pozo azul', lat: 11.1350, lon: -74.1120, name: 'Pozo Azul (Minca)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'restaurante guasimo', lat: 11.2428, lon: -74.2130, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'restaurante guásimo', lat: 11.2428, lon: -74.2130, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'guasimo', lat: 11.2428, lon: -74.2130, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'guásimo', lat: 11.2428, lon: -74.2130, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'parque de los novios', lat: 11.24235, lon: -74.21360, name: 'Parque de Los Novios (Parque Santander)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'parque santander', lat: 11.24235, lon: -74.21360, name: 'Parque de Los Novios (Parque Santander)', city: 'Santa Marta', country: 'Colombia' },
   { key: 'centro historico', lat: 11.2435, lon: -74.2115, name: 'Centro Histórico de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
   { key: 'centro histórico', lat: 11.2435, lon: -74.2115, name: 'Centro Histórico de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
   { key: 'playa blanca santa marta', lat: 11.2185, lon: -74.2330, name: 'Playa Blanca Santa Marta', city: 'Santa Marta', country: 'Colombia' },
@@ -285,9 +289,9 @@ const VERIFIED_HIGH_PRECISION_POIS = [
   { key: 'el bistró santa marta', lat: 11.2428, lon: -74.2110, name: 'Restaurante El Bistró Santa Marta', city: 'Santa Marta', country: 'Colombia' },
   { key: 'el bistro', lat: 11.2428, lon: -74.2110, name: 'Restaurante El Bistró Santa Marta', city: 'Santa Marta', country: 'Colombia' },
   { key: 'el bistró', lat: 11.2428, lon: -74.2110, name: 'Restaurante El Bistró Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'acuario y museo del mar del rodadero', lat: 11.2140, lon: -74.2315, name: 'Acuario y Museo del Mar del Rodadero', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'acuario del rodadero', lat: 11.2140, lon: -74.2315, name: 'Acuario y Museo del Mar del Rodadero', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'acuario y museo del mar', lat: 11.2140, lon: -74.2315, name: 'Acuario y Museo del Mar del Rodadero', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'acuario y museo del mar del rodadero', lat: 11.21855, lon: -74.23340, name: 'Acuario y Museo del Mar del Rodadero (Inca Inca)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'acuario del rodadero', lat: 11.21855, lon: -74.23340, name: 'Acuario y Museo del Mar del Rodadero (Inca Inca)', city: 'Santa Marta', country: 'Colombia' },
+  { key: 'acuario y museo del mar', lat: 11.21855, lon: -74.23340, name: 'Acuario y Museo del Mar del Rodadero (Inca Inca)', city: 'Santa Marta', country: 'Colombia' },
   { key: 'marina de santa marta', lat: 11.2450, lon: -74.2170, name: 'Marina de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
   { key: 'marina santa marta', lat: 11.2450, lon: -74.2170, name: 'Marina de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
   { key: 'restaurante y bar el cielo', lat: 11.2055, lon: -74.2265, name: 'Restaurante y Bar El Cielo (El Rodadero)', city: 'Santa Marta', country: 'Colombia' },
@@ -307,9 +311,12 @@ export async function geocodePlace(query, lat = null, lon = null) {
   const cached = geocodeCache.get(key)
   if (cached) return cached
 
-  // 0. High Precision Verified POIs lookup
+  // 0. High Precision Verified POIs lookup (prioritize exact and most specific longest key first)
   const qLower = normalizedQuery.toLowerCase()
-  const verified = VERIFIED_HIGH_PRECISION_POIS.find(poi => qLower.includes(poi.key) || poi.key.includes(qLower))
+  const matchedPois = VERIFIED_HIGH_PRECISION_POIS
+    .filter(poi => qLower === poi.key || qLower.includes(poi.key) || poi.key.includes(qLower))
+    .sort((a, b) => b.key.length - a.key.length)
+  const verified = matchedPois[0]
   if (verified) {
     const res = {
       name: verified.name,
@@ -322,8 +329,31 @@ export async function geocodePlace(query, lat = null, lon = null) {
     return res
   }
 
-  // 1. Try global Photon search first (without lat/lon) to avoid local user GPS proximity
-  // bias distorting major international city lookups (e.g. user in Colombia/Mexico searching "Nueva York").
+  // 1. If lat and lon are provided, perform proximity search FIRST to bind results directly to the destination area
+  if (lat && lon) {
+    try {
+      const proxResults = await photonSearch(normalizedQuery, 8, lat, lon)
+      const photonProx = selectBestPoiResult(proxResults, query)
+      if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
+        const dMeters = haversineMeters(lat, lon, photonProx.latitude, photonProx.longitude)
+        if (dMeters <= 75000) {
+          const res = {
+            name: photonProx.name,
+            latitude: Number(photonProx.latitude),
+            longitude: Number(photonProx.longitude),
+            city: photonProx.city || '',
+            country: photonProx.country || ''
+          }
+          geocodeCache.set(key, res)
+          return res
+        }
+      }
+    } catch (err) {
+      console.warn('[geocodePlace] Proximity Photon search failed:', err.message)
+    }
+  }
+
+  // 2. Global Photon search
   try {
     const globalResults = await photonSearch(normalizedQuery, 5, null, null)
     const photonGlobal = selectBestPoiResult(globalResults, query)
@@ -340,27 +370,6 @@ export async function geocodePlace(query, lat = null, lon = null) {
     }
   } catch (err) {
     console.warn('[geocodePlace] Global Photon search failed:', err.message)
-  }
-
-  // 2. Try with lat/lon proximity bias if provided and global search returned nothing
-  if (lat && lon) {
-    try {
-      const proxResults = await photonSearch(normalizedQuery, 5, lat, lon)
-      const photonProx = selectBestPoiResult(proxResults, query)
-      if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
-        const res = {
-          name: photonProx.name,
-          latitude: Number(photonProx.latitude),
-          longitude: Number(photonProx.longitude),
-          city: photonProx.city || '',
-          country: photonProx.country || ''
-        }
-        geocodeCache.set(key, res)
-        return res
-      }
-    } catch (err) {
-      console.warn('[geocodePlace] Proximity Photon search failed:', err.message)
-    }
   }
 
   // 3. Fallback to Nominatim if Photon fails or returns no results
@@ -814,5 +823,18 @@ async function photonHotelsFallback(latitude, longitude, budget) {
     console.warn('[osm] photonHotelsFallback error:', err.message)
     return []
   }
+}
+
+export function haversineMeters(lat1, lon1, lat2, lon2) {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 0
+  const R = 6371000 // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
 }
 

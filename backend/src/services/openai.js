@@ -59,7 +59,8 @@ export const DESTINATION_LOCAL_PRESETS = {
       { name: 'Discoteca La Puerta', specialty: 'Música en vivo, cocteles tropicales y el mejor ambiente festivo del Centro Histórico' },
       { name: 'Restaurante y Bar El Cielo', specialty: 'Pescados frescos, cocteles y comida tradicional caribeña frente a la playa de El Rodadero' },
       { name: 'Restaurante La Roca', specialty: 'Comida de mar fresca, patacones y ambiente relajado en la zona costera de Palomino' },
-      { name: 'Bares en la Calle 22', specialty: 'Ambiente nocturno vibrante con coctelería artesanal y terrazas alrededor del Parque de Los Novios' },
+      { name: 'La Azotea Disco Lounge', specialty: 'Música variada, cocteles artesanales y terraza animada en el Parque de Los Novios' },
+      { name: 'El Callejón Gastrobar', specialty: 'Cervezas artesanales, cocteles y tapas en el ambiente bohemio del Centro Histórico' },
       { name: 'Restaurante Ostrería Mary', specialty: 'Auténticos ceviches artesanales de ostras, camarón y pulpo fresco en el Centro Histórico' },
       { name: 'Restaurante El Bistró Santa Marta', specialty: 'Bistronomía artesanal con panes horneados en casa, tapas mediterráneas y pescados a la plancha' }
     ],

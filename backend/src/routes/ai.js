@@ -4217,47 +4217,55 @@ export async function collectTourCandidates(input, location) {
         const isRestaurant = entityType === 'food' || /restaurante|bistro|cafe|comida|asador|gourmet|bar|pub/i.test(placeName)
         
         let geo = null
-        // Tier 1: Consulta directa con contexto de ciudad y país
+        const destLat = canonicalDest?.latitude ?? null
+        const destLon = canonicalDest?.longitude ?? null
+
+        // Tier 1: Consulta directa con contexto de ciudad y país con sesgo de proximidad al destino
         const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
-        geo = await geocodePlace(searchQuery).catch(() => null)
+        geo = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
 
         // Tier 2: Búsqueda con clasificador canónico universal según el tipo de entidad
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
           const cleanedPlace = placeName.replace(/^(?:el|la|los|las)\s+/i, '').trim()
           
           if (entityType === 'shopping') {
-            geo = await geocodePlace(`Centro Comercial ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`${cleanedPlace} Mall, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            geo = await geocodePlace(`Centro Comercial ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`${cleanedPlace} Mall, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
           } else if (entityType === 'food') {
-            geo = await geocodePlace(`Restaurante ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Bar ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Café ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Gastrobar ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            geo = await geocodePlace(`Restaurante ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Bar ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Café ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Discoteca ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Gastrobar ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
           } else if (entityType === 'beach_coastal') {
-            geo = await geocodePlace(`Playa ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Playas de ${cleanedPlace}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Malecón ${cleanedPlace}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${country}`).catch(() => null)
+            geo = await geocodePlace(`Playa ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Playas de ${cleanedPlace}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Bahía ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Cabo ${cleanedPlace}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Malecón ${cleanedPlace}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${country}`, destLat, destLon).catch(() => null)
           } else if (entityType === 'cultural') {
-            geo = await geocodePlace(`Museo ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Teatro ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            geo = await geocodePlace(`Museo ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Acuario ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Teatro ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
           } else if (entityType === 'religious') {
-            geo = await geocodePlace(`Catedral ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Iglesia ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            geo = await geocodePlace(`Catedral ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Iglesia ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
           } else if (entityType === 'urban_promenade' || entityType === 'park_nature') {
-            geo = await geocodePlace(`Parque ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Paseo ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Plaza ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Gran Malecón ${cleanedPlace}, ${city}`).catch(() => null)
+            geo = await geocodePlace(`Parque ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Paseo ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Plaza ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Gran Malecón ${cleanedPlace}, ${city}`, destLat, destLon).catch(() => null)
           } else if (entityType === 'entertainment_sports') {
-            geo = await geocodePlace(`Estadio ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Zoológico ${cleanedPlace}, ${city}, ${country}`).catch(() => null)
+            geo = await geocodePlace(`Acuario ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Estadio ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+            if (!geo) geo = await geocodePlace(`Zoológico ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
           }
 
-          if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}`).catch(() => null)
-          if (!geo) geo = await geocodePlace(`${cleanedPlace}, Centro, ${city}`).catch(() => null)
+          if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}`, destLat, destLon).catch(() => null)
+          if (!geo) geo = await geocodePlace(`${cleanedPlace}, Centro, ${city}`, destLat, destLon).catch(() => null)
         }
 
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
