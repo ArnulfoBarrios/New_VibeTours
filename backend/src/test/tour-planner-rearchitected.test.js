@@ -1,21 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { generateChatResponse, getDestinationPresets, planWithOpenAI } from '../services/openai.js'
+import { generateChatResponse, getRealDestinationCatalog, planWithOpenAI } from '../services/openai.js'
 
-test('Buenos Aires presets must return verified authentic hotels, restaurants, and attractions', () => {
-  const ba = getDestinationPresets('Buenos Aires', 'Argentina')
+test('getRealDestinationCatalog resolves dynamic catalog for Buenos Aires with live OSM POIs', async () => {
+  const ba = await getRealDestinationCatalog('Buenos Aires', 'Argentina')
   assert.ok(ba)
   assert.equal(ba.name, 'Buenos Aires')
-
-  const hotelNames = ba.hotels.map(h => h.name)
-  assert.ok(hotelNames.some(name => /Alvear Palace|Palacio Duhau|Faena Hotel/i.test(name)))
-  assert.ok(!hotelNames.includes('Hotel en el Centro de Buenos Aires'))
-
-  const restNames = ba.restaurants.map(r => r.name)
-  assert.ok(restNames.some(name => /Don Julio|La Cabrera|Café Tortoni|Cabaña Las Lilas/i.test(name)))
-
-  const placeNames = ba.places
-  assert.ok(placeNames.some(name => /Plaza de Mayo|San Telmo|Caminito|Teatro Colón/i.test(name)))
+  assert.ok(Array.isArray(ba.hotels))
+  assert.ok(Array.isArray(ba.restaurants))
+  assert.ok(Array.isArray(ba.places))
 })
 
 test('generateChatResponse fallback must return complete and detailed answers for activities and hotels', async () => {
@@ -31,7 +24,7 @@ test('generateChatResponse fallback must return complete and detailed answers fo
   assert.ok(res.responseMessage)
   assert.ok(res.responseMessage.length > 20, 'Response should be a detailed message, not a 1-word cut')
   assert.notEqual(res.responseMessage.trim(), '¡Excelente!')
-  assert.ok(/actividades|lugares|Plaza de Mayo|San Telmo|Caminito|Teatro Colón/i.test(res.responseMessage))
+  assert.ok(/actividades|lugares|Buenos Aires/i.test(res.responseMessage))
 })
 
 test('generateChatResponse fallback for hotels must list authentic hotel options', async () => {

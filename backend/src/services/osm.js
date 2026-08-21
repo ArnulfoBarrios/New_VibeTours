@@ -158,150 +158,6 @@ export function selectBestPoiResult(results, originalQuery = '') {
 }
 
 
-const VERIFIED_HIGH_PRECISION_POIS = [
-  // Cartagena
-  { key: 'castillo san felipe', lat: 10.4237, lon: -75.5398, name: 'Castillo San Felipe de Barajas', city: 'Cartagena', country: 'Colombia' },
-  { key: 'islas del rosario', lat: 10.1772, lon: -75.7428, name: 'Islas del Rosario (Isla Grande)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'isla del rosario', lat: 10.1772, lon: -75.7428, name: 'Islas del Rosario (Isla Grande)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'isla grande', lat: 10.1772, lon: -75.7428, name: 'Isla Grande (Islas del Rosario)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'ciudad amurallada', lat: 10.4243, lon: -75.5516, name: 'Ciudad Amurallada', city: 'Cartagena', country: 'Colombia' },
-  { key: 'centro historico', lat: 10.4243, lon: -75.5516, name: 'Centro Histórico', city: 'Cartagena', country: 'Colombia' },
-  { key: 'centro histórico', lat: 10.4243, lon: -75.5516, name: 'Centro Histórico', city: 'Cartagena', country: 'Colombia' },
-  { key: 'bocagrande', lat: 10.4045, lon: -75.5568, name: 'Bocagrande', city: 'Cartagena', country: 'Colombia' },
-  { key: 'convento de la popa', lat: 10.4216, lon: -75.5244, name: 'Convento de la Popa', city: 'Cartagena', country: 'Colombia' },
-  { key: 'cerro de la popa', lat: 10.4216, lon: -75.5244, name: 'Convento de la Popa', city: 'Cartagena', country: 'Colombia' },
-  { key: 'mercado de bazurto', lat: 10.4185, lon: -75.5188, name: 'Mercado de Bazurto', city: 'Cartagena', country: 'Colombia' },
-  { key: 'getsemani', lat: 10.4208, lon: -75.5458, name: 'Getsemaní', city: 'Cartagena', country: 'Colombia' },
-  { key: 'getsemaní', lat: 10.4208, lon: -75.5458, name: 'Getsemaní', city: 'Cartagena', country: 'Colombia' },
-  { key: 'paseo en chiva', lat: 10.4225, lon: -75.5478, name: 'Tour en Chiva Rumbera (Torre del Reloj / Centro Histórico)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'chiva rumbera', lat: 10.4225, lon: -75.5478, name: 'Tour en Chiva Rumbera (Torre del Reloj / Centro Histórico)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'tour en chiva', lat: 10.4225, lon: -75.5478, name: 'Tour en Chiva (Torre del Reloj / Centro Histórico)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'chiva', lat: 10.4225, lon: -75.5478, name: 'Tour en Chiva Rumbera (Torre del Reloj / Centro Histórico)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'cafe del mar', lat: 10.4215, lon: -75.5539, name: 'Café del Mar (Baluarte Santo Domingo)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'café del mar', lat: 10.4215, lon: -75.5539, name: 'Café del Mar (Baluarte Santo Domingo)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'bahia de cartagena', lat: 10.4030, lon: -75.5440, name: 'Bahía de Cartagena (Paseo Marítimo)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'bahía de cartagena', lat: 10.4030, lon: -75.5440, name: 'Bahía de Cartagena (Paseo Marítimo)', city: 'Cartagena', country: 'Colombia' },
-  { key: 'la cevicheria', lat: 10.4262, lon: -75.5487, name: 'Restaurante La Cevicheria', city: 'Cartagena', country: 'Colombia' },
-  { key: 'restaurante la cevicheria', lat: 10.4262, lon: -75.5487, name: 'Restaurante La Cevicheria', city: 'Cartagena', country: 'Colombia' },
-  { key: 'celele', lat: 10.4206, lon: -75.5441, name: 'Restaurante Celele', city: 'Cartagena', country: 'Colombia' },
-  { key: 'restaurante celele', lat: 10.4206, lon: -75.5441, name: 'Restaurante Celele', city: 'Cartagena', country: 'Colombia' },
-  { key: 'el boliche', lat: 10.4278, lon: -75.5472, name: 'Restaurante El Boliche Cebichería', city: 'Cartagena', country: 'Colombia' },
-  { key: 'restaurante el boliche', lat: 10.4278, lon: -75.5472, name: 'Restaurante El Boliche Cebichería', city: 'Cartagena', country: 'Colombia' },
-  { key: 'la mulata', lat: 10.4247, lon: -75.5482, name: 'Restaurante La Mulata', city: 'Cartagena', country: 'Colombia' },
-  { key: 'restaurante la mulata', lat: 10.4247, lon: -75.5482, name: 'Restaurante La Mulata', city: 'Cartagena', country: 'Colombia' },
-  { key: 'hotel casa la fe', lat: 10.4258, lon: -75.5480, name: 'Hotel Casa La Fe', city: 'Cartagena', country: 'Colombia' },
-  { key: 'hotel boutique casa isabel', lat: 10.4265, lon: -75.5395, name: 'Hotel Boutique Casa Isabel', city: 'Cartagena', country: 'Colombia' },
-  { key: 'hotel san pedro de majagua', lat: 10.1755, lon: -75.7360, name: 'Hotel San Pedro de Majagua', city: 'Cartagena', country: 'Colombia' },
-
-  // Barranquilla
-  { key: 'museo del caribe', lat: 10.9823, lon: -74.7801, name: 'Museo del Caribe', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'parque cultural del caribe', lat: 10.9823, lon: -74.7801, name: 'Parque Cultural del Caribe', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'la cueva', lat: 10.9892, lon: -74.7937, name: 'Restaurante La Cueva', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante la cueva', lat: 10.9892, lon: -74.7937, name: 'Restaurante La Cueva', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'bocas de ceniza', lat: 11.0850, lon: -74.8550, name: 'Bocas de Ceniza', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'catedral metropolitana maria reina', lat: 10.9856, lon: -74.7903, name: 'Catedral Metropolitana María Reina', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'catedral metropolitana maría reina', lat: 10.9856, lon: -74.7903, name: 'Catedral Metropolitana María Reina', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'catedral maria reina', lat: 10.9856, lon: -74.7903, name: 'Catedral Metropolitana María Reina', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'barrio el prado', lat: 10.9995, lon: -74.8015, name: 'Barrio El Prado', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'gran malecon', lat: 11.0180, lon: -74.7870, name: 'Gran Malecón del Río', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'gran malecón', lat: 11.0180, lon: -74.7870, name: 'Gran Malecón del Río', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'ventana al mundo', lat: 11.0345, lon: -74.8360, name: 'Monumento Ventana al Mundo', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'ventana de campeones', lat: 11.0020, lon: -74.7730, name: 'Monumento Ventana de Campeones', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'la troja', lat: 10.9975, lon: -74.8035, name: 'La Troja', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'parque de los fundadores', lat: 10.9985, lon: -74.8020, name: 'Parque de los Fundadores', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante el celler', lat: 11.0062, lon: -74.8078, name: 'Restaurante El Celler', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'el celler', lat: 11.0062, lon: -74.8078, name: 'Restaurante El Celler', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante la pergola', lat: 11.0025, lon: -74.8040, name: 'Restaurante La Pérgola', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante la pérgola', lat: 11.0025, lon: -74.8040, name: 'Restaurante La Pérgola', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante el corralito', lat: 11.0070, lon: -74.8180, name: 'Restaurante El Corralito', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'el corralito', lat: 11.0070, lon: -74.8180, name: 'Restaurante El Corralito', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante la marea', lat: 11.0150, lon: -74.8210, name: 'Restaurante La Marea', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'la marea', lat: 11.0150, lon: -74.8210, name: 'Restaurante La Marea', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante el tropezon', lat: 10.9880, lon: -74.7950, name: 'Restaurante El Tropezón', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante el tropezón', lat: 10.9880, lon: -74.7950, name: 'Restaurante El Tropezón', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'el tropezon', lat: 10.9880, lon: -74.7950, name: 'Restaurante El Tropezón', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'el tropezón', lat: 10.9880, lon: -74.7950, name: 'Restaurante El Tropezón', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante la casa de la cerveza', lat: 11.0165, lon: -74.7915, name: 'Restaurante La Casa de la Cerveza', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'la casa de la cerveza', lat: 11.0165, lon: -74.7915, name: 'Restaurante La Casa de la Cerveza', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'el buen sazon', lat: 10.9950, lon: -74.8050, name: 'Restaurante El Buen Sazón', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'el buen sazón', lat: 10.9950, lon: -74.8050, name: 'Restaurante El Buen Sazón', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante el buen sazon', lat: 10.9950, lon: -74.8050, name: 'Restaurante El Buen Sazón', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante el buen sazón', lat: 10.9950, lon: -74.8050, name: 'Restaurante El Buen Sazón', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante el portico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'restaurante el pórtico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'el portico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'el pórtico', lat: 11.0050, lon: -74.8120, name: 'Restaurante El Pórtico', city: 'Barranquilla', country: 'Colombia' },
-  { key: 'hotel el prado', lat: 10.9990, lon: -74.8010, name: 'Hotel El Prado', city: 'Barranquilla', country: 'Colombia' },
-
-  // Santa Marta
-  { key: 'playa el rodadero', lat: 11.2065, lon: -74.2272, name: 'Playa El Rodadero', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'el rodadero', lat: 11.2065, lon: -74.2272, name: 'Playa El Rodadero', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'bahia de taganga', lat: 11.2675, lon: -74.1925, name: 'Bahía de Taganga', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'bahía de taganga', lat: 11.2675, lon: -74.1925, name: 'Bahía de Taganga', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'taganga', lat: 11.2675, lon: -74.1925, name: 'Bahía de Taganga', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante ouzo', lat: 11.2421, lon: -74.2134, name: 'Restaurante Ouzo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'ouzo', lat: 11.2421, lon: -74.2134, name: 'Restaurante Ouzo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'parque nacional natural tayrona', lat: 11.3100, lon: -73.9600, name: 'Parque Nacional Natural Tayrona', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'parque tayrona', lat: 11.3100, lon: -73.9600, name: 'Parque Nacional Natural Tayrona', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'tayrona', lat: 11.3100, lon: -73.9600, name: 'Parque Nacional Natural Tayrona', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante donde chucho', lat: 11.2058, lon: -74.2275, name: 'Restaurante Donde Chucho', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'donde chucho', lat: 11.2058, lon: -74.2275, name: 'Restaurante Donde Chucho', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'cabo san juan', lat: 11.3280, lon: -73.9350, name: 'Cabo San Juan del Guía (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'cabo san juan del guia', lat: 11.3280, lon: -73.9350, name: 'Cabo San Juan del Guía (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'cabo san juan del guía', lat: 11.3280, lon: -73.9350, name: 'Cabo San Juan del Guía (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'playa cristal', lat: 11.3128, lon: -74.0845, name: 'Playa Cristal (Tayrona)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante burukuka', lat: 11.2110, lon: -74.2300, name: 'Restaurante Burukuka', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'burukuka', lat: 11.2110, lon: -74.2300, name: 'Restaurante Burukuka', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'discoteca la puerta', lat: 11.24434, lon: -74.21235, name: 'Discoteca La Puerta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'la puerta', lat: 11.24434, lon: -74.21235, name: 'Discoteca La Puerta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'quinta de san pedro alejandrino', lat: 11.2330, lon: -74.1830, name: 'Quinta de San Pedro Alejandrino', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'quinta san pedro alejandrino', lat: 11.2330, lon: -74.1830, name: 'Quinta de San Pedro Alejandrino', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'playa concha', lat: 11.2985, lon: -74.1528, name: 'Bahía Concha (Playa Concha)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'bahia concha', lat: 11.2985, lon: -74.1528, name: 'Bahía Concha', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'bahía concha', lat: 11.2985, lon: -74.1528, name: 'Bahía Concha', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'la azotea', lat: 11.2426, lon: -74.2134, name: 'La Azotea Disco Lounge', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'la azotea disco lounge', lat: 11.2426, lon: -74.2134, name: 'La Azotea Disco Lounge', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'el callejon', lat: 11.2415, lon: -74.2125, name: 'El Callejón Gastrobar', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'el callejón', lat: 11.2415, lon: -74.2125, name: 'El Callejón Gastrobar', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'minca', lat: 11.1435, lon: -74.1165, name: 'Minca (Sierra Nevada)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'pozo azul', lat: 11.1350, lon: -74.1120, name: 'Pozo Azul (Minca)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante guasimo', lat: 11.2428, lon: -74.2130, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante guásimo', lat: 11.2428, lon: -74.2130, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'guasimo', lat: 11.2428, lon: -74.2130, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'guásimo', lat: 11.2428, lon: -74.2130, name: 'Restaurante Guásimo', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'parque de los novios', lat: 11.24235, lon: -74.21360, name: 'Parque de Los Novios (Parque Santander)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'parque santander', lat: 11.24235, lon: -74.21360, name: 'Parque de Los Novios (Parque Santander)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'centro historico', lat: 11.2435, lon: -74.2115, name: 'Centro Histórico de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'centro histórico', lat: 11.2435, lon: -74.2115, name: 'Centro Histórico de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'playa blanca santa marta', lat: 11.2185, lon: -74.2330, name: 'Playa Blanca Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'playa de palomino', lat: 11.2505, lon: -73.5650, name: 'Playa de Palomino', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'palomino', lat: 11.2505, lon: -73.5650, name: 'Playa de Palomino', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante la roca', lat: 11.2490, lon: -73.5640, name: 'Restaurante La Roca', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante ostreria mary', lat: 11.2445, lon: -74.2130, name: 'Restaurante Ostrería Mary', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante ostrería mary', lat: 11.2445, lon: -74.2130, name: 'Restaurante Ostrería Mary', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'ostreria mary', lat: 11.2445, lon: -74.2130, name: 'Restaurante Ostrería Mary', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'ostrería mary', lat: 11.2445, lon: -74.2130, name: 'Restaurante Ostrería Mary', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'museo del oro tairona', lat: 11.2440, lon: -74.2135, name: 'Museo del Oro Tairona - Casa de la Aduana', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'casa de la aduana', lat: 11.2440, lon: -74.2135, name: 'Museo del Oro Tairona - Casa de la Aduana', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante el bistro santa marta', lat: 11.2428, lon: -74.2110, name: 'Restaurante El Bistró Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante el bistró santa marta', lat: 11.2428, lon: -74.2110, name: 'Restaurante El Bistró Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'el bistro santa marta', lat: 11.2428, lon: -74.2110, name: 'Restaurante El Bistró Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'el bistró santa marta', lat: 11.2428, lon: -74.2110, name: 'Restaurante El Bistró Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'el bistro', lat: 11.2428, lon: -74.2110, name: 'Restaurante El Bistró Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'el bistró', lat: 11.2428, lon: -74.2110, name: 'Restaurante El Bistró Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'acuario y museo del mar del rodadero', lat: 11.21855, lon: -74.23340, name: 'Acuario y Museo del Mar del Rodadero (Inca Inca)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'acuario del rodadero', lat: 11.21855, lon: -74.23340, name: 'Acuario y Museo del Mar del Rodadero (Inca Inca)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'acuario y museo del mar', lat: 11.21855, lon: -74.23340, name: 'Acuario y Museo del Mar del Rodadero (Inca Inca)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'marina de santa marta', lat: 11.2450, lon: -74.2170, name: 'Marina de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'marina santa marta', lat: 11.2450, lon: -74.2170, name: 'Marina de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante y bar el cielo', lat: 11.2055, lon: -74.2265, name: 'Restaurante y Bar El Cielo (El Rodadero)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'restaurante el cielo', lat: 11.2055, lon: -74.2265, name: 'Restaurante y Bar El Cielo (El Rodadero)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'el cielo santa marta', lat: 11.2055, lon: -74.2265, name: 'Restaurante y Bar El Cielo (El Rodadero)', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'catedral basilica de santa marta', lat: 11.2435, lon: -74.2105, name: 'Catedral Basílica de Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'centro comercial buenavista', lat: 11.2290, lon: -74.1850, name: 'Centro Comercial Buenavista Santa Marta', city: 'Santa Marta', country: 'Colombia' },
-  { key: 'hotel san marcos', lat: 11.2430, lon: -74.2110, name: 'Hotel San Marcos', city: 'Santa Marta', country: 'Colombia' }
-]
-
 export async function geocodePlace(query, lat = null, lon = null) {
   if (!query || typeof query !== 'string') return null
   const normalizedQuery = normalizeGeocodeQuery(query)
@@ -310,24 +166,6 @@ export async function geocodePlace(query, lat = null, lon = null) {
   const key = `geocode_${normalizedQuery.toLowerCase().trim()}_${lat ?? ''}_${lon ?? ''}`
   const cached = geocodeCache.get(key)
   if (cached) return cached
-
-  // 0. High Precision Verified POIs lookup (prioritize exact and most specific longest key first)
-  const qLower = normalizedQuery.toLowerCase()
-  const matchedPois = VERIFIED_HIGH_PRECISION_POIS
-    .filter(poi => qLower === poi.key || qLower.includes(poi.key) || poi.key.includes(qLower))
-    .sort((a, b) => b.key.length - a.key.length)
-  const verified = matchedPois[0]
-  if (verified) {
-    const res = {
-      name: verified.name,
-      latitude: verified.lat,
-      longitude: verified.lon,
-      city: verified.city,
-      country: verified.country
-    }
-    geocodeCache.set(key, res)
-    return res
-  }
 
   // 1. If lat and lon are provided, perform proximity search FIRST to bind results directly to the destination area
   if (lat && lon) {
@@ -447,7 +285,7 @@ const OVERPASS_SERVERS = [
 const attractionsCache = new Map()
 const CACHE_TTL_MS = 30 * 60 * 1000
 
-async function fetchOverpassWithMirrors(query, timeoutMs = 3500) {
+async function fetchOverpassWithMirrors(query, timeoutMs = 1800) {
   for (const serverUrl of OVERPASS_SERVERS) {
     try {
       const response = await fetch(serverUrl, {
@@ -753,8 +591,8 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
   `
   try {
     const json = await fetchOverpassWithMirrors(query, 3000)
-    if (json) {
-      return (json.elements ?? [])
+    if (json && json.elements && json.elements.length > 0) {
+      const results = (json.elements ?? [])
         .map((element) => {
           const lat = element.lat ?? element.center?.lat
           const lon = element.lon ?? element.center?.lon
@@ -773,11 +611,45 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
         })
         .filter(Boolean)
         .slice(0, 10)
+      if (results.length > 0) return results
     }
   } catch (error) {
     console.warn('[osm] overpassNearbyFood query failed:', error.message)
   }
-  return []
+  return photonFoodFallback(latitude, longitude)
+}
+
+async function photonFoodFallback(latitude, longitude) {
+  try {
+    const url = new URL('https://photon.komoot.io/api/')
+    url.searchParams.set('q', 'restaurant')
+    url.searchParams.set('lat', String(latitude))
+    url.searchParams.set('lon', String(longitude))
+    url.searchParams.set('limit', '12')
+    const response = await fetch(url, { signal: AbortSignal.timeout(3000) })
+    if (!response.ok) return []
+    const json = await response.json()
+    return (json.features ?? [])
+      .map((feature) => {
+        const name = feature.properties.name
+        const lat = feature.geometry.coordinates[1]
+        const lon = feature.geometry.coordinates[0]
+        if (!name || lat == null || lon == null) return null
+        return {
+          id: feature.properties.osm_id ? String(feature.properties.osm_id) : `photon-food-${Math.random().toString(36).slice(2, 9)}`,
+          name,
+          latitude: lat,
+          longitude: lon,
+          type: 'restaurant',
+          cuisine: feature.properties.cuisine || null,
+          tags: feature.properties
+        }
+      })
+      .filter(Boolean)
+  } catch (err) {
+    console.warn('[osm] photonFoodFallback error:', err.message)
+    return []
+  }
 }
 
 async function photonHotelsFallback(latitude, longitude, budget) {

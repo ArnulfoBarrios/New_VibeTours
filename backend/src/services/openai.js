@@ -11,381 +11,12 @@ const destinationCatalogCache = new GeoCache(12 * 60 * 60 * 1000, 200)
  * Curated real catalog for popular destinations to ensure 100% authentic POIs,
  * hotels, restaurants, and real annual events with zero generic synthetic strings.
  */
-export const DESTINATION_LOCAL_PRESETS = {
-  cartagena: {
-    name: 'Cartagena',
-    country: 'Colombia',
-    hotels: [
-      { name: 'Hotel Casa La Fe', desc: 'Hermosa casona colonial republicana restaurada del siglo XIX con piscina en la azotea y vistas panorámicas de las cúpulas coloniales en la Plaza Fernández de Madrid (Centro Histórico).', price: '~$90 - $130 USD/noche' },
-      { name: 'Hotel Boutique Casa Isabel', desc: 'Situado frente a la Laguna del Cabrero con terraza en la azotea, jacuzzi y vista inigualable del Castillo San Felipe de Barajas.', price: '~$75 - $110 USD/noche' },
-      { name: 'Hotel San Pedro de Majagua', desc: 'Cabañas ecológicas de lujo en Isla Grande (Archipiélago del Rosario) con acceso directo a playas de aguas cristalinas y centro de buceo.', price: '~$140 - $220 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante La Cevicheria', specialty: 'Ceviche clásico de corvina, langosta al ajillo y pulpo a la plancha con patacones y arroz con coco' },
-      { name: 'Restaurante Celele', specialty: 'Terrina de cerdo con salsa de corozo, pescado confitado con coco y puré de yuca con flores comestibles' },
-      { name: 'Restaurante El Boliche Cebichería', specialty: 'Ceviche de langostinos con tamarindo, ceviche mixto con leche de tigre y chips de plátano verde' },
-      { name: 'Restaurante La Mulata', specialty: 'Cazuela de mariscos cremosa, pargo rojo frito con ensalada de aguacate y limonada de coco' }
-    ],
-    places: [
-      'Castillo San Felipe de Barajas',
-      'Excursión a las Islas del Rosario',
-      'Recorrido por la Ciudad Amurallada',
-      'Paseo y atardecer en Bocagrande',
-      'Convento de la Popa',
-      'Mercado de Bazurto y recorrido cultural',
-      'Café del Mar',
-      'Plaza de Santo Domingo y Getsemaní'
-    ],
-    events: [
-      { name: 'Hay Festival Cartagena', month: 'Enero/Febrero', desc: 'Prestigioso encuentro internacional de literatura, arte y pensamiento.' },
-      { name: 'Festival Internacional de Cine de Cartagena (FICCI)', month: 'Marzo/Abril', desc: 'El festival de cine más antiguo de América Latina.' },
-      { name: 'Fiestas de la Independencia de Cartagena', month: 'Noviembre', desc: 'Gran celebración popular con desfiles folclóricos, música caribeña y comparsas.' }
-    ]
-  },
-  'santa marta': {
-    name: 'Santa Marta',
-    country: 'Colombia',
-    hotels: [
-      { name: 'Hotel Irotama Resort', desc: 'Icónico resort frente al mar en Bello Horizonte con amplias piscinas tropicales, spa, acceso directo a la playa y múltiples restaurantes.', price: '~$120 - $190 USD/noche' },
-      { name: 'Hotel Boutique Don Pepe', desc: 'Elegante y exclusivo hotel boutique en el Centro Histórico de Santa Marta con spa de hidroterapia, terraza gourmet y arquitectura colonial refinada.', price: '~$100 - $160 USD/noche' },
-      { name: 'Santa Marta Marriott Resort Playa Dormida', desc: 'Lujo contemporáneo frente al mar con acceso directo a playa virgen, piscina infinita y gastronomía caribeña.', price: '~$140 - $220 USD/noche' },
-      { name: 'Hotel San Marcos', desc: 'Alojamiento acogedor y céntrico a pasos de la bahía y el Parque de Los Novios.', price: '~$50 - $90 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante Ouzo', specialty: 'Exquisita cocina mediterránea de autor y mariscos frescos en el Parque de Los Novios' },
-      { name: 'Restaurante Donde Chucho', specialty: 'Legendaria cazuela de mariscos cremosa, pargo rojo frito al estilo caribeño y ceviches frescos en El Rodadero y Centro' },
-      { name: 'Restaurante Guásimo', specialty: 'Alta cocina contemporánea del Gran Caribe inspirada en los saberes ancestrales de la Sierra Nevada y pesca del día' },
-      { name: 'Restaurante Burukuka', specialty: 'Gastronomía caribeña fusión y coctelería con vista panorámica espectacular a la bahía de El Rodadero' },
-      { name: 'Discoteca La Puerta', specialty: 'Música en vivo, cocteles tropicales y el mejor ambiente festivo del Centro Histórico' },
-      { name: 'Restaurante y Bar El Cielo', specialty: 'Pescados frescos, cocteles y comida tradicional caribeña frente a la playa de El Rodadero' },
-      { name: 'Restaurante La Roca', specialty: 'Comida de mar fresca, patacones y ambiente relajado en la zona costera de Palomino' },
-      { name: 'La Azotea Disco Lounge', specialty: 'Música variada, cocteles artesanales y terraza animada en el Parque de Los Novios' },
-      { name: 'El Callejón Gastrobar', specialty: 'Cervezas artesanales, cocteles y tapas en el ambiente bohemio del Centro Histórico' },
-      { name: 'Restaurante Ostrería Mary', specialty: 'Auténticos ceviches artesanales de ostras, camarón y pulpo fresco en el Centro Histórico' },
-      { name: 'Restaurante El Bistró Santa Marta', specialty: 'Bistronomía artesanal con panes horneados en casa, tapas mediterráneas y pescados a la plancha' }
-    ],
-    places: [
-      'Playa El Rodadero',
-      'Bahía de Taganga',
-      'Playa Blanca Santa Marta',
-      'Parque Nacional Natural Tayrona',
-      'Cabo San Juan del Guía',
-      'Bahía Concha',
-      'Playa Cristal',
-      'Quinta de San Pedro Alejandrino',
-      'Minca',
-      'Centro Histórico y Parque de Los Novios',
-      'Catedral Basílica de Santa Marta',
-      'Museo del Oro Tairona - Casa de la Aduana',
-      'Acuario y Museo del Mar del Rodadero',
-      'Playa de Palomino',
-      'Marina de Santa Marta',
-      'Centro Comercial Buenavista'
-    ],
-    events: [
-      { name: 'Fiesta del Mar', month: 'Julio (último fin de semana)', desc: 'La máxima festividad de Santa Marta con competencias náuticas internacionales, conciertos masivos en la playa y desfiles folclóricos.' },
-      { name: 'Festival Internacional de Teatro del Caribe (Festicaribe)', month: 'Septiembre', desc: 'Encuentro cultural con compañías teatrales y presentaciones al aire libre en plazas históricas.' }
-    ]
-  },
-  medellin: {
-    name: 'Medellín',
-    country: 'Colombia',
-    hotels: [
-      { name: 'The Click Clack Hotel Medellín', desc: 'Diseño vanguardista en El Poblado con terraza panorámica, coctelería botánica y habitaciones contemporáneas.', price: '~$110 - $160 USD/noche' },
-      { name: 'Hotel Dann Carlton Medellín', desc: 'Lujo y confort clásico en El Poblado con piscina climatizada, spa y restaurante giratorio.', price: '~$90 - $140 USD/noche' },
-      { name: 'Marquee Medellín', desc: 'Hotel boutique exclusivo en Parque Lleras con piscina en la azotea y acabados italianos de lujo.', price: '~$130 - $190 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante El Cielo', specialty: 'Experiencia gastronómica sensorial y creativa de alta cocina colombiana' },
-      { name: 'Restaurante Carmen Medellín', specialty: 'Platos contemporáneos de autor con ingredientes nativos y pesca fresca' },
-      { name: 'Mondongo\'s El Poblado', specialty: 'Auténtica bandeja paisa, mondongo tradicional y arepas de chócolo' },
-      { name: 'Alambique', specialty: 'Cocina artesanal de autor servida en un ambiente bohemio con coctelería botánica' }
-    ],
-    places: [
-      'Comuna 13 y Graffitour',
-      'Parque Arví y Metrocable',
-      'Plaza Botero y Museo de Antioquia',
-      'Jardín Botánico de Medellín',
-      'Barrio Provenza y El Poblado',
-      'Pueblito Paisa en el Cerro Nutibara'
-    ],
-    events: [
-      { name: 'Feria de las Flores', month: 'Agosto (primera semana)', desc: 'El evento cultural más emblemático de Medellín con el Desfile de Silleteros, conciertos y exhibición floral.' }
-    ]
-  },
-  bogota: {
-    name: 'Bogotá',
-    country: 'Colombia',
-    hotels: [
-      { name: 'Four Seasons Hotel Casa Medina', desc: 'Casona histórica declarada monumento nacional en Zona G con arquitectura colonial.', price: '~$250 - $380 USD/noche' },
-      { name: 'The Click Clack Hotel Bogotá', desc: 'Concepto boutique urbano e innovador cerca del Parque de la 93.', price: '~$100 - $150 USD/noche' },
-      { name: 'Hotel de la Opera', desc: 'Elegancia colonial y spa en el corazón histórico del barrio La Candelaria.', price: '~$90 - $130 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante Leo', specialty: 'Cocina colombiana de ecosistemas por la reconocida chef Leonor Espinosa' },
-      { name: 'Harry Sasson', specialty: 'Alta gastronomía internacional y parrilla en una mansión clásica restaurada' },
-      { name: 'Andrés DC', specialty: 'Gastronomía típica colombiana, carnes a la brasa y fiesta tradicional' },
-      { name: 'Prudencia La Candelaria', specialty: 'Menú degustación artesanal de temporada cocinado a la leña' }
-    ],
-    places: [
-      'Cerro de Monserrate',
-      'Museo del Oro',
-      'Barrio La Candelaria y Plaza de Bolívar',
-      'Museo Botero',
-      'Parque de la 93 y Zona Rosa',
-      'Jardín Botánico de Bogotá'
-    ],
-    events: [
-      { name: 'Festival Estéreo Picnic', month: 'Marzo/Abril', desc: 'Uno de los festivales de música alternativa y pop más grandes de Sudamérica.' },
-      { name: 'Feria Internacional del Libro de Bogotá (FILBo)', month: 'Abril/Mayo', desc: 'Gran encuentro literario y cultural en Corferias con autores de todo el mundo.' }
-    ]
-  },
-  barranquilla: {
-    name: 'Barranquilla',
-    country: 'Colombia',
-    hotels: [
-      { name: 'Hotel El Prado', desc: 'Monumento arquitectónico y patrimonio nacional con elegantes jardines tropicales, piscina histórica y estilo neoclásico republicano en el barrio El Prado.', price: '~$80 - $130 USD/noche' },
-      { name: 'Dann Carlton Barranquilla', desc: 'Hotel de gran categoría frente al centro comercial Buenavista con piscina, restaurante giratorio y spa de lujo.', price: '~$90 - $140 USD/noche' },
-      { name: 'Movich Buró 51', desc: 'Hotel moderno y confortable en el sector de Buenavista con piscina al aire libre, gastronomía de autor y diseño contemporáneo.', price: '~$85 - $135 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante La Cueva', specialty: 'El legendario bar-restaurante del Grupo de Barranquilla frecuentado por Gabriel García Márquez, con gastronomía típica caribeña y ambiente cultural único' },
-      { name: 'Restaurante El Celler', specialty: 'Cocina mediterránea y caribeña de autor con mariscos frescos, arroces y tapas de alta calidad' },
-      { name: 'Restaurante El Pulpo Paul', specialty: 'Ceviches frescos, arroces de mariscos y cazuelas al estilo del Caribe' },
-      { name: 'Restaurante El Tropezón', specialty: 'Auténtica gastronomía tradicional barranquillera, sancochos y asados típicos' },
-      { name: 'Restaurante La Marea', specialty: 'Pescados frescos, cazuela de mariscos y comida caribeña con vista al río' },
-      { name: 'Restaurante La Pérgola', specialty: 'Comida italiana y mediterránea artesanal en un ambiente acogedor' },
-      { name: 'Restaurante El Corralito', specialty: 'Platos tradicionales y carnes asadas al carbón' },
-      { name: 'Restaurante La Casa de la Cerveza', specialty: 'Cervezas artesanales y comida casual con ambiente frente al Gran Malecón' }
-    ],
-    places: [
-      'Gran Malecón del Río',
-      'Monumento Ventana al Mundo',
-      'Catedral Metropolitana María Reina',
-      'Restaurante La Cueva',
-      'Museo del Caribe y Parque Cultural',
-      'Bocas de Ceniza',
-      'Barrio El Prado',
-      'La Troja (Patrimonio Cultural y Musical)',
-      'Parque de los Fundadores',
-      'Monumento Ventana de Campeones'
-    ],
-    events: [
-      { name: 'Carnaval de Barranquilla', month: 'Febrero/Marzo', desc: 'Obra Maestra del Patrimonio Oral e Inmaterial de la Humanidad (UNESCO) con la Batalla de Flores y la Gran Parada.' },
-      { name: 'Barranquijazz', month: 'Septiembre', desc: 'El festival de jazz y música del Caribe más importante de Colombia con grandes exponentes internacionales.' }
-    ]
-  },
-  'buenos aires': {
-    name: 'Buenos Aires',
-    country: 'Argentina',
-    hotels: [
-      { name: 'Alvear Palace Hotel', desc: 'Lujo clásico y majestuoso en el corazón de Recoleta con arquitectura estilo francés y spa de primer nivel.', price: '~$380 - $650 USD/noche' },
-      { name: 'Palacio Duhau - Park Hyatt Buenos Aires', desc: 'Palacio neoclásico en la Avenida Alvear con jardines privados, galería de arte subterránea y gastronomía gourmet.', price: '~$420 - $700 USD/noche' },
-      { name: 'Faena Hotel Buenos Aires', desc: 'Diseño teatral y vanguardista creado por Philippe Starck en Puerto Madero con piscina icónica y espectáculos de tango.', price: '~$350 - $580 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Don Julio Parrilla', specialty: 'Los cortes de carne argentina más famosos del mundo, asado a la parrilla de leña y vinos Malbec selectos en Palermo' },
-      { name: 'La Cabrera', specialty: 'Generosos cortes de carne premium servidos con variedad de cazuelas y guarniciones artesanales' },
-      { name: 'Café Tortoni', specialty: 'El café notable más antiguo de Buenos Aires con tradicionales churros con chocolate caliente y shows de tango' },
-      { name: 'Cabaña Las Lilas', specialty: 'Carnes a las brasas y vista al río en los diques de Puerto Madero' }
-    ],
-    places: [
-      'Plaza de Mayo y Casa Rosada',
-      'Barrio de San Telmo y Feria de Antigüedades',
-      'Caminito y Barrio de La Boca',
-      'Cementerio de la Recoleta',
-      'Teatro Colón',
-      'Puerto Madero y Puente de la Mujer',
-      'Bosques de Palermo y Rosedal'
-    ],
-    events: [
-      { name: 'Festival y Mundial de Tango de Buenos Aires', month: 'Agosto', desc: 'La máxima fiesta del tango mundial con milongas callejeras y competencias en la Usina del Arte.' },
-      { name: 'Noche de los Museos de Buenos Aires', month: 'Noviembre', desc: 'Más de 200 museos y espacios culturales abiertos gratuitamente toda la noche con música en vivo.' }
-    ]
-  },
-  miami: {
-    name: 'Miami',
-    country: 'Estados Unidos',
-    hotels: [
-      { name: 'The Miami Beach EDITION', desc: 'Lujo frente al mar en South Beach con diseño sofisticado, spa y pistas de bowling.', price: '~$350 - $600 USD/noche' },
-      { name: '1 Hotel South Beach', desc: 'Retiro ecológico de 5 estrellas frente al océano con 4 piscinas y terraza panorámica.', price: '~$400 - $700 USD/noche' },
-      { name: 'Faena Hotel Miami Beach', desc: 'Espectacular arte teatral, glamour y gastronomía de clase mundial frente a la playa.', price: '~$500 - $850 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Joe\'s Stone Crab', specialty: 'Legendarios cangrejos moros de Florida, hash browns y key lime pie' },
-      { name: 'La Mar by Gastón Acurio', specialty: 'Ceviches peruanos de alta gama con terraza frente a la bahía de Biscayne' },
-      { name: 'Versailles Restaurant', specialty: 'Auténtica comida cubana, sándwich cubano y café con leche en Little Havana' },
-      { name: 'Zuma Miami', specialty: 'Izakaya japonesa contemporánea de alta cocina en Downtown Miami' }
-    ],
-    places: [
-      'South Beach y Ocean Drive',
-      'Distrito de Arte de Wynwood',
-      'Little Havana y Calle Ocho',
-      'Vizcaya Museum and Gardens',
-      'Bayside Marketplace y Bahía de Biscayne',
-      'Miami Design District'
-    ],
-    events: [
-      { name: 'Art Basel Miami Beach', month: 'Diciembre', desc: 'La feria de arte contemporáneo internacional más importante de Norteamérica.' }
-    ]
-  },
-  roma: {
-    name: 'Roma',
-    country: 'Italia',
-    hotels: [
-      { name: 'Hotel de Russie', desc: 'Elegancia clásica junto a Piazza del Popolo con jardines secretos y terraza gastronómica.', price: '~$450 - $800 USD/noche' },
-      { name: 'The St. Regis Rome', desc: 'Lujo aristocrático del siglo XIX en el corazón histórico de Roma.', price: '~$500 - $900 USD/noche' },
-      { name: 'Hotel Artemide', desc: 'Confort moderno, spa y terraza panorámica en Via Nazionale.', price: '~$180 - $280 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Roscioli Salumeria con Cucina', specialty: 'La mejor pasta Carbonara clásica y quesos artesanales italianos' },
-      { name: 'Trattoria Da Enzo al 29', specialty: 'Auténtica Cacio e Pepe y alcachofas a la romana en el corazón de Trastevere' },
-      { name: 'Armando al Pantheon', specialty: 'Clásicos romanos refinados junto al Panteón de Agripa' },
-      { name: 'Pizzarium Bonci', specialty: 'Pizza al taglio crujiente con masas de fermentación natural y toppings gourmet' }
-    ],
-    places: [
-      'Coliseo Romano y Foro Romano',
-      'Fontana di Trevi',
-      'Panteón de Agripa y Piazza Navona',
-      'Basílica de San Pedro y Museos Vaticanos',
-      'Barrio de Trastevere',
-      'Piazza di Spagna'
-    ],
-    events: [
-      { name: 'Festa di Noantri en Trastevere', month: 'Julio', desc: 'Tradicional procesión religiosa y fiesta popular en las calles de Trastevere.' }
-    ]
-  },
-  paris: {
-    name: 'París',
-    country: 'Francia',
-    hotels: [
-      { name: 'Le Bristol Paris', desc: 'Palacio de lujo clásico francés con jardín privado y restaurante con estrellas Michelin.', price: '~$900 - $1500 USD/noche' },
-      { name: 'Hôtel Plaza Athénée', desc: 'Ícono de la alta costura parisina en Avenue Montaigne con vistas a la Torre Eiffel.', price: '~$950 - $1600 USD/noche' },
-      { name: 'Hôtel Fabric', desc: 'Boutique contemporáneo con estilo industrial chic en el vibrante barrio de Oberkampf.', price: '~$200 - $320 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Le Comptoir du Relais', specialty: 'Bistronomía parisina clásica, pato confitado y quesos selectos en Saint-Germain' },
-      { name: 'Bouillon Pigalle', specialty: 'Tradición francesa, boeuf bourguignon y profiteroles a precios accesibles' },
-      { name: 'Septime', specialty: 'Cocina francesa moderna de temporada con estrella Michelin' },
-      { name: 'L\'As du Fallafel', specialty: 'Famoso falafel artesanal en el histórico barrio de Le Marais' }
-    ],
-    places: [
-      'Torre Eiffel y Campo de Marte',
-      'Museo del Louvre',
-      'Catedral de Notre-Dame y Sainte-Chapelle',
-      'Barrio de Montmartre y Basílica del Sagrado Corazón',
-      'Paseo por el Río Sena y Jardines de Luxemburgo',
-      'Arco de Triunfo y Campos Elíseos'
-    ],
-    events: [
-      { name: 'Nuit Blanche', month: 'Octubre/Junio', desc: 'Noche cultural en toda la ciudad con museos abiertos y exhibiciones artísticas al aire libre.' }
-    ]
-  },
-  tokio: {
-    name: 'Tokio',
-    country: 'Japón',
-    hotels: [
-      { name: 'Aman Tokyo', desc: 'Santuario de lujo zen en las alturas de Otemachi con vistas panorámicas al Palacio Imperial.', price: '~$800 - $1400 USD/noche' },
-      { name: 'Park Hyatt Tokyo', desc: 'Vistas icónicas de Shinjuku y el Monte Fuji con diseño contemporáneo y spa de altura.', price: '~$450 - $800 USD/noche' },
-      { name: 'The Tokyo Station Hotel', desc: 'Encanto clásico y arquitectura europea dentro del histórico edificio de la estación de Tokio.', price: '~$350 - $550 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Sukiyabashi Jiro Roppongi', specialty: 'Sushi Edomae tradicional de máxima maestría y pescado fresco' },
-      { name: 'Ichiran Shibuya', specialty: 'Ramen Tonkotsu artesanal servido en cabinas individuales de concentración' },
-      { name: 'Rokurinsha', specialty: 'Famoso Tsukemen con fideos gruesos y caldo concentrado en Tokyo Station' },
-      { name: 'Gyukatsu Motomura', specialty: 'Carne de res empanizada servida en piedra caliente personal' }
-    ],
-    places: [
-      'Cruce de Shibuya y Estatua de Hachiko',
-      'Templo Senso-ji en Asakusa',
-      'Parque Shinjuku Gyoen',
-      'Santuario Meiji y Barrio Harajuku',
-      'Torre de Tokio y Roppongi Hills',
-      'Distrito de Neón de Akihabara'
-    ],
-    events: [
-      { name: 'Sanja Matsuri en Asakusa', month: 'Mayo', desc: 'Uno de los festivales sintoístas más grandes y coloridos de Tokio con santuarios portátiles Mikoshi.' }
-    ]
-  },
-  barcelona: {
-    name: 'Barcelona',
-    country: 'España',
-    hotels: [
-      { name: 'Hotel Arts Barcelona', desc: 'Lujo frente a la playa de la Barceloneta con vistas panorámicas al mar Mediterráneo y restaurantes con estrellas Michelin.', price: '~$380 - $650 USD/noche' },
-      { name: 'W Barcelona', desc: 'Diseño vanguardista icónico en forma de vela frente al mar con piscina infinity en la terraza.', price: '~$320 - $580 USD/noche' },
-      { name: 'Hotel Casa Fuster', desc: 'Monumento modernista en Passeig de Gràcia con terraza mirador y club de jazz.', price: '~$250 - $420 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante Cervecería Catalana', specialty: 'Famosas tapas gourmet catalanas, montaditos y mariscos frescos al momento' },
-      { name: 'Restaurante Disfrutar', specialty: 'Cocina vanguardista y creativa galardonada entre los mejores del mundo' },
-      { name: 'Restaurante Can Majó', specialty: 'Auténtica paella marinera, fideuá y pescados frescos frente a la Barceloneta' }
-    ],
-    places: [
-      'Basílica de la Sagrada Familia',
-      'Park Güell',
-      'Barrio Gótico y Catedral de Barcelona',
-      'Casa Batlló y Passeig de Gràcia',
-      'Paseo por Las Ramblas y Mercado de La Boquería',
-      'Playa de la Barceloneta'
-    ],
-    events: [
-      { name: 'Fiestas de La Mercè', month: 'Septiembre', desc: 'La fiesta mayor de Barcelona con espectáculos pirotécnicos, correfocs y castellers tradicionales.' }
-    ]
-  },
-  cancun: {
-    name: 'Cancún',
-    country: 'México',
-    hotels: [
-      { name: 'Grand Fiesta Americana Coral Beach', desc: 'Resort de lujo familiar con playa privada de aguas tranquilas y spa de hidroterapia en la Zona Hotelera.', price: '~$320 - $550 USD/noche' },
-      { name: 'Hyatt Ziva Cancun', desc: 'Exclusivo resort todo incluido rodeado por el mar Caribe con delfinario privado y piscinas frente al mar.', price: '~$400 - $700 USD/noche' },
-      { name: 'Nizuc Resort & Spa', desc: 'Elegancia contemporánea en Punta Nizuc con suites privadas y arrecifes de coral.', price: '~$450 - $800 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante Lorenzillo\'s', specialty: 'Langosta viva cocinada al gusto sobre la laguna Nichupté con vista al atardecer' },
-      { name: 'Restaurante La Habichuela Downtown', specialty: 'Cocina mexicana y caribeña tradicional en un jardín con réplicas de arte maya' },
-      { name: 'Porfirio\'s Cancún', specialty: 'Alta cocina mexicana contemporánea, cortes y mariachi en vivo' }
-    ],
-    places: [
-      'Playa Delfines y Mirador Cancún',
-      'Excursión a Isla Mujeres en catamarán',
-      'Zona Arqueológica El Rey',
-      'Museo Subacuático de Arte (MUSA)',
-      'Paseo en Laguna Nichupté'
-    ],
-    events: [
-      { name: 'Festival de Tradiciones de Vida y Muerte', month: 'Octubre/Noviembre', desc: 'Conmovedora e impresionante celebración del Día de Muertos con altares, gastronomía y danzas tradicionales.' }
-    ]
-  },
-  cusco: {
-    name: 'Cusco',
-    country: 'Perú',
-    hotels: [
-      { name: 'Belmond Hotel Monasterio', desc: 'Antiguo monasterio del siglo XVI en la Plaza Nazarenas con patio colonial y suites con oxígeno.', price: '~$450 - $800 USD/noche' },
-      { name: 'JW Marriott El Convento Cusco', desc: 'Lujo colonial restaurado en el centro histórico con spa andino y arquitectura incaica.', price: '~$250 - $420 USD/noche' },
-      { name: 'Palacio del Inka', desc: 'Mansión histórica de cinco siglos frente al Templo del Sol Qorikancha.', price: '~$200 - $350 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante Cicciolina', specialty: 'Tapas de autor andinas y mediterráneas con panadería artesanal y vinos selectos' },
-      { name: 'Restaurante Chicha por Gastón Acurio', specialty: 'Cocina cusqueña regional de alta gama, trucha del lago y lechón crocante' },
-      { name: 'Restaurante Morena Peruvian Kitchen', specialty: 'Clásicos peruanos refinados: lomo saltado, ají de gallina y ceviches frescos' }
-    ],
-    places: [
-      'Plaza de Armas de Cusco',
-      'Fortaleza de Sacsayhuamán',
-      'Templo del Sol Qorikancha',
-      'Barrio Tradicional de San Blas',
-      'Mercado Central de San Pedro',
-      'Excursión al Valle Sagrado de los Incas'
-    ],
-    events: [
-      { name: 'Inti Raymi (Fiesta del Sol)', month: '24 de Junio', desc: 'La ceremonia inca más importante del año con representaciones sagradas en Sacsayhuamán y el Qorikancha.' }
-    ]
-  }
-}
+export const DESTINATION_LOCAL_PRESETS = {}
 
 /**
- * Clean catalog resolver. Fetches verified real places from OSM/Overpass/Photon
- * if not present in curated presets.
+ * 100% Dynamic Global Catalog Resolver.
+ * Fetches verified real venues, restaurants, cafes, bars, and attractions
+ * dynamically from OpenStreetMap (Overpass API / Photon) anywhere in the world.
  */
 export async function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null) {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
@@ -393,14 +24,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const cached = destinationCatalogCache.get(cacheKey)
   if (cached) return cached
 
-  // 1. Curated Preset Check
-  const preset = getDestinationPresets(destName, countryName)
-  if (preset && preset.places && preset.places.length >= 4) {
-    destinationCatalogCache.set(cacheKey, preset)
-    return preset
-  }
-
-  // 2. Dynamic Geocode & OSM Live Query
+  // 1. Dynamic Geocode & OSM Live Query
   let lat = userLat
   let lon = userLon
   if (!lat || !lon) {
@@ -419,30 +43,36 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   let realPlaces = []
 
   if (lat && lon) {
+    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500))
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
-      overpassHotels(lat, lon, 'moderate', 8000).catch(() => []),
-      overpassNearbyFood(lat, lon, 5000).catch(() => []),
-      overpassAttractions(lat, lon, 8000).catch(() => [])
+      Promise.race([overpassHotels(lat, lon, 'moderate', 8000).catch(() => []), timeoutPromise]),
+      Promise.race([overpassNearbyFood(lat, lon, 6000).catch(() => []), timeoutPromise]),
+      Promise.race([overpassAttractions(lat, lon, 8000).catch(() => []), timeoutPromise])
     ])
 
-    realHotels = (osmHotels || []).filter(h => h.name && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 3)
-    realRests = (osmRests || []).filter(r => r.name && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 5)
-    realPlaces = (osmAttractions || []).filter(p => p.name && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 10)
+    realHotels = (osmHotels || []).filter(h => h && h.name && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
+    realRests = (osmRests || []).filter(r => r && r.name && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 12)
+    realPlaces = (osmAttractions || []).filter(p => p && p.name && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 15)
+
+    if (realPlaces.length === 0) {
+      const photonPlaces = await photonSearch(`${capitalCity} tourism`, 10, lat, lon).catch(() => [])
+      realPlaces = (photonPlaces || []).filter(p => p && p.name).slice(0, 10)
+    }
   }
 
   const result = {
     name: capitalCity,
     country: targetCountry,
-    hotels: realHotels.length > 0 ? realHotels.map(h => ({
+    hotels: realHotels.map(h => ({
       name: h.name,
       desc: `Alojamiento verificado ubicado en ${capitalCity}.`,
       price: '~$75 - $140 USD/noche'
-    })) : [],
-    restaurants: realRests.length > 0 ? realRests.map(r => ({
+    })),
+    restaurants: realRests.map(r => ({
       name: r.name,
-      specialty: r.cuisine ? `Especialidad en cocina ${r.cuisine}` : `Platos y sabores representativos de ${capitalCity}`
-    })) : [],
-    places: realPlaces.length > 0 ? realPlaces.map(p => p.name) : [],
+      specialty: r.cuisine ? `Especialidad en cocina ${r.cuisine}` : `Gastronomía local en ${capitalCity}`
+    })),
+    places: realPlaces.map(p => p.name),
     events: []
   }
 
@@ -657,7 +287,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = `¡Hola! Qué gusto saludarte. Soy Tour Planner AI 🤖, tu asistente personal de viajes en VibeTours.\n\nEstoy aquí para diseñar un tour increíble adaptado a tus fechas, acompañantes, presupuesto y gustos. Cuéntame: ¿a qué ciudad o lugar te gustaría viajar hoy?`
       }
     } else {
-      const preset = realCatalog || getDestinationPresets('Cartagena', 'Colombia')
+      const preset = realCatalog || getDestinationPresets(known.city || 'Destino', known.country || 'Local')
       const fbHasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
@@ -870,7 +500,7 @@ REGLAS ESTRITAS PARA "specificPlaces":
 2. ESTÁ TERMINANTEMENTE PROHIBIDO incluir actividades genéricas o frases descriptivas como:
    - "Instalación en casa", "Llegada", "Despedida", "Regreso a casa", "Picnic o almuerzo en la zona", "Picnic en la zona", "Tiempo libre", "Día libre", "Tarde libre", "Tarde libre para explorar", "Fiesta nocturna", "Tubbing en el río", "Las cascadas y visita a fincas de café", "Últimos momentos para disfrutar de la ciudad", "Participación en algún evento cultural".
    - Palabras genéricas como "local", "restaurante local", "zona", "casa propia", "comida típica", "para explorar".
-3. Si el itinerario menciona una recomendación de restaurante (ej: "Cena en un restaurante local (recomiendo Restaurante El Celler)"), el lugar extraído DEBE SER "Restaurante El Celler" y NO "local".`
+3. Recomienda ÚNICAMENTE restaurantes, cafés y bares reales que existan en el catálogo del destino y que aparezcan en el mapa (ej: "Cena en Restaurante Ouzo" o "Almuerzo en Manuel Restaurante"), usando siempre su nombre comercial exacto.`
 
   try {
     const formattedHistory = history.slice(-8).map(m => ({
@@ -1011,7 +641,7 @@ Devuelve ÚNICAMENTE un JSON con:
 - "interests": lista de intereses mencionados (ej: ["playa", "gastronomía", "cultura"]).
 - "selectedHotel": { "name": "Nombre del hotel" } o null si no se ha elegido.
 - "accommodationStatus": "Casa propia / familiar", "Hotel elegido", "Por definir" o null.
-- "specificPlaces": lista de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Restaurante El Celler", "dia": 1 }, { "name": "Museo del Caribe", "dia": 2 }]). NUNCA incluir actividades genéricas ("Instalación en casa", "Llegada", "Despedida", "Picnic en la zona", "Tiempo libre", "Día libre", "Últimos momentos...", "local").`
+- "specificPlaces": lista de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Manuel Restaurante", "dia": 1 }, { "name": "Museo del Caribe", "dia": 2 }]). NUNCA incluir actividades genéricas ("Instalación en casa", "Llegada", "Despedida", "Picnic en la zona", "Tiempo libre", "Día libre", "Últimos momentos...", "local").`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
