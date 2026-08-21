@@ -264,8 +264,8 @@ class VoiceGuideService {
     String lang = 'es',
     void Function(String name, String description)? onResolved,
   }) async {
-    String title = stop.name.trim();
-    String description = stop.description.trim();
+    String title = stop.name.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
+    String description = stop.description.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
 
     final isGenericName = title.isEmpty ||
                           title.toLowerCase() == 'parada' ||
@@ -273,8 +273,10 @@ class VoiceGuideService {
                           title.toLowerCase().startsWith('atracción del recorrido');
 
     final isDescriptionEmpty = description.isEmpty ||
+                               description.length < 20 ||
                                description.toLowerCase() == 'parada' ||
-                               description.toLowerCase() == 'parada turistica';
+                               description.toLowerCase() == 'parada turistica' ||
+                               description.toLowerCase() == title.toLowerCase();
 
     if (isGenericName || isDescriptionEmpty) {
       final details = await fetchWikipediaAndGeocodingDetails(
@@ -283,7 +285,7 @@ class VoiceGuideService {
         lang: lang,
       );
 
-      if (details != null) {
+      if (details != null && details['description'] != null && details['description']!.length > 20) {
         title = details['name'] ?? title;
         description = details['description'] ?? description;
         if (onResolved != null) {
@@ -295,8 +297,8 @@ class VoiceGuideService {
     if (title.isEmpty || title.toLowerCase() == 'parada') {
       title = 'Atracción del recorrido ${stop.order + 1}';
     }
-    if (description.isEmpty || description.toLowerCase() == 'parada') {
-      description = 'Hemos llegado a un punto de interés especial en nuestra ruta. Disfruta de esta parada en el camino.';
+    if (description.isEmpty || description.toLowerCase() == 'parada' || description.length < 20) {
+      description = '$title es uno de los atractivos más emblemáticos y destacados para disfrutar en esta ruta. Tómate un momento para apreciar su historia, ambiente y detalles visuales.';
     }
 
     await speak('$title. $description', lang: lang);
@@ -305,12 +307,22 @@ class VoiceGuideService {
   Future<void> speak(String text, {String lang = 'es'}) async {
     final value = text.trim();
     if (value.isEmpty) return;
-    await setLanguage(lang);
-    await _tts.stop();
-    await _tts.speak(value);
+    try {
+      await setLanguage(lang);
+      await _tts.stop();
+      await _tts.speak(value);
+    } catch (e) {
+      debugPrint('[VoiceGuide] Error al reproducir síntesis de voz: $e');
+    }
   }
 
-  Future<void> stop() => _tts.stop();
+  Future<void> stop() async {
+    try {
+      await _tts.stop();
+    } catch (e) {
+      debugPrint('[VoiceGuide] Error al detener TTS: $e');
+    }
+  }
 
   Future<String?> listenCommand({
     void Function(String)? onPartialResult,

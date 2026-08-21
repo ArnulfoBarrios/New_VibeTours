@@ -3307,11 +3307,13 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
     resolvedName = candidateFallback?.name || fallbackPlace?.name || `${input.destination}`
   }
-  resolvedName = sanitizeStopTitle(resolvedName)
-  let description = source.descripcion ?? source.description
+  let description = source.descripcion ?? source.description ?? ''
+  description = description.replace(/^(Atracci[oó]n(\s*\/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*/i, '').trim()
+
   const isGenericDesc = !description || 
-                         description.trim().length === 0 || 
+                         description.trim().length < 25 || 
                          coordinates.wasFallback ||
+                         (description.toLowerCase() === resolvedName.toLowerCase()) ||
                          description.includes('un punto de gran interés recomendado') ||
                          description.includes('gran valor patrimonial de') ||
                          description.includes('increíble entorno natural') ||
@@ -3322,10 +3324,10 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
 
   if (isGenericDesc) {
     const wikiText = await wikipediaSummaryText(resolvedName, input.city || input.destination).catch(() => null)
-    if (wikiText) {
+    if (wikiText && wikiText.length > 30) {
       description = wikiText
     } else {
-      const rawCat = fallbackPlace?.category || source.categoria || source.category || 'lugar'
+      const rawCat = fallbackPlace?.category || source.categoria || source.category || source.type || 'lugar'
       description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
     }
   }
@@ -4271,7 +4273,7 @@ export async function collectTourCandidates(input, location) {
             city,
             country,
             address: geo?.name || `${placeName}, ${city}`,
-            description: `Atracción/Restaurante: ${placeName}`,
+            description: '',
             tags: { requested_place: 'true' }
           }
         }

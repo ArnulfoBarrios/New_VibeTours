@@ -1301,7 +1301,7 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop) {
                     children: [
                       Expanded(
                         child: Text(
-                          stop.name,
+                          stop.name.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim(),
                           style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -1312,41 +1312,123 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop) {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
+
+                  // Voice Guide (Audioguía de IA) Interactive Bar
+                  Consumer(
+                    builder: (context, ref, _) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.primary.withValues(alpha: 0.15),
+                              Colors.cyan.withValues(alpha: 0.08),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppTheme.primary.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () async {
+                              final voiceService = ref.read(voiceGuideProvider);
+                              final cleanName = stop.name.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
+                              final cleanDesc = stop.description.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
+                              final narrateText = cleanDesc.isNotEmpty && cleanDesc != cleanName
+                                  ? '$cleanName. $cleanDesc'
+                                  : '$cleanName es uno de los atractivos imperdibles en este recorrido. Disfruta de su riqueza histórica, cultural y arquitectura visual.';
+                              await voiceService.speak(narrateText);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: const BoxDecoration(
+                                      color: AppTheme.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.record_voice_over_rounded, color: Colors.white, size: 20),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Escuchar Audioguía de la Parada',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        ),
+                                        Text(
+                                          'Narración con IA de la historia y recomendaciones',
+                                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.stop_circle_outlined, color: Colors.redAccent),
+                                    tooltip: 'Detener audio',
+                                    onPressed: () async {
+                                      await ref.read(voiceGuideProvider).stop();
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
 
                   // General Description Section
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: Theme.of(context).dividerColor.withValues(alpha: 0.12),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: const [
-                            Icon(Icons.info_outline_rounded, color: AppTheme.primary, size: 20),
-                            SizedBox(width: 8),
+                  Builder(
+                    builder: (context) {
+                      final cleanName = stop.name.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
+                      final cleanDesc = stop.description.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
+                      final finalDesc = cleanDesc.isNotEmpty && cleanDesc != cleanName
+                          ? cleanDesc
+                          : 'Disfruta de $cleanName, un destacado punto de interés con historia, arquitectura y gran valor cultural en esta experiencia.';
+
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor.withValues(alpha: 0.12),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.info_outline_rounded, color: AppTheme.primary, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Descripción General',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
                             Text(
-                              'Descripción General',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              finalDesc,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          stop.description.isNotEmpty
-                              ? stop.description
-                              : 'Disfruta de esta increíble parada con historia, ambiente único y atractivos turísticos.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 18),
 
