@@ -150,8 +150,8 @@ export function deduplicatePlacesByName(places = []) {
 export function isValidSpecificPlace(placeName) {
   if (!placeName || typeof placeName !== 'string') return false
   
-  // Limpiar markdown, viñetas y espacios conservando guiones internos
-  const clean = placeName.replace(/[*_#•]/g, '').trim()
+  // Limpiar markdown, corchetes, paréntesis, viñetas y espacios conservando guiones internos
+  const clean = placeName.replace(/[*_#•\[\]\(\)]/g, '').trim()
   if (clean.length < 3) return false
   const cleanLower = clean.toLowerCase()
 
@@ -164,18 +164,23 @@ export function isValidSpecificPlace(placeName) {
     return false
   }
 
+  // 1.2 Descartar frases de actividad descriptiva o transición que inician con verbos o sustantivos de ocio
+  if (/^(?:exploraci[oó]n|caf[ée]\s+y\s+cascadas|cascadas\s+en|tarde\s+(?:en|de|libre)|mañana\s+(?:en|de|libre)|d[íi]a\s+(?:en|de|libre)|llegada|despedida|check-in|check-out|instalaci[oó]n|regreso|retorno|traslado|la\s+playa|el\s+mar|las\s+playas|la\s+ciudad|el\s+centro|el\s+hotel)\b/i.test(cleanLower)) {
+    return false
+  }
+
   // 2. Descartar comodidades, hoteles, metadatos (Presupuesto, Transporte, Alojamiento), acciones y frases meta de viaje
-  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|regreso al hotel|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
+  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|irotama|zuana|decameron|hilton|marriott|movich|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|regreso al hotel|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
   if (isMetaOrAmenity) return false
 
   // 2.1 Descartar actividades descriptivas de viaje, check-ins, ocio genérico, despedidas o momentos libres
   const isDescriptiveActivity = /\b(instalaci[oó]n|instalacion en casa|en casa|llegada a|bienvenida|despedida de|despedida|regreso a|regreso al hotel|picnic|picnic o almuerzo|picnic en la zona|almuerzo en la zona|comida en la zona|tarde libre|tiempo libre|d[íi]a libre|dia libre|mañana libre|noche libre|compras o descanso|para compras|últimos momentos|ultimos momentos|disfrutar de la ciudad|a tu ritmo|participaci[oó]n en|evento cultural|si hay alguno|relax en|de relax|vida nocturna en|exploraci[oó]n de|descubrir la historia|fiesta nocturna|vida nocturna|noche de fiesta|noche de rumba|rumba|tubbing|tubing|careteo|rafting|canopy|kayak|paddle|senderismo|caminata|cascadas y visita|visita a fincas|fincas de caf[ée]|finca cafetera|fincas cafeteras)\b/i.test(cleanLower)
-  if (isDescriptiveActivity && !/\b(restaurante|bar|caf[ée]|museo|parque nacional|teatro|hotel|catedral|iglesia|bistr[oó]|calle\s+\d+|quinta de|playa\s+[a-z]+|bah[íi]a\s+[a-z]+|cabo\s+[a-z]+|centro comercial)\b/i.test(cleanLower)) {
+  if (isDescriptiveActivity && !/\b(restaurante|bar|museo|parque nacional|teatro|catedral|iglesia|bistr[oó]|calle\s+\d+|quinta de|playa\s+[a-z]+|bah[íi]a\s+[a-z]+|cabo\s+[a-z]+|centro comercial)\b/i.test(cleanLower)) {
     return false
   }
 
   // 2.2 Descartar palabras genéricas o fragmentos sueltos no identificables
-  const isGenericFragment = /^(local|un local|el local|restaurante local|un restaurante local|bar local|la zona|zona|en la zona|la ciudad|ciudad|en la ciudad|casa propia|alojamiento propio|en casa|casa|casa de un familiar|casa familiar|para explorar|explorar|fiesta nocturna|las cascadas|cascadas|el r[íi]o|r[íi]o|tubbing en el r[íi]o|tubbing|tubing)$/i.test(cleanLower)
+  const isGenericFragment = /^(local|un local|el local|restaurante local|un restaurante local|bar local|la zona|zona|en la zona|la ciudad|ciudad|en la ciudad|casa propia|alojamiento propio|en casa|casa|casa de un familiar|casa familiar|para explorar|explorar|fiesta nocturna|las cascadas|cascadas|el r[íi]o|r[íi]o|tubbing en el r[íi]o|tubbing|tubing|la playa|playa|playas|las playas|el mar|la costa|la bahía|la bahia|la montaña|la sierra|el parque|la plaza)$/i.test(cleanLower)
   if (isGenericFragment) return false
 
   // 2.3 Descartar estructuras físicas genéricas o no turísticas que no son atracciones (canchas de barrio, paradas de bus, pérgolas)
@@ -504,28 +509,23 @@ aiRouter.post('/chat', async (req, res, next) => {
             for (const part of parts) {
               cleanAndAddCandidate(part, currentDay)
             }
-          }
+          } else {
+            // 2. Extraer negritas específicas si las hay (**Nombre**)
+            const boldRegex = /\*\*([^*\n]{3,60})\*\*/g
+            let bm
+            let foundBold = false
+            while ((bm = boldRegex.exec(line)) !== null) {
+              cleanAndAddCandidate(bm[1], currentDay)
+              foundBold = true
+            }
 
-          // 2. Extraer corchetes específicos si los hay ([Nombre])
-          const bracketRegex = /\[([^\]\n]{3,60})\]/g
-          let brm
-          while ((brm = bracketRegex.exec(line)) !== null) {
-            cleanAndAddCandidate(brm[1], currentDay)
-          }
-
-          // 3. Extraer negritas específicas si las hay (**Nombre**)
-          const boldRegex = /\*\*([^*\n]{3,60})\*\*/g
-          let bm
-          while ((bm = boldRegex.exec(line)) !== null) {
-            cleanAndAddCandidate(bm[1], currentDay)
-          }
-
-          // 4. Extraer ítems numerados o con viñetas estándar si no hubo flechas
-          if (!/->|—|–|>/.test(line)) {
-            const regex = /^(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,60})\*{0,2}\s*[:—\-]?/i
-            const m = line.match(regex)
-            if (m && !dayMatch) {
-              cleanAndAddCandidate(m[1], currentDay)
+            // 3. Extraer ítems numerados o con viñetas estándar si no hubo flechas ni negritas
+            if (!foundBold) {
+              const regex = /^(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,60})\*{0,2}\s*[:—\-]?/i
+              const m = line.match(regex)
+              if (m && !dayMatch) {
+                cleanAndAddCandidate(m[1], currentDay)
+              }
             }
           }
         }

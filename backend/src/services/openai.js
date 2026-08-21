@@ -805,18 +805,21 @@ ETAPA 3: HOSPEDAJE, TRANSPORTE Y PRESUPUESTO
 ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
 - Si el usuario YA confirmó sus días de viaje (${known.durationDays ? `${known.durationDays} días` : 'duración'}):
   Presenta el itinerario estructurado integrando las actividades aprobadas a lo largo de los ${known.durationDays || 3} días (Día 1 a Día ${known.durationDays || 3}):
-  "Itinerario de Viaje a ${destName} (${known.datesSeason || `${known.durationDays || 3} días`}):"
-  • Día 1: [Llegada / Hotel] -> [Lugar físico real 1] -> [Cena en Restaurante real 1]
-  • Día 2: [Lugar físico real 2] -> [Almuerzo en Restaurante real 2] -> [Lugar físico real 3]
-  ...
+  "Itinerario de Viaje a ${destName} (${known.datesSeason || `${known.durationDays || 3} días`}):
+  • Día 1: Playa El Rodadero -> Restaurante Ouzo -> Bahía de Taganga
+  • Día 2: Parque Nacional Natural Tayrona -> Restaurante Donde Chucho -> Cabo San Juan del Guía
+  • Día 3: Playa Cristal -> Restaurante Burukuka -> Discoteca La Puerta
+  ... (hasta el Día ${known.durationDays || 3})"
+
   REGLAS DE ORO DEL ITINERARIO:
-  1. CADA DÍA (del Día 1 al Día ${known.durationDays || 3}) DEBE TENER al menos 1 o 2 lugares físicos o restaurantes REALES y DIFERENTES.
-  2. ESTÁ TERMINANTEMENTE PROHIBIDO dejar días vacíos, días con descripciones abstractas o días de relleno ("Día libre", "Tarde libre", "Últimos momentos", "Visita opcional").
-  3. En las líneas con flechas (->), CADA ELEMENTO DEBE SER ÚNICAMENTE EL NOMBRE PROPIO DE UN LUGAR FÍSICO O RESTAURANTE REAL (ej: "• Día 2: Bahía de Taganga -> Restaurante Ouzo").
-  4. ESTÁ TERMINANTEMENTE PROHIBIDO poner frases de actividades como paradas en las flechas (NUNCA poner "-> Fiesta nocturna", "-> Tarde libre para explorar", "-> Tubbing en el río", "-> Las cascadas y visita a fincas de café", "-> Regreso al hotel y despedida").
-  Alojamiento: [Hotel elegido, casa propia o por definir]
-  Transporte: [Medio de transporte elegido o por definir]
-  Presupuesto: [Presupuesto elegido o por definir]
+  1. ESTÁ TERMINANTEMENTE PROHIBIDO USAR CORCHETES []. Escribe los nombres propios de los lugares directos y limpios.
+  2. NUNCA pongas "Llegada / Hotel", "Exploración en...", "Café y cascadas...", "Tarde en la playa", "Tarde libre", "Despedida" ni el nombre del hotel como paradas en las flechas (->).
+  3. CADA ELEMENTO entre flechas (->) DEBE SER EXCLUSIVAMENTE EL NOMBRE PROPIO DE UN LUGAR FÍSICO O RESTAURANTE REAL (ej: "• Día 1: Playa El Rodadero -> Restaurante Ouzo -> Bahía de Taganga").
+  4. CADA DÍA (del Día 1 al Día ${known.durationDays || 3}) DEBE TENER al menos 2 o 3 lugares físicos o restaurantes REALES y DIFERENTES.
+  5. ESTÁ TERMINANTEMENTE PROHIBIDO dejar días vacíos, días con descripciones abstractas o días de relleno ("Día libre", "Tarde libre", "Últimos momentos", "Visita opcional").
+  Alojamiento: ${known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus || 'Por definir'}
+  Transporte: ${known.transport || 'Por definir'}
+  Presupuesto: ${known.budget || 'Por definir'}
 - Si NO se han confirmado los días de viaje, NO presentes un itinerario por días; pregunta cuántos días durará su estadía.
 - Pregunta: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está todo listo para generar tu tour?"
 - "readyToBuild" DEBE ser false.
