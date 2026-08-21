@@ -178,8 +178,8 @@ export function isValidSpecificPlace(placeName) {
   const isGenericFragment = /^(local|un local|el local|restaurante local|un restaurante local|bar local|la zona|zona|en la zona|la ciudad|ciudad|en la ciudad|casa propia|alojamiento propio|en casa|casa|casa de un familiar|casa familiar|para explorar|explorar|fiesta nocturna|las cascadas|cascadas|el r[íi]o|r[íi]o|tubbing en el r[íi]o|tubbing|tubing)$/i.test(cleanLower)
   if (isGenericFragment) return false
 
-  // 2.3 Descartar estructuras físicas genéricas o no turísticas que no son atracciones (canchas de barrio, paradas de bus)
-  if (/^(la\s+)?(cancha|cancha sint[ée]tica|cancha de f[uú]tbol|cancha de microf[uú]tbol|parada de bus|estaci[óo]n de bus|quiosco|kiosco|grader[íi]as)$/i.test(cleanLower) ||
+  // 2.3 Descartar estructuras físicas genéricas o no turísticas que no son atracciones (canchas de barrio, paradas de bus, pérgolas)
+  if (/^(la\s+)?(p[ée]rgola|cancha|cancha sint[ée]tica|cancha de f[uú]tbol|cancha de microf[uú]tbol|parada de bus|estaci[óo]n de bus|quiosco|kiosco|grader[íi]as)$/i.test(cleanLower) ||
       /\b(cancha sint[ée]tica|cancha de f[uú]tbol|parque cancha)\b/i.test(cleanLower)) {
     return false
   }

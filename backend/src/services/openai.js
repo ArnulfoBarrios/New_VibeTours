@@ -950,6 +950,10 @@ REGLAS ESTRITAS PARA "specificPlaces":
       responseMessage = `¡Excelente! Procedo a generar tu tour personalizado en ${destName} en el mapa. ¡Prepárate para disfrutar tu viaje!`
     }
 
+    const destinationSuggestions = (!hasCity && !parsedExtracted.city)
+      ? await buildVisualDestinationSuggestions(actionChips).catch(() => [])
+      : []
+
     return {
       responseMessage,
       actionChips,
