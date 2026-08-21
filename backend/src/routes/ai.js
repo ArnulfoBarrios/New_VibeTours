@@ -1994,42 +1994,14 @@ export function buildTourPlanner(input, location = null, places = []) {
         }
       })
 
-      // Ordenar estrictamente por día preservando la secuencia fiel acordada en el chat
-      selectedPlaces.sort((a, b) => (Number(a.dia || a.day || 1) - Number(b.dia || b.day || 1)))
-
-      // Intra-day ordering: organizar paradas dentro del MISMO día sin cambiar de día a ninguna parada
-      if (totalDays >= 2) {
-        const optimizedByDay = []
-        const uniqueDays = Array.from(new Set(selectedPlaces.map(p => Number(p.dia || p.day || 1)))).sort((a, b) => a - b)
-        for (const d of uniqueDays) {
-          const dayPlaces = selectedPlaces.filter(p => (Number(p.dia || p.day || 1) === d))
-          if (dayPlaces.length <= 2) {
-            optimizedByDay.push(...dayPlaces)
-            continue
-          }
-
-          // Nearest-neighbor ordering within the SAME day
-          const ordered = [dayPlaces[0]]
-          const remaining = dayPlaces.slice(1)
-          while (remaining.length > 0) {
-            const current = ordered[ordered.length - 1]
-            let bestIdx = 0
-            let bestDist = Infinity
-            for (let j = 0; j < remaining.length; j++) {
-              const dist = (current.latitude && current.longitude && remaining[j].latitude && remaining[j].longitude)
-                ? getDistanceKm(current.latitude, current.longitude, remaining[j].latitude, remaining[j].longitude)
-                : 0
-              if (dist < bestDist) {
-                bestDist = dist
-                bestIdx = j
-              }
-            }
-            ordered.push(remaining.splice(bestIdx, 1)[0])
-          }
-          optimizedByDay.push(...ordered)
-        }
-        selectedPlaces = optimizedByDay
-      }
+      // Ordenar estrictamente por día y dentro del día preservar el orden secuencial exacto del chat
+      selectedPlaces.sort((a, b) => {
+        const dayDiff = (Number(a.dia || a.day || 1) - Number(b.dia || b.day || 1))
+        if (dayDiff !== 0) return dayDiff
+        const idxA = refList.findIndex(item => isPlaceMatching(a.name, getName(item)))
+        const idxB = refList.findIndex(item => isPlaceMatching(b.name, getName(item)))
+        return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
+      })
     } else {
       scored.sort((a, b) => b.score - a.score)
       selectedPlaces = selectPlaces(scored, stopTarget, input)

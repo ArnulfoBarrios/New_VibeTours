@@ -75,13 +75,27 @@ test('Full 8-Day Santa Marta Chat Itinerary is faithfully preserved stop-by-stop
   assert.ok(day8.some(p => p.name.includes('Cielo')), 'Day 8 must contain Restaurante y Bar El Cielo')
 })
 
-test('Geocoding of Santa Marta POIs returns valid high precision coordinates', async () => {
-  const dondeChucho = await geocodePlace('Restaurante Donde Chucho, Santa Marta, Colombia')
-  assert.ok(dondeChucho && dondeChucho.latitude)
+test('Intra-day stop order from chat is strictly preserved without TSP reordering', () => {
+  const day2ChatOrder = [
+    { name: 'Bocas de Ceniza', dia: 2, day: 2 },
+    { name: 'Catedral Metropolitana María Reina', dia: 2, day: 2 },
+    { name: 'Parque de los Sueños', dia: 2, day: 2 },
+    { name: 'Restaurante El Corral', dia: 2, day: 2 }
+  ]
 
-  const acuario = await geocodePlace('Acuario y Museo del Mar del Rodadero, Santa Marta, Colombia')
-  assert.ok(acuario && acuario.latitude)
+  const planner = buildTourPlanner({
+    city: 'Barranquilla',
+    destination: 'Barranquilla, Colombia',
+    durationDays: 3,
+    durationHours: 72,
+    specificPlaces: day2ChatOrder
+  })
 
-  const bistro = await geocodePlace('Restaurante El Bistró Santa Marta, Santa Marta, Colombia')
-  assert.ok(bistro && bistro.latitude)
+  const day2Stops = planner.selectedPlaces.filter(p => Number(p.dia || p.day) === 2)
+  assert.equal(day2Stops.length, 4)
+  assert.equal(day2Stops[0].name, 'Bocas de Ceniza')
+  assert.equal(day2Stops[1].name, 'Catedral Metropolitana María Reina')
+  assert.equal(day2Stops[2].name, 'Parque de los Sueños')
+  assert.equal(day2Stops[3].name, 'Restaurante El Corral')
 })
+
