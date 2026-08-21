@@ -467,7 +467,8 @@ aiRouter.post('/chat', async (req, res, next) => {
           candidate = candidate.replace(/^[.,;!*:]+/, '').trim()
 
           // Si conecta dos lugares con " y el " o " y la " (ej: "Catedral Metropolitana María Reina y el Parque de los Fundadores")
-          if (/\s+y\s+(?:el\s+|la\s+|los\s+|las\s+)/i.test(candidate)) {
+          const isSingleCompoundVenue = /^(?:acuario\s+y\s+museo|restaurante\s+y\s+bar|bar\s+y\s+restaurante|caf[ée]\s+y\s+bar)\b/i.test(candidate)
+          if (!isSingleCompoundVenue && /\s+y\s+(?:el\s+|la\s+|los\s+|las\s+)/i.test(candidate)) {
             const subParts = candidate.split(/\s+y\s+(?:el\s+|la\s+|los\s+|las\s+)/i)
             for (const sp of subParts) {
               cleanAndAddCandidate(sp, day)
@@ -1852,10 +1853,13 @@ async function buildFallbackTour(planner, input) {
   }
 }
 
-export function buildTourPlanner(input, location, places) {
+export function buildTourPlanner(input, location = null, places = []) {
   const origin = location ? { latitude: location.latitude, longitude: location.longitude } : null
+  const candidatePlaces = Array.isArray(places) && places.length > 0
+    ? places
+    : (Array.isArray(input.specificPlaces) && input.specificPlaces.length > 0 ? input.specificPlaces : (Array.isArray(input.selectedPlaces) ? input.selectedPlaces : []))
   const normalized = uniqueByName(
-    places.map((place, index) => normalizeCandidate(place, index, input, origin)),
+    candidatePlaces.map((place, index) => normalizeCandidate(place, index, input, origin)),
   ).filter((place) => place.name)
 
   const isCorridorRoute = Boolean(input.originPlace || input.destinationPlace)
@@ -1932,17 +1936,34 @@ export function buildTourPlanner(input, location, places) {
       : (Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
 
     const getName = (x) => typeof x === 'string' ? x : (x?.name || '')
+    function isPlaceMatching(nameA, nameB) {
+      if (!nameA || !nameB) return false
+      const keyA = normalizePlaceKey(nameA)
+      const keyB = normalizePlaceKey(nameB)
+      if (!keyA || !keyB) return false
+      if (keyA === keyB) return true
+      const typeA = getPlaceEntityType(nameA)
+      const typeB = getPlaceEntityType(nameB)
+      if (typeA !== 'generic' && typeB !== 'generic' && typeA !== typeB) {
+        return false
+      }
+      const minLen = Math.min(keyA.length, keyB.length)
+      const maxLen = Math.max(keyA.length, keyB.length)
+      if (minLen >= 4 && (keyA.includes(keyB) || keyB.includes(keyA))) {
+        if (minLen / maxLen >= 0.6 || typeA === typeB) {
+          return true
+        }
+      }
+      return false
+    }
+
     const requestedPlaces = []
     const otherPlaces = []
 
     for (const p of scored) {
-      const pKey = normalizePlaceKey(p.name)
       const isRequested = p.rawTags?.requested_place === 'true' || 
                           p.category === 'requested' || 
-                          (refList.length > 0 && refList.some(sp => {
-                            const spKey = normalizePlaceKey(getName(sp))
-                            return spKey && (spKey === pKey || pKey.includes(spKey) || spKey.includes(pKey))
-                          }))
+                          (refList.length > 0 && refList.some(sp => isPlaceMatching(p.name, getName(sp))))
       if (isRequested) {
         requestedPlaces.push(p)
       } else {
@@ -1952,26 +1973,16 @@ export function buildTourPlanner(input, location, places) {
 
     if (requestedPlaces.length >= 1) {
       requestedPlaces.sort((a, b) => {
-        const aKey = normalizePlaceKey(a.name)
-        const bKey = normalizePlaceKey(b.name)
-        const idxA = refList.findIndex(item => {
-          const itemKey = normalizePlaceKey(getName(item))
-          return itemKey && aKey && (itemKey === aKey || itemKey.includes(aKey) || aKey.includes(itemKey))
-        })
-        const idxB = refList.findIndex(item => {
-          const itemKey = normalizePlaceKey(getName(item))
-          return itemKey && bKey && (itemKey === bKey || itemKey.includes(bKey) || bKey.includes(itemKey))
-        })
+        const idxA = refList.findIndex(item => isPlaceMatching(a.name, getName(item)))
+        const idxB = refList.findIndex(item => isPlaceMatching(b.name, getName(item)))
         return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
       })
 
       const totalDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
       selectedPlaces = requestedPlaces.map((p, i) => {
-        const pKey = normalizePlaceKey(p.name)
-        const matchedRef = refList.find(item => {
-          const itemKey = normalizePlaceKey(getName(item))
-          return itemKey && pKey && (itemKey === pKey || itemKey.includes(pKey) || pKey.includes(itemKey))
-        })
+        // Prioritize exact matchedRef first, then p.dia, then substring match
+        const exactRef = refList.find(item => normalizePlaceKey(getName(item)) === normalizePlaceKey(p.name))
+        const matchedRef = exactRef || refList.find(item => isPlaceMatching(p.name, getName(item)))
         const dayFromRef = typeof matchedRef === 'object' ? (matchedRef?.day || matchedRef?.dia) : null
         const assignedDay = dayFromRef != null
           ? Number(dayFromRef)
@@ -2136,6 +2147,8 @@ function normalizeCandidate(place, index, input, origin) {
     imageUrl: images[0] ?? '',
     images,
     history: place.history ?? place.description ?? '',
+    dia: place.dia != null ? Number(place.dia) : (place.day != null ? Number(place.day) : null),
+    day: place.dia != null ? Number(place.dia) : (place.day != null ? Number(place.day) : null),
     score: 0,
   }
 }
@@ -4248,7 +4261,19 @@ export async function collectTourCandidates(input, location) {
         }
 
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
-          return null
+          if (placeName && isValidSpecificPlace(placeName) && canonicalDest && Number.isFinite(canonicalDest.latitude)) {
+            const angle = (index * 45) * (Math.PI / 180)
+            const r = 0.003 + (index * 0.0008)
+            geo = {
+              name: `${placeName}, ${city}`,
+              latitude: canonicalDest.latitude + (r * Math.cos(angle)),
+              longitude: canonicalDest.longitude + (r * Math.sin(angle)),
+              city,
+              country
+            }
+          } else {
+            return null
+          }
         }
 
         const finalLat = geo.latitude
@@ -4347,22 +4372,36 @@ export async function collectTourCandidates(input, location) {
   // Prioritize specific chat places and geocoded iconic landmarks first in the pool
   const pool = [...geocodedSpecifics, ...geocodedIconics, ...overpassPrimary, ...overpassWide, ...photonPlaces]
   
-  function dedupeByProximity(places, minDistanceMeters = 150) {
+  function dedupeByProximity(places, minDistanceMeters = 50) {
     const result = []
     for (const p of places) {
       if (!p || !p.name) continue
       const pKey = normalizePlaceKey(p.name)
+      const pType = getPlaceEntityType(p.name)
+      const pDay = p.dia || p.day
       
       const existingIdx = result.findIndex(item => {
         const itemKey = normalizePlaceKey(item.name)
+        const itemType = getPlaceEntityType(item.name)
+        const itemDay = item.dia || item.day
+
+        // 1. Nunca mezclar lugares asignados a días diferentes
+        if (pDay != null && itemDay != null && Number(pDay) !== Number(itemDay)) {
+          return false
+        }
+
+        // 2. Coincidencia exacta de clave de nombre
         if (pKey === itemKey) return true
-        if (pKey.length >= 4 && itemKey.length >= 4 && (pKey.includes(itemKey) || itemKey.includes(pKey))) {
+        if (pKey.length >= 5 && itemKey.length >= 5 && (pKey.includes(itemKey) || itemKey.includes(pKey))) {
           return true
         }
+
+        // 3. Deduplicación por proximidad sólo si comparten el MISMO tipo de entidad y están a menos de 50 metros
         if (hasUsableCoordinates(item.latitude, item.longitude) && hasUsableCoordinates(p.latitude, p.longitude)) {
           const dist = haversineMeters(item.latitude, item.longitude, p.latitude, p.longitude)
-          if (dist < minDistanceMeters) return true
-          if (dist < 400 && (itemKey.includes(pKey) || pKey.includes(itemKey))) return true
+          if (dist < minDistanceMeters && pType === itemType && (itemKey.includes(pKey) || pKey.includes(itemKey))) {
+            return true
+          }
         }
         return false
       })
