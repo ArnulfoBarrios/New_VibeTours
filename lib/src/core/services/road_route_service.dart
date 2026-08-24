@@ -25,8 +25,12 @@ class RoadRouteResult {
   const RoadRouteResult({
     required this.geometry,
     this.maritimeSegments = const [],
+    this.flightSegments = const [],
     this.ports = const [],
+    this.airports = const [],
     this.usesMaritimeTransfer = false,
+    this.usesFlightTransfer = false,
+    this.transitAdviceMessage,
     this.usesLiveTraffic = false,
     this.usedFallback = false,
     this.distanceMeters = 0,
@@ -37,8 +41,12 @@ class RoadRouteResult {
 
   final List<GeoPoint> geometry;
   final List<List<GeoPoint>> maritimeSegments;
+  final List<List<GeoPoint>> flightSegments;
   final List<RoutePortWaypoint> ports;
+  final List<RoutePortWaypoint> airports;
   final bool usesMaritimeTransfer;
+  final bool usesFlightTransfer;
+  final String? transitAdviceMessage;
   final bool usesLiveTraffic;
   final bool usedFallback;
   final double distanceMeters;
@@ -107,16 +115,37 @@ class RoadRouteService {
     final geometry = <GeoPoint>[];
     final maritimeSegments = <List<GeoPoint>>[];
     final ports = <RoutePortWaypoint>[];
+    final airports = <RoutePortWaypoint>[];
+    final flightSegments = <List<GeoPoint>>[];
     var usesMaritimeTransfer = false;
+    var usesFlightTransfer = false;
     var usedFallback = false;
     var usesLiveTraffic = false;
     var totalDistanceMeters = 0.0;
     var totalTravelTimeSeconds = 0;
     var totalTrafficDelaySeconds = 0;
+    String? transitAdviceMessage;
 
     for (var index = 0; index < points.length - 1; index++) {
       final start = points[index];
       final end = points[index + 1];
+      final directDistance = _distanceMeters(start, end);
+
+      // Long-distance / Intercontinental transfer (> 400 km): Build Flight-aware route
+      if (directDistance > 400000) {
+        final flightRoute = await _buildFlightAwareRoute(start, end);
+        if (flightRoute != null) {
+          _appendGeometry(geometry, flightRoute.geometry);
+          flightSegments.addAll(flightRoute.flightSegments);
+          airports.addAll(flightRoute.airports);
+          usesFlightTransfer = true;
+          transitAdviceMessage = flightRoute.transitAdviceMessage;
+          totalDistanceMeters += flightRoute.distanceMeters;
+          totalTravelTimeSeconds += (directDistance / 220).round(); // ~800 km/h flight speed
+          continue;
+        }
+      }
+
       _DrivingRoute? roadRoute;
       if (preferLiveTraffic) {
         roadRoute = await _fetchTomTomTrafficRoute(start, end);
@@ -128,9 +157,6 @@ class RoadRouteService {
           _looksLikeMaritimeTransfer(roadRoute, start, end);
 
       if (!requiresPortTransfer) {
-        // Routing engines commonly snap their first/last geometry points to a
-        // nearby road. Preserve the exact requested endpoints so the rendered
-        // route always starts at the live GPS fix and ends at the selected POI.
         _appendGeometry(
           geometry,
           _withRequestedEndpoints(roadRoute.geometry, start, end),
@@ -148,6 +174,7 @@ class RoadRouteService {
         maritimeSegments.addAll(maritimeRoute.maritimeSegments);
         ports.addAll(maritimeRoute.ports);
         usesMaritimeTransfer = true;
+        transitAdviceMessage = '⛵ Tramo marítimo requerido: Dirigiéndote al muelle para tomar la embarcación hacia tu destino.';
         totalDistanceMeters += maritimeRoute.distanceMeters;
         totalTravelTimeSeconds += maritimeRoute.travelTimeSeconds ?? 0;
         totalTrafficDelaySeconds += maritimeRoute.trafficDelaySeconds ?? 0;
@@ -171,8 +198,12 @@ class RoadRouteService {
     return RoadRouteResult(
       geometry: geometry.isEmpty ? points : geometry,
       maritimeSegments: maritimeSegments,
+      flightSegments: flightSegments,
       ports: _dedupePorts(ports),
+      airports: _dedupePorts(airports),
       usesMaritimeTransfer: usesMaritimeTransfer,
+      usesFlightTransfer: usesFlightTransfer,
+      transitAdviceMessage: transitAdviceMessage,
       usesLiveTraffic: usesLiveTraffic,
       usedFallback: usedFallback,
       distanceMeters: totalDistanceMeters,
@@ -184,6 +215,111 @@ class RoadRouteService {
           ? _trafficSeverity(totalTrafficDelaySeconds, totalTravelTimeSeconds)
           : TrafficSeverity.unavailable,
     );
+  }
+
+  Future<RoadRouteResult?> _buildFlightAwareRoute(
+    GeoPoint start,
+    GeoPoint end,
+  ) async {
+    final startAirports = await _findAirportsNear(start, role: 'Aeropuerto salida');
+    final endAirports = await _findAirportsNear(end, role: 'Aeropuerto llegada');
+    final startAirport = startAirports.isEmpty ? null : startAirports.first;
+    final endAirport = endAirports.isEmpty ? null : endAirports.first;
+    if (startAirport == null && endAirport == null) return null;
+
+    final geometry = <GeoPoint>[];
+    final airports = <RoutePortWaypoint>[?startAirport, ?endAirport];
+    final airStart = startAirport?.location ?? start;
+    final airEnd = endAirport?.location ?? end;
+
+    if (startAirport != null && _distanceMeters(start, airStart) > 200) {
+      final startRoad = await _fetchDrivingRoute(start, airStart);
+      _appendGeometry(geometry, startRoad?.geometry ?? [start, airStart]);
+    } else {
+      _appendGeometry(geometry, [start]);
+    }
+
+    _appendGeometry(geometry, [airStart, airEnd]);
+
+    if (endAirport != null && _distanceMeters(airEnd, end) > 200) {
+      final endRoad = await _fetchDrivingRoute(airEnd, end);
+      _appendGeometry(geometry, endRoad?.geometry ?? [airEnd, end]);
+    } else {
+      _appendGeometry(geometry, [end]);
+    }
+
+    final advice = '✈️ Conexión aérea requerida: Dirígete a ${startAirport?.name ?? "tu aeropuerto de salida"} para abordar tu vuelo hacia ${endAirport?.name ?? "el destino"}.';
+
+    return RoadRouteResult(
+      geometry: geometry,
+      flightSegments: [[airStart, airEnd]],
+      airports: airports,
+      usesFlightTransfer: true,
+      transitAdviceMessage: advice,
+      distanceMeters: _geometryDistanceMeters(geometry),
+    );
+  }
+
+  Future<List<RoutePortWaypoint>> _findAirportsNear(
+    GeoPoint point, {
+    required String role,
+  }) async {
+    final query = '''
+[out:json][timeout:14];
+(
+  node(around:95000,${point.latitude},${point.longitude})["aeroway"="aerodrome"]["aerodrome:type"~"international|public|regional"];
+  way(around:95000,${point.latitude},${point.longitude})["aeroway"="aerodrome"]["aerodrome:type"~"international|public|regional"];
+  node(around:95000,${point.latitude},${point.longitude})["aeroway"="aerodrome"];
+  way(around:95000,${point.latitude},${point.longitude})["aeroway"="aerodrome"];
+);
+out center tags 15;
+''';
+    try {
+      final response = await _client
+          .post(
+            Uri.parse(_overpassUrl),
+            headers: const {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'User-Agent': 'VIBETOURS/1.0',
+            },
+            body: {'data': query},
+          )
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return const [];
+      }
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final elements = decoded['elements'] as List<dynamic>? ?? const [];
+      final list = <RoutePortWaypoint>[];
+      for (final raw in elements) {
+        if (raw is! Map<String, dynamic>) continue;
+        final lat =
+            (raw['lat'] as num?)?.toDouble() ??
+            ((raw['center'] as Map<String, dynamic>?)?['lat'] as num?)
+                ?.toDouble();
+        final lon =
+            (raw['lon'] as num?)?.toDouble() ??
+            ((raw['center'] as Map<String, dynamic>?)?['lon'] as num?)
+                ?.toDouble();
+        if (lat == null || lon == null) continue;
+        final tags = raw['tags'] as Map<String, dynamic>? ?? const {};
+        final name = tags['name'] ?? tags['name:es'] ?? tags['name:en'] ?? 'Aeropuerto';
+        list.add(
+          RoutePortWaypoint(
+            name: name.toString(),
+            location: GeoPoint(latitude: lat, longitude: lon),
+            role: role,
+          ),
+        );
+      }
+      list.sort(
+        (a, b) => _distanceMeters(point, a.location)
+            .compareTo(_distanceMeters(point, b.location)),
+      );
+      return _dedupePorts(list);
+    } on Object {
+      return const [];
+    }
   }
 
   Future<RoadRouteResult?> _buildMaritimeAwareRoute(

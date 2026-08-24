@@ -112,24 +112,11 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
     }
   }
 
-  bool _canProceed() {
-    if (_currentPage == 0) return _travelerType.isNotEmpty;
-    if (_currentPage == 1) return _budget.isNotEmpty;
-    if (_currentPage == 2) return _preferredPace.isNotEmpty;
-    if (_currentPage == 3) return _transportPreference.isNotEmpty;
-    if (_currentPage == 4) return _preferredTimeOfDay.isNotEmpty;
-    if (_currentPage == 5) return _interests.isNotEmpty;
-    if (_currentPage == 6) return true; // Permisos (puede proceder)
-    return false;
-  }
-
   Future<void> _saveAndFinish() async {
-    final l10n = AppLocalizations.of(context);
-
     await ref.read(touristProfileProvider.notifier).updatePreferences(
       travelerType: _travelerType,
       budget: _budget,
-      companionType: _travelerType, // Simplify companion as travelerType
+      companionType: _travelerType,
       hasChildren: _hasChildren,
       interests: _interests.toList(),
       preferredPace: _preferredPace,
@@ -142,15 +129,18 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
         await ref.read(onboardingCompleteProvider.notifier).complete();
       }
       
-      
-      final prompt = l10n.prefAiPrompt(
-        _tx(_travelerType).toLowerCase(),
-        _tx(_budget).toLowerCase(),
-        _tx(_preferredPace).toLowerCase(),
-        _tx(_transportPreference).toLowerCase(),
-        _tx(_preferredTimeOfDay).toLowerCase(),
-        _interests.map((i) => _tx(i.translationKey)).join(', ')
-      );
+      final answeredDetails = <String>[];
+      if (_travelerType.isNotEmpty) answeredDetails.add('viajo ${_tx(_travelerType).toLowerCase()}');
+      if (_budget.isNotEmpty) answeredDetails.add('con presupuesto ${_tx(_budget).toLowerCase()}');
+      if (_preferredPace.isNotEmpty) answeredDetails.add('a un ritmo ${_tx(_preferredPace).toLowerCase()}');
+      if (_transportPreference.isNotEmpty) answeredDetails.add('moviéndome ${_tx(_transportPreference).toLowerCase()}');
+      if (_preferredTimeOfDay.isNotEmpty) answeredDetails.add('preferiblemente en las ${_tx(_preferredTimeOfDay).toLowerCase()}');
+      if (_interests.isNotEmpty) answeredDetails.add('me interesan: ${_interests.map((i) => _tx(i.translationKey)).join(', ')}');
+
+      final prompt = answeredDetails.isNotEmpty
+          ? 'Hola, deseo diseñar un tour personalizado. Ten en cuenta que ${answeredDetails.join(", ")}.'
+          : '¡Hola! Deseo diseñar un tour turístico personalizado según mis recomendaciones.';
+
       ref.read(aiPromptProvider.notifier).state = prompt;
       ref.read(aiPromptAutoStartProvider.notifier).state = true;
       
@@ -197,15 +187,26 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
                       ],
                     ),
                   ),
-                  if (!widget.isOnboarding && _currentPage == 0)
-                    const SizedBox(width: 48), // Balance for lack of back button
+                  if (_currentPage < 6)
+                    TextButton(
+                      onPressed: _nextPage,
+                      child: Text(
+                        'Saltar',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    )
+                  else if (!widget.isOnboarding && _currentPage == 0)
+                    const SizedBox(width: 48),
                 ],
               ),
             ),
             Expanded(
               child: PageView(
                 controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
+                physics: const BouncingScrollPhysics(),
                 onPageChanged: (int page) => setState(() => _currentPage = page),
                 children: [
                   _buildStep1Traveler().animate().fade().slideX(begin: 0.1, duration: 300.ms),
@@ -223,7 +224,7 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
               child: LiquidButton(
                 label: _currentPage == 6 ? AppLocalizations.of(context).prefCompleteProfile : AppLocalizations.of(context).prefNext,
                 icon: _currentPage == 6 ? Icons.check_circle_rounded : Icons.arrow_forward_rounded,
-                onPressed: _canProceed() ? _nextPage : null,
+                onPressed: _nextPage,
               ),
             )
           ],

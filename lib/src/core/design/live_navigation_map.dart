@@ -779,7 +779,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
               tilt: widget.trackingMode ? 48.0 : 0.0,
               bearing: widget.trackingMode ? (widget.trackingHeading ?? 0.0) : 0.0,
             ),
-            compassEnabled: true,
+            compassEnabled: false,
             rotateGesturesEnabled: true,
             myLocationEnabled: false,
             onMapCreated: (controller) {

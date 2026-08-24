@@ -187,8 +187,14 @@ class _HeaderSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final topPadding = MediaQuery.of(context).padding.top;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: topPadding > 0 ? topPadding + 8 : 16,
+        bottom: 12,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

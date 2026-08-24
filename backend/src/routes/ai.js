@@ -4377,15 +4377,36 @@ export async function collectTourCandidates(input, location) {
   const radiusPrimary = isRegionalOrNature ? 15000 : 4500
   const radiusWide = isRegionalOrNature ? 55000 : 9000
 
-  const [overpassPrimary, overpassWide] = location 
+  // Calculate subzone centroid if user has specific requested places (e.g. Tayrona cluster, Minca, etc.)
+  let searchCenterLat = location?.latitude || cityCenterLat
+  let searchCenterLon = location?.longitude || cityCenterLon
+
+  const validSpecifics = geocodedSpecifics.filter(p => hasUsableCoordinates(p.latitude, p.longitude))
+  if (validSpecifics.length > 0) {
+    searchCenterLat = validSpecifics.reduce((acc, p) => acc + p.latitude, 0) / validSpecifics.length
+    searchCenterLon = validSpecifics.reduce((acc, p) => acc + p.longitude, 0) / validSpecifics.length
+    console.info(`[collectTourCandidates] Using subzone centroid (${searchCenterLat.toFixed(4)}, ${searchCenterLon.toFixed(4)}) derived from ${validSpecifics.length} user selected stops.`)
+  }
+
+  const [overpassPrimary, overpassWide] = (searchCenterLat && searchCenterLon)
     ? await Promise.all([
-        overpassAttractions(location.latitude, location.longitude, radiusPrimary),
-        overpassAttractions(location.latitude, location.longitude, radiusWide)
+        overpassAttractions(searchCenterLat, searchCenterLon, radiusPrimary),
+        overpassAttractions(searchCenterLat, searchCenterLon, radiusWide)
       ])
     : [[], []]
   
   // Prioritize specific chat places and geocoded iconic landmarks first in the pool
-  const pool = [...geocodedSpecifics, ...geocodedIconics, ...overpassPrimary, ...overpassWide, ...photonPlaces]
+  let pool = [...geocodedSpecifics, ...geocodedIconics, ...overpassPrimary, ...overpassWide, ...photonPlaces]
+
+  // Proximity filter against subzone centroid to prevent mixing distant downtown POIs with nature reserves
+  if (validSpecifics.length > 0 && searchCenterLat && searchCenterLon) {
+    pool = pool.filter(place => {
+      if (!hasUsableCoordinates(place.latitude, place.longitude)) return false
+      if (place.tags?.requested_place === 'true') return true
+      const distToCentroid = haversineMeters(place.latitude, place.longitude, searchCenterLat, searchCenterLon) / 1000
+      return distToCentroid <= (isRegionalOrNature ? 28 : 12)
+    })
+  }
   
   function dedupeByProximity(places, minDistanceMeters = 50) {
     const result = []
