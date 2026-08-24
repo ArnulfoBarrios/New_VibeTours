@@ -69,30 +69,30 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   return { url: curatedImage(`${placeName} ${city} travel`, normalizedCategory, seed), isFallback: true }
 }
 
-async function wikipediaSummaryImage(placeName, city = '') {
+async function wikipediaSummaryImage(placeName, city = '', country = '') {
   if (!placeName || typeof placeName !== 'string') return null
   const raw = placeName.trim()
   if (raw.length < 3) return null
 
   const cleaned = raw.replace(/\(.*?\)/g, '').replace(/_/g, ' ').trim()
   const cleanCity = String(city || '').replace(/_/g, ' ').trim()
-  const variations = [
-    ...(cleanCity ? [`${cleaned} (${cleanCity})`, `${cleaned}, ${cleanCity}`] : []),
-    raw,
-    cleaned
-  ].filter((v, i, arr) => v && v.length >= 3 && arr.indexOf(v) === i)
-  const languages = ['en', 'es']
+  const cleanCountry = String(country || '').replace(/_/g, ' ').trim()
 
-  for (const varName of variations) {
-    for (const lang of languages) {
-      try {
-        const slug = encodeURIComponent(varName.trim().replace(/\s+/g, '_'))
-        const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${slug}`
-        const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
-        if (!response.ok) continue
-        const json = await response.json()
-        if (json.type === 'standard' || json.type === 'normal') {
-          const imageUrl = json.originalimage?.source || json.thumbnail?.source
+  // 1. Search in Spanish Wikipedia with full destination context
+  try {
+    const searchQuery = `${cleaned} ${cleanCity} ${cleanCountry}`.trim()
+    const searchUrl = `https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQuery)}&utf8=&format=json&origin=*`
+    const sRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+    if (sRes.ok) {
+      const sJson = await sRes.json()
+      const topHit = sJson?.query?.search?.[0]
+      if (topHit && topHit.title) {
+        const slug = encodeURIComponent(topHit.title.replace(/\s+/g, '_'))
+        const sumUrl = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
+        const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+        if (sumRes.ok) {
+          const sumJson = await sumRes.json()
+          const imageUrl = sumJson.originalimage?.source || sumJson.thumbnail?.source
           if (imageUrl) {
             const lower = imageUrl.toLowerCase()
             const isUnusable = [
@@ -105,45 +105,104 @@ async function wikipediaSummaryImage(placeName, city = '') {
             }
           }
         }
-      } catch {
-        // Continue with next variation
       }
     }
+  } catch {}
+
+  // 2. Direct slug variations in es.wikipedia.org ONLY
+  const variations = [
+    ...(cleanCity ? [`${cleaned} (${cleanCity})`, `${cleaned}, ${cleanCity}`] : []),
+    cleaned
+  ].filter((v, i, arr) => v && v.length >= 3 && arr.indexOf(v) === i)
+
+  for (const varName of variations) {
+    try {
+      const slug = encodeURIComponent(varName.trim().replace(/\s+/g, '_'))
+      const url = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
+      const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+      if (!response.ok) continue
+      const json = await response.json()
+      if (json.type === 'standard' || json.type === 'normal') {
+        const imageUrl = json.originalimage?.source || json.thumbnail?.source
+        if (imageUrl) {
+          const lower = imageUrl.toLowerCase()
+          const isUnusable = [
+            '.svg', 'flag', 'bandera', 'escudo', 'coat_of_arms', 'coat of arms', 'blason', 'stemma',
+            'seal', 'logo', 'icon', 'symbol', 'map', 'mapa', 'location', 'diagram', 'chart',
+            'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_'
+          ].some(k => lower.includes(k))
+          if (!isUnusable) {
+            return imageUrl
+          }
+        }
+      }
+    } catch {}
   }
   return null
 }
 
-export async function wikipediaSummaryText(placeName, city = '') {
+export async function wikipediaSummaryText(placeName, city = '', country = '') {
   if (!placeName || typeof placeName !== 'string') return null
   const raw = placeName.trim()
   if (raw.length < 3) return null
 
   const cleaned = raw.replace(/\(.*?\)/g, '').replace(/_/g, ' ').trim()
   const cleanCity = String(city || '').replace(/_/g, ' ').trim()
+  const cleanCountry = String(country || '').replace(/_/g, ' ').trim()
+
+  // 1. Search in Spanish Wikipedia with full destination context
+  try {
+    const searchQuery = `${cleaned} ${cleanCity} ${cleanCountry}`.trim()
+    const searchUrl = `https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQuery)}&utf8=&format=json&origin=*`
+    const sRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+    if (sRes.ok) {
+      const sJson = await sRes.json()
+      const topHit = sJson?.query?.search?.[0]
+      if (topHit && topHit.title) {
+        const slug = encodeURIComponent(topHit.title.replace(/\s+/g, '_'))
+        const sumUrl = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
+        const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+        if (sumRes.ok) {
+          const sumJson = await sumRes.json()
+          if (sumJson.extract && sumJson.extract.length > 40 && !sumJson.extract.includes('puede referirse a')) {
+            const extractLower = sumJson.extract.toLowerCase()
+            const isEnglish = /\b(is the|is a|was a|located in|town of|municipality of)\b/i.test(extractLower)
+            const isForeignMismatch = (cleanCountry.toLowerCase() === 'colombia' || cleanCity.toLowerCase() === 'cartagena') &&
+              (extractLower.includes('lanzarote') || extractLower.includes('canarias') || extractLower.includes('españa') || extractLower.includes('alicante'))
+            if (!isEnglish && !isForeignMismatch) {
+              return sumJson.extract
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Direct slug variations in es.wikipedia.org ONLY
   const variations = [
     ...(cleanCity ? [`${cleaned} (${cleanCity})`, `${cleaned}, ${cleanCity}`] : []),
-    raw,
     cleaned
   ].filter((v, i, arr) => v && v.length >= 3 && arr.indexOf(v) === i)
-  const languages = ['es', 'en']
 
   for (const varName of variations) {
-    for (const lang of languages) {
-      try {
-        const slug = encodeURIComponent(varName.trim().replace(/\s+/g, '_'))
-        const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${slug}`
-        const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
-        if (!response.ok) continue
-        const json = await response.json()
-        if (json.type === 'standard' || json.type === 'normal') {
-          if (json.extract && json.extract.length > 40 && !json.extract.includes('puede referirse a')) {
+    try {
+      const slug = encodeURIComponent(varName.trim().replace(/\s+/g, '_'))
+      const url = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
+      const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+      if (!response.ok) continue
+      const json = await response.json()
+      if (json.type === 'standard' || json.type === 'normal') {
+        if (json.extract && json.extract.length > 40 && !json.extract.includes('puede referirse a')) {
+          const extractLower = json.extract.toLowerCase()
+          const isEnglish = /\b(is the|is a|was a|located in|town of|municipality of)\b/i.test(extractLower)
+          const isForeignMismatch = (cleanCountry.toLowerCase() === 'colombia' || cleanCity.toLowerCase() === 'cartagena') &&
+            (extractLower.includes('lanzarote') || extractLower.includes('canarias') || extractLower.includes('españa') || extractLower.includes('alicante'))
+          if (!isEnglish && !isForeignMismatch) {
             return json.extract
           }
         }
-      } catch {
-        // Continue with next variation
       }
-    }
+    } catch {}
   }
   return null
 }

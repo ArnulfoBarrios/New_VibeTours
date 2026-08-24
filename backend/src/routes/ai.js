@@ -66,7 +66,7 @@ setInterval(() => {
       tourJobs.delete(jobId)
     }
   }
-}, 3600000)
+}, 3600000).unref()
 
 const requestSchema = z.object({
   destination: z.string().optional().default(''),
@@ -120,10 +120,40 @@ export function getPlaceEntityType(placeName) {
   return 'generic'
 }
 
+// Limpiador de prefijos de actividad para obtener el nombre físico limpio del lugar
+export function cleanPlacePhysicalName(placeName) {
+  if (!placeName || typeof placeName !== 'string') return ''
+  let cleaned = placeName
+    .replace(/[*_#•\[\]\(\)]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  cleaned = cleaned.replace(/^(?:tour\s+(?:en\s+barco|en\s+lancha|guiado|panor[áa]mico|por|a|al|hacia)\s+(?:por\s+la|por\s+el|por|la|el|a\s+la|a\s+el|al)?\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:paseo\s+(?:en\s+barco|en\s+lancha|en\s+bote|en\s+kayak|en\s+chiva|por|a|al|hacia)\s+(?:por\s+la|por\s+el|por|la|el|a\s+la|a\s+el|al)?\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:recorrido\s+(?:por\s+el|por\s+la|por|en\s+el|en\s+la|en|a\s+el|a\s+la|a|al)\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:visita\s+(?:guiada\s+)?(?:a\s+la|a\s+el|al|a|por\s+el|por\s+la|por)\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:excursi[oó]n\s+(?:a\s+la|a\s+el|al|a|hacia\s+la|hacia\s+el|hacia|por)\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:caminata\s+(?:por\s+el|por\s+la|por|hacia\s+el|hacia\s+la|hacia|a\s+el|a\s+la|a|al)\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:almuerzo\s+(?:en\s+el|en\s+la|en)\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:cena\s+(?:en\s+el|en\s+la|en)\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:desayuno\s+(?:en\s+el|en\s+la|en)\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:degustaci[oó]n\s+(?:en\s+el|en\s+la|en)\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:tarde\s+de\s+playa\s+en\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:exploraci[oó]n\s+(?:de\s+la|de\s+el|del|de)\s*)/i, '')
+  cleaned = cleaned.replace(/^(?:recorrido\s+hist[óo]rico\s+por\s+(?:el|la)?\s*)/i, '')
+
+  cleaned = cleaned.trim()
+  if (cleaned.length > 0) {
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
+  }
+  return cleaned
+}
+
 // Normalizador de clave canónica para fusionar variantes de un mismo lugar (ej: "Restaurante El Bistro" vs "Bistro", "Playa de El Rodadero" vs "El Rodadero")
 export function normalizePlaceKey(placeName) {
   if (!placeName || typeof placeName !== 'string') return ''
-  const base = placeName
+  const cleaned = cleanPlacePhysicalName(placeName)
+  const base = cleaned
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // remove accents
@@ -147,7 +177,8 @@ export function deduplicatePlacesByName(places = []) {
   const result = []
   for (const p of places) {
     if (!p) continue
-    const name = typeof p === 'string' ? p.trim() : (p.name || '').trim()
+    let name = typeof p === 'string' ? p.trim() : (p.name || '').trim()
+    name = cleanPlacePhysicalName(name)
     const dia = typeof p === 'object' ? (p.dia || p.day) : null
     if (!name || !isValidSpecificPlace(name)) continue
     const key = normalizePlaceKey(name)
@@ -198,6 +229,11 @@ export function isValidSpecificPlace(placeName) {
   const clean = placeName.replace(/[*_#•\[\]\(\)]/g, '').trim()
   if (clean.length < 3) return false
   const cleanLower = clean.toLowerCase()
+
+  // Descartar opciones o nombres de hotel sugeridos extraídos accidentalmente (ej: "Real", "Las Palmas", "Hotel...")
+  if (/^(?:real|las palmas|hotel|hostal|resort|posada|cabaña|cabañas)$/i.test(cleanLower)) {
+    return false
+  }
 
   // 1. Descartar encabezados de días y momentos del día
   const isTimeHeader = /^(d[íi]a\s*\d+|day\s*\d+|mañana|tarde|noche|almuerzo|cena|desayuno|madrugada|atardecer)/i.test(clean)
@@ -3374,10 +3410,10 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     fallbackPlace,
     startPlace,
     })
-  let resolvedName = sourceName || fallbackPlace?.name || candidateFallback?.name || `${input.destination}`
+  let resolvedName = cleanPlacePhysicalName(sourceName || fallbackPlace?.name || candidateFallback?.name || `${input.destination}`)
   const isValidCityPlace = await isPlaceBelongingToCity(resolvedName, input.city || input.destination, coordinates.latitude, coordinates.longitude, candidatePlaces[0])
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
-    resolvedName = candidateFallback?.name || fallbackPlace?.name || `${input.destination}`
+    resolvedName = cleanPlacePhysicalName(candidateFallback?.name || fallbackPlace?.name || `${input.destination}`)
   }
   let description = source.descripcion ?? source.description ?? ''
   description = description.replace(/^(Atracci[oó]n(\s*\/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*/i, '').trim()
@@ -3395,7 +3431,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
                          description.includes('destacado de la zona');
 
   if (isGenericDesc) {
-    const wikiText = await wikipediaSummaryText(resolvedName, input.city || input.destination).catch(() => null)
+    const wikiText = await wikipediaSummaryText(resolvedName, input.city || input.destination, input.country).catch(() => null)
     if (wikiText && wikiText.length > 30) {
       description = wikiText
     } else {
@@ -3427,7 +3463,8 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   
   const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index, {
     latitude: coordinates.latitude,
-    longitude: coordinates.longitude
+    longitude: coordinates.longitude,
+    country: input.country
   }).catch(() => ({ url: "", isFallback: true }))
   
   // Priorizar siempre la foto REAL obtenida de Wikipedia/Wikimedia/Openverse/Pexels si no es fallback genérico
@@ -3441,6 +3478,12 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
 
   // Normalizar lista de actividades evitando genéricos "Explorar" / "Fotografiar" sueltos
   let rawActivities = normalizeList(source.actividades ?? source.activities, [])
+  if (rawName && rawName.toLowerCase() !== resolvedName.toLowerCase() && rawName.length > 5) {
+    const activityPhrase = rawName.trim()
+    if (!rawActivities.includes(activityPhrase)) {
+      rawActivities = [activityPhrase, ...rawActivities]
+    }
+  }
   const isGenericActivities = rawActivities.length === 0 || 
                               (rawActivities.length <= 2 && rawActivities.every(a => a.toLowerCase() === 'explorar' || a.toLowerCase() === 'fotografiar'));
   if (isGenericActivities) {
@@ -3469,7 +3512,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     datos_curiosos: normalizeList(source.datos_curiosos, [`${resolvedName} es uno de los puntos emblemáticos más destacados de la zona.`]),
     consejos: rawTips,
     ubicacion: {
-      nombre_lugar: fallbackPlace?.name ?? ubicacion.nombre_lugar ?? resolvedName,
+      nombre_lugar: cleanPlacePhysicalName(fallbackPlace?.name ?? ubicacion.nombre_lugar ?? resolvedName),
       direccion: fallbackPlace?.address ?? ubicacion.direccion ?? source.address ?? "",
       ciudad: fallbackPlace?.city ?? ubicacion.ciudad ?? input.city ?? "",
       region: fallbackPlace?.region ?? ubicacion.region ?? "",

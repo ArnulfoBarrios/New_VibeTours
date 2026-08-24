@@ -452,7 +452,7 @@ ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
   REGLAS DE ORO DEL ITINERARIO:
   1. ESTÁ TERMINANTEMENTE PROHIBIDO USAR CORCHETES []. Escribe los nombres propios de los lugares reales de ${destName} directos y limpios.
   2. NUNCA pongas "Llegada / Hotel", "Exploración en...", "Café y cascadas...", "Tarde en la playa", "Tarde libre", "Despedida" ni el nombre del hotel como paradas en las flechas (->).
-  3. CADA ELEMENTO entre flechas (->) DEBE SER EXCLUSIVAMENTE EL NOMBRE PROPIO DE UN LUGAR FÍSICO O RESTAURANTE REAL de ${destName} (ej: "• Día 1: Lugar Real A -> Lugar Real B -> Restaurante Real C").
+  3. CADA ELEMENTO entre flechas (->) DEBE SER EXCLUSIVAMENTE EL NOMBRE PROPIO Y LIMPIO DE UN LUGAR FÍSICO O RESTAURANTE REAL de ${destName} (ej: "• Día 1: Bahía de Cartagena -> Castillo San Felipe -> Café del Mar"). ESTÁ TERMINANTEMENTE PROHIBIDO escribir frases de actividad como nombre de parada (NUNCA escribas "Tour en barco por la Bahía de Cartagena", "Recorrido por el Centro Histórico", "Paseo en lancha a...", "Caminata por..."). Describe la actividad a realizar en el texto explicativo de tu mensaje, pero en las flechas (->) escribe únicamente el nombre propio y limpio del lugar físico.
   4. CADA DÍA (del Día 1 al Día ${known.durationDays || 3}) DEBE TENER al menos 2 o 3 lugares físicos o restaurantes REALES y DIFERENTES A LOS DE OTROS DÍAS (CERO DUPLICADOS O REPETICIONES EN TODO EL TOUR).
   5. PRESERVACIÓN DEL ORDEN: El orden en que se presenten las paradas (1º -> 2º -> 3º) dentro de cada día será exactamente el orden cronológico del recorrido en el mapa.
   6. ESTÁ TERMINANTEMENTE PROHIBIDO dejar días vacíos, días con descripciones abstractas o días de relleno ("Día libre", "Tarde libre", "Últimos momentos", "Visita opcional").
@@ -493,7 +493,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
     "accommodationStatus": null,
     "specificPlaces": [
       {
-        "name": "Nombre Real del Lugar o Restaurante",
+        "name": "Nombre Real y Limpio del Lugar Físico",
         "dia": 1,
         "day": 1,
         "type": "food|cultural|park|beach|shopping|generic"
@@ -506,9 +506,10 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
 REGLAS ESTRITAS PARA "specificPlaces":
 1. DEBE contener ÚNICAMENTE lugares físicos y restaurantes reales con su nombre propio y su número de día exacto ('dia': 1, 2, ...).
 2. ESTÁ TERMINANTEMENTE PROHIBIDO incluir actividades genéricas o frases descriptivas como:
-   - "Instalación en casa", "Llegada", "Despedida", "Regreso a casa", "Picnic o almuerzo en la zona", "Picnic en la zona", "Tiempo libre", "Día libre", "Tarde libre", "Tarde libre para explorar", "Fiesta nocturna", "Tubbing en el río", "Las cascadas y visita a fincas de café", "Últimos momentos para disfrutar de la ciudad", "Participación en algún evento cultural".
+   - "Tour en barco por la Bahía de Cartagena", "Recorrido por el Centro Histórico", "Paseo en lancha a...", "Instalación en casa", "Llegada", "Despedida", "Regreso a casa", "Picnic o almuerzo en la zona", "Picnic en la zona", "Tiempo libre", "Día libre", "Tarde libre", "Tarde libre para explorar", "Fiesta nocturna", "Tubbing en el río", "Las cascadas y visita a fincas de café", "Últimos momentos para disfrutar de la ciudad", "Participación en algún evento cultural".
    - Palabras genéricas como "local", "restaurante local", "zona", "casa propia", "comida típica", "para explorar".
-3. Recomienda ÚNICAMENTE restaurantes, cafés y bares reales que existan en el catálogo del destino y que aparezcan en el mapa (ej: "Cena en Restaurante Ouzo" o "Almuerzo en Manuel Restaurante"), usando siempre su nombre comercial exacto.`
+3. NUNCA incluir nombres u opciones de hoteles recomendados (ej: 'Capilla del Mar', 'Real', 'Las Palmas') en specificPlaces, ya que son hospedajes, no paradas turísticas.
+4. Recomienda ÚNICAMENTE restaurantes, cafés y bares reales que existan en el catálogo del destino y que aparezcan en el mapa (ej: "Cena en Restaurante Ouzo" o "Almuerzo en Manuel Restaurante"), usando siempre su nombre comercial exacto.`
 
   try {
     const formattedHistory = history.slice(-8).map(m => ({
