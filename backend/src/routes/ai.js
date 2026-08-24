@@ -297,6 +297,20 @@ aiRouter.post('/chat', async (req, res, next) => {
       })
     }
 
+    // Safeguard: Protect confirmed city from accidental overwrite when user mentions a city in correction/complaint
+    const hasExistingCity = Boolean(currentPreferences.city || currentPreferences.destination)
+    const isCorrectionOrNegation = /\b(te equivocaste|es de|son de|queda en|quedan en|no es de|no son de|no queda en|no quedan en|confusi[oó]n|en realidad|pertenece a|pertenecen a|equivocaci[oó]n|eso est[aá] en)\b/i.test(message)
+    const isExplicitCityChange = /\b(cambiemos a|cambiar a|cambiar destino|nuevo destino|mejor vamos a|ahora quiero ir a|vamos mejor a|prefiero ir a)\b/i.test(message)
+
+    if (hasExistingCity && validExtracted.city && validExtracted.city.toLowerCase() !== (currentPreferences.city || currentPreferences.destination || '').toLowerCase()) {
+      if (isCorrectionOrNegation && !isExplicitCityChange) {
+        console.info(`[ai/chat] Preserving original city "${currentPreferences.city || currentPreferences.destination}" - ignoring mentioned city "${validExtracted.city}" from correction message.`)
+        delete validExtracted.city
+        delete validExtracted.destination
+        delete validExtracted.canonicalDestination
+      }
+    }
+
     const updatedPreferences = {
       ...currentPreferences,
       ...validExtracted
@@ -306,7 +320,16 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences.longitude = longitude
     }
     if (initialCombinedSpecifics.length > 0) {
-      updatedPreferences.specificPlaces = initialCombinedSpecifics
+      if (isCorrectionOrNegation) {
+        const lowerMsg = message.toLowerCase()
+        updatedPreferences.specificPlaces = initialCombinedSpecifics.filter(place => {
+          const placeName = (typeof place === 'string' ? place : (place?.name || '')).toLowerCase()
+          if (!placeName) return false
+          return !lowerMsg.includes(placeName)
+        })
+      } else {
+        updatedPreferences.specificPlaces = initialCombinedSpecifics
+      }
     }
     delete updatedPreferences.intentEval
     delete updatedPreferences.isAmbiguousInput
@@ -4262,6 +4285,16 @@ export async function collectTourCandidates(input, location) {
         const finalLon = geo.longitude
 
         if (finalLat && finalLon) {
+          const originLat = location?.latitude || canonicalDest?.latitude
+          const originLon = location?.longitude || canonicalDest?.longitude
+          if (originLat && originLon) {
+            const distKm = haversineMeters(finalLat, finalLon, originLat, originLon) / 1000
+            if (distKm > 45) {
+              console.warn(`[tour-ai] Discarding specific place "${placeName}" (${distKm.toFixed(1)}km from ${city}) because it exceeds city boundary.`)
+              return null
+            }
+          }
+
           return {
             name: placeName,
             latitude: finalLat,

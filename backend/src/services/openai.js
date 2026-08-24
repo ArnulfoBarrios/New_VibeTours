@@ -438,17 +438,15 @@ ETAPA 3: HOSPEDAJE, TRANSPORTE Y PRESUPUESTO
 
 ETAPA 4: PRESENTACIÓN DEL ITINERARIO Y CONFIRMACIÓN
 - Si el usuario YA confirmó sus días de viaje (${known.durationDays ? `${known.durationDays} días` : 'duración'}):
-  Presenta el itinerario estructurado integrando las actividades aprobadas a lo largo de los ${known.durationDays || 3} días (Día 1 a Día ${known.durationDays || 3}):
   "Itinerario de Viaje a ${destName} (${known.datesSeason || `${known.durationDays || 3} días`}):
-  • Día 1: Parque Cultural del Caribe -> Malecón del Río -> Manuel Restaurante
-  • Día 2: Bocas de Ceniza -> Catedral Metropolitana María Reina -> Restaurante Cucayo
-  • Día 3: Monumento Ventana al Mundo -> Barrio El Prado -> Restaurante La Cueva
+  • Día 1: Atracción Principal 1 -> Sitio Cultural o Mirador -> Restaurante Emblemático
+  • Día 2: Playa o Parque Natural -> Museo o Plaza Histórica -> Restaurante Típico
   ... (hasta el Día ${known.durationDays || 3})"
 
   REGLAS DE ORO DEL ITINERARIO:
-  1. ESTÁ TERMINANTEMENTE PROHIBIDO USAR CORCHETES []. Escribe los nombres propios de los lugares directos y limpios.
+  1. ESTÁ TERMINANTEMENTE PROHIBIDO USAR CORCHETES []. Escribe los nombres propios de los lugares reales de ${destName} directos y limpios.
   2. NUNCA pongas "Llegada / Hotel", "Exploración en...", "Café y cascadas...", "Tarde en la playa", "Tarde libre", "Despedida" ni el nombre del hotel como paradas en las flechas (->).
-  3. CADA ELEMENTO entre flechas (->) DEBE SER EXCLUSIVAMENTE EL NOMBRE PROPIO DE UN LUGAR FÍSICO O RESTAURANTE REAL (ej: "• Día 1: Parque Cultural del Caribe -> Malecón del Río -> Manuel Restaurante").
+  3. CADA ELEMENTO entre flechas (->) DEBE SER EXCLUSIVAMENTE EL NOMBRE PROPIO DE UN LUGAR FÍSICO O RESTAURANTE REAL de ${destName} (ej: "• Día 1: Lugar Real A -> Lugar Real B -> Restaurante Real C").
   4. CADA DÍA (del Día 1 al Día ${known.durationDays || 3}) DEBE TENER al menos 2 o 3 lugares físicos o restaurantes REALES y DIFERENTES A LOS DE OTROS DÍAS (CERO DUPLICADOS O REPETICIONES EN TODO EL TOUR).
   5. PRESERVACIÓN DEL ORDEN: El orden en que se presenten las paradas (1º -> 2º -> 3º) dentro de cada día será exactamente el orden cronológico del recorrido en el mapa.
   6. ESTÁ TERMINANTEMENTE PROHIBIDO dejar días vacíos, días con descripciones abstractas o días de relleno ("Día libre", "Tarde libre", "Últimos momentos", "Visita opcional").
@@ -632,6 +630,10 @@ Analiza el último mensaje del usuario y el historial reciente para extraer dato
 Mensaje actual del usuario: "${userMessage}"
 Datos ya conocidos: ${JSON.stringify(currentData)}
 
+REGLA CRÍTICA DE CIUDAD DESTINO:
+- Solo extraer "city" si el usuario declara EXPLÍCITAMENTE que desea viajar allí o cambiar de destino.
+- Si el usuario menciona una ciudad como corrección, queja o negación (ej: "te equivocaste, esos lugares son de Barranquilla, no de Santa Marta"), NO sobreescribas el destino y mantén: "city": ${JSON.stringify(currentData.city || currentData.destination || null)}.
+
 Devuelve ÚNICAMENTE un JSON con:
 - "city": ciudad destino explícita (ej: "Santa Marta", "Cartagena", "Medellín") o null si no se menciona.
 - "country": país o null.
@@ -668,6 +670,19 @@ Devuelve ÚNICAMENTE un JSON con:
       if (parsed.durationDays && !parsed.durationHours) {
         parsed.durationHours = Number(parsed.durationDays) * 24
       }
+
+      // Safeguard: Do NOT overwrite known destination if user is making a correction/negation
+      const isCorrectionOrNegation = /\b(te equivocaste|es de|son de|queda en|quedan en|no es de|no son de|no queda en|no quedan en|confusi[oó]n|en realidad|pertenece a|pertenecen a|equivocaci[oó]n|eso est[aá] en)\b/i.test(userMessage)
+      const isExplicitCityChange = /\b(cambiemos a|cambiar a|cambiar destino|nuevo destino|mejor vamos a|ahora quiero ir a|vamos mejor a|prefiero ir a)\b/i.test(userMessage)
+
+      if ((currentData.city || currentData.destination) && isCorrectionOrNegation && !isExplicitCityChange) {
+        parsed.city = currentData.city || currentData.destination
+        parsed.destination = currentData.destination || currentData.city
+        if (currentData.canonicalDestination) {
+          parsed.canonicalDestination = currentData.canonicalDestination
+        }
+      }
+
       return parsed
     }
   } catch (err) {
