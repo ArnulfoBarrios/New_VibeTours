@@ -4,12 +4,54 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
 
 export const aiRouter = Router()
+
+// Endpoint de síntesis de voz humana mediante OpenAI TTS (tts-1)
+aiRouter.post('/speech', async (req, res, next) => {
+  try {
+    const speechSchema = z.object({
+      text: z.string().min(1),
+      voice: z.string().optional().default('alloy'),
+      speed: z.number().min(0.25).max(4.0).optional().default(1.0)
+    })
+    const { text, voice, speed } = speechSchema.parse(req.body)
+    const audioBuffer = await generateSpeechAudio({ text, voice, speed })
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.length,
+      'Cache-Control': 'public, max-age=86400'
+    })
+    res.send(audioBuffer)
+  } catch (error) {
+    next(error)
+  }
+})
+
+// Alias /tts para retrocompatibilidad
+aiRouter.post('/tts', async (req, res, next) => {
+  try {
+    const speechSchema = z.object({
+      text: z.string().min(1),
+      voice: z.string().optional().default('alloy'),
+      speed: z.number().min(0.25).max(4.0).optional().default(1.0)
+    })
+    const { text, voice, speed } = speechSchema.parse(req.body)
+    const audioBuffer = await generateSpeechAudio({ text, voice, speed })
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.length,
+      'Cache-Control': 'public, max-age=86400'
+    })
+    res.send(audioBuffer)
+  } catch (error) {
+    next(error)
+  }
+})
 
 // Almacenamiento en memoria para trabajos de generación asíncrona
 const tourJobs = new Map()

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
@@ -7,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import '../config/app_config.dart';
 import '../../domain/models.dart';
 import 'sqlite-service.dart';
 
@@ -105,10 +107,23 @@ class VoiceGuideService {
 
   final SqliteService _sqliteService;
   final FlutterTts _tts = FlutterTts();
+  final AudioPlayer _audioPlayer = AudioPlayer();
   final SpeechToText _speech = SpeechToText();
   double _currentMultiplier = 1.0;
+  String _selectedOpenAiVoice = 'alloy';
+
+  // In-memory cache for synthesized speech MP3 bytes
+  static final Map<String, Uint8List> _speechMemoryCache = {};
 
   double get currentMultiplier => _currentMultiplier;
+  String get selectedOpenAiVoice => _selectedOpenAiVoice;
+
+  void setOpenAiVoice(String voice) {
+    final lower = voice.toLowerCase();
+    if (['alloy', 'nova', 'shimmer', 'onyx', 'echo', 'fable'].contains(lower)) {
+      _selectedOpenAiVoice = lower;
+    }
+  }
 
   Future<void> _initTts() async {
     try {
@@ -175,6 +190,9 @@ class VoiceGuideService {
 
   Future<void> setSpeedMultiplier(double multiplier) async {
     _currentMultiplier = multiplier;
+    try {
+      await _audioPlayer.setPlaybackRate(multiplier);
+    } catch (_) {}
     // Baseline speech rate for 1.0x is 0.46 on mobile FlutterTts (coincide con el ritmo de la landing page)
     final rawRate = (0.46 * multiplier).clamp(0.2, 1.0);
     await _tts.setSpeechRate(rawRate);
@@ -304,19 +322,108 @@ class VoiceGuideService {
     await speak('$title. $description', lang: lang);
   }
 
-  Future<void> speak(String text, {String lang = 'es'}) async {
+  Future<Uint8List?> _fetchSpeechAudio(String text, {String? voice, double? speed}) async {
+    final v = voice ?? _selectedOpenAiVoice;
+    final s = speed ?? _currentMultiplier;
+    final cacheKey = '${v}_${s.toStringAsFixed(2)}_$text';
+
+    if (_speechMemoryCache.containsKey(cacheKey)) {
+      return _speechMemoryCache[cacheKey];
+    }
+
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return null;
+
+    // 1. Intentar llamada directa con OpenAI API Key si está configurada en la app
+    final openAiKey = AppConfig.openAiApiKey;
+    if (openAiKey.isNotEmpty) {
+      try {
+        final uri = Uri.parse('https://api.openai.com/v1/audio/speech');
+        final response = await http.post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $openAiKey',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': 'tts-1',
+            'input': trimmed,
+            'voice': v,
+            'speed': s.clamp(0.25, 4.0),
+            'response_format': 'mp3',
+          }),
+        ).timeout(const Duration(seconds: 12));
+
+        if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+          _speechMemoryCache[cacheKey] = response.bodyBytes;
+          return response.bodyBytes;
+        }
+      } catch (e) {
+        debugPrint('[VoiceGuide] Nota en llamada directa a OpenAI TTS: $e');
+      }
+    }
+
+    // 2. Intentar a través de las rutas del backend (/ai/speech o /ai/tts)
+    for (final baseUrl in AppConfig.apiBaseUrls) {
+      try {
+        final uri = Uri.parse('$baseUrl/ai/speech');
+        final response = await http.post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'text': trimmed,
+            'voice': v,
+            'speed': s.clamp(0.25, 4.0),
+          }),
+        ).timeout(const Duration(seconds: 12));
+
+        if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+          _speechMemoryCache[cacheKey] = response.bodyBytes;
+          return response.bodyBytes;
+        }
+      } catch (e) {
+        debugPrint('[VoiceGuide] Nota al solicitar audio TTS a $baseUrl: $e');
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> speak(String text, {String lang = 'es', String? voice}) async {
     final value = text.trim();
     if (value.isEmpty) return;
+
+    await stop();
+
+    // 1. Intentar reproducir con voz ultra humana mediante OpenAI TTS (tts-1)
+    try {
+      final audioBytes = await _fetchSpeechAudio(value, voice: voice);
+      if (audioBytes != null && audioBytes.isNotEmpty) {
+        await _audioPlayer.setPlaybackRate(_currentMultiplier);
+        await _audioPlayer.play(BytesSource(audioBytes));
+        debugPrint('[VoiceGuide] Reproduciendo narración con voz humana OpenAI TTS ($selectedOpenAiVoice)');
+        return;
+      }
+    } catch (e) {
+      debugPrint('[VoiceGuide] Excepción al procesar OpenAI TTS: $e');
+    }
+
+    // 2. Fallback offline: motor nativo del dispositivo con FlutterTts
     try {
       await setLanguage(lang);
-      await _tts.stop();
       await _tts.speak(value);
+      debugPrint('[VoiceGuide] Reproduciendo narración con TTS nativo (fallback)');
     } catch (e) {
-      debugPrint('[VoiceGuide] Error al reproducir síntesis de voz: $e');
+      debugPrint('[VoiceGuide] Error al reproducir síntesis de voz nativa: $e');
     }
   }
 
   Future<void> stop() async {
+    try {
+      await _audioPlayer.stop();
+    } catch (e) {
+      debugPrint('[VoiceGuide] Error al detener AudioPlayer: $e');
+    }
     try {
       await _tts.stop();
     } catch (e) {

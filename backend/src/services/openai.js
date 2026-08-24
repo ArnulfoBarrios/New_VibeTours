@@ -1016,3 +1016,54 @@ export async function buildVisualDestinationSuggestions(chips = []) {
   }
   return results
 }
+
+const speechCache = new GeoCache(24 * 60 * 60 * 1000, 200)
+
+export async function generateSpeechAudio({ text = '', voice = 'alloy', speed = 1.0 }) {
+  const trimmed = (text || '').trim()
+  if (!trimmed) {
+    throw new Error('El texto para la síntesis de voz no puede estar vacío.')
+  }
+
+  const safeVoice = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].includes(voice.toLowerCase())
+    ? voice.toLowerCase()
+    : 'alloy'
+  const safeSpeed = Math.min(Math.max(Number(speed) || 1.0, 0.25), 4.0)
+  const cacheKey = `tts_${safeVoice}_${safeSpeed}_${trimmed}`
+
+  const cached = speechCache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY no configurada en el servidor.')
+  }
+
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'tts-1',
+      input: trimmed,
+      voice: safeVoice,
+      speed: safeSpeed,
+      response_format: 'mp3'
+    })
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '')
+    throw new Error(`Error en OpenAI TTS (${response.status}): ${errorText}`)
+  }
+
+  const arrayBuffer = await response.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  speechCache.set(cacheKey, buffer)
+  return buffer
+}
+
