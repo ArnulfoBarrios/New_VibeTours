@@ -27,6 +27,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
   final TextEditingController _avatarUrlController = TextEditingController();
   bool _isEditingBio = false;
@@ -38,8 +39,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _loadAppVersion();
     final user = ref.read(authUserProvider).valueOrNull;
     if (user != null) {
-      _bioController.text = user.userMetadata?['bio']?.toString() ?? '';
-      _avatarUrlController.text = user.userMetadata?['custom_avatar_url']?.toString() ?? user.userMetadata?['avatar_url']?.toString() ?? '';
+      final metadata = user.userMetadata ?? {};
+      _nameController.text = metadata['custom_full_name']?.toString() ?? metadata['full_name']?.toString() ?? '';
+      _bioController.text = metadata['bio']?.toString() ?? '';
+      _avatarUrlController.text = metadata['custom_avatar_url']?.toString() ?? metadata['avatar_url']?.toString() ?? '';
     }
   }
 
@@ -58,9 +61,111 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _bioController.dispose();
     _avatarUrlController.dispose();
     super.dispose();
+  }
+
+  void _showEditNameDialog(String currentName) {
+    _nameController.text = currentName;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.edit_rounded, color: AppTheme.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Editar nombre', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Personaliza cómo se mostrará tu nombre en tu perfil, pasaporte y tours.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _nameController,
+                textCapitalization: TextCapitalization.words,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Nombre o Alias',
+                  hintText: 'Ej. Arnulfo',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  prefixIcon: const Icon(Icons.person_outline_rounded),
+                ),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final trimmed = _nameController.text.trim();
+                if (trimmed.isEmpty) return;
+                final navigator = Navigator.of(context);
+                final messenger = ScaffoldMessenger.of(context);
+                navigator.pop();
+                try {
+                  await ref.read(authServiceProvider).updateUserProfile(
+                    fullName: trimmed,
+                  );
+                  if (mounted) {
+                    setState(() {});
+                    messenger
+                      ..clearSnackBars()
+                      ..showSnackBar(
+                        const SnackBar(
+                          content: Text('Nombre actualizado con éxito.'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    messenger
+                      ..clearSnackBars()
+                      ..showSnackBar(
+                        SnackBar(
+                          content: Text(_getFriendlyError(e)),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                  }
+                }
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   String _getFriendlyError(Object error) {
@@ -537,7 +642,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final l10n = AppLocalizations.of(context);
     final user = ref.watch(authUserProvider).valueOrNull;
     final metadata = user?.userMetadata ?? {};
-    final name = (metadata['custom_full_name']?.toString() ?? metadata['full_name']?.toString() ?? 'Usuario').split(' ').first;
+    final rawFullName = metadata['custom_full_name']?.toString() ?? metadata['full_name']?.toString() ?? metadata['name']?.toString() ?? 'Usuario';
+    final name = rawFullName.split(' ').first;
     final email = user?.email ?? 'correo@ejemplo.com';
     final bio = metadata['bio']?.toString() ?? l10n.addBioPlaceholder;
     final avatarUrl = metadata['custom_avatar_url']?.toString() ?? metadata['avatar_url']?.toString();
@@ -677,17 +783,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          Text(
-                            name,
-                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                               color: Colors.white,
-                               fontSize: 24,
-                               fontWeight: FontWeight.w900,
-                               letterSpacing: -0.5,
-                               shadows: [
-                                 Shadow(blurRadius: 10, color: Colors.black38),
-                               ],
-                             ),
+                          GestureDetector(
+                            onTap: () => _showEditNameDialog(rawFullName),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    name,
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                      color: Colors.white,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -0.5,
+                                      shadows: const [
+                                        Shadow(blurRadius: 10, color: Colors.black38),
+                                      ],
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.25),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.edit_rounded,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(

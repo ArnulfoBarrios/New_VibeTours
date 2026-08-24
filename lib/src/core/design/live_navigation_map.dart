@@ -16,6 +16,7 @@ class LiveNavigationMap extends ConsumerStatefulWidget {
     required this.styleUrl,
     this.route,
     this.currentLocation,
+    this.additionalWaypoints,
     this.trackingMode = true,
     this.trackingHeading,
     this.fitPadding = const EdgeInsets.fromLTRB(36, 108, 36, 440),
@@ -28,6 +29,7 @@ class LiveNavigationMap extends ConsumerStatefulWidget {
   final String styleUrl;
   final RoadRouteResult? route;
   final GeoPoint? currentLocation;
+  final List<GeoPoint>? additionalWaypoints;
   final bool trackingMode;
   final double? trackingHeading;
   final EdgeInsets fitPadding;
@@ -556,6 +558,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         ?currentPos,
         destPos,
         ..._fullGeometry,
+        if (widget.additionalWaypoints != null)
+          ...widget.additionalWaypoints!.map((p) => LatLng(p.latitude, p.longitude)),
       ];
 
       if (boundsPoints.isNotEmpty) {
@@ -613,6 +617,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         widget.currentLocation!.longitude,
       );
       _animateToLocation(currentPos, widget.trackingHeading);
+      if (!widget.trackingMode) {
+        _updateCameraPosition();
+      }
     }
 
     if (trackingChanged || routeChanged || (widget.trackingMode && headingChanged && !locationChanged)) {
@@ -638,11 +645,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         : LatLng(currentLocation.latitude, currentLocation.longitude);
     final destPos = LatLng(widget.destination.latitude, widget.destination.longitude);
 
-    final rawPoints = routeGeom.isNotEmpty
+    final rawPoints = routeGeom.length >= 2
         ? [for (final p in routeGeom) LatLng(p.latitude, p.longitude)]
-        : currentPos != null
-            ? [currentPos, destPos]
-            : [destPos];
+        : <LatLng>[];
 
     _setRouteGeometry(rawPoints);
 
@@ -729,6 +734,11 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
           await controller.updateLine(_routeLine!, LineOptions(geometry: lineGeometry));
         }
       } catch (_) {}
+    } else if (_routeLine != null) {
+      try {
+        await controller.removeLine(_routeLine!);
+      } catch (_) {}
+      _routeLine = null;
     }
 
     if (visualPosition != null) {
@@ -755,9 +765,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
-    if (widget.trackingMode) {
-      _updateCameraPosition();
-    }
+    _updateCameraPosition();
   }
 
   @override
@@ -797,6 +805,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                 });
               }
               _renderLiveRoute();
+              _updateCameraPosition();
             },
           ),
         ),

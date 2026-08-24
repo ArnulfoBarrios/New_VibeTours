@@ -119,6 +119,7 @@ export function selectBestPoiResult(results, originalQuery = '') {
   const lowerQuery = String(originalQuery || '').toLowerCase()
   const isExplicitTransitQuery = /\b(estaci[oó]n|bus|metro|subway|parada|transit|train|railway|stop)\b/i.test(lowerQuery)
   const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja)\b/i.test(lowerQuery)
+  const isViewpointQuery = /\b(mirador|viewpoint|lookout|belvedere|observatorio)\b/i.test(lowerQuery)
 
   let candidates = [...results]
 
@@ -145,6 +146,16 @@ export function selectBestPoiResult(results, originalQuery = '') {
   }
 
   if (candidates.length === 0) return null
+
+  if (isViewpointQuery && candidates.length > 1) {
+    const directViewpointMatch = candidates.find(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || r.class || '').toLowerCase()
+      const name = String(r.name || '').toLowerCase()
+      return type === 'viewpoint' || key === 'tourism' || name.includes('mirador') || name.includes('viewpoint')
+    })
+    if (directViewpointMatch) return directViewpointMatch
+  }
 
   if (isFoodQuery && candidates.length > 1) {
     const directFoodMatch = candidates.find(r => {

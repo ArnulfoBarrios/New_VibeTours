@@ -4402,9 +4402,8 @@ export async function collectTourCandidates(input, location) {
   if (validSpecifics.length > 0 && searchCenterLat && searchCenterLon) {
     pool = pool.filter(place => {
       if (!hasUsableCoordinates(place.latitude, place.longitude)) return false
-      if (place.tags?.requested_place === 'true') return true
       const distToCentroid = haversineMeters(place.latitude, place.longitude, searchCenterLat, searchCenterLon) / 1000
-      return distToCentroid <= (isRegionalOrNature ? 28 : 12)
+      return distToCentroid <= (isRegionalOrNature ? 22 : 12)
     })
   }
   

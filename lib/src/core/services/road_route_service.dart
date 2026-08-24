@@ -189,7 +189,8 @@ class RoadRouteService {
         totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
         usesLiveTraffic = usesLiveTraffic || roadRoute.usesLiveTraffic;
       } else {
-        _appendGeometry(geometry, [start, end]);
+        // No valid land route exists across water/terrain: do NOT draw a fake straight line across oceans
+        _appendGeometry(geometry, [start]);
         totalDistanceMeters += _distanceMeters(start, end);
         usedFallback = true;
       }
@@ -217,35 +218,28 @@ class RoadRouteService {
     );
   }
 
+  final Map<String, List<RoutePortWaypoint>> _airportsDynamicCache = {};
+
   Future<RoadRouteResult?> _buildFlightAwareRoute(
     GeoPoint start,
     GeoPoint end,
   ) async {
     final startAirports = await _findAirportsNear(start, role: 'Aeropuerto salida');
     final endAirports = await _findAirportsNear(end, role: 'Aeropuerto llegada');
-    final startAirport = startAirports.isEmpty ? null : startAirports.first;
-    final endAirport = endAirports.isEmpty ? null : endAirports.first;
-    if (startAirport == null && endAirport == null) return null;
+    final startAirport = startAirports.isNotEmpty ? startAirports.first : null;
+    final endAirport = endAirports.isNotEmpty ? endAirports.first : null;
 
     final geometry = <GeoPoint>[];
     final airports = <RoutePortWaypoint>[?startAirport, ?endAirport];
     final airStart = startAirport?.location ?? start;
     final airEnd = endAirport?.location ?? end;
 
+    // Ground leg from user origin to departure airport (if found dynamically)
     if (startAirport != null && _distanceMeters(start, airStart) > 200) {
       final startRoad = await _fetchDrivingRoute(start, airStart);
       _appendGeometry(geometry, startRoad?.geometry ?? [start, airStart]);
     } else {
       _appendGeometry(geometry, [start]);
-    }
-
-    _appendGeometry(geometry, [airStart, airEnd]);
-
-    if (endAirport != null && _distanceMeters(airEnd, end) > 200) {
-      final endRoad = await _fetchDrivingRoute(airEnd, end);
-      _appendGeometry(geometry, endRoad?.geometry ?? [airEnd, end]);
-    } else {
-      _appendGeometry(geometry, [end]);
     }
 
     final advice = '✈️ Conexión aérea requerida: Dirígete a ${startAirport?.name ?? "tu aeropuerto de salida"} para abordar tu vuelo hacia ${endAirport?.name ?? "el destino"}.';
@@ -260,66 +254,148 @@ class RoadRouteService {
     );
   }
 
+  Future<List<RoutePortWaypoint>> findAirportsNear(
+    GeoPoint point, {
+    required String role,
+  }) => _findAirportsNear(point, role: role);
+
   Future<List<RoutePortWaypoint>> _findAirportsNear(
     GeoPoint point, {
     required String role,
   }) async {
-    final query = '''
-[out:json][timeout:14];
+    final cacheKey = '${point.latitude.toStringAsFixed(1)},${point.longitude.toStringAsFixed(1)}';
+    if (_airportsDynamicCache.containsKey(cacheKey)) {
+      return _airportsDynamicCache[cacheKey]!;
+    }
+
+    final candidateList = <RoutePortWaypoint>[];
+
+    // 1. Photon Spatial Geocoding (fastest and ranked by user coordinates)
+    try {
+      final photonUrl = Uri.parse(
+        'https://photon.komoot.io/api/?q=aeropuerto&lat=${point.latitude}&lon=${point.longitude}&limit=10',
+      );
+      final response = await _client.get(
+        photonUrl,
+        headers: const {'User-Agent': 'VibeTours/1.0'},
+      ).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final features = decoded['features'] as List<dynamic>? ?? const [];
+        for (final item in features) {
+          if (item is! Map<String, dynamic>) continue;
+          final properties = item['properties'] as Map<String, dynamic>? ?? const {};
+          final geometry = item['geometry'] as Map<String, dynamic>? ?? const {};
+          final coords = geometry['coordinates'] as List<dynamic>? ?? const [];
+          if (coords.length < 2) continue;
+          final lon = (coords[0] as num?)?.toDouble();
+          final lat = (coords[1] as num?)?.toDouble();
+          if (lat == null || lon == null) continue;
+
+          final osmValue = properties['osm_value']?.toString() ?? '';
+          final type = properties['type']?.toString() ?? '';
+          final name = properties['name']?.toString() ?? '';
+
+          // Filter out bus stops, train stations, and unrelated administrative regions
+          final isAerodrome = osmValue == 'aerodrome' || osmValue == 'terminal' || type == 'aerodrome';
+          final hasAirportName = name.toLowerCase().contains('aeropuerto') || name.toLowerCase().contains('airport');
+          final isIgnored = osmValue == 'bus_stop' || osmValue == 'station' || osmValue == 'administrative';
+
+          if ((isAerodrome || hasAirportName) && !isIgnored && name.isNotEmpty) {
+            candidateList.add(
+              RoutePortWaypoint(
+                name: name,
+                location: GeoPoint(latitude: lat, longitude: lon),
+                role: role,
+              ),
+            );
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Overpass API fallback if Photon had no candidates
+    if (candidateList.isEmpty) {
+      final query = '''
+[out:json][timeout:5];
 (
-  node(around:95000,${point.latitude},${point.longitude})["aeroway"="aerodrome"]["aerodrome:type"~"international|public|regional"];
-  way(around:95000,${point.latitude},${point.longitude})["aeroway"="aerodrome"]["aerodrome:type"~"international|public|regional"];
   node(around:95000,${point.latitude},${point.longitude})["aeroway"="aerodrome"];
   way(around:95000,${point.latitude},${point.longitude})["aeroway"="aerodrome"];
 );
-out center tags 15;
+out center tags 10;
 ''';
-    try {
-      final response = await _client
-          .post(
-            Uri.parse(_overpassUrl),
-            headers: const {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'User-Agent': 'VIBETOURS/1.0',
-            },
-            body: {'data': query},
-          )
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const [];
-      }
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final elements = decoded['elements'] as List<dynamic>? ?? const [];
-      final list = <RoutePortWaypoint>[];
-      for (final raw in elements) {
-        if (raw is! Map<String, dynamic>) continue;
-        final lat =
-            (raw['lat'] as num?)?.toDouble() ??
-            ((raw['center'] as Map<String, dynamic>?)?['lat'] as num?)
-                ?.toDouble();
-        final lon =
-            (raw['lon'] as num?)?.toDouble() ??
-            ((raw['center'] as Map<String, dynamic>?)?['lon'] as num?)
-                ?.toDouble();
-        if (lat == null || lon == null) continue;
-        final tags = raw['tags'] as Map<String, dynamic>? ?? const {};
-        final name = tags['name'] ?? tags['name:es'] ?? tags['name:en'] ?? 'Aeropuerto';
-        list.add(
-          RoutePortWaypoint(
-            name: name.toString(),
-            location: GeoPoint(latitude: lat, longitude: lon),
-            role: role,
-          ),
+      try {
+        final response = await _client
+            .post(
+              Uri.parse(_overpassUrl),
+              headers: const {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'VIBETOURS/1.0',
+              },
+              body: {'data': query},
+            )
+            .timeout(const Duration(seconds: 4));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+          final elements = decoded['elements'] as List<dynamic>? ?? const [];
+          for (final raw in elements) {
+            if (raw is! Map<String, dynamic>) continue;
+            final lat = (raw['lat'] as num?)?.toDouble() ??
+                ((raw['center'] as Map<String, dynamic>?)?['lat'] as num?)?.toDouble();
+            final lon = (raw['lon'] as num?)?.toDouble() ??
+                ((raw['center'] as Map<String, dynamic>?)?['lon'] as num?)?.toDouble();
+            if (lat == null || lon == null) continue;
+            final tags = raw['tags'] as Map<String, dynamic>? ?? const {};
+            final name = tags['name'] ?? tags['name:es'] ?? tags['name:en'] ?? 'Aeropuerto';
+            candidateList.add(
+              RoutePortWaypoint(
+                name: name.toString(),
+                location: GeoPoint(latitude: lat, longitude: lon),
+                role: role,
+              ),
+            );
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. Nominatim fallback if still empty
+    if (candidateList.isEmpty) {
+      try {
+        final nominatimUrl = Uri.parse(
+          'https://nominatim.openstreetmap.org/search?q=aeropuerto&format=json&limit=5&bounded=1&viewbox=${point.longitude - 1.2},${point.latitude + 1.2},${point.longitude + 1.2},${point.latitude - 1.2}',
         );
-      }
-      list.sort(
+        final nomResponse = await _client.get(
+          nominatimUrl,
+          headers: const {'User-Agent': 'VibeTours/1.0'},
+        ).timeout(const Duration(seconds: 4));
+        if (nomResponse.statusCode == 200) {
+          final nomDecoded = jsonDecode(nomResponse.body) as List<dynamic>;
+          for (final raw in nomDecoded) {
+            if (raw is! Map<String, dynamic>) continue;
+            final lat = double.tryParse(raw['lat']?.toString() ?? '');
+            final lon = double.tryParse(raw['lon']?.toString() ?? '');
+            if (lat == null || lon == null) continue;
+            final name = (raw['name'] ?? raw['display_name']?.toString().split(',').first ?? 'Aeropuerto').toString();
+            candidateList.add(RoutePortWaypoint(name: name, location: GeoPoint(latitude: lat, longitude: lon), role: role));
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (candidateList.isNotEmpty) {
+      // Sort strictly by distance to the user's origin point
+      candidateList.sort(
         (a, b) => _distanceMeters(point, a.location)
             .compareTo(_distanceMeters(point, b.location)),
       );
-      return _dedupePorts(list);
-    } on Object {
-      return const [];
+      final deduped = _dedupePorts(candidateList);
+      _airportsDynamicCache[cacheKey] = deduped;
+      return deduped;
     }
+
+    return const [];
   }
 
   Future<RoadRouteResult?> _buildMaritimeAwareRoute(
@@ -575,8 +651,15 @@ out center tags 30;
   ) {
     if (route.hasFerrySegment) return true;
     final directDistance = _distanceMeters(start, end);
-    if (directDistance < 3000) return false;
     if (route.distanceMeters <= 0) return true;
+
+    // If the driving route terminates far from destination (e.g. boat-only beaches like Playa Cristal)
+    if (route.geometry.isNotEmpty) {
+      final roadEndDist = _distanceMeters(route.geometry.last, end);
+      if (roadEndDist > 450) return true;
+    }
+
+    if (directDistance < 3000) return false;
     if (route.distanceMeters / directDistance > 3.5) return true;
     return false;
   }
@@ -658,7 +741,7 @@ out center tags 30;
     GeoPoint start,
     GeoPoint end,
   ) {
-    if (geometry.isEmpty) return [start, end];
+    if (geometry.isEmpty) return [start];
 
     final result = <GeoPoint>[start];
     for (final point in geometry) {
@@ -666,7 +749,9 @@ out center tags 30;
         result.add(point);
       }
     }
-    if (_distanceMeters(result.last, end) > 1) {
+    // Only snap end point if within reasonable walking/road distance (<= 300m)
+    // Avoid drawing straight lines across bays/oceans to boat-only destinations
+    if (_distanceMeters(result.last, end) > 1 && _distanceMeters(result.last, end) <= 300) {
       result.add(end);
     }
     return result;
