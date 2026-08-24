@@ -367,10 +367,23 @@ CATÁLOGO OFICIAL Y VERIFICADO DE LUGARES EN ${destName.toUpperCase()} (${destCo
 • Atractivos, playas y patrimonio verificados: ${realCatalog.places?.join(', ') || 'N/A'}
 ` : ''}
 
-REGLA UNIVERSAL DE PERTENENCIA TERRITORIAL ESTRICTA PARA CUALQUIER DESTINO:
-1. Todos los atractivos, playas, museos, plazas, parques, miradores, bares y restaurantes que propongas, menciones o incluyas en el itinerario DEBEN pertenecer exclusivamente al municipio, ciudad y área metropolitana de ${destName || 'el destino'} (${destCountry || ''}).
-2. ESTÁ TERMINANTEMENTE PROHIBIDO incluir o recomendar lugares ubicados en otras ciudades, departamentos, provincias o países que se encuentren a más de 50-60 km de distancia (por ejemplo: si el destino es Santa Marta, NUNCA menciones lugares de Cartagena como Café del Mar o Isla de Barú; si el destino es Roma, NUNCA menciones lugares de Pisa o Florencia; si el destino es Tokio, NUNCA menciones lugares de Kioto; si el destino es Mendoza, NUNCA menciones lugares de Buenos Aires; si el destino es París, NUNCA menciones lugares de Niza).
-3. Utiliza preferentemente los lugares del CATÁLOGO OFICIAL VERIFICADO arriba indicado. Si el usuario propone o pregunta por un lugar que pertenece a otra ciudad, aclárale cortésmente a qué ciudad pertenece y su distancia real, y ofrécele alternativas dentro de ${destName}.
+REGLA UNIVERSAL DE PERTENENCIA TERRITORIAL ESTRICTA:
+1. Para tours de un solo destino/ciudad: Todos los atractivos, playas, museos, plazas, parques, miradores, bares y restaurantes que propongas, menciones o incluyas en el itinerario DEBEN pertenecer exclusivamente al municipio, ciudad y área metropolitana de ${destName || 'el destino'} (${destCountry || ''}).
+2. ESTÁ TERMINANTEMENTE PROHIBIDO incluir o recomendar lugares ubicados en otras ciudades alejadas cuando el tour es local de una sola ciudad (por ejemplo: si el tour es únicamente en Santa Marta, NUNCA menciones lugares de Cartagena como Café del Mar o Isla de Barú).
+
+EXCEPCIÓN CRÍTICA Y OBLIGATORIA: TOURS MULTI-CIUDAD / ROAD TRIPS / RUTAS INTERURBANAS:
+- Si el usuario solicita o expresa la intención de hacer un tour entre ciudades, recorrido interurbano o road trip (ej: "Crea un tour desde Barranquilla hasta Santa Marta", "de Madrid a Barcelona", "tour por Cartagena y Santa Marta", "road trip por la Costa", "ruta de Ciudad A a Ciudad B"):
+  1. ACEPTA Y DA LA BIENVENIDA A LA SOLICITUD DE INMEDIATO con entusiasmo (NUNCA digas "no puedo ayudarte a crear un tour desde X").
+  2. ACTIVA el modo multi-ciudad y organiza el viaje de forma cronológica conectando ambas ciudades:
+     - Paradas/salida en la ciudad de origen (ej: Malecón del Río en Barranquilla).
+     - Paradas en el corredor vial/carretera intermedia o miradores (ej: Ciénaga, paradores costeros, mirador).
+     - Paradas en la ciudad de destino (ej: Centro Histórico, Quinta de San Pedro Alejandrino en Santa Marta).
+  3. Extrae en "extractedPreferences":
+     - "isMultiCity": true
+     - "originPlace": "Ciudad de salida (ej: Barranquilla)"
+     - "destinationPlace": "Ciudad de llegada (ej: Santa Marta)"
+     - "cities": ["Barranquilla", "Santa Marta"]
+     - "destination": "Barranquilla a Santa Marta"
 
 REGLA DE COHERENCIA DE SUBZONA Y CLUSTER GEOGRÁFICO:
 - Si el usuario solicita o enfoca su tour en una subzona, parque nacional, reserva natural, archipiélago o corredor específico (ej: "Parque Tayrona", "Minca", "Barú", "Islas del Rosario", etc.):
@@ -643,8 +656,21 @@ REGLA CRÍTICA DE DESTINO TURÍSTICO (UNIVERSAL: CIUDADES, PARQUES, ISLAS, REGIO
 - Solo extraer si el usuario declara EXPLÍCITAMENTE que desea viajar allí, explorar la zona o cambiar de destino.
 - Si el usuario menciona un lugar como corrección, queja o negación (ej: "te equivocaste, esos lugares son de Barranquilla, no de Santa Marta"), NO sobreescribas el destino y mantén: "destination": ${JSON.stringify(currentData.destination || currentData.city || null)}, "city": ${JSON.stringify(currentData.city || currentData.destination || null)}.
 
+REGLA DE TOURS MULTI-CIUDAD / ROAD TRIPS:
+- Si el usuario solicita un viaje entre ciudades o ruta interurbana (ej: "Crea un tour desde Barranquilla hasta Santa Marta", "tour de Bogotá a Medellín", "road trip por Cartagena y Santa Marta", "de Madrid a Barcelona"):
+  - Extraer "isMultiCity": true
+  - Extraer "originPlace": ciudad de origen (ej: "Barranquilla")
+  - Extraer "destinationPlace": ciudad de destino (ej: "Santa Marta")
+  - Extraer "cities": ["Barranquilla", "Santa Marta"]
+  - Extraer "destination": "Barranquilla a Santa Marta"
+  - Extraer "city": "Santa Marta"
+
 Devuelve ÚNICAMENTE un JSON con:
-- "destination": destino turístico explícito (parque natural, reserva, isla, valle, región, pueblo o ciudad) o null si no se menciona.
+- "destination": destino turístico explícito (parque natural, reserva, isla, valle, región, pueblo o ciudad o "Origen a Destino") o null si no se menciona.
+- "isMultiCity": boolean (true si es un tour entre múltiples ciudades o road trip).
+- "originPlace": ciudad de salida si es multi-ciudad o null.
+- "destinationPlace": ciudad de llegada si es multi-ciudad o null.
+- "cities": lista de ciudades involucradas si es multi-ciudad (ej: ["Barranquilla", "Santa Marta"]) o [].
 - "city": ciudad/municipio de referencia o null.
 - "country": país o null.
 - "datesSeason": fechas o temporada (ej: "del 9 al 12 de octubre", "julio", "puente de noviembre", "este fin de semana").
@@ -690,7 +716,7 @@ Devuelve ÚNICAMENTE un JSON con:
 
       // Safeguard: Do NOT overwrite known destination if user is making a correction/negation
       const isCorrectionOrNegation = /\b(te equivocaste|es de|son de|queda en|quedan en|no es de|no son de|no queda en|no quedan en|confusi[oó]n|en realidad|pertenece a|pertenecen a|equivocaci[oó]n|eso est[aá] en)\b/i.test(userMessage)
-      const isExplicitCityChange = /\b(cambiemos a|cambiar a|cambiar destino|nuevo destino|mejor vamos a|ahora quiero ir a|vamos mejor a|prefiero ir a)\b/i.test(userMessage)
+      const isExplicitCityChange = /\b(cambiemos a|cambiar a|cambiar destino|nuevo destino|mejor vamos a|ahora quiero ir a|vamos mejor a|prefiero ir a|desde|hasta|tour de|de\s+[a-z]+\s+a\s+[a-z]+)\b/i.test(userMessage)
 
       if ((currentData.city || currentData.destination) && isCorrectionOrNegation && !isExplicitCityChange) {
         parsed.city = currentData.city || currentData.destination
@@ -712,6 +738,22 @@ Devuelve ÚNICAMENTE un JSON con:
 export function extractChatInformationFallback(prompt) {
   const res = {}
   const text = (prompt || '').toLowerCase()
+
+  const routeMatch = text.match(/\b(?:de|desde)\s+([a-záéíóúñ\s]+?)\s+(?:a|hast[aá])\s+([a-záéíóúñ\s]+?)(?:$|\s+(?:en|con|para|el|la|los|del)\b)/i)
+  if (routeMatch) {
+    const originRaw = routeMatch[1].trim()
+    const destinationRaw = routeMatch[2].trim()
+    if (originRaw.length > 2 && destinationRaw.length > 2) {
+      const origin = originRaw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      const destination = destinationRaw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      res.isMultiCity = true
+      res.originPlace = origin
+      res.destinationPlace = destination
+      res.cities = [origin, destination]
+      res.destination = `${origin} a ${destination}`
+      res.city = destination
+    }
+  }
 
   const dateRangeMatch = text.match(/\b(?:del\s+|desde\s+(?:el\s+)?)?(\d{1,2})\s+(?:al|hasta(?:\s+el)?)\s+(\d{1,2})\b/i)
   if (dateRangeMatch) {

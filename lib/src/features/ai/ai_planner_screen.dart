@@ -325,6 +325,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     if (prefs.isEmpty && !state.webSearchDone) return const SizedBox.shrink();
 
     final city = prefs['destination'] ?? prefs['city'];
+    final isMultiCity = prefs['isMultiCity'] == true || (prefs['originPlace'] != null && prefs['destinationPlace'] != null);
+    final destinationLabel = isMultiCity && prefs['originPlace'] != null && prefs['destinationPlace'] != null
+        ? 'Ruta: ${prefs['originPlace']} ➔ ${prefs['destinationPlace']}'
+        : 'Destino: $city';
     final datesSeason = prefs['datesSeason'];
     final durationDays = prefs['durationDays'] ?? (prefs['durationHours'] != null ? (prefs['durationHours'] / 24.0).toStringAsFixed(0) : null);
     final companions = prefs['companions'];
@@ -337,7 +341,13 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         : (rawSpecPlaces?.toString() ?? '');
 
     final items = <Map<String, dynamic>>[];
-    if (city != null && city.toString().isNotEmpty) items.add({'icon': Icons.location_on_rounded, 'label': 'Destino: $city', 'color': Colors.blue});
+    if (city != null && city.toString().isNotEmpty) {
+      items.add({
+        'icon': isMultiCity ? Icons.alt_route_rounded : Icons.location_on_rounded,
+        'label': destinationLabel,
+        'color': Colors.blue
+      });
+    }
     if (datesSeason != null && datesSeason.toString().isNotEmpty) items.add({'icon': Icons.calendar_month_rounded, 'label': '$datesSeason', 'color': Colors.purple});
     if (durationDays != null && durationDays.toString().isNotEmpty) items.add({'icon': Icons.timer_rounded, 'label': '$durationDays día(s)', 'color': Colors.amber.shade800});
     if (companions != null && companions.toString().isNotEmpty) items.add({'icon': Icons.people_rounded, 'label': '$companions', 'color': Colors.teal});
