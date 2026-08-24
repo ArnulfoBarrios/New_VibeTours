@@ -1019,7 +1019,7 @@ export async function buildVisualDestinationSuggestions(chips = []) {
 
 const speechCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 
-export async function generateSpeechAudio({ text = '', voice = 'alloy', speed = 1.0 }) {
+export async function generateSpeechAudio({ text = '', voice = 'nova', speed = 1.0, model = 'tts-1-hd' }) {
   const trimmed = (text || '').trim()
   if (!trimmed) {
     throw new Error('El texto para la síntesis de voz no puede estar vacío.')
@@ -1027,9 +1027,12 @@ export async function generateSpeechAudio({ text = '', voice = 'alloy', speed = 
 
   const safeVoice = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].includes(voice.toLowerCase())
     ? voice.toLowerCase()
-    : 'alloy'
+    : 'nova'
+  const safeModel = ['tts-1-hd', 'tts-1'].includes(model.toLowerCase())
+    ? model.toLowerCase()
+    : 'tts-1-hd'
   const safeSpeed = Math.min(Math.max(Number(speed) || 1.0, 0.25), 4.0)
-  const cacheKey = `tts_${safeVoice}_${safeSpeed}_${trimmed}`
+  const cacheKey = `tts_${safeModel}_${safeVoice}_${safeSpeed}_${trimmed}`
 
   const cached = speechCache.get(cacheKey)
   if (cached) {
@@ -1048,7 +1051,7 @@ export async function generateSpeechAudio({ text = '', voice = 'alloy', speed = 
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'tts-1',
+      model: safeModel,
       input: trimmed,
       voice: safeVoice,
       speed: safeSpeed,

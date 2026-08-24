@@ -110,7 +110,7 @@ class VoiceGuideService {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final SpeechToText _speech = SpeechToText();
   double _currentMultiplier = 1.0;
-  String _selectedOpenAiVoice = 'alloy';
+  String _selectedOpenAiVoice = 'nova';
 
   // In-memory cache for synthesized speech MP3 bytes
   static final Map<String, Uint8List> _speechMemoryCache = {};
@@ -120,7 +120,7 @@ class VoiceGuideService {
 
   void setOpenAiVoice(String voice) {
     final lower = voice.toLowerCase();
-    if (['alloy', 'nova', 'shimmer', 'onyx', 'echo', 'fable'].contains(lower)) {
+    if (['nova', 'shimmer', 'alloy', 'onyx', 'echo', 'fable'].contains(lower)) {
       _selectedOpenAiVoice = lower;
     }
   }
@@ -138,7 +138,7 @@ class VoiceGuideService {
     }
     await setLanguage('es');
     await setSpeedMultiplier(1.0);
-    await _tts.setPitch(1.0);
+    await _tts.setPitch(1.04);
   }
 
   Future<void> setLanguage(String lang) async {
@@ -164,6 +164,9 @@ class VoiceGuideService {
             if (locale == ttsLang.toLowerCase()) score += 10;
             if (name.contains('network') || name.contains('neural') || name.contains('wavenet') || name.contains('natural') || name.contains('premium')) {
               score += 20;
+            }
+            if (name.contains('female') || name.contains('fem') || name.contains('ana') || name.contains('elvira') || name.contains('conchita') || name.contains('marta') || name.contains('sfb') || name.contains('es-es-x-ana') || name.contains('es-us-x-sfb')) {
+              score += 25;
             }
             if (name.contains('google')) score += 5;
             if (name.contains('es-es') || name.contains('es_es')) score += 5;
@@ -322,10 +325,10 @@ class VoiceGuideService {
     await speak('$title. $description', lang: lang);
   }
 
-  Future<Uint8List?> _fetchSpeechAudio(String text, {String? voice, double? speed}) async {
+  Future<Uint8List?> _fetchSpeechAudio(String text, {String? voice, double? speed, String model = 'tts-1-hd'}) async {
     final v = voice ?? _selectedOpenAiVoice;
     final s = speed ?? _currentMultiplier;
-    final cacheKey = '${v}_${s.toStringAsFixed(2)}_$text';
+    final cacheKey = '${model}_${v}_${s.toStringAsFixed(2)}_$text';
 
     if (_speechMemoryCache.containsKey(cacheKey)) {
       return _speechMemoryCache[cacheKey];
@@ -346,7 +349,7 @@ class VoiceGuideService {
             'Content-Type': 'application/json',
           },
           body: jsonEncode({
-            'model': 'tts-1',
+            'model': model,
             'input': trimmed,
             'voice': v,
             'speed': s.clamp(0.25, 4.0),
@@ -374,6 +377,7 @@ class VoiceGuideService {
             'text': trimmed,
             'voice': v,
             'speed': s.clamp(0.25, 4.0),
+            'model': model,
           }),
         ).timeout(const Duration(seconds: 12));
 
@@ -395,13 +399,13 @@ class VoiceGuideService {
 
     await stop();
 
-    // 1. Intentar reproducir con voz ultra humana mediante OpenAI TTS (tts-1)
+    // 1. Intentar reproducir con voz humana femenina de alta definición (OpenAI TTS HD - Nova)
     try {
-      final audioBytes = await _fetchSpeechAudio(value, voice: voice);
+      final audioBytes = await _fetchSpeechAudio(value, voice: voice, model: 'tts-1-hd');
       if (audioBytes != null && audioBytes.isNotEmpty) {
         await _audioPlayer.setPlaybackRate(_currentMultiplier);
         await _audioPlayer.play(BytesSource(audioBytes));
-        debugPrint('[VoiceGuide] Reproduciendo narración con voz humana OpenAI TTS ($selectedOpenAiVoice)');
+        debugPrint('[VoiceGuide] Reproduciendo narración con voz humana femenina OpenAI TTS HD ($selectedOpenAiVoice)');
         return;
       }
     } catch (e) {

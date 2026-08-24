@@ -11,16 +11,17 @@ import { resolveCanonicalDestination, validateCandidateLocation, haversineDistan
 
 export const aiRouter = Router()
 
-// Endpoint de síntesis de voz humana mediante OpenAI TTS (tts-1)
+// Endpoint de síntesis de voz humana mediante OpenAI TTS (tts-1-hd)
 aiRouter.post('/speech', async (req, res, next) => {
   try {
     const speechSchema = z.object({
       text: z.string().min(1),
-      voice: z.string().optional().default('alloy'),
-      speed: z.number().min(0.25).max(4.0).optional().default(1.0)
+      voice: z.string().optional().default('nova'),
+      speed: z.number().min(0.25).max(4.0).optional().default(1.0),
+      model: z.string().optional().default('tts-1-hd')
     })
-    const { text, voice, speed } = speechSchema.parse(req.body)
-    const audioBuffer = await generateSpeechAudio({ text, voice, speed })
+    const { text, voice, speed, model } = speechSchema.parse(req.body)
+    const audioBuffer = await generateSpeechAudio({ text, voice, speed, model })
     res.set({
       'Content-Type': 'audio/mpeg',
       'Content-Length': audioBuffer.length,
@@ -37,11 +38,12 @@ aiRouter.post('/tts', async (req, res, next) => {
   try {
     const speechSchema = z.object({
       text: z.string().min(1),
-      voice: z.string().optional().default('alloy'),
-      speed: z.number().min(0.25).max(4.0).optional().default(1.0)
+      voice: z.string().optional().default('nova'),
+      speed: z.number().min(0.25).max(4.0).optional().default(1.0),
+      model: z.string().optional().default('tts-1-hd')
     })
-    const { text, voice, speed } = speechSchema.parse(req.body)
-    const audioBuffer = await generateSpeechAudio({ text, voice, speed })
+    const { text, voice, speed, model } = speechSchema.parse(req.body)
+    const audioBuffer = await generateSpeechAudio({ text, voice, speed, model })
     res.set({
       'Content-Type': 'audio/mpeg',
       'Content-Length': audioBuffer.length,
