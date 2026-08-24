@@ -242,7 +242,8 @@ aiRouter.post('/chat', async (req, res, next) => {
       })
     }
 
-    if (latitude && longitude) {
+    // Solo usar GPS del usuario como coordenadas si no hay destino previo confirmado
+    if (latitude && longitude && !currentPreferences.canonicalDestination && !currentPreferences.destination) {
       currentPreferences.latitude = latitude
       currentPreferences.longitude = longitude
     }
@@ -397,7 +398,11 @@ aiRouter.post('/chat', async (req, res, next) => {
         updatedPreferences.city = cleanAdministrativeCityName(canonical.city)
         updatedPreferences.country = canonical.country
         updatedPreferences.region = canonical.region
-        updatedPreferences.destination = canonical.displayName
+        updatedPreferences.destination = canonical.entityName || canonical.displayName || canonical.city
+        if (Number.isFinite(canonical.latitude) && Number.isFinite(canonical.longitude)) {
+          updatedPreferences.latitude = canonical.latitude
+          updatedPreferences.longitude = canonical.longitude
+        }
       } else {
         updatedPreferences.city = cleanAdministrativeCityName(rawDest)
       }
@@ -4378,8 +4383,8 @@ export async function collectTourCandidates(input, location) {
   const radiusWide = isRegionalOrNature ? 55000 : 9000
 
   // Calculate subzone centroid if user has specific requested places (e.g. Tayrona cluster, Minca, etc.)
-  let searchCenterLat = location?.latitude || cityCenterLat
-  let searchCenterLon = location?.longitude || cityCenterLon
+  let searchCenterLat = input.canonicalDestination?.latitude || location?.latitude || cityCenterLat
+  let searchCenterLon = input.canonicalDestination?.longitude || location?.longitude || cityCenterLon
 
   const validSpecifics = geocodedSpecifics.filter(p => hasUsableCoordinates(p.latitude, p.longitude))
   if (validSpecifics.length > 0) {

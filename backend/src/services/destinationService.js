@@ -149,13 +149,17 @@ export async function resolveCanonicalDestination(query, options = {}) {
           const lat = Number(item.lat)
           const lon = Number(item.lon)
 
-          // Format clean displayName e.g. "Santa Marta, Magdalena, Colombia"
-          const displayParts = [city || cleanAdministrativeCityName(item.name?.split(',')[0]), region !== city ? region : '', country].filter(Boolean)
+          // Format clean displayName e.g. "Parque Nacional Natural Tayrona, Santa Marta, Colombia" or "Santa Marta, Magdalena, Colombia"
+          const entity = item.name ? cleanAdministrativeCityName(item.name.split(',')[0]) : ''
+          const isEntityDifferentFromCity = entity && city && entity.toLowerCase() !== city.toLowerCase()
+          const firstPart = isEntityDifferentFromCity ? `${entity}, ${city}` : (city || entity || cleaned)
+          const displayParts = [firstPart, (region && region !== city && !firstPart.includes(region)) ? region : '', country].filter(Boolean)
           const displayName = displayParts.join(', ')
 
           return {
             displayName,
             city: city || cleaned,
+            entityName: entity || cleaned,
             region,
             country,
             countryCode,
@@ -164,7 +168,7 @@ export async function resolveCanonicalDestination(query, options = {}) {
             placeId: String(item.place_id || item.osm_id || `${lat}_${lon}`),
             rawName: item.name || item.display_name
           }
-        }).filter(c => c.city && Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
+        }).filter(c => (c.city || c.entityName) && Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
 
         if (candidateObjects.length > 0) {
           let primary = candidateObjects[0]

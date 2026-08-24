@@ -324,7 +324,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     final prefs = state.preferences;
     if (prefs.isEmpty && !state.webSearchDone) return const SizedBox.shrink();
 
-    final city = prefs['city'] ?? prefs['destination'];
+    final city = prefs['destination'] ?? prefs['city'];
     final datesSeason = prefs['datesSeason'];
     final durationDays = prefs['durationDays'] ?? (prefs['durationHours'] != null ? (prefs['durationHours'] / 24.0).toStringAsFixed(0) : null);
     final companions = prefs['companions'];

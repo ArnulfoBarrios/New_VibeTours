@@ -636,24 +636,27 @@ Analiza el último mensaje del usuario y el historial reciente para extraer dato
 Mensaje actual del usuario: "${userMessage}"
 Datos ya conocidos: ${JSON.stringify(currentData)}
 
-REGLA CRÍTICA DE CIUDAD DESTINO:
-- Solo extraer "city" si el usuario declara EXPLÍCITAMENTE que desea viajar allí o cambiar de destino.
-- Si el usuario menciona una ciudad como corrección, queja o negación (ej: "te equivocaste, esos lugares son de Barranquilla, no de Santa Marta"), NO sobreescribas el destino y mantén: "city": ${JSON.stringify(currentData.city || currentData.destination || null)}.
+REGLA CRÍTICA DE DESTINO TURÍSTICO (UNIVERSAL: CIUDADES, PARQUES, ISLAS, REGIONES):
+- Extraer "destination" como el destino turístico explícito, sea un parque natural, reserva ecológica, isla, archipiélago, valle, región, pueblo o ciudad (ej: "Parque Tayrona", "Gran Cañón", "Valle de Cocora", "San Andrés", "Islas Galápagos", "Santa Marta", "Cartagena", "Medellín", "Barcelona", "Roma").
+- Extraer "city" como el municipio o ciudad de referencia correspondiente (ej: "Santa Marta" si es Parque Tayrona, "Salento" si es Valle de Cocora, o el mismo destino si es ciudad).
+- Solo extraer si el usuario declara EXPLÍCITAMENTE que desea viajar allí, explorar la zona o cambiar de destino.
+- Si el usuario menciona un lugar como corrección, queja o negación (ej: "te equivocaste, esos lugares son de Barranquilla, no de Santa Marta"), NO sobreescribas el destino y mantén: "destination": ${JSON.stringify(currentData.destination || currentData.city || null)}, "city": ${JSON.stringify(currentData.city || currentData.destination || null)}.
 
 Devuelve ÚNICAMENTE un JSON con:
-- "city": ciudad destino explícita (ej: "Santa Marta", "Cartagena", "Medellín") o null si no se menciona.
+- "destination": destino turístico explícito (parque natural, reserva, isla, valle, región, pueblo o ciudad) o null si no se menciona.
+- "city": ciudad/municipio de referencia o null.
 - "country": país o null.
-- "datesSeason": fechas o temporada (ej: "del 9 al 12 de octubre", "julio", "puente de noviembre").
+- "datesSeason": fechas o temporada (ej: "del 9 al 12 de octubre", "julio", "puente de noviembre", "este fin de semana").
 - "durationDays": número de días explícito O calculado a partir del rango de fechas (ej: del 9 al 12 de octubre son 4 días -> 4, "3 días" -> 3). Si no hay fechas ni duración, DEBE ser null.
 - "companions": acompañantes (ej: "solo", "en pareja", "con amigos", "en familia").
 - "groupSize": número de personas si se menciona.
 - "hasChildren": true si viaja con niños, false si no.
 - "budget": "Económico", "Moderado", "Lujo", "Ajustado" o null.
 - "transport": "Caminando", "Auto rentado", "Transporte público", "Bicicleta", "Taxi / Uber" o null.
-- "interests": lista de intereses mencionados (ej: ["playa", "gastronomía", "cultura"]).
+- "interests": lista de intereses mencionados (ej: ["playa", "naturaleza", "fotografía", "gastronomía", "cultura"]).
 - "selectedHotel": { "name": "Nombre del hotel" } o null si no se ha elegido.
 - "accommodationStatus": "Casa propia / familiar", "Hotel elegido", "Por definir" o null.
-- "specificPlaces": lista de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Manuel Restaurante", "dia": 1 }, { "name": "Museo del Caribe", "dia": 2 }]). NUNCA incluir actividades genéricas ("Instalación en casa", "Llegada", "Despedida", "Picnic en la zona", "Tiempo libre", "Día libre", "Últimos momentos...", "local").`
+- "specificPlaces": lista de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Cabo San Juan", "dia": 1 }, { "name": "Playa de Arrecifes", "dia": 2 }]). NUNCA incluir actividades genéricas ("Instalación en casa", "Llegada", "Despedida", "Picnic en la zona", "Tiempo libre", "Día libre", "Últimos momentos...", "local").`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -675,6 +678,13 @@ Devuelve ÚNICAMENTE un JSON con:
       const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
       if (parsed.durationDays && !parsed.durationHours) {
         parsed.durationHours = Number(parsed.durationDays) * 24
+      }
+
+      if (parsed.destination && !parsed.city) {
+        parsed.city = parsed.destination
+      }
+      if (parsed.city && !parsed.destination) {
+        parsed.destination = parsed.city
       }
 
       // Safeguard: Do NOT overwrite known destination if user is making a correction/negation
