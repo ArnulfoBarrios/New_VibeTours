@@ -337,7 +337,7 @@ class VoiceGuideService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
 
-    // 1. Intentar llamada directa con OpenAI API Key si está configurada en la app
+    // 1. Intentar llamada directa ultra-rápida si OpenAI API Key está configurada en la app
     final openAiKey = AppConfig.openAiApiKey;
     if (openAiKey.isNotEmpty) {
       try {
@@ -355,21 +355,24 @@ class VoiceGuideService {
             'speed': s.clamp(0.25, 4.0),
             'response_format': 'mp3',
           }),
-        ).timeout(const Duration(seconds: 12));
+        ).timeout(const Duration(seconds: 5));
 
         if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
           _speechMemoryCache[cacheKey] = response.bodyBytes;
           return response.bodyBytes;
+        } else {
+          debugPrint('[VoiceGuide] OpenAI TTS HTTP ${response.statusCode}: ${response.body}');
         }
       } catch (e) {
-        debugPrint('[VoiceGuide] Nota en llamada directa a OpenAI TTS: $e');
+        debugPrint('[VoiceGuide] Error en llamada directa a OpenAI TTS: $e');
       }
     }
 
-    // 2. Intentar a través de las rutas del backend (/ai/speech o /ai/tts)
-    for (final baseUrl in AppConfig.apiBaseUrls) {
+    // 2. Intentar únicamente con la URL base principal configurada (con timeout corto de 3s para no demorar la reproducción)
+    final mainApiUrl = AppConfig.apiBaseUrl;
+    if (mainApiUrl.isNotEmpty) {
       try {
-        final uri = Uri.parse('$baseUrl/ai/speech');
+        final uri = Uri.parse('$mainApiUrl/ai/speech');
         final response = await http.post(
           uri,
           headers: {'Content-Type': 'application/json'},
@@ -379,14 +382,14 @@ class VoiceGuideService {
             'speed': s.clamp(0.25, 4.0),
             'model': model,
           }),
-        ).timeout(const Duration(seconds: 12));
+        ).timeout(const Duration(seconds: 3));
 
         if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
           _speechMemoryCache[cacheKey] = response.bodyBytes;
           return response.bodyBytes;
         }
       } catch (e) {
-        debugPrint('[VoiceGuide] Nota al solicitar audio TTS a $baseUrl: $e');
+        debugPrint('[VoiceGuide] Nota: backend $mainApiUrl no respondió speech ($e)');
       }
     }
 
