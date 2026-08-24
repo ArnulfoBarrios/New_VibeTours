@@ -325,7 +325,7 @@ class VoiceGuideService {
     await speak('$title. $description', lang: lang);
   }
 
-  Future<Uint8List?> _fetchSpeechAudio(String text, {String? voice, double? speed, String model = 'tts-1-hd'}) async {
+  Future<Uint8List?> _fetchSpeechAudio(String text, {String? voice, double? speed, String model = 'tts-1'}) async {
     final v = voice ?? _selectedOpenAiVoice;
     final s = speed ?? _currentMultiplier;
     final cacheKey = '${model}_${v}_${s.toStringAsFixed(2)}_$text';
@@ -402,13 +402,13 @@ class VoiceGuideService {
 
     await stop();
 
-    // 1. Intentar reproducir con voz humana femenina de alta definición (OpenAI TTS HD - Nova)
+    // 1. Intentar reproducir con voz humana femenina de OpenAI TTS (Nova)
     try {
-      final audioBytes = await _fetchSpeechAudio(value, voice: voice, model: 'tts-1-hd');
+      final audioBytes = await _fetchSpeechAudio(value, voice: voice, model: 'tts-1');
       if (audioBytes != null && audioBytes.isNotEmpty) {
         await _audioPlayer.setPlaybackRate(_currentMultiplier);
         await _audioPlayer.play(BytesSource(audioBytes));
-        debugPrint('[VoiceGuide] Reproduciendo narración con voz humana femenina OpenAI TTS HD ($selectedOpenAiVoice)');
+        debugPrint('[VoiceGuide] Reproduciendo narración con voz humana femenina OpenAI TTS ($selectedOpenAiVoice)');
         return;
       }
     } catch (e) {
