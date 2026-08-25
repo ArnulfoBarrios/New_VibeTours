@@ -284,11 +284,14 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
               } catch (_) {}
             }
 
+            final isMicro = canonical?.isMicroDestination == true ||
+                RegExp(r'tayrona|minca|guatapé|guatape|islas del rosario|isla barú|isla baru', caseSensitive: false).hasMatch(dest.toString());
+
             final request = AiTourRequest(
               prompt: text,
               destination: canonical?.displayName ?? dest.toString(),
               country: canonical?.country ?? updatedPreferences['country']?.toString() ?? '',
-              city: canonical?.city ?? dest.toString(),
+              city: isMicro ? (canonical?.entityName ?? dest.toString()) : (canonical?.city ?? dest.toString()),
               canonicalDestination: canonical,
               type: TourType.custom,
               durationHours: durHours,

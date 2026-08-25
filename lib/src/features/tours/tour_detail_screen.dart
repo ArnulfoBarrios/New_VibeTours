@@ -1576,11 +1576,18 @@ class _StopTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(stop.name, style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  stop.name.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim(),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 4),
                 Text(
-                  '${stop.suggestedMinutes} min - ${stop.activities.isNotEmpty ? stop.activities.first : 'Explorar'}',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  '${stop.suggestedMinutes} min · ${_getStopSubtitle(stop)}',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).textTheme.bodySmall?.color,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -1588,6 +1595,30 @@ class _StopTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _getStopSubtitle(TourStop stop) {
+    final cleanDesc = stop.description.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
+    if (cleanDesc.isNotEmpty && cleanDesc != stop.name && !cleanDesc.toLowerCase().startsWith('ubicado en')) {
+      return cleanDesc;
+    }
+    if (stop.activities.isNotEmpty) {
+      final act = stop.activities.first;
+      if (!act.toLowerCase().startsWith('descubrir la historia') && !act.toLowerCase().startsWith('visitar y explorar')) {
+        return act;
+      }
+    }
+    final lower = stop.name.toLowerCase();
+    if (lower.contains('restaurante') || lower.contains('bistro') || lower.contains('cafe') || lower.contains('bar')) {
+      return 'Gastronomía y sabores locales';
+    }
+    if (lower.contains('playa') || lower.contains('cabo') || lower.contains('piscina') || lower.contains('bahia') || lower.contains('ensenada')) {
+      return 'Playa, mar y paisaje costero';
+    }
+    if (lower.contains('sendero') || lower.contains('pueblito') || lower.contains('trek') || lower.contains('bosque')) {
+      return 'Sendero natural y miradores';
+    }
+    return 'Punto de interés turístico';
   }
 }
 

@@ -110,10 +110,10 @@ export function getPlaceEntityType(placeName) {
   if (!placeName || typeof placeName !== 'string') return 'generic'
   const lower = placeName.toLowerCase()
   if (/\b(museo|museum|galer[íi]a de arte|teatro|monumento|estatua|escultura|castillo|fuerte|muralla|bastion|palacio)\b/i.test(lower)) return 'cultural'
-  if (/\b(parque|jard[íi]n|jardin|bosque|reserva|sendero|cascada|laguna|lago|mirador|bot[áa]nico|botanico)\b/i.test(lower)) return 'park_nature'
-  if (/\b(playa|beach|bah[íi]a|bahia|cala|isla|island|cayo|arrecife|muelle|puerto)\b/i.test(lower)) return 'beach_coastal'
+  if (/\b(parque|jard[íi]n|jardin|bosque|reserva|sendero|cascada|laguna|lago|mirador|bot[áa]nico|botanico|pueblito)\b/i.test(lower)) return 'park_nature'
+  if (/\b(playa|beach|bah[íi]a|bahia|cala|isla|island|cayo|arrecife|muelle|puerto|piscina|cabo|ensenada|playón)\b/i.test(lower)) return 'beach_coastal'
   if (/\b(catedral|bas[íi]lica|basilica|iglesia|capilla|templo|mezquita|sinagoga|santuario)\b/i.test(lower)) return 'religious'
-  if (/\b(restaurante|restaurant|bistro|caf[ée]|coffee|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|panader[íi]a|pasteler[íi]a|comida|helader[íi]a)\b/i.test(lower)) return 'food'
+  if (/\b(restaurante|restaurant|bistro|caf[ée]|coffee|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|panader[íi]a|pasteler[íi]a|comida|helader[íi]a|parador|kiosko)\b/i.test(lower)) return 'food'
   if (/\b(centro comercial|mall|shopping|plaza comercial|mercado|bazar)\b/i.test(lower)) return 'shopping'
   if (/\b(estadio|coliseo|arena|zool[óo]gico|zoologico|acuario|parque de diversiones|parque tem[áa]tico)\b/i.test(lower)) return 'entertainment_sports'
   if (/\b(paseo|malec[oó]n|malecon|rambla|avenida|bulevar|callej[oó]n|callejon|plaza|plazoleta)\b/i.test(lower)) return 'urban_promenade'
@@ -533,6 +533,22 @@ aiRouter.post('/chat', async (req, res, next) => {
       })
     }
 
+    // Fetch verified real food / restaurant places if inquiring about dining or if within planning stages
+    let nearbyFoodPlaces = []
+    const isFoodQuery = /\b(restaurante|restaurantes|comida|comer|almorzar|cenar|gastronom[íi]a|platos|donde comer|d[oó]nde comer)\b/i.test(message)
+    const targetLat = updatedPreferences.latitude || updatedPreferences.canonicalDestination?.latitude
+    const targetLon = updatedPreferences.longitude || updatedPreferences.canonicalDestination?.longitude
+    if (targetLat && targetLon && (isFoodQuery || updatedPreferences.destination)) {
+      try {
+        nearbyFoodPlaces = await overpassNearbyFood(targetLat, targetLon, 8000).catch(() => [])
+        if (!nearbyFoodPlaces || nearbyFoodPlaces.length === 0) {
+          nearbyFoodPlaces = await photonFoodFallback(targetLat, targetLon).catch(() => [])
+        }
+      } catch (err) {
+        console.warn('[ai/chat] nearby food search failed:', err.message)
+      }
+    }
+
     // 3. Generar respuesta conversacional amigable y cordial con la IA
     const chatState = {
       history: [
@@ -545,7 +561,8 @@ aiRouter.post('/chat', async (req, res, next) => {
       chatState,
       `Preferencias del usuario acumuladas: ${JSON.stringify(updatedPreferences)}`,
       webSearchResult?.summary || '',
-      updatedPreferences
+      updatedPreferences,
+      nearbyFoodPlaces
     )
 
     // Extraer lugares SOLO si ya se eligió la ciudad destino y provienen de elecciones explícitas o de un itinerario estructurado confirmado
@@ -3317,6 +3334,15 @@ function generateDynamicTips(name, category, city) {
 
 function generateDynamicActivities(name, category) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
+  if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada/i.test(cleanName)) {
+    return ['Disfrutar del mar, la brisa y arena cristalina', 'Nadar y hacer snorkel en los arrecifes', 'Caminar por la orilla y descansar']
+  }
+  if (/sendero|pueblito|trek|camino|hiking|bosque|reserva/i.test(cleanName)) {
+    return ['Recorrer el sendero ecológico natural', 'Apreciar la flora, fauna y miradores panorámicos', 'Tomar fotos del paisaje natural']
+  }
+  if (/restaurante|comida|cafe|bistro|bar|parador|kiosko|asador/i.test(cleanName)) {
+    return ['Degustar la gastronomía típica local y mariscos', 'Probar bebidas y postres tradicionales', 'Relajarse con la vista del lugar']
+  }
   if (/biblioteca|library|museo|museum|galeria/i.test(cleanName)) {
     return ['Recorrer las galerías principales', 'Visitar la tienda de recuerdos y exposiciones', 'Fotografiar los detalles de la arquitectura']
   }
@@ -3332,7 +3358,7 @@ function generateDynamicActivities(name, category) {
   if (/parque|park|garden/i.test(cleanName)) {
     return ['Pasear por los senderos arbolados', 'Descansar en las áreas verdes', 'Disfrutar del paisaje natural']
   }
-  return [`Descubrir la historia de ${cleanName}`, 'Tomar fotos representativas de la parada', 'Explorar la cultura y ambiente local']
+  return [`Visitar y explorar ${cleanName}`, 'Tomar fotos representativas de la parada', 'Disfrutar del ambiente y cultura local']
 }
 
 async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lon = null, targetCityCoords = null) {
@@ -3687,11 +3713,14 @@ function uniqueByName(values) {
   const seen = new Set()
   return values.filter((value) => {
     if (!value || !value.name) return false
-    const key = normalizeKey(value.name)
-    const fuzzyKey = fuzzyNormalizeKey(value.name)
-    if (seen.has(key) || (fuzzyKey.length > 3 && seen.has(fuzzyKey))) return false
+    const rawType = (value.type || value.category || '').toLowerCase()
+    const isFood = rawType.includes('food') || rawType.includes('restaurant') || /restaurante|cafe|bistro|bar|comida/i.test(value.name)
+    const typePrefix = isFood ? 'food' : 'attraction'
+    const key = `${typePrefix}_${normalizeKey(value.name)}`
+    const fuzzyKey = `${typePrefix}_${fuzzyNormalizeKey(value.name)}`
+    if (seen.has(key) || (fuzzyKey.length > 5 && seen.has(fuzzyKey))) return false
     seen.add(key)
-    if (fuzzyKey.length > 3) seen.add(fuzzyKey)
+    if (fuzzyKey.length > 5) seen.add(fuzzyKey)
     return true
   })
 }
@@ -4328,12 +4357,16 @@ export async function collectTourCandidates(input, location) {
         const isRestaurant = entityType === 'food' || /restaurante|bistro|cafe|comida|asador|gourmet|bar|pub/i.test(placeName)
         
         let geo = null
-        const destLat = canonicalDest?.latitude ?? null
-        const destLon = canonicalDest?.longitude ?? null
+        // Tier 0: Consulta directa por nombre de lugar con sesgo de proximidad al destino
+        if (destLat && destLon) {
+          geo = await geocodePlace(placeName, destLat, destLon).catch(() => null)
+        }
 
         // Tier 1: Consulta directa con contexto de ciudad y país con sesgo de proximidad al destino
-        const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
-        geo = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+          const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
+          geo = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
+        }
 
         // Tier 2: Búsqueda con clasificador canónico universal según el tipo de entidad
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {

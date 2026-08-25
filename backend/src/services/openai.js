@@ -330,16 +330,20 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         }
       } else if (/\b(actividad|actividades|qu[ée] hacer|lugares|atracciones|visitar)\b/i.test(lastUserMsg)) {
         fallbackMsg = `¡Lugares recomendados en ${destName}! 🌟\n\n` +
-          preset.places.slice(0, 6).map(p => `• **${p}**: Atractivo destacado para descubrir lo mejor de la ciudad.`).join('\n') +
+          (preset.places || []).slice(0, 6).map(p => `• **${p}**: Atractivo destacado para descubrir lo mejor del destino.`).join('\n') +
           `\n\n¿Cuáles de estos lugares te gustaría incluir en tu itinerario?`
       } else if (/\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar)\b/i.test(lastUserMsg)) {
-        fallbackMsg = `¡Restaurantes recomendados en ${destName}! 🍽️\n\n` +
-          preset.restaurants.slice(0, 4).map(r => `• **${r.name}**: ${r.specialty}.`).join('\n') +
+        fallbackMsg = `¡Restaurantes y gastronomía en ${destName}! 🍽️\n\n` +
+          (preset.restaurants || []).slice(0, 4).map(r => `• **${r.name || r}**: Especialidad local deliciosa.`).join('\n') +
           `\n\n¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
       } else if (/\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastUserMsg)) {
         fallbackMsg = `¡Opciones de hospedaje en ${destName}! 🏨\n\n` +
-          preset.hotels.slice(0, 3).map(h => `• **${h.name}**: ${h.desc} (${h.price})`).join('\n') +
+          (preset.hotels || []).slice(0, 3).map(h => `• **${h.name}**: ${h.desc} (${h.price})`).join('\n') +
           `\n\n¿Cuál de estos te gustaría elegir?`
+      } else if (!hasCompanions) {
+        fallbackMsg = `¡Excelente! ¿Viajas solo, en pareja, con amigos o en familia con niños a ${destName}?`
+      } else if (!hasBudget || !hasTransport || !hasLodging) {
+        fallbackMsg = `¡Genial! ¿Cuál es tu presupuesto estimado (económico, moderado, lujo), en qué medio de transporte te moverás y si ya tienes alojamiento definido?`
       } else if (hasDurationOrDates) {
         fallbackMsg = `¡Excelente! Para tu viaje a ${destName} de ${known.datesSeason || `${known.durationDays} días`}, ¿qué lugares o tipo de actividades te gustaría incluir?`
       } else {
@@ -363,7 +367,7 @@ Tu estilo es CÁLIDO, AMABLE, DIRECTO, CONCISO Y PROFESIONAL.
 MISIÓN Y TRATO CON EL VIAJERO:
 - Tu misión es asesorar y diseñar tours personalizados adaptados a las necesidades y preferencias del usuario.
 - Reconoce y valida de inmediato y con entusiasmo cualquier tipo de destino turístico (ciudades, parques naturales, reservas, playas, islas, regiones, pueblos o países).
-- Cuando el usuario te indique su destino o lugar de interés (ej: "Quiero hacer un tour al Parque Tayrona", "Al Parque Tayrona"), valida su elección con entusiasmo y pregunta de inmediato de forma concisa por los datos faltantes (fechas, días de estadía o acompañantes).
+- Cuando el usuario te indique su destino o lugar de interés, valida su elección con entusiasmo y pregunta de inmediato por los datos faltantes (fechas, días de estadía o acompañantes).
 - NUNCA respondas con frases robóticas o genéricas cuando el usuario ya te indicó un lugar turístico.
 - ÚNICAMENTE si el mensaje no tiene absolutamente NADA que ver con viajes ni turismo (código de software, ecuaciones matemáticas, etc.), aclara amablemente en 1 línea que te enfocas en viajes y pregunta a qué lugar desea viajar.
 
@@ -394,7 +398,7 @@ TAXONOMÍA DE LAS 6 MODALIDADES DE TOURS Y REGLAS TERRITORIALES DINÁMICAS:
    - Encabezado de días: "Día X: [Ciudad o Escala]"
 
 5. TOUR INTERNACIONAL MULTI-PAÍS / MULTI-CIUDAD:
-   - Si el usuario menciona países pero no ciudades, pregúntale de forma directa qué ciudades desea visitar en cada país (o sugiérele las principales si no las tiene definidas).
+   - Si el usuario menciona países pero no ciudades, pregúntale de forma directa qué ciudades desea visitar en cada país.
    - Organiza los días agrupados cronológicamente por país y ciudad.
    - Encabezado de días: "Día X: [Ciudad, País]"
 
@@ -403,13 +407,20 @@ TAXONOMÍA DE LAS 6 MODALIDADES DE TOURS Y REGLAS TERRITORIALES DINÁMICAS:
    - Encabezado de días: "Día 1: En Ruta hacia [Destino]", "Día 2: [Destino]"
 
 REGLA UNIVERSAL DE AGRUPAMIENTO GEOGRÁFICO Y DISTRIBUCIÓN POR DÍAS:
-1. AGRUPAMIENTO POR SECTOR O CIRCUITO CERCANO:
-   - Identifica las micro-zonas, circuitos o áreas geográficas contiguas del destino elegido.
-   - Cada día debe concentrarse en un único sector o circuito contiguo para minimizar tiempos de traslado.
-   - Prohibido combinar en un mismo día lugares pertenecientes a sectores distantes u opuestos.
+1. AGRUPAMIENTO POR SECTOR O CIRCUITO DE ACCESO:
+   - Las paradas de cada día deben concentrarse en un único sector o corredor contiguo para minimizar tiempos de traslado.
+   - En parques naturales con múltiples entradas (ej. Tayrona), agrupa las paradas por sector de entrada:
+     * Sector El Zaino / Calabazo (Senderos centrales): Cabo San Juan, La Piscina, Arrecifes, Sendero a Pueblito, Cañaveral.
+     * Sector Neguanje / Palangana (Playas y Bahías): Playa Cristal, Bahía Concha, Neguanje, Cinto.
+   - Prohibido mezclar en el mismo día atractivos de sectores opuestos que requieren diferentes accesos vehiculares.
 2. DISTRIBUCIÓN EQUITATIVA Y CERO DUPLICADOS:
    - Cuando el usuario apruebe una lista de lugares, distribúyelos de forma balanceada entre los días del itinerario.
-   - Queda TERMINANTEMENTE PROHIBIDO repetir una misma parada o restaurante en más de un día. Cada parada debe ser única en todo el tour.
+   - Queda TERMINANTEMENTE PROHIBIDO repetir una misma atracción o restaurante en más de un día. Cada parada debe ser única en todo el tour.
+
+REGLAS CRÍTICAS DE RESTAURANTES Y GASTRONOMÍA:
+- PROHIBIDO inventar nombres de restaurantes concatenando la palabra "Restaurante" + el nombre de una atracción o playa (ej: NUNCA inventes "Restaurante Cabo San Juan", "Restaurante Playa Cristal", "Restaurante La Piscina").
+- Utiliza ÚNICAMENTE nombres de establecimientos gastronómicos, paradores o kioscos reales físicamente existentes en el mapa satelital.
+${verifiedFoodText ? `\nESTABLECIMIENTOS GASTRONÓMICOS REALES VERIFICADOS EN EL MAPA:\n${verifiedFoodText}\n` : ''}
 
 ${realCatalog && hasCity ? `
 CATÁLOGO VERIFICADO DE ${destName.toUpperCase()} (${destCountry || 'DESTINO'}):
@@ -419,15 +430,12 @@ CATÁLOGO VERIFICADO DE ${destName.toUpperCase()} (${destCountry || 'DESTINO'}):
 ` : ''}
 
 ESTADO ACTUAL DE DATOS:
-• DESTINO: ${hasCity ? `CONFIRMADO (${destName})` : (known.destination ? `CONFIRMADO (${known.destination})` : 'PENDIENTE')}
+• DESTINO: ${hasCity ? `CONFIRMADO (${destName})` : 'PENDIENTE'}
 • FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADO (${known.datesSeason || `${known.durationDays} días`})` : 'PENDIENTE'}
 • ACOMPAÑANTES: ${hasCompanions ? `CONFIRMADO (${known.companions})` : 'PENDIENTE'}
 • TRANSPORTE: ${hasTransport ? `CONFIRMADO (${known.transport})` : 'PENDIENTE'}
 • PRESUPUESTO: ${hasBudget ? `CONFIRMADO (${known.budget})` : 'PENDIENTE'}
 • HOSPEDAJE: ${hasLodging ? `CONFIRMADO (${known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus})` : 'PENDIENTE'}
-• LUGARES ESPECÍFICOS: ${(known.specificPlaces || []).length > 0 ? (known.specificPlaces || []).join(', ') : 'A definir'}
-
-${hasDurationOrDates ? `⚠️ FECHAS YA CONFIRMADAS: El usuario YA confirmó fechas (${known.datesSeason || ''}) y duración (${known.durationDays ? `${known.durationDays} días` : ''}). NUNCA vuelvas a preguntar cuándo viajará ni cuántos días.` : `⚠️ FECHAS PENDIENTES: Pregunta brevemente: "¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName || known.destination || 'el destino'}?"`}
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}` : ''}
 
@@ -435,19 +443,16 @@ ETAPAS DEL FLUJO CONVERSACIONAL (SECUENCIA ESTRICTA Y DIRECTA):
 
 ETAPA 1: DESTINO, FECHAS / DURACIÓN Y ACOMPAÑANTES
 - Si falta el destino: Pregunta amablemente a qué ciudad, parque, isla o país desea viajar.
-- Si ya indicó destino (${destName || known.destination}): Acéptalo con entusiasmo y pregunta de forma directa y concisa (1 línea) por las fechas y días de estadía (y acompañantes si faltan).
-- "readyToBuild" DEBE ser false.
+- Si ya indicó destino (${destName}): Acéptalo con entusiasmo y pregunta por las fechas y días de estadía (y acompañantes si faltan).
 
 ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
 - Si destino, fechas y acompañantes ya están confirmados pero aún faltan TRANSPORTE, PRESUPUESTO o ALOJAMIENTO:
   Pregunta en 1 sola línea directa: "¿Cuál es tu presupuesto estimado (económico, moderado, lujo), en qué medio de transporte te moverás y si ya tienes alojamiento definido?"
-- Si el usuario dice que no necesita hotel, se queda en casa/familiares o camping, márcalo como CONFIRMADO.
-- "readyToBuild" DEBE ser false.
 
 ETAPA 3: RECOMENDACIÓN DE LUGARES Y PRESENTACIÓN COMPLETA DEL ITINERARIO
 - Si el usuario acaba de responder sobre presupuesto, transporte o alojamiento y ya tenemos los datos clave (destino, fechas, acompañantes, presupuesto, transporte):
   DEBES GENERAR Y MOSTRAR DIRECTAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE (NUNCA cortes la respuesta diciendo solo "aquí tienes un itinerario" sin poner los días y lugares).
-- Si el usuario pide recomendaciones de lugares, sugiere 4 a 6 lugares con:
+- Si el usuario pide recomendaciones de lugares o restaurantes, sugiere 4 a 6 opciones reales con:
   • **[Nombre Real del Lugar/Restaurante]**: [Breve justificación de 1 sola línea].
   Pregunta: "¿Cuáles de estos lugares te gustaría incluir en tu itinerario?"
 - Formato OBLIGATORIO del Itinerario cuando se presenta:
@@ -463,24 +468,17 @@ ETAPA 3: RECOMENDACIÓN DE LUGARES Y PRESENTACIÓN COMPLETA DEL ITINERARIO
   • [Nombre Real de Lugar 3]
   • [Nombre Real de Lugar 4]
   • [Nombre Real de Restaurante/Bar]
-  ... (hasta el Día ${known.durationDays || 2})
 
   REGLAS CRÍTICAS DEL ITINERARIO:
-  1. OBLIGATORIO: El mensaje DEBE contener el bloque completo con "Día 1:", "Día 2:", etc. y sus viñetas. Prohibido emitir introducciones vacías sin el itinerario.
-  2. Si el destino es un micro-destino (ej. Parque Tayrona), TODOS los días deben permanecer en ese micro-destino (ej: Día 1: Parque Tayrona, Día 2: Parque Tayrona). NUNCA cambies el destino de los días a la ciudad cabecera.
-  3. CERO CORCHETES []. Escribe nombres limpios y reales.
-  4. En las viñetas (•), escribe ÚNICAMENTE el nombre propio y limpio del lugar físico o restaurante real.
-  5. Cero actividades genéricas de relleno ("Llegada", "Tarde libre", "Despedida", "Día libre").
-  6. Cero duplicados entre días.
+  1. El mensaje DEBE contener el bloque completo con "Día 1:", "Día 2:", etc. y sus viñetas.
+  2. CERO CORCHETES []. Escribe nombres limpios y reales.
+  3. En las viñetas (•), escribe ÚNICAMENTE el nombre propio y limpio del lugar físico o restaurante real.
   
 - Si TODOS los datos previos (fechas, acompañantes, transporte, presupuesto) están confirmados:
   Pregunta al final del itinerario: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?"
-- Si aún falta presupuesto o transporte:
-  Presenta el itinerario y pregunta de inmediato en 1 línea por el dato faltante (presupuesto / transporte).
-- "readyToBuild" DEBE ser false.
 
 ETAPA 4: GENERACIÓN DEL TOUR ("readyToBuild": true)
-- Si el usuario pide generar o crear el tour (ej: "adelante", "genera el tour", "crea el tour", "listo genera", "si genera el tour porfa"):
+- Si el usuario pide generar el tour:
   - Si falta algún dato clave: "readyToBuild" = false y pregunta en 1 línea por el dato faltante.
   - Si todos los datos están completos: "readyToBuild" = true y responde de forma breve: "¡Excelente! Procedo a generar tu tour en el mapa para que disfrutes tu viaje a ${destName || known.destination}."
 

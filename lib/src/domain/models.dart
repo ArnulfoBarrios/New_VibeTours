@@ -751,6 +751,8 @@ class CanonicalDestination {
     required this.latitude,
     required this.longitude,
     required this.placeId,
+    this.entityName,
+    this.isMicroDestination = false,
     this.isAmbiguous = false,
   });
 
@@ -762,6 +764,8 @@ class CanonicalDestination {
   final double latitude;
   final double longitude;
   final String placeId;
+  final String? entityName;
+  final bool isMicroDestination;
   final bool isAmbiguous;
 
   factory CanonicalDestination.fromJson(Map<String, dynamic> json) {
@@ -774,6 +778,8 @@ class CanonicalDestination {
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       placeId: json['placeId'] as String? ?? '',
+      entityName: json['entityName'] as String?,
+      isMicroDestination: json['isMicroDestination'] == true,
       isAmbiguous: json['isAmbiguous'] == true,
     );
   }
@@ -787,6 +793,8 @@ class CanonicalDestination {
     'latitude': latitude,
     'longitude': longitude,
     'placeId': placeId,
+    'entityName': entityName,
+    'isMicroDestination': isMicroDestination,
     'isAmbiguous': isAmbiguous,
   };
 }
