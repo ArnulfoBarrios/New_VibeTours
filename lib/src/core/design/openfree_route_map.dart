@@ -109,6 +109,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
   bool _styleLoaded = false;
   bool _hasMapError = false;
   bool _hasFitRoute = false;
+  bool _isResolvingRoute = false;
   int _drawRequest = 0;
   int _currentAnimationId = 0;
   int _retryKey = 0;
@@ -503,6 +504,48 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
               ),
             ),
             if (_hasMapError) _buildMapErrorOverlay(),
+            if (_styleLoaded && _isResolvingRoute)
+              Positioned(
+                top: 12,
+                left: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black.withValues(alpha: 0.75)
+                        : Colors.white.withValues(alpha: 0.90),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 11,
+                        height: 11,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Trazando ruta...',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             if (_styleLoaded)
               Positioned(
                 top: 12,
@@ -625,6 +668,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       return;
     }
     
+    if (mounted) setState(() => _isResolvingRoute = true);
     try {
       final resolvedRoute = await _routeService.resolveRoute(widget.points);
       if (!mounted || requestId != _drawRequest) return;
@@ -651,6 +695,10 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
         );
       } catch (e) {
         debugPrint('Error painting fallback route on failure: $e');
+      }
+    } finally {
+      if (mounted && requestId == _drawRequest) {
+        setState(() => _isResolvingRoute = false);
       }
     }
   }

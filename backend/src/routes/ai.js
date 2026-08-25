@@ -489,7 +489,7 @@ aiRouter.post('/chat', async (req, res, next) => {
             delete updatedPreferences.selectedHotel
           }
           updatedPreferences.canonicalDestination = canonical
-          updatedPreferences.city = cleanAdministrativeCityName(canonical.city)
+          updatedPreferences.city = canonical.isMicroDestination ? canonical.entityName : cleanAdministrativeCityName(canonical.city)
           updatedPreferences.country = canonical.country
           updatedPreferences.region = canonical.region
           updatedPreferences.destination = canonical.isMicroDestination ? canonical.entityName : (canonical.entityName || canonical.displayName || canonical.city)
@@ -4249,11 +4249,19 @@ export async function collectTourCandidates(input, location) {
   }
 
   // Case C: Standard single-city tour
-  const city = location?.city || input.city || ''
+  const isMicroDest = Boolean(
+    input.canonicalDestination?.isMicroDestination ||
+    /tayrona|minca|guatapé|guatape|islas del rosario|isla barú|isla baru|san bernardo/i.test(input.destination || '') ||
+    /tayrona|minca|guatapé|guatape|islas del rosario|isla barú|isla baru|san bernardo/i.test(input.city || '')
+  )
+
+  const city = isMicroDest
+    ? (input.canonicalDestination?.entityName || input.destination || location?.city || '')
+    : (location?.city || input.city || '')
   const country = location?.country || input.country || ''
 
-  // Obtenemos primero las coordenadas del centro de la ciudad destino para validar el radio
-  const cityGeo = await geocodePlace(`${city} ${country}`.trim()).catch(() => null)
+  // Obtenemos primero las coordenadas del centro del destino para validar el radio
+  const cityGeo = (location?.latitude && location?.longitude) ? location : await geocodePlace(`${city} ${country}`.trim()).catch(() => null)
   const cityCenterLat = cityGeo?.latitude
   const cityCenterLon = cityGeo?.longitude
 
@@ -4268,12 +4276,10 @@ export async function collectTourCandidates(input, location) {
 
   const isMultiDay = Boolean((input.durationDays && input.durationDays >= 2) || (input.durationHours && input.durationHours >= 24))
   const isWalkingOrUrban = input.transport === 'Caminando' || input.transport === 'Bicicleta' || input.type === 'cultural' || input.type === 'historic'
-  const maxCityRadiusKm = (isRegionalOrNature || isMultiDay) ? 65 : (isWalkingOrUrban ? 4.5 : 15)
+  const maxCityRadiusKm = isMicroDest ? 14 : ((isRegionalOrNature || isMultiDay) ? 65 : (isWalkingOrUrban ? 4.5 : 15))
 
   function isWithinCityBounds(lat, lon, maxDistanceKm = maxCityRadiusKm) {
     if (!cityCenterLat || !cityCenterLon || !lat || !lon) return true
-    const isIslandOrExcursion = /isla|rosario|barú|baru|playa blanca|tayrona|minca|guatapé|ceniza|salgar|puerto colombia/i.test(input.destination || '') || /isla|rosario|barú|baru|playa blanca|tayrona|minca|guatapé|ceniza|salgar|puerto colombia/i.test(input.prompt || '')
-    if (isIslandOrExcursion) return true
     const dist = getDistanceKm(cityCenterLat, cityCenterLon, lat, lon)
     if (dist > maxDistanceKm) {
       console.warn(`[collectTourCandidates] Omitiendo parada lejana (${dist.toFixed(1)} km > ${maxDistanceKm} km del centro de ${city})`)
@@ -4440,15 +4446,10 @@ export async function collectTourCandidates(input, location) {
   }
 
   // 1. Fetch top iconic landmarks from OpenAI global geography knowledge
-  const iconicLandmarks = await fetchCityIconicLandmarks({
-    destination: input.destination,
-    city,
-    country,
-    type: input.type,
-    interests: input.touristInterests,
-    prompt: input.prompt,
-    durationHours: input.durationHours
-  })
+  const iconicLandmarks = await fetchCityIconicLandmarks(
+    isMicroDest ? (input.canonicalDestination?.entityName || input.destination || city) : city,
+    country
+  )
 
   let geocodedIconics = []
   if (Array.isArray(iconicLandmarks) && iconicLandmarks.length > 0) {
