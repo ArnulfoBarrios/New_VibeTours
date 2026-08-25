@@ -630,7 +630,7 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
   return photonFoodFallback(latitude, longitude)
 }
 
-async function photonFoodFallback(latitude, longitude) {
+export async function photonFoodFallback(latitude, longitude) {
   try {
     const url = new URL('https://photon.komoot.io/api/')
     url.searchParams.set('q', 'restaurant')
