@@ -611,19 +611,19 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       return;
     }
 
-    // Pintar primero la Polyline de respaldo de manera instantánea
-    try {
-      await _paintRoute(
-        RoadRouteResult(geometry: widget.points),
-        focusActiveStop: focusActiveStop,
-        fitRoute: !_hasFitRoute,
-        isIncremental: isIncremental,
-      );
-    } catch (e) {
-      debugPrint('Error painting instant fallback route: $e');
+    if (!shouldResolveRoadRoute) {
+      try {
+        await _paintRoute(
+          RoadRouteResult(geometry: widget.points),
+          focusActiveStop: focusActiveStop,
+          fitRoute: !_hasFitRoute,
+          isIncremental: isIncremental,
+        );
+      } catch (e) {
+        debugPrint('Error painting fallback route: $e');
+      }
+      return;
     }
-
-    if (!shouldResolveRoadRoute) return;
     
     try {
       final resolvedRoute = await _routeService.resolveRoute(widget.points);
@@ -634,7 +634,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
           await _paintRoute(
             resolvedRoute,
             focusActiveStop: focusActiveStop,
-            fitRoute: false,
+            fitRoute: !_hasFitRoute,
             isIncremental: isIncremental,
           );
         } catch (e) {
@@ -642,7 +642,16 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
         }
       }
     } catch (_) {
-      // La ruta de respaldo ya se pintó previamente
+      try {
+        await _paintRoute(
+          RoadRouteResult(geometry: widget.points),
+          focusActiveStop: focusActiveStop,
+          fitRoute: !_hasFitRoute,
+          isIncremental: isIncremental,
+        );
+      } catch (e) {
+        debugPrint('Error painting fallback route on failure: $e');
+      }
     }
   }
 
@@ -774,6 +783,40 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
               lineJoin: 'round',
             ),
           );
+        } catch (_) {}
+      }
+    }
+
+    // Draw walking / hiking trail approach segments with Google Maps-style dotted trail
+    for (final walkingSegment in route.walkingSegments) {
+      final segmentPoints = [
+        for (final point in walkingSegment)
+          LatLng(point.latitude, point.longitude),
+      ];
+      if (segmentPoints.length > 1) {
+        try {
+          await controller.addLine(
+            LineOptions(
+              geometry: segmentPoints,
+              lineColor: '#80B3FF',
+              lineWidth: 3.5,
+              lineOpacity: 0.85,
+              lineJoin: 'round',
+            ),
+          );
+          final dots = _generateWalkingDots(segmentPoints);
+          if (dots.isNotEmpty) {
+            await controller.addCircles([
+              for (final dot in dots)
+                CircleOptions(
+                  geometry: dot,
+                  circleRadius: 3.5,
+                  circleColor: '#0055FF',
+                  circleOpacity: 0.98,
+                  circleStrokeWidth: 0,
+                ),
+            ]);
+          }
         } catch (_) {}
       }
     }
@@ -1207,6 +1250,27 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       southwest: LatLng(minLat, minLng),
       northeast: LatLng(maxLat, maxLng),
     );
+  }
+
+  List<LatLng> _generateWalkingDots(List<LatLng> points) {
+    final dots = <LatLng>[];
+    if (points.length < 2) return dots;
+
+    for (int i = 0; i < points.length - 1; i++) {
+      final p1 = points[i];
+      final p2 = points[i + 1];
+      final dLat = p2.latitude - p1.latitude;
+      final dLng = p2.longitude - p1.longitude;
+      final distDeg = math.sqrt(dLat * dLat + dLng * dLng);
+      // Dot step ~ 0.00035 degrees (~35-40 meters)
+      const step = 0.00035;
+      final numSteps = (distDeg / step).round().clamp(1, 80);
+      for (int s = 0; s <= numSteps; s++) {
+        final t = s / numSteps;
+        dots.add(LatLng(p1.latitude + dLat * t, p1.longitude + dLng * t));
+      }
+    }
+    return dots;
   }
 
   double _distanceSquared(LatLng p1, LatLng p2) {

@@ -125,19 +125,30 @@ export async function resolveCanonicalDestination(query, options = {}) {
 
   if (/^cartagena$/i.test(normalizedQuery.trim()) || /^cartagena de indias$/i.test(normalizedQuery.trim())) {
     normalizedQuery = 'Cartagena, Colombia'
+  } else if (/\btayrona\b/i.test(normalizedQuery) && !/parque nacional natural/i.test(normalizedQuery)) {
+    normalizedQuery = 'Parque Nacional Natural Tayrona, Colombia'
   }
 
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.searchParams.set('format', 'jsonv2')
-  url.searchParams.set('limit', '5')
+  url.searchParams.set('limit', '8')
   url.searchParams.set('addressdetails', '1')
   url.searchParams.set('q', normalizedQuery)
 
   try {
     const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
     if (response.ok) {
-      const results = await response.json()
-      if (Array.isArray(results) && results.length > 0) {
+      const rawResults = await response.json()
+      if (Array.isArray(rawResults) && rawResults.length > 0) {
+        // Discard commercial shops/malls, highways/services, and parking lots when searching for tourist destinations
+        const validResults = rawResults.filter(item => {
+          if (item.category === 'shop' || item.type === 'mall') return false
+          if (item.category === 'highway' && item.type === 'service') return false
+          if (item.category === 'amenity' && (item.type === 'parking' || item.type === 'fuel')) return false
+          return true
+        })
+        const results = validResults.length > 0 ? validResults : rawResults
+
         const candidateObjects = results.map(item => {
           const address = item.address || {}
           let rawCity = address.city || address.town || address.village || address.municipality || address.county || address.state_district || ''
@@ -153,6 +164,8 @@ export async function resolveCanonicalDestination(query, options = {}) {
           const entity = item.name ? cleanAdministrativeCityName(item.name.split(',')[0]) : ''
           const isEntityDifferentFromCity = Boolean(entity && city && entity.toLowerCase() !== city.toLowerCase())
           const isMicro = Boolean(
+            item.category === 'boundary' && item.type === 'national_park' ||
+            item.category === 'leisure' && (item.type === 'nature_reserve' || item.type === 'park') ||
             isEntityDifferentFromCity ||
             /\b(parque|reserva|isla|islas|playa|valle|cayo|archipi[ée]lago|embalse|lago|laguna|cañ[oó]n|sierra|nevado)\b/i.test(cleaned) ||
             /\b(parque|reserva|isla|islas|playa|valle|cayo|archipi[ée]lago|embalse|lago|laguna|cañ[oó]n|sierra|nevado)\b/i.test(entity)
@@ -172,12 +185,19 @@ export async function resolveCanonicalDestination(query, options = {}) {
             latitude: lat,
             longitude: lon,
             placeId: String(item.place_id || item.osm_id || `${lat}_${lon}`),
-            rawName: item.name || item.display_name
+            rawName: item.name || item.display_name,
+            category: item.category,
+            type: item.type
           }
         }).filter(c => (c.city || c.entityName) && Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
 
         if (candidateObjects.length > 0) {
           let primary = candidateObjects[0]
+          // Prioritize national park or protected area if searching for a park
+          const parkMatch = candidateObjects.find(c => c.category === 'boundary' && (c.type === 'national_park' || c.type === 'protected_area'))
+          if (parkMatch && /\b(parque|reserva|natural)\b/i.test(cleaned)) {
+            primary = parkMatch
+          }
           if (/^cartagena$/i.test(cleaned) && !/españa|spain|murcia/i.test(cleaned)) {
             const colMatch = candidateObjects.find(c => c.countryCode === 'CO' || c.country === 'Colombia')
             if (colMatch) primary = colMatch

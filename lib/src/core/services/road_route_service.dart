@@ -26,6 +26,7 @@ class RoadRouteResult {
     required this.geometry,
     this.maritimeSegments = const [],
     this.flightSegments = const [],
+    this.walkingSegments = const [],
     this.ports = const [],
     this.airports = const [],
     this.usesMaritimeTransfer = false,
@@ -42,6 +43,7 @@ class RoadRouteResult {
   final List<GeoPoint> geometry;
   final List<List<GeoPoint>> maritimeSegments;
   final List<List<GeoPoint>> flightSegments;
+  final List<List<GeoPoint>> walkingSegments;
   final List<RoutePortWaypoint> ports;
   final List<RoutePortWaypoint> airports;
   final bool usesMaritimeTransfer;
@@ -114,9 +116,10 @@ class RoadRouteService {
   }) async {
     final geometry = <GeoPoint>[];
     final maritimeSegments = <List<GeoPoint>>[];
+    final flightSegments = <List<GeoPoint>>[];
+    final walkingSegments = <List<GeoPoint>>[];
     final ports = <RoutePortWaypoint>[];
     final airports = <RoutePortWaypoint>[];
-    final flightSegments = <List<GeoPoint>>[];
     var usesMaritimeTransfer = false;
     var usesFlightTransfer = false;
     var usedFallback = false;
@@ -157,6 +160,17 @@ class RoadRouteService {
           _looksLikeMaritimeTransfer(roadRoute, start, end);
 
       if (!requiresPortTransfer) {
+        final roadGeo = roadRoute.geometry;
+        if (roadGeo.isNotEmpty) {
+          final firstPoint = roadGeo.first;
+          final lastPoint = roadGeo.last;
+          if (_distanceMeters(start, firstPoint) > 250) {
+            walkingSegments.add([start, firstPoint]);
+          }
+          if (_distanceMeters(lastPoint, end) > 250) {
+            walkingSegments.add([lastPoint, end]);
+          }
+        }
         _appendGeometry(
           geometry,
           _withRequestedEndpoints(roadRoute.geometry, start, end),
@@ -180,6 +194,17 @@ class RoadRouteService {
         totalTrafficDelaySeconds += maritimeRoute.trafficDelaySeconds ?? 0;
         usesLiveTraffic = usesLiveTraffic || maritimeRoute.usesLiveTraffic;
       } else if (roadRoute != null) {
+        final roadGeo = roadRoute.geometry;
+        if (roadGeo.isNotEmpty) {
+          final firstPoint = roadGeo.first;
+          final lastPoint = roadGeo.last;
+          if (_distanceMeters(start, firstPoint) > 250) {
+            walkingSegments.add([start, firstPoint]);
+          }
+          if (_distanceMeters(lastPoint, end) > 250) {
+            walkingSegments.add([lastPoint, end]);
+          }
+        }
         _appendGeometry(
           geometry,
           _withRequestedEndpoints(roadRoute.geometry, start, end),
@@ -189,8 +214,9 @@ class RoadRouteService {
         totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
         usesLiveTraffic = usesLiveTraffic || roadRoute.usesLiveTraffic;
       } else {
-        // No valid land route exists across water/terrain: do NOT draw a fake straight line across oceans
-        _appendGeometry(geometry, [start]);
+        // Pedestrian / trail off-road access segment
+        walkingSegments.add([start, end]);
+        _appendGeometry(geometry, [start, end]);
         totalDistanceMeters += _distanceMeters(start, end);
         usedFallback = true;
       }
@@ -200,6 +226,7 @@ class RoadRouteService {
       geometry: geometry.isEmpty ? points : geometry,
       maritimeSegments: maritimeSegments,
       flightSegments: flightSegments,
+      walkingSegments: walkingSegments,
       ports: _dedupePorts(ports),
       airports: _dedupePorts(airports),
       usesMaritimeTransfer: usesMaritimeTransfer,
