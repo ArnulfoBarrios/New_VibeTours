@@ -571,6 +571,18 @@ REGLAS PARA "specificPlaces":
     const actionChips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
     const parsedExtracted = parsed.extractedPreferences || {}
 
+    // Filtrar estrictamente cualquier hotel que se haya colado en specificPlaces
+    if (Array.isArray(parsedExtracted.specificPlaces)) {
+      parsedExtracted.specificPlaces = parsedExtracted.specificPlaces.filter(p => {
+        const pName = typeof p === 'string' ? p : (p?.name || '')
+        const pNameLower = pName.toLowerCase()
+        if (/\b(hotel|hostal|resort|inn|lodging|alojamiento|the meeting point|imperial|yivinaca|monaco real|colonial inn|canadiense)\b/i.test(pNameLower)) {
+          return false
+        }
+        return true
+      })
+    }
+
     // Safeguard: If the bot claimed to present the itinerary but omitted the "Día 1:" block, reconstruct the complete day-by-day text
     const mentionsPresentingItinerary = /\b(aqu[íi]\s+tienes\s+(un|el)\s+itinerario|itinerario\s+para\s+tu\s+viaje|este\s+es\s+el\s+itinerario|itinerario\s+de\s+viaje)\b/i.test(responseMessage)
     const hasDayHeaders = /d[íi]a\s*1\s*:/i.test(responseMessage)
@@ -763,6 +775,17 @@ Devuelve ÚNICAMENTE un JSON con:
       const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
       if (parsed.durationDays && !parsed.durationHours) {
         parsed.durationHours = Number(parsed.durationDays) * 24
+      }
+
+      if (Array.isArray(parsed.specificPlaces)) {
+        parsed.specificPlaces = parsed.specificPlaces.filter(p => {
+          const pName = typeof p === 'string' ? p : (p?.name || '')
+          const pNameLower = pName.toLowerCase()
+          if (/\b(hotel|hostal|resort|inn|lodging|alojamiento|the meeting point|imperial|yivinaca|monaco real|colonial inn|canadiense)\b/i.test(pNameLower)) {
+            return false
+          }
+          return true
+        })
       }
 
       if (parsed.destination && !parsed.city) {

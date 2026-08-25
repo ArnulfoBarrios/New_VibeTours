@@ -251,7 +251,7 @@ export function isValidSpecificPlace(placeName) {
 
   // 2. Descartar comodidades de hoteles, metadatos, acciones y frases meta de viaje
   if (!/^(?:la\s+piscina|playa\s+la\s+piscina|piscina\s+natural)\b/i.test(cleanLower)) {
-    const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|irotama|zuana|decameron|hilton|marriott|movich|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|regreso al hotel|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
+    const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|irotama|zuana|decameron|hilton|marriott|movich|casa la fe|casa isabel|majagua|the meeting point|yivinaca|colonial inn|monaco real|canadiense|imperial|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|regreso al hotel|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
     if (isMetaOrAmenity) return false
   }
 
@@ -4390,10 +4390,15 @@ export async function collectTourCandidates(input, location) {
   }
 
   // Geocode any specific places requested or discussed in chat
-  const mergedSpecifics = deduplicatePlacesByName([
+  const rawSpecifics = [
     ...(Array.isArray(input.specificPlaces) ? input.specificPlaces : []),
     ...(Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
-  ])
+  ].filter(p => {
+    const pName = typeof p === 'string' ? p : (p?.name || '')
+    return isValidSpecificPlace(pName)
+  })
+
+  const mergedSpecifics = deduplicatePlacesByName(rawSpecifics)
 
   let geocodedSpecifics = []
   if (mergedSpecifics.length > 0) {
