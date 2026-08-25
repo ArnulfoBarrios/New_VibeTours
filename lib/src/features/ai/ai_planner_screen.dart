@@ -1498,9 +1498,13 @@ class FormattedMessageText extends StatelessWidget {
         continue;
       }
 
-      // Bullet points (- or *)
-      if (line.startsWith('- ') || line.startsWith('* ')) {
-        final bulletText = line.substring(2).trim();
+      // Bullet points (•, -, or *)
+      if (line.startsWith('• ') || line.startsWith('•') || line.startsWith('- ') || line.startsWith('* ')) {
+        final bulletText = line.startsWith('• ')
+            ? line.substring(2).trim()
+            : line.startsWith('•')
+                ? line.substring(1).trim()
+                : line.substring(2).trim();
         children.add(
           Padding(
             padding: const EdgeInsets.only(left: 4, top: 2, bottom: 2),
@@ -1514,6 +1518,23 @@ class FormattedMessageText extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        );
+        continue;
+      }
+
+      // Itinerary / Day headers (e.g., Día 1: Barranquilla, Itinerario de Viaje...)
+      final isDayOrItineraryHeader = RegExp(r'^(?:D[íi]a\s*\d+|Itinerario(?:\s+de\s+Viaje)?)\b', caseSensitive: false).hasMatch(line);
+      if (isDayOrItineraryHeader) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: RichText(
+              text: _buildTextSpan(
+                line.startsWith('**') ? line : '**$line**',
+                textColor,
+              ),
             ),
           ),
         );

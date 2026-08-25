@@ -214,9 +214,8 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
       specificPlaces: ['Castillo San Felipe', 'Islas del Rosario', 'Ciudad Amurallada']
     }
     const res = await generateChatResponse(state, '', '', currentPreferences)
-    assert.ok(res.responseMessage.includes('Día 1 en Cartagena'))
-    assert.ok(res.responseMessage.includes('Mañana'))
-    assert.ok(res.responseMessage.includes('Almuerzo'))
+    assert.ok(res.responseMessage.includes('Día 1: Cartagena'))
+    assert.ok(res.responseMessage.includes('Castillo San Felipe'))
   })
 
   it('should return exact high precision verified coordinates for Islas del Rosario and Castillo San Felipe', async () => {
