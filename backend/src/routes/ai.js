@@ -249,9 +249,11 @@ export function isValidSpecificPlace(placeName) {
     return false
   }
 
-  // 2. Descartar comodidades, hoteles, metadatos (Presupuesto, Transporte, Alojamiento), acciones y frases meta de viaje
-  const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|irotama|zuana|decameron|hilton|marriott|movich|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|regreso al hotel|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|piscina|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
-  if (isMetaOrAmenity) return false
+  // 2. Descartar comodidades de hoteles, metadatos, acciones y frases meta de viaje
+  if (!/^(?:la\s+piscina|playa\s+la\s+piscina|piscina\s+natural)\b/i.test(cleanLower)) {
+    const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|irotama|zuana|decameron|hilton|marriott|movich|casa la fe|casa isabel|majagua|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|regreso al hotel|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
+    if (isMetaOrAmenity) return false
+  }
 
   // 2.1 Descartar actividades descriptivas de viaje, check-ins, ocio genérico, despedidas o momentos libres
   const isDescriptiveActivity = /\b(instalaci[oó]n|instalacion en casa|en casa|llegada a|bienvenida|despedida de|despedida|regreso a|regreso al hotel|picnic|picnic o almuerzo|picnic en la zona|almuerzo en la zona|comida en la zona|tarde libre|tiempo libre|d[íi]a libre|dia libre|mañana libre|noche libre|compras o descanso|para compras|últimos momentos|ultimos momentos|disfrutar de la ciudad|a tu ritmo|participaci[oó]n en|evento cultural|si hay alguno|relax en|de relax|vida nocturna en|exploraci[oó]n de|descubrir la historia|fiesta nocturna|vida nocturna|noche de fiesta|noche de rumba|rumba|tubbing|tubing|careteo|rafting|canopy|kayak|paddle|senderismo|caminata|cascadas y visita|visita a fincas|fincas de caf[ée]|finca cafetera|fincas cafeteras)\b/i.test(cleanLower)
@@ -976,6 +978,10 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         message: '¿A qué ciudad o lugar te gustaría ir? Basado en lo que buscas, aquí tienes algunas recomendaciones:',
         suggestions
       })
+    }
+
+    if (!input.durationHours && input.durationDays) {
+      input.durationHours = Number(input.durationDays) === 1 ? 8 : Number(input.durationDays) * 24
     }
 
     // RULE 3: If duration is missing and NOT specified in prompt, ASK FOR DURATION
@@ -4357,6 +4363,9 @@ export async function collectTourCandidates(input, location) {
         const isRestaurant = entityType === 'food' || /restaurante|bistro|cafe|comida|asador|gourmet|bar|pub/i.test(placeName)
         
         let geo = null
+        const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
+        const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
+
         // Tier 0: Consulta directa por nombre de lugar con sesgo de proximidad al destino
         if (destLat && destLon) {
           geo = await geocodePlace(placeName, destLat, destLon).catch(() => null)
@@ -4620,7 +4629,7 @@ export async function collectTourCandidates(input, location) {
     source = 'chat-augmented-places'
   }
 
-  if (normalizedPool.length < 3) {
+  if (selected.length < 3 && normalizedPool.length < 3) {
     console.info('[tour-ai] Lack of geodata candidates. Fetching real suggestions from OpenAI...', { destination: input.destination, city, country })
     const aiFallbacks = await suggestFallbackPlacesWithOpenAI({
       destination: input.destination,
