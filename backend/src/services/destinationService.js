@@ -151,7 +151,12 @@ export async function resolveCanonicalDestination(query, options = {}) {
 
           // Format clean displayName e.g. "Parque Nacional Natural Tayrona, Santa Marta, Colombia" or "Santa Marta, Magdalena, Colombia"
           const entity = item.name ? cleanAdministrativeCityName(item.name.split(',')[0]) : ''
-          const isEntityDifferentFromCity = entity && city && entity.toLowerCase() !== city.toLowerCase()
+          const isEntityDifferentFromCity = Boolean(entity && city && entity.toLowerCase() !== city.toLowerCase())
+          const isMicro = Boolean(
+            isEntityDifferentFromCity ||
+            /\b(parque|reserva|isla|islas|playa|valle|cayo|archipi[ée]lago|embalse|lago|laguna|cañ[oó]n|sierra|nevado)\b/i.test(cleaned) ||
+            /\b(parque|reserva|isla|islas|playa|valle|cayo|archipi[ée]lago|embalse|lago|laguna|cañ[oó]n|sierra|nevado)\b/i.test(entity)
+          )
           const firstPart = isEntityDifferentFromCity ? `${entity}, ${city}` : (city || entity || cleaned)
           const displayParts = [firstPart, (region && region !== city && !firstPart.includes(region)) ? region : '', country].filter(Boolean)
           const displayName = displayParts.join(', ')
@@ -159,7 +164,8 @@ export async function resolveCanonicalDestination(query, options = {}) {
           return {
             displayName,
             city: city || cleaned,
-            entityName: entity || cleaned,
+            entityName: isMicro ? (entity || cleaned) : (entity || city || cleaned),
+            isMicroDestination: isMicro,
             region,
             country,
             countryCode,
@@ -195,6 +201,8 @@ export async function resolveCanonicalDestination(query, options = {}) {
           const result = {
             displayName: primary.displayName,
             city: primary.city,
+            entityName: primary.entityName,
+            isMicroDestination: Boolean(primary.isMicroDestination),
             region: primary.region,
             country: primary.country,
             countryCode: primary.countryCode,
@@ -227,10 +235,13 @@ export function validateCandidateLocation(place, canonicalDest, maxDistanceKm = 
     return false
   }
 
-  // 1. Haversine distance check from canonical center
+  // 1. If destination is a micro-destination (e.g. Parque Tayrona, Minca, Guatapé), use a strict radius (18 km) around the park/entity center
+  const allowedRadius = canonicalDest.isMicroDestination ? 18 : maxDistanceKm
+
+  // 2. Haversine distance check from canonical center
   const distKm = haversineDistanceKm(canonicalDest.latitude, canonicalDest.longitude, lat, lon)
-  if (distKm > maxDistanceKm) {
-    console.warn(`[validateCandidateLocation] Discarding "${place.name}" (${distKm.toFixed(1)} km > ${maxDistanceKm} km from ${canonicalDest.displayName})`)
+  if (distKm > allowedRadius) {
+    console.warn(`[validateCandidateLocation] Discarding "${place.name}" (${distKm.toFixed(1)} km > ${allowedRadius} km from ${canonicalDest.displayName})`)
     return false
   }
 

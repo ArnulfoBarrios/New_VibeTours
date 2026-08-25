@@ -280,7 +280,7 @@ export function isValidSpecificPlace(placeName) {
   }
 
   // 5. Descartar categorías de turismo generales, eventos/festivales y etiquetas temáticas
-  const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto|fiesta del mar|fiestas del mar|carnaval|carnavales|festival|festivales|feria|ferias|desfile|desfiles|semana santa|evento|eventos|descripci[óo]n|resumen|notas?|presupuesto|transporte|alojamiento|hospedaje|acompañantes|fechas|duraci[oó]n|destino)$/i.test(cleanLower)
+  const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|paseo|paseos|bailar|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto|fiesta del mar|fiestas del mar|carnaval|carnavales|festival|festivales|feria|ferias|desfile|desfiles|semana santa|evento|eventos|descripci[óo]n|resumen|notas?|presupuesto|transporte|alojamiento|hospedaje|acompañantes|fechas|duraci[oó]n|destino)$/i.test(cleanLower)
   if (isCategoryOrTheme) return false
 
   // 6. Descartar si es país o "Ciudad, País"
@@ -468,16 +468,19 @@ aiRouter.post('/chat', async (req, res, next) => {
       if (!updatedPreferences.cities || updatedPreferences.cities.length === 0) {
         updatedPreferences.cities = [updatedPreferences.originPlace, updatedPreferences.destinationPlace]
       }
+    } else if (updatedPreferences.isMultiCountry && Array.isArray(updatedPreferences.countries) && updatedPreferences.countries.length > 0) {
+      updatedPreferences.destination = updatedPreferences.countries.join(' y ')
+      updatedPreferences.country = updatedPreferences.countries.join(', ')
     } else {
-      let rawDest = updatedPreferences.city || updatedPreferences.destination
+      let rawDest = updatedPreferences.destination || updatedPreferences.city
       if (rawDest && typeof rawDest === 'string' && rawDest.trim().length > 0) {
         rawDest = cleanAdministrativeCityName(rawDest)
         const canonical = await resolveCanonicalDestination(rawDest)
         if (canonical) {
           // If destination changed, clear previous specific places and hotel to prevent cross-destination pollution
-          if (currentPreferences.canonicalDestination && 
-              currentPreferences.canonicalDestination.city &&
-              currentPreferences.canonicalDestination.city !== canonical.city) {
+          const prevDest = currentPreferences.canonicalDestination?.entityName || currentPreferences.canonicalDestination?.city || currentPreferences.destination || currentPreferences.city
+          const newDest = canonical.entityName || canonical.city
+          if (prevDest && newDest && prevDest.toLowerCase() !== newDest.toLowerCase()) {
             delete updatedPreferences.specificPlaces
             delete updatedPreferences.selectedHotel
           }
@@ -485,12 +488,13 @@ aiRouter.post('/chat', async (req, res, next) => {
           updatedPreferences.city = cleanAdministrativeCityName(canonical.city)
           updatedPreferences.country = canonical.country
           updatedPreferences.region = canonical.region
-          updatedPreferences.destination = canonical.entityName || canonical.displayName || canonical.city
+          updatedPreferences.destination = canonical.isMicroDestination ? canonical.entityName : (canonical.entityName || canonical.displayName || canonical.city)
           if (Number.isFinite(canonical.latitude) && Number.isFinite(canonical.longitude)) {
             updatedPreferences.latitude = canonical.latitude
             updatedPreferences.longitude = canonical.longitude
           }
         } else {
+          updatedPreferences.destination = rawDest
           updatedPreferences.city = cleanAdministrativeCityName(rawDest)
         }
       }
