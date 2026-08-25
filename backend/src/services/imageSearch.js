@@ -159,18 +159,27 @@ export async function wikipediaSummaryText(placeName, city = '', country = '') {
       const sJson = await sRes.json()
       const topHit = sJson?.query?.search?.[0]
       if (topHit && topHit.title) {
-        const slug = encodeURIComponent(topHit.title.replace(/\s+/g, '_'))
-        const sumUrl = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
-        const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
-        if (sumRes.ok) {
-          const sumJson = await sumRes.json()
-          if (sumJson.extract && sumJson.extract.length > 40 && !sumJson.extract.includes('puede referirse a')) {
-            const extractLower = sumJson.extract.toLowerCase()
-            const isEnglish = /\b(is the|is a|was a|located in|town of|municipality of)\b/i.test(extractLower)
-            const isForeignMismatch = (cleanCountry.toLowerCase() === 'colombia' || cleanCity.toLowerCase() === 'cartagena') &&
-              (extractLower.includes('lanzarote') || extractLower.includes('canarias') || extractLower.includes('españa') || extractLower.includes('alicante'))
-            if (!isEnglish && !isForeignMismatch) {
-              return sumJson.extract
+        const topTitleLower = topHit.title.toLowerCase()
+        const cleanLower = cleaned.toLowerCase()
+        const placeWords = cleanLower.split(/\s+/).filter(w => w.length >= 3 && !/^(parque|playa|sendero|cabo|bahia|bahía|hotel|isla|restaurante|el|la|los|las|de|del|en)$/i.test(w))
+        const isBroadMismatch = (topTitleLower.includes('parque nacional') && !cleanLower.includes('parque nacional')) ||
+                                (cleanCity && topTitleLower === cleanCity.toLowerCase())
+        const hasSpecificWordMatch = placeWords.length === 0 || placeWords.some(w => topTitleLower.includes(w))
+
+        if (!isBroadMismatch && hasSpecificWordMatch) {
+          const slug = encodeURIComponent(topHit.title.replace(/\s+/g, '_'))
+          const sumUrl = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
+          const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+          if (sumRes.ok) {
+            const sumJson = await sumRes.json()
+            if (sumJson.extract && sumJson.extract.length > 40 && !sumJson.extract.includes('puede referirse a')) {
+              const extractLower = sumJson.extract.toLowerCase()
+              const isEnglish = /\b(is the|is a|was a|located in|town of|municipality of)\b/i.test(extractLower)
+              const isForeignMismatch = (cleanCountry.toLowerCase() === 'colombia' || cleanCity.toLowerCase() === 'cartagena') &&
+                (extractLower.includes('lanzarote') || extractLower.includes('canarias') || extractLower.includes('españa') || extractLower.includes('alicante'))
+              if (!isEnglish && !isForeignMismatch) {
+                return sumJson.extract
+              }
             }
           }
         }

@@ -1341,7 +1341,13 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop) {
                               final cleanDesc = stop.description.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
                               final narrateText = cleanDesc.isNotEmpty && cleanDesc != cleanName
                                   ? '$cleanName. $cleanDesc'
-                                  : '$cleanName es uno de los atractivos imperdibles en este recorrido. Disfruta de su riqueza histórica, cultural y arquitectura visual.';
+                                  : (RegExp(r'restaurante|comida|cafe|bar|gastronom', caseSensitive: false).hasMatch(cleanName)
+                                      ? '$cleanName es un destacado lugar gastronómico para probar exquisitos sabores locales.'
+                                      : (RegExp(r'playa|beach|bah[íi]a|cabo|piscina|isla|arrecife', caseSensitive: false).hasMatch(cleanName)
+                                          ? '$cleanName es una hermosa playa perfecta para disfrutar del mar y la brisa marina.'
+                                          : (RegExp(r'sendero|pueblito|trek|camino|hiking', caseSensitive: false).hasMatch(cleanName)
+                                              ? '$cleanName es una fascinante ruta de senderismo rodeada de naturaleza y miradores.'
+                                              : '$cleanName es uno de los atractivos imperdibles en este recorrido. Disfruta de la experiencia.')));
                               await voiceService.speak(narrateText);
                             },
                             child: Padding(
@@ -1395,7 +1401,13 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop) {
                       final cleanDesc = stop.description.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
                       final finalDesc = cleanDesc.isNotEmpty && cleanDesc != cleanName
                           ? cleanDesc
-                          : 'Disfruta de $cleanName, un destacado punto de interés con historia, arquitectura y gran valor cultural en esta experiencia.';
+                          : (RegExp(r'restaurante|comida|cafe|bar|gastronom', caseSensitive: false).hasMatch(cleanName)
+                              ? 'Disfruta de $cleanName, un destacado espacio gastronómico ideal para degustar sabores tradicionales y relajarse.'
+                              : (RegExp(r'playa|beach|bah[íi]a|cabo|piscina|isla|arrecife', caseSensitive: false).hasMatch(cleanName)
+                                  ? 'Disfruta de $cleanName, una paradisíaca zona costera de arenas cálidas y aguas cristalinas para conectar con el mar.'
+                                  : (RegExp(r'sendero|pueblito|trek|camino|hiking', caseSensitive: false).hasMatch(cleanName)
+                                      ? 'Disfruta de $cleanName, una fascinante ruta de senderismo rodeada de naturaleza, fauna y miradores.'
+                                      : 'Disfruta de $cleanName, un destacado punto de interés con gran atractivo en esta experiencia.')));
 
                       return Container(
                         width: double.infinity,

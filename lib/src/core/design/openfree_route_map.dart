@@ -506,7 +506,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
             if (_hasMapError) _buildMapErrorOverlay(),
             if (_styleLoaded && _isResolvingRoute)
               Positioned(
-                top: 12,
+                top: MediaQuery.paddingOf(context).top > 0 ? (MediaQuery.paddingOf(context).top + 8) : 12,
                 left: 12,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -548,7 +548,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
               ),
             if (_styleLoaded)
               Positioned(
-                top: 12,
+                top: MediaQuery.paddingOf(context).top > 0 ? (MediaQuery.paddingOf(context).top + 8) : 12,
                 right: 12,
                 child: _buildStyleSelector(),
               ),

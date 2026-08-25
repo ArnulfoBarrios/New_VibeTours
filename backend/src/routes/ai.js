@@ -3275,6 +3275,15 @@ function generateDynamicDescription(name, category, city) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
   const loc = city ? `en ${city}` : 'en la zona'
 
+  if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom/i.test(cleanName) || /food|restaurant|gastronom/i.test(category)) {
+    return `${cleanName} es un destacado establecimiento gastronómico ${loc}, ideal para degustar exquisitos sabores autóctonos, preparaciones tradicionales y disfrutar de una experiencia culinaria inolvidable.`
+  }
+  if (/sendero|pueblito|trek|camino|hiking|bosque|reserva|chairama/i.test(cleanName) || /trail|nature|park/i.test(category)) {
+    return `${cleanName} es una fascinante ruta de senderismo y patrimonio natural ${loc}, rodeada de exuberante vegetación tropical, miradores panorámicos y vestigios culturales de gran valor.`
+  }
+  if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada|costa/i.test(cleanName) || /beach|playa|coastal/i.test(category)) {
+    return `${cleanName} cautiva por sus impresionantes paisajes costeros, arenas doradas y aguas cristalinas ${loc}, ofreciendo un entorno perfecto para el descanso, el mar y la conexión con la naturaleza.`
+  }
   if (/convención|convention|congreso|eventos/i.test(cleanName) || /convention/i.test(category)) {
     return `${cleanName} es un emblemático centro de eventos y exposiciones ${loc}, reconocido por albergar importantes cumbres internacionales, conferencias corporativas y eventos culturales de primer nivel.`
   }
@@ -3293,9 +3302,6 @@ function generateDynamicDescription(name, category, city) {
   if (/arco|arch|formación/i.test(cleanName)) {
     return `${cleanName} representa uno de los monumentos naturales más espectaculares e icónicos ${loc}, tallado por la fuerza del mar y el viento donde se encuentran grandes corrientes oceánicas.`
   }
-  if (/playa|beach|bahía|bay|marina|cabo|caleta/i.test(cleanName) || /playa|sol/i.test(category)) {
-    return `${cleanName} cautiva a los visitantes por sus playas de arena dorada y aguas cristalinas ${loc}, perfectas para nadar, practicar deportes acuáticos, relajarse y contemplar la fauna marina.`
-  }
   if (/museo|museum|galeria|gallery|exhibición/i.test(cleanName) || /museo|arte/i.test(category)) {
     return `${cleanName} resguarda valiosas colecciones históricas, artesanales y artísticas ${loc}, ofreciendo recorridos educativos que conectan a los visitantes con la historia y herencia cultural del lugar.`
   }
@@ -3303,11 +3309,29 @@ function generateDynamicDescription(name, category, city) {
     return `${cleanName} es un verdadero pulmón verde y santuario natural ${loc}, ideal para caminatas, contemplación del paisaje y actividades al aire libre rodeado de flora y fauna local.`
   }
 
-  return `${cleanName} es un lugar emblemático de gran interés ${loc}, destacado por su valor cultural, su arquitectura representativa y las experiencias únicas que ofrece a los viajeros.`
+  return `${cleanName} es un lugar emblemático de gran interés ${loc}, destacado por su valor histórico, cultural y las experiencias únicas que ofrece a los viajeros.`
 }
 
 function generateDynamicTips(name, category, city) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
+  if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada|costa/i.test(cleanName) || /beach|playa|coastal/i.test(category)) {
+    return [
+      `Lleva protector solar biodegradable, abundante agua y calzado adecuado para caminar en arena o senderos.`,
+      `Ten precaución con el oleaje y atiende las banderas y recomendaciones de los guardavidas o guías locales.`
+    ]
+  }
+  if (/sendero|pueblito|trek|camino|hiking|bosque|reserva|chairama/i.test(cleanName) || /trail|nature|park/i.test(category)) {
+    return [
+      `Usa calzado de trekking con buen agarre, ropa fresca y lleva repelente de insectos e hidratación.`,
+      `Transita únicamente por los senderos autorizados para proteger los ecosistemas y restos arqueológicos.`
+    ]
+  }
+  if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom/i.test(cleanName) || /food|restaurant/i.test(category)) {
+    return [
+      `Prueba las especialidades gastronómicas locales, pescados frescos o preparaciones tradicionales de la región.`,
+      `Lleva efectivo por si el establecimiento tiene conectividad limitada en zonas de reserva o playa.`
+    ]
+  }
   if (/biblioteca|library|museo|museum|galeria/i.test(cleanName)) {
     return [
       `Explora con calma las salas principales y verifica las exposiciones temporales de ${cleanName}.`,
@@ -3332,9 +3356,15 @@ function generateDynamicTips(name, category, city) {
       `Tómate unos minutos para admirar la arquitectura del vestíbulo y las obras de arte expuestas.`
     ]
   }
+  if (/parque|park|garden/i.test(cleanName)) {
+    return [
+      `Disfruta de las áreas verdes y camina por los senderos a un ritmo relajado.`,
+      `Mantén limpios los espacios depositando la basura en los puntos ecológicos correspondientes.`
+    ]
+  }
   return [
-    `Recorre ${cleanName} con tiempo suficiente para apreciar sus detalles arquitectónicos y entorno.`,
-    `Toma fotografías desde los mejores ángulos frontales y explora los alrededores.`
+    `Recorre ${cleanName} con tiempo suficiente para disfrutar de su entorno y atractivos locales.`,
+    `Toma fotografías desde los mejores ángulos y consulta a los guías o anfitriones del lugar.`
   ]
 }
 
@@ -4367,7 +4397,11 @@ export async function collectTourCandidates(input, location) {
         const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
 
         // Tier 0: Consulta directa por nombre de lugar con sesgo de proximidad al destino
-        if (destLat && destLon) {
+        if (/pueblito|chairama/i.test(placeName)) {
+          geo = await geocodePlace('Pueblito Tayrona', destLat, destLon).catch(() => null)
+          if (!geo) geo = await geocodePlace('El Pueblito Chairama', destLat, destLon).catch(() => null)
+        }
+        if (!geo && destLat && destLon) {
           geo = await geocodePlace(placeName, destLat, destLon).catch(() => null)
         }
 
@@ -4381,7 +4415,9 @@ export async function collectTourCandidates(input, location) {
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
           const cleanedPlace = placeName.replace(/^(?:el|la|los|las)\s+/i, '').trim()
           
-          if (entityType === 'shopping') {
+          if (/pueblito|chairama/i.test(cleanedPlace)) {
+            geo = await geocodePlace('Pueblito Tayrona', destLat, destLon).catch(() => null)
+          } else if (entityType === 'shopping') {
             geo = await geocodePlace(`Centro Comercial ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
             if (!geo) geo = await geocodePlace(`${cleanedPlace} Mall, ${city}, ${country}`, destLat, destLon).catch(() => null)
             if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
@@ -4445,8 +4481,9 @@ export async function collectTourCandidates(input, location) {
           const originLon = location?.longitude || canonicalDest?.longitude
           if (originLat && originLon) {
             const distKm = haversineMeters(finalLat, finalLon, originLat, originLon) / 1000
-            if (distKm > 45) {
-              console.warn(`[tour-ai] Discarding specific place "${placeName}" (${distKm.toFixed(1)}km from ${city}) because it exceeds city boundary.`)
+            const maxBound = (isMicroDest || canonicalDest?.isMicroDestination) ? 18 : 45
+            if (distKm > maxBound) {
+              console.warn(`[tour-ai] Discarding specific place "${placeName}" (${distKm.toFixed(1)}km from ${city}) because it exceeds boundary (${maxBound}km).`)
               return null
             }
           }
