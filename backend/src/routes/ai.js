@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -1075,28 +1075,48 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     }
     const planner = buildTourPlanner(input, location, candidatePack.places)
     
-    // Batch-generate 100% unique custom reasons for all selected places using OpenAI
+    // Batch-generate 100% unique custom reasons & rich descriptions for all selected places using OpenAI
     const placeNames = planner.selectedPlaces.map(p => p.name)
-    const customReasonsMap = await generateCustomPlaceReasons({
-      destination: input.destination,
-      city: input.city,
-      prompt: input.prompt,
-      places: placeNames
-    }).catch(() => ({}))
+    const [customReasonsMap, richDescriptionsMap] = await Promise.all([
+      generateCustomPlaceReasons({
+        destination: input.destination,
+        city: input.city,
+        prompt: input.prompt,
+        places: placeNames
+      }).catch(() => ({})),
+      generateRichPlaceDescriptionsBatch({
+        destination: input.destination,
+        city: input.city,
+        country: input.country,
+        places: placeNames,
+        prompt: input.prompt
+      }).catch(() => ({}))
+    ])
 
-    // We send back the selected places as recommendations with real images & 100% unique reasons
+    const assignedUrls = new Set()
+    // We send back the selected places as recommendations with real unique images & rich descriptions
     const recommendations = await Promise.all(
       planner.selectedPlaces.map(async (place, index) => {
         let imageUrl = place.imageUrl || place.images?.[0] || ''
-        if (!imageUrl) {
+        if (!imageUrl || assignedUrls.has(imageUrl)) {
           try {
-            imageUrl = await imageForPlace(place.name, input.city || input.destination || '')
+            const imgRes = await imageForPlaceWithStatus(place.name, input.city || input.destination || '', place.category, index, {
+              country: input.country,
+              latitude: place.latitude,
+              longitude: place.longitude,
+              assignedUrls
+            })
+            imageUrl = imgRes.url
           } catch (_) {}
         }
         if (!imageUrl) {
           imageUrl = getReliableCategoryFallbackImage(place.name, place.category)
         }
+        assignedUrls.add(imageUrl)
+
         const aiReason = customReasonsMap[place.name] || null
+        const richDesc = richDescriptionsMap[place.name] || place.description || place.history || ''
+
         return {
           id: place.placeId || place.id || `rec-${index}`,
           name: place.name,
@@ -1104,7 +1124,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
           longitude: place.longitude,
           category: place.category || 'turismo',
           imageUrl,
-          description: place.description || place.history || '',
+          description: richDesc,
           reason: buildRecommendationReason(place, input, aiReason),
           durationMinutes: place.minutes || 25,
           dia: Number(place.dia || place.day || 1),
@@ -1728,13 +1748,27 @@ async function processTourGeneration(jobId, input) {
         : (Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length ? sourceTour.itinerario : (sourceTour.stops ?? planner.selectedPlaces))
       const stopTarget = plannedStops.length > 0 ? plannedStops.length : Math.min(30, Math.max(3, planner.selectedPlaces.length))
       const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
+      
+      const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
+      const richDescriptionsMap = await generateRichPlaceDescriptionsBatch({
+        destination: input.destination,
+        city: input.city,
+        country: input.country,
+        places: plannedPlaceNames,
+        prompt: input.prompt
+      }).catch(() => ({}))
+
+      const assignedUrls = new Set()
       const settledStops = await Promise.allSettled(
         Array.from({ length: stopTarget }, (_, index) => {
           const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
           const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
           const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (anchorPlace?.dia ? Number(anchorPlace.dia) : null)
           const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopTarget) + 1)
-          return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
+          return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
+            descriptionsMap: richDescriptionsMap,
+            assignedUrls
+          })
         }),
       )
       const rawNormalized = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
@@ -3464,7 +3498,7 @@ function sanitizeStopTitle(rawName) {
   return name
 }
 
-async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null) {
+async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null, options = {}) {
   const source = stop && typeof stop === 'object' ? stop : {}
   const ubicacion = source.ubicacion ?? source.locationInfo ?? {}
   const candidateIndex = (index < candidatePlaces.length) ? index : (candidatePlaces.length > 0 ? (index % candidatePlaces.length) : 0)
@@ -3493,20 +3527,15 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
     resolvedName = cleanPlacePhysicalName(candidateFallback?.name || fallbackPlace?.name || `${input.destination}`)
   }
-  let description = source.descripcion ?? source.description ?? ''
+  let description = options?.descriptionsMap?.[resolvedName] || options?.descriptionsMap?.[sourceName] || source.descripcion || source.description || ''
   description = description.replace(/^(Atracci[oó]n(\s*\/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*/i, '').trim()
 
   const isGenericDesc = !description || 
                          description.trim().length < 25 || 
-                         coordinates.wasFallback ||
                          (description.toLowerCase() === resolvedName.toLowerCase()) ||
                          description.includes('un punto de gran interés recomendado') ||
                          description.includes('gran valor patrimonial de') ||
-                         description.includes('increíble entorno natural') ||
-                         description.includes('maravillosa oferta culinaria') ||
-                         description.includes('fascinante atmósfera de') ||
-                         description.includes('identidad auténtica') ||
-                         description.includes('destacado de la zona');
+                         description.includes('identidad auténtica');
 
   if (isGenericDesc) {
     const wikiText = await wikipediaSummaryText(resolvedName, input.city || input.destination, input.country).catch(() => null)
@@ -3542,7 +3571,8 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index, {
     latitude: coordinates.latitude,
     longitude: coordinates.longitude,
-    country: input.country
+    country: input.country,
+    assignedUrls: options?.assignedUrls
   }).catch(() => ({ url: "", isFallback: true }))
   
   // Priorizar siempre la foto REAL obtenida de Wikipedia/Wikimedia/Openverse/Pexels si no es fallback genérico
@@ -4520,6 +4550,17 @@ export async function collectTourCandidates(input, location) {
           p.latitude = anchorMate.latitude + 0.0015
           p.longitude = anchorMate.longitude + 0.0015
         }
+      }
+    }
+
+    // Fast-path: Si el usuario ya seleccionó paradas específicas en el chat y todas están geocodificadas con éxito,
+    // retornar directamente ahorrando múltiples llamadas lentas y timeouts a Overpass/Photon/OpenAI
+    if (geocodedSpecifics.length >= 3 && mergedSpecifics.length >= 3) {
+      console.info(`[collectTourCandidates] Fast-path: Successfully geocoded ${geocodedSpecifics.length} user selected stops directly. Skipping generic city scrapers.`)
+      return {
+        rawCount: geocodedSpecifics.length,
+        places: geocodedSpecifics,
+        source: 'user-chat-selected-places'
       }
     }
   }

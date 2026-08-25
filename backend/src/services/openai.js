@@ -1048,6 +1048,79 @@ export async function fetchCityIconicLandmarks(city, country) {
   return catalog?.places || []
 }
 
+export async function generateRichPlaceDescriptionsBatch({ destination = '', city = '', country = '', places = [], prompt = '' }) {
+  if (!places || places.length === 0) return {}
+  const apiKey = process.env.OPENAI_API_KEY
+
+  const placeNames = places.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
+  if (placeNames.length === 0) return {}
+
+  if (apiKey) {
+    const systemPrompt = `Eres un guía turístico profesional de VibeTours.
+Redacta para CADA lugar turístico una descripción rica, inmersiva e individualizada (40-60 palabras por lugar) en español.
+Cada lugar debe tener su propia identidad (playa, sendero, restaurante o monumento con sus detalles reales).
+Devuelve únicamente un objeto JSON donde cada clave es el nombre exacto del lugar y el valor es la descripción:
+{"Lugar": "texto"}`
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Destino: ${destination || city || 'Colombia'}\nLugares:\n${placeNames.join(', ')}` }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.6,
+          max_tokens: 600
+        }),
+        signal: AbortSignal.timeout(2500)
+      })
+
+      if (response.ok) {
+        const json = await response.json()
+        const content = json.choices?.[0]?.message?.content
+        if (content) {
+          const parsed = JSON.parse(content)
+          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+            return parsed
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[openai] generateRichPlaceDescriptionsBatch failed or timed out:', err.message)
+    }
+  }
+
+  // Fallback rico e individualizado en caso de desconexión
+  const fallback = {}
+  for (const name of placeNames) {
+    if (/cabo san juan/i.test(name)) {
+      fallback[name] = 'Emblemático rincón del Caribe colombiano famoso por su icónico mirador en la colina sobre el mar, dos bahías gemelas de arena dorada y aguas color esmeralda ideales para nadar y relajarse bajo las palmeras.'
+    } else if (/la piscina/i.test(name)) {
+      fallback[name] = 'Una serena ensenada marina protegida naturalmente por una barrera de arrecifes de coral, creando una piscina de agua salada calmada y cristalina perfecta para hacer snorkel y contemplar peces tropicales.'
+    } else if (/pueblito|chairama/i.test(name)) {
+      fallback[name] = 'Un fascinante sendero ancestral empedrado que atraviesa la selva tropical húmeda, conectando vestigios arqueológicos de terrazas indígenas rodeadas de exuberante flora, aves exóticas y monos aulladores.'
+    } else if (/cristal/i.test(name)) {
+      fallback[name] = 'Paradisíaca playa de arena blanca brillante y aguas turquesas de increíble visibilidad, rodeada de colinas selváticas y famosa por sus coloridos fondos coralinos repletos de vida marina.'
+    } else if (/bah[íi]a concha/i.test(name)) {
+      fallback[name] = 'Una amplia y tranquila bahía de arenas suaves flanqueada por montañas boscosas, donde el mar quieto invita a nadar plácidamente y disfrutar de la sombra de los árboles costeros.'
+    } else if (/arrecifes/i.test(name)) {
+      fallback[name] = 'Impresionante sector costero caracterizado por gigantescos bloques de granito pulidos por el mar, oleaje imponente y un paisaje agreste donde la selva tropical se encuentra con el océano.'
+    } else if (/restaurante|comida|cima|doña|cafe|bar/i.test(name)) {
+      fallback[name] = `Auténtico espacio gastronómico donde disfrutar de la cocina típica regional, deleitándose con exquisito pescado frito, arroz con coco, patacones crujientes y refrescantes jugos naturales tropicales.`
+    } else {
+      fallback[name] = `${name} es un punto de visita indispensable en ${destination || city || 'la región'}, que ofrece a los viajeros una experiencia envolvente para descubrir los paisajes y la cultura del lugar.`
+    }
+  }
+  return fallback
+}
+
 export async function generateCustomPlaceReasons(places = [], city = '', country = '') {
   return places.map(p => ({
     name: p.name || p,

@@ -669,6 +669,18 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     }
     
     if (mounted) setState(() => _isResolvingRoute = true);
+    // Pintar de inmediato los pines y centrar la cámara para respuesta visual instantánea (0ms de mapa vacío)
+    if (!_hasFitRoute) {
+      try {
+        await _paintRoute(
+          RoadRouteResult(geometry: widget.points),
+          focusActiveStop: focusActiveStop,
+          fitRoute: true,
+          isIncremental: isIncremental,
+        );
+      } catch (_) {}
+    }
+
     try {
       final resolvedRoute = await _routeService.resolveRoute(widget.points);
       if (!mounted || requestId != _drawRequest) return;
@@ -678,7 +690,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
           await _paintRoute(
             resolvedRoute,
             focusActiveStop: focusActiveStop,
-            fitRoute: !_hasFitRoute,
+            fitRoute: false,
             isIncremental: isIncremental,
           );
         } catch (e) {

@@ -15,58 +15,81 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   const latitude = options?.latitude ?? options?.lat ?? null
   const longitude = options?.longitude ?? options?.lon ?? null
   const contextualQuery = [placeName, city, country].filter(Boolean).join(', ')
+  const assignedUrls = options?.assignedUrls instanceof Set ? options.assignedUrls : null
 
-  // 1A. Consulta prioritaria a Wikipedia Summary API (Foto principal oficial del monumento/lugar con desambiguación local)
-  const wikiSummary = await wikipediaSummaryImage(placeName, city)
-  if (wikiSummary) return { url: wikiSummary, isFallback: false }
-
-  // 1B. Búsqueda contextual estricta por texto del lugar en Wikimedia Commons (ej: "Getsemaní, Cartagena, Colombia")
-  const wiki = await wikimediaImage(contextualQuery, null, seed) || await wikimediaImage(placeName, null, seed)
-  if (wiki) return { url: wiki, isFallback: false }
-
-  // 1C. Búsqueda estricta contextual en Openverse por nombre del lugar
-  const openverse = await openverseImage(contextualQuery, null, seed) || await openverseImage(`${placeName} ${city}`, null, seed)
-  if (openverse) return { url: openverse, isFallback: false }
-
-  // 1D. Consulta a Pexels API (si existe PEXELS_API_KEY configurada en .env)
-  if (process.env.PEXELS_API_KEY) {
-    const pexels = await pexelsImage(contextualQuery, seed) || await pexelsImage(`${placeName} ${city}`, seed)
-    if (pexels) return { url: pexels, isFallback: false }
+  function isValidDistinct(url) {
+    if (!url || typeof url !== 'string') return false
+    if (assignedUrls && assignedUrls.has(url)) return false
+    return true
   }
 
-  // 1E. Consulta por geolocalización (GeoSearch) en Wikimedia Commons únicamente si son coordenadas específicas de un punto
+  // 1A. Consulta prioritaria a Wikipedia Summary API
+  const wikiSummary = await wikipediaSummaryImage(placeName, city)
+  if (isValidDistinct(wikiSummary)) {
+    assignedUrls?.add(wikiSummary)
+    return { url: wikiSummary, isFallback: false }
+  }
+
+  // 1B. Búsqueda contextual estricta en Wikimedia Commons
+  const wiki = await wikimediaImage(contextualQuery, null, seed) || await wikimediaImage(placeName, null, seed)
+  if (isValidDistinct(wiki)) {
+    assignedUrls?.add(wiki)
+    return { url: wiki, isFallback: false }
+  }
+
+  // 1C. Búsqueda estricta contextual en Openverse
+  const openverse = await openverseImage(contextualQuery, null, seed) || await openverseImage(`${placeName} ${city}`, null, seed)
+  if (isValidDistinct(openverse)) {
+    assignedUrls?.add(openverse)
+    return { url: openverse, isFallback: false }
+  }
+
+  // 1D. Consulta a Pexels API
+  if (process.env.PEXELS_API_KEY) {
+    const pexels = await pexelsImage(contextualQuery, seed) || await pexelsImage(`${placeName} ${city}`, seed)
+    if (isValidDistinct(pexels)) {
+      assignedUrls?.add(pexels)
+      return { url: pexels, isFallback: false }
+    }
+  }
+
+  // 1E. GeoSearch en Wikimedia Commons
   if (latitude && longitude && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))) {
     const wikiGeo = await wikimediaGeoImage(Number(latitude), Number(longitude), 500, seed)
-    if (wikiGeo) return { url: wikiGeo, isFallback: false }
+    if (isValidDistinct(wikiGeo)) {
+      assignedUrls?.add(wikiGeo)
+      return { url: wikiGeo, isFallback: false }
+    }
   }
   
   // 2. Fallback: Buscar imagen de la categoría específica en esa ciudad/región
   if (city) {
     const categoryKeywords = categorySearchKeywords(normalizedCategory)
     const cityWords = getCityWords(city)
-    
-    // Rotar la palabra clave de búsqueda para que paradas del mismo tipo tengan consultas diferentes
     const keyword = categoryKeywords[Math.abs(seed) % categoryKeywords.length]
     const searchQuery = `${keyword} ${city}`
     const requiredGroups = [cityWords, categoryKeywords]
     
     const wikiCity = await wikimediaImage(searchQuery, requiredGroups, seed)
-    if (wikiCity) return { url: wikiCity, isFallback: true }
-    
-    const openverseCity = await openverseImage(searchQuery, requiredGroups, seed)
-    if (openverseCity) return { url: openverseCity, isFallback: true }
-
-    // Fallback secundario de la ciudad únicamente para vistas generales o categorías por defecto
-    const isSpecialCategory = ['restaurant', 'cafe', 'market', 'nightlife', 'museum', 'sports', 'shopping', 'mall', 'beach', 'church', 'cathedral', 'park', 'nature'].includes(normalizedCategory) ||
-      /comercial|mall|shopping|tienda|restaurante|playa|catedral|parque|jard[íi]n|museo|estadio|zool[óo]gico/i.test(placeName)
-    if (!isSpecialCategory) {
-      const wikiJustCity = await wikimediaImage(city, [cityWords], seed)
-      if (wikiJustCity) return { url: wikiJustCity, isFallback: true }
+    if (isValidDistinct(wikiCity)) {
+      assignedUrls?.add(wikiCity)
+      return { url: wikiCity, isFallback: true }
     }
   }
 
-  // 3. Último recurso: Imagen curada según la categoría (rotada con la semilla)
-  return { url: curatedImage(`${placeName} ${city} travel`, normalizedCategory, seed), isFallback: true }
+  // 3. Último recurso: Imagen curada según la categoría (rotada con la semilla + offset anti-colisión)
+  let curated = curatedImage(`${placeName} ${city} travel`, normalizedCategory, seed)
+  if (assignedUrls && assignedUrls.has(curated)) {
+    for (let offset = 1; offset < 10; offset++) {
+      const nextCandidate = curatedImage(`${placeName} ${city} travel`, normalizedCategory, seed + offset)
+      if (!assignedUrls.has(nextCandidate)) {
+        curated = nextCandidate
+        break
+      }
+    }
+  }
+  assignedUrls?.add(curated)
+  return { url: curated, isFallback: true }
 }
 
 async function wikipediaSummaryImage(placeName, city = '', country = '') {
@@ -423,12 +446,36 @@ function categorySearchKeywords(category) {
 
 function curatedImage(seed, category, indexSeed = 0) {
   const categoryImages = {
+    beach: [
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1515238152791-8216bfdf89a7?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1509233725247-49e657c54213?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=800&q=80'
+    ],
+    trail: [
+      'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1511497584788-87676104235f?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80'
+    ],
     restaurant: [
-      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600&q=75',
-      'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=600&q=75',
-      'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=75',
-      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=75',
-      'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=600&q=75',
+      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80'
     ],
     cafe: [
       'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=600&q=75',
@@ -501,14 +548,24 @@ function curatedImage(seed, category, indexSeed = 0) {
     ]
   }
 
-  // 1. Si la categoría es específica (restaurante, café, museo, etc.), servir foto temática de alta calidad
-  const specificCategories = ['restaurant', 'cafe', 'market', 'nightlife', 'museum', 'religious', 'sports', 'nature', 'historic']
-  const targetCategory = specificCategories.includes(category) ? category : 'default'
+  const seedLower = String(seed || '').toLowerCase()
+  let targetCategory = category
+  if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada|costa/i.test(seedLower)) {
+    targetCategory = 'beach'
+  } else if (/sendero|pueblito|trek|camino|hiking|bosque|chairama/i.test(seedLower)) {
+    targetCategory = 'trail'
+  } else if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom/i.test(seedLower)) {
+    targetCategory = 'restaurant'
+  }
+
+  // 1. Si la categoría es específica, servir foto temática rotada
+  const specificCategories = ['beach', 'trail', 'restaurant', 'cafe', 'market', 'nightlife', 'museum', 'religious', 'sports', 'nature', 'viewpoint', 'historic']
+  const finalCategory = specificCategories.includes(targetCategory) ? targetCategory : 'default'
   
-  if (targetCategory !== 'default') {
-    const list = categoryImages[targetCategory]
-    const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0) + indexSeed
-    return list[Math.abs(hash) % list.length]
+  if (finalCategory !== 'default') {
+    const list = categoryImages[finalCategory]
+    const idx = Math.abs(Number(indexSeed || 0)) % list.length
+    return list[idx]
   }
 
   // 2. Solo para vistas panorámicas generales o portadas, verificar la ciudad

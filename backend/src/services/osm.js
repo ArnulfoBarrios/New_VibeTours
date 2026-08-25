@@ -296,26 +296,26 @@ const OVERPASS_SERVERS = [
 const attractionsCache = new Map()
 const CACHE_TTL_MS = 30 * 60 * 1000
 
-async function fetchOverpassWithMirrors(query, timeoutMs = 1800) {
-  for (const serverUrl of OVERPASS_SERVERS) {
-    try {
-      const response = await fetch(serverUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': USER_AGENT
-        },
-        body: new URLSearchParams({ data: query }),
-        signal: AbortSignal.timeout(timeoutMs)
-      })
-      if (response.ok) {
-        return await response.json()
-      }
-    } catch (err) {
-      console.warn(`[osm] Overpass mirror (${serverUrl}) timed out or failed:`, err.message)
-    }
+async function fetchOverpassWithMirrors(query, timeoutMs = 1200) {
+  const fetchPromises = OVERPASS_SERVERS.map(async (serverUrl) => {
+    const response = await fetch(serverUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': USER_AGENT
+      },
+      body: new URLSearchParams({ data: query }),
+      signal: AbortSignal.timeout(timeoutMs)
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status} from ${serverUrl}`)
+    return await response.json()
+  })
+
+  try {
+    return await Promise.any(fetchPromises)
+  } catch {
+    return null
   }
-  return null
 }
 
 export async function overpassAttractions(latitude, longitude, radius = 4500) {
@@ -601,7 +601,7 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
     out center tags 20;
   `
   try {
-    const json = await fetchOverpassWithMirrors(query, 3000)
+    const json = await fetchOverpassWithMirrors(query, 1500)
     if (json && json.elements && json.elements.length > 0) {
       const results = (json.elements ?? [])
         .map((element) => {
