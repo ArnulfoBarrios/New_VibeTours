@@ -765,6 +765,53 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
+    // Draw walking / hiking trail approach segments in live navigation
+    final walkingSegments = widget.route?.walkingSegments ?? const [];
+    for (final walkingSegment in walkingSegments) {
+      final segmentPoints = [
+        for (final point in walkingSegment)
+          LatLng(point.latitude, point.longitude),
+      ];
+      if (segmentPoints.length > 1) {
+        try {
+          await controller.addLine(
+            LineOptions(
+              geometry: segmentPoints,
+              lineColor: '#60A5FA',
+              lineWidth: 4,
+              lineOpacity: 0.90,
+              lineJoin: 'round',
+            ),
+          );
+          final dots = _generateWalkingDots(segmentPoints);
+          if (dots.isNotEmpty) {
+            await controller.addCircles([
+              for (final dot in dots)
+                CircleOptions(
+                  geometry: dot,
+                  circleRadius: 4.0,
+                  circleColor: '#0055FF',
+                  circleOpacity: 1.0,
+                  circleStrokeWidth: 1.0,
+                  circleStrokeColor: '#FFFFFF',
+                ),
+            ]);
+          }
+          final trailStart = segmentPoints.first;
+          await controller.addSymbol(
+            SymbolOptions(
+              geometry: trailStart,
+              textField: '🥾',
+              textSize: 20,
+              textColor: '#FFFFFF',
+              textHaloColor: '#000000',
+              textHaloWidth: 1.0,
+            ),
+          );
+        } catch (_) {}
+      }
+    }
+
     _updateCameraPosition();
   }
 
@@ -835,5 +882,26 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
           ),
       ],
     );
+  }
+
+  List<LatLng> _generateWalkingDots(List<LatLng> points) {
+    final dots = <LatLng>[];
+    if (points.length < 2) return dots;
+
+    for (int i = 0; i < points.length - 1; i++) {
+      final p1 = points[i];
+      final p2 = points[i + 1];
+      final dLat = p2.latitude - p1.latitude;
+      final dLng = p2.longitude - p1.longitude;
+      final distDeg = math.sqrt(dLat * dLat + dLng * dLng);
+      // Dot step ~ 0.00025 degrees (~25 meters)
+      const step = 0.00025;
+      final numSteps = (distDeg / step).round().clamp(2, 100);
+      for (int s = 0; s <= numSteps; s++) {
+        final t = s / numSteps;
+        dots.add(LatLng(p1.latitude + dLat * t, p1.longitude + dLng * t));
+      }
+    }
+    return dots;
   }
 }

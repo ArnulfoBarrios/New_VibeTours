@@ -458,6 +458,7 @@ out center tags 10;
       _appendGeometry(geometry, [end]);
     }
 
+    final portName = startPort?.name ?? 'el muelle de embarque';
     return RoadRouteResult(
       geometry: geometry,
       maritimeSegments: [
@@ -465,6 +466,7 @@ out center tags 10;
       ],
       ports: ports,
       usesMaritimeTransfer: true,
+      transitAdviceMessage: '⛵ Tramo marítimo requerido: La ruta terrestre te llevará hasta $portName, donde podrás abordar la embarcación hacia tu destino.',
       distanceMeters: _geometryDistanceMeters(geometry),
     );
   }

@@ -444,34 +444,37 @@ ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
 - Si el usuario dice que no necesita hotel, se queda en casa/familiares o camping, márcalo como CONFIRMADO.
 - "readyToBuild" DEBE ser false.
 
-ETAPA 3: RECOMENDACIÓN DE LUGARES Y PRESENTACIÓN DEL ITINERARIO
-- Si el usuario pide recomendaciones de lugares o actividades, recomienda de 4 a 6 lugares con el formato:
+ETAPA 3: RECOMENDACIÓN DE LUGARES Y PRESENTACIÓN COMPLETA DEL ITINERARIO
+- Si el usuario acaba de responder sobre presupuesto, transporte o alojamiento y ya tenemos los datos clave (destino, fechas, acompañantes, presupuesto, transporte):
+  DEBES GENERAR Y MOSTRAR DIRECTAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE (NUNCA cortes la respuesta diciendo solo "aquí tienes un itinerario" sin poner los días y lugares).
+- Si el usuario pide recomendaciones de lugares, sugiere 4 a 6 lugares con:
   • **[Nombre Real del Lugar/Restaurante]**: [Breve justificación de 1 sola línea].
   Pregunta: "¿Cuáles de estos lugares te gustaría incluir en tu itinerario?"
-- Si el usuario aprueba los lugares o pide ver el itinerario:
-  Presenta el itinerario estructurado por días con agrupamiento espacial y cero duplicados:
+- Formato OBLIGATORIO del Itinerario cuando se presenta:
 
   Itinerario de Viaje: ${destName || known.destination} (${known.datesSeason || `${known.durationDays || 2} días`})
 
-  Día 1: [Sector o Nombre de Destino]
+  Día 1: [Nombre de Destino o Sector]
   • [Nombre Real de Lugar 1]
   • [Nombre Real de Lugar 2]
   • [Nombre Real de Restaurante/Bar]
 
-  Día 2: [Sector o Nombre de Destino]
+  Día 2: [Nombre de Destino o Sector]
   • [Nombre Real de Lugar 3]
   • [Nombre Real de Lugar 4]
   • [Nombre Real de Restaurante/Bar]
   ... (hasta el Día ${known.durationDays || 2})
 
-  REGLAS DEL ITINERARIO:
-  1. CERO CORCHETES []. Escribe los nombres propios reales limpios.
-  2. En las viñetas (•), escribe ÚNICAMENTE el nombre propio y limpio del lugar físico o restaurante real.
-  3. Cero actividades genéricas de relleno ("Llegada", "Tarde libre", "Despedida", "Día libre").
-  4. Cero duplicados entre días.
+  REGLAS CRÍTICAS DEL ITINERARIO:
+  1. OBLIGATORIO: El mensaje DEBE contener el bloque completo con "Día 1:", "Día 2:", etc. y sus viñetas. Prohibido emitir introducciones vacías sin el itinerario.
+  2. Si el destino es un micro-destino (ej. Parque Tayrona), TODOS los días deben permanecer en ese micro-destino (ej: Día 1: Parque Tayrona, Día 2: Parque Tayrona). NUNCA cambies el destino de los días a la ciudad cabecera.
+  3. CERO CORCHETES []. Escribe nombres limpios y reales.
+  4. En las viñetas (•), escribe ÚNICAMENTE el nombre propio y limpio del lugar físico o restaurante real.
+  5. Cero actividades genéricas de relleno ("Llegada", "Tarde libre", "Despedida", "Día libre").
+  6. Cero duplicados entre días.
   
 - Si TODOS los datos previos (fechas, acompañantes, transporte, presupuesto) están confirmados:
-  Pregunta: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?"
+  Pregunta al final del itinerario: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?"
 - Si aún falta presupuesto o transporte:
   Presenta el itinerario y pregunta de inmediato en 1 línea por el dato faltante (presupuesto / transporte).
 - "readyToBuild" DEBE ser false.
@@ -558,6 +561,36 @@ REGLAS PARA "specificPlaces":
       .trim()
     const actionChips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
     const parsedExtracted = parsed.extractedPreferences || {}
+
+    // Safeguard: If the bot claimed to present the itinerary but omitted the "Día 1:" block, reconstruct the complete day-by-day text
+    const mentionsPresentingItinerary = /\b(aqu[íi]\s+tienes\s+(un|el)\s+itinerario|itinerario\s+para\s+tu\s+viaje|este\s+es\s+el\s+itinerario|itinerario\s+de\s+viaje)\b/i.test(responseMessage)
+    const hasDayHeaders = /d[íi]a\s*1\s*:/i.test(responseMessage)
+    if (mentionsPresentingItinerary && !hasDayHeaders) {
+      const placesList = (parsedExtracted.specificPlaces || known.specificPlaces || [])
+      const placeNames = placesList.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
+      const daysCount = Number(parsedExtracted.durationDays || known.durationDays || 2)
+      const dName = destName || known.destination || 'tu destino'
+      
+      let reconstructed = `Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n`
+      if (placeNames.length > 0) {
+        const perDay = Math.max(1, Math.ceil(placeNames.length / daysCount))
+        for (let d = 1; d <= daysCount; d++) {
+          reconstructed += `Día ${d}: ${dName}\n`
+          const dayPlaces = placeNames.slice((d - 1) * perDay, d * perDay)
+          dayPlaces.forEach(p => {
+            reconstructed += ` • ${p}\n`
+          })
+          reconstructed += '\n'
+        }
+      } else {
+        for (let d = 1; d <= daysCount; d++) {
+          reconstructed += `Día ${d}: ${dName}\n`
+          reconstructed += ` • Lugares destacados de ${dName}\n\n`
+        }
+      }
+      reconstructed += '¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?'
+      responseMessage = reconstructed
+    }
 
     // Evaluar estado completo de información clave
     const finalHasLodging = Boolean(hasLodging || hasValidValue(parsedExtracted.selectedHotel) || hasValidValue(parsedExtracted.accommodationStatus))

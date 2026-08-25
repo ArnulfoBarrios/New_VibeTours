@@ -787,7 +787,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       }
     }
 
-    // Draw walking / hiking trail approach segments with Google Maps-style dotted trail
+    // Draw walking / hiking trail approach segments with Google Maps-style dotted trail and hiking boots icon
     for (final walkingSegment in route.walkingSegments) {
       final segmentPoints = [
         for (final point in walkingSegment)
@@ -798,9 +798,9 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
           await controller.addLine(
             LineOptions(
               geometry: segmentPoints,
-              lineColor: '#80B3FF',
-              lineWidth: 3.5,
-              lineOpacity: 0.85,
+              lineColor: '#60A5FA',
+              lineWidth: 4,
+              lineOpacity: 0.90,
               lineJoin: 'round',
             ),
           );
@@ -810,13 +810,25 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
               for (final dot in dots)
                 CircleOptions(
                   geometry: dot,
-                  circleRadius: 3.5,
+                  circleRadius: 4.0,
                   circleColor: '#0055FF',
-                  circleOpacity: 0.98,
-                  circleStrokeWidth: 0,
+                  circleOpacity: 1.0,
+                  circleStrokeWidth: 1.0,
+                  circleStrokeColor: '#FFFFFF',
                 ),
             ]);
           }
+          final trailStart = segmentPoints.first;
+          await controller.addSymbol(
+            SymbolOptions(
+              geometry: trailStart,
+              textField: '🥾',
+              textSize: 20,
+              textColor: '#FFFFFF',
+              textHaloColor: '#000000',
+              textHaloWidth: 1.0,
+            ),
+          );
         } catch (_) {}
       }
     }
