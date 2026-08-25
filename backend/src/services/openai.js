@@ -200,13 +200,17 @@ export function isNonTouristicInput(text = '') {
   return false
 }
 
-export async function generateChatResponse(state, backendInstruction = '', webSearchSummary = '', currentPreferences = {}) {
+export async function generateChatResponse(state, backendInstruction = '', webSearchSummary = '', currentPreferences = {}, nearbyFoodPlaces = []) {
   const known = { ...(currentPreferences || {}) }
   const rawDestName = known.city || known.destination || ''
   const destName = cleanAdministrativeCityName(rawDestName)
   const hasCity = Boolean(destName && !isVagueDestination(destName))
   const destCountry = known.country || (destName.toLowerCase() === 'cartagena' || destName.toLowerCase() === 'santa marta' || destName.toLowerCase() === 'medellín' || destName.toLowerCase() === 'bogotá' ? 'Colombia' : '')
   const hasDurationOrDates = Boolean(known.durationDays || known.datesSeason)
+
+  const verifiedFoodText = (Array.isArray(nearbyFoodPlaces) && nearbyFoodPlaces.length > 0)
+    ? nearbyFoodPlaces.slice(0, 8).map(f => `• **${f.name}** (${f.type || 'restaurante'}, ${f.cuisine ? `cocina ${f.cuisine}` : 'gastronomía local'})`).join('\n')
+    : ''
 
   const history = state.history || []
   const lastUserMsg = history[history.length - 1]?.content || ''
