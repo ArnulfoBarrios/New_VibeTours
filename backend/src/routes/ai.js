@@ -3236,6 +3236,9 @@ function shouldUseAiPlanner(input, planner) {
   if (process.env.DISABLE_AI_PLANNER === 'true') return false
   if (input.durationHours > 168) return false
   if (planner.selectedPlaces.length > 30) return false
+  if (Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length >= 3 && (input.specificPlaces?.length || input.selectedPlaces?.length)) {
+    return false
+  }
   return true
 }
 
@@ -3243,6 +3246,9 @@ function aiPlannerSkipReason(input, planner) {
   if (process.env.DISABLE_AI_PLANNER === 'true') return 'disabled_by_env'
   if (input.durationHours > 168) return 'long_tour_uses_deterministic_planner'
   if (planner.selectedPlaces.length > 30) return 'too_many_places_for_ai_planner'
+  if (Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length >= 3 && (input.specificPlaces?.length || input.selectedPlaces?.length)) {
+    return 'user_selected_chat_places_already_complete'
+  }
   return 'not_skipped'
 }
 
@@ -4782,6 +4788,13 @@ export function isValidTouristAttraction(place, input) {
   // 0.001 Bloqueo de estructuras físicas genéricas o no turísticas (pérgolas, canchas de barrio, paradas de bus)
   if (/^(la\s+)?(p[ée]rgola|cancha|cancha sint[ée]tica|cancha de f[uú]tbol|cancha de microf[uú]tbol|parada de bus|estaci[óo]n de bus|quiosco|kiosco|grader[íi]as)$/i.test(nameLower) ||
       /\b(cancha sint[ée]tica|cancha de f[uú]tbol|parque cancha)\b/i.test(nameLower)) {
+    return false
+  }
+
+  // 0.002 Bloqueo absoluto de estaciones policiales, CAI, puntos de información burocráticos y oficinas
+  if (/\b(polic[íi]a|police|cai|punto de informaci[óo]n|tourist information|oficina de informaci[óo]n|oficina de turismo|alcald[íi]a|juzgado|notar[íi]a|embajada|consulado|banco|atm|cajero|supermercado|farmacia|droguer[íi]a|hospital|cl[íi]nica)\b/i.test(nameLower) ||
+      place.tags?.amenity === 'police' ||
+      place.tags?.information === 'office') {
     return false
   }
 

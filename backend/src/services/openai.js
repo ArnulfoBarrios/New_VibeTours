@@ -417,9 +417,16 @@ REGLA UNIVERSAL DE AGRUPAMIENTO GEOGRÁFICO Y DISTRIBUCIÓN POR DÍAS:
      * Sector El Zaino / Calabazo (Senderos centrales): Cabo San Juan, La Piscina, Arrecifes, Sendero a Pueblito, Cañaveral.
      * Sector Neguanje / Palangana (Playas y Bahías): Playa Cristal, Bahía Concha, Neguanje, Cinto.
    - Prohibido mezclar en el mismo día atractivos de sectores opuestos que requieren diferentes accesos vehiculares.
-2. DISTRIBUCIÓN EQUITATIVA Y CERO DUPLICADOS:
-   - Cuando el usuario apruebe una lista de lugares, distribúyelos de forma balanceada entre los días del itinerario.
-   - Queda TERMINANTEMENTE PROHIBIDO repetir una misma atracción o restaurante en más de un día. Cada parada debe ser única en todo el tour.
+REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
+1. SELECCIÓN DE ATRACTIVOS ICÓNICOS Y REALES (NIVEL TURISMO INTERNACIONAL):
+   - Para CUALQUIER ciudad o destino del mundo (ej. Barranquilla, Medellín, París, Tokio, etc.), selecciona ÚNICAMENTE los atractivos turísticos, culturales, históricos, arquitectónicos y paisajísticos MÁS POPULARES, EMBLEMÁTICOS E ICÓNICOS de la ciudad (estándar TripAdvisor / Lonely Planet / Guía Oficial de Turismo).
+   - En Barranquilla por ejemplo: Gran Malecón del Río, Ventana al Mundo, Museo del Carnaval, Casa del Carnaval, Barrio Abajo, Ciénaga de Mallorquín, Bocas de Ceniza, Catedral Metropolitana.
+   - PROHIBIDO terminantemente incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o supermercados como paradas turísticas.
+2. BALANCE DIARIO ESTRICTO (FÓRMULA 2:1):
+   - Cada día de tour DEBE tener:
+     • 2 atractivos turísticos/culturales o paisajísticos destacados.
+     • Máximo 1 parada gastronómica estratégica (almuerzo o cena en un restaurante o lugar de comida típica de la región).
+   - PROHIBIDO programar 2 o 3 restaurantes el mismo día (evitar maratones de comida sucesivos).
 
 REGLAS CRÍTICAS DE RESTAURANTES Y GASTRONOMÍA:
 - PROHIBIDO inventar nombres de restaurantes concatenando la palabra "Restaurante" + el nombre de una atracción o playa (ej: NUNCA inventes "Restaurante Cabo San Juan", "Restaurante Playa Cristal", "Restaurante La Piscina").

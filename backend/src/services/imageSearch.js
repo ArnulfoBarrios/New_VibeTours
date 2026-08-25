@@ -17,10 +17,29 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   const contextualQuery = [placeName, city, country].filter(Boolean).join(', ')
   const assignedUrls = options?.assignedUrls instanceof Set ? options.assignedUrls : null
 
+  const isFoodOrDrink = normalizedCategory === 'restaurant' || normalizedCategory === 'food' || normalizedCategory === 'cafe' ||
+    /restaurante|comida|asador|bistro|gourmet|cafe|café|bar|pub|pizzeria|chifa/i.test(placeName)
+
   function isValidDistinct(url) {
     if (!url || typeof url !== 'string') return false
     if (assignedUrls && assignedUrls.has(url)) return false
     return true
+  }
+
+  // 0. Para restaurantes y gastronomía local, priorizar directamente imágenes gastronómicas curadas para evitar retratos de personas o cantantes
+  if (isFoodOrDrink) {
+    let curatedFood = curatedImage(`${placeName} ${city}`, 'restaurant', seed)
+    if (assignedUrls && assignedUrls.has(curatedFood)) {
+      for (let offset = 1; offset < 10; offset++) {
+        const nextCandidate = curatedImage(`${placeName} ${city}`, 'restaurant', seed + offset)
+        if (!assignedUrls.has(nextCandidate)) {
+          curatedFood = nextCandidate
+          break
+        }
+      }
+    }
+    assignedUrls?.add(curatedFood)
+    return { url: curatedFood, isFallback: true }
   }
 
   // 1A. Consulta prioritaria a Wikipedia Summary API
