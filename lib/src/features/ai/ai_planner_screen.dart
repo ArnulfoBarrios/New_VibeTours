@@ -1468,7 +1468,15 @@ class FormattedMessageText extends StatelessWidget {
   Widget build(BuildContext context) {
     if (text.isEmpty) return const SizedBox.shrink();
 
-    final lines = text.split('\n');
+    final normalizedText = text
+        .replaceAll(r'\r\n', '\n')
+        .replaceAll(r'\n', '\n')
+        .replaceAll(r'\r', '\n')
+        .replaceAll('\\r\\n', '\n')
+        .replaceAll('\\n', '\n')
+        .replaceAll('\\r', '\n');
+
+    final lines = normalizedText.split('\n');
     final List<Widget> children = [];
 
     for (final rawLine in lines) {

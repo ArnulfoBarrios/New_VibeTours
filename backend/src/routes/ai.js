@@ -322,14 +322,14 @@ aiRouter.post('/chat', async (req, res, next) => {
       })
     }
 
-    // Solo usar GPS del usuario como coordenadas si no hay destino previo confirmado
-    if (latitude && longitude && !currentPreferences.canonicalDestination && !currentPreferences.destination) {
+    // Solo usar GPS del usuario como coordenadas iniciales si no hay destino previo confirmado
+    if (latitude && longitude && !currentPreferences.canonicalDestination && !currentPreferences.destination && !currentPreferences.city) {
       currentPreferences.latitude = latitude
       currentPreferences.longitude = longitude
     }
 
-    // Si el usuario pide atracciones "cerca de mi zona / cerca de mí" y tenemos GPS, geocodificar su ciudad actual
-    if (latitude && longitude && /\b(cerca de mi|cerca de m[íi]|mi zona|mi ubicaci[óo]n|mi ciudad|aqu[íi]|propio pa[íi]s|en mi pa[íi]s|cercano|cercanos)\b/i.test(message)) {
+    // Si el usuario pide atracciones "cerca de mi zona / cerca de mí" y no hay destino previo, geocodificar su ciudad actual
+    if (latitude && longitude && !currentPreferences.destination && !currentPreferences.city && /\b(cerca de mi|cerca de m[íi]|mi zona|mi ubicaci[óo]n|mi ciudad|aqu[íi]|propio pa[íi]s|en mi pa[íi]s|cercano|cercanos)\b/i.test(message)) {
       try {
         const geoResult = await reverseGeocodeLocation(latitude, longitude)
         if (geoResult?.city) {
@@ -397,8 +397,12 @@ aiRouter.post('/chat', async (req, res, next) => {
       ...validExtracted
     }
     if (latitude && longitude) {
-      updatedPreferences.latitude = latitude
-      updatedPreferences.longitude = longitude
+      updatedPreferences.userGpsLatitude = latitude
+      updatedPreferences.userGpsLongitude = longitude
+      if (!updatedPreferences.destination && !updatedPreferences.city && !updatedPreferences.canonicalDestination) {
+        updatedPreferences.latitude = latitude
+        updatedPreferences.longitude = longitude
+      }
     }
     if (initialCombinedSpecifics.length > 0) {
       if (isCorrectionOrNegation) {
