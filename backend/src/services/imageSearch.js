@@ -17,8 +17,11 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   const contextualQuery = [placeName, city, country].filter(Boolean).join(', ')
   const assignedUrls = options?.assignedUrls instanceof Set ? options.assignedUrls : null
 
-  const isFoodOrDrink = normalizedCategory === 'restaurant' || normalizedCategory === 'food' || normalizedCategory === 'cafe' ||
-    /restaurante|comida|asador|bistro|gourmet|cafe|café|bar|pub|pizzeria|chifa/i.test(placeName)
+  const isLandmarkOrCultural = /\b(catedral|iglesia|bas[íi]lica|templo|museo|monumento|parque|malec[óo]n|playa|plaza|castillo|fortaleza|mirador|puente|teatro|jard[íi]n|cerro|colina)\b/i.test(placeName)
+  const isFoodOrDrink = !isLandmarkOrCultural && (
+    normalizedCategory === 'restaurant' || normalizedCategory === 'food' || normalizedCategory === 'cafe' ||
+    /\b(restaurante|restaurantes|comida|asador|asadores|bistro|bistr[oó]|gourmet|caf[ée]|cafes|caf[ée]s|bar|bares|pub|pubs|pizzer[íi]a|pizzerias|chifa|gastronom[íi]a|taquer[íi]a)\b/i.test(placeName)
+  )
 
   function isValidDistinct(url) {
     if (!url || typeof url !== 'string') return false

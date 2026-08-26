@@ -1059,8 +1059,9 @@ REGLAS DE CALIDAD:
 
 export async function suggestFallbackPlacesWithOpenAI({ destination, city, country, type, excludeNames = [] }) {
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return null
+  if (!apiKey) return []
   const targetLocation = `${city || destination || ''} ${country || ''}`.trim()
+  const excludeStr = Array.isArray(excludeNames) && excludeNames.length > 0 ? `\nLugares que YA están en el tour (NO repetir): ${excludeNames.join(', ')}` : ''
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -1069,17 +1070,36 @@ export async function suggestFallbackPlacesWithOpenAI({ destination, city, count
         model: 'gpt-4o-mini',
         response_format: { type: 'json_object' },
         messages: [
-          { role: 'system', content: `Suggest 3 real physically existing tourist POIs in "${targetLocation}". Return JSON: { "places": [{ "name": "...", "type": "...", "category": "...", "description": "..." }] }` },
-          { role: 'user', content: `Places for ${targetLocation}` }
-        ]
+          {
+            role: 'system',
+            content: `Eres un experto turístico local. Sugiere de 6 a 8 atractivos turísticos y restaurantes emblemáticos REALES físicamente existentes en "${targetLocation}".
+Devuelve ÚNICAMENTE un JSON:
+{
+  "places": [
+    {
+      "name": "Nombre real del lugar",
+      "type": "cultural|park|beach|food|viewpoint",
+      "category": "attraction|restaurant",
+      "description": "Breve descripción atractiva del lugar"
+    }
+  ]
+}`
+          },
+          { role: 'user', content: `Lugares alternativos para ${targetLocation}.${excludeStr}` }
+        ],
+        temperature: 0.6
       })
     })
     if (response.ok) {
       const data = await response.json()
-      return JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
+      const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
+      if (Array.isArray(parsed.places)) return parsed.places
+      if (Array.isArray(parsed)) return parsed
     }
-  } catch (_) {}
-  return null
+  } catch (e) {
+    console.warn('[suggestFallbackPlacesWithOpenAI] Error:', e.message)
+  }
+  return []
 }
 
 export async function fetchCityIconicLandmarks(city, country) {
@@ -1099,11 +1119,20 @@ export async function generateRichPlaceDescriptionsBatch({ destination = '', cit
   if (placeNames.length === 0) return {}
 
   if (apiKey) {
-    const systemPrompt = `Eres un guía turístico profesional de VibeTours.
-Redacta para CADA lugar turístico una descripción rica, inmersiva e individualizada (40-60 palabras por lugar) en español.
-Cada lugar debe tener su propia identidad (playa, sendero, restaurante o monumento con sus detalles reales).
-Devuelve únicamente un objeto JSON donde cada clave es el nombre exacto del lugar y el valor es la descripción:
-{"Lugar": "texto"}`
+    const systemPrompt = `Eres un guía turístico profesional y narrador experto de VibeTours.
+Tu misión es redactar para TODAS Y CADA UNA de las paradas turísticas listadas una descripción inmersiva, detallada, evocadora y cinematográfica (entre 60 y 90 palabras por lugar) en español.
+
+ESTÁNDAR DE EXCELENCIA (Como guía experto presencial hablándole al viajero):
+- Narra la historia, el ambiente, la arquitectura, los colores, sonidos y la experiencia única que vivirá el visitante en ese lugar específico.
+- Para iglesias, catedrales y monumentos: describe su arquitectura, valor histórico y atmósfera solemne.
+- Para malecones, paseos costeros y miradores: describe las vistas panorámicas, la brisa, el ambiente vibrante y los quioscos o puntos de encuentro.
+- Para museos y centros culturales: describe las exposiciones, el viaje histórico y la riqueza cultural que alberga.
+- Para playas, senderos y naturaleza: describe el oleaje, tipo de arena, vegetación, senderos y fauna.
+- Para restaurantes: describe los sabores típicos auténticos, aromas de la cocina regional y el ambiente gastronómico acogedor.
+- PROHIBIDO TERMINANTEMENTE usar frases clónicas como "es un punto de visita indispensable" o plantillas repetitivas. Cada lugar debe tener un texto 100% único, fluido y enriquecedor.
+
+Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del lugar y el valor es la descripción:
+{"Lugar": "texto inmersivo de 60-90 palabras"}`
 
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1116,13 +1145,13 @@ Devuelve únicamente un objeto JSON donde cada clave es el nombre exacto del lug
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Destino: ${destination || city || 'Colombia'}\nLugares:\n${placeNames.join(', ')}` }
+            { role: 'user', content: `Destino: ${destination || city || 'Colombia'}\nLugares obligatorios a describir con riqueza de detalles:\n${placeNames.map((p, i) => `${i + 1}. ${p}`).join('\n')}` }
           ],
           response_format: { type: 'json_object' },
           temperature: 0.6,
-          max_tokens: 600
+          max_tokens: 900
         }),
-        signal: AbortSignal.timeout(2500)
+        signal: AbortSignal.timeout(8000)
       })
 
       if (response.ok) {
@@ -1131,37 +1160,69 @@ Devuelve únicamente un objeto JSON donde cada clave es el nombre exacto del lug
         if (content) {
           const parsed = JSON.parse(content)
           if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+            // Verificar que todas las paradas tengan descripción
+            const allCovered = placeNames.every(name => parsed[name] && parsed[name].length > 20)
+            if (allCovered) return parsed
+            // Si faltó alguna, mezclar con fallback rico
+            for (const name of placeNames) {
+              if (!parsed[name] || parsed[name].length < 20) {
+                parsed[name] = buildRichFallbackDescription(name, destination || city)
+              }
+            }
             return parsed
           }
         }
       }
     } catch (err) {
-      console.warn('[openai] generateRichPlaceDescriptionsBatch failed or timed out:', err.message)
+      console.warn('[openai] generateRichPlaceDescriptionsBatch fallback activated:', err.message)
     }
   }
 
-  // Fallback rico e individualizado en caso de desconexión
+  // Fallback rico e individualizado por categoría en caso de desconexión
   const fallback = {}
   for (const name of placeNames) {
-    if (/cabo san juan/i.test(name)) {
-      fallback[name] = 'Emblemático rincón del Caribe colombiano famoso por su icónico mirador en la colina sobre el mar, dos bahías gemelas de arena dorada y aguas color esmeralda ideales para nadar y relajarse bajo las palmeras.'
-    } else if (/la piscina/i.test(name)) {
-      fallback[name] = 'Una serena ensenada marina protegida naturalmente por una barrera de arrecifes de coral, creando una piscina de agua salada calmada y cristalina perfecta para hacer snorkel y contemplar peces tropicales.'
-    } else if (/pueblito|chairama/i.test(name)) {
-      fallback[name] = 'Un fascinante sendero ancestral empedrado que atraviesa la selva tropical húmeda, conectando vestigios arqueológicos de terrazas indígenas rodeadas de exuberante flora, aves exóticas y monos aulladores.'
-    } else if (/cristal/i.test(name)) {
-      fallback[name] = 'Paradisíaca playa de arena blanca brillante y aguas turquesas de increíble visibilidad, rodeada de colinas selváticas y famosa por sus coloridos fondos coralinos repletos de vida marina.'
-    } else if (/bah[íi]a concha/i.test(name)) {
-      fallback[name] = 'Una amplia y tranquila bahía de arenas suaves flanqueada por montañas boscosas, donde el mar quieto invita a nadar plácidamente y disfrutar de la sombra de los árboles costeros.'
-    } else if (/arrecifes/i.test(name)) {
-      fallback[name] = 'Impresionante sector costero caracterizado por gigantescos bloques de granito pulidos por el mar, oleaje imponente y un paisaje agreste donde la selva tropical se encuentra con el océano.'
-    } else if (/restaurante|comida|cima|doña|cafe|bar/i.test(name)) {
-      fallback[name] = `Auténtico espacio gastronómico donde disfrutar de la cocina típica regional, deleitándose con exquisito pescado frito, arroz con coco, patacones crujientes y refrescantes jugos naturales tropicales.`
-    } else {
-      fallback[name] = `${name} es un punto de visita indispensable en ${destination || city || 'la región'}, que ofrece a los viajeros una experiencia envolvente para descubrir los paisajes y la cultura del lugar.`
-    }
+    fallback[name] = buildRichFallbackDescription(name, destination || city)
   }
   return fallback
+}
+
+function buildRichFallbackDescription(name, city = '') {
+  const clean = String(name || '')
+  if (/cabo san juan/i.test(clean)) {
+    return 'Emblemático rincón del Caribe colombiano famoso por su icónico mirador en la colina sobre el mar, dos bahías gemelas de arena dorada y aguas color esmeralda ideales para nadar y relajarse bajo las palmeras.'
+  } else if (/la piscina/i.test(clean)) {
+    return 'Una serena ensenada marina protegida naturalmente por una barrera de arrecifes de coral, creando una piscina de agua salada calmada y cristalina perfecta para hacer snorkel y contemplar peces tropicales.'
+  } else if (/pueblito|chairama/i.test(clean)) {
+    return 'Un fascinante sendero ancestral empedrado que atraviesa la selva tropical húmeda, conectando vestigios arqueológicos de terrazas indígenas rodeadas de exuberante flora, aves exóticas y monos aulladores.'
+  } else if (/cristal/i.test(clean)) {
+    return 'Paradisíaca playa de arena blanca brillante y aguas turquesas de increíble visibilidad, rodeada de colinas selváticas y famosa por sus coloridos fondos coralinos repletos de vida marina.'
+  } else if (/bah[íi]a concha/i.test(clean)) {
+    return 'Una amplia y tranquila bahía de arenas suaves flanqueada por montañas boscosas, donde el mar quieto invita a nadar plácidamente y disfrutar de la sombra de los árboles costeros.'
+  } else if (/arrecifes/i.test(clean)) {
+    return 'Impresionante sector costero caracterizado por gigantescos bloques de granito pulidos por el mar, oleaje imponente y un paisaje agreste donde la selva tropical se encuentra con el océano.'
+  }
+
+  const isChurch = /\b(catedral|iglesia|bas[íi]lica|templo|santuario|parroquia)\b/i.test(clean)
+  if (isChurch) {
+    return `Majestuoso recinto de gran valor histórico y espiritual en ${city || 'la ciudad'}, reconocido por su impresionante diseño arquitectónico, imponentes vitrales y un ambiente de serenidad que invita a contemplar el patrimonio cultural de la región.`
+  }
+
+  const isMuseum = /\b(museo|casa museo|galer[íi]a|centro cultural|casa del carnaval)\b/i.test(clean)
+  if (isMuseum) {
+    return `Fascinante espacio cultural e interactivo en ${city || 'la región'}, donde se preserva la memoria viva, las tradiciones folclóricas, vestigios arqueológicos y expresiones artísticas que definen la identidad de sus habitantes.`
+  }
+
+  const isWaterOrPark = /\b(malec[óo]n|parque|plaza|mirador|paseo|boulevard|jard[íi]n|cerro)\b/i.test(clean)
+  if (isWaterOrPark) {
+    return `Un vibrante punto de encuentro al aire libre en ${city || 'la ciudad'}, ideal para pasear junto a la brisa, contemplar panorámicas inolvidables, disfrutar de eventos al aire libre y conectar con la vida cotidiana local.`
+  }
+
+  const isFood = /\b(restaurante|comida|asador|bistro|caf[ée]|bar|gastronom[íi]a|taquer[íi]a|pizzer[íi]a|parador)\b/i.test(clean)
+  if (isFood) {
+    return `Auténtico espacio gastronómico donde deleitarse con las recetas más representativas de la región, disfrutando de ingredientes frescos, sazón tradicional y un ambiente acogedor para compartir en la mesa.`
+  }
+
+  return `Destacado atractivo turístico de ${city || 'la región'}, que cautiva a los viajeros por su atmósfera singular, historia envolvente y paisajes representativos para explorar durante el recorrido.`
 }
 
 export async function generateCustomPlaceReasons(places = [], city = '', country = '') {

@@ -1255,6 +1255,8 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       try {
         candidatePack = await collectTourCandidates({
           ...input,
+          specificPlaces: [],
+          selectedPlaces: [],
           destination,
           city,
           country,
@@ -1294,6 +1296,9 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       if (/\b(aeropuerto|airport|terminal de transporte|terminal de buses|estaci[oó]n de servicio|gasolinera|hospital|cl[íi]nica|parqueadero|parking|alcald[íi]a|gobernaci[oó]n|cementerio|carulla|éxito|olímpica|d1|ara|banco|cajero)\b/i.test(n)) {
         return false
       }
+      if (/^(v[íi]a\s+|carretera\s+|autopista\s+|calle\s+|carrera\s+|diagonal\s+|transversal\s+)/i.test(n) || /\s+-\s+/.test(n)) {
+        return false
+      }
       return isValidSpecificPlace(p.name)
     }
 
@@ -1313,12 +1318,16 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
         excludeNames: excludeNameList
       }).catch(() => [])
 
-      if (Array.isArray(aiSuggestions)) {
+      const rawAiList = Array.isArray(aiSuggestions)
+        ? aiSuggestions
+        : (Array.isArray(aiSuggestions?.places) ? aiSuggestions.places : [])
+
+      if (rawAiList.length > 0) {
         const centerLat = location?.latitude ?? lat ?? 11.2408
         const centerLon = location?.longitude ?? lon ?? -74.2110
 
-        for (let i = 0; i < aiSuggestions.length; i++) {
-          const item = aiSuggestions[i]
+        for (let i = 0; i < rawAiList.length; i++) {
+          const item = rawAiList[i]
           if (item?.name && !isDuplicatePlace(item.name, null) && isQualityTouristPlace(item)) {
             const geo = await geocodePlace(`${item.name} ${city} ${country}`, centerLat, centerLon).catch(() => null)
             const realLat = geo?.latitude ?? (centerLat + (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1))
@@ -1333,7 +1342,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
               city: geo?.city || city,
               country: geo?.country || country,
               category: item.category || item.type || input.type || 'tourism',
-              description: item.description || `Bienvenido a ${item.name}, uno de los puntos imperdibles de ${city}. Disfruta de su riqueza histórica, valor cultural y entorno vibrante.`,
+              description: item.description || `Bienvenido a ${item.name}, uno de los puntos imperdibles de ${city}.`,
               reason: item.description || `Atractivo imperdible recomendado para visitar en ${city}.`,
               minutes: 35
             })
@@ -1343,14 +1352,22 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
     }
 
     // 5. Build rich alternative DTOs with REAL geocoded coordinates, unique AI reasons & images for each place
-    const candidatePlaces = available.slice(0, 6)
+    const candidatePlaces = available.slice(0, 8)
     const placeNames = candidatePlaces.map(p => p.name)
-    const customReasonsMap = await generateCustomPlaceReasons({
-      destination: destination || city,
-      city,
-      prompt: input.prompt,
-      places: placeNames
-    }).catch(() => ({}))
+    const [customReasonsMap, richDescriptionsMap] = await Promise.all([
+      generateCustomPlaceReasons({
+        destination: destination || city,
+        city,
+        prompt: input.prompt,
+        places: placeNames
+      }).catch(() => ({})),
+      generateRichPlaceDescriptionsBatch({
+        destination: destination || city,
+        city,
+        country,
+        places: placeNames
+      }).catch(() => ({}))
+    ])
 
     const alternatives = await Promise.all(
       candidatePlaces.map(async (place) => {
@@ -1379,6 +1396,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
         }
 
         const aiReason = customReasonsMap[place.name] || place.reason || null
+        const richDesc = richDescriptionsMap[place.name] || place.description || `Explora ${place.name}, una parada imprescindible en ${city} llena de cultura e historia local.`
         return {
           id: place.placeId || place.id || place.name,
           name: place.name,
@@ -1386,7 +1404,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
           longitude: realLon,
           category: place.category || 'turismo',
           imageUrl,
-          description: place.description || place.history || `Explora ${place.name}, una parada imprescindible en ${city} llena de cultura e historia local.`,
+          description: richDesc,
           reason: buildRecommendationReason(place, { city, country, destination }, aiReason),
           durationMinutes: place.minutes || 30,
           locationInfo: {
