@@ -920,7 +920,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               ),
             ),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Container(
@@ -958,24 +958,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                             errorBorder: InputBorder.none,
                             filled: false,
                             fillColor: Colors.transparent,
-                            contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                            contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                             isDense: true,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade600,
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                            padding: EdgeInsets.zero,
-                            onPressed: isBusy ? null : _sendMessage,
                           ),
                         ),
                       ),
@@ -984,10 +968,40 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              _VoicePromptButton(
-                isRecording: _isRecording,
-                isBusy: _isStartingVoice || isBusy,
-                onPressed: _toggleVoiceInput,
+              ListenableBuilder(
+                listenable: _prompt,
+                builder: (context, _) {
+                  final hasText = _prompt.text.trim().isNotEmpty || _selectedImagePath != null;
+                  return SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                      child: hasText
+                          ? Container(
+                              key: const ValueKey('send_button'),
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade600,
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                                padding: EdgeInsets.zero,
+                                onPressed: isBusy ? null : _sendMessage,
+                              ),
+                            )
+                          : _VoicePromptButton(
+                              key: const ValueKey('mic_button'),
+                              isRecording: _isRecording,
+                              isBusy: _isStartingVoice || isBusy,
+                              onPressed: _toggleVoiceInput,
+                            ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -1166,6 +1180,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
 class _VoicePromptButton extends StatefulWidget {
   const _VoicePromptButton({
+    super.key,
     required this.isRecording,
     required this.isBusy,
     required this.onPressed,

@@ -1249,6 +1249,16 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       }
     }
 
+    const currentKeys = new Set(
+      currentPlaces.map(p => normalizeKey(p.name || '')).filter(Boolean)
+    )
+    const currentIds = new Set(
+      [
+        ...currentPlaces.map(p => (p.id || p.placeId || '').toLowerCase().trim()),
+        ...excludeIds.map(id => (id || '').toLowerCase().trim())
+      ].filter(Boolean)
+    )
+
     // 3. Fast Parallel Search: Photon POIs + Real AI alternatives in parallel
     const excludeNameList = Array.from(currentKeys).filter(n => n.length > 2)
     const [photonPlaces, aiSuggestions] = await Promise.all([
