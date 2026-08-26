@@ -308,6 +308,8 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
     final controller = ref.read(aiBuilderProvider.notifier);
     final currentStop = ref.read(aiBuilderProvider).recommendations[index];
 
+    final alternativesFuture = controller.getAlternatives();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -320,7 +322,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
         ),
         padding: const EdgeInsets.all(20),
         child: FutureBuilder<List<AiRecommendation>>(
-          future: controller.getAlternatives(),
+          future: alternativesFuture,
           builder: (context, snapshot) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -464,6 +466,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
 
   void _showAddStopSheet(BuildContext context) {
     final controller = ref.read(aiBuilderProvider.notifier);
+    final alternativesFuture = controller.getAlternatives();
 
     showModalBottomSheet(
       context: context,
@@ -477,7 +480,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
         ),
         padding: const EdgeInsets.all(20),
         child: FutureBuilder<List<AiRecommendation>>(
-          future: controller.getAlternatives(),
+          future: alternativesFuture,
           builder: (context, snapshot) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,

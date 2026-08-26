@@ -1249,34 +1249,31 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       }
     }
 
-    // 3. Collect REAL POI candidates from OpenStreetMap (Overpass & Photon)
-    let candidatePack = { places: [] }
-    if (location) {
-      try {
-        candidatePack = await collectTourCandidates({
-          ...input,
-          specificPlaces: [],
-          selectedPlaces: [],
-          destination,
-          city,
-          country,
-          latitude: location.latitude,
-          longitude: location.longitude
-        }, location)
-      } catch (e) {
-        console.warn('[alternatives] collectTourCandidates failed:', e.message)
-      }
-    }
-
-    const currentKeys = new Set(
-      currentPlaces.map(p => normalizeKey(p.name || '')).filter(Boolean)
-    )
-    const currentIds = new Set(
-      [
-        ...currentPlaces.map(p => (p.id || p.placeId || '').toLowerCase().trim()),
-        ...excludeIds.map(id => (id || '').toLowerCase().trim())
-      ].filter(Boolean)
-    )
+    // 3. Fast Parallel Search: Photon POIs + Real AI alternatives in parallel
+    const excludeNameList = Array.from(currentKeys).filter(n => n.length > 2)
+    const [photonPlaces, aiSuggestions] = await Promise.all([
+      (async () => {
+        if (!location?.latitude) return []
+        try {
+          return await photonTourAttractions({
+            city,
+            country,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            limit: 12
+          })
+        } catch (_) {
+          return []
+        }
+      })(),
+      suggestFallbackPlacesWithOpenAI({
+        destination,
+        city,
+        country,
+        type: input.type || 'cultural',
+        excludeNames: excludeNameList
+      }).catch(() => [])
+    ])
 
     const isDuplicatePlace = (name, pId) => {
       if (!name && !pId) return true
@@ -1302,51 +1299,38 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       return isValidSpecificPlace(p.name)
     }
 
-    let available = (candidatePack.places || []).filter(place => {
+    let available = (photonPlaces || []).filter(place => {
       return isQualityTouristPlace(place) && !isDuplicatePlace(place.name, place.placeId || place.id)
     })
 
-    // Si OSM no tiene suficientes lugares turísticos únicos, enriquecer dinámicamente con OpenAI
-    if (available.length < 6) {
-      console.info('[alternatives] Querying OpenAI dynamically for REAL places in:', city)
-      const excludeNameList = Array.from(currentKeys).filter(n => n.length > 2)
-      const aiSuggestions = await suggestFallbackPlacesWithOpenAI({
-        destination,
-        city,
-        country,
-        type: input.type || 'cultural',
-        excludeNames: excludeNameList
-      }).catch(() => [])
+    const rawAiList = Array.isArray(aiSuggestions)
+      ? aiSuggestions
+      : (Array.isArray(aiSuggestions?.places) ? aiSuggestions.places : [])
 
-      const rawAiList = Array.isArray(aiSuggestions)
-        ? aiSuggestions
-        : (Array.isArray(aiSuggestions?.places) ? aiSuggestions.places : [])
+    if (rawAiList.length > 0) {
+      const centerLat = location?.latitude ?? lat ?? 11.2408
+      const centerLon = location?.longitude ?? lon ?? -74.2110
 
-      if (rawAiList.length > 0) {
-        const centerLat = location?.latitude ?? lat ?? 11.2408
-        const centerLon = location?.longitude ?? lon ?? -74.2110
+      for (let i = 0; i < rawAiList.length; i++) {
+        const item = rawAiList[i]
+        if (item?.name && !isDuplicatePlace(item.name, null) && isQualityTouristPlace(item)) {
+          const geo = await geocodePlace(`${item.name} ${city} ${country}`, centerLat, centerLon).catch(() => null)
+          const realLat = geo?.latitude ?? (centerLat + (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1))
+          const realLon = geo?.longitude ?? (centerLon + (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1))
 
-        for (let i = 0; i < rawAiList.length; i++) {
-          const item = rawAiList[i]
-          if (item?.name && !isDuplicatePlace(item.name, null) && isQualityTouristPlace(item)) {
-            const geo = await geocodePlace(`${item.name} ${city} ${country}`, centerLat, centerLon).catch(() => null)
-            const realLat = geo?.latitude ?? (centerLat + (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1))
-            const realLon = geo?.longitude ?? (centerLon + (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1))
-
-            available.push({
-              placeId: `ai-real-${Date.now()}-${i}`,
-              name: item.name,
-              latitude: realLat,
-              longitude: realLon,
-              address: geo?.name || `${city}, ${country}`,
-              city: geo?.city || city,
-              country: geo?.country || country,
-              category: item.category || item.type || input.type || 'tourism',
-              description: item.description || `Bienvenido a ${item.name}, uno de los puntos imperdibles de ${city}.`,
-              reason: item.description || `Atractivo imperdible recomendado para visitar en ${city}.`,
-              minutes: 35
-            })
-          }
+          available.push({
+            placeId: `ai-real-${Date.now()}-${i}`,
+            name: item.name,
+            latitude: realLat,
+            longitude: realLon,
+            address: geo?.name || `${city}, ${country}`,
+            city: geo?.city || city,
+            country: geo?.country || country,
+            category: item.category || item.type || input.type || 'tourism',
+            description: item.description || `Bienvenido a ${item.name}, uno de los puntos imperdibles de ${city}.`,
+            reason: item.description || `Atractivo imperdible recomendado para visitar en ${city}.`,
+            minutes: 35
+          })
         }
       }
     }

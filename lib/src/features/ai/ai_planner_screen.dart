@@ -924,19 +924,21 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             children: [
               Expanded(
                 child: Container(
+                  constraints: const BoxConstraints(minHeight: 46),
                   decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 4.0, left: 4.0),
+                        padding: const EdgeInsets.only(left: 4.0),
                         child: IconButton(
-                          icon: const Icon(Icons.image, color: Colors.grey, size: 22),
+                          icon: const Icon(Icons.image_outlined, color: Colors.grey, size: 22),
                           onPressed: _pickImage,
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                          constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
                           padding: EdgeInsets.zero,
                         ),
                       ),
@@ -956,21 +958,25 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                             errorBorder: InputBorder.none,
                             filled: false,
                             fillColor: Colors.transparent,
-                            contentPadding: EdgeInsets.symmetric(vertical: 12),
+                            contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                             isDense: true,
                           ),
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 4.0, right: 4.0, left: 4.0),
-                        child: IconButton(
-                          icon: const Icon(Icons.send, color: Colors.white, size: 18),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.blue.shade600,
-                            padding: const EdgeInsets.all(8),
-                            minimumSize: const Size(36, 36),
+                        padding: const EdgeInsets.all(4.0),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade600,
+                            shape: BoxShape.circle,
                           ),
-                          onPressed: isBusy ? null : _sendMessage,
+                          child: IconButton(
+                            icon: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                            padding: EdgeInsets.zero,
+                            onPressed: isBusy ? null : _sendMessage,
+                          ),
                         ),
                       ),
                     ],
@@ -978,13 +984,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4.0),
-                child: _VoicePromptButton(
-                  isRecording: _isRecording,
-                  isBusy: _isStartingVoice || isBusy,
-                  onPressed: _toggleVoiceInput,
-                ),
+              _VoicePromptButton(
+                isRecording: _isRecording,
+                isBusy: _isStartingVoice || isBusy,
+                onPressed: _toggleVoiceInput,
               ),
             ],
           ),
@@ -1228,8 +1231,8 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
         return Transform.scale(
           scale: pulse,
           child: Container(
-            width: 42,
-            height: 42,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: background,
               shape: BoxShape.circle,
@@ -1244,6 +1247,7 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
                   : null,
             ),
             child: IconButton(
+              padding: EdgeInsets.zero,
               onPressed: busy ? null : widget.onPressed,
               icon: AnimatedSwitcher(
                 duration: 180.ms,

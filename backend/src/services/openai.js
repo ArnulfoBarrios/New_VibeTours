@@ -323,7 +323,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
             : []
           const pool = Array.from(new Set([...rawSpecifics, ...(preset.places || [])]))
-          
+
           let dayBlocks = []
           for (let d = 1; d <= numDays; d++) {
             const p1 = pool[(d - 1) * 2] || preset.places[0] || 'Centro Histórico'
@@ -595,7 +595,7 @@ REGLAS PARA "specificPlaces":
       const placeNames = placesList.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
       const daysCount = Number(parsedExtracted.durationDays || known.durationDays || 2)
       const dName = destName || known.destination || 'tu destino'
-      
+
       let reconstructed = `Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n`
       if (placeNames.length > 0) {
         const perDay = Math.max(1, Math.ceil(placeNames.length / daysCount))
@@ -1119,60 +1119,73 @@ export async function generateRichPlaceDescriptionsBatch({ destination = '', cit
   if (placeNames.length === 0) return {}
 
   if (apiKey) {
+    const chunkSize = 4
+    const chunks = []
+    for (let i = 0; i < placeNames.length; i += chunkSize) {
+      chunks.push(placeNames.slice(i, i + chunkSize))
+    }
+
     const systemPrompt = `Eres un guía turístico profesional y narrador experto de VibeTours.
-Tu misión es redactar para TODAS Y CADA UNA de las paradas turísticas listadas una descripción inmersiva, detallada, evocadora y cinematográfica (entre 60 y 90 palabras por lugar) en español.
+Tu misión es redactar para CADA parada turística listada una descripción inmersiva, detallada, evocadora y cinematográfica (entre 60 y 90 palabras por lugar) en español.
 
 ESTÁNDAR DE EXCELENCIA (Como guía experto presencial hablándole al viajero):
-- Narra la historia, el ambiente, la arquitectura, los colores, sonidos y la experiencia única que vivirá el visitante en ese lugar específico.
+- Narra la historia, el ambiente, la arquitectura, los colores, sonidos y la experiencia viva y única que vivirá el visitante en ese lugar específico.
 - Para iglesias, catedrales y monumentos: describe su arquitectura, valor histórico y atmósfera solemne.
-- Para malecones, paseos costeros y miradores: describe las vistas panorámicas, la brisa, el ambiente vibrante y los quioscos o puntos de encuentro.
+- Para malecones, paseos costeros y miradores: describe las vistas panorámicas, la brisa, el ambiente vibrante y los puntos de encuentro.
 - Para museos y centros culturales: describe las exposiciones, el viaje histórico y la riqueza cultural que alberga.
 - Para playas, senderos y naturaleza: describe el oleaje, tipo de arena, vegetación, senderos y fauna.
-- Para restaurantes: describe los sabores típicos auténticos, aromas de la cocina regional y el ambiente gastronómico acogedor.
+- Para bares, centros nocturnos y restaurantes: describe la música en vivo, los vinilos de salsa, el baile callejero, sabores típicos auténticos y la fiesta cultural caribeña.
 - PROHIBIDO TERMINANTEMENTE usar frases clónicas como "es un punto de visita indispensable" o plantillas repetitivas. Cada lugar debe tener un texto 100% único, fluido y enriquecedor.
 
 Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del lugar y el valor es la descripción:
 {"Lugar": "texto inmersivo de 60-90 palabras"}`
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Destino: ${destination || city || 'Colombia'}\nLugares obligatorios a describir con riqueza de detalles:\n${placeNames.map((p, i) => `${i + 1}. ${p}`).join('\n')}` }
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.6,
-          max_tokens: 900
-        }),
-        signal: AbortSignal.timeout(8000)
-      })
+      const chunkResults = await Promise.allSettled(
+        chunks.map(async (chunk) => {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `Destino: ${destination || city || 'Colombia'}\nLugares obligatorios a describir con riqueza de detalles:\n${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}` }
+              ],
+              response_format: { type: 'json_object' },
+              temperature: 0.7,
+              max_tokens: 700
+            }),
+            signal: AbortSignal.timeout(10000)
+          })
 
-      if (response.ok) {
-        const json = await response.json()
-        const content = json.choices?.[0]?.message?.content
-        if (content) {
-          const parsed = JSON.parse(content)
-          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-            // Verificar que todas las paradas tengan descripción
-            const allCovered = placeNames.every(name => parsed[name] && parsed[name].length > 20)
-            if (allCovered) return parsed
-            // Si faltó alguna, mezclar con fallback rico
-            for (const name of placeNames) {
-              if (!parsed[name] || parsed[name].length < 20) {
-                parsed[name] = buildRichFallbackDescription(name, destination || city)
-              }
+          if (response.ok) {
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content
+            if (content) {
+              return JSON.parse(content)
             }
-            return parsed
           }
+          return {}
+        })
+      )
+
+      const merged = {}
+      for (const res of chunkResults) {
+        if (res.status === 'fulfilled' && res.value && typeof res.value === 'object') {
+          Object.assign(merged, res.value)
         }
       }
+
+      for (const name of placeNames) {
+        if (!merged[name] || merged[name].length < 20) {
+          merged[name] = buildRichFallbackDescription(name, destination || city)
+        }
+      }
+      return merged
     } catch (err) {
       console.warn('[openai] generateRichPlaceDescriptionsBatch fallback activated:', err.message)
     }
