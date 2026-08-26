@@ -26,19 +26,20 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
     super.dispose();
   }
 
+  Future<void> _handleFinalizeTour() async {
+    await ref.read(aiBuilderProvider.notifier).buildTour();
+    if (!mounted) return;
+    final built = ref.read(aiBuilderProvider).builtTour;
+    if (built != null && mounted) {
+      ref.read(selectedTourProvider.notifier).state = built;
+      context.pushReplacement('/tours/${built.id}', extra: built);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(aiBuilderProvider);
     final mapStyle = ref.watch(mapStyleProvider);
-
-
-    if (state.builtTour != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(selectedTourProvider.notifier).state = state.builtTour;
-        context.pushReplacement('/tours/${state.builtTour!.id}');
-      });
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
 
     final points = state.recommendations
         .map((r) => GeoPoint(latitude: r.latitude, longitude: r.longitude))
@@ -55,11 +56,11 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: LiquidButton(
-              label: 'Finalizar',
-              icon: Icons.check_circle_outline,
-              onPressed: () {
-                ref.read(aiBuilderProvider.notifier).buildTour();
-              },
+              label: state.isBuilding ? 'Generando...' : 'Finalizar',
+              icon: state.isBuilding
+                  ? Icons.hourglass_top_rounded
+                  : Icons.check_circle_outline,
+              onPressed: state.isBuilding ? null : _handleFinalizeTour,
             ),
           ),
         ],

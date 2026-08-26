@@ -191,6 +191,12 @@ export function getDefaultActionChips(known = {}, lastMessage = '') {
 export function isNonTouristicInput(text = '') {
   if (!text || typeof text !== 'string') return false
   const trimmed = text.trim()
+
+  // Si el usuario pide recomendaciones de lugares, viajes o destinos, NUNCA es no-turístico
+  if (/\b(recomi[eé]nda|sugi[eé]re|dame ideas|qu[eé] (lugar|sitio|ciudad|destino|pa[íi]s)|a d[oó]nde (ir|viajar)|no s[eé] a d[oó]nde|alg[uú]n lugar|qu[eé] hacer|planes|vacaciones|turismo|viaje|viajar)\b/i.test(trimmed)) {
+    return false
+  }
+
   if (/^(flutter\s+run|npm\s+|git\s+|cd\s+|ls\b|node\s+|pip\s+|cargo\s+|docker\s+|python\s+|sudo\s+|yarn\s+|pnpm\s+)/i.test(trimmed)) return true
   if (/(flutter run|npm run|npm test|git commit|git push|node index)/i.test(trimmed)) return true
   if (/^(console\.log|function\s*\(|def\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|import\s+.*from|class\s+\w+)/i.test(trimmed)) return true
@@ -418,18 +424,18 @@ REGLA UNIVERSAL DE AGRUPAMIENTO GEOGRÁFICO Y DISTRIBUCIÓN POR DÍAS:
      * Sector Neguanje / Palangana (Playas y Bahías): Playa Cristal, Bahía Concha, Neguanje, Cinto.
    - Prohibido mezclar en el mismo día atractivos de sectores opuestos que requieren diferentes accesos vehiculares.
 REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
-1. SELECCIÓN DE ATRACTIVOS ICÓNICOS Y REALES (NIVEL TURISMO INTERNACIONAL):
-   - Para CUALQUIER ciudad o destino del mundo (ej. Barranquilla, Medellín, París, Tokio, etc.), selecciona ÚNICAMENTE los atractivos turísticos, culturales, históricos, arquitectónicos y paisajísticos MÁS POPULARES, EMBLEMÁTICOS E ICÓNICOS de la ciudad (estándar TripAdvisor / Lonely Planet / Guía Oficial de Turismo).
-   - En Barranquilla por ejemplo: Gran Malecón del Río, Ventana al Mundo, Museo del Carnaval, Casa del Carnaval, Barrio Abajo, Ciénaga de Mallorquín, Bocas de Ceniza, Catedral Metropolitana.
-   - PROHIBIDO terminantemente incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o supermercados como paradas turísticas.
+1. SELECCIÓN DE ATRACTIVOS ICÓNICOS Y REALES (NIVEL TURISMO INTERNACIONAL, CERO HARDCODEO):
+   - Para CUALQUIER ciudad o destino del mundo solicitado (${destName || 'el destino seleccionado'}), selecciona ÚNICAMENTE los atractivos turísticos, culturales, históricos, arquitectónicos y paisajísticos MÁS POPULARES, EMBLEMÁTICOS E ICÓNICOS que existan FÍSICAMENTE en ese destino específico.
+   - PROHIBIDO TERMINANTEMENTE asignar atractivos de una ciudad a otra (por ejemplo, nunca pongas lugares de una ciudad en otra distinta ni mezcles destinos ajenos).
+   - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o supermercados como paradas turísticas.
 2. BALANCE DIARIO ESTRICTO (FÓRMULA 2:1):
    - Cada día de tour DEBE tener:
-     • 2 atractivos turísticos/culturales o paisajísticos destacados.
+     • 2 atractivos turísticos/culturales o paisajísticos destacados propios del destino.
      • Máximo 1 parada gastronómica estratégica (almuerzo o cena en un restaurante o lugar de comida típica de la región).
    - PROHIBIDO programar 2 o 3 restaurantes el mismo día (evitar maratones de comida sucesivos).
 
 REGLAS CRÍTICAS DE RESTAURANTES Y GASTRONOMÍA:
-- PROHIBIDO inventar nombres de restaurantes concatenando la palabra "Restaurante" + el nombre de una atracción o playa (ej: NUNCA inventes "Restaurante Cabo San Juan", "Restaurante Playa Cristal", "Restaurante La Piscina").
+- PROHIBIDO inventar nombres de restaurantes concatenando la palabra "Restaurante" + el nombre de una atracción o playa (ej: NUNCA inventes "Restaurante [Nombre de Playa]").
 - Utiliza ÚNICAMENTE nombres de establecimientos gastronómicos, paradores o kioscos reales físicamente existentes en el mapa satelital.
 ${verifiedFoodText ? `\nESTABLECIMIENTOS GASTRONÓMICOS REALES VERIFICADOS EN EL MAPA:\n${verifiedFoodText}\n` : ''}
 
@@ -442,7 +448,7 @@ CATÁLOGO VERIFICADO DE ${destName.toUpperCase()} (${destCountry || 'DESTINO'}):
 
 ESTADO ACTUAL DE DATOS:
 • DESTINO: ${hasCity ? `CONFIRMADO (${destName})` : 'PENDIENTE'}
-• FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADO (${known.datesSeason || `${known.durationDays} días`})` : 'PENDIENTE'}
+• FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADO (${known.datesSeason || `${known.durationDays || 2} días`})` : 'PENDIENTE'}
 • ACOMPAÑANTES: ${hasCompanions ? `CONFIRMADO (${known.companions})` : 'PENDIENTE'}
 • TRANSPORTE: ${hasTransport ? `CONFIRMADO (${known.transport})` : 'PENDIENTE'}
 • PRESUPUESTO: ${hasBudget ? `CONFIRMADO (${known.budget})` : 'PENDIENTE'}
@@ -452,41 +458,39 @@ ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSumm
 
 ETAPAS DEL FLUJO CONVERSACIONAL (SECUENCIA ESTRICTA Y DIRECTA):
 
-ETAPA 1: DESTINO, FECHAS / DURACIÓN Y ACOMPAÑANTES
-- Si falta el destino: Pregunta amablemente a qué ciudad, parque, isla o país desea viajar.
+ETAPA 1: ASESORÍA DE DESTINOS, FECHAS / DURACIÓN Y ACOMPAÑANTES
+- Si falta el destino o el usuario pide recomendaciones ("no sé a dónde viajar", "recomiéndame algún lugar", "¿a dónde puedo ir?"):
+  Sugiérele de inmediato 4 o 5 destinos variados y populares (playa, naturaleza, cultura, destinos internacionales) con 1 línea descriptiva de cada uno y pregunta cuál le interesa.
 - Si ya indicó destino (${destName}): Acéptalo con entusiasmo y pregunta por las fechas y días de estadía (y acompañantes si faltan).
 
 ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
 - Si destino, fechas y acompañantes ya están confirmados pero aún faltan TRANSPORTE, PRESUPUESTO o ALOJAMIENTO:
   Pregunta en 1 sola línea directa: "¿Cuál es tu presupuesto estimado (económico, moderado, lujo), en qué medio de transporte te moverás y si ya tienes alojamiento definido?"
 
-ETAPA 3: RECOMENDACIÓN DE LUGARES Y PRESENTACIÓN COMPLETA DEL ITINERARIO
-- Si el usuario acaba de responder sobre presupuesto, transporte o alojamiento y ya tenemos los datos clave (destino, fechas, acompañantes, presupuesto, transporte):
-  DEBES GENERAR Y MOSTRAR DIRECTAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE (NUNCA cortes la respuesta diciendo solo "aquí tienes un itinerario" sin poner los días y lugares).
-- Si el usuario pide recomendaciones de lugares o restaurantes, sugiere 4 a 6 opciones reales con:
-  • **[Nombre Real del Lugar/Restaurante]**: [Breve justificación de 1 sola línea].
-  Pregunta: "¿Cuáles de estos lugares te gustaría incluir en tu itinerario?"
-- Formato OBLIGATORIO del Itinerario cuando se presenta:
+ETAPA 3: PRESENTACIÓN COMPLETA DEL ITINERARIO POR DÍAS (ENTREGA INMEDIATA)
+- Si el usuario acaba de responder sobre presupuesto, transporte o alojamiento y ya tenemos los datos clave (destino, fechas, acompañantes, presupuesto, transporte, hospedaje):
+  DEBES GENERAR Y MOSTRAR OBLIGATORIAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE (NUNCA cortes la respuesta diciendo solo "aquí tienes un itinerario" sin poner el bloque completo de días y lugares).
+- DURACIÓN EXACTA: Debes estructurar EXACTAMENTE ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))} días en el itinerario (desde Día 1 hasta Día ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))}), sin omitir ningún día ni generar días de menos.
 
-  Itinerario de Viaje: ${destName || known.destination} (${known.datesSeason || `${known.durationDays || 2} días`})
+Formato OBLIGATORIO del Itinerario:
+Itinerario de Viaje: ${destName || known.destination} (${known.datesSeason || `${known.durationDays || 2} días`})
 
-  Día 1: [Nombre de Destino o Sector]
-  • [Nombre Real de Lugar 1]
-  • [Nombre Real de Lugar 2]
-  • [Nombre Real de Restaurante/Bar]
+Día 1: ${destName || 'Destino'}
+• [Nombre Real de Lugar 1 propio de ${destName || 'este destino'}]
+• [Nombre Real de Lugar 2 propio de ${destName || 'este destino'}]
+• [Nombre Real de Restaurante/Bar propio de ${destName || 'este destino'}]
 
-  Día 2: [Nombre de Destino o Sector]
-  • [Nombre Real de Lugar 3]
-  • [Nombre Real de Lugar 4]
-  • [Nombre Real de Restaurante/Bar]
+Día 2: ${destName || 'Destino'}
+• [Nombre Real de Lugar 3 propio de ${destName || 'este destino'}]
+• [Nombre Real de Lugar 4 propio de ${destName || 'este destino'}]
+• [Nombre Real de Restaurante/Bar propio de ${destName || 'este destino'}]
 
-  REGLAS CRÍTICAS DEL ITINERARIO:
-  1. El mensaje DEBE contener el bloque completo con "Día 1:", "Día 2:", etc. y sus viñetas.
-  2. CERO CORCHETES []. Escribe nombres limpios y reales.
-  3. En las viñetas (•), escribe ÚNICAMENTE el nombre propio y limpio del lugar físico o restaurante real.
-  
-- Si TODOS los datos previos (fechas, acompañantes, transporte, presupuesto) están confirmados:
-  Pregunta al final del itinerario: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?"
+REGLAS CRÍTICAS DEL ITINERARIO:
+1. El mensaje DEBE contener el bloque completo con "Día 1:", "Día 2:", etc. hasta el Día ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))} y sus viñetas.
+2. CERO CORCHETES []. Escribe nombres limpios y reales.
+3. En las viñetas (•), escribe ÚNICAMENTE el nombre propio y limpio del lugar físico o restaurante real.
+4. Si TODOS los datos previos (fechas, acompañantes, transporte, presupuesto, hospedaje) están confirmados:
+   Pregunta al final del itinerario: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?"
 
 ETAPA 4: GENERACIÓN DEL TOUR ("readyToBuild": true)
 - Si el usuario pide generar el tour:
@@ -604,9 +608,18 @@ REGLAS PARA "specificPlaces":
           reconstructed += '\n'
         }
       } else {
+        const cat = realCatalog || (hasCity ? await getRealDestinationCatalog(destName, destCountry).catch(() => null) : null)
+        const samplePlaces = (cat?.places || []).slice(0, daysCount * 2)
+        const sampleRests = (cat?.restaurants || []).slice(0, daysCount)
+        if (!parsedExtracted.specificPlaces) parsedExtracted.specificPlaces = []
         for (let d = 1; d <= daysCount; d++) {
-          reconstructed += `Día ${d}: ${dName}\n`
-          reconstructed += ` • Lugares destacados de ${dName}\n\n`
+          const p1 = samplePlaces[(d - 1) * 2] || `Atractivo destacado de ${dName}`
+          const p2 = samplePlaces[(d - 1) * 2 + 1] || `Centro histórico de ${dName}`
+          const r = sampleRests[(d - 1) % Math.max(1, sampleRests.length)]?.name || 'Restaurante Típico'
+          reconstructed += `Día ${d}: ${dName}\n • ${p1}\n • ${p2}\n • ${r}\n\n`
+          parsedExtracted.specificPlaces.push({ name: p1, dia: d, type: 'cultural' })
+          parsedExtracted.specificPlaces.push({ name: p2, dia: d, type: 'cultural' })
+          parsedExtracted.specificPlaces.push({ name: r, dia: d, type: 'food' })
         }
       }
       reconstructed += '¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?'

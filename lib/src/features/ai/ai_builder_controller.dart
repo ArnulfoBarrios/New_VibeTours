@@ -663,6 +663,38 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     state = state.copyWithHotel(hotel);
   }
 
+  void prepareForEditing([Tour? tour]) {
+    if (tour != null && tour.stops.isNotEmpty) {
+      final recs = tour.stops.asMap().entries.map((entry) {
+        final s = entry.value;
+        return AiRecommendation(
+          id: s.id,
+          name: s.name,
+          latitude: s.location.latitude,
+          longitude: s.location.longitude,
+          category: s.activities.isNotEmpty ? s.activities.first : 'Punto de interés',
+          imageUrl: s.imageUrl,
+          description: s.description,
+          reason: s.tips.isNotEmpty ? s.tips.first : 'Parada del itinerario',
+          durationMinutes: s.suggestedMinutes,
+          locationInfo: s.locationInfo,
+          day: s.day,
+          dia: s.day,
+        );
+      }).toList();
+      state = state.copyWith(
+        recommendations: recs,
+        builtTour: null,
+        isBuilding: false,
+      );
+    } else {
+      state = state.copyWith(
+        builtTour: null,
+        isBuilding: false,
+      );
+    }
+  }
+
   Future<void> buildTour() async {
     if (state.isBuilding || state.request == null || state.recommendations.isEmpty) return;
     state = state.copyWith(isBuilding: true, error: null);

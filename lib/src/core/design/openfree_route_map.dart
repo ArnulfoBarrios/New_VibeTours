@@ -32,6 +32,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
     this.focusOnLast = false,
     this.onMapCreated,
     this.onPointSelected,
+    this.onRouteResolvingChanged,
   });
 
   factory OpenFreeRouteMap.fromStops({
@@ -53,6 +54,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
     bool focusOnLast = false,
     void Function(MapLibreMapController)? onMapCreated,
     void Function(GeoPoint)? onPointSelected,
+    void Function(bool isResolving)? onRouteResolvingChanged,
   }) {
     return OpenFreeRouteMap(
       key: key,
@@ -75,6 +77,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
       focusOnLast: focusOnLast,
       onMapCreated: onMapCreated,
       onPointSelected: onPointSelected,
+      onRouteResolvingChanged: onRouteResolvingChanged,
     );
   }
 
@@ -97,6 +100,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
   final bool focusOnLast;
   final void Function(MapLibreMapController)? onMapCreated;
   final void Function(GeoPoint)? onPointSelected;
+  final void Function(bool isResolving)? onRouteResolvingChanged;
 
   @override
   ConsumerState<OpenFreeRouteMap> createState() => _OpenFreeRouteMapState();
@@ -209,6 +213,17 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     return true;
   }
 
+  bool _arePointsEqual(List<GeoPoint> a, List<GeoPoint> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i].latitude != b[i].latitude || a[i].longitude != b[i].longitude) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   LatLng _projectPointOntoSegmentMetric(LatLng p, LatLng a, LatLng b) {
     final latRad = (a.latitude + b.latitude) / 2.0 * (math.pi / 180.0);
     final cosLat = math.cos(latRad);
@@ -221,13 +236,14 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     final wx = (p.longitude - a.longitude) * cosLat;
     final wy = p.latitude - a.latitude;
 
-    final t = (wx * dx + wy * dy) / (dx * dx + dy * dy);
-    final clampedT = t.clamp(0.0, 1.0);
+    final c1 = wx * dx + wy * dy;
+    if (c1 <= 0) return a;
 
-    return LatLng(
-      a.latitude + clampedT * (b.latitude - a.latitude),
-      a.longitude + clampedT * (b.longitude - a.longitude),
-    );
+    final c2 = dx * dx + dy * dy;
+    if (c2 <= c1) return b;
+
+    final ratio = c1 / c2;
+    return LatLng(a.latitude + ratio * dy, a.longitude + (ratio * dx) / cosLat);
   }
 
   double _metricDistanceMeters(LatLng p1, LatLng p2) {
@@ -241,15 +257,15 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
   List<LatLng> _trimRouteGeometry(List<LatLng> geometry, LatLng currentPos) {
     if (geometry.length < 2) return geometry;
 
-    final startIdx = _lastMatchedIndex.clamp(0, geometry.length - 2);
-    final endIdx = math.min(startIdx + 25, geometry.length - 1);
+    var minDistanceMeters = double.infinity;
+    var bestIndex = _lastMatchedIndex;
 
-    int bestIndex = startIdx;
-    double minDistanceMeters = double.infinity;
+    final searchStart = (_lastMatchedIndex - 2).clamp(0, geometry.length - 1);
+    final searchEnd = (_lastMatchedIndex + 8).clamp(0, geometry.length - 1);
 
-    for (int i = startIdx; i < endIdx; i++) {
+    for (var i = searchStart; i < searchEnd; i++) {
       final p1 = geometry[i];
-      final p2 = geometry[i + 1];
+      final p2 = geometry[math.min(i + 1, geometry.length - 1)];
 
       final proj = _projectPointOntoSegmentMetric(currentPos, p1, p2);
       final distMeters = _metricDistanceMeters(currentPos, proj);
@@ -259,7 +275,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
         bestIndex = i;
       }
     }
-
+    
     if (minDistanceMeters < 120.0) {
       _lastMatchedIndex = math.max(_lastMatchedIndex, bestIndex);
     }
@@ -296,7 +312,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
   void didUpdateWidget(covariant OpenFreeRouteMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     final routeChanged =
-        oldWidget.points != widget.points ||
+        !_arePointsEqual(oldWidget.points, widget.points) ||
         oldWidget.styleUrl != widget.styleUrl ||
         oldWidget.routeOverride != widget.routeOverride;
     
@@ -320,10 +336,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
         isIncremental: isIncremental,
       );
     } else if (oldWidget.activeIndex != widget.activeIndex) {
-      _drawRoute(
-        focusActiveStop: true,
-        isIncremental: isIncremental,
-      );
+      _animateToActiveStop(widget.activeIndex);
     }
 
     if (locationChanged && widget.currentLocation != null) {
@@ -668,12 +681,15 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       return;
     }
     
-    if (mounted) setState(() => _isResolvingRoute = true);
-    // Pintar de inmediato los pines y centrar la cámara para respuesta visual instantánea (0ms de mapa vacío)
+    if (mounted) {
+      setState(() => _isResolvingRoute = true);
+      widget.onRouteResolvingChanged?.call(true);
+    }
+    // Pre-centrar cámara y pintar pines de paradas sin trazar líneas rectas sobre el agua
     if (!_hasFitRoute) {
       try {
         await _paintRoute(
-          RoadRouteResult(geometry: widget.points),
+          const RoadRouteResult(geometry: []),
           focusActiveStop: focusActiveStop,
           fitRoute: true,
           isIncremental: isIncremental,
@@ -711,6 +727,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     } finally {
       if (mounted && requestId == _drawRequest) {
         setState(() => _isResolvingRoute = false);
+        widget.onRouteResolvingChanged?.call(false);
       }
     }
   }
@@ -733,12 +750,14 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
         LatLng(point.latitude, point.longitude),
     ];
     
-    _fullRouteGeometry = [
-      for (final point in route.geometry)
-        LatLng(point.latitude, point.longitude),
-    ];
-    if (_fullRouteGeometry.isEmpty) {
-      _fullRouteGeometry = points;
+    final bool hasExplicitGeometry = route.geometry.isNotEmpty;
+    if (hasExplicitGeometry) {
+      _fullRouteGeometry = [
+        for (final point in route.geometry)
+          LatLng(point.latitude, point.longitude),
+      ];
+    } else {
+      _fullRouteGeometry = [];
     }
 
     final currentLocation = widget.currentLocation;
@@ -1108,8 +1127,11 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
         }
       }
     } else {
-      if (points.isNotEmpty) {
-        _drawNewStopWithEffect(points.first, 0, activeIndex, animId);
+      for (int i = 0; i < points.length; i++) {
+        if (!drawnStops.contains(i)) {
+          _drawNewStopWithEffect(points[i], i, activeIndex, animId);
+          drawnStops.add(i);
+        }
       }
     }
     if (widget.trackingMode && currentPoint != null) {
@@ -1190,6 +1212,22 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
         );
       } catch (_) {}
     }
+  }
+
+  Future<void> _animateToActiveStop(int activeIndex) async {
+    final controller = _controller;
+    if (controller == null || !mounted || widget.points.isEmpty) return;
+    final clampedIndex = activeIndex.clamp(0, widget.points.length - 1);
+    final target = LatLng(
+      widget.points[clampedIndex].latitude,
+      widget.points[clampedIndex].longitude,
+    );
+    try {
+      await controller.animateCamera(
+        CameraUpdate.newLatLngZoom(target, 15),
+        duration: const Duration(milliseconds: 400),
+      );
+    } catch (_) {}
   }
 
   Future<void> _drawNewStopWithEffect(LatLng location, int index, int activeIndex, int animId) async {

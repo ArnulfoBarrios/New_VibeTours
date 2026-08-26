@@ -19,6 +19,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../shared/location_disclosure_dialog.dart';
 import 'ai_builder_controller.dart';
+import 'widgets/animated_route_preview_card.dart';
 
 class AiPlannerScreen extends ConsumerStatefulWidget {
   const AiPlannerScreen({super.key});
@@ -437,195 +438,20 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
   Widget _buildMapCard(AiBuilderState builderState) {
     // Si ya existe un tour construido, el mapa se muestra de forma limpia y única dentro de la tarjeta embebida del chat
-    if (builderState.builtTour != null) {
+    if (builderState.builtTour != null || builderState.recommendations.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    List<GeoPoint> points = [];
-    List<String> labels = [];
-
-    if (builderState.recommendations.isNotEmpty) {
-      points = builderState.recommendations
-          .map((r) => GeoPoint(latitude: r.latitude, longitude: r.longitude))
-          .toList();
-      labels = builderState.recommendations.map((r) => r.name).toList();
-    }
-
-    if (points.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      key: const ValueKey('ai_planner_map_card_stable'),
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.12)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Dynamic stops creation bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.route_rounded, size: 16, color: Colors.blueAccent),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${builderState.recommendations.length} Paradas Seleccionadas',
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle_rounded, size: 11, color: Colors.green),
-                          SizedBox(width: 4),
-                          Text(
-                            'Optimizado',
-                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    children: [
-                      for (int i = 0; i < builderState.recommendations.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 16,
-                                  height: 16,
-                                  alignment: Alignment.center,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.blueAccent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    '${i + 1}',
-                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  builderState.recommendations[i].name,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ClipRRect(
-            child: SizedBox(
-              height: 200,
-              child: OpenFreeRouteMap(
-                key: const ValueKey('ai_planner_openfree_map_stable'),
-                points: points,
-                labels: labels,
-                styleUrl: ref.watch(mapStyleProvider),
-                activeIndex: -1,
-                height: 200,
-                borderRadius: 0,
-                showNumbers: true,
-                useRoadRouting: true,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      side: BorderSide(color: Colors.blue.shade300),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: Icon(Icons.edit_location_alt_outlined, size: 16, color: Colors.blue.shade700),
-                    label: Text(
-                      'Modificar paradas',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
-                    ),
-                    onPressed: () => context.push('/ai/builder'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.blue.shade600,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: builderState.isBuilding
-                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.rocket_launch_rounded, size: 16, color: Colors.white),
-                    label: Text(
-                      builderState.isBuilding ? 'Creando tour...' : 'Crear tour',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    onPressed: builderState.isBuilding
-                        ? null
-                        : () {
-                            ref.read(aiBuilderProvider.notifier).buildTour();
-                          },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return AnimatedRoutePreviewCard(
+      key: const ValueKey('ai_planner_animated_route_card_stable'),
+      stops: builderState.recommendations,
+      mapStyleUrl: ref.watch(mapStyleProvider),
+      isBuilding: builderState.isBuilding,
+      onModifyStops: () {
+        ref.read(aiBuilderProvider.notifier).prepareForEditing();
+        context.push('/ai/builder');
+      },
+      onCreateTour: () => ref.read(aiBuilderProvider.notifier).buildTour(),
     );
   }
 
@@ -975,7 +801,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                       'Modificar paradas',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
                     ),
-                    onPressed: () => context.push('/ai/builder'),
+                    onPressed: () {
+                      ref.read(aiBuilderProvider.notifier).prepareForEditing(tour);
+                      context.push('/ai/builder');
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
