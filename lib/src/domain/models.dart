@@ -986,6 +986,37 @@ class AiRecommendation {
     'day': day,
     'locationInfo': locationInfo.toCreationJson(),
   };
+
+  AiRecommendation copyWith({
+    String? id,
+    String? name,
+    double? latitude,
+    double? longitude,
+    String? category,
+    String? imageUrl,
+    String? description,
+    String? reason,
+    int? durationMinutes,
+    TourLocationInfo? locationInfo,
+    int? day,
+    int? dia,
+  }) {
+    final d = day ?? dia ?? this.day;
+    return AiRecommendation(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      category: category ?? this.category,
+      imageUrl: imageUrl ?? this.imageUrl,
+      description: description ?? this.description,
+      reason: reason ?? this.reason,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      locationInfo: locationInfo ?? this.locationInfo,
+      day: d,
+      dia: d,
+    );
+  }
 }
 
 String tourTypeLabel(TourType type) {

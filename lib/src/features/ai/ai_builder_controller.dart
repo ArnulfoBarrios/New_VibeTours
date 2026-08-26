@@ -619,16 +619,26 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     }
   }
 
-  void addStopWithRecommendation(AiRecommendation newRec) {
+  void addStopWithRecommendation(AiRecommendation newRec, {int? targetDay}) {
+    final assignedDay = targetDay ?? (newRec.day > 0 ? newRec.day : 1);
+    final configuredRec = newRec.copyWith(day: assignedDay, dia: assignedDay);
     final newRecs = List<AiRecommendation>.from(state.recommendations);
-    newRecs.add(newRec);
+    newRecs.add(configuredRec);
     final newRemovedRecs = state.removedRecommendations
-        .where((r) => r.id != newRec.id && r.name.toLowerCase().trim() != newRec.name.toLowerCase().trim())
+        .where((r) => r.id != configuredRec.id && r.name.toLowerCase().trim() != configuredRec.name.toLowerCase().trim())
         .toList();
     state = state.copyWith(
       recommendations: newRecs,
       removedRecommendations: newRemovedRecs,
     );
+  }
+
+  void moveStopToDay(int index, int targetDay) {
+    final newRecs = List<AiRecommendation>.from(state.recommendations);
+    if (index >= 0 && index < newRecs.length) {
+      newRecs[index] = newRecs[index].copyWith(day: targetDay, dia: targetDay);
+      state = state.copyWith(recommendations: newRecs);
+    }
   }
 
   Future<void> removeStop(int index) async {

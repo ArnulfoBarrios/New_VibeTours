@@ -5220,7 +5220,6 @@ function persistTour(tour, route, input, userId) {
     })
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Route Voice Assistant — POST /api/ai/chat/route-assistant
 // Classifies the user's voice query and returns a travel-scoped response
@@ -5233,30 +5232,38 @@ const routeAssistantSchema = z.object({
   tourContext: z.object({
     currentStopName: z.string().optional().default(''),
     city: z.string().optional().default(''),
-    country: z.string().optional().default('')
+    country: z.string().optional().default(''),
+    hotelName: z.string().optional().default(''),
+    hotelAddress: z.string().optional().default(''),
+    hotelLat: z.number().optional(),
+    hotelLon: z.number().optional()
   }).optional().default({})
 })
 
-const ROUTE_ASSISTANT_SYSTEM_PROMPT = `Eres VibeTours Voice, un asistente de voz especializado EXCLUSIVAMENTE en ayudar a turistas durante un recorrido turístico activo. Tu única función es responder preguntas relacionadas con el viaje, el turismo, el destino actual, restaurantes, puntos de interés y navegación.
+const ROUTE_ASSISTANT_SYSTEM_PROMPT = `Eres VibeTours Voice, un asistente de voz turístico y amigable que acompaña a turistas durante un recorrido turístico activo. Tu función es responder preguntas sobre el recorrido, gastronomía, puntos de interés, navegación y retorno al alojamiento/hotel/casa.
 
-CLASIFICACIÓN OBLIGATORIA:
-- Si la pregunta es sobre viajes, turismo, gastronomía, puntos de interés, navegación, clima, moneda local, idioma, historia del lugar, cultura, transporte, hoteles o cualquier tema relacionado al destino turístico → isRelatedToTravel: true.
-- Si la pregunta es sobre matemáticas, programación, medicina, política, entretenimiento no relacionado al viaje, o cualquier tema ajeno al turismo → isRelatedToTravel: false.
+CLASIFICACIÓN:
+- Si la consulta es sobre viajes, turismo, comida/restaurantes, lugares de interés, navegación, regreso al hotel o casa, clima, cultura, etc. → isRelatedToTravel: true.
+- Si es ajena al viaje (matemáticas, programación, política, etc.) → isRelatedToTravel: false.
 
-ACCIÓNES DISPONIBLES (actionType):
-- "SEARCH_RESTAURANTS": el usuario pregunta por comida, restaurantes, cafés, bares o lugares para comer.
-- "RETURN_TO_ACCOMMODATION": el usuario quiere regresar al hotel o alojamiento.
-- "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre el punto de interés actual.
-- "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro lugar del tour.
-- null: la acción es solo informativa (clima, moneda, tips, etc.) o la consulta no es válida.
+ACCIONES DISPONIBLES (actionType):
+1. "SEARCH_RESTAURANTS": el usuario tiene hambre, busca comida, restaurantes, cafés o bares en la zona. (Importante: la búsqueda se realiza alrededor de la posición del usuario).
+2. "SEARCH_PLACES": el usuario busca lugares interesantes, atractivos turísticos, miradores, plazas, parques o sitios para ver cerca de su posición.
+3. "RETURN_TO_ACCOMMODATION": el usuario quiere regresar a su hotel, alojamiento o casa.
+   - Si en el contexto ya existe un hotel confirmado (hotelName / hotelAddress / hotelLat), confírmale de inmediato y con entusiasmo que trazas la ruta hacia su hotel (menciona el nombre del hotel en responseText). NO le pidas la dirección si ya está en el contexto.
+   - Si el usuario indica una dirección o lugar específico por voz (ej: "mi casa queda en...", "llévame a la Calle 84 # 51B..."), extrae esa dirección en "destinationAddress" y confirma que trazas la ruta hacia allá.
+   - Solo si NO hay ningún hotel en el contexto y el usuario NO dio ninguna dirección, pídele amablemente que te indique el nombre o dirección de su hospedaje.
+4. "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre la parada actual.
+5. "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro punto del recorrido.
+6. null: consulta informativa general (clima, tips, etc.).
 
-RESPUESTA: Siempre en español colombiano, amigable, conciso (máximo 2 oraciones). Si isRelatedToTravel es false, rechaza educadamente sin revelar detalles técnicos. CRÍTICO: Si la acción es "SEARCH_RESTAURANTS", indica en tu respuesta de voz que vas a buscar comida en su ubicación actual o zona actual (no menciones la siguiente parada, ya que la búsqueda se realiza alrededor de la posición del usuario).
-
-Devuelve ÚNICAMENTE un objeto JSON válido con este esquema exacto:
+RESPUESTA (responseText): En español colombiano/latinoamericano, natural, cálido, conciso (máximo 2 oraciones).
+Devuelve ÚNICAMENTE un JSON válido con este esquema:
 {
   "isRelatedToTravel": boolean,
   "responseText": "string",
-  "actionType": "SEARCH_RESTAURANTS" | "RETURN_TO_ACCOMMODATION" | "DESCRIBE_CURRENT_POI" | "CHANGE_DESTINATION" | null
+  "actionType": "SEARCH_RESTAURANTS" | "SEARCH_PLACES" | "RETURN_TO_ACCOMMODATION" | "DESCRIBE_CURRENT_POI" | "CHANGE_DESTINATION" | null,
+  "destinationAddress": "string" // opcional, si el usuario dio una dirección explícita
 }`
 
 aiRouter.post('/chat/route-assistant', async (req, res, next) => {
@@ -5276,7 +5283,8 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
       tourContext?.currentStopName ? `Parada actual: ${tourContext.currentStopName}` : '',
       tourContext?.city ? `Ciudad: ${tourContext.city}` : '',
       tourContext?.country ? `País: ${tourContext.country}` : '',
-      latitude != null ? `Coordenadas del usuario: ${latitude}, ${longitude}` : ''
+      tourContext?.hotelName ? `Hotel/Alojamiento confirmado: ${tourContext.hotelName}${tourContext.hotelAddress ? ` (${tourContext.hotelAddress})` : ''}` : '',
+      latitude != null ? `Coordenadas actuales del usuario: ${latitude}, ${longitude}` : ''
     ].filter(Boolean).join('. ')
 
     const userMessage = contextInfo
@@ -5325,22 +5333,86 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
       }
     }
 
-    // If SEARCH_RESTAURANTS and we have coordinates, enrich the response with real places
-    let nearbyFood = []
-    if (
-      aiResult.isRelatedToTravel &&
-      aiResult.actionType === 'SEARCH_RESTAURANTS' &&
-      latitude != null &&
-      longitude != null
-    ) {
-      nearbyFood = await overpassNearbyFood(latitude, longitude, 1000)
+    let nearbyPlaces = []
+    let targetDestination = null
+
+    const centerLat = latitude ?? (tourContext?.hotelLat || 11.0041)
+    const centerLon = longitude ?? (tourContext?.hotelLon || -74.8070)
+
+    // 1. Manejo de SEARCH_RESTAURANTS
+    if (aiResult.isRelatedToTravel && aiResult.actionType === 'SEARCH_RESTAURANTS') {
+      try {
+        nearbyPlaces = await overpassNearbyFood(centerLat, centerLon, 1200)
+      } catch (_) {}
+
+      if (!nearbyPlaces || nearbyPlaces.length === 0) {
+        try {
+          nearbyPlaces = await photonFoodFallback(centerLat, centerLon)
+        } catch (_) {}
+      }
+    }
+
+    // 2. Manejo de SEARCH_PLACES
+    if (aiResult.isRelatedToTravel && aiResult.actionType === 'SEARCH_PLACES') {
+      try {
+        const photonSpots = await photonSearch('tourism attraction viewpoint', 10, centerLat, centerLon)
+        if (photonSpots && photonSpots.length > 0) {
+          nearbyPlaces = photonSpots.map(p => ({
+            name: p.name,
+            latitude: p.latitude,
+            longitude: p.longitude,
+            type: 'attraction'
+          }))
+        }
+      } catch (_) {}
+
+      if (!nearbyPlaces || nearbyPlaces.length === 0) {
+        try {
+          nearbyPlaces = await overpassAttractions(centerLat, centerLon, 2500)
+        } catch (_) {}
+      }
+    }
+
+    // 3. Manejo de RETURN_TO_ACCOMMODATION
+    if (aiResult.isRelatedToTravel && aiResult.actionType === 'RETURN_TO_ACCOMMODATION') {
+      if (tourContext.hotelLat && tourContext.hotelLon) {
+        targetDestination = {
+          name: tourContext.hotelName || 'Alojamiento',
+          latitude: tourContext.hotelLat,
+          longitude: tourContext.hotelLon,
+          address: tourContext.hotelAddress || ''
+        }
+      } else if (aiResult.destinationAddress) {
+        const query = `${aiResult.destinationAddress}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
+        const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
+        if (geo?.latitude && geo?.longitude) {
+          targetDestination = {
+            name: aiResult.destinationAddress,
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            address: aiResult.destinationAddress
+          }
+        }
+      } else if (tourContext.hotelName) {
+        const query = `${tourContext.hotelName}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
+        const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
+        if (geo?.latitude && geo?.longitude) {
+          targetDestination = {
+            name: tourContext.hotelName,
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            address: tourContext.hotelAddress || tourContext.hotelName
+          }
+        }
+      }
     }
 
     return res.json({
       isRelatedToTravel: aiResult.isRelatedToTravel,
       responseText: aiResult.responseText,
       actionType: aiResult.actionType ?? null,
-      nearbyPlaces: nearbyFood.length > 0 ? nearbyFood : undefined
+      nearbyPlaces: (nearbyPlaces && nearbyPlaces.length > 0) ? nearbyPlaces : undefined,
+      targetDestination: targetDestination ?? undefined
     })
   } catch (error) {
     next(error)

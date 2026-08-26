@@ -115,7 +115,18 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     
     // Limpiar inmediatamente para evitar múltiples envíos mientras se obtiene la ubicación
     _prompt.clear();
+    if (_isRecording || _isStartingVoice) {
+      _isRecording = false;
+      _isStartingVoice = false;
+      try {
+        _voicePrompt.stop();
+      } catch (_) {
+        _voicePrompt.cancel();
+      }
+    }
     setState(() {
+      _isRecording = false;
+      _isStartingVoice = false;
       _selectedImagePath = null;
       _isProcessingAction = true;
       _voiceFeedback = null;

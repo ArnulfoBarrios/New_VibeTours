@@ -223,13 +223,33 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(
-                                    rec.category.toUpperCase(),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppTheme.primary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        rec.category.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppTheme.primary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          'Día ${rec.day > 0 ? rec.day : 1}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blue,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -254,6 +274,13 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                               },
                               icon: const Icon(Icons.swap_horiz_rounded, size: 18),
                               label: const Text('Cambiar'),
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                _showMoveDayDialog(context, index, rec.day);
+                              },
+                              icon: const Icon(Icons.calendar_month_rounded, size: 18, color: Colors.blue),
+                              label: Text('Día ${rec.day > 0 ? rec.day : 1}', style: const TextStyle(color: Colors.blue)),
                             ),
                             if (state.recommendations.length > 2)
                               TextButton.icon(
@@ -464,113 +491,198 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
     );
   }
 
-  void _showAddStopSheet(BuildContext context) {
+  void _showMoveDayDialog(BuildContext context, int stopIndex, int currentDay) {
+    final state = ref.read(aiBuilderProvider);
+    final maxDay = state.recommendations.isEmpty
+        ? 1
+        : state.recommendations.map((s) => s.day).reduce((a, b) => a > b ? a : b);
+    final totalDays = maxDay > 1 ? maxDay : 1;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mover parada de día'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Selecciona el día al que deseas mover esta parada:'),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: List.generate(totalDays > 1 ? totalDays : (totalDays + 1), (i) {
+                final dayNum = i + 1;
+                final isCurrent = dayNum == currentDay;
+                return ChoiceChip(
+                  label: Text('Día $dayNum'),
+                  selected: isCurrent,
+                  onSelected: (selected) {
+                    if (selected) {
+                      ref.read(aiBuilderProvider.notifier).moveStopToDay(stopIndex, dayNum);
+                      Navigator.pop(context);
+                    }
+                  },
+                );
+              }),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddStopSheet(BuildContext context, {int? defaultDay}) {
     final controller = ref.read(aiBuilderProvider.notifier);
+    final state = ref.read(aiBuilderProvider);
+    final maxDay = state.recommendations.isEmpty
+        ? 1
+        : state.recommendations.map((s) => s.day).reduce((a, b) => a > b ? a : b);
+    final totalDays = maxDay > 1 ? maxDay : 1;
+    int selectedTargetDay = defaultDay ?? 1;
+
     final alternativesFuture = controller.getAlternatives();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.65,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: FutureBuilder<List<AiRecommendation>>(
-          future: alternativesFuture,
-          builder: (context, snapshot) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Añadir parada al recorrido',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Container(
+          height: MediaQuery.of(context).size.height * 0.70,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Añadir parada al recorrido',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Selecciona el día destino:',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: List.generate(totalDays > 1 ? totalDays : (totalDays + 1), (i) {
+                    final dayNum = i + 1;
+                    final isSelected = dayNum == selectedTargetDay;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ChoiceChip(
+                        label: Text('Día $dayNum'),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setSheetState(() => selectedTargetDay = dayNum);
+                          }
+                        },
+                      ),
+                    );
+                  }),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Lugares turísticos recomendados en la zona por IA:',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                ),
-                const SizedBox(height: 14),
-                Expanded(
-                  child: snapshot.connectionState == ConnectionState.waiting
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 14),
-                              Text(
-                                'Buscando paradas recomendadas en la zona...',
-                                style: TextStyle(color: Colors.grey, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        )
-                      : (snapshot.data == null || snapshot.data!.isEmpty)
-                          ? const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.location_off_rounded, size: 36, color: Colors.grey),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'No se encontraron otras alternativas cercanas.',
-                                    style: TextStyle(color: Colors.grey, fontSize: 13),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: snapshot.data!.length,
-                              itemBuilder: (context, altIndex) {
-                                final alt = snapshot.data![altIndex];
-                                return Card(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.all(8),
-                                    leading: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: alt.imageUrl.isNotEmpty
-                                          ? Image.network(alt.imageUrl, width: 54, height: 54, fit: BoxFit.cover)
-                                          : Container(width: 54, height: 54, color: Colors.grey.shade200, child: const Icon(Icons.place)),
-                                    ),
-                                    title: Text(alt.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    subtitle: Text(
-                                      alt.reason.isNotEmpty ? alt.reason : alt.category,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    trailing: FilledButton.icon(
-                                      onPressed: () {
-                                        controller.addStopWithRecommendation(alt);
-                                        Navigator.pop(context);
-                                      },
-                                      icon: const Icon(Icons.add_rounded, size: 16),
-                                      label: const Text('Añadir'),
-                                    ),
-                                  ),
-                                );
-                              },
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Lugares turísticos recomendados en la zona por IA:',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: FutureBuilder<List<AiRecommendation>>(
+                  future: alternativesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 14),
+                            Text(
+                              'Buscando paradas recomendadas en la zona...',
+                              style: TextStyle(color: Colors.grey, fontSize: 13),
                             ),
+                          ],
+                        ),
+                      );
+                    }
+                    if (snapshot.data == null || snapshot.data!.isEmpty) {
+                      return const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.location_off_rounded, size: 36, color: Colors.grey),
+                            SizedBox(height: 8),
+                            Text(
+                              'No se encontraron otras alternativas cercanas.',
+                              style: TextStyle(color: Colors.grey, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return ListView.builder(
+                      itemCount: snapshot.data!.length,
+                      itemBuilder: (context, altIndex) {
+                        final alt = snapshot.data![altIndex];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.all(8),
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: alt.imageUrl.isNotEmpty
+                                  ? Image.network(alt.imageUrl, width: 54, height: 54, fit: BoxFit.cover)
+                                  : Container(width: 54, height: 54, color: Colors.grey.shade200, child: const Icon(Icons.place)),
+                            ),
+                            title: Text(alt.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(
+                              alt.reason.isNotEmpty ? alt.reason : alt.category,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            trailing: FilledButton.icon(
+                              onPressed: () {
+                                controller.addStopWithRecommendation(alt, targetDay: selectedTargetDay);
+                                Navigator.pop(context);
+                              },
+                              icon: const Icon(Icons.add_rounded, size: 16),
+                              label: Text('Día $selectedTargetDay'),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
-              ],
-            );
-          },
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -19,6 +19,7 @@ import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../../state/live_tour_state.dart';
+import '../ai/ai_builder_controller.dart';
 import 'tour_rating_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ class _RouteAssistantResponse {
     required this.responseText,
     this.actionType,
     this.nearbyPlaces = const [],
+    this.targetDestination,
   });
 
   factory _RouteAssistantResponse.fromJson(Map<String, dynamic> json) {
@@ -42,11 +44,16 @@ class _RouteAssistantResponse {
         }
       }
     }
+    _NearbyFoodPlace? dest;
+    if (json['targetDestination'] is Map<String, dynamic>) {
+      dest = _NearbyFoodPlace.fromJson(json['targetDestination'] as Map<String, dynamic>);
+    }
     return _RouteAssistantResponse(
       isRelatedToTravel: json['isRelatedToTravel'] == true,
       responseText: (json['responseText'] as String?) ?? '',
       actionType: json['actionType'] as String?,
       nearbyPlaces: places,
+      targetDestination: dest,
     );
   }
 
@@ -54,6 +61,7 @@ class _RouteAssistantResponse {
   final String responseText;
   final String? actionType;
   final List<_NearbyFoodPlace> nearbyPlaces;
+  final _NearbyFoodPlace? targetDestination;
 }
 
 class _NearbyFoodPlace {
@@ -252,7 +260,34 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       if (stop.id == 'hotel_start') return stop;
     }
     for (final stop in tour.stops.reversed) {
-      if (stop.name.toLowerCase().contains('hotel')) return stop;
+      final nameLower = stop.name.toLowerCase();
+      if (nameLower.contains('hotel') ||
+          nameLower.contains('hostal') ||
+          nameLower.contains('resort') ||
+          nameLower.contains('hospedaje') ||
+          nameLower.contains('alojamiento')) {
+        return stop;
+      }
+    }
+    if (tour.meetingPointInfo.nombreLugar.isNotEmpty) {
+      final nameLower = tour.meetingPointInfo.nombreLugar.toLowerCase();
+      if (nameLower.contains('hotel') ||
+          nameLower.contains('hostal') ||
+          nameLower.contains('resort') ||
+          nameLower.contains('hospedaje') ||
+          nameLower.contains('alojamiento')) {
+        return TourStop(
+          id: 'hotel_meeting',
+          name: tour.meetingPointInfo.nombreLugar,
+          location: tour.stops.isNotEmpty ? tour.stops.first.location : const GeoPoint(latitude: 0, longitude: 0),
+          imageUrl: '',
+          description: 'Alojamiento',
+          activities: const ['Alojamiento', 'Descanso'],
+          tips: const ['Punto de estancia del tour'],
+          suggestedMinutes: 15,
+          locationInfo: tour.meetingPointInfo,
+        );
+      }
     }
     return null;
   }
@@ -364,6 +399,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ? tour.stops[_activeStop]
         : null;
 
+    final hotelStop = tour != null ? _findHotelStop(tour) : null;
+    final builderState = ref.read(aiBuilderProvider);
+    final selectedHotel = builderState.selectedHotel;
+    final hotelName = hotelStop?.name ?? selectedHotel?['name']?.toString() ?? '';
+    final hotelAddress = hotelStop?.locationInfo.direccion ?? selectedHotel?['address']?.toString() ?? selectedHotel?['direccion']?.toString() ?? '';
+    final hotelLat = hotelStop?.location.latitude ?? double.tryParse(selectedHotel?['latitude']?.toString() ?? '');
+    final hotelLon = hotelStop?.location.longitude ?? double.tryParse(selectedHotel?['longitude']?.toString() ?? '');
+
     final body = <String, dynamic>{
       'userQuery': userQuery,
       if (_currentPoint != null) 'latitude': _currentPoint!.latitude,
@@ -372,6 +415,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         'currentStopName': stop?.name ?? '',
         'city': tour?.city ?? '',
         'country': tour?.country ?? '',
+        if (hotelName.isNotEmpty) 'hotelName': hotelName,
+        if (hotelAddress.isNotEmpty) 'hotelAddress': hotelAddress,
+        if (hotelLat != null && hotelLat != 0.0) 'hotelLat': hotelLat,
+        if (hotelLon != null && hotelLon != 0.0) 'hotelLon': hotelLon,
       },
     };
 
@@ -408,9 +455,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   ) async {
     switch (response.actionType) {
       case 'SEARCH_RESTAURANTS':
+      case 'SEARCH_PLACES':
         if (response.nearbyPlaces.isNotEmpty) {
           setState(() {
             _voiceFoodPlaces = response.nearbyPlaces;
+            _selectedVoicePlace = null;
+            _navigatingToHotel = false;
           });
           // Narrate the found options
           final names = response.nearbyPlaces
@@ -419,12 +469,22 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               .join(', ');
           final voiceGuide = ref.read(voiceGuideProvider);
           await voiceGuide.speak(
-            'Encontré los siguientes lugares: $names. Los marqué en el mapa.',
+            'Encontré estas opciones en la zona: $names. Las marqué en el mapa para ti.',
           );
         }
 
       case 'RETURN_TO_ACCOMMODATION':
-        if (tour != null && _findHotelStop(tour) != null) {
+        if (response.targetDestination != null) {
+          setState(() {
+            _selectedVoicePlace = response.targetDestination;
+            _navigatingToHotel = true;
+            _liveRoute = null;
+            _liveRouteStopIndex = null;
+          });
+          if (tour != null) {
+            _recalculateRoute(tour, force: true);
+          }
+        } else if (tour != null && _findHotelStop(tour) != null) {
           _startHotelNavigation();
         }
 
@@ -492,9 +552,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   fitPadding: const EdgeInsets.fromLTRB(28, 100, 28, 390),
                   route: liveRoute,
                   currentLocation: _currentPoint,
-                  additionalWaypoints: _selectedVoicePlace != null
-                      ? null
-                      : tour.stops.map((s) => s.location).toList(),
+                  additionalWaypoints: _voiceFoodPlaces.isNotEmpty
+                      ? _voiceFoodPlaces.map((p) => p.toGeoPoint()).toList()
+                      : (_selectedVoicePlace != null
+                          ? null
+                          : tour.stops.map((s) => s.location).toList()),
                   trackingMode: _isTrackingMode,
                   trackingHeading: _currentHeading,
                   onPointSelected: (point) {
