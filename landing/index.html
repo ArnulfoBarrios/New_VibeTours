@@ -12,6 +12,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   
+  <!-- Leaflet Map CSS for Interactive Smartphone Simulator -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  
   <!-- Stylesheet -->
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -38,8 +41,10 @@
       <nav>
         <ul class="nav-menu">
           <li><a href="#como-funciona" class="nav-link" id="nav-how">¿Cómo Funciona?</a></li>
-          <li><a href="#generador" class="nav-link" id="nav-generator">Simulador IA</a></li>
+          <li><a href="#simulador" class="nav-link" id="nav-generator">Simulador App</a></li>
           <li><a href="#funciones" class="nav-link" id="nav-features">Funciones</a></li>
+          <li><a href="#galeria" class="nav-link" id="nav-gallery">Galería App</a></li>
+          <li><a href="#comparativa" class="nav-link" id="nav-compare">Comparativa</a></li>
           <li><a href="#faq" class="nav-link" id="nav-faq">FAQ</a></li>
         </ul>
       </nav>
@@ -102,8 +107,8 @@
           <span>Crear Cuenta Gratis</span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </a>
-        <a href="#generador" id="hero-cta-secondary" class="btn btn-glass btn-large">
-          <span>Probar Simulador</span>
+        <a href="#simulador" id="hero-cta-secondary" class="btn btn-glass btn-large">
+          <span>Probar Simulador en Vivo</span>
         </a>
       </div>
 
@@ -168,102 +173,299 @@
   </section>
 
   <!-- ==========================================================================
-       2. WIDGET INTERACTIVO: SIMULADOR DE TOURS IA COCKPIT
+       2. WIDGET INTERACTIVO: SIMULADOR DE APP EN SMARTPHONE 3D (PLAYGROUND)
        ========================================================================== -->
-  <section id="generador" class="section">
+  <section id="simulador" class="section">
     <div class="section-header reveal-on-scroll">
-      <span class="section-subtitle" id="gen-subtitle">Simulador en Vivo</span>
-      <h2 class="section-title" id="gen-title">Diseña tu Tour al Instante</h2>
-      <p class="section-description" id="gen-desc">
-        Selecciona tus preferencias y observa cómo la IA genera un itinerario verificado en tiempo real.
+      <span class="section-subtitle" id="sim-subtitle">Experiencia Interactiva 3D</span>
+      <h2 class="section-title" id="sim-title">Prueba la App desde tu Navegador</h2>
+      <p class="section-description" id="sim-desc">
+        Interactúa en tiempo real con el Asistente IA, navega rutas GPS en el mapa satelital y escucha audioguías reales.
       </p>
     </div>
 
-    <div class="glass-card generator-container reveal-on-scroll delay-1">
-      <!-- Interactive Selector Controls -->
-      <div class="generator-controls">
-        <div class="control-group">
-          <label class="control-label" id="gen-lbl-city">1. Elige una Ciudad</label>
-          <div class="chips-group" id="cityChips">
-            <button class="chip active" data-city="cartagena">🌴 Cartagena</button>
-            <button class="chip" data-city="tokio">⛩️ Tokio</button>
-            <button class="chip" data-city="paris">🎨 París</button>
-            <button class="chip" data-city="roma">🏛️ Roma</button>
+    <div class="smartphone-simulator-container reveal-on-scroll delay-1">
+      
+      <!-- Cockpit Control Deck (Left Side) -->
+      <div class="simulator-control-panel glass-card">
+        <div class="cockpit-header">
+          <div class="cockpit-badge">
+            <span class="live-dot"></span>
+            <span id="sim-cockpit-badge">Centro de Mando del Simulador</span>
+          </div>
+          <h3 class="cockpit-title" id="sim-cockpit-title">Configura tu Experiencia</h3>
+          <p class="cockpit-desc" id="sim-cockpit-desc">
+            Prueba cómo reacciona el smartphone virtual al cambiar de ciudad, ritmo e intereses turísticos.
+          </p>
+        </div>
+
+        <!-- City Selector -->
+        <div class="cockpit-group">
+          <label class="cockpit-label" id="sim-lbl-city">1. Selecciona Destino</label>
+          <div class="cockpit-chips" id="simCityChips">
+            <button class="cockpit-chip active" data-sim-city="cartagena">🌴 Cartagena</button>
+            <button class="cockpit-chip" data-sim-city="paris">🎨 París</button>
+            <button class="cockpit-chip" data-sim-city="tokio">⛩️ Tokio</button>
+            <button class="cockpit-chip" data-sim-city="roma">🏛️ Roma</button>
+            <button class="cockpit-chip" data-sim-city="newyork">🗽 Nueva York</button>
           </div>
         </div>
 
-        <div class="control-group">
-          <label class="control-label" id="gen-lbl-pace">2. Ritmo de Caminata</label>
-          <div class="chips-group" id="paceChips">
-            <button class="chip active" data-pace="relaxed">🚶 Relajado (2h)</button>
-            <button class="chip" data-pace="balanced">⚖️ Equilibrado (3.5h)</button>
-            <button class="chip" data-pace="fast">⚡ Dinámico (5h)</button>
+        <!-- Walk Pace -->
+        <div class="cockpit-group">
+          <label class="cockpit-label" id="sim-lbl-pace">2. Ritmo & Duración</label>
+          <div class="cockpit-chips" id="simPaceChips">
+            <button class="cockpit-chip active" data-sim-pace="relaxed">🚶 Relajado (2h)</button>
+            <button class="cockpit-chip" data-sim-pace="balanced">⚖️ Moderado (3.5h)</button>
+            <button class="cockpit-chip" data-sim-pace="fast">⚡ Intenso (5h)</button>
           </div>
         </div>
 
-        <div class="control-group">
-          <label class="control-label" id="gen-lbl-interest">3. Interés Principal</label>
-          <div class="chips-group" id="interestChips">
-            <button class="chip active" data-interest="history">🏛️ Historia & Monumentos</button>
-            <button class="chip" data-interest="food">🍷 Gastronomía Local</button>
-            <button class="chip" data-interest="art">🎨 Arte & Museos</button>
+        <!-- Telemetry Stats Card -->
+        <div class="cockpit-telemetry glass-subcard">
+          <div class="telemetry-grid">
+            <div class="tele-item">
+              <span class="tele-label" id="sim-tele-gps-label">Precisión GPS</span>
+              <span class="tele-val text-cyan">± 1.8 m</span>
+            </div>
+            <div class="tele-item">
+              <span class="tele-label" id="sim-tele-latency-label">Latencia IA</span>
+              <span class="tele-val text-green">0.42 s</span>
+            </div>
+            <div class="tele-item">
+              <span class="tele-label" id="sim-tele-source-label">Cartografía</span>
+              <span class="tele-val text-purple">OSM Real</span>
+            </div>
+            <div class="tele-item">
+              <span class="tele-label" id="sim-tele-voice-label">Voz Narrativa</span>
+              <span class="tele-val text-orange">HD Neural</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Experience Switcher -->
+        <div class="cockpit-actions">
+          <button id="btnSwitchToChat" class="btn btn-glass btn-small active-sim-mode">
+            💬 1. Probar Chat IA
+          </button>
+          <button id="btnSwitchToMap" class="btn btn-glass btn-small">
+            📍 2. Mapa Satelital
+          </button>
+          <button id="btnSwitchToFeed" class="btn btn-glass btn-small">
+            🧭 3. Feed de Tours
+          </button>
+        </div>
+      </div>
+
+      <!-- Smartphone Hardware Mockup (Right Side) -->
+      <div class="phone-mockup-wrapper">
+        <div class="smartphone-hardware">
+          
+          <!-- Outer Titanium Bezel & Side Buttons -->
+          <div class="phone-btn phone-btn-volume-up"></div>
+          <div class="phone-btn phone-btn-volume-down"></div>
+          <div class="phone-btn phone-btn-power"></div>
+          
+          <!-- Dynamic Island / Speaker Notch -->
+          <div class="phone-dynamic-island" id="phoneIsland">
+            <div class="island-camera"></div>
+            <div class="island-sensor"></div>
+            <div class="island-live-indicator" id="islandLiveStatus">
+              <span class="island-wave-bar"></span>
+              <span class="island-wave-bar"></span>
+              <span class="island-wave-bar"></span>
+            </div>
+          </div>
+
+          <!-- Glass Screen Viewport -->
+          <div class="phone-screen-viewport">
+            
+            <!-- Status Bar -->
+            <div class="phone-status-bar">
+              <span class="phone-clock" id="phoneLiveClock">12:45</span>
+              <div class="phone-status-icons">
+                <span class="status-icon">5G</span>
+                <span class="status-icon">📶</span>
+                <span class="status-icon">🔋 100%</span>
+              </div>
+            </div>
+
+            <!-- ================= TAB 1: AI PLANNER CHAT ================= -->
+            <div class="phone-tab-content active" id="tabContentChat">
+              <div class="app-screen-header">
+                <div class="app-avatar-badge">🤖</div>
+                <div class="app-header-meta">
+                  <h4 class="app-header-title">Vibe Planner AI</h4>
+                  <span class="app-status-text"><span class="green-dot"></span> Online • Asistente Activo</span>
+                </div>
+              </div>
+
+              <!-- Chat Message Scroll Area -->
+              <div class="phone-chat-scroll" id="simChatScroll">
+                <div class="chat-msg bot-msg">
+                  <div class="msg-bubble">
+                    ¡Hola! 🌴 Soy tu asistente inteligente VibeTours. ¿Qué tipo de ruta te gustaría explorar hoy?
+                  </div>
+                  <span class="msg-time">12:44</span>
+                </div>
+              </div>
+
+              <!-- Quick Prompt Chips -->
+              <div class="phone-quick-prompts">
+                <button class="prompt-chip" data-prompt="Quiero una ruta histórica de 2h con vistas al mar">🏛️ Ruta Histórica</button>
+                <button class="prompt-chip" data-prompt="Recomiéndame los mejores cafés y comida callejera">🍷 Gastronomía Local</button>
+                <button class="prompt-chip" data-prompt="¿Dónde ver el mejor atardecer y tomar fotos?">📸 Mejores Fotos</button>
+              </div>
+
+              <!-- Chat Input Bar -->
+              <form class="phone-input-bar" id="simChatForm">
+                <input type="text" id="simChatInputField" class="phone-text-input" placeholder="Pregunta algo sobre tu viaje..." autocomplete="off">
+                <button type="submit" class="phone-send-btn" title="Enviar Mensaje">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                </button>
+              </form>
+            </div>
+
+            <!-- ================= TAB 2: LIVE GPS MAP & AUDIO ================= -->
+            <div class="phone-tab-content" id="tabContentMap">
+              <div class="app-screen-header map-header">
+                <div>
+                  <h4 class="app-header-title" id="simMapHeaderTitle">Cartagena Colonial</h4>
+                  <span class="app-status-text" id="simMapHeaderSubtitle">4 Paradas • 2.1 km</span>
+                </div>
+                <button id="simStepWalkBtn" class="phone-action-btn">
+                  🚶 <span id="simWalkBtnText">Simular Paso</span>
+                </button>
+              </div>
+
+              <!-- Leaflet Map Container -->
+              <div id="simLeafletMap" class="phone-map-canvas"></div>
+
+              <!-- Floating Live Audio Mini Player -->
+              <div class="phone-audio-player-card">
+                <div class="audio-left">
+                  <button id="phoneAudioToggleBtn" class="audio-play-circle">▶</button>
+                  <div class="audio-track-info">
+                    <h5 id="phoneAudioStopTitle">1. Torre del Reloj</h5>
+                    <p id="phoneAudioStopSub">Audioguía GPS en proximidad (15m)</p>
+                  </div>
+                </div>
+                <div class="audio-waveform-mini" id="phoneWaveform">
+                  <span></span><span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ================= TAB 3: DISCOVERY FEED ================= -->
+            <div class="phone-tab-content" id="tabContentFeed">
+              <div class="app-screen-header">
+                <div>
+                  <h4 class="app-header-title" id="simFeedHeaderTitle">Explorar Tours</h4>
+                  <span class="app-status-text" id="simFeedHeaderSubtitle">Catálogo Verificado</span>
+                </div>
+              </div>
+
+              <div class="phone-feed-scroll" id="simFeedCardsContainer">
+                <!-- Dynamically populated tour cards -->
+              </div>
+            </div>
+
+            <!-- Bottom Navigation Tabs Inside Phone -->
+            <div class="phone-bottom-navbar">
+              <button class="phone-nav-item active" data-target-tab="tabContentChat">
+                <span class="nav-icon">🤖</span>
+                <span class="nav-label" id="pnav-chat">IA Planner</span>
+              </button>
+              <button class="phone-nav-item" data-target-tab="tabContentMap">
+                <span class="nav-icon">📍</span>
+                <span class="nav-label" id="pnav-map">Live Tour</span>
+              </button>
+              <button class="phone-nav-item" data-target-tab="tabContentFeed">
+                <span class="nav-icon">🧭</span>
+                <span class="nav-label" id="pnav-feed">Explorar</span>
+              </button>
+            </div>
+
           </div>
         </div>
       </div>
 
-      <!-- Dynamic AI Result Preview Card -->
-      <div class="generator-preview glass-subcard">
-        <div class="preview-header">
-          <div class="preview-badge" id="gen-badge-live">✨ Itinerario Verificado</div>
-          <span class="preview-status" id="gen-status-osm">📡 OpenStreetMap GPS</span>
-        </div>
+    </div>
+  </section>
 
-        <h3 class="preview-tour-title" id="tourPreviewTitle">Cartagena Colonial: Murallas y Plazas</h3>
-        <p class="preview-tour-desc" id="tourPreviewDesc">
-          Ruta histórica por fortalezas coloniales, plazas emblemáticas y baluartes con audioguía GPS contextual.
-        </p>
+  <!-- ==========================================================================
+       3. COMPARATIVA INTERACTIVA: TURISMO TRADICIONAL VS VIBETOURS
+       ========================================================================== -->
+  <section id="comparativa" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle" id="comp-subtitle">Evolución del Turismo</span>
+      <h2 class="section-title" id="comp-title">¿Por Qué Cambiar a VibeTours?</h2>
+      <p class="section-description" id="comp-desc">
+        Compara la experiencia convencional con la libertad guiada por inteligencia artificial.
+      </p>
+    </div>
 
-        <div class="preview-meta-bar">
-          <div class="preview-meta-item">
-            <span class="meta-icon">⏱️</span>
-            <span id="tourPreviewDuration">Duración: 2 Horas</span>
-          </div>
-          <div class="preview-meta-item">
-            <span class="meta-icon">🚶</span>
-            <span id="tourPreviewDistance">Distancia: 2.1 km</span>
-          </div>
-          <div class="preview-meta-item">
-            <span class="meta-icon">💵</span>
-            <span id="tourPreviewBudget">Presupuesto: $15 - $25 USD</span>
-          </div>
-        </div>
-
-        <!-- Stops Sequence -->
-        <div class="preview-stops-list" id="tourPreviewStops">
-          <div class="stop-item">
-            <span class="stop-number">1</span>
-            <span class="stop-name">Torre del Reloj & Plaza de los Coches</span>
-          </div>
-          <div class="stop-item">
-            <span class="stop-number">2</span>
-            <span class="stop-name">Plaza de la Aduana & Museo de Arte Moderno</span>
-          </div>
-          <div class="stop-item">
-            <span class="stop-number">3</span>
-            <span class="stop-name">Santuario San Pedro Claver</span>
-          </div>
-          <div class="stop-item">
-            <span class="stop-number">4</span>
-            <span class="stop-name">Baluarte de Santo Domingo</span>
+    <div class="comparison-grid reveal-on-scroll delay-1">
+      
+      <!-- Card 1: Traditional Tourism -->
+      <div class="glass-card comparison-card traditional-card">
+        <div class="comparison-header">
+          <div class="comp-icon-badge bg-red">❌</div>
+          <div>
+            <h3 class="comp-title" id="comp-trad-title">Turismo Tradicional</h3>
+            <span class="comp-tag" id="comp-trad-tag">Método Antiguo</span>
           </div>
         </div>
-
-        <div class="preview-footer-cta">
-          <a href="register.html" class="btn btn-primary btn-small" id="gen-btn-cta">
-            Explorar este tour en la app
-          </a>
-        </div>
+        <ul class="comp-list">
+          <li>
+            <span class="cross-icon">✕</span>
+            <div id="comp-trad-1"><strong>Grupos masivos y lentos:</strong> Sigues un paraguas con 30 personas sin escuchar bien al guía.</div>
+          </li>
+          <li>
+            <span class="cross-icon">✕</span>
+            <div id="comp-trad-2"><strong>Horarios rígidos:</strong> Te obligan a madrugar y apurar tus fotos en cada sitio.</div>
+          </li>
+          <li>
+            <span class="cross-icon">✕</span>
+            <div id="comp-trad-3"><strong>Costos elevados:</strong> $40 - $120 USD por persona para un recorrido genérico.</div>
+          </li>
+          <li>
+            <span class="cross-icon">✕</span>
+            <div id="comp-trad-4"><strong>Paradas trampa:</strong> Desvíos comerciales no solicitados para comprar souvenirs.</div>
+          </li>
+        </ul>
       </div>
+
+      <!-- Card 2: VibeTours Smart Experience -->
+      <div class="glass-card comparison-card smart-card">
+        <div class="smart-glow-border"></div>
+        <div class="comparison-header">
+          <div class="comp-icon-badge bg-cyan">✨</div>
+          <div>
+            <h3 class="comp-title" id="comp-vibe-title">Experiencia VibeTours</h3>
+            <span class="comp-tag tag-primary" id="comp-vibe-tag">Inteligencia Artificial & GPS</span>
+          </div>
+        </div>
+        <ul class="comp-list">
+          <li>
+            <span class="check-icon">✓</span>
+            <div id="comp-vibe-1"><strong>100% a tu propio ritmo:</strong> Camina cuando quieras, haz pausas para café y retoma en cualquier punto.</div>
+          </li>
+          <li>
+            <span class="check-icon">✓</span>
+            <div id="comp-vibe-2"><strong>Audioguías por proximidad:</strong> Historias y anécdotas narradas al oído exactamente cuando llegas.</div>
+          </li>
+          <li>
+            <span class="check-icon">✓</span>
+            <div id="comp-vibe-3"><strong>Ahorro superior al 85%:</strong> Generación ilimitada de rutas satelitales sin intermediarios.</div>
+          </li>
+          <li>
+            <span class="check-icon">✓</span>
+            <div id="comp-vibe-4"><strong>Itinerarios personalizados:</strong> La IA adapta las paradas a tu presupuesto, gustos y energía.</div>
+          </li>
+        </ul>
+      </div>
+
     </div>
   </section>
 
@@ -378,7 +580,158 @@
   </section>
 
   <!-- ==========================================================================
-       4. ¿CÓMO FUNCIONA? (3 PASOS)
+       5. GALERÍA 3D SHOWCASE DE LA APLICACIÓN REAL
+       ========================================================================== -->
+  <section id="galeria" class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle" id="gallery-subtitle">Diseño de Alta Fidelidad</span>
+      <h2 class="section-title" id="gallery-title">Conoce la App por Dentro</h2>
+      <p class="section-description" id="gallery-desc">
+        Explora las pantallas reales de VibeTours diseñadas para brindarte la mejor experiencia en cualquier destino.
+      </p>
+    </div>
+
+    <!-- Category Filter Tabs -->
+    <div class="gallery-filter-tabs reveal-on-scroll delay-1">
+      <button class="gallery-tab active" data-gallery-filter="all" id="gtab-all">Todas las Pantallas</button>
+      <button class="gallery-tab" data-gallery-filter="ai" id="gtab-ai">🤖 IA & Planificador</button>
+      <button class="gallery-tab" data-gallery-filter="tours" id="gtab-tours">📍 Navegación & Tours</button>
+      <button class="gallery-tab" data-gallery-filter="creator" id="gtab-creator">✍️ Creador & Comunidad</button>
+    </div>
+
+    <!-- 3D Perspective Card Carousel -->
+    <div class="gallery-perspective-stage reveal-on-scroll delay-2">
+      <div class="gallery-grid" id="galleryGrid">
+        
+        <div class="gallery-card glass-card" data-category="ai">
+          <div class="gallery-card-img-wrap">
+            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Chat de IA.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Chat de IA.jpeg" src="assets/screenshots/Modo claro/Chat de IA.jpeg" alt="Chat de IA">
+          </div>
+          <div class="gallery-card-info">
+            <span class="gallery-badge bg-purple">IA Conversacional</span>
+            <h4>Chat con Vibe Planner</h4>
+            <p>Generación de itinerarios satelitales en lenguaje natural.</p>
+          </div>
+        </div>
+
+        <div class="gallery-card glass-card" data-category="ai">
+          <div class="gallery-card-img-wrap">
+            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Diseñando el tour.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Diseñando tour.jpeg" src="assets/screenshots/Modo claro/Diseñando el tour.jpeg" alt="Diseñando Tour">
+          </div>
+          <div class="gallery-card-info">
+            <span class="gallery-badge bg-cyan">Cálculo en Tiempo Real</span>
+            <h4>Diseñador de Rutas</h4>
+            <p>Optimización de distancias y tiempos de caminata.</p>
+          </div>
+        </div>
+
+        <div class="gallery-card glass-card" data-category="tours">
+          <div class="gallery-card-img-wrap">
+            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Detalles de tour 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Detalles de tour 1.jpeg" src="assets/screenshots/Modo claro/Detalles de tour 1.jpeg" alt="Detalles de Tour">
+          </div>
+          <div class="gallery-card-info">
+            <span class="gallery-badge bg-blue">Satelital OSM</span>
+            <h4>Detalles & Paradas GPS</h4>
+            <p>Información histórica, audioguía y coordenadas precisas.</p>
+          </div>
+        </div>
+
+        <div class="gallery-card glass-card" data-category="tours">
+          <div class="gallery-card-img-wrap">
+            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Explorar 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Explorar 1.jpeg" src="assets/screenshots/Modo claro/Explorar 1.jpeg" alt="Explorar Rutas">
+          </div>
+          <div class="gallery-card-info">
+            <span class="gallery-badge bg-green">Catálogo Mundial</span>
+            <h4>Explorador de Ciudades</h4>
+            <p>Descubre rutas creadas por la comunidad y verificadas por IA.</p>
+          </div>
+        </div>
+
+        <div class="gallery-card glass-card" data-category="creator">
+          <div class="gallery-card-img-wrap">
+            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Creador Manual de tours 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Creador Manual de tour 1.jpeg" src="assets/screenshots/Modo claro/Creador Manual de tours 1.jpeg" alt="Creador de Tours">
+          </div>
+          <div class="gallery-card-info">
+            <span class="gallery-badge bg-orange">Comunidad Global</span>
+            <h4>Creador Manual de Tours</h4>
+            <p>Fija paradas, agrega fotos y comparte con otros viajeros.</p>
+          </div>
+        </div>
+
+        <div class="gallery-card glass-card" data-category="tours">
+          <div class="gallery-card-img-wrap">
+            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Calificar Tour.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Calificar tour.jpeg" src="assets/screenshots/Modo claro/Calificar Tour.jpeg" alt="Calificar Tour">
+          </div>
+          <div class="gallery-card-info">
+            <span class="gallery-badge bg-purple">Valoraciones Reales</span>
+            <h4>Reseñas y Feedback</h4>
+            <p>Sistema de calificaciones comunitarias transparentes.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       6. TESTIMONIOS Y SOCIAL PROOF
+       ========================================================================== -->
+  <section class="section">
+    <div class="section-header reveal-on-scroll">
+      <span class="section-subtitle" id="test-subtitle">Opiniones de la Comunidad</span>
+      <h2 class="section-title" id="test-title">Amado por Viajeros Autónomos</h2>
+      <p class="section-description" id="test-desc">
+        Descubre cómo miles de personas disfrutan de sus viajes sin depender de tours aburridos.
+      </p>
+    </div>
+
+    <div class="testimonials-grid reveal-on-scroll delay-1">
+      <div class="glass-card testimonial-card">
+        <div class="testimonial-rating">⭐⭐⭐⭐⭐</div>
+        <p class="testimonial-text" id="test1-text">
+          "Pude recorrer Cartagena a mi ritmo. Llegué a la Torre del Reloj y la voz me contó historias fascinantes que ni siquiera los guías locales sabían. ¡Increíble!"
+        </p>
+        <div class="testimonial-user">
+          <div class="user-avatar">SC</div>
+          <div>
+            <h5 class="user-name">Sofía Cárdenas</h5>
+            <span class="user-location">Viajera en Cartagena • Tour Histórico</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card testimonial-card">
+        <div class="testimonial-rating">⭐⭐⭐⭐⭐</div>
+        <p class="testimonial-text" id="test2-text">
+          "El chat de IA me diseñó una ruta de cafés y arte en París perfecta para mi presupuesto de estudiante. Ahorré más de 80 euros en un solo día."
+        </p>
+        <div class="testimonial-user">
+          <div class="user-avatar">MR</div>
+          <div>
+            <h5 class="user-name">Mateo Rodríguez</h5>
+            <span class="user-location">Viajero en París • Ruta Gastronómica</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card testimonial-card">
+        <div class="testimonial-rating">⭐⭐⭐⭐⭐</div>
+        <p class="testimonial-text" id="test3-text">
+          "La precisión del GPS es impresionante. No se pierde nunca y me llevó a templos ocultos en Tokio que no aparecen en las guías turísticas tradicionales."
+        </p>
+        <div class="testimonial-user">
+          <div class="user-avatar">EN</div>
+          <div>
+            <h5 class="user-name">Elena Navarro</h5>
+            <span class="user-location">Viajera en Tokio • Santuarios & Templos</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       7. ¿CÓMO FUNCIONA? (3 PASOS)
        ========================================================================== -->
   <section id="como-funciona" class="section">
     <div class="section-header reveal-on-scroll">
@@ -511,8 +864,9 @@
         <h4 class="footer-col-title" id="footer-col1-title">Navegación</h4>
         <ul class="footer-links">
           <li><a href="#como-funciona" id="footer-link-how">¿Cómo Funciona?</a></li>
-          <li><a href="#generador" id="footer-link-generator">Simulador IA</a></li>
+          <li><a href="#simulador" id="footer-link-generator">Simulador App</a></li>
           <li><a href="#funciones" id="footer-link-features">Funciones</a></li>
+          <li><a href="#galeria" id="footer-link-gallery">Galería App</a></li>
           <li><a href="#faq" id="footer-link-faq">Preguntas Frecuentes</a></li>
         </ul>
       </div>
@@ -534,6 +888,9 @@
     </div>
   </footer>
 
+  <!-- Leaflet Map JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
   <!-- Scripts -->
   <script src="app.js"></script>
 </body>

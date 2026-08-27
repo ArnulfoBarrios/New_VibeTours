@@ -1495,3 +1495,1030 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   8. SMARTPHONE SIMULATOR PLAYGROUND (COCKPIT & 3D HARDWARE FRAME)
+   ========================================================================== */
+.smartphone-simulator-container {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 40px;
+  align-items: center;
+  margin-top: 30px;
+}
+
+/* Simulator Cockpit Deck (Left Side) */
+.simulator-control-panel {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.cockpit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 100px;
+  background: rgba(0, 122, 255, 0.1);
+  border: 1px solid rgba(0, 122, 255, 0.25);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary-cyan);
+  box-shadow: 0 0 8px var(--primary-cyan);
+  animation: pulseCore 1.5s infinite;
+}
+
+.cockpit-title {
+  font-size: 24px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  color: var(--text-main);
+}
+
+.cockpit-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.cockpit-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cockpit-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cockpit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cockpit-chip {
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-speed);
+}
+
+.cockpit-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.cockpit-chip.active {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+  box-shadow: 0 4px 14px var(--primary-glow);
+}
+
+/* Telemetry Stats Card */
+.cockpit-telemetry {
+  padding: 18px;
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.tele-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tele-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+}
+
+.tele-val {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.text-cyan { color: var(--primary-cyan); }
+.text-green { color: var(--success); }
+.text-purple { color: var(--accent-purple); }
+.text-orange { color: var(--warning); }
+
+.cockpit-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.active-sim-mode {
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+  background: rgba(0, 122, 255, 0.12) !important;
+}
+
+/* ==========================================================================
+   SMARTPHONE HARDWARE 3D CHASSIS
+   ========================================================================== */
+.phone-mockup-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  perspective: 1200px;
+}
+
+.smartphone-hardware {
+  width: 350px;
+  height: 710px;
+  background: #0B0E17;
+  border-radius: 50px;
+  padding: 12px;
+  box-shadow: 
+    0 0 0 3px #2C3545,
+    0 0 0 7px #121622,
+    0 30px 70px -10px rgba(0, 0, 0, 0.5),
+    0 0 50px rgba(0, 122, 255, 0.25);
+  position: relative;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s ease;
+  user-select: none;
+}
+
+.smartphone-hardware:hover {
+  transform: rotateY(-3deg) rotateX(2deg) translateY(-4px);
+  box-shadow: 
+    0 0 0 3px #3D485C,
+    0 0 0 7px #151A27,
+    0 35px 80px -10px rgba(0, 0, 0, 0.6),
+    0 0 60px rgba(0, 240, 255, 0.35);
+}
+
+/* Physical Side Buttons */
+.phone-btn {
+  position: absolute;
+  background: #232B38;
+  border-radius: 4px;
+}
+
+.phone-btn-volume-up {
+  left: -10px;
+  top: 140px;
+  width: 4px;
+  height: 48px;
+}
+
+.phone-btn-volume-down {
+  left: -10px;
+  top: 200px;
+  width: 4px;
+  height: 48px;
+}
+
+.phone-btn-power {
+  right: -10px;
+  top: 160px;
+  width: 4px;
+  height: 64px;
+}
+
+/* Dynamic Island */
+.phone-dynamic-island {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 105px;
+  height: 25px;
+  background: #000000;
+  border-radius: 20px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 10px;
+  gap: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.island-camera {
+  width: 9px;
+  height: 9px;
+  background: #0d1527;
+  border-radius: 50%;
+  border: 1px solid #1c2b4a;
+}
+
+.island-sensor {
+  width: 6px;
+  height: 6px;
+  background: #080c14;
+  border-radius: 50%;
+}
+
+.island-live-indicator {
+  display: none;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+}
+
+.island-live-indicator.active {
+  display: flex;
+}
+
+.island-wave-bar {
+  width: 2px;
+  height: 100%;
+  background: var(--primary-cyan);
+  border-radius: 1px;
+  animation: waveBar 0.8s infinite ease-in-out;
+}
+
+.island-wave-bar:nth-child(2) { animation-delay: 0.2s; }
+.island-wave-bar:nth-child(3) { animation-delay: 0.4s; }
+
+/* Phone Screen Viewport */
+.phone-screen-viewport {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-page);
+  border-radius: 40px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Status Bar */
+.phone-status-bar {
+  height: 44px;
+  padding: 10px 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-main);
+  z-index: 10;
+}
+
+.phone-status-icons {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+}
+
+/* Screen Tab Switcher Content */
+.phone-tab-content {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.phone-tab-content.active {
+  display: flex;
+}
+
+.app-screen-header {
+  padding: 8px 16px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.app-screen-header.map-header {
+  justify-content: space-between;
+}
+
+.app-avatar-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.app-header-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.app-status-text {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.green-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+/* Tab 1: Chat Scroll & Bubbles */
+.phone-chat-scroll {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 86%;
+  animation: fadeInMsg 0.3s ease-out;
+}
+
+@keyframes fadeInMsg {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bot-msg {
+  align-self: flex-start;
+}
+
+.user-msg {
+  align-self: flex-end;
+}
+
+.msg-bubble {
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.bot-msg .msg-bubble {
+  background: var(--surface);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+  border-bottom-left-radius: 4px;
+  box-shadow: var(--shadow-sm);
+}
+
+.user-msg .msg-bubble {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+.msg-time {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  margin-top: 3px;
+  padding: 0 4px;
+}
+
+.user-msg .msg-time {
+  text-align: right;
+}
+
+/* Dynamic Tour Card in Chat */
+.sim-tour-card {
+  margin-top: 8px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.sim-tour-card h5 {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.sim-tour-meta-row {
+  display: flex;
+  gap: 10px;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.sim-tour-card .btn-card-action {
+  width: 100%;
+  padding: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: none;
+  background: var(--primary);
+  color: #FFFFFF;
+  cursor: pointer;
+}
+
+/* Quick Prompt Chips in Phone */
+.phone-quick-prompts {
+  padding: 6px 10px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.phone-quick-prompts::-webkit-scrollbar {
+  display: none;
+}
+
+.prompt-chip {
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 100px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.prompt-chip:hover {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+}
+
+/* Phone Input Bar */
+.phone-input-bar {
+  padding: 8px 10px 10px;
+  display: flex;
+  gap: 6px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.phone-text-input {
+  flex: 1;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 7px 12px;
+  font-size: 11px;
+  color: var(--text-main);
+  outline: none;
+}
+
+.phone-text-input:focus {
+  border-color: var(--primary);
+}
+
+.phone-send-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: none;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.phone-send-btn:hover {
+  transform: scale(1.08);
+}
+
+/* Tab 2: Leaflet Map Inside Phone */
+.phone-map-canvas {
+  flex: 1;
+  width: 100%;
+  z-index: 1;
+  background: #E5E9EC;
+}
+
+.phone-action-btn {
+  padding: 5px 10px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--primary);
+  color: #FFFFFF;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: transform 0.2s;
+}
+
+.phone-action-btn:hover {
+  transform: scale(1.05);
+}
+
+/* Floating Live Audio Mini Player in Map */
+.phone-audio-player-card {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  background: var(--glass-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-md);
+  z-index: 20;
+}
+
+.audio-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.audio-play-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #FFFFFF;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 4px 10px var(--primary-glow);
+}
+
+.audio-track-info h5 {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.audio-track-info p {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.audio-waveform-mini {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.audio-waveform-mini span {
+  width: 2px;
+  height: 4px;
+  background: var(--accent-purple);
+  border-radius: 1px;
+  transition: height 0.2s;
+}
+
+.audio-waveform-mini.playing span {
+  animation: waveBar 1s infinite ease-in-out;
+}
+
+.audio-waveform-mini.playing span:nth-child(1) { animation-delay: 0.1s; }
+.audio-waveform-mini.playing span:nth-child(2) { animation-delay: 0.3s; }
+.audio-waveform-mini.playing span:nth-child(3) { animation-delay: 0.2s; }
+.audio-waveform-mini.playing span:nth-child(4) { animation-delay: 0.4s; }
+.audio-waveform-mini.playing span:nth-child(5) { animation-delay: 0.15s; }
+
+/* Tab 3: Discovery Feed */
+.phone-feed-scroll {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sim-feed-card {
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.sim-feed-card:hover {
+  transform: translateY(-2px);
+}
+
+.feed-card-img {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+}
+
+.feed-card-body {
+  padding: 8px 10px;
+}
+
+.feed-card-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+
+.feed-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Phone Bottom Nav Bar */
+.phone-bottom-navbar {
+  height: 52px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding-bottom: 4px;
+  z-index: 10;
+}
+
+.phone-nav-item {
+  border: none;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.phone-nav-item .nav-icon {
+  font-size: 16px;
+}
+
+.phone-nav-item.active {
+  color: var(--primary);
+  transform: scale(1.08);
+}
+
+/* ==========================================================================
+   9. COMPARATIVA INTERACTIVA (TRADICIONAL VS VIBETOURS)
+   ========================================================================== */
+.comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-top: 30px;
+}
+
+.comparison-card {
+  padding: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+}
+
+.smart-card {
+  border: 1.5px solid var(--primary);
+  background: linear-gradient(180deg, var(--glass-card) 0%, rgba(0, 122, 255, 0.05) 100%);
+  box-shadow: 0 20px 50px -10px rgba(0, 122, 255, 0.2);
+}
+
+.smart-glow-border {
+  position: absolute;
+  inset: -1px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, var(--primary-cyan), var(--primary), var(--accent-purple));
+  z-index: -1;
+  opacity: 0.4;
+  filter: blur(8px);
+}
+
+.comparison-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.comp-icon-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.bg-red { background: rgba(239, 68, 68, 0.15); color: #EF4444; }
+.bg-cyan { background: rgba(0, 240, 255, 0.15); color: var(--primary-cyan); }
+
+.comp-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.comp-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.tag-primary {
+  color: var(--primary);
+}
+
+.comp-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.comp-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.comp-list li strong {
+  color: var(--text-main);
+}
+
+.cross-icon {
+  color: #EF4444;
+  font-weight: 900;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.check-icon {
+  color: var(--success);
+  font-weight: 900;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   10. GALERÍA 3D SHOWCASE DE LA APLICACIÓN REAL
+   ========================================================================== */
+.gallery-filter-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 20px 0 36px;
+  flex-wrap: wrap;
+}
+
+.gallery-tab {
+  padding: 8px 18px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-speed);
+}
+
+.gallery-tab:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.gallery-tab.active {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+  box-shadow: 0 4px 14px var(--primary-glow);
+}
+
+.gallery-perspective-stage {
+  perspective: 1400px;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+.gallery-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+}
+
+.gallery-card:hover {
+  transform: translateY(-8px) scale(1.02);
+}
+
+.gallery-card-img-wrap {
+  width: 100%;
+  height: 380px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+}
+
+.gallery-screen-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  transition: transform 0.5s ease;
+}
+
+.gallery-card:hover .gallery-screen-img {
+  transform: scale(1.04);
+}
+
+.gallery-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gallery-badge {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.gallery-card-info h4 {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.gallery-card-info p {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   11. TESTIMONIOS Y RESEÑAS SATELITALES
+   ========================================================================== */
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 30px;
+}
+
+.testimonial-card {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.testimonial-rating {
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+
+.testimonial-text {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.testimonial-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-cyan));
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.user-location {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   RESPONSIVE ADJUSTMENTS FOR NEW COMPONENTS
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .smartphone-simulator-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .testimonials-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .smartphone-hardware {
+    width: 320px;
+    height: 650px;
+  }
+
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
