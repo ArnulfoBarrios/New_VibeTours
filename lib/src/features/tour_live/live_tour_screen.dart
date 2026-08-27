@@ -298,7 +298,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           name: mpName,
           location: (lat != 0.0 && lon != 0.0)
               ? GeoPoint(latitude: lat, longitude: lon)
-              : (tour.stops.isNotEmpty ? tour.stops.first.location : const GeoPoint(latitude: 0, longitude: 0)),
+              : const GeoPoint(latitude: 0, longitude: 0),
           imageUrl: '',
           description: 'Punto de alojamiento del tour',
           activities: const ['Alojamiento', 'Descanso'],
@@ -553,7 +553,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           final destinationPoint = _selectedVoicePlace != null
               ? _selectedVoicePlace!.toGeoPoint()
               : _navigatingToHotel
-                  ? (_findHotelStop(tour)?.location ?? stop.location)
+                  ? ((_findHotelStop(tour) != null && _findHotelStop(tour)!.location.latitude != 0.0)
+                      ? _findHotelStop(tour)!.location
+                      : stop.location)
                   : stop.location;
           final destinationName = _selectedVoicePlace != null
               ? _selectedVoicePlace!.name
@@ -1090,13 +1092,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             : _activeStop;
             
     final hotelStop = _findHotelStop(tour);
-    if (_navigatingToHotel && hotelStop == null) return;
+    if (_navigatingToHotel && hotelStop == null && _selectedVoicePlace == null) return;
     
     final GeoPoint destination;
     if (_selectedVoicePlace != null) {
       destination = _selectedVoicePlace!.toGeoPoint();
-    } else if (_navigatingToHotel) {
-      destination = hotelStop!.location;
+    } else if (_navigatingToHotel && hotelStop != null && hotelStop.location.latitude != 0.0) {
+      destination = hotelStop.location;
     } else {
       destination = tour.stops[_activeStop].location;
     }
@@ -1354,12 +1356,56 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   Widget _buildRestaurantNavigationPanel(BuildContext context, Tour tour) {
-    final isAirport = _selectedVoicePlace?.type?.contains('Aeropuerto') == true ||
+    final isAirport = _selectedVoicePlace?.type == 'aeropuerto' ||
+        (_selectedVoicePlace?.type?.contains('Aeropuerto') ?? false) ||
         (_selectedVoicePlace?.name.contains('Aeropuerto') ?? false);
-    final isPort = _selectedVoicePlace?.type?.contains('Puerto') == true ||
+    final isPort = _selectedVoicePlace?.type == 'puerto' ||
         _selectedVoicePlace?.type?.contains('Embarque') == true ||
+        (_selectedVoicePlace?.type?.contains('Puerto') ?? false) ||
         (_selectedVoicePlace?.name.contains('Muelle') ?? false) ||
         (_selectedVoicePlace?.name.contains('Puerto') ?? false);
+    final nameLower = (_selectedVoicePlace?.name ?? '').toLowerCase();
+    final typeLower = (_selectedVoicePlace?.type ?? '').toLowerCase();
+    final isHotel = typeLower == 'hotel' ||
+        nameLower.contains('hotel') ||
+        nameLower.contains('hostal') ||
+        nameLower.contains('resort') ||
+        nameLower.contains('alojamiento') ||
+        nameLower.contains('hospedaje') ||
+        nameLower.contains('estelar') ||
+        nameLower.contains('boutique') ||
+        nameLower.contains('posada');
+    final isAttraction = typeLower == 'attraction' ||
+        typeLower == 'tourism' ||
+        typeLower == 'monument' ||
+        typeLower == 'viewpoint' ||
+        typeLower == 'park' ||
+        typeLower == 'museo' ||
+        nameLower.contains('parque') ||
+        nameLower.contains('museo') ||
+        nameLower.contains('mirador') ||
+        nameLower.contains('castillo') ||
+        nameLower.contains('plaza');
+
+    final destinationTitle = isAirport
+        ? 'Ruta al Aeropuerto'
+        : isPort
+            ? 'Ruta al Muelle'
+            : isHotel
+                ? 'Ruta a tu Alojamiento'
+                : isAttraction
+                    ? 'Ruta al Punto de Interés'
+                    : 'Ruta al Restaurante';
+
+    final destinationIcon = isAirport
+        ? Icons.flight_takeoff_rounded
+        : isPort
+            ? Icons.directions_boat_rounded
+            : isHotel
+                ? Icons.hotel_rounded
+                : isAttraction
+                    ? Icons.place_rounded
+                    : Icons.restaurant_rounded;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1369,11 +1415,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           children: [
             Expanded(
               child: Text(
-                isAirport
-                    ? 'Ruta al Aeropuerto'
-                    : isPort
-                        ? 'Ruta al Muelle'
-                        : 'Ruta al restaurante',
+                destinationTitle,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,
@@ -1381,11 +1423,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               ),
             ),
             Icon(
-              isAirport
-                  ? Icons.flight_takeoff_rounded
-                  : isPort
-                      ? Icons.directions_boat_rounded
-                      : Icons.restaurant_rounded,
+              destinationIcon,
               color: Theme.of(context).colorScheme.primary,
             ),
           ],

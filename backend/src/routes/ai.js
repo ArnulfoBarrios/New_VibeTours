@@ -664,7 +664,7 @@ aiRouter.post('/chat', async (req, res, next) => {
 
             // 3. Extraer ítems numerados o con viñetas estándar si no hubo flechas ni negritas
             if (!foundBold) {
-              const regex = /^(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Restaurante|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)\s*(?:\d+)?\s*[:—\-]?\s*)?\*{0,2}([^:\n\.\(\—]{3,60})\*{0,2}\s*[:—\-]?/i
+              const regex = /^(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)(?:\s+\d+)?\s*[:—\-]\s*)?\*{0,2}([^:\n\.\(\—]{3,60})\*{0,2}\s*[:—\-]?/i
               const m = line.match(regex)
               if (m && !dayMatch) {
                 cleanAndAddCandidate(m[1], currentDay)
@@ -1568,6 +1568,36 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     const routeStops = normalizedStops.map(s => s.routeStop)
     const coverUrl = await imageForPlace(input.city || input.destination, input.country || "").catch(() => fallbackCover(input.destination))
     
+    let hotelPuntoEncuentro = null
+    const chosenHotel = input.selectedHotel || plannerContext?.selectedHotel
+    if (chosenHotel?.name) {
+      let hLat = Number(chosenHotel.latitude)
+      let hLon = Number(chosenHotel.longitude)
+      let hAddr = chosenHotel.tags?.['addr:street'] || chosenHotel.address || ''
+      if (!hLat || !hLon || isNaN(hLat) || isNaN(hLon)) {
+        const query = `${chosenHotel.name}, ${input.city || input.destination || ''} ${input.country || ''}`.trim()
+        const geo = await geocodePlace(query, input.latitude, input.longitude).catch(() => null)
+        if (geo?.latitude && geo?.longitude) {
+          hLat = geo.latitude
+          hLon = geo.longitude
+          if (!hAddr && geo.name) hAddr = geo.name
+        }
+      }
+      if (hLat && hLon && !isNaN(hLat) && !isNaN(hLon)) {
+        hotelPuntoEncuentro = {
+          nombre_lugar: chosenHotel.name,
+          direccion: hAddr,
+          ciudad: input.city || input.destination || '',
+          region: '',
+          pais: input.country || '',
+          latitud: hLat,
+          longitud: hLon,
+          place_id: chosenHotel.id?.toString() || '',
+          url_mapa: mapUrlFor(hLat, hLon)
+        }
+      }
+    }
+
     const tour = {
       id: `ai-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
       nombre_tour: sourceTour.nombre_tour ?? sourceTour.title ?? `${input.city || input.destination} VibeTour AI`,
@@ -1585,19 +1615,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       publico_recomendado: normalizeAudience(sourceTour.publico_recomendado, input.type, input.touristInterests),
       mejor_epoca: sourceTour.mejor_epoca ?? planner.bestSeason,
       horario_recomendado: sourceTour.horario_recomendado ?? planner.recommendedSchedule,
-      punto_encuentro: plannerContext?.selectedHotel 
-        ? {
-            nombre_lugar: plannerContext.selectedHotel.name,
-            direccion: plannerContext.selectedHotel.tags?.['addr:street'] || plannerContext.selectedHotel.address || '',
-            ciudad: input.city || '',
-            region: '',
-            pais: input.country || '',
-            latitud: Number(plannerContext.selectedHotel.latitude),
-            longitud: Number(plannerContext.selectedHotel.longitude),
-            place_id: plannerContext.selectedHotel.id?.toString() || '',
-            url_mapa: mapUrlFor(plannerContext.selectedHotel.latitude, plannerContext.selectedHotel.longitude)
-          }
-        : normalizeLocationInfo(sourceTour.punto_encuentro, publicStops[0], input),
+      punto_encuentro: hotelPuntoEncuentro || normalizeLocationInfo(sourceTour.punto_encuentro, publicStops[0], input),
       imagen_portada: coverUrl,
       galeria_tour: unique([
         ...publicStops.flatMap(s => s.imagenes).filter(img => img && !img.includes('photo-1469854523086') && !img.includes('photo-1507525428034')),
@@ -5380,7 +5398,8 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
           name: tourContext.hotelName || 'Alojamiento',
           latitude: tourContext.hotelLat,
           longitude: tourContext.hotelLon,
-          address: tourContext.hotelAddress || ''
+          address: tourContext.hotelAddress || '',
+          type: 'hotel'
         }
       } else if (aiResult.destinationAddress) {
         const query = `${aiResult.destinationAddress}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
@@ -5390,7 +5409,8 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
             name: aiResult.destinationAddress,
             latitude: geo.latitude,
             longitude: geo.longitude,
-            address: aiResult.destinationAddress
+            address: aiResult.destinationAddress,
+            type: 'hotel'
           }
         }
       } else if (tourContext.hotelName) {
@@ -5401,7 +5421,8 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
             name: tourContext.hotelName,
             latitude: geo.latitude,
             longitude: geo.longitude,
-            address: tourContext.hotelAddress || tourContext.hotelName
+            address: tourContext.hotelAddress || tourContext.hotelName,
+            type: 'hotel'
           }
         }
       }
