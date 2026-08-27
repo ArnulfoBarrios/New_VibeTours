@@ -156,7 +156,7 @@ async function initInteractiveGlobe() {
 
   function buildGlobe() {
     if (!globeCanvas) return;
-    const width = globeCanvas.offsetWidth || 380;
+    const width = globeCanvas.offsetWidth || 490;
     if (width === 0) return;
 
     if (globeInstance) {
@@ -173,7 +173,7 @@ async function initInteractiveGlobe() {
     const markerColor = [0.0, 0.48, 1.0]; // VibeTours Primary Blue (#007AFF)
     const glowColor = isDark ? [0.0, 0.4, 1.0] : [0.65, 0.78, 0.98];
     const arcColor = [0.68, 0.32, 0.87]; // AI Purple (#AF52DE)
-    const mapBrightness = isDark ? 8 : 5.8;
+    const mapBrightness = isDark ? 8.2 : 6.0;
 
     // IMPORTANT: width passed to createGlobe is the dimension (cobe applies devicePixelRatio internally)
     globeInstance = createGlobe(globeCanvas, {
@@ -183,19 +183,19 @@ async function initInteractiveGlobe() {
       phi: 0,
       theta: 0.15,
       dark: darkFactor,
-      diffuse: 1.5,
-      mapSamples: 16000,
+      diffuse: 1.4,
+      mapSamples: 20000,
       mapBrightness: mapBrightness,
       baseColor: baseColor,
       markerColor: markerColor,
       glowColor: glowColor,
-      markerElevation: 0.05,
+      markerElevation: 0.06,
       markers: VIBETOURS_MARKERS,
       arcs: VIBETOURS_ARCS,
       arcColor: arcColor,
       arcWidth: 0.7,
       arcHeight: 0.28,
-      opacity: 0.92,
+      opacity: 0.94,
       onRender: (state) => {
         if (!isGlobePaused) {
           if (isGlidingToCity) {
@@ -228,6 +228,14 @@ async function initInteractiveGlobe() {
     });
     resizeObserver.observe(globeCanvas);
   }
+
+  let resizeTimeout = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      buildGlobe();
+    }, 200);
+  });
 
   window.rebuildCobeGlobe = buildGlobe;
 }

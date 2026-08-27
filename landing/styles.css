@@ -457,12 +457,12 @@ a {
    5. HERO SECTION & 3D INTERACTIVE GLOBE WITH ORBITAL HUD
    -------------------------------------------------------------------------- */
 .hero-section {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 130px 24px 60px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 40px;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 36px;
   align-items: center;
   min-height: 85vh;
   position: relative;
@@ -518,7 +518,6 @@ a {
   color: var(--text-muted);
   line-height: 1.6;
   margin-bottom: 24px;
-  max-width: 480px;
 }
 
 /* Metric Telemetry Ticker */
@@ -561,12 +560,13 @@ a {
   display: flex;
   gap: 20px;
   flex-wrap: wrap;
+  margin-top: 24px;
 }
 
 .trust-item {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
@@ -593,13 +593,13 @@ a {
   justify-content: center;
   align-items: center;
   width: 100%;
-  min-height: 480px;
+  min-height: 540px;
 }
 
 .globe-hud-stage {
   position: relative;
-  width: 380px;
-  height: 380px;
+  width: 490px;
+  height: 490px;
   max-width: 100%;
   aspect-ratio: 1 / 1;
   display: flex;
