@@ -89,7 +89,6 @@ let globeDragOffset = { phi: 0, theta: 0 };
 let isGlobePaused = false;
 let pointerInteracting = null;
 let isGlidingToCity = false;
-let lenisInstance = null;
 
 const VIBETOURS_MARKERS = [
   { id: "cartagena", location: [10.39, -75.48], size: 0.055 },
@@ -278,38 +277,9 @@ function initCityDockControls() {
 }
 
 /* --------------------------------------------------------------------------
-   4. SCROLL EFFECTS: LENIS SMOOTH SCROLL, 3D PARALLAX & STICKY SIMULATOR
+   4. SCROLL EFFECTS: INSTANT 1:1 TICKER, 3D PARALLAX & STICKY SIMULATOR
    -------------------------------------------------------------------------- */
-function initLenisSmoothScroll() {
-  if (typeof Lenis !== 'undefined') {
-    try {
-      lenisInstance = new Lenis({
-        duration: 1.15,
-        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-        orientation: 'vertical',
-        gestureOrientation: 'vertical',
-        smoothWheel: true,
-        wheelMultiplier: 1.0,
-        touchMultiplier: 1.5,
-        infinite: false
-      });
-
-      function raf(time) {
-        if (lenisInstance) {
-          lenisInstance.raf(time);
-        }
-        requestAnimationFrame(raf);
-      }
-      requestAnimationFrame(raf);
-    } catch (e) {
-      console.warn('Lenis scroll initialization error:', e);
-    }
-  }
-}
-
 function initScrollEffects() {
-  initLenisSmoothScroll();
-
   const progressBar = document.getElementById('scrollProgress');
   const orb1 = document.getElementById('ambientOrb1');
   const orb2 = document.getElementById('ambientOrb2');
@@ -337,17 +307,19 @@ function initScrollEffects() {
     heroObserver.observe(heroSection);
   }
 
-  function handleScroll() {
+  let ticking = false;
+
+  function updateScrollVisuals() {
     const scrollY = window.scrollY;
     const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
     const progress = totalHeight > 0 ? (scrollY / totalHeight) * 100 : 0;
 
-    // 1. Top Scroll Progress Bar
+    // 1. Top Scroll Progress Bar (Instant 1:1)
     if (progressBar) {
       progressBar.style.width = `${progress}%`;
     }
 
-    // 2. Ambient Orbs Parallax
+    // 2. Ambient Orbs Parallax (Instant 1:1 Transform)
     if (orb1) orb1.style.transform = `translate3d(0, ${scrollY * 0.08}px, 0)`;
     if (orb2) orb2.style.transform = `translate3d(0, ${-scrollY * 0.06}px, 0)`;
     if (orb3) orb3.style.transform = `translate3d(0, ${scrollY * 0.04}px, 0)`;
@@ -378,6 +350,8 @@ function initScrollEffects() {
         }
       }
     }
+
+    ticking = false;
   }
 
   function handleSimulatorProgress(p) {
@@ -400,14 +374,15 @@ function initScrollEffects() {
     }
   }
 
-  if (lenisInstance) {
-    lenisInstance.on('scroll', handleScroll);
-  } else {
-    window.addEventListener('scroll', handleScroll, { passive: true });
-  }
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(updateScrollVisuals);
+      ticking = true;
+    }
+  }, { passive: true });
 
   // Initial call
-  handleScroll();
+  updateScrollVisuals();
 
   // Reveal On Scroll Observer
   const revealElements = document.querySelectorAll('.reveal-on-scroll');

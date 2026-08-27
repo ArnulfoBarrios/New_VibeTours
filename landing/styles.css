@@ -147,8 +147,8 @@ body::before {
   width: 0%;
   background: linear-gradient(90deg, var(--primary-cyan), var(--primary), var(--accent-purple));
   z-index: 10000;
-  transition: width 0.1s ease-out;
   box-shadow: 0 0 12px var(--primary-cyan);
+  will-change: width;
 }
 
 a {
@@ -165,7 +165,7 @@ a {
   pointer-events: none;
   z-index: 0;
   opacity: 0.85;
-  transition: transform 0.2s ease-out;
+  will-change: transform;
 }
 
 .orb-1 {
@@ -1509,7 +1509,7 @@ a {
 
 .simulator-sticky-track {
   position: relative;
-  min-height: 250vh;
+  min-height: 180vh;
 }
 
 .smartphone-simulator-container {
@@ -1551,7 +1551,8 @@ a {
   background: linear-gradient(90deg, var(--primary-cyan), var(--primary), var(--accent-purple));
   box-shadow: 0 0 10px var(--primary-cyan);
   border-radius: 4px;
-  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: width 0.15s ease-out;
+  will-change: width;
 }
 
 .journey-steps-grid {
