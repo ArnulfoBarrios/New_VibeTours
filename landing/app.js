@@ -156,7 +156,7 @@ async function initInteractiveGlobe() {
 
   function buildGlobe() {
     if (!globeCanvas) return;
-    const width = globeCanvas.offsetWidth || 490;
+    const width = globeCanvas.offsetWidth || 420;
     if (width === 0) return;
 
     if (globeInstance) {
