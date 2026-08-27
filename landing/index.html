@@ -173,7 +173,7 @@
   <!-- ==========================================================================
        2. WIDGET INTERACTIVO: SIMULADOR DE APP EN SMARTPHONE (FLUTTER FIDELITY)
        ========================================================================== -->
-  <section id="simulador" class="section">
+  <section id="simulador" class="section simulator-section">
     <div class="section-header reveal-on-scroll">
       <span class="section-subtitle" id="sim-subtitle">Experiencia Interactiva 3D</span>
       <h2 class="section-title" id="sim-title">Prueba la App desde tu Navegador</h2>
@@ -182,85 +182,112 @@
       </p>
     </div>
 
-    <div class="smartphone-simulator-container reveal-on-scroll delay-1">
-      
-      <!-- Cockpit Control Deck (Left Side) -->
-      <div class="simulator-control-panel glass-card">
-        <div class="cockpit-header">
-          <div class="cockpit-badge">
-            <span class="live-dot"></span>
-            <span id="sim-cockpit-badge">Centro de Mando del Simulador</span>
-          </div>
-          <h3 class="cockpit-title" id="sim-cockpit-title">Configura tu Destino</h3>
-          <p class="cockpit-desc" id="sim-cockpit-desc">
-            Elige una ciudad y prueba cómo la app adapta el feed de exploración, las respuestas de IA y el mapa de navegación GPS.
-          </p>
-        </div>
-
-        <!-- City Selector -->
-        <div class="cockpit-group">
-          <label class="cockpit-label" id="sim-lbl-city">1. Destino Turístico</label>
-          <div class="cockpit-chips" id="simCityChips">
-            <button class="cockpit-chip active" data-sim-city="cartagena">🌴 Cartagena</button>
-            <button class="cockpit-chip" data-sim-city="paris">🎨 París</button>
-            <button class="cockpit-chip" data-sim-city="tokio">⛩️ Tokio</button>
-            <button class="cockpit-chip" data-sim-city="roma">🏛️ Roma</button>
-            <button class="cockpit-chip" data-sim-city="newyork">🗽 Nueva York</button>
-          </div>
-        </div>
-
-        <!-- Walk Pace -->
-        <div class="cockpit-group">
-          <label class="cockpit-label" id="sim-lbl-pace">2. Ritmo de Viaje</label>
-          <div class="cockpit-chips" id="simPaceChips">
-            <button class="cockpit-chip active" data-sim-pace="relaxed">🚶 Relajado (2h)</button>
-            <button class="cockpit-chip" data-sim-pace="balanced">⚖️ Moderado (3.5h)</button>
-            <button class="cockpit-chip" data-sim-pace="fast">⚡ Intenso (5h)</button>
-          </div>
-        </div>
-
-        <!-- Telemetry Stats Card -->
-        <div class="cockpit-telemetry glass-subcard">
-          <div class="telemetry-grid">
-            <div class="tele-item">
-              <span class="tele-label" id="sim-tele-gps-label">Precisión GPS</span>
-              <span class="tele-val text-cyan">± 1.8 m</span>
+    <!-- Scroll Track Wrapper for Desktop Sticky Pinning & Scroll-Driven Walkthrough -->
+    <div class="simulator-sticky-track" id="simulatorStickyTrack">
+      <div class="smartphone-simulator-container" id="simulatorStickyContainer">
+        
+        <!-- Cockpit Control Deck (Left Side) -->
+        <div class="simulator-control-panel glass-card">
+          <div class="cockpit-header">
+            <div class="cockpit-badge">
+              <span class="live-dot"></span>
+              <span id="sim-cockpit-badge">Centro de Mando del Simulador</span>
             </div>
-            <div class="tele-item">
-              <span class="tele-label" id="sim-tele-latency-label">Latencia IA</span>
-              <span class="tele-val text-green">0.42 s</span>
+            <h3 class="cockpit-title" id="sim-cockpit-title">Configura tu Destino</h3>
+            <p class="cockpit-desc" id="sim-cockpit-desc">
+              Elige una ciudad y prueba cómo la app adapta el feed de exploración, las respuestas de IA y el mapa de navegación GPS.
+            </p>
+          </div>
+
+          <!-- Live Journey Step Progress Tracker (Scroll-Driven) -->
+          <div class="cockpit-journey-tracker" id="cockpitJourneyTracker">
+            <div class="journey-progress-bar">
+              <div class="journey-progress-fill" id="journeyProgressFill"></div>
             </div>
-            <div class="tele-item">
-              <span class="tele-label" id="sim-tele-source-label">Cartografía</span>
-              <span class="tele-val text-purple">OSM Real</span>
-            </div>
-            <div class="tele-item">
-              <span class="tele-label" id="sim-tele-voice-label">Voz Narrativa</span>
-              <span class="tele-val text-orange">HD Neural</span>
+            <div class="journey-steps-grid">
+              <div class="journey-step active" data-step-tab="tabContentExplore" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentExplore')">
+                <span class="step-num-badge">1</span>
+                <span class="step-label" id="sim-step1-label">Explorar</span>
+              </div>
+              <div class="journey-step" data-step-tab="tabContentChat" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentChat')">
+                <span class="step-num-badge">2</span>
+                <span class="step-label" id="sim-step2-label">Chat IA</span>
+              </div>
+              <div class="journey-step" data-step-tab="tabContentMap" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentMap')">
+                <span class="step-num-badge">3</span>
+                <span class="step-label" id="sim-step3-label">Live Tour</span>
+              </div>
+              <div class="journey-step" data-step-tab="tabContentProfile" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentProfile')">
+                <span class="step-num-badge">4</span>
+                <span class="step-label" id="sim-step4-label">Perfil</span>
+              </div>
             </div>
           </div>
+
+          <!-- City Selector -->
+          <div class="cockpit-group">
+            <label class="cockpit-label" id="sim-lbl-city">1. Destino Turístico</label>
+            <div class="cockpit-chips" id="simCityChips">
+              <button class="cockpit-chip active" data-sim-city="cartagena">🌴 Cartagena</button>
+              <button class="cockpit-chip" data-sim-city="paris">🎨 París</button>
+              <button class="cockpit-chip" data-sim-city="tokio">⛩️ Tokio</button>
+              <button class="cockpit-chip" data-sim-city="roma">🏛️ Roma</button>
+              <button class="cockpit-chip" data-sim-city="newyork">🗽 Nueva York</button>
+            </div>
+          </div>
+
+          <!-- Walk Pace -->
+          <div class="cockpit-group">
+            <label class="cockpit-label" id="sim-lbl-pace">2. Ritmo de Viaje</label>
+            <div class="cockpit-chips" id="simPaceChips">
+              <button class="cockpit-chip active" data-sim-pace="relaxed">🚶 Relajado (2h)</button>
+              <button class="cockpit-chip" data-sim-pace="balanced">⚖️ Moderado (3.5h)</button>
+              <button class="cockpit-chip" data-sim-pace="fast">⚡ Intenso (5h)</button>
+            </div>
+          </div>
+
+          <!-- Telemetry Stats Card -->
+          <div class="cockpit-telemetry glass-subcard">
+            <div class="telemetry-grid">
+              <div class="tele-item">
+                <span class="tele-label" id="sim-tele-gps-label">Precisión GPS</span>
+                <span class="tele-val text-cyan">± 1.8 m</span>
+              </div>
+              <div class="tele-item">
+                <span class="tele-label" id="sim-tele-latency-label">Latencia IA</span>
+                <span class="tele-val text-green">0.42 s</span>
+              </div>
+              <div class="tele-item">
+                <span class="tele-label" id="sim-tele-source-label">Cartografía</span>
+                <span class="tele-val text-purple">OSM Real</span>
+              </div>
+              <div class="tele-item">
+                <span class="tele-label" id="sim-tele-voice-label">Voz Narrativa</span>
+                <span class="tele-val text-orange">HD Neural</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Switcher for Screen Views -->
+          <div class="cockpit-actions">
+            <button id="btnSwitchToExplore" class="btn btn-glass btn-small active-sim-mode">
+              🧭 Explorar
+            </button>
+            <button id="btnSwitchToChat" class="btn btn-glass btn-small">
+              💬 Chat IA
+            </button>
+            <button id="btnSwitchToMap" class="btn btn-glass btn-small">
+              🏖️ Live Tour
+            </button>
+            <button id="btnSwitchToProfile" class="btn btn-glass btn-small">
+              👤 Perfil
+            </button>
+          </div>
         </div>
 
-        <!-- Quick Switcher for Screen Views -->
-        <div class="cockpit-actions">
-          <button id="btnSwitchToExplore" class="btn btn-glass btn-small active-sim-mode">
-            🧭 Explorar
-          </button>
-          <button id="btnSwitchToChat" class="btn btn-glass btn-small">
-            💬 Chat IA
-          </button>
-          <button id="btnSwitchToMap" class="btn btn-glass btn-small">
-            🏖️ Live Tour
-          </button>
-          <button id="btnSwitchToProfile" class="btn btn-glass btn-small">
-            👤 Perfil
-          </button>
-        </div>
-      </div>
-
-      <!-- Smartphone Hardware Mockup (Right Side - Flutter App Look & Feel) -->
-      <div class="phone-mockup-wrapper">
-        <div class="smartphone-hardware">
+        <!-- Smartphone Hardware Mockup (Right Side - Flutter App Look & Feel) -->
+        <div class="phone-mockup-wrapper">
+          <div class="smartphone-hardware">
           
           <!-- Outer Titanium Bezel & Side Buttons -->
           <div class="phone-btn phone-btn-volume-up"></div>
@@ -306,7 +333,7 @@
                 </div>
               </div>
 
-              <div class="flutter-scroll-body">
+              <div class="flutter-scroll-body" data-lenis-prevent>
                 <!-- Search Bar -->
                 <div class="flutter-search-bar">
                   <span class="search-icon">🔍</span>
@@ -361,7 +388,7 @@
               </div>
 
               <!-- Chat Message Scroll Area -->
-              <div class="phone-chat-scroll" id="simChatScroll">
+              <div class="phone-chat-scroll" id="simChatScroll" data-lenis-prevent>
                 <div class="chat-msg bot-msg">
                   <div class="msg-bubble">
                     ¡Hola! 🌴 Soy tu asistente de viaje VibeTours. ¿Qué tipo de ruta te gustaría explorar hoy?
@@ -399,7 +426,7 @@
               </div>
 
               <!-- Leaflet Map Container -->
-              <div id="simLeafletMap" class="phone-map-canvas"></div>
+              <div id="simLeafletMap" class="phone-map-canvas" data-lenis-prevent></div>
             </div>
 
             <!-- ================= SCREEN 4: PERFIL (PROFILE SCREEN) ================= -->
@@ -408,7 +435,7 @@
                 <h4 class="greeting-title">Mi Perfil</h4>
               </div>
 
-              <div class="flutter-scroll-body">
+              <div class="flutter-scroll-body" data-lenis-prevent>
                 <div class="profile-card-header">
                   <div class="profile-avatar-large">VB</div>
                   <h4 class="profile-name">Viajero VibeTours</h4>
@@ -484,8 +511,7 @@
           </div>
         </div>
       </div>
-
-    </div>
+    </div> <!-- Close simulatorStickyTrack -->
   </section>
 
   <!-- ==========================================================================
@@ -723,6 +749,9 @@
 
   <!-- Leaflet Map JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Lenis Smooth Scroll Engine -->
+  <script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
   
   <!-- Scripts -->
   <script src="app.js"></script>

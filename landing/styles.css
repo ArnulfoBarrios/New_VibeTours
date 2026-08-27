@@ -1502,20 +1502,125 @@ a {
 /* ==========================================================================
    8. SMARTPHONE SIMULATOR PLAYGROUND (COCKPIT & 3D HARDWARE FRAME)
    ========================================================================== */
+.simulator-section {
+  position: relative;
+  overflow: visible;
+}
+
+.simulator-sticky-track {
+  position: relative;
+  min-height: 250vh;
+}
+
 .smartphone-simulator-container {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-columns: 1.05fr 0.95fr;
   gap: 40px;
   align-items: center;
-  margin-top: 30px;
+  position: sticky;
+  top: 90px;
+  z-index: 10;
+  padding-top: 10px;
+  padding-bottom: 20px;
+}
+
+/* Live Journey Step Tracker */
+.cockpit-journey-tracker {
+  position: relative;
+  padding: 12px 14px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  margin-bottom: 4px;
+}
+
+.journey-progress-bar {
+  position: absolute;
+  top: 24px;
+  left: 36px;
+  right: 36px;
+  height: 3px;
+  background: var(--border-subtle);
+  border-radius: 4px;
+  z-index: 1;
+}
+
+.journey-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--primary-cyan), var(--primary), var(--accent-purple));
+  box-shadow: 0 0 10px var(--primary-cyan);
+  border-radius: 4px;
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.journey-steps-grid {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  z-index: 2;
+}
+
+.journey-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform var(--transition-speed);
+}
+
+.journey-step:hover {
+  transform: translateY(-2px);
+}
+
+.step-num-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.journey-step.active .step-num-badge {
+  background: var(--primary);
+  border-color: var(--primary-cyan);
+  color: #FFFFFF;
+  box-shadow: 0 0 14px var(--cyan-glow);
+  transform: scale(1.15);
+}
+
+.journey-step.completed .step-num-badge {
+  background: var(--surface-tertiary);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.step-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  transition: color 0.3s ease;
+}
+
+.journey-step.active .step-label {
+  color: var(--primary);
+  font-weight: 800;
 }
 
 /* Simulator Cockpit Deck (Left Side) */
 .simulator-control-panel {
-  padding: 32px;
+  padding: 28px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 18px;
 }
 
 .cockpit-badge {
@@ -1529,7 +1634,7 @@ a {
   color: var(--primary);
   font-size: 12px;
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .live-dot {
@@ -1542,26 +1647,26 @@ a {
 }
 
 .cockpit-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   color: var(--text-main);
 }
 
 .cockpit-desc {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .cockpit-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .cockpit-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-main);
   text-transform: uppercase;
@@ -1575,9 +1680,9 @@ a {
 }
 
 .cockpit-chip {
-  padding: 8px 14px;
+  padding: 7px 13px;
   border-radius: 12px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--border-subtle);
   background: var(--surface);
@@ -1601,30 +1706,30 @@ a {
 
 /* Telemetry Stats Card */
 .cockpit-telemetry {
-  padding: 18px;
+  padding: 14px 16px;
 }
 
 .telemetry-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 12px;
 }
 
 .tele-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .tele-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--text-tertiary);
   text-transform: uppercase;
 }
 
 .tele-val {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
 }
 
@@ -1635,7 +1740,7 @@ a {
 
 .cockpit-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -1799,7 +1904,6 @@ a {
 }
 
 /* Screen Tab Switcher Content */
-/* Screen Tab Switcher Content */
 .phone-tab-content {
   flex: 1;
   display: none;
@@ -1807,10 +1911,16 @@ a {
   overflow: hidden;
   position: relative;
   background: var(--bg-page);
+  opacity: 0;
+  transform: translateY(8px) scale(0.985);
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
 }
 
 .phone-tab-content.active {
   display: flex;
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 /* Flutter AppBar Styling */
@@ -2651,8 +2761,15 @@ a {
    RESPONSIVE ADJUSTMENTS
    ========================================================================== */
 @media (max-width: 1024px) {
+  .simulator-sticky-track {
+    min-height: auto;
+  }
+
   .smartphone-simulator-container {
+    position: relative;
+    top: auto;
     grid-template-columns: 1fr;
+    gap: 30px;
   }
 }
 
@@ -2664,6 +2781,10 @@ a {
 
   .comparison-grid {
     grid-template-columns: 1fr;
+  }
+
+  .journey-steps-grid .step-label {
+    display: none;
   }
 }
 

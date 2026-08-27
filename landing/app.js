@@ -83,11 +83,13 @@ let globeCanvas = null;
 let globePhi = 0;
 let globeTargetPhi = 0;
 let globePhiOffset = 0;
+let globeScrollPhi = 0;
 let globeThetaOffset = 0;
 let globeDragOffset = { phi: 0, theta: 0 };
 let isGlobePaused = false;
 let pointerInteracting = null;
 let isGlidingToCity = false;
+let lenisInstance = null;
 
 const VIBETOURS_MARKERS = [
   { id: "cartagena", location: [10.39, -75.48], size: 0.055 },
@@ -207,7 +209,7 @@ async function initInteractiveGlobe() {
             globePhi += 0.003;
           }
         }
-        state.phi = globePhi + globePhiOffset + globeDragOffset.phi;
+        state.phi = globePhi + globePhiOffset + globeDragOffset.phi + globeScrollPhi;
         state.theta = 0.15 + globeThetaOffset + globeDragOffset.theta;
       }
     });
@@ -276,28 +278,138 @@ function initCityDockControls() {
 }
 
 /* --------------------------------------------------------------------------
-   4. SCROLL EFFECTS: PROGRESS BAR, PARALLAX & REVEAL ANIMATIONS
+   4. SCROLL EFFECTS: LENIS SMOOTH SCROLL, 3D PARALLAX & STICKY SIMULATOR
    -------------------------------------------------------------------------- */
+function initLenisSmoothScroll() {
+  if (typeof Lenis !== 'undefined') {
+    try {
+      lenisInstance = new Lenis({
+        duration: 1.15,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        orientation: 'vertical',
+        gestureOrientation: 'vertical',
+        smoothWheel: true,
+        wheelMultiplier: 1.0,
+        touchMultiplier: 1.5,
+        infinite: false
+      });
+
+      function raf(time) {
+        if (lenisInstance) {
+          lenisInstance.raf(time);
+        }
+        requestAnimationFrame(raf);
+      }
+      requestAnimationFrame(raf);
+    } catch (e) {
+      console.warn('Lenis scroll initialization error:', e);
+    }
+  }
+}
+
 function initScrollEffects() {
+  initLenisSmoothScroll();
+
   const progressBar = document.getElementById('scrollProgress');
   const orb1 = document.getElementById('ambientOrb1');
   const orb2 = document.getElementById('ambientOrb2');
   const orb3 = document.getElementById('ambientOrb3');
 
-  window.addEventListener('scroll', () => {
-    const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
-    const progress = totalHeight > 0 ? (window.scrollY / totalHeight) * 100 : 0;
+  // Hero Parallax Elements
+  const heroSection = document.querySelector('.hero-section');
+  const heroCardTop = document.querySelector('.floating-top-left');
+  const heroCardBottom = document.querySelector('.floating-bottom-right');
+  const heroVisualStage = document.querySelector('.globe-hud-stage');
 
+  // Simulator Sticky Track
+  const simTrack = document.getElementById('simulatorStickyTrack');
+  let currentScrolledTab = 'tabContentExplore';
+
+  // Observe Hero visibility to pause globe rendering when far away
+  if (heroSection) {
+    const heroObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!pointerInteracting && !isGlidingToCity) {
+          isGlobePaused = !entry.isIntersecting;
+        }
+      });
+    }, { threshold: 0.05 });
+    heroObserver.observe(heroSection);
+  }
+
+  function handleScroll() {
+    const scrollY = window.scrollY;
+    const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = totalHeight > 0 ? (scrollY / totalHeight) * 100 : 0;
+
+    // 1. Top Scroll Progress Bar
     if (progressBar) {
       progressBar.style.width = `${progress}%`;
     }
 
-    const scrollY = window.scrollY;
-    if (orb1) orb1.style.transform = `translateY(${scrollY * 0.08}px)`;
-    if (orb2) orb2.style.transform = `translateY(${-scrollY * 0.06}px)`;
-    if (orb3) orb3.style.transform = `translateY(${scrollY * 0.04}px)`;
-  }, { passive: true });
+    // 2. Ambient Orbs Parallax
+    if (orb1) orb1.style.transform = `translate3d(0, ${scrollY * 0.08}px, 0)`;
+    if (orb2) orb2.style.transform = `translate3d(0, ${-scrollY * 0.06}px, 0)`;
+    if (orb3) orb3.style.transform = `translate3d(0, ${scrollY * 0.04}px, 0)`;
 
+    // 3. Hero Parallax & Dynamic 3D Globe Spin
+    if (scrollY < window.innerHeight * 1.5) {
+      globeScrollPhi = scrollY * 0.0022;
+      if (heroCardTop) {
+        heroCardTop.style.transform = `translate3d(${scrollY * -0.06}px, ${scrollY * -0.15}px, 0) rotate(${scrollY * -0.01}deg)`;
+      }
+      if (heroCardBottom) {
+        heroCardBottom.style.transform = `translate3d(${scrollY * 0.06}px, ${scrollY * 0.14}px, 0) rotate(${scrollY * 0.01}deg)`;
+      }
+      if (heroVisualStage) {
+        const scaleVal = Math.max(0.92, 1 - scrollY * 0.00012);
+        heroVisualStage.style.transform = `translate3d(0, ${scrollY * 0.05}px, 0) scale(${scaleVal})`;
+      }
+    }
+
+    // 4. Simulator Sticky Track Walkthrough
+    if (simTrack && window.innerWidth > 1024 && simulatorInstance) {
+      const rect = simTrack.getBoundingClientRect();
+      const trackHeight = simTrack.offsetHeight - window.innerHeight;
+      if (trackHeight > 0) {
+        const simProgress = -rect.top / trackHeight;
+        if (simProgress >= -0.05 && simProgress <= 1.05) {
+          handleSimulatorProgress(simProgress);
+        }
+      }
+    }
+  }
+
+  function handleSimulatorProgress(p) {
+    if (simulatorInstance.isManualOverride) return;
+
+    let targetTab = 'tabContentExplore';
+    if (p < 0.22) {
+      targetTab = 'tabContentExplore';
+    } else if (p >= 0.22 && p < 0.52) {
+      targetTab = 'tabContentChat';
+    } else if (p >= 0.52 && p < 0.80) {
+      targetTab = 'tabContentMap';
+    } else {
+      targetTab = 'tabContentProfile';
+    }
+
+    if (targetTab !== currentScrolledTab) {
+      currentScrolledTab = targetTab;
+      simulatorInstance.switchTab(targetTab, false);
+    }
+  }
+
+  if (lenisInstance) {
+    lenisInstance.on('scroll', handleScroll);
+  } else {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+  }
+
+  // Initial call
+  handleScroll();
+
+  // Reveal On Scroll Observer
   const revealElements = document.querySelectorAll('.reveal-on-scroll');
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
@@ -738,6 +850,8 @@ class AppSimulator {
     this.currentStepIdx = 0;
     this.isAudioPlaying = false;
     this.speechUtterance = null;
+    this.isManualOverride = false;
+    this.overrideTimer = null;
   }
 
   init() {
@@ -746,6 +860,15 @@ class AppSimulator {
     this.bindChatEvents();
     this.initPhoneMap();
     this.updateCityState(this.currentCityKey);
+    this.updateJourneyTracker(this.activeTab);
+  }
+
+  setManualOverride() {
+    this.isManualOverride = true;
+    clearTimeout(this.overrideTimer);
+    this.overrideTimer = setTimeout(() => {
+      this.isManualOverride = false;
+    }, 2000);
   }
 
   bindCockpitControls() {
@@ -776,10 +899,10 @@ class AppSimulator {
     const btnMap = document.getElementById('btnSwitchToMap');
     const btnProfile = document.getElementById('btnSwitchToProfile');
 
-    if (btnExplore) btnExplore.addEventListener('click', () => this.switchTab('tabContentExplore'));
-    if (btnChat) btnChat.addEventListener('click', () => this.switchTab('tabContentChat'));
-    if (btnMap) btnMap.addEventListener('click', () => this.switchTab('tabContentMap'));
-    if (btnProfile) btnProfile.addEventListener('click', () => this.switchTab('tabContentProfile'));
+    if (btnExplore) btnExplore.addEventListener('click', () => this.switchTab('tabContentExplore', true));
+    if (btnChat) btnChat.addEventListener('click', () => this.switchTab('tabContentChat', true));
+    if (btnMap) btnMap.addEventListener('click', () => this.switchTab('tabContentMap', true));
+    if (btnProfile) btnProfile.addEventListener('click', () => this.switchTab('tabContentProfile', true));
   }
 
   bindPhoneNavigation() {
@@ -787,7 +910,7 @@ class AppSimulator {
     navItems.forEach(item => {
       item.addEventListener('click', () => {
         const targetTab = item.dataset.targetTab;
-        if (targetTab) this.switchTab(targetTab);
+        if (targetTab) this.switchTab(targetTab, true);
       });
     });
 
@@ -807,7 +930,32 @@ class AppSimulator {
     }
   }
 
-  switchTab(tabId) {
+  updateJourneyTracker(tabId) {
+    const tabToStep = {
+      'tabContentExplore': 0,
+      'tabContentChat': 1,
+      'tabContentMap': 2,
+      'tabContentProfile': 3
+    };
+    const stepIdx = tabToStep[tabId] ?? 0;
+    const steps = document.querySelectorAll('#cockpitJourneyTracker .journey-step');
+    const fill = document.getElementById('journeyProgressFill');
+
+    if (fill) {
+      const percentage = (stepIdx / 3) * 100;
+      fill.style.width = `${percentage}%`;
+    }
+
+    steps.forEach((step, idx) => {
+      step.classList.toggle('active', idx === stepIdx);
+      step.classList.toggle('completed', idx < stepIdx);
+    });
+  }
+
+  switchTab(tabId, isManual = false) {
+    if (isManual) {
+      this.setManualOverride();
+    }
     this.activeTab = tabId;
 
     // Update screen content
@@ -830,6 +978,9 @@ class AppSimulator {
     if (btnChat) btnChat.classList.toggle('active-sim-mode', tabId === 'tabContentChat');
     if (btnMap) btnMap.classList.toggle('active-sim-mode', tabId === 'tabContentMap');
     if (btnProfile) btnProfile.classList.toggle('active-sim-mode', tabId === 'tabContentProfile');
+
+    // Update Live Journey Step Progress in Cockpit
+    this.updateJourneyTracker(tabId);
 
     // Invalidate Leaflet map size on switch to Map
     if (tabId === 'tabContentMap' && this.mapInstance) {
@@ -1197,6 +1348,10 @@ const landingTranslations = {
     pnavTours: 'Tours',
     pnavProfile: 'Perfil',
     simWalkBtnText: 'Simular Paso',
+    simStep1Label: 'Explorar',
+    simStep2Label: 'Chat IA',
+    simStep3Label: 'Live Tour',
+    simStep4Label: 'Perfil',
 
     compSubtitle: 'Evolución del Turismo',
     compTitle: '¿Por Qué Cambiar a VibeTours?',
@@ -1297,6 +1452,10 @@ const landingTranslations = {
     pnavTours: 'Tours',
     pnavProfile: 'Profile',
     simWalkBtnText: 'Simulate Step',
+    simStep1Label: 'Explore',
+    simStep2Label: 'AI Chat',
+    simStep3Label: 'Live Tour',
+    simStep4Label: 'Profile',
 
     compSubtitle: 'Tourism Evolution',
     compTitle: 'Why Switch to VibeTours?',
@@ -1413,6 +1572,10 @@ window.setLandingLanguage = function(lang) {
   updateText('#pnav-tours', t.pnavTours);
   updateText('#pnav-profile', t.pnavProfile);
   updateText('#simWalkBtnText', t.simWalkBtnText);
+  updateText('#sim-step1-label', t.simStep1Label);
+  updateText('#sim-step2-label', t.simStep2Label);
+  updateText('#sim-step3-label', t.simStep3Label);
+  updateText('#sim-step4-label', t.simStep4Label);
 
   // Comparison
   updateText('#comp-subtitle', t.compSubtitle);
