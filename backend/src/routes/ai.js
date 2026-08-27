@@ -5249,10 +5249,10 @@ CLASIFICACIÓN:
 ACCIONES DISPONIBLES (actionType):
 1. "SEARCH_RESTAURANTS": el usuario tiene hambre, busca comida, restaurantes, cafés o bares en la zona. (Importante: la búsqueda se realiza alrededor de la posición del usuario).
 2. "SEARCH_PLACES": el usuario busca lugares interesantes, atractivos turísticos, miradores, plazas, parques o sitios para ver cerca de su posición.
-3. "RETURN_TO_ACCOMMODATION": el usuario quiere regresar a su hotel, alojamiento o casa.
-   - Si en el contexto ya existe un hotel confirmado (hotelName / hotelAddress / hotelLat), confírmale de inmediato y con entusiasmo que trazas la ruta hacia su hotel (menciona el nombre del hotel en responseText). NO le pidas la dirección si ya está en el contexto.
-   - Si el usuario indica una dirección o lugar específico por voz (ej: "mi casa queda en...", "llévame a la Calle 84 # 51B..."), extrae esa dirección en "destinationAddress" y confirma que trazas la ruta hacia allá.
-   - Solo si NO hay ningún hotel en el contexto y el usuario NO dio ninguna dirección, pídele amablemente que te indique el nombre o dirección de su hospedaje.
+3. "RETURN_TO_ACCOMMODATION": el usuario quiere regresar a su hotel, alojamiento o casa, o está mencionando/respondiendo el nombre de su hotel o dirección (ej: "Hotel Boutique Casa Carolina", "mi hotel es Casa Carolina", "calle 84 # 51B", "llévame al hotel").
+   - Si en el contexto ya existe un hotel confirmado (hotelName / hotelAddress / hotelLat), confírmale de inmediato y con entusiasmo que trazas la ruta hacia su hotel (menciona el nombre del hotel en responseText). NUNCA le pidas la dirección ni el nombre si ya está en el contexto.
+   - Si el usuario menciona o responde el nombre de un hotel, hostal o una dirección (ej: "Hotel Boutique Casa Carolina", "mi casa en...", "calle 84 # 51B"), clasifícalo de inmediato como "RETURN_TO_ACCOMMODATION", extrae el nombre o dirección en "destinationAddress" y confirma que trazas la ruta hacia allá.
+   - Solo si NO hay ningún hotel en el contexto y el usuario dijo únicamente "llévame a mi hotel / quiero ir a mi hotel" sin mencionar ningún nombre ni dirección, pídele amablemente que te indique el nombre de su hotel.
 4. "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre la parada actual.
 5. "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro punto del recorrido.
 6. null: consulta informativa general (clima, tips, etc.).

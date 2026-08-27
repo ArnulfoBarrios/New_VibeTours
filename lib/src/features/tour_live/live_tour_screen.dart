@@ -254,34 +254,53 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   TourStop? _findHotelStop(Tour tour) {
     for (final stop in tour.stops) {
-      if (stop.id == 'hotel_end') return stop;
-    }
-    for (final stop in tour.stops) {
-      if (stop.id == 'hotel_start') return stop;
+      if (stop.id == 'hotel_end' || stop.id == 'hotel_start') return stop;
     }
     for (final stop in tour.stops.reversed) {
       final nameLower = stop.name.toLowerCase();
       if (nameLower.contains('hotel') ||
           nameLower.contains('hostal') ||
           nameLower.contains('resort') ||
+          nameLower.contains('boutique') ||
+          nameLower.contains('posada') ||
           nameLower.contains('hospedaje') ||
           nameLower.contains('alojamiento')) {
         return stop;
       }
     }
-    if (tour.meetingPointInfo.nombreLugar.isNotEmpty) {
-      final nameLower = tour.meetingPointInfo.nombreLugar.toLowerCase();
+
+    final mpName = tour.meetingPointInfo.nombreLugar.isNotEmpty
+        ? tour.meetingPointInfo.nombreLugar
+        : tour.meetingPoint;
+
+    if (mpName.isNotEmpty) {
+      final nameLower = mpName.toLowerCase();
       if (nameLower.contains('hotel') ||
           nameLower.contains('hostal') ||
           nameLower.contains('resort') ||
+          nameLower.contains('boutique') ||
+          nameLower.contains('posada') ||
+          nameLower.contains('casa carolina') ||
+          nameLower.contains('dann carlton') ||
           nameLower.contains('hospedaje') ||
           nameLower.contains('alojamiento')) {
+        double lat = 0.0;
+        double lon = 0.0;
+        if (tour.meetingPointInfo.urlMapa.contains('?q=')) {
+          final parts = tour.meetingPointInfo.urlMapa.split('?q=').last.split(',');
+          if (parts.length == 2) {
+            lat = double.tryParse(parts[0]) ?? 0.0;
+            lon = double.tryParse(parts[1]) ?? 0.0;
+          }
+        }
         return TourStop(
           id: 'hotel_meeting',
-          name: tour.meetingPointInfo.nombreLugar,
-          location: tour.stops.isNotEmpty ? tour.stops.first.location : const GeoPoint(latitude: 0, longitude: 0),
+          name: mpName,
+          location: (lat != 0.0 && lon != 0.0)
+              ? GeoPoint(latitude: lat, longitude: lon)
+              : (tour.stops.isNotEmpty ? tour.stops.first.location : const GeoPoint(latitude: 0, longitude: 0)),
           imageUrl: '',
-          description: 'Alojamiento',
+          description: 'Punto de alojamiento del tour',
           activities: const ['Alojamiento', 'Descanso'],
           tips: const ['Punto de estancia del tour'],
           suggestedMinutes: 15,
@@ -289,6 +308,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         );
       }
     }
+
     return null;
   }
 
