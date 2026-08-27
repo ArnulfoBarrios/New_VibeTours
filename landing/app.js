@@ -1,5 +1,5 @@
 /* ==========================================================================
-   VIBETOURS - MODERN INTERACTIVE LOGIC & BILINGUAL ENGINE (ES / EN)
+   VIBETOURS - MODERN INTERACTIVE LOGIC, 3D GLOBE & BILINGUAL ENGINE
    ========================================================================== */
 
 let currentLandingLang = localStorage.getItem('vibetours_lang') || 'es';
@@ -7,7 +7,8 @@ let currentLandingLang = localStorage.getItem('vibetours_lang') || 'es';
 document.addEventListener('DOMContentLoaded', () => {
   initThemeToggle();
   initInteractiveGlobe();
-  initScrollAnimations();
+  initScrollEffects();
+  initCardSpotlight();
   initTourGeneratorWidget();
   initAudioSimulator();
   initFaqAccordion();
@@ -15,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* --------------------------------------------------------------------------
-   1. THEME TOGGLE (LIGHT / DARK) WITH PERSISTENCE & GLOBE SYNC
+   1. THEME TOGGLE (LIGHT / DARK) WITH REAL-TIME GLOBE SYNC
    -------------------------------------------------------------------------- */
 function initThemeToggle() {
   const toggleBtn = document.getElementById('themeToggleBtn');
@@ -60,7 +61,7 @@ function initThemeToggle() {
       if (src) img.src = src;
     });
 
-    // Refresh 3D globe colors in real time
+    // Rebuild globe in real time with the new palette
     if (typeof window.rebuildCobeGlobe === 'function') {
       window.rebuildCobeGlobe();
     }
@@ -68,7 +69,7 @@ function initThemeToggle() {
 }
 
 /* --------------------------------------------------------------------------
-   2. 3D INTERACTIVE GLOBE (COBE) WITH REAL DESTINATIONS & THEME ADAPTATION
+   2. 3D INTERACTIVE GLOBE (COBE) WITH HIGH DEFINITION & FLUID DRAG
    -------------------------------------------------------------------------- */
 let globeInstance = null;
 let globeCanvas = null;
@@ -80,19 +81,20 @@ let isGlobePaused = false;
 let pointerInteracting = null;
 
 const VIBETOURS_MARKERS = [
-  { id: "cartagena", location: [10.39, -75.48], size: 0.045 },
-  { id: "paris", location: [48.85, 2.35], size: 0.045 },
-  { id: "tokyo", location: [35.68, 139.69], size: 0.045 },
-  { id: "newyork", location: [40.71, -74.0], size: 0.045 },
-  { id: "rome", location: [41.9, 12.49], size: 0.045 },
-  { id: "london", location: [51.5, -0.12], size: 0.045 }
+  { id: "cartagena", location: [10.39, -75.48], size: 0.05 },
+  { id: "paris", location: [48.85, 2.35], size: 0.05 },
+  { id: "tokyo", location: [35.68, 139.69], size: 0.05 },
+  { id: "newyork", location: [40.71, -74.0], size: 0.05 },
+  { id: "rome", location: [41.9, 12.49], size: 0.05 },
+  { id: "london", location: [51.5, -0.12], size: 0.05 }
 ];
 
 const VIBETOURS_ARCS = [
   { from: [10.39, -75.48], to: [40.71, -74.0] },
   { from: [40.71, -74.0], to: [48.85, 2.35] },
   { from: [48.85, 2.35], to: [41.9, 12.49] },
-  { from: [41.9, 12.49], to: [35.68, 139.69] }
+  { from: [41.9, 12.49], to: [35.68, 139.69] },
+  { from: [35.68, 139.69], to: [10.39, -75.48] }
 ];
 
 async function initInteractiveGlobe() {
@@ -108,14 +110,14 @@ async function initInteractiveGlobe() {
       const fallbackModule = await import('https://esm.sh/cobe@0.6.3');
       createGlobe = fallbackModule.default || fallbackModule.createGlobe;
     } catch (fallbackErr) {
-      console.warn('Cobe library unavailable, using static fallback:', fallbackErr);
+      console.warn('Cobe library unavailable:', fallbackErr);
       return;
     }
   }
 
   if (!createGlobe) return;
 
-  // Pointer interactions for dragging and rotating
+  // Pointer drag and touch support
   globeCanvas.addEventListener('pointerdown', (e) => {
     pointerInteracting = { x: e.clientX, y: e.clientY };
     globeCanvas.style.cursor = 'grabbing';
@@ -136,15 +138,15 @@ async function initInteractiveGlobe() {
   window.addEventListener('pointermove', (e) => {
     if (pointerInteracting !== null) {
       globeDragOffset = {
-        phi: (e.clientX - pointerInteracting.x) / 300,
-        theta: (e.clientY - pointerInteracting.y) / 1000
+        phi: (e.clientX - pointerInteracting.x) / 280,
+        theta: (e.clientY - pointerInteracting.y) / 800
       };
     }
   }, { passive: true });
 
   function buildGlobe() {
     if (!globeCanvas) return;
-    const width = globeCanvas.offsetWidth;
+    const width = globeCanvas.offsetWidth || 380;
     if (width === 0) return;
 
     if (globeInstance) {
@@ -155,44 +157,44 @@ async function initInteractiveGlobe() {
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     const isDark = currentTheme === 'dark';
 
-    // VibeTours Luxury Theme Colors
+    // High Contrast Luxury Theme Configuration
     const darkFactor = isDark ? 1 : 0;
-    const baseColor = isDark ? [0.18, 0.22, 0.32] : [0.85, 0.88, 0.94];
-    const markerColor = [0.0, 0.48, 1.0]; // #007AFF
-    const glowColor = isDark ? [0.0, 0.3, 0.85] : [0.72, 0.82, 0.98];
-    const arcColor = [0.68, 0.32, 0.87]; // #AF52DE
-    const mapBrightness = isDark ? 8 : 4.2;
+    const baseColor = isDark ? [0.16, 0.20, 0.32] : [0.75, 0.80, 0.88];
+    const markerColor = [0.0, 0.48, 1.0]; // VibeTours Primary Blue (#007AFF)
+    const glowColor = isDark ? [0.0, 0.35, 0.95] : [0.65, 0.78, 0.98];
+    const arcColor = [0.68, 0.32, 0.87]; // AI Purple (#AF52DE)
+    const mapBrightness = isDark ? 8 : 5.5;
 
     globeInstance = createGlobe(globeCanvas, {
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
       width: width * 2,
       height: width * 2,
       phi: 0,
-      theta: 0.2,
+      theta: 0.15,
       dark: darkFactor,
-      diffuse: 1.4,
+      diffuse: 1.5,
       mapSamples: 16000,
       mapBrightness: mapBrightness,
       baseColor: baseColor,
       markerColor: markerColor,
       glowColor: glowColor,
-      markerElevation: 0.04,
+      markerElevation: 0.05,
       markers: VIBETOURS_MARKERS,
       arcs: VIBETOURS_ARCS,
       arcColor: arcColor,
       arcWidth: 0.6,
       arcHeight: 0.28,
-      opacity: 0.88,
+      opacity: 0.9,
       onRender: (state) => {
         if (!isGlobePaused) globePhi += 0.003;
         state.phi = globePhi + globePhiOffset + globeDragOffset.phi;
-        state.theta = 0.2 + globeThetaOffset + globeDragOffset.theta;
+        state.theta = 0.15 + globeThetaOffset + globeDragOffset.theta;
       }
     });
 
     setTimeout(() => {
       if (globeCanvas) globeCanvas.style.opacity = '1';
-    }, 60);
+    }, 50);
   }
 
   if (globeCanvas.offsetWidth > 0) {
@@ -211,11 +213,29 @@ async function initInteractiveGlobe() {
 }
 
 /* --------------------------------------------------------------------------
-   3. SCROLL REVEAL ANIMATIONS (INTERSECTION OBSERVER)
+   3. SCROLL EFFECTS: PROGRESS BAR, PARALLAX & REVEAL ANIMATIONS
    -------------------------------------------------------------------------- */
-function initScrollAnimations() {
-  const revealElements = document.querySelectorAll('.reveal-on-scroll');
+function initScrollEffects() {
+  const progressBar = document.getElementById('scrollProgress');
+  const orb1 = document.getElementById('ambientOrb1');
+  const orb2 = document.getElementById('ambientOrb2');
+  const orb3 = document.getElementById('ambientOrb3');
 
+  window.addEventListener('scroll', () => {
+    const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = totalHeight > 0 ? (window.scrollY / totalHeight) * 100 : 0;
+
+    if (progressBar) {
+      progressBar.style.width = `${progress}%`;
+    }
+
+    const scrollY = window.scrollY;
+    if (orb1) orb1.style.transform = `translateY(${scrollY * 0.08}px)`;
+    if (orb2) orb2.style.transform = `translateY(${-scrollY * 0.06}px)`;
+    if (orb3) orb3.style.transform = `translateY(${scrollY * 0.04}px)`;
+  }, { passive: true });
+
+  const revealElements = document.querySelectorAll('.reveal-on-scroll');
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
@@ -228,7 +248,23 @@ function initScrollAnimations() {
 }
 
 /* --------------------------------------------------------------------------
-   4. WIDGET INTERACTIVO: GENERADOR DE TOURS EN VIVO
+   4. CARD SPOTLIGHT EFFECT (CURSOR REACTIVE GLOW)
+   -------------------------------------------------------------------------- */
+function initCardSpotlight() {
+  const cards = document.querySelectorAll('.glass-card');
+  cards.forEach(card => {
+    card.addEventListener('mousemove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      card.style.setProperty('--mouse-x', `${x}px`);
+      card.style.setProperty('--mouse-y', `${y}px`);
+    });
+  });
+}
+
+/* --------------------------------------------------------------------------
+   5. WIDGET INTERACTIVO: SIMULADOR DE TOURS IA
    -------------------------------------------------------------------------- */
 const tourTemplates = {
   cartagena: {
@@ -572,7 +608,7 @@ function updateGeneratedPreview() {
 }
 
 /* --------------------------------------------------------------------------
-   5. AUDIO DEMO SIMULATOR
+   6. AUDIO DEMO SIMULATOR
    -------------------------------------------------------------------------- */
 function initAudioSimulator() {
   const playBtn = document.getElementById('simPlayBtn');
@@ -589,7 +625,7 @@ function initAudioSimulator() {
       if (isPlaying) {
         if (waveAnim) waveAnim.classList.add('playing');
         if (playIcon) playIcon.innerText = '⏸';
-        if (playText) playText.innerText = isEs ? 'Pausar Demostración' : 'Pause Demo';
+        if (playText) playText.innerText = isEs ? 'Pausar' : 'Pause';
 
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
@@ -604,14 +640,14 @@ function initAudioSimulator() {
             isPlaying = false;
             if (waveAnim) waveAnim.classList.remove('playing');
             if (playIcon) playIcon.innerText = '▶';
-            if (playText) playText.innerText = isEs ? 'Reproducir Demostración' : 'Play Demo';
+            if (playText) playText.innerText = isEs ? 'Reproducir' : 'Play';
           };
           window.speechSynthesis.speak(utterance);
         }
       } else {
         if (waveAnim) waveAnim.classList.remove('playing');
         if (playIcon) playIcon.innerText = '▶';
-        if (playText) playText.innerText = isEs ? 'Reproducir Demostración' : 'Play Demo';
+        if (playText) playText.innerText = isEs ? 'Reproducir' : 'Play';
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
         }
@@ -621,7 +657,7 @@ function initAudioSimulator() {
 }
 
 /* --------------------------------------------------------------------------
-   6. FAQ ACCORDION INTERACTION
+   7. FAQ ACCORDION INTERACTION
    -------------------------------------------------------------------------- */
 function initFaqAccordion() {
   const faqCards = document.querySelectorAll('.faq-card');
@@ -641,14 +677,13 @@ function initFaqAccordion() {
 }
 
 /* --------------------------------------------------------------------------
-   7. BILINGUAL TRANSLATION ENGINE (ES / EN)
+   8. BILINGUAL TRANSLATION ENGINE (ES / EN)
    -------------------------------------------------------------------------- */
 const landingTranslations = {
   es: {
     navHow: '¿Cómo Funciona?',
-    navGenerator: 'Probar IA',
+    navGenerator: 'Simulador IA',
     navFeatures: 'Funciones',
-    navDestinations: 'Destinos',
     navFaq: 'FAQ',
     navRegister: 'Registrarse',
 
@@ -664,7 +699,7 @@ const landingTranslations = {
     floatVoiceSub: 'Torre del Reloj',
     floatGpsTitle: 'GPS Satelital Activo',
     floatGpsSub: '6 Paradas • 2.4 km',
-    globeDragHint: 'Arrastra para girar el globo',
+    globeDragHint: 'Arrastra para girar en 3D',
 
     genSubtitle: 'Simulador en Vivo',
     genTitle: 'Diseña tu Tour al Instante',
@@ -690,7 +725,7 @@ const landingTranslations = {
     bento2Desc: 'La voz narra historias y detalles automáticamente al aproximarte a cada parada con GPS en tiempo real.',
     bento2PlayerLabel: 'Proximidad GPS',
     bento2Snippet: '"Llegando a la Torre del Reloj, construida en el siglo XIX..."',
-    simPlayText: 'Reproducir Demostración',
+    simPlayText: 'Reproducir',
 
     bento3Pill: '03. Exploración Urbana',
     bento3Title: 'Lugares Cercanos & Clima en Vivo',
@@ -715,14 +750,6 @@ const landingTranslations = {
     step3Title: 'Recorre con Live Tour',
     step3Desc: 'Sigue el mapa GPS con narraciones de voz automáticas al llegar a cada sitio.',
 
-    destSubtitle: 'Destinos Globales',
-    destTitle: 'Rutas Populares',
-    destDesc: 'Rutas verificadas listas para recorrer en Modo Demo o con tu cuenta.',
-    city1Sub: 'Coliseo, Foro Romano & Fontana di Trevi',
-    city2Sub: 'Torre Eiffel, Louvre & Barrio Latino',
-    city3Sub: 'Shibuya, Senso-ji & Akihabara',
-    city4Sub: 'Central Park, Times Square & Soho',
-
     faqSubtitle: 'Dudas Frecuentes',
     faqTitle: 'Preguntas Frecuentes',
     faqDesc: 'Respuestas rápidas sobre el funcionamiento de VibeTours.',
@@ -744,9 +771,8 @@ const landingTranslations = {
     footerDesc: 'Tu compañero de viaje inteligente con IA, geolocalización satelital y audioguías en vivo.',
     footerCol1Title: 'Navegación',
     footerLinkHow: '¿Cómo Funciona?',
-    footerLinkGenerator: 'Probar IA',
+    footerLinkGenerator: 'Simulador IA',
     footerLinkFeatures: 'Funciones',
-    footerLinkDestinations: 'Destinos',
     footerLinkFaq: 'Preguntas Frecuentes',
     footerCol2Title: 'Portal Legal',
     footerLinkTerms: 'Términos de Servicio',
@@ -758,9 +784,8 @@ const landingTranslations = {
   },
   en: {
     navHow: 'How it Works',
-    navGenerator: 'Try AI',
+    navGenerator: 'AI Simulator',
     navFeatures: 'Features',
-    navDestinations: 'Destinations',
     navFaq: 'FAQ',
     navRegister: 'Sign Up',
 
@@ -776,7 +801,7 @@ const landingTranslations = {
     floatVoiceSub: 'Clock Tower',
     floatGpsTitle: 'Active Satellite GPS',
     floatGpsSub: '6 Stops • 2.4 km',
-    globeDragHint: 'Drag to spin globe',
+    globeDragHint: 'Drag to rotate in 3D',
 
     genSubtitle: 'Live Simulator',
     genTitle: 'Design Your Tour in Seconds',
@@ -802,7 +827,7 @@ const landingTranslations = {
     bento2Desc: 'Audio stories play automatically as you approach each landmark with real-time GPS.',
     bento2PlayerLabel: 'GPS Proximity',
     bento2Snippet: '"Approaching the Clock Tower, built over 19th-century fortress walls..."',
-    simPlayText: 'Play Voice Demo',
+    simPlayText: 'Play',
 
     bento3Pill: '03. Urban Discovery',
     bento3Title: 'Nearby Spots & Live Weather',
@@ -827,14 +852,6 @@ const landingTranslations = {
     step3Title: 'Explore Hands-Free',
     step3Desc: 'Follow GPS maps with automatic proximity voice narration.',
 
-    destSubtitle: 'Global Destinations',
-    destTitle: 'Popular Routes',
-    destDesc: 'Pre-loaded verified tours ready to walk in Demo Mode or with your account.',
-    city1Sub: 'Colosseum, Roman Forum & Trevi Fountain',
-    city2Sub: 'Eiffel Tower, Louvre & Latin Quarter',
-    city3Sub: 'Shibuya, Senso-ji & Akihabara',
-    city4Sub: 'Central Park, Times Square & Soho',
-
     faqSubtitle: 'Clear Answers',
     faqTitle: 'Frequently Asked Questions',
     faqDesc: 'Quick answers about how VibeTours works.',
@@ -856,9 +873,8 @@ const landingTranslations = {
     footerDesc: 'Your smart travel companion powered by AI, satellite geolocation, and hands-free audio guides.',
     footerCol1Title: 'Navigation',
     footerLinkHow: 'How it Works',
-    footerLinkGenerator: 'Try AI',
+    footerLinkGenerator: 'AI Simulator',
     footerLinkFeatures: 'Features',
-    footerLinkDestinations: 'Destinations',
     footerLinkFaq: 'FAQ',
     footerCol2Title: 'Legal Portal',
     footerLinkTerms: 'Terms of Service',
@@ -886,7 +902,6 @@ window.setLandingLanguage = function(lang) {
   updateText('#nav-how', t.navHow);
   updateText('#nav-generator', t.navGenerator);
   updateText('#nav-features', t.navFeatures);
-  updateText('#nav-destinations', t.navDestinations);
   updateText('#nav-faq', t.navFaq);
   updateText('#nav-btn-register', t.navRegister);
 
@@ -958,15 +973,6 @@ window.setLandingLanguage = function(lang) {
   updateText('#step3-title', t.step3Title);
   updateText('#step3-desc', t.step3Desc);
 
-  // Destinations
-  updateText('#dest-subtitle', t.destSubtitle);
-  updateText('#dest-title', t.destTitle);
-  updateText('#dest-desc', t.destDesc);
-  updateText('#city1-sub', t.city1Sub);
-  updateText('#city2-sub', t.city2Sub);
-  updateText('#city3-sub', t.city3Sub);
-  updateText('#city4-sub', t.city4Sub);
-
   // FAQ
   updateText('#faq-subtitle', t.faqSubtitle);
   updateText('#faq-title', t.faqTitle);
@@ -993,7 +999,6 @@ window.setLandingLanguage = function(lang) {
   updateText('#footer-link-how', t.footerLinkHow);
   updateText('#footer-link-generator', t.footerLinkGenerator);
   updateText('#footer-link-features', t.footerLinkFeatures);
-  updateText('#footer-link-destinations', t.footerLinkDestinations);
   updateText('#footer-link-faq', t.footerLinkFaq);
   updateText('#footer-col2-title', t.footerCol2Title);
   updateText('#footer-link-terms', t.footerLinkTerms);

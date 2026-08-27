@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VibeTours - Tu Guía Turístico Inteligente con IA | Experiencia de Lujo</title>
-  <meta name="description" content="Descubre el turismo inteligente con VibeTours. Itinerarios personalizados con IA anclados a coordenadas GPS reales de OpenStreetMap, audioguías en vivo y diseño de vanguardia.">
+  <meta name="description" content="Descubre el turismo inteligente con VibeTours. Itinerarios en tiempo real con IA anclados a coordenadas satelitales verificadas de OpenStreetMap y audioguías automáticas.">
   <link rel="icon" type="image/png" href="assets/images/logo_light.png">
   
   <!-- Apple & Inter Modern Typography -->
@@ -17,10 +17,13 @@
 </head>
 <body>
 
-  <!-- Ambient Light Orbs for Depth -->
-  <div class="ambient-glow orb-1"></div>
-  <div class="ambient-glow orb-2"></div>
-  <div class="ambient-glow orb-3"></div>
+  <!-- Top Scroll Progress Indicator -->
+  <div class="scroll-progress" id="scrollProgress"></div>
+
+  <!-- Ambient Light Orbs for Parallax Depth -->
+  <div class="ambient-glow orb-1" id="ambientOrb1"></div>
+  <div class="ambient-glow orb-2" id="ambientOrb2"></div>
+  <div class="ambient-glow orb-3" id="ambientOrb3"></div>
 
   <!-- ==========================================================================
        HEADER & NAVIGATION (GLASSMORPHIC NAVBAR)
@@ -35,9 +38,8 @@
       <nav>
         <ul class="nav-menu">
           <li><a href="#como-funciona" class="nav-link" id="nav-how">¿Cómo Funciona?</a></li>
-          <li><a href="#generador" class="nav-link" id="nav-generator">Probar IA</a></li>
+          <li><a href="#generador" class="nav-link" id="nav-generator">Simulador IA</a></li>
           <li><a href="#funciones" class="nav-link" id="nav-features">Funciones</a></li>
-          <li><a href="#destinos" class="nav-link" id="nav-destinations">Destinos</a></li>
           <li><a href="#faq" class="nav-link" id="nav-faq">FAQ</a></li>
         </ul>
       </nav>
@@ -62,7 +64,7 @@
   </header>
 
   <!-- ==========================================================================
-       1. HERO SECTION WITH 3D INTERACTIVE GLOBE & FLOATING LIVE CARDS
+       1. HERO SECTION WITH 3D INTERACTIVE GLOBE & LIVE CARDS
        ========================================================================== -->
   <section class="hero-section">
     <div class="hero-content reveal-on-scroll">
@@ -104,9 +106,8 @@
 
     <!-- 3D Interactive Globe Visual Stage -->
     <div class="hero-visual-wrapper reveal-on-scroll delay-1">
-      <div class="mockup-ambient-glow" id="heroMockupGlow"></div>
-
-      <!-- Floating Card 1: Live Voice Guide -->
+      
+      <!-- Floating Card 1: Live Voice Guide (Top Left) -->
       <div class="floating-card floating-top-left glass-card">
         <div class="floating-icon-box bg-purple">🎧</div>
         <div class="floating-info">
@@ -121,36 +122,19 @@
         </div>
       </div>
 
-      <!-- 3D Interactive Cobe Globe Container -->
+      <!-- 3D Interactive Cobe Globe Canvas Container -->
       <div class="globe-container" id="globeWrapper">
+        <div class="globe-halo"></div>
         <canvas id="cobeGlobeCanvas" class="globe-canvas"></canvas>
-        
-        <div class="globe-drag-hint">
-          <span class="sparkle">✦</span>
-          <span id="globe-drag-hint">Arrastra para girar el globo</span>
-        </div>
-
-        <!-- Visual Pulse Markers -->
-        <div class="globe-pulse-badge pulse-pos-1">
-          <div class="pulse-indicator">
-            <span class="pulse-ring"></span>
-            <span class="pulse-ring delay-ring"></span>
-            <span class="pulse-core"></span>
-          </div>
-          <span class="pulse-city">Cartagena</span>
-        </div>
-
-        <div class="globe-pulse-badge pulse-pos-2">
-          <div class="pulse-indicator">
-            <span class="pulse-ring"></span>
-            <span class="pulse-ring delay-ring"></span>
-            <span class="pulse-core"></span>
-          </div>
-          <span class="pulse-city">París</span>
-        </div>
       </div>
 
-      <!-- Floating Card 2: GPS Route Status -->
+      <!-- Hint below globe -->
+      <div class="globe-drag-hint">
+        <span class="sparkle">✦</span>
+        <span id="globe-drag-hint">Arrastra para girar en 3D</span>
+      </div>
+
+      <!-- Floating Card 2: GPS Route Status (Bottom Right) -->
       <div class="floating-card floating-bottom-right glass-card">
         <div class="floating-icon-box bg-blue">📍</div>
         <div class="floating-info">
@@ -162,7 +146,7 @@
   </section>
 
   <!-- ==========================================================================
-       2. WIDGET INTERACTIVO: GENERADOR DE TOURS EN VIVO
+       2. WIDGET INTERACTIVO: SIMULADOR DE TOURS IA
        ========================================================================== -->
   <section id="generador" class="section">
     <div class="section-header reveal-on-scroll">
@@ -411,58 +395,7 @@
   </section>
 
   <!-- ==========================================================================
-       5. DESTINOS POPULARES
-       ========================================================================== -->
-  <section id="destinos" class="section">
-    <div class="section-header reveal-on-scroll">
-      <span class="section-subtitle" id="dest-subtitle">Destinos Globales</span>
-      <h2 class="section-title" id="dest-title">Rutas Populares</h2>
-      <p class="section-description" id="dest-desc">
-        Rutas verificadas listas para recorrer en Modo Demo o con tu cuenta.
-      </p>
-    </div>
-
-    <div class="destinations-grid reveal-on-scroll delay-1">
-      <div class="city-card">
-        <img src="https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=600&q=80" alt="Roma" class="city-bg">
-        <div class="city-overlay">
-          <span class="city-badge">🏛️ 8 Paradas • 3.2 km</span>
-          <h4 class="city-title">Roma, Italia</h4>
-          <p class="city-sub" id="city1-sub">Coliseo, Foro Romano & Fontana di Trevi</p>
-        </div>
-      </div>
-
-      <div class="city-card">
-        <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=80" alt="París" class="city-bg">
-        <div class="city-overlay">
-          <span class="city-badge">🎨 10 Paradas • 4.1 km</span>
-          <h4 class="city-title">París, Francia</h4>
-          <p class="city-sub" id="city2-sub">Torre Eiffel, Louvre & Barrio Latino</p>
-        </div>
-      </div>
-
-      <div class="city-card">
-        <img src="https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=600&q=80" alt="Tokio" class="city-bg">
-        <div class="city-overlay">
-          <span class="city-badge">⛩️ 12 Paradas • 4.8 km</span>
-          <h4 class="city-title">Tokio, Japón</h4>
-          <p class="city-sub" id="city3-sub">Shibuya, Senso-ji & Akihabara</p>
-        </div>
-      </div>
-
-      <div class="city-card">
-        <img src="https://images.unsplash.com/photo-1518391846015-55a9cc003b25?auto=format&fit=crop&w=600&q=80" alt="Nueva York" class="city-bg">
-        <div class="city-overlay">
-          <span class="city-badge">🗽 9 Paradas • 3.5 km</span>
-          <h4 class="city-title">Nueva York, EE.UU.</h4>
-          <p class="city-sub" id="city4-sub">Central Park, Times Square & Soho</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ==========================================================================
-       6. PREGUNTAS FRECUENTES (FAQ)
+       5. PREGUNTAS FRECUENTES (FAQ)
        ========================================================================== -->
   <section id="faq" class="section">
     <div class="section-header reveal-on-scroll">
@@ -517,7 +450,7 @@
   </section>
 
   <!-- ==========================================================================
-       7. BANNER FINAL CTA
+       6. BANNER FINAL CTA
        ========================================================================== -->
   <section class="section">
     <div class="glass-card cta-banner reveal-on-scroll">
@@ -539,7 +472,7 @@
   </section>
 
   <!-- ==========================================================================
-       8. FOOTER
+       7. FOOTER
        ========================================================================== -->
   <footer class="footer">
     <div class="footer-container">
@@ -556,9 +489,8 @@
         <h4 class="footer-col-title" id="footer-col1-title">Navegación</h4>
         <ul class="footer-links">
           <li><a href="#como-funciona" id="footer-link-how">¿Cómo Funciona?</a></li>
-          <li><a href="#generador" id="footer-link-generator">Probar IA</a></li>
+          <li><a href="#generador" id="footer-link-generator">Simulador IA</a></li>
           <li><a href="#funciones" id="footer-link-features">Funciones</a></li>
-          <li><a href="#destinos" id="footer-link-destinations">Destinos</a></li>
           <li><a href="#faq" id="footer-link-faq">Preguntas Frecuentes</a></li>
         </ul>
       </div>
