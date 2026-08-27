@@ -1796,55 +1796,307 @@ a {
 }
 
 /* Screen Tab Switcher Content */
+/* Screen Tab Switcher Content */
 .phone-tab-content {
   flex: 1;
   display: none;
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  background: var(--bg-page);
 }
 
 .phone-tab-content.active {
   display: flex;
 }
 
-.app-screen-header {
-  padding: 8px 16px 10px;
+/* Flutter AppBar Styling */
+.flutter-appbar {
+  padding: 8px 14px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: 5;
+}
+
+.appbar-user-greeting {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-subtle);
 }
 
-.app-screen-header.map-header {
-  justify-content: space-between;
-}
-
-.app-avatar-badge {
+.greeting-avatar {
   width: 32px;
   height: 32px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-cyan));
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
 }
 
-.app-header-meta {
+.greeting-subtitle {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: block;
+}
+
+.greeting-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.appbar-weather-chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 100px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+}
+
+/* Scroll Body for Flutter Screens */
+.flutter-scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
   display: flex;
   flex-direction: column;
+  gap: 14px;
+  scrollbar-width: thin;
 }
 
-.app-header-title {
+/* Flutter Search Bar */
+.flutter-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.flutter-search-bar input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 11px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.flutter-search-bar .search-icon,
+.flutter-search-bar .filter-icon {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Category Filter Chips */
+.flutter-category-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.flutter-category-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.cat-pill {
+  white-space: nowrap;
+  padding: 6px 12px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cat-pill.active,
+.cat-pill:hover {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+}
+
+/* Featured Hero Tour Card (Flutter TourCard Style) */
+.featured-tour-card {
+  position: relative;
+  height: 160px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: transform 0.25s ease;
+}
+
+.featured-tour-card:hover {
+  transform: scale(1.02);
+}
+
+.featured-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.featured-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.85) 100%);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  color: #FFFFFF;
+}
+
+.featured-badge {
+  align-self: flex-start;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 100px;
+  background: rgba(0, 122, 255, 0.85);
+  backdrop-filter: blur(10px);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.featured-title {
   font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.featured-meta-row {
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+}
+
+.featured-rating {
+  margin-left: auto;
+  font-weight: 800;
+  color: #FFD700;
+}
+
+/* Section Title Row */
+.flutter-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flutter-section-title-row h5 {
+  font-size: 12px;
   font-weight: 800;
   color: var(--text-main);
 }
 
-.app-status-text {
+.see-all-link {
   font-size: 10px;
+  font-weight: 700;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+/* Popular Tours List */
+.popular-tours-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.popular-tour-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.popular-tour-item:hover {
+  transform: translateY(-2px);
+}
+
+.popular-tour-img {
+  width: 55px;
+  height: 55px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.popular-tour-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.popular-tour-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.popular-tour-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* Chat Screen Styling */
+.chat-appbar {
+  background: var(--surface);
+}
+
+.chat-header-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-sparkle-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.ai-online-sub {
+  font-size: 9px;
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -1858,7 +2110,6 @@ a {
   background: var(--success);
 }
 
-/* Tab 1: Chat Scroll & Bubbles */
 .phone-chat-scroll {
   flex: 1;
   padding: 12px;
@@ -1892,7 +2143,7 @@ a {
 .msg-bubble {
   padding: 10px 14px;
   border-radius: 16px;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -1922,7 +2173,6 @@ a {
   text-align: right;
 }
 
-/* Dynamic Tour Card in Chat */
 .sim-tour-card {
   margin-top: 8px;
   background: var(--surface-secondary);
@@ -1932,7 +2182,7 @@ a {
 }
 
 .sim-tour-card h5 {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--primary);
   margin-bottom: 4px;
@@ -1941,7 +2191,7 @@ a {
 .sim-tour-meta-row {
   display: flex;
   gap: 10px;
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-muted);
   margin-bottom: 8px;
 }
@@ -1949,16 +2199,20 @@ a {
 .sim-tour-card .btn-card-action {
   width: 100%;
   padding: 6px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   border-radius: 8px;
   border: none;
   background: var(--primary);
   color: #FFFFFF;
   cursor: pointer;
+  transition: opacity 0.2s;
 }
 
-/* Quick Prompt Chips in Phone */
+.sim-tour-card .btn-card-action:hover {
+  opacity: 0.9;
+}
+
 .phone-quick-prompts {
   padding: 6px 10px;
   display: flex;
@@ -1973,7 +2227,7 @@ a {
 
 .prompt-chip {
   white-space: nowrap;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   padding: 5px 10px;
   border-radius: 100px;
@@ -1990,7 +2244,6 @@ a {
   border-color: var(--primary);
 }
 
-/* Phone Input Bar */
 .phone-input-bar {
   padding: 8px 10px 10px;
   display: flex;
@@ -2015,8 +2268,8 @@ a {
 }
 
 .phone-send-btn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: var(--primary);
   border: none;
@@ -2032,7 +2285,29 @@ a {
   transform: scale(1.08);
 }
 
-/* Tab 2: Leaflet Map Inside Phone */
+/* Map Screen Styling */
+.flutter-map-appbar {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: 5;
+}
+
+.app-header-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.app-status-text {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
 .phone-map-canvas {
   flex: 1;
   width: 100%;
@@ -2059,34 +2334,124 @@ a {
   transform: scale(1.05);
 }
 
-/* Floating Live Audio Mini Player in Map */
-.phone-audio-player-card {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  right: 10px;
+/* Profile Screen Styling */
+.profile-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 10px;
+  background: var(--surface);
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+  gap: 6px;
+}
+
+.profile-avatar-large {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+.profile-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.profile-badge {
+  font-size: 9px;
+  color: var(--primary);
+  font-weight: 700;
+  padding: 2px 8px;
+  background: rgba(0, 122, 255, 0.1);
+  border-radius: 100px;
+}
+
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.profile-stat-box {
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.stat-num {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.stat-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.profile-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  padding: 4px 0;
+  color: var(--text-muted);
+}
+
+.settings-row strong {
+  color: var(--text-main);
+}
+
+/* Floating Audio Mini-Player (Matching Flutter AudioMiniPlayerWidget) */
+.flutter-audio-mini-player {
+  padding: 6px 12px;
   background: var(--glass-card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  padding: 10px 12px;
+  border-top: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: var(--shadow-md);
-  z-index: 20;
+  z-index: 15;
 }
 
-.audio-left {
+.mini-player-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  cursor: pointer;
 }
 
 .audio-play-circle {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: var(--primary);
   color: #FFFFFF;
@@ -2094,32 +2459,35 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
-  box-shadow: 0 4px 10px var(--primary-glow);
+  box-shadow: 0 2px 8px var(--primary-glow);
+  flex-shrink: 0;
 }
 
 .audio-track-info h5 {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   color: var(--text-main);
+  margin: 0;
 }
 
 .audio-track-info p {
-  font-size: 9px;
+  font-size: 8px;
   color: var(--text-muted);
+  margin: 0;
 }
 
 .audio-waveform-mini {
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  height: 14px;
+  height: 12px;
 }
 
 .audio-waveform-mini span {
   width: 2px;
-  height: 4px;
+  height: 3px;
   background: var(--accent-purple);
   border-radius: 1px;
   transition: height 0.2s;
@@ -2135,64 +2503,16 @@ a {
 .audio-waveform-mini.playing span:nth-child(4) { animation-delay: 0.4s; }
 .audio-waveform-mini.playing span:nth-child(5) { animation-delay: 0.15s; }
 
-/* Tab 3: Discovery Feed */
-.phone-feed-scroll {
-  flex: 1;
-  padding: 10px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.sim-feed-card {
-  background: var(--surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.sim-feed-card:hover {
-  transform: translateY(-2px);
-}
-
-.feed-card-img {
-  width: 100%;
-  height: 90px;
-  object-fit: cover;
-}
-
-.feed-card-body {
-  padding: 8px 10px;
-}
-
-.feed-card-title {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--text-main);
-  margin-bottom: 4px;
-}
-
-.feed-card-meta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-/* Phone Bottom Nav Bar */
+/* Phone Bottom Navigation Bar (Matching Flutter VibeBottomNav) */
 .phone-bottom-navbar {
-  height: 52px;
+  height: 48px;
   background: var(--surface);
   border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding-bottom: 4px;
-  z-index: 10;
+  padding-bottom: 2px;
+  z-index: 20;
 }
 
 .phone-nav-item {
@@ -2202,7 +2522,7 @@ a {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   color: var(--text-muted);
   cursor: pointer;
@@ -2210,12 +2530,12 @@ a {
 }
 
 .phone-nav-item .nav-icon {
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .phone-nav-item.active {
   color: var(--primary);
-  transform: scale(1.08);
+  transform: scale(1.05);
 }
 
 /* ==========================================================================
@@ -2325,184 +2645,10 @@ a {
 }
 
 /* ==========================================================================
-   10. GALERÍA 3D SHOWCASE DE LA APLICACIÓN REAL
-   ========================================================================== */
-.gallery-filter-tabs {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin: 20px 0 36px;
-  flex-wrap: wrap;
-}
-
-.gallery-tab {
-  padding: 8px 18px;
-  border-radius: 100px;
-  font-size: 13px;
-  font-weight: 700;
-  border: 1px solid var(--border-subtle);
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all var(--transition-speed);
-}
-
-.gallery-tab:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  transform: translateY(-2px);
-}
-
-.gallery-tab.active {
-  background: var(--primary);
-  color: #FFFFFF;
-  border-color: var(--primary);
-  box-shadow: 0 4px 14px var(--primary-glow);
-}
-
-.gallery-perspective-stage {
-  perspective: 1400px;
-}
-
-.gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 28px;
-}
-
-.gallery-card {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
-}
-
-.gallery-card:hover {
-  transform: translateY(-8px) scale(1.02);
-}
-
-.gallery-card-img-wrap {
-  width: 100%;
-  height: 380px;
-  border-radius: 16px;
-  overflow: hidden;
-  background: #000;
-}
-
-.gallery-screen-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top;
-  transition: transform 0.5s ease;
-}
-
-.gallery-card:hover .gallery-screen-img {
-  transform: scale(1.04);
-}
-
-.gallery-card-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.gallery-badge {
-  align-self: flex-start;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 3px 8px;
-  border-radius: 6px;
-  text-transform: uppercase;
-  margin-bottom: 2px;
-}
-
-.gallery-card-info h4 {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--text-main);
-}
-
-.gallery-card-info p {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-/* ==========================================================================
-   11. TESTIMONIOS Y RESEÑAS SATELITALES
-   ========================================================================== */
-.testimonials-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  margin-top: 30px;
-}
-
-.testimonial-card {
-  padding: 28px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.testimonial-rating {
-  font-size: 14px;
-  letter-spacing: 2px;
-}
-
-.testimonial-text {
-  font-size: 14px;
-  color: var(--text-muted);
-  line-height: 1.6;
-  font-style: italic;
-}
-
-.testimonial-user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary), var(--primary-cyan));
-  color: #FFFFFF;
-  font-weight: 800;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.user-name {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--text-main);
-}
-
-.user-location {
-  font-size: 11px;
-  color: var(--text-tertiary);
-}
-
-/* ==========================================================================
-   RESPONSIVE ADJUSTMENTS FOR NEW COMPONENTS
+   RESPONSIVE ADJUSTMENTS
    ========================================================================== */
 @media (max-width: 1024px) {
   .smartphone-simulator-container {
-    grid-template-columns: 1fr;
-  }
-  
-  .gallery-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .testimonials-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -2516,9 +2662,6 @@ a {
   .comparison-grid {
     grid-template-columns: 1fr;
   }
-
-  .gallery-grid {
-    grid-template-columns: 1fr;
-  }
 }
+
 

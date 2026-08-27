@@ -12,9 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initScrollEffects();
   initCardSpotlight();
   initInteractiveSmartphoneSimulator();
-  initGalleryFilters();
   initLivePhoneClock();
-  initAudioSimulator();
   initFaqAccordion();
   setLandingLanguage(currentLandingLang);
 });
@@ -599,92 +597,122 @@ const tourTemplates = {
 };
 
 /* --------------------------------------------------------------------------
-   6. SMARTPHONE SIMULATOR ENGINE (PLAYGROUND CONTROLLER & LEAFLET MAP)
+   6. SMARTPHONE SIMULATOR ENGINE (FLUTTER APP FIDELITY CONTROLLER)
    -------------------------------------------------------------------------- */
 const SIMULATOR_DATA = {
   cartagena: {
     name: "Cartagena de Indias",
+    weather: "☀️ 28°C",
     title: "Cartagena Colonial: Murallas y Plazas",
     desc: "Ruta histórica por fortalezas coloniales, plazas emblemáticas y baluartes con audioguía GPS contextual.",
+    duration: "2h 30m",
+    distance: "2.4 km",
+    rating: "⭐ 4.9",
     center: [10.4236, -75.5501],
     zoom: 16,
+    imgClaro: "assets/screenshots/Modo claro/Detalles de tour 1.jpeg",
+    imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 1.jpeg",
+    popular: [
+      { title: "Getsemaní Arte Callejero y Sabores", duration: "3h", distance: "3.2 km", rating: "4.8 ⭐", img: "assets/screenshots/Modo claro/Explorar 1.jpeg" },
+      { title: "Baluartes & Atardecer Caribe", duration: "1.5h", distance: "1.8 km", rating: "4.9 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 2.jpeg" }
+    ],
     stops: [
       { name: "1. Torre del Reloj & Plaza de los Coches", latlng: [10.4236, -75.5501], voice: "Bienvenido a la Torre del Reloj, entrada principal a la ciudad amurallada de Cartagena construida en el siglo diecinueve." },
       { name: "2. Plaza de la Aduana & Museo de Arte", latlng: [10.4222, -75.5492], voice: "Plaza de la Aduana: la plaza más amplia de la ciudad colonial, sede de mercaderes y casas reales." },
       { name: "3. Santuario San Pedro Claver", latlng: [10.4215, -75.5480], voice: "Santuario San Pedro Claver, iglesia barroca de piedra coralina dedicada al defensor de los derechos humanos." },
       { name: "4. Baluarte de Santo Domingo", latlng: [10.4245, -75.5530], voice: "Baluarte de Santo Domingo: la fortificación más antigua frente al mar Caribe, ideal para ver el atardecer." }
-    ],
-    feed: [
-      { title: "Cartagena Colonial y Murallas", duration: "2h • 2.1 km", rating: "4.9 ⭐", imgClaro: "assets/screenshots/Modo claro/Detalles de tour 1.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 1.jpeg" },
-      { title: "Getsemaní Arte Callejero y Gastronomía", duration: "3h • 3.2 km", rating: "4.8 ⭐", imgClaro: "assets/screenshots/Modo claro/Explorar 1.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Explorar 1.jpeg" }
     ]
   },
   paris: {
     name: "París, Francia",
+    weather: "⛅ 19°C",
     title: "París Imperial: Notre-Dame al Louvre",
     desc: "Recorrido histórico por la Île de la Cité, puentes del Sena y monumentos del corazón parisino.",
+    duration: "3h 00m",
+    distance: "3.5 km",
+    rating: "⭐ 4.9",
     center: [48.8566, 2.3450],
     zoom: 15,
+    imgClaro: "assets/screenshots/Modo claro/Detalles de tour 2.jpeg",
+    imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 2.jpeg",
+    popular: [
+      { title: "Montmartre Bohemio & Cafés de Arte", duration: "3h", distance: "3.5 km", rating: "4.9 ⭐", img: "assets/screenshots/Modo claro/Explorar 2.jpeg" },
+      { title: "Bistrós de Saint-Germain", duration: "2.5h", distance: "2.8 km", rating: "4.7 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 1.jpeg" }
+    ],
     stops: [
       { name: "1. Catedral de Notre-Dame", latlng: [48.8530, 2.3499], voice: "Notre-Dame de París, obra maestra gótica en la Isla de la Cité a orillas del río Sena." },
       { name: "2. Puente de las Artes", latlng: [48.8584, 2.3375], voice: "Puente de las Artes, famoso mirador peatonal con vistas panorámicas al Museo del Louvre." },
       { name: "3. Patio de la Pirámide del Louvre", latlng: [48.8606, 2.3376], voice: "Museo del Louvre y su icónica pirámide de cristal diseñada por I.M. Pei." },
       { name: "4. Jardines de las Tullerías", latlng: [48.8635, 2.3275], voice: "Jardines de las Tullerías, parque histórico que conecta el Louvre con la Plaza de la Concordia." }
-    ],
-    feed: [
-      { title: "París Bohemio: Montmartre y Cafés", duration: "3h • 3.5 km", rating: "4.9 ⭐", imgClaro: "assets/screenshots/Modo claro/Detalles de tour 2.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 2.jpeg" },
-      { title: "Ruta de Bistrós en Saint-Germain", duration: "2.5h • 2.8 km", rating: "4.7 ⭐", imgClaro: "assets/screenshots/Modo claro/Explorar 2.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Explorar 2.jpeg" }
     ]
   },
   tokio: {
     name: "Tokio, Japón",
+    weather: "🌧️ 16°C",
     title: "Tokio Tradicional: Santuarios y Jardines",
     desc: "Recorrido espiritual desde los templos milenarios de Asakusa hasta los jardines del Palacio Imperial.",
+    duration: "3h 30m",
+    distance: "4.2 km",
+    rating: "⭐ 5.0",
     center: [35.7000, 139.7750],
     zoom: 14,
+    imgClaro: "assets/screenshots/Modo claro/Detalles de tour 3.jpeg",
+    imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 3.jpeg",
+    popular: [
+      { title: "Ruta de Ramen & Izakayas en Shinjuku", duration: "3h", distance: "3.8 km", rating: "5.0 ⭐", img: "assets/screenshots/Modo claro/Explorar 1.jpeg" },
+      { title: "Akihabara Tech & Shibuya Sky", duration: "4h", distance: "5.0 km", rating: "4.8 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 2.jpeg" }
+    ],
     stops: [
       { name: "1. Templo Senso-ji & Kaminarimon", latlng: [35.7147, 139.7967], voice: "Templo Senso-ji en Asakusa, el templo budista más antiguo y venerado de Tokio, fundado en el año 628." },
       { name: "2. Calle Comercial Nakamise", latlng: [35.7128, 139.7966], voice: "Calle Nakamise, centenario paseo comercial con delicias tradicionales y artesanías japonesas." },
       { name: "3. Jardines del Palacio Imperial", latlng: [35.6852, 139.7528], voice: "Jardines del Palacio Imperial de Tokio, residencia del Emperador de Japón entre fosos y murallas." },
       { name: "4. Santuario Meiji Jingu", latlng: [35.6764, 139.6993], voice: "Santuario Meiji, oasis de bosque sagrado y paz en medio del vibrante distrito de Shibuya." }
-    ],
-    feed: [
-      { title: "Ruta Culinaria: Ramen & Izakayas", duration: "3.5h • 4.0 km", rating: "5.0 ⭐", imgClaro: "assets/screenshots/Modo claro/Explorar 1.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Explorar 1.jpeg" },
-      { title: "Akihabara Tech & Shibuya Sky", duration: "4h • 5.1 km", rating: "4.8 ⭐", imgClaro: "assets/screenshots/Modo claro/Detalles de tour 3.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 3.jpeg" }
     ]
   },
   roma: {
     name: "Roma, Italia",
+    weather: "☀️ 24°C",
     title: "Roma Eterna: Coliseo y Foros",
     desc: "Sumérgete en dos milenios de historia imperial visitando los monumentos cumbre de Roma.",
+    duration: "2h 45m",
+    distance: "3.1 km",
+    rating: "⭐ 4.9",
     center: [41.8950, 12.4850],
     zoom: 15,
+    imgClaro: "assets/screenshots/Modo claro/Detalles del tour 4.jpeg",
+    imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 4.jpeg",
+    popular: [
+      { title: "Trattorias & Gelato en Trastevere", duration: "2.5h", distance: "2.6 km", rating: "4.9 ⭐", img: "assets/screenshots/Modo claro/Explorar 2.jpeg" },
+      { title: "Barroco & Plazas de Bernini", duration: "3h", distance: "3.4 km", rating: "4.8 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 1.jpeg" }
+    ],
     stops: [
       { name: "1. Coliseo Romano", latlng: [41.8902, 12.4922], voice: "El Coliseo Romano, el anfiteatro más grande de la antigüedad y símbolo eterno de la civilización romana." },
       { name: "2. Foro Romano & Palatino", latlng: [41.8925, 12.4853], voice: "Foro Romano, el epicentro político, religioso y judicial de la antigua Roma." },
       { name: "3. Panteón de Agripa", latlng: [41.8986, 12.4769], voice: "Panteón de Agripa, templo romano con la cúpula de hormigón no armado más grande del mundo." },
       { name: "4. Fontana di Trevi", latlng: [41.9009, 12.4833], voice: "Fontana di Trevi, joya del barroco donde la tradición manda lanzar una moneda para asegurar el regreso." }
-    ],
-    feed: [
-      { title: "Trattorias & Gelato en Trastevere", duration: "2.5h • 2.6 km", rating: "4.9 ⭐", imgClaro: "assets/screenshots/Modo claro/Detalles del tour 4.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 4.jpeg" },
-      { title: "Barroco & Plazas de Roma", duration: "3h • 3.4 km", rating: "4.8 ⭐", imgClaro: "assets/screenshots/Modo claro/Explorar 2.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Explorar 2.jpeg" }
     ]
   },
   newyork: {
     name: "Nueva York, USA",
-    title: "Nueva York: De Central Park a Times Square",
+    weather: "⛅ 22°C",
+    title: "Nueva York: Central Park a Broadway",
     desc: "Itinerario vibrante cruzando miradores, rascacielos históricos y avenidas icónicas.",
+    duration: "3h 15m",
+    distance: "3.8 km",
+    rating: "⭐ 4.8",
     center: [40.7550, -73.9800],
     zoom: 14,
+    imgClaro: "assets/screenshots/Modo claro/Explorar 1.jpeg",
+    imgOscuro: "assets/screenshots/Modo oscuro/Explorar 1.jpeg",
+    popular: [
+      { title: "High Line & Chelsea Market Gourmet", duration: "2h", distance: "2.3 km", rating: "4.9 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 2.jpeg" },
+      { title: "Ruta de Arte en SoHo & Village", duration: "3h", distance: "3.8 km", rating: "4.7 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 3.jpeg" }
+    ],
     stops: [
       { name: "1. Central Park (Bethesda)", latlng: [40.7739, -73.9708], voice: "Central Park y la emblemática terraza Bethesda en el pulmón verde de Manhattan." },
       { name: "2. Times Square & Broadway", latlng: [40.7580, -73.9855], voice: "Times Square, la encrucijada del mundo iluminada por pantallas gigantes y teatros legendarios." },
       { name: "3. Empire State Building", latlng: [40.7484, -73.9857], voice: "Empire State Building, rascacielos art déco que definió el horizonte de Nueva York." },
       { name: "4. Puente de Brooklyn", latlng: [40.7061, -73.9969], voice: "Puente de Brooklyn, maravilla de la ingeniería del siglo diecinueve con vistas al skyline." }
-    ],
-    feed: [
-      { title: "High Line & Chelsea Market Gourmet", duration: "2h • 2.3 km", rating: "4.9 ⭐", imgClaro: "assets/screenshots/Modo claro/Explorar 1.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Explorar 1.jpeg" },
-      { title: "Ruta de Arte en SoHo & Village", duration: "3h • 3.8 km", rating: "4.7 ⭐", imgClaro: "assets/screenshots/Modo claro/Detalles de tour 1.jpeg", imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 1.jpeg" }
     ]
   }
 };
@@ -693,7 +721,7 @@ class AppSimulator {
   constructor() {
     this.currentCityKey = 'cartagena';
     this.currentPace = 'relaxed';
-    this.activeTab = 'tabContentChat';
+    this.activeTab = 'tabContentExplore';
     this.mapInstance = null;
     this.tileLayer = null;
     this.routeLine = null;
@@ -709,7 +737,6 @@ class AppSimulator {
     this.bindPhoneNavigation();
     this.bindChatEvents();
     this.initPhoneMap();
-    this.populateDiscoveryFeed();
     this.updateCityState(this.currentCityKey);
   }
 
@@ -735,14 +762,16 @@ class AppSimulator {
       });
     });
 
-    // Quick Experience Switchers
+    // Quick Screen Switchers
+    const btnExplore = document.getElementById('btnSwitchToExplore');
     const btnChat = document.getElementById('btnSwitchToChat');
     const btnMap = document.getElementById('btnSwitchToMap');
-    const btnFeed = document.getElementById('btnSwitchToFeed');
+    const btnProfile = document.getElementById('btnSwitchToProfile');
 
+    if (btnExplore) btnExplore.addEventListener('click', () => this.switchTab('tabContentExplore'));
     if (btnChat) btnChat.addEventListener('click', () => this.switchTab('tabContentChat'));
     if (btnMap) btnMap.addEventListener('click', () => this.switchTab('tabContentMap'));
-    if (btnFeed) btnFeed.addEventListener('click', () => this.switchTab('tabContentFeed'));
+    if (btnProfile) btnProfile.addEventListener('click', () => this.switchTab('tabContentProfile'));
   }
 
   bindPhoneNavigation() {
@@ -760,10 +789,13 @@ class AppSimulator {
       stepBtn.addEventListener('click', () => this.simulateWalkStep());
     }
 
-    // Audio Play/Pause Button in Map Card
+    // Audio Play/Pause Button in Mini Player
     const audioBtn = document.getElementById('phoneAudioToggleBtn');
     if (audioBtn) {
-      audioBtn.addEventListener('click', () => this.toggleVoiceAudio());
+      audioBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleVoiceAudio();
+      });
     }
   }
 
@@ -781,14 +813,17 @@ class AppSimulator {
     });
 
     // Update Cockpit button styles
+    const btnExplore = document.getElementById('btnSwitchToExplore');
     const btnChat = document.getElementById('btnSwitchToChat');
     const btnMap = document.getElementById('btnSwitchToMap');
-    const btnFeed = document.getElementById('btnSwitchToFeed');
+    const btnProfile = document.getElementById('btnSwitchToProfile');
+
+    if (btnExplore) btnExplore.classList.toggle('active-sim-mode', tabId === 'tabContentExplore');
     if (btnChat) btnChat.classList.toggle('active-sim-mode', tabId === 'tabContentChat');
     if (btnMap) btnMap.classList.toggle('active-sim-mode', tabId === 'tabContentMap');
-    if (btnFeed) btnFeed.classList.toggle('active-sim-mode', tabId === 'tabContentFeed');
+    if (btnProfile) btnProfile.classList.toggle('active-sim-mode', tabId === 'tabContentProfile');
 
-    // Invalidate Leaflet map size on switch
+    // Invalidate Leaflet map size on switch to Map
     if (tabId === 'tabContentMap' && this.mapInstance) {
       setTimeout(() => {
         this.mapInstance.invalidateSize();
@@ -836,12 +871,45 @@ class AppSimulator {
   updateCityState(cityKey) {
     const city = SIMULATOR_DATA[cityKey] || SIMULATOR_DATA['cartagena'];
     this.currentStepIdx = 0;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // Update Explorar (Home Screen)
+    const homeCityName = document.getElementById('simHomeCityName');
+    const homeWeatherChip = document.getElementById('simHomeWeatherChip');
+    const featuredImg = document.getElementById('simFeaturedImg');
+    const featuredTitle = document.getElementById('simFeaturedTitle');
+    const featuredDuration = document.getElementById('simFeaturedDuration');
+    const featuredDistance = document.getElementById('simFeaturedDistance');
+    const popularList = document.getElementById('simPopularToursList');
+
+    if (homeCityName) homeCityName.innerText = city.name;
+    if (homeWeatherChip) homeWeatherChip.innerText = city.weather;
+    if (featuredImg) featuredImg.src = isDark ? city.imgOscuro : city.imgClaro;
+    if (featuredTitle) featuredTitle.innerText = city.title;
+    if (featuredDuration) featuredDuration.innerText = `⏱️ ${city.duration}`;
+    if (featuredDistance) featuredDistance.innerText = `🚶 ${city.distance}`;
+
+    if (popularList) {
+      popularList.innerHTML = city.popular.map(item => `
+        <div class="popular-tour-item" onclick="simulatorInstance.switchTab('tabContentMap')">
+          <img class="popular-tour-img" src="${item.img}" alt="${item.title}" onerror="this.src='assets/screenshots/Modo claro/Detalles de tour 1.jpeg'">
+          <div class="popular-tour-info">
+            <h6 class="popular-tour-title">${item.title}</h6>
+            <div class="popular-tour-meta">
+              <span>⏱️ ${item.duration}</span>
+              <span>🚶 ${item.distance}</span>
+              <span class="text-warning">${item.rating}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
 
     // Update Map Title Header
     const mapHeaderTitle = document.getElementById('simMapHeaderTitle');
     const mapHeaderSub = document.getElementById('simMapHeaderSubtitle');
     if (mapHeaderTitle) mapHeaderTitle.innerText = city.title;
-    if (mapHeaderSub) mapHeaderSub.innerText = `${city.stops.length} Paradas • ${this.currentPace === 'relaxed' ? '2.1 km' : '3.8 km'}`;
+    if (mapHeaderSub) mapHeaderSub.innerText = `${city.stops.length} Paradas • ${city.distance}`;
 
     // Update Map Layer and Markers
     if (this.mapInstance && typeof L !== 'undefined') {
@@ -887,9 +955,8 @@ class AppSimulator {
       this.mapInstance.fitBounds(this.routeLine.getBounds(), { padding: [30, 30] });
     }
 
-    // Update Floating Audio Card Info
+    // Update Floating Audio Mini Player Info
     this.updateAudioCard(0);
-    this.populateDiscoveryFeed();
   }
 
   simulateWalkStep() {
@@ -1020,8 +1087,8 @@ class AppSimulator {
           <div class="sim-tour-card">
             <h5>${city.title}</h5>
             <div class="sim-tour-meta-row">
-              <span>⏱️ 2h 30m</span>
-              <span>🚶 2.4 km</span>
+              <span>⏱️ ${city.duration}</span>
+              <span>🚶 ${city.distance}</span>
               <span>💵 $15 USD</span>
             </div>
             <button class="btn-card-action" onclick="simulatorInstance.switchTab('tabContentMap')">
@@ -1034,27 +1101,6 @@ class AppSimulator {
       scrollArea.appendChild(botMsg);
       scrollArea.scrollTop = scrollArea.scrollHeight;
     }, 650);
-  }
-
-  populateDiscoveryFeed() {
-    const container = document.getElementById('simFeedCardsContainer');
-    if (!container) return;
-
-    const city = SIMULATOR_DATA[this.currentCityKey] || SIMULATOR_DATA['cartagena'];
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-
-    container.innerHTML = city.feed.map(item => `
-      <div class="sim-feed-card" onclick="simulatorInstance.switchTab('tabContentMap')">
-        <img class="feed-card-img" src="${isDark ? item.imgOscuro : item.imgClaro}" alt="${item.title}" onerror="this.src='assets/screenshots/Modo claro/Detalles de tour 1.jpeg'">
-        <div class="feed-card-body">
-          <h5 class="feed-card-title">${item.title}</h5>
-          <div class="feed-card-meta">
-            <span>⏱️ ${item.duration}</span>
-            <span>${item.rating}</span>
-          </div>
-        </div>
-      </div>
-    `).join('');
   }
 }
 
@@ -1079,82 +1125,7 @@ function initLivePhoneClock() {
 }
 
 /* --------------------------------------------------------------------------
-   8. 3D APP SCREENSHOTS GALLERY CATEGORY FILTERS
-   -------------------------------------------------------------------------- */
-function initGalleryFilters() {
-  const tabs = document.querySelectorAll('.gallery-tab');
-  const cards = document.querySelectorAll('.gallery-card');
-
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-
-      const filter = tab.dataset.galleryFilter || 'all';
-
-      cards.forEach(card => {
-        const cat = card.dataset.category;
-        if (filter === 'all' || cat === filter) {
-          card.style.display = 'flex';
-        } else {
-          card.style.display = 'none';
-        }
-      });
-    });
-  });
-}
-
-/* --------------------------------------------------------------------------
-   9. AUDIO DEMO SIMULATOR
-   -------------------------------------------------------------------------- */
-function initAudioSimulator() {
-  const playBtn = document.getElementById('simPlayBtn');
-  const waveAnim = document.getElementById('bentoWaveAnimation');
-  const playIcon = document.getElementById('simPlayIcon');
-  const playText = document.getElementById('simPlayText');
-  let isPlaying = false;
-
-  if (playBtn) {
-    playBtn.addEventListener('click', () => {
-      isPlaying = !isPlaying;
-      const isEs = currentLandingLang === 'es';
-
-      if (isPlaying) {
-        if (waveAnim) waveAnim.classList.add('playing');
-        if (playIcon) playIcon.innerText = '⏸';
-        if (playText) playText.innerText = isEs ? 'Pausar' : 'Pause';
-
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(
-            isEs 
-              ? "Bienvenido a VibeTours. Te estás aproximando a la emblemática Torre del Reloj, construida sobre las murallas del siglo diecinueve."
-              : "Welcome to VibeTours. You are approaching the historic Clock Tower, originally erected on 19th-century fortress walls."
-          );
-          utterance.lang = isEs ? 'es-ES' : 'en-US';
-          utterance.rate = 0.95;
-          utterance.onend = () => {
-            isPlaying = false;
-            if (waveAnim) waveAnim.classList.remove('playing');
-            if (playIcon) playIcon.innerText = '▶';
-            if (playText) playText.innerText = isEs ? 'Reproducir' : 'Play';
-          };
-          window.speechSynthesis.speak(utterance);
-        }
-      } else {
-        if (waveAnim) waveAnim.classList.remove('playing');
-        if (playIcon) playIcon.innerText = '▶';
-        if (playText) playText.innerText = isEs ? 'Reproducir' : 'Play';
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-        }
-      }
-    });
-  }
-}
-
-/* --------------------------------------------------------------------------
-   10. FAQ ACCORDION INTERACTION
+   8. FAQ ACCORDION INTERACTION
    -------------------------------------------------------------------------- */
 function initFaqAccordion() {
   const faqCards = document.querySelectorAll('.faq-card');
@@ -1174,14 +1145,12 @@ function initFaqAccordion() {
 }
 
 /* --------------------------------------------------------------------------
-   11. BILINGUAL TRANSLATION ENGINE (ES / EN)
+   9. BILINGUAL TRANSLATION ENGINE (ES / EN)
    -------------------------------------------------------------------------- */
 const landingTranslations = {
   es: {
     navHow: '¿Cómo Funciona?',
     navGenerator: 'Simulador App',
-    navFeatures: 'Funciones',
-    navGallery: 'Galería App',
     navCompare: 'Comparativa',
     navFaq: 'FAQ',
     navRegister: 'Registrarse',
@@ -1201,22 +1170,24 @@ const landingTranslations = {
 
     simSubtitle: 'Experiencia Interactiva 3D',
     simTitle: 'Prueba la App desde tu Navegador',
-    simDesc: 'Interactúa en tiempo real con el Asistente IA, navega rutas GPS en el mapa satelital y escucha audioguías reales.',
+    simDesc: 'Navega la interfaz real de VibeTours: explora tours, interactúa con el Asistente IA, sigue rutas GPS con audioguía y gestiona tu perfil.',
     simCockpitBadge: 'Centro de Mando del Simulador',
-    simCockpitTitle: 'Configura tu Experiencia',
-    simCockpitDesc: 'Prueba cómo reacciona el smartphone virtual al cambiar de ciudad, ritmo e intereses turísticos.',
-    simLblCity: '1. Selecciona Destino',
-    simLblPace: '2. Ritmo & Duración',
+    simCockpitTitle: 'Configura tu Destino',
+    simCockpitDesc: 'Elige una ciudad y prueba cómo la app adapta el feed de exploración, las respuestas de IA y el mapa de navegación GPS.',
+    simLblCity: '1. Destino Turístico',
+    simLblPace: '2. Ritmo de Viaje',
     simTeleGpsLabel: 'Precisión GPS',
     simTeleLatencyLabel: 'Latencia IA',
     simTeleSourceLabel: 'Cartografía',
     simTeleVoiceLabel: 'Voz Narrativa',
-    btnSwitchToChat: '💬 1. Probar Chat IA',
-    btnSwitchToMap: '📍 2. Mapa Satelital',
-    btnSwitchToFeed: '🧭 3. Feed de Tours',
-    pnavChat: 'IA Planner',
-    pnavMap: 'Live Tour',
-    pnavFeed: 'Explorar',
+    btnSwitchToExplore: '🧭 Explorar',
+    btnSwitchToChat: '💬 Chat IA',
+    btnSwitchToMap: '🏖️ Live Tour',
+    btnSwitchToProfile: '👤 Perfil',
+    pnavExplore: 'Explorar',
+    pnavChat: 'Chat IA',
+    pnavTours: 'Tours',
+    pnavProfile: 'Perfil',
     simWalkBtnText: 'Simular Paso',
 
     compSubtitle: 'Evolución del Turismo',
@@ -1234,50 +1205,6 @@ const landingTranslations = {
     compVibe2: '<strong>Audioguías por proximidad:</strong> Historias y anécdotas narradas al oído exactamente cuando llegas.',
     compVibe3: '<strong>Ahorro superior al 85%:</strong> Generación ilimitada de rutas satelitales sin intermediarios.',
     compVibe4: '<strong>Itinerarios personalizados:</strong> La IA adapta las paradas a tu presupuesto, gustos y energía.',
-
-    gallerySubtitle: 'Diseño de Alta Fidelidad',
-    galleryTitle: 'Conoce la App por Dentro',
-    galleryDesc: 'Explora las pantallas reales de VibeTours diseñadas para brindarte la mejor experiencia en cualquier destino.',
-    gtabAll: 'Todas las Pantallas',
-    gtabAi: '🤖 IA & Planificador',
-    gtabTours: '📍 Navegación & Tours',
-    gtabCreator: '✍️ Creador & Comunidad',
-
-    testSubtitle: 'Opiniones de la Comunidad',
-    testTitle: 'Amado por Viajeros Autónomos',
-    testDesc: 'Descubre cómo miles de personas disfrutan de sus viajes sin depender de tours aburridos.',
-    test1Text: '"Pude recorrer Cartagena a mi ritmo. Llegué a la Torre del Reloj y la voz me contó historias fascinantes que ni siquiera los guías locales sabían. ¡Increíble!"',
-    test2Text: '"El chat de IA me diseñó una ruta de cafés y arte en París perfecta para mi presupuesto de estudiante. Ahorré más de 80 euros en un solo día."',
-    test3Text: '"La precisión del GPS es impresionante. No se pierde nunca y me llevó a templos ocultos en Tokio que no aparecen en las guías turísticas tradicionales."',
-
-    bentoSubtitle: 'Tecnología de Vanguardia',
-    bentoTitle: 'Experiencia de Viaje Inmersiva',
-    bentoDesc: 'Inteligencia artificial, cartografía satelital abierta y diseño de lujo en una sola app.',
-    bento1Pill: '01. IA Generativa',
-    bento1Title: 'Vibe Planner AI & Chatbot',
-    bento1Desc: 'Pide tu tour en lenguaje natural. La IA calcula tiempos, distancias y coordenadas precisas al instante.',
-    bento1ChatUser: '"Quiero un tour de 3 horas por cafés y museos en París con poco presupuesto."',
-    bento1ChatAi: '"¡Listo! Ruta por Montmartre: 5 paradas reales, $18 USD estimados y mapa optimizado."',
-
-    bento2Pill: '02. Guiado Satelital',
-    bento2Title: 'Live Tour & Audioguía Manos Libres',
-    bento2Desc: 'La voz narra historias y detalles automáticamente al aproximarte a cada parada con GPS en tiempo real.',
-    bento2PlayerLabel: 'Proximidad GPS',
-    bento2Snippet: '"Llegando a la Torre del Reloj, construida en el siglo XIX..."',
-    simPlayText: 'Reproducir',
-
-    bento3Pill: '03. Exploración Urbana',
-    bento3Title: 'Lugares Cercanos & Clima en Vivo',
-    bento3Desc: 'Monitorea el clima en tiempo real y encuentra puntos de interés a tu alrededor antes de salir.',
-    bento3WeatherCity: 'Cartagena de Indias',
-    bento3WeatherTag: 'Cielo Despejado',
-
-    bento4Pill: '04. Comunidad',
-    bento4Title: 'Creador Manual de Tours',
-    bento4Desc: 'Crea y comparte rutas personalizadas con paradas interactivas, fotos en alta resolución y notas locales.',
-    bento4Item1: '✍️ Edición rápida de paradas e itinerarios en mapa.',
-    bento4Item2: '🖼️ Galería fotográfica y descripciones culturales.',
-    bento4Item3: '⭐ Valoraciones comunitarias y perfiles de guías locales.',
 
     howSubtitle: 'Fácil y Rápido',
     howTitle: 'Tu Viaje en Tres Pasos',
@@ -1311,8 +1238,7 @@ const landingTranslations = {
     footerCol1Title: 'Navegación',
     footerLinkHow: '¿Cómo Funciona?',
     footerLinkGenerator: 'Simulador App',
-    footerLinkFeatures: 'Funciones',
-    footerLinkGallery: 'Galería App',
+    footerLinkCompare: 'Comparativa',
     footerLinkFaq: 'Preguntas Frecuentes',
     footerCol2Title: 'Portal Legal',
     footerLinkTerms: 'Términos de Servicio',
@@ -1325,8 +1251,6 @@ const landingTranslations = {
   en: {
     navHow: 'How it Works',
     navGenerator: 'App Simulator',
-    navFeatures: 'Features',
-    navGallery: 'App Gallery',
     navCompare: 'Comparison',
     navFaq: 'FAQ',
     navRegister: 'Sign Up',
@@ -1346,22 +1270,24 @@ const landingTranslations = {
 
     simSubtitle: '3D Interactive Experience',
     simTitle: 'Test the App Directly in Your Browser',
-    simDesc: 'Chat with the AI Assistant, navigate real GPS maps, and listen to voice guides in real time.',
+    simDesc: 'Explore real VibeTours features: browse tours, chat with AI Planner, navigate GPS routes with audio guide, and manage your profile.',
     simCockpitBadge: 'Simulator Command Cockpit',
-    simCockpitTitle: 'Configure Your Experience',
-    simCockpitDesc: 'Test how the virtual smartphone responds when changing city, pace, and interests.',
-    simLblCity: '1. Select Destination',
-    simLblPace: '2. Pace & Duration',
+    simCockpitTitle: 'Configure Destination',
+    simCockpitDesc: 'Pick a city to test how the app adapts discovery tours, AI chat responses, and GPS navigation maps.',
+    simLblCity: '1. Destination',
+    simLblPace: '2. Walking Pace',
     simTeleGpsLabel: 'GPS Accuracy',
     simTeleLatencyLabel: 'AI Latency',
     simTeleSourceLabel: 'Cartography',
     simTeleVoiceLabel: 'Narrative Voice',
-    btnSwitchToChat: '💬 1. Test AI Chat',
-    btnSwitchToMap: '📍 2. Satellite Map',
-    btnSwitchToFeed: '🧭 3. Tour Feed',
-    pnavChat: 'AI Planner',
-    pnavMap: 'Live Tour',
-    pnavFeed: 'Explore',
+    btnSwitchToExplore: '🧭 Explore',
+    btnSwitchToChat: '💬 AI Chat',
+    btnSwitchToMap: '🏖️ Live Tour',
+    btnSwitchToProfile: '👤 Profile',
+    pnavExplore: 'Explore',
+    pnavChat: 'AI Chat',
+    pnavTours: 'Tours',
+    pnavProfile: 'Profile',
     simWalkBtnText: 'Simulate Step',
 
     compSubtitle: 'Tourism Evolution',
@@ -1379,50 +1305,6 @@ const landingTranslations = {
     compVibe2: '<strong>Proximity audio guides:</strong> Stories and historical anecdotes narrated in your ear automatically.',
     compVibe3: '<strong>Over 85% cost savings:</strong> Unlimited satellite itineraries without middleman markups.',
     compVibe4: '<strong>Personalized routes:</strong> AI tailors every stop to your budget, tastes, and energy.',
-
-    gallerySubtitle: 'High-Fidelity Interface',
-    galleryTitle: 'Inside the App',
-    galleryDesc: 'Discover real screenshots of VibeTours designed for the ultimate autonomous journey.',
-    gtabAll: 'All Screens',
-    gtabAi: '🤖 AI & Planner',
-    gtabTours: '📍 Navigation & Tours',
-    gtabCreator: '✍️ Creator & Community',
-
-    testSubtitle: 'Community Reviews',
-    testTitle: 'Loved by Autonomous Travelers',
-    testDesc: 'Discover how thousands of travelers explore the world without rigid tour guides.',
-    test1Text: '"I walked through Cartagena at my own pace. As soon as I reached the Clock Tower, the audio narrated stories even local guides didn\'t know!"',
-    test2Text: '"The AI designed a gourmet cafe route in Paris perfect for my student budget. I saved over 80 euros in a single afternoon."',
-    test3Text: '"The GPS precision is amazing. It never drops signal and led me to hidden temples in Tokyo that traditional tour books miss."',
-
-    bentoSubtitle: 'Cutting-Edge Tech',
-    bentoTitle: 'Immersive Travel Experience',
-    bentoDesc: 'Artificial intelligence, open satellite maps, and luxury design in a single app.',
-    bento1Pill: '01. Generative AI',
-    bento1Title: 'Vibe Planner AI & Chatbot',
-    bento1Desc: 'Request your dream tour in natural language. AI computes exact times, distances, and coordinates.',
-    bento1ChatUser: '"I want a 3-hour tour around cafes and museums in Paris on a tight budget."',
-    bento1ChatAi: '"Ready! Route across Montmartre: 5 real stops, $18 USD estimated, and map optimized."',
-
-    bento2Pill: '02. Satellite Guidance',
-    bento2Title: 'Live Tour & Hands-Free Audio',
-    bento2Desc: 'Audio stories play automatically as you approach each landmark with real-time GPS.',
-    bento2PlayerLabel: 'GPS Proximity',
-    bento2Snippet: '"Approaching the Clock Tower, built over 19th-century fortress walls..."',
-    simPlayText: 'Play',
-
-    bento3Pill: '03. Urban Discovery',
-    bento3Title: 'Nearby Spots & Live Weather',
-    bento3Desc: 'Check live weather and discover trending cultural spots around you before heading out.',
-    bento3WeatherCity: 'Cartagena de Indias',
-    bento3WeatherTag: 'Clear Sky',
-
-    bento4Pill: '04. Community',
-    bento4Title: 'Manual Tour Creator',
-    bento4Desc: 'Design and share custom routes with interactive map pins, high-res photos, and local tips.',
-    bento4Item1: '✍️ Rapid drag-and-drop map itinerary editing.',
-    bento4Item2: '🖼️ High-resolution photo galleries and descriptions.',
-    bento4Item3: '⭐ Community reviews and local city guide profiles.',
 
     howSubtitle: 'Quick & Simple',
     howTitle: 'Your Trip in 3 Steps',
@@ -1456,8 +1338,7 @@ const landingTranslations = {
     footerCol1Title: 'Navigation',
     footerLinkHow: 'How it Works',
     footerLinkGenerator: 'App Simulator',
-    footerLinkFeatures: 'Features',
-    footerLinkGallery: 'App Gallery',
+    footerLinkCompare: 'Comparison',
     footerLinkFaq: 'FAQ',
     footerCol2Title: 'Legal Portal',
     footerLinkTerms: 'Terms of Service',
@@ -1484,8 +1365,6 @@ window.setLandingLanguage = function(lang) {
   // Navigation
   updateText('#nav-how', t.navHow);
   updateText('#nav-generator', t.navGenerator);
-  updateText('#nav-features', t.navFeatures);
-  updateText('#nav-gallery', t.navGallery);
   updateText('#nav-compare', t.navCompare);
   updateText('#nav-faq', t.navFaq);
   updateText('#nav-btn-register', t.navRegister);
@@ -1517,12 +1396,14 @@ window.setLandingLanguage = function(lang) {
   updateText('#sim-tele-latency-label', t.simTeleLatencyLabel);
   updateText('#sim-tele-source-label', t.simTeleSourceLabel);
   updateText('#sim-tele-voice-label', t.simTeleVoiceLabel);
+  updateText('#btnSwitchToExplore', t.btnSwitchToExplore);
   updateText('#btnSwitchToChat', t.btnSwitchToChat);
   updateText('#btnSwitchToMap', t.btnSwitchToMap);
-  updateText('#btnSwitchToFeed', t.btnSwitchToFeed);
+  updateText('#btnSwitchToProfile', t.btnSwitchToProfile);
+  updateText('#pnav-explore', t.pnavExplore);
   updateText('#pnav-chat', t.pnavChat);
-  updateText('#pnav-map', t.pnavMap);
-  updateText('#pnav-feed', t.pnavFeed);
+  updateText('#pnav-tours', t.pnavTours);
+  updateText('#pnav-profile', t.pnavProfile);
   updateText('#simWalkBtnText', t.simWalkBtnText);
 
   // Comparison
@@ -1541,54 +1422,6 @@ window.setLandingLanguage = function(lang) {
   updateHTML('#comp-vibe-2', t.compVibe2);
   updateHTML('#comp-vibe-3', t.compVibe3);
   updateHTML('#comp-vibe-4', t.compVibe4);
-
-  // Gallery
-  updateText('#gallery-subtitle', t.gallerySubtitle);
-  updateText('#gallery-title', t.galleryTitle);
-  updateText('#gallery-desc', t.galleryDesc);
-  updateText('#gtab-all', t.gtabAll);
-  updateText('#gtab-ai', t.gtabAi);
-  updateText('#gtab-tours', t.gtabTours);
-  updateText('#gtab-creator', t.gtabCreator);
-
-  // Testimonials
-  updateText('#test-subtitle', t.testSubtitle);
-  updateText('#test-title', t.testTitle);
-  updateText('#test-desc', t.testDesc);
-  updateText('#test1-text', t.test1Text);
-  updateText('#test2-text', t.test2Text);
-  updateText('#test3-text', t.test3Text);
-
-  // Bento Features
-  updateText('#bento-subtitle', t.bentoSubtitle);
-  updateText('#bento-title', t.bentoTitle);
-  updateText('#bento-desc', t.bentoDesc);
-
-  updateText('#bento1-pill', t.bento1Pill);
-  updateText('#bento1-title', t.bento1Title);
-  updateText('#bento1-desc', t.bento1Desc);
-  updateText('#bento1-chat-user', t.bento1ChatUser);
-  updateText('#bento1-chat-ai', t.bento1ChatAi);
-
-  updateText('#bento2-pill', t.bento2Pill);
-  updateText('#bento2-title', t.bento2Title);
-  updateText('#bento2-desc', t.bento2Desc);
-  updateText('#bento2-player-label', t.bento2PlayerLabel);
-  updateText('#bento2-snippet', t.bento2Snippet);
-  updateText('#simPlayText', t.simPlayText);
-
-  updateText('#bento3-pill', t.bento3Pill);
-  updateText('#bento3-title', t.bento3Title);
-  updateText('#bento3-desc', t.bento3Desc);
-  updateText('#bento3-weather-city', t.bento3WeatherCity);
-  updateText('#bento3-weather-tag', t.bento3WeatherTag);
-
-  updateText('#bento4-pill', t.bento4Pill);
-  updateText('#bento4-title', t.bento4Title);
-  updateText('#bento4-desc', t.bento4Desc);
-  updateText('#bento4-item1', t.bento4Item1);
-  updateText('#bento4-item2', t.bento4Item2);
-  updateText('#bento4-item3', t.bento4Item3);
 
   // How it Works
   updateText('#how-subtitle', t.howSubtitle);
@@ -1626,8 +1459,7 @@ window.setLandingLanguage = function(lang) {
   updateText('#footer-col1-title', t.footerCol1Title);
   updateText('#footer-link-how', t.footerLinkHow);
   updateText('#footer-link-generator', t.footerLinkGenerator);
-  updateText('#footer-link-features', t.footerLinkFeatures);
-  updateText('#footer-link-gallery', t.footerLinkGallery);
+  updateText('#footer-link-compare', t.footerLinkCompare);
   updateText('#footer-link-faq', t.footerLinkFaq);
   updateText('#footer-col2-title', t.footerCol2Title);
   updateText('#footer-link-terms', t.footerLinkTerms);
@@ -1647,4 +1479,5 @@ function updateHTML(selector, html) {
   const el = document.querySelector(selector);
   if (el && html !== undefined) el.innerHTML = html;
 }
+
 

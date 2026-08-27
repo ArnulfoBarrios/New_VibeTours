@@ -42,8 +42,6 @@
         <ul class="nav-menu">
           <li><a href="#como-funciona" class="nav-link" id="nav-how">¿Cómo Funciona?</a></li>
           <li><a href="#simulador" class="nav-link" id="nav-generator">Simulador App</a></li>
-          <li><a href="#funciones" class="nav-link" id="nav-features">Funciones</a></li>
-          <li><a href="#galeria" class="nav-link" id="nav-gallery">Galería App</a></li>
           <li><a href="#comparativa" class="nav-link" id="nav-compare">Comparativa</a></li>
           <li><a href="#faq" class="nav-link" id="nav-faq">FAQ</a></li>
         </ul>
@@ -173,14 +171,14 @@
   </section>
 
   <!-- ==========================================================================
-       2. WIDGET INTERACTIVO: SIMULADOR DE APP EN SMARTPHONE 3D (PLAYGROUND)
+       2. WIDGET INTERACTIVO: SIMULADOR DE APP EN SMARTPHONE (FLUTTER FIDELITY)
        ========================================================================== -->
   <section id="simulador" class="section">
     <div class="section-header reveal-on-scroll">
       <span class="section-subtitle" id="sim-subtitle">Experiencia Interactiva 3D</span>
       <h2 class="section-title" id="sim-title">Prueba la App desde tu Navegador</h2>
       <p class="section-description" id="sim-desc">
-        Interactúa en tiempo real con el Asistente IA, navega rutas GPS en el mapa satelital y escucha audioguías reales.
+        Navega la interfaz real de VibeTours: explora tours, interactúa con el Asistente IA, sigue rutas GPS con audioguía y gestiona tu perfil.
       </p>
     </div>
 
@@ -193,15 +191,15 @@
             <span class="live-dot"></span>
             <span id="sim-cockpit-badge">Centro de Mando del Simulador</span>
           </div>
-          <h3 class="cockpit-title" id="sim-cockpit-title">Configura tu Experiencia</h3>
+          <h3 class="cockpit-title" id="sim-cockpit-title">Configura tu Destino</h3>
           <p class="cockpit-desc" id="sim-cockpit-desc">
-            Prueba cómo reacciona el smartphone virtual al cambiar de ciudad, ritmo e intereses turísticos.
+            Elige una ciudad y prueba cómo la app adapta el feed de exploración, las respuestas de IA y el mapa de navegación GPS.
           </p>
         </div>
 
         <!-- City Selector -->
         <div class="cockpit-group">
-          <label class="cockpit-label" id="sim-lbl-city">1. Selecciona Destino</label>
+          <label class="cockpit-label" id="sim-lbl-city">1. Destino Turístico</label>
           <div class="cockpit-chips" id="simCityChips">
             <button class="cockpit-chip active" data-sim-city="cartagena">🌴 Cartagena</button>
             <button class="cockpit-chip" data-sim-city="paris">🎨 París</button>
@@ -213,7 +211,7 @@
 
         <!-- Walk Pace -->
         <div class="cockpit-group">
-          <label class="cockpit-label" id="sim-lbl-pace">2. Ritmo & Duración</label>
+          <label class="cockpit-label" id="sim-lbl-pace">2. Ritmo de Viaje</label>
           <div class="cockpit-chips" id="simPaceChips">
             <button class="cockpit-chip active" data-sim-pace="relaxed">🚶 Relajado (2h)</button>
             <button class="cockpit-chip" data-sim-pace="balanced">⚖️ Moderado (3.5h)</button>
@@ -243,21 +241,24 @@
           </div>
         </div>
 
-        <!-- Quick Experience Switcher -->
+        <!-- Quick Switcher for Screen Views -->
         <div class="cockpit-actions">
-          <button id="btnSwitchToChat" class="btn btn-glass btn-small active-sim-mode">
-            💬 1. Probar Chat IA
+          <button id="btnSwitchToExplore" class="btn btn-glass btn-small active-sim-mode">
+            🧭 Explorar
+          </button>
+          <button id="btnSwitchToChat" class="btn btn-glass btn-small">
+            💬 Chat IA
           </button>
           <button id="btnSwitchToMap" class="btn btn-glass btn-small">
-            📍 2. Mapa Satelital
+            🏖️ Live Tour
           </button>
-          <button id="btnSwitchToFeed" class="btn btn-glass btn-small">
-            🧭 3. Feed de Tours
+          <button id="btnSwitchToProfile" class="btn btn-glass btn-small">
+            👤 Perfil
           </button>
         </div>
       </div>
 
-      <!-- Smartphone Hardware Mockup (Right Side) -->
+      <!-- Smartphone Hardware Mockup (Right Side - Flutter App Look & Feel) -->
       <div class="phone-mockup-wrapper">
         <div class="smartphone-hardware">
           
@@ -277,12 +278,12 @@
             </div>
           </div>
 
-          <!-- Glass Screen Viewport -->
+          <!-- Phone Screen Viewport -->
           <div class="phone-screen-viewport">
             
             <!-- Status Bar -->
             <div class="phone-status-bar">
-              <span class="phone-clock" id="phoneLiveClock">12:45</span>
+              <span class="phone-clock" id="phoneLiveClock">09:41</span>
               <div class="phone-status-icons">
                 <span class="status-icon">5G</span>
                 <span class="status-icon">📶</span>
@@ -290,13 +291,72 @@
               </div>
             </div>
 
-            <!-- ================= TAB 1: AI PLANNER CHAT ================= -->
-            <div class="phone-tab-content active" id="tabContentChat">
-              <div class="app-screen-header">
-                <div class="app-avatar-badge">🤖</div>
-                <div class="app-header-meta">
-                  <h4 class="app-header-title">Vibe Planner AI</h4>
-                  <span class="app-status-text"><span class="green-dot"></span> Online • Asistente Activo</span>
+            <!-- ================= SCREEN 1: EXPLORAR (HOME SCREEN) ================= -->
+            <div class="phone-tab-content active" id="tabContentExplore">
+              <div class="flutter-appbar">
+                <div class="appbar-user-greeting">
+                  <div class="greeting-avatar">VB</div>
+                  <div>
+                    <span class="greeting-subtitle">Hola, Viajero 👋</span>
+                    <h4 class="greeting-title" id="simHomeCityName">Cartagena de Indias</h4>
+                  </div>
+                </div>
+                <div class="appbar-weather-chip" id="simHomeWeatherChip">
+                  <span>☀️ 28°C</span>
+                </div>
+              </div>
+
+              <div class="flutter-scroll-body">
+                <!-- Search Bar -->
+                <div class="flutter-search-bar">
+                  <span class="search-icon">🔍</span>
+                  <input type="text" placeholder="Buscar ciudades, museos, cafés..." readonly onclick="simulatorInstance.switchTab('tabContentChat')">
+                  <span class="filter-icon">⚙️</span>
+                </div>
+
+                <!-- Category Chips -->
+                <div class="flutter-category-chips">
+                  <button class="cat-pill active">🏛️ Historia</button>
+                  <button class="cat-pill">🍷 Gastronomía</button>
+                  <button class="cat-pill">🎨 Arte</button>
+                  <button class="cat-pill">🌿 Naturaleza</button>
+                </div>
+
+                <!-- Featured Hero Tour Banner -->
+                <div class="featured-tour-card" id="simFeaturedTourCard" onclick="simulatorInstance.switchTab('tabContentMap')">
+                  <img class="featured-cover-img" id="simFeaturedImg" src="assets/screenshots/Modo claro/Detalles de tour 1.jpeg" alt="Featured Tour">
+                  <div class="featured-overlay">
+                    <div class="featured-badge">✨ Recomendado por IA</div>
+                    <h4 class="featured-title" id="simFeaturedTitle">Cartagena Colonial: Murallas y Plazas</h4>
+                    <div class="featured-meta-row">
+                      <span id="simFeaturedDuration">⏱️ 2h 30m</span>
+                      <span id="simFeaturedDistance">🚶 2.4 km</span>
+                      <span class="featured-rating">⭐ 4.9</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Popular Tours Section -->
+                <div class="flutter-section-title-row">
+                  <h5>Tours Populares</h5>
+                  <span class="see-all-link" onclick="simulatorInstance.switchTab('tabContentChat')">Ver todos</span>
+                </div>
+
+                <div class="popular-tours-list" id="simPopularToursList">
+                  <!-- Injected dynamically -->
+                </div>
+              </div>
+            </div>
+
+            <!-- ================= SCREEN 2: CHAT IA (VIBE PLANNER SCREEN) ================= -->
+            <div class="phone-tab-content" id="tabContentChat">
+              <div class="flutter-appbar chat-appbar">
+                <div class="chat-header-user">
+                  <div class="ai-sparkle-badge">✨</div>
+                  <div>
+                    <h4 class="greeting-title">Vibe Planner AI</h4>
+                    <span class="ai-online-sub"><span class="green-dot"></span> Asistente Activo</span>
+                  </div>
                 </div>
               </div>
 
@@ -304,9 +364,9 @@
               <div class="phone-chat-scroll" id="simChatScroll">
                 <div class="chat-msg bot-msg">
                   <div class="msg-bubble">
-                    ¡Hola! 🌴 Soy tu asistente inteligente VibeTours. ¿Qué tipo de ruta te gustaría explorar hoy?
+                    ¡Hola! 🌴 Soy tu asistente de viaje VibeTours. ¿Qué tipo de ruta te gustaría explorar hoy?
                   </div>
-                  <span class="msg-time">12:44</span>
+                  <span class="msg-time">09:40</span>
                 </div>
               </div>
 
@@ -326,9 +386,9 @@
               </form>
             </div>
 
-            <!-- ================= TAB 2: LIVE GPS MAP & AUDIO ================= -->
+            <!-- ================= SCREEN 3: TOURS / LIVE MAP SCREEN ================= -->
             <div class="phone-tab-content" id="tabContentMap">
-              <div class="app-screen-header map-header">
+              <div class="flutter-map-appbar">
                 <div>
                   <h4 class="app-header-title" id="simMapHeaderTitle">Cartagena Colonial</h4>
                   <span class="app-status-text" id="simMapHeaderSubtitle">4 Paradas • 2.1 km</span>
@@ -340,49 +400,84 @@
 
               <!-- Leaflet Map Container -->
               <div id="simLeafletMap" class="phone-map-canvas"></div>
+            </div>
 
-              <!-- Floating Live Audio Mini Player -->
-              <div class="phone-audio-player-card">
-                <div class="audio-left">
-                  <button id="phoneAudioToggleBtn" class="audio-play-circle">▶</button>
-                  <div class="audio-track-info">
-                    <h5 id="phoneAudioStopTitle">1. Torre del Reloj</h5>
-                    <p id="phoneAudioStopSub">Audioguía GPS en proximidad (15m)</p>
+            <!-- ================= SCREEN 4: PERFIL (PROFILE SCREEN) ================= -->
+            <div class="phone-tab-content" id="tabContentProfile">
+              <div class="flutter-appbar">
+                <h4 class="greeting-title">Mi Perfil</h4>
+              </div>
+
+              <div class="flutter-scroll-body">
+                <div class="profile-card-header">
+                  <div class="profile-avatar-large">VB</div>
+                  <h4 class="profile-name">Viajero VibeTours</h4>
+                  <span class="profile-badge">Nivel 2 • Explorador Satelital</span>
+                </div>
+
+                <div class="profile-stats-grid">
+                  <div class="profile-stat-box">
+                    <span class="stat-num">3</span>
+                    <span class="stat-lbl">Tours Hechos</span>
+                  </div>
+                  <div class="profile-stat-box">
+                    <span class="stat-num">14.2</span>
+                    <span class="stat-lbl">km Caminados</span>
+                  </div>
+                  <div class="profile-stat-box">
+                    <span class="stat-num">12</span>
+                    <span class="stat-lbl">Audioguías</span>
                   </div>
                 </div>
-                <div class="audio-waveform-mini" id="phoneWaveform">
-                  <span></span><span></span><span></span><span></span><span></span>
+
+                <div class="profile-settings-list">
+                  <div class="settings-row">
+                    <span>🚶 Ritmo preferido</span>
+                    <strong>Moderado</strong>
+                  </div>
+                  <div class="settings-row">
+                    <span>🏛️ Interés principal</span>
+                    <strong>Historia & Arte</strong>
+                  </div>
+                  <div class="settings-row">
+                    <span>📡 Precisión satelital</span>
+                    <strong class="text-green">Activa (OSM)</strong>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <!-- ================= TAB 3: DISCOVERY FEED ================= -->
-            <div class="phone-tab-content" id="tabContentFeed">
-              <div class="app-screen-header">
-                <div>
-                  <h4 class="app-header-title" id="simFeedHeaderTitle">Explorar Tours</h4>
-                  <span class="app-status-text" id="simFeedHeaderSubtitle">Catálogo Verificado</span>
+            <!-- ================= FLOATING AUDIO MINI-PLAYER (MATCHING FLUTTER AudioMiniPlayerWidget) ================= -->
+            <div class="flutter-audio-mini-player" id="flutterAudioMiniPlayer">
+              <div class="mini-player-left">
+                <button id="phoneAudioToggleBtn" class="audio-play-circle">▶</button>
+                <div class="audio-track-info" onclick="simulatorInstance.switchTab('tabContentMap')">
+                  <h5 id="phoneAudioStopTitle">1. Torre del Reloj</h5>
+                  <p id="phoneAudioStopSub">Audioguía GPS en proximidad (12m)</p>
                 </div>
               </div>
-
-              <div class="phone-feed-scroll" id="simFeedCardsContainer">
-                <!-- Dynamically populated tour cards -->
+              <div class="audio-waveform-mini" id="phoneWaveform">
+                <span></span><span></span><span></span><span></span><span></span>
               </div>
             </div>
 
-            <!-- Bottom Navigation Tabs Inside Phone -->
+            <!-- ================= BOTTOM NAVIGATION (MATCHING FLUTTER VibeBottomNav) ================= -->
             <div class="phone-bottom-navbar">
-              <button class="phone-nav-item active" data-target-tab="tabContentChat">
-                <span class="nav-icon">🤖</span>
-                <span class="nav-label" id="pnav-chat">IA Planner</span>
+              <button class="phone-nav-item active" data-target-tab="tabContentExplore">
+                <span class="nav-icon">🧭</span>
+                <span class="nav-label" id="pnav-explore">Explorar</span>
+              </button>
+              <button class="phone-nav-item" data-target-tab="tabContentChat">
+                <span class="nav-icon">💬</span>
+                <span class="nav-label" id="pnav-chat">Chat IA</span>
               </button>
               <button class="phone-nav-item" data-target-tab="tabContentMap">
-                <span class="nav-icon">📍</span>
-                <span class="nav-label" id="pnav-map">Live Tour</span>
+                <span class="nav-icon">🏖️</span>
+                <span class="nav-label" id="pnav-tours">Tours</span>
               </button>
-              <button class="phone-nav-item" data-target-tab="tabContentFeed">
-                <span class="nav-icon">🧭</span>
-                <span class="nav-label" id="pnav-feed">Explorar</span>
+              <button class="phone-nav-item" data-target-tab="tabContentProfile">
+                <span class="nav-icon">👤</span>
+                <span class="nav-label" id="pnav-profile">Perfil</span>
               </button>
             </div>
 
@@ -470,268 +565,7 @@
   </section>
 
   <!-- ==========================================================================
-       3. BENTO GRID DE FUNCIONALIDADES 2.0
-       ========================================================================== -->
-  <section id="funciones" class="section">
-    <div class="section-header reveal-on-scroll">
-      <span class="section-subtitle" id="bento-subtitle">Tecnología de Vanguardia</span>
-      <h2 class="section-title" id="bento-title">Experiencia de Viaje Inmersiva</h2>
-      <p class="section-description" id="bento-desc">
-        Inteligencia artificial, cartografía satelital abierta y diseño de lujo en una sola app.
-      </p>
-    </div>
-
-    <div class="bento-grid reveal-on-scroll delay-1">
-      
-      <!-- BENTO 1: Vibe Planner AI (Large 2 Cols) -->
-      <div class="glass-card bento-item bento-large">
-        <div class="bento-content">
-          <span class="bento-pill bg-purple" id="bento1-pill">01. IA Generativa</span>
-          <h3 class="bento-item-title" id="bento1-title">Vibe Planner AI & Chatbot</h3>
-          <p class="bento-item-desc" id="bento1-desc">
-            Pide tu tour en lenguaje natural. La IA calcula tiempos, distancias y coordenadas precisas al instante.
-          </p>
-          <div class="bento-interactive-chat">
-            <div class="chat-bubble user">
-              <span id="bento1-chat-user">"Quiero un tour de 3 horas por cafés y museos en París con poco presupuesto."</span>
-            </div>
-            <div class="chat-bubble ai">
-              <span class="ai-spark">✨</span>
-              <span id="bento1-chat-ai">"¡Listo! Ruta por Montmartre: 5 paradas reales, $18 USD estimados y mapa optimizado."</span>
-            </div>
-          </div>
-        </div>
-        <div class="bento-visual">
-          <img class="bento-phone-screen showcase-img" data-claro="assets/screenshots/Modo claro/Chat de IA.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Chat de IA.jpeg" src="assets/screenshots/Modo claro/Chat de IA.jpeg" alt="Chat de IA">
-        </div>
-      </div>
-
-      <!-- BENTO 2: Live Tour GPS & Voice Player (1 Col) -->
-      <div class="glass-card bento-item">
-        <span class="bento-pill bg-blue" id="bento2-pill">02. Guiado Satelital</span>
-        <h3 class="bento-item-title" id="bento2-title">Live Tour & Audioguía Manos Libres</h3>
-        <p class="bento-item-desc" id="bento2-desc">
-          La voz narra historias y detalles automáticamente al aproximarte a cada parada con GPS en tiempo real.
-        </p>
-
-        <!-- Live Audio Simulator Inside Card -->
-        <div class="live-player-box">
-          <div class="player-header">
-            <span class="player-dot"></span>
-            <span class="player-status" id="bento2-player-label">Proximidad GPS</span>
-          </div>
-          <p class="player-snippet" id="bento2-snippet">"Llegando a la Torre del Reloj, construida en el siglo XIX..."</p>
-          <div class="player-wave" id="bentoWaveAnimation">
-            <div class="w-bar"></div>
-            <div class="w-bar"></div>
-            <div class="w-bar"></div>
-            <div class="w-bar"></div>
-            <div class="w-bar"></div>
-          </div>
-          <button id="simPlayBtn" class="btn btn-primary btn-small player-btn">
-            <span id="simPlayIcon">▶</span>
-            <span id="simPlayText">Reproducir</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- BENTO 3: Lugares Cercanos & Clima (1 Col) -->
-      <div class="glass-card bento-item">
-        <span class="bento-pill bg-green" id="bento3-pill">03. Exploración Urbana</span>
-        <h3 class="bento-item-title" id="bento3-title">Lugares Cercanos & Clima en Vivo</h3>
-        <p class="bento-item-desc" id="bento3-desc">
-          Monitorea el clima en tiempo real y encuentra puntos de interés a tu alrededor antes de salir.
-        </p>
-        <div class="live-weather-card">
-          <div class="weather-left">
-            <span class="weather-icon">☀️</span>
-            <div>
-              <div class="weather-temp">28°C</div>
-              <div class="weather-city" id="bento3-weather-city">Cartagena de Indias</div>
-            </div>
-          </div>
-          <div class="weather-right">
-            <span class="weather-tag" id="bento3-weather-tag">Cielo Despejado</span>
-            <span class="weather-hum">💧 Humedad 68%</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- BENTO 4: Creador Manual para la Comunidad (Large 2 Cols) -->
-      <div class="glass-card bento-item bento-large">
-        <div class="bento-content">
-          <span class="bento-pill bg-orange" id="bento4-pill">04. Comunidad</span>
-          <h3 class="bento-item-title" id="bento4-title">Creador Manual de Tours</h3>
-          <p class="bento-item-desc" id="bento4-desc">
-            Crea y comparte rutas personalizadas con paradas interactivas, fotos en alta resolución y notas locales.
-          </p>
-          <ul class="bento-feature-list">
-            <li id="bento4-item1">✍️ Edición rápida de paradas e itinerarios en mapa.</li>
-            <li id="bento4-item2">🖼️ Galería fotográfica y descripciones culturales.</li>
-            <li id="bento4-item3">⭐ Valoraciones comunitarias y perfiles de guías locales.</li>
-          </ul>
-        </div>
-        <div class="bento-visual">
-          <img class="bento-phone-screen showcase-img" data-claro="assets/screenshots/Modo claro/Creador Manual de tours 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Creador Manual de tour 1.jpeg" src="assets/screenshots/Modo claro/Creador Manual de tours 1.jpeg" alt="Creador de Tours">
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- ==========================================================================
-       5. GALERÍA 3D SHOWCASE DE LA APLICACIÓN REAL
-       ========================================================================== -->
-  <section id="galeria" class="section">
-    <div class="section-header reveal-on-scroll">
-      <span class="section-subtitle" id="gallery-subtitle">Diseño de Alta Fidelidad</span>
-      <h2 class="section-title" id="gallery-title">Conoce la App por Dentro</h2>
-      <p class="section-description" id="gallery-desc">
-        Explora las pantallas reales de VibeTours diseñadas para brindarte la mejor experiencia en cualquier destino.
-      </p>
-    </div>
-
-    <!-- Category Filter Tabs -->
-    <div class="gallery-filter-tabs reveal-on-scroll delay-1">
-      <button class="gallery-tab active" data-gallery-filter="all" id="gtab-all">Todas las Pantallas</button>
-      <button class="gallery-tab" data-gallery-filter="ai" id="gtab-ai">🤖 IA & Planificador</button>
-      <button class="gallery-tab" data-gallery-filter="tours" id="gtab-tours">📍 Navegación & Tours</button>
-      <button class="gallery-tab" data-gallery-filter="creator" id="gtab-creator">✍️ Creador & Comunidad</button>
-    </div>
-
-    <!-- 3D Perspective Card Carousel -->
-    <div class="gallery-perspective-stage reveal-on-scroll delay-2">
-      <div class="gallery-grid" id="galleryGrid">
-        
-        <div class="gallery-card glass-card" data-category="ai">
-          <div class="gallery-card-img-wrap">
-            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Chat de IA.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Chat de IA.jpeg" src="assets/screenshots/Modo claro/Chat de IA.jpeg" alt="Chat de IA">
-          </div>
-          <div class="gallery-card-info">
-            <span class="gallery-badge bg-purple">IA Conversacional</span>
-            <h4>Chat con Vibe Planner</h4>
-            <p>Generación de itinerarios satelitales en lenguaje natural.</p>
-          </div>
-        </div>
-
-        <div class="gallery-card glass-card" data-category="ai">
-          <div class="gallery-card-img-wrap">
-            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Diseñando el tour.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Diseñando tour.jpeg" src="assets/screenshots/Modo claro/Diseñando el tour.jpeg" alt="Diseñando Tour">
-          </div>
-          <div class="gallery-card-info">
-            <span class="gallery-badge bg-cyan">Cálculo en Tiempo Real</span>
-            <h4>Diseñador de Rutas</h4>
-            <p>Optimización de distancias y tiempos de caminata.</p>
-          </div>
-        </div>
-
-        <div class="gallery-card glass-card" data-category="tours">
-          <div class="gallery-card-img-wrap">
-            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Detalles de tour 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Detalles de tour 1.jpeg" src="assets/screenshots/Modo claro/Detalles de tour 1.jpeg" alt="Detalles de Tour">
-          </div>
-          <div class="gallery-card-info">
-            <span class="gallery-badge bg-blue">Satelital OSM</span>
-            <h4>Detalles & Paradas GPS</h4>
-            <p>Información histórica, audioguía y coordenadas precisas.</p>
-          </div>
-        </div>
-
-        <div class="gallery-card glass-card" data-category="tours">
-          <div class="gallery-card-img-wrap">
-            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Explorar 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Explorar 1.jpeg" src="assets/screenshots/Modo claro/Explorar 1.jpeg" alt="Explorar Rutas">
-          </div>
-          <div class="gallery-card-info">
-            <span class="gallery-badge bg-green">Catálogo Mundial</span>
-            <h4>Explorador de Ciudades</h4>
-            <p>Descubre rutas creadas por la comunidad y verificadas por IA.</p>
-          </div>
-        </div>
-
-        <div class="gallery-card glass-card" data-category="creator">
-          <div class="gallery-card-img-wrap">
-            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Creador Manual de tours 1.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Creador Manual de tour 1.jpeg" src="assets/screenshots/Modo claro/Creador Manual de tours 1.jpeg" alt="Creador de Tours">
-          </div>
-          <div class="gallery-card-info">
-            <span class="gallery-badge bg-orange">Comunidad Global</span>
-            <h4>Creador Manual de Tours</h4>
-            <p>Fija paradas, agrega fotos y comparte con otros viajeros.</p>
-          </div>
-        </div>
-
-        <div class="gallery-card glass-card" data-category="tours">
-          <div class="gallery-card-img-wrap">
-            <img class="gallery-screen-img showcase-img" data-claro="assets/screenshots/Modo claro/Calificar Tour.jpeg" data-oscuro="assets/screenshots/Modo oscuro/Calificar tour.jpeg" src="assets/screenshots/Modo claro/Calificar Tour.jpeg" alt="Calificar Tour">
-          </div>
-          <div class="gallery-card-info">
-            <span class="gallery-badge bg-purple">Valoraciones Reales</span>
-            <h4>Reseñas y Feedback</h4>
-            <p>Sistema de calificaciones comunitarias transparentes.</p>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </section>
-
-  <!-- ==========================================================================
-       6. TESTIMONIOS Y SOCIAL PROOF
-       ========================================================================== -->
-  <section class="section">
-    <div class="section-header reveal-on-scroll">
-      <span class="section-subtitle" id="test-subtitle">Opiniones de la Comunidad</span>
-      <h2 class="section-title" id="test-title">Amado por Viajeros Autónomos</h2>
-      <p class="section-description" id="test-desc">
-        Descubre cómo miles de personas disfrutan de sus viajes sin depender de tours aburridos.
-      </p>
-    </div>
-
-    <div class="testimonials-grid reveal-on-scroll delay-1">
-      <div class="glass-card testimonial-card">
-        <div class="testimonial-rating">⭐⭐⭐⭐⭐</div>
-        <p class="testimonial-text" id="test1-text">
-          "Pude recorrer Cartagena a mi ritmo. Llegué a la Torre del Reloj y la voz me contó historias fascinantes que ni siquiera los guías locales sabían. ¡Increíble!"
-        </p>
-        <div class="testimonial-user">
-          <div class="user-avatar">SC</div>
-          <div>
-            <h5 class="user-name">Sofía Cárdenas</h5>
-            <span class="user-location">Viajera en Cartagena • Tour Histórico</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="glass-card testimonial-card">
-        <div class="testimonial-rating">⭐⭐⭐⭐⭐</div>
-        <p class="testimonial-text" id="test2-text">
-          "El chat de IA me diseñó una ruta de cafés y arte en París perfecta para mi presupuesto de estudiante. Ahorré más de 80 euros en un solo día."
-        </p>
-        <div class="testimonial-user">
-          <div class="user-avatar">MR</div>
-          <div>
-            <h5 class="user-name">Mateo Rodríguez</h5>
-            <span class="user-location">Viajero en París • Ruta Gastronómica</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="glass-card testimonial-card">
-        <div class="testimonial-rating">⭐⭐⭐⭐⭐</div>
-        <p class="testimonial-text" id="test3-text">
-          "La precisión del GPS es impresionante. No se pierde nunca y me llevó a templos ocultos en Tokio que no aparecen en las guías turísticas tradicionales."
-        </p>
-        <div class="testimonial-user">
-          <div class="user-avatar">EN</div>
-          <div>
-            <h5 class="user-name">Elena Navarro</h5>
-            <span class="user-location">Viajera en Tokio • Santuarios & Templos</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ==========================================================================
-       7. ¿CÓMO FUNCIONA? (3 PASOS)
+       4. ¿CÓMO FUNCIONA? (3 PASOS)
        ========================================================================== -->
   <section id="como-funciona" class="section">
     <div class="section-header reveal-on-scroll">
@@ -865,8 +699,7 @@
         <ul class="footer-links">
           <li><a href="#como-funciona" id="footer-link-how">¿Cómo Funciona?</a></li>
           <li><a href="#simulador" id="footer-link-generator">Simulador App</a></li>
-          <li><a href="#funciones" id="footer-link-features">Funciones</a></li>
-          <li><a href="#galeria" id="footer-link-gallery">Galería App</a></li>
+          <li><a href="#comparativa" id="footer-link-compare">Comparativa</a></li>
           <li><a href="#faq" id="footer-link-faq">Preguntas Frecuentes</a></li>
         </ul>
       </div>
