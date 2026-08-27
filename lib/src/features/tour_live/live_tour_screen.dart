@@ -120,8 +120,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _isOffRoute = false;
   bool _locationStreamRequested = false;
   bool _noLandRouteAvailable = false;
-  // Live navigation opens in overview mode by default to frame the whole route.
+  // Live navigation opens in overview mode by default, then smoothly transitions to tracking mode on movement.
   bool _isTrackingMode = false;
+  GeoPoint? _initialOverviewPoint;
+  bool _hasUserManuallyToggledTracking = false;
   bool _navigatingToHotel = false;
   double? _currentHeading;
   bool _stopsEnriched = false;
@@ -131,8 +133,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   double _ttsSpeedMultiplier = 1.0;
   bool _autoPlayProximityEnabled = true;
   final Set<String> _autoTriggeredStopIds = {};
-
-
 
   Future<void> _updateBatterySamplingMode(double speed, double distanceToStop) async {
     final isStopped = speed < 0.5 || distanceToStop < 30.0;
@@ -158,9 +158,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       }
       final service = ref.read(locationServiceProvider);
       final stream = await service.positionStream(
-        // Navigation needs frequent fixes; sparse fixes are still smoothed by
-        // LiveNavigationMap, but a 3 m filter keeps GPS corrections subtle.
-        distanceFilterMeters: targetMode == LocationSamplingMode.stationary ? 35 : 3,
+        // Keep distance filter responsive so the map does not freeze in traffic/stops
+        distanceFilterMeters: targetMode == LocationSamplingMode.stationary ? 6 : 2,
         mode: targetMode,
       );
       if (!mounted || stream == null) return;
@@ -738,12 +737,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                         child: Column(
                           children: [
                             _MapMenuItem(
-                              icon: _isTrackingMode ? Icons.my_location_rounded : Icons.explore_rounded,
+                              icon: _isTrackingMode ? Icons.explore_rounded : Icons.my_location_rounded,
                               label: _isTrackingMode ? 'Vista general' : 'Seguimiento',
                               isActive: _isTrackingMode,
                               onTap: () {
                                 setState(() {
                                   _isTrackingMode = !_isTrackingMode;
+                                  _hasUserManuallyToggledTracking = true;
                                   _isMapMenuExpanded = false;
                                 });
                               },
@@ -813,6 +813,29 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   ],
                 ),
               ),
+              if (!_isTrackingMode)
+                Positioned(
+                  right: 16,
+                  bottom: 236 + MediaQuery.of(context).padding.bottom,
+                  child: FloatingActionButton.extended(
+                    heroTag: 'live_tour_follow_fab',
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    onPressed: () {
+                      setState(() {
+                        _isTrackingMode = true;
+                        _hasUserManuallyToggledTracking = true;
+                      });
+                    },
+                    icon: const Icon(Icons.my_location_rounded, color: AppTheme.primary),
+                    label: const Text(
+                      'Seguir ubicación',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 left: 16,
                 right: 16,
@@ -993,6 +1016,20 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     _currentPoint = point;
     if (position.heading >= 0) {
       _currentHeading = position.heading;
+    }
+
+    // Auto-transition from overview to tracking mode when user starts moving
+    if (!_isTrackingMode && !_hasUserManuallyToggledTracking) {
+      _initialOverviewPoint ??= point;
+      final movedDist = Geolocator.distanceBetween(
+        _initialOverviewPoint!.latitude,
+        _initialOverviewPoint!.longitude,
+        point.latitude,
+        point.longitude,
+      );
+      if (position.speed > 0.8 || movedDist > 12.0) {
+        _isTrackingMode = true;
+      }
     }
 
     setState(() {});
@@ -1824,6 +1861,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   _liveRouteStopIndex = null;
                   _isOffRoute = false;
                   _noLandRouteAvailable = false;
+                  _isTrackingMode = false;
+                  _initialOverviewPoint = null;
+                  _hasUserManuallyToggledTracking = false;
                   _voiceFoodPlaces = []; // Clear food markers on stop change
                   _selectedVoicePlace = null; // Clear selected restaurant on stop change
                 });

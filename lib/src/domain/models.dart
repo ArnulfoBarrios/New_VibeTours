@@ -227,6 +227,7 @@ class Tour {
     required this.stops,
     this.isPublished = true,
     this.isAiGenerated = false,
+    this.moderationStatus = 'pending',
     this.shortSummary = '',
     this.subcategories = const [],
     this.featuredExperience = '',
@@ -269,6 +270,7 @@ class Tour {
   final List<TourStop> stops;
   final bool isPublished;
   final bool isAiGenerated;
+  final String moderationStatus;
   final String shortSummary;
   final List<String> subcategories;
   final String featuredExperience;
@@ -434,6 +436,34 @@ class NearbyPlace {
   final double? rating;
   final bool? isOpenNow;
   final String statusLabel;
+
+  NearbyPlace copyWith({
+    String? id,
+    String? name,
+    String? type,
+    int? distanceMeters,
+    GeoPoint? location,
+    String? imageUrl,
+    String? thumbnailUrl,
+    String? category,
+    double? rating,
+    bool? isOpenNow,
+    String? statusLabel,
+  }) {
+    return NearbyPlace(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      distanceMeters: distanceMeters ?? this.distanceMeters,
+      location: location ?? this.location,
+      imageUrl: imageUrl ?? this.imageUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      category: category ?? this.category,
+      rating: rating ?? this.rating,
+      isOpenNow: isOpenNow ?? this.isOpenNow,
+      statusLabel: statusLabel ?? this.statusLabel,
+    );
+  }
 }
 
 class WeatherSnapshot {

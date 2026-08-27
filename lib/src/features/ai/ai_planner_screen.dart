@@ -232,10 +232,19 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     final currentUserId = currentUser?.id ?? 'guest';
 
     if (_lastUserId != null && _lastUserId != currentUserId) {
+      final wasGuest = _lastUserId == 'guest';
       _lastUserId = currentUserId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(aiBuilderProvider.notifier).resetChat();
-      });
+      if (!wasGuest && currentUserId == 'guest') {
+        // User logged out
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(aiBuilderProvider.notifier).resetChat();
+        });
+      } else if (!wasGuest && currentUserId != 'guest') {
+        // Switched between two different accounts
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(aiBuilderProvider.notifier).resetChat();
+        });
+      }
     } else {
       _lastUserId = currentUserId;
     }

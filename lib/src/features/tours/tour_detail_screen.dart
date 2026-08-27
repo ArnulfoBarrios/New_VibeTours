@@ -487,7 +487,7 @@ class TourDetailScreen extends ConsumerWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Borrador temporal de IA',
+                  'Tu Itinerario Inteligente está listo',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppTheme.primary,
@@ -499,8 +499,8 @@ class TourDetailScreen extends ConsumerWidget {
           const SizedBox(height: 6),
           Text(
             isLoggedIn
-                ? 'Este tour fue generado dinámicamente y aún no está guardado. Elige cómo deseas conservarlo:'
-                : 'Este tour fue generado por IA. Inicia sesión para guardarlo en tu cuenta o publicarlo:',
+                ? 'Este tour fue generado por el asistente de IA y está listo para guardarse. Elige cómo deseas conservarlo:'
+                : 'Hemos diseñado este recorrido personalizado según tus gustos. Inicia sesión para guardarlo en tu cuenta o enviarlo al catálogo:',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
@@ -533,7 +533,7 @@ class TourDetailScreen extends ConsumerWidget {
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       try {
-                        final personalTour = _copyTour(tour, isPublished: false);
+                        final personalTour = _copyTour(tour, isPublished: false, moderationStatus: 'pending');
                         final saved = await ref.read(userToursProvider.notifier).saveTour(personalTour);
                         ref.read(selectedTourProvider.notifier).state = saved;
                         if (context.mounted) {
@@ -572,13 +572,13 @@ class TourDetailScreen extends ConsumerWidget {
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       try {
-                        final publicTour = _copyTour(tour, isPublished: true);
+                        final publicTour = _copyTour(tour, isPublished: false, moderationStatus: 'pending');
                         final saved = await ref.read(userToursProvider.notifier).saveTour(publicTour);
                         ref.read(selectedTourProvider.notifier).state = saved;
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('El tour se ha publicado exitosamente.'),
+                              content: Text('Tu tour ha sido enviado a revisión. Nuestro administrador lo evaluará para publicarlo en el catálogo.'),
                               backgroundColor: AppTheme.primary,
                             ),
                           );
@@ -587,7 +587,7 @@ class TourDetailScreen extends ConsumerWidget {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Error al publicar: $e'),
+                              content: Text('Error al enviar a revisión: $e'),
                               backgroundColor: Colors.red,
                             ),
                           );
@@ -613,7 +613,7 @@ class TourDetailScreen extends ConsumerWidget {
     );
   }
 
-  Tour _copyTour(Tour tour, {required bool isPublished}) {
+  Tour _copyTour(Tour tour, {required bool isPublished, String moderationStatus = 'pending'}) {
     return Tour(
       id: tour.id,
       title: tour.title,
@@ -634,6 +634,7 @@ class TourDetailScreen extends ConsumerWidget {
       stops: tour.stops,
       isPublished: isPublished,
       isAiGenerated: tour.isAiGenerated,
+      moderationStatus: moderationStatus,
       shortSummary: tour.shortSummary,
       subcategories: tour.subcategories,
       featuredExperience: tour.featuredExperience,

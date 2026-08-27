@@ -57,6 +57,12 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   int _retryKey = 0;
   Timer? _loadTimeoutTimer;
 
+  // Walking approach segment annotations tracking
+  final List<Line> _walkingLines = [];
+  final List<Circle> _walkingDots = [];
+  final List<Symbol> _walkingSymbols = [];
+  final List<List<LatLng>> _initialWalkingSegments = [];
+
   // The location provider is intentionally event based to save battery.  These
   // fields turn its sparse updates into continuous map frames instead of moving
   // the puck and camera only when a new GPS fix arrives.
@@ -300,12 +306,13 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     if (_fullGeometry.length < 2) return _fullGeometry;
 
     final startIdx = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
-    final endIdx = _fullGeometry.length - 1;
+    // Limit forward search window to nearby sequential segments (max 6 segments ahead)
+    final searchEndIdx = math.min(startIdx + 6, _fullGeometry.length - 1);
 
     int bestSegment = startIdx;
     double minDist = double.infinity;
 
-    for (int i = startIdx; i < endIdx; i++) {
+    for (int i = startIdx; i < searchEndIdx; i++) {
       final a = _fullGeometry[i];
       final b = _fullGeometry[i + 1];
 
@@ -318,7 +325,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
-    if (minDist < 1000.0) {
+    // Only advance segment index if user is actually within standard roadway corridor (<= 35m)
+    if (minDist <= 35.0) {
       _lastSegmentIndex = math.max(_lastSegmentIndex, bestSegment);
     }
 
@@ -328,28 +336,44 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     final activeProj = _projectPointOntoSegmentMetric(currentPos, a, b);
 
     final remaining = _fullGeometry.sublist(activeSegment + 1);
-    // Keep the visual line attached to the GPS puck even when the routing
-    // engine snapped its geometry to a road a few metres away. Without this
-    // connector the first visible part of the route appears to start later.
     final connectorDistance = _metricDistanceMeters(currentPos, activeProj);
-    return [
-      if (connectorDistance > 1) currentPos,
-      activeProj,
-      ...remaining,
-    ];
+
+    // If user is directly on/near the roadway (<= 25m), attach smoothly to GPS puck.
+    // If user is off-road/inside residential complex (> 25m), start cleanly at road geometry
+    // without drawing a solid line cutting through buildings.
+    if (connectorDistance <= 25.0) {
+      return [
+        if (connectorDistance > 1.0) currentPos,
+        activeProj,
+        ...remaining,
+      ];
+    } else {
+      // If user hasn't reached the roadway yet, display the full road route from its origin
+      if (_lastSegmentIndex == 0) {
+        return _fullGeometry;
+      }
+      return [
+        activeProj,
+        ...remaining,
+      ];
+    }
   }
 
   List<LatLng> _getTravelledGeometry(LatLng currentPos) {
-    if (_fullGeometry.length < 2) return const [];
+    if (_fullGeometry.length < 2 || _lastSegmentIndex == 0) return const [];
 
     final activeSegment = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
-    if (activeSegment == 0) return const [];
-
     final activeProj = _projectPointOntoSegmentMetric(
       currentPos,
       _fullGeometry[activeSegment],
       _fullGeometry[activeSegment + 1],
     );
+
+    // Do not draw travelled grey lines if user is off-road (> 35m)
+    if (_metricDistanceMeters(currentPos, activeProj) > 35.0) {
+      return const [];
+    }
+
     return [..._fullGeometry.take(activeSegment + 1), activeProj];
   }
 
@@ -435,6 +459,83 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     }
   }
 
+  Future<void> _clearWalkingAnnotations() async {
+    final controller = _controller;
+    if (controller == null) return;
+    for (final line in _walkingLines) {
+      try {
+        await controller.removeLine(line);
+      } catch (_) {}
+    }
+    _walkingLines.clear();
+    if (_walkingDots.isNotEmpty) {
+      try {
+        await controller.removeCircles(_walkingDots);
+      } catch (_) {}
+      _walkingDots.clear();
+    }
+    for (final sym in _walkingSymbols) {
+      try {
+        await controller.removeSymbol(sym);
+      } catch (_) {}
+    }
+    _walkingSymbols.clear();
+    _initialWalkingSegments.clear();
+  }
+
+  void _updateTrimmedWalkingSegments(LatLng currentPos) {
+    final controller = _controller;
+    if (controller == null || _initialWalkingSegments.isEmpty) return;
+
+    // If user has advanced onto the main road geometry, clear walking approach graphics
+    if (_lastSegmentIndex > 0) {
+      unawaited(_clearWalkingAnnotations());
+      return;
+    }
+
+    // Trim dots that the user has already traversed
+    if (_walkingDots.isNotEmpty) {
+      final dotsToRemove = <Circle>[];
+      for (final dot in _walkingDots) {
+        final dotPos = dot.options.geometry;
+        if (dotPos != null) {
+          final distToUser = _metricDistanceMeters(currentPos, dotPos);
+          if (distToUser < 18.0) {
+            dotsToRemove.add(dot);
+          }
+        }
+      }
+      if (dotsToRemove.isNotEmpty) {
+        unawaited(() async {
+          try {
+            await controller.removeCircles(dotsToRemove);
+            _walkingDots.removeWhere((d) => dotsToRemove.contains(d));
+          } catch (_) {}
+        }());
+      }
+    }
+
+    // Trim the walking line from currentPos to the connection point
+    for (int i = 0; i < _walkingLines.length && i < _initialWalkingSegments.length; i++) {
+      final seg = _initialWalkingSegments[i];
+      if (seg.length >= 2) {
+        final endPoint = seg.last;
+        final distToEnd = _metricDistanceMeters(currentPos, endPoint);
+        if (distToEnd < 20.0) {
+          unawaited(_clearWalkingAnnotations());
+          break;
+        } else {
+          try {
+            controller.updateLine(
+              _walkingLines[i],
+              LineOptions(geometry: [currentPos, endPoint]),
+            );
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
   void _updateTrimmedRouteLine(
     LatLng currentPos, {
     bool updatePuck = true,
@@ -443,6 +544,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     if (controller == null || _fullGeometry.isEmpty) return;
 
     if (updatePuck) _queueUserPuckUpdate(currentPos);
+
+    _updateTrimmedWalkingSegments(currentPos);
 
     if (_routeLine != null) {
       final trimmed = _getZeroGapTrimmedGeometry(currentPos);
@@ -765,6 +868,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
+    // Clear previous walking annotations before drawing new ones
+    await _clearWalkingAnnotations();
+
     // Draw walking / hiking trail approach segments in live navigation
     final walkingSegments = widget.route?.walkingSegments ?? const [];
     for (final walkingSegment in walkingSegments) {
@@ -773,8 +879,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
           LatLng(point.latitude, point.longitude),
       ];
       if (segmentPoints.length > 1) {
+        _initialWalkingSegments.add(segmentPoints);
         try {
-          await controller.addLine(
+          final line = await controller.addLine(
             LineOptions(
               geometry: segmentPoints,
               lineColor: '#60A5FA',
@@ -783,9 +890,11 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
               lineJoin: 'round',
             ),
           );
+          _walkingLines.add(line);
+
           final dots = _generateWalkingDots(segmentPoints);
           if (dots.isNotEmpty) {
-            await controller.addCircles([
+            final createdDots = await controller.addCircles([
               for (final dot in dots)
                 CircleOptions(
                   geometry: dot,
@@ -796,9 +905,10 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                   circleStrokeColor: '#FFFFFF',
                 ),
             ]);
+            _walkingDots.addAll(createdDots);
           }
           final trailStart = segmentPoints.first;
-          await controller.addSymbol(
+          final sym = await controller.addSymbol(
             SymbolOptions(
               geometry: trailStart,
               textField: '🥾',
@@ -808,6 +918,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
               textHaloWidth: 1.0,
             ),
           );
+          _walkingSymbols.add(sym);
         } catch (_) {}
       }
     }

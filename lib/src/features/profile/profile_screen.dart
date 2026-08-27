@@ -1693,13 +1693,20 @@ class _CreatedTourTile extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: (tour.isPublished ? Colors.green : Colors.orange).withValues(alpha: 0.12),
+                          color: (tour.isPublished
+                                  ? Colors.green
+                                  : (tour.moderationStatus == 'rejected' ? Colors.red : Colors.orange))
+                              .withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          tour.isPublished ? 'Publicado' : 'En revisión',
+                          tour.isPublished
+                              ? 'Publicado'
+                              : (tour.moderationStatus == 'rejected' ? 'Rechazado' : 'En revisión'),
                           style: TextStyle(
-                            color: tour.isPublished ? Colors.green : Colors.orange,
+                            color: tour.isPublished
+                                ? Colors.green
+                                : (tour.moderationStatus == 'rejected' ? Colors.red : Colors.orange),
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),

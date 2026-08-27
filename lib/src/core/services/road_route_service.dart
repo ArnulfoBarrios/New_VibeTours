@@ -161,20 +161,33 @@ class RoadRouteService {
 
       if (!requiresPortTransfer) {
         final roadGeo = roadRoute.geometry;
+        List<GeoPoint> fullLegGeometry = [];
         if (roadGeo.isNotEmpty) {
           final firstPoint = roadGeo.first;
           final lastPoint = roadGeo.last;
-          if (_distanceMeters(start, firstPoint) > 250) {
-            walkingSegments.add([start, firstPoint]);
+          
+          // Connect origin to main road network using local street routing if separated
+          if (_distanceMeters(start, firstPoint) > 40) {
+            final connector = await _fetchLocalStreetRoute(start, firstPoint);
+            if (connector != null && connector.isNotEmpty) {
+              _appendGeometry(fullLegGeometry, connector);
+            }
           }
-          if (_distanceMeters(lastPoint, end) > 250) {
-            walkingSegments.add([lastPoint, end]);
+
+          _appendGeometry(fullLegGeometry, roadGeo);
+
+          // Connect road end to final destination
+          if (_distanceMeters(lastPoint, end) > 40) {
+            final endConnector = await _fetchLocalStreetRoute(lastPoint, end);
+            if (endConnector != null && endConnector.isNotEmpty) {
+              _appendGeometry(fullLegGeometry, endConnector);
+            }
           }
+        } else {
+          fullLegGeometry = [start, end];
         }
-        _appendGeometry(
-          geometry,
-          _withRequestedEndpoints(roadRoute.geometry, start, end),
-        );
+
+        _appendGeometry(geometry, fullLegGeometry.isEmpty ? [start, end] : fullLegGeometry);
         totalDistanceMeters += roadRoute.distanceMeters;
         totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
         totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
@@ -195,20 +208,27 @@ class RoadRouteService {
         usesLiveTraffic = usesLiveTraffic || maritimeRoute.usesLiveTraffic;
       } else if (roadRoute != null) {
         final roadGeo = roadRoute.geometry;
+        List<GeoPoint> fullLegGeometry = [];
         if (roadGeo.isNotEmpty) {
           final firstPoint = roadGeo.first;
           final lastPoint = roadGeo.last;
-          if (_distanceMeters(start, firstPoint) > 250) {
-            walkingSegments.add([start, firstPoint]);
+          if (_distanceMeters(start, firstPoint) > 40) {
+            final connector = await _fetchLocalStreetRoute(start, firstPoint);
+            if (connector != null && connector.isNotEmpty) {
+              _appendGeometry(fullLegGeometry, connector);
+            }
           }
-          if (_distanceMeters(lastPoint, end) > 250) {
-            walkingSegments.add([lastPoint, end]);
+          _appendGeometry(fullLegGeometry, roadGeo);
+          if (_distanceMeters(lastPoint, end) > 40) {
+            final endConnector = await _fetchLocalStreetRoute(lastPoint, end);
+            if (endConnector != null && endConnector.isNotEmpty) {
+              _appendGeometry(fullLegGeometry, endConnector);
+            }
           }
+        } else {
+          fullLegGeometry = [start, end];
         }
-        _appendGeometry(
-          geometry,
-          _withRequestedEndpoints(roadRoute.geometry, start, end),
-        );
+        _appendGeometry(geometry, fullLegGeometry.isEmpty ? [start, end] : fullLegGeometry);
         totalDistanceMeters += roadRoute.distanceMeters;
         totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
         totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
@@ -566,6 +586,53 @@ out center tags 10;
     }
   }
 
+  Future<List<GeoPoint>?> _fetchLocalStreetRoute(
+    GeoPoint origin,
+    GeoPoint target,
+  ) async {
+    final dist = _distanceMeters(origin, target);
+    if (dist <= 30) return [origin, target];
+
+    // 1. Attempt TomTom which supports newer residential urban street networks
+    if (_tomTomApiKey.trim().isNotEmpty) {
+      final tt = await _fetchTomTomTrafficRoute(origin, target);
+      if (tt != null && tt.geometry.length >= 2) {
+        return tt.geometry;
+      }
+    }
+
+    // 2. Attempt OSM routing profiles with wider snapping radius for residential zones
+    final profiles = [
+      ('https://routing.openstreetmap.de/routed-foot', 'foot'),
+      ('https://routing.openstreetmap.de/routed-car', 'driving'),
+      (_osrmBaseUrl, 'driving'),
+    ];
+    for (final profile in profiles) {
+      final base = profile.$1;
+      final mode = profile.$2;
+      final uri = Uri.parse(
+        '$base/route/v1/$mode/'
+        '${origin.longitude},${origin.latitude};${target.longitude},${target.latitude}'
+        '?overview=full&geometries=geojson&radiuses=350;350',
+      );
+      try {
+        final res = await _client.get(uri).timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) {
+          final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+          if (decoded['code'] == 'Ok') {
+            final routes = decoded['routes'] as List<dynamic>? ?? const [];
+            if (routes.isNotEmpty) {
+              final geo = _parseGeoJsonGeometry((routes.first as Map<String, dynamic>)['geometry']);
+              if (geo.length >= 2) return geo;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+
   static final List<RoutePortWaypoint> _curatedFallbackPorts = [
     RoutePortWaypoint(
       name: 'Muelle de la Bodeguita (Cartagena)',
@@ -763,27 +830,6 @@ out center tags 30;
         target.add(point);
       }
     }
-  }
-
-  static List<GeoPoint> _withRequestedEndpoints(
-    List<GeoPoint> geometry,
-    GeoPoint start,
-    GeoPoint end,
-  ) {
-    if (geometry.isEmpty) return [start];
-
-    final result = <GeoPoint>[start];
-    for (final point in geometry) {
-      if (_distanceMeters(result.last, point) > 1) {
-        result.add(point);
-      }
-    }
-    // Only snap end point if within reasonable walking/road distance (<= 300m)
-    // Avoid drawing straight lines across bays/oceans to boat-only destinations
-    if (_distanceMeters(result.last, end) > 1 && _distanceMeters(result.last, end) <= 300) {
-      result.add(end);
-    }
-    return result;
   }
 
   static double _geometryDistanceMeters(List<GeoPoint> geometry) {

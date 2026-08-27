@@ -380,23 +380,11 @@ class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: AppTheme.primary,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                l10n.editorsChoice,
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                "98% ${l10n.vibeMatchAffinity}",
+                                "98% ${l10n.matchAffinity}",
                                 style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
                               ),
                             ),

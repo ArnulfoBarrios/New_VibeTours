@@ -124,6 +124,11 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
   double? _lastCalculatedHeading;
   int _lastMatchedIndex = 0;
 
+  final List<Line> _walkingLines = [];
+  final List<Circle> _walkingDots = [];
+  final List<Symbol> _walkingSymbols = [];
+  final List<List<LatLng>> _initialWalkingSegments = [];
+
   late final AnimationController _smoothPosController;
   LatLng? _animStartPos;
   LatLng? _animTargetPos;
@@ -260,8 +265,8 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     var minDistanceMeters = double.infinity;
     var bestIndex = _lastMatchedIndex;
 
-    final searchStart = (_lastMatchedIndex - 2).clamp(0, geometry.length - 1);
-    final searchEnd = (_lastMatchedIndex + 8).clamp(0, geometry.length - 1);
+    final searchStart = (_lastMatchedIndex - 1).clamp(0, geometry.length - 1);
+    final searchEnd = (_lastMatchedIndex + 6).clamp(0, geometry.length - 1);
 
     for (var i = searchStart; i < searchEnd; i++) {
       final p1 = geometry[i];
@@ -276,8 +281,12 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       }
     }
     
-    if (minDistanceMeters < 120.0) {
+    if (minDistanceMeters <= 35.0) {
       _lastMatchedIndex = math.max(_lastMatchedIndex, bestIndex);
+    }
+
+    if (_lastMatchedIndex == 0 && minDistanceMeters > 25.0) {
+      return geometry;
     }
 
     final activeIndex = _lastMatchedIndex.clamp(0, geometry.length - 2);
@@ -289,9 +298,85 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     return [activeProj, ...remaining];
   }
 
+  Future<void> _clearWalkingAnnotations() async {
+    final controller = _controller;
+    if (controller == null) return;
+    for (final line in _walkingLines) {
+      try {
+        await controller.removeLine(line);
+      } catch (_) {}
+    }
+    _walkingLines.clear();
+    if (_walkingDots.isNotEmpty) {
+      try {
+        await controller.removeCircles(_walkingDots);
+      } catch (_) {}
+      _walkingDots.clear();
+    }
+    for (final sym in _walkingSymbols) {
+      try {
+        await controller.removeSymbol(sym);
+      } catch (_) {}
+    }
+    _walkingSymbols.clear();
+    _initialWalkingSegments.clear();
+  }
+
+  void _updateTrimmedWalkingSegments(LatLng currentPos) {
+    final controller = _controller;
+    if (controller == null || _initialWalkingSegments.isEmpty) return;
+
+    if (_lastMatchedIndex > 0) {
+      unawaited(_clearWalkingAnnotations());
+      return;
+    }
+
+    if (_walkingDots.isNotEmpty) {
+      final dotsToRemove = <Circle>[];
+      for (final dot in _walkingDots) {
+        final dotPos = dot.options.geometry;
+        if (dotPos != null) {
+          final distToUser = _metricDistanceMeters(currentPos, dotPos);
+          if (distToUser < 18.0) {
+            dotsToRemove.add(dot);
+          }
+        }
+      }
+      if (dotsToRemove.isNotEmpty) {
+        unawaited(() async {
+          try {
+            await controller.removeCircles(dotsToRemove);
+            _walkingDots.removeWhere((d) => dotsToRemove.contains(d));
+          } catch (_) {}
+        }());
+      }
+    }
+
+    for (int i = 0; i < _walkingLines.length && i < _initialWalkingSegments.length; i++) {
+      final seg = _initialWalkingSegments[i];
+      if (seg.length >= 2) {
+        final endPoint = seg.last;
+        final distToEnd = _metricDistanceMeters(currentPos, endPoint);
+        if (distToEnd < 20.0) {
+          unawaited(_clearWalkingAnnotations());
+          break;
+        } else {
+          try {
+            controller.updateLine(
+              _walkingLines[i],
+              LineOptions(geometry: [currentPos, endPoint]),
+            );
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
   void _updateTrimmedRouteLine(LatLng currentPos) {
     final controller = _controller;
     if (controller == null || _mainRouteLine == null || _fullRouteGeometry.isEmpty) return;
+
+    _updateTrimmedWalkingSegments(currentPos);
 
     final trimmed = _trimRouteGeometry(_fullRouteGeometry, currentPos);
     if (trimmed.length >= 2) {
@@ -867,14 +952,16 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     }
 
     // Draw walking / hiking trail approach segments with Google Maps-style dotted trail and hiking boots icon
+    await _clearWalkingAnnotations();
     for (final walkingSegment in route.walkingSegments) {
       final segmentPoints = [
         for (final point in walkingSegment)
           LatLng(point.latitude, point.longitude),
       ];
       if (segmentPoints.length > 1) {
+        _initialWalkingSegments.add(segmentPoints);
         try {
-          await controller.addLine(
+          final line = await controller.addLine(
             LineOptions(
               geometry: segmentPoints,
               lineColor: '#60A5FA',
@@ -883,9 +970,11 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
               lineJoin: 'round',
             ),
           );
+          _walkingLines.add(line);
+
           final dots = _generateWalkingDots(segmentPoints);
           if (dots.isNotEmpty) {
-            await controller.addCircles([
+            final createdDots = await controller.addCircles([
               for (final dot in dots)
                 CircleOptions(
                   geometry: dot,
@@ -896,9 +985,10 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
                   circleStrokeColor: '#FFFFFF',
                 ),
             ]);
+            _walkingDots.addAll(createdDots);
           }
           final trailStart = segmentPoints.first;
-          await controller.addSymbol(
+          final sym = await controller.addSymbol(
             SymbolOptions(
               geometry: trailStart,
               textField: '🥾',
@@ -908,6 +998,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
               textHaloWidth: 1.0,
             ),
           );
+          _walkingSymbols.add(sym);
         } catch (_) {}
       }
     }

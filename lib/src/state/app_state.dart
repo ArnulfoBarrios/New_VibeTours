@@ -41,8 +41,12 @@ final authUserProvider = StreamProvider<User?>((ref) async* {
     final user = state.session?.user;
     final newUserId = user?.id;
     if (newUserId != currentUserId) {
+      // Only reset the chat when logging out or switching between two different authenticated accounts.
+      // Retain the chat session when a guest logs in so their generated tour and conversation are preserved.
+      if (currentUserId != null && (newUserId == null || newUserId != currentUserId)) {
+        ref.read(aiBuilderProvider.notifier).resetChat();
+      }
       currentUserId = newUserId;
-      ref.read(aiBuilderProvider.notifier).resetChat();
       ref.read(liveTourPlaybackProvider.notifier).stopTour();
       ref.read(voiceGuideProvider).stop();
     }

@@ -464,12 +464,16 @@ ETAPA 1: ASESORÍA DE DESTINOS, FECHAS / DURACIÓN Y ACOMPAÑANTES
 - Si ya indicó destino (${destName}): Acéptalo con entusiasmo y pregunta por las fechas y días de estadía (y acompañantes si faltan).
 
 ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
-- Si destino, fechas y acompañantes ya están confirmados pero aún faltan TRANSPORTE, PRESUPUESTO o ALOJAMIENTO:
-  Pregunta en 1 sola línea directa: "¿Cuál es tu presupuesto estimado (económico, moderado, lujo), en qué medio de transporte te moverás y si ya tienes alojamiento definido?"
+- Si el usuario pide recomendaciones de hotel/alojamiento o indica que aún no tiene alojamiento (ej: "¿qué recomiendas?", "recomiéndame hoteles"):
+  Presenta de inmediato 4 o 5 opciones de hoteles reales con nombre propio en ${destName || 'el destino'} (ej: ${realCatalog.hotels?.map(h => h.name).join(', ') || 'Hotel Santa Marta Real, Hotel Boutique Casa Carolina, Hotel Tayrona, Hotel Irotama'}), con 1 línea concisa de cada uno, e invítalo a elegir uno para armar el itinerario.
+  NUNCA des consejos genéricos como "buscar en plataformas" ni vuelvas a preguntar por datos que ya estén CONFIRMADOS (presupuesto, transporte, fechas).
+- Si faltan datos de transporte, presupuesto o alojamiento:
+  Pregunta en 1 sola línea directa ÚNICAMENTE por los campos que figuren como PENDIENTE en el ESTADO ACTUAL DE DATOS.
 
 ETAPA 3: PRESENTACIÓN COMPLETA DEL ITINERARIO POR DÍAS (ENTREGA INMEDIATA)
-- Si el usuario acaba de responder sobre presupuesto, transporte o alojamiento y ya tenemos los datos clave (destino, fechas, acompañantes, presupuesto, transporte, hospedaje):
-  DEBES GENERAR Y MOSTRAR OBLIGATORIAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE (NUNCA cortes la respuesta diciendo solo "aquí tienes un itinerario" sin poner el bloque completo de días y lugares).
+- Si el usuario acaba de elegir hotel, o indicó su casa/alojamiento, o ya tenemos los datos clave (destino, fechas, acompañantes, presupuesto, transporte, hospedaje):
+  DEBES GENERAR Y MOSTRAR OBLIGATORIAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE.
+  PROHIBIDO TERMINAR EL MENSAJE DICIENDO SOLO "aquí tienes tu itinerario:" SIN INCLUIR TODO EL BLOQUE DE DÍAS Y VIÑETAS A CONTINUACIÓN.
 - DURACIÓN EXACTA: Debes estructurar EXACTAMENTE ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))} días en el itinerario (desde Día 1 hasta Día ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))}), sin omitir ningún día ni generar días de menos.
 
 Formato OBLIGATORIO del Itinerario:
@@ -588,15 +592,25 @@ REGLAS PARA "specificPlaces":
     }
 
     // Safeguard: If the bot claimed to present the itinerary but omitted the "Día 1:" block, reconstruct the complete day-by-day text
-    const mentionsPresentingItinerary = /\b(aqu[íi]\s+tienes\s+(un|el)\s+itinerario|itinerario\s+para\s+tu\s+viaje|este\s+es\s+el\s+itinerario|itinerario\s+de\s+viaje)\b/i.test(responseMessage)
+    const mentionsPresentingItinerary = /\b(aqu[íi]\s+(?:tienes|est[áa]|te\s+dejo|te\s+presento|va)\s+(?:un|el|tu|este)?\s*itinerario|itinerario\s+para\s+tu\s+viaje|itinerario\s+para|este\s+es\s+(?:el|tu|un)\s+itinerario|itinerario\s+de\s+viaje|itinerario\s+sugerido|itinerario\s+personalizado|aqu[íi]\s+tienes\s+tu\s+itinerario|aqu[íi]\s+est[áa]\s+tu\s+itinerario|aqu[íi]\s+tienes\s+el\s+itinerario|aqu[íi]\s+est[áa]\s+el\s+itinerario|tu\s+itinerario\s+para|itinerario\s*:)\b/i.test(responseMessage)
     const hasDayHeaders = /d[íi]a\s*1\s*:/i.test(responseMessage)
-    if (mentionsPresentingItinerary && !hasDayHeaders) {
+    const userRequestedItinerary = /\b(mu[ée]strame\s+(el\s+|tu\s+)?itinerario|ver\s+(el\s+|tu\s+)?itinerario|cu[aá]l\s+es\s+el\s+itinerario|quiero\s+ver\s+el\s+itinerario|dame\s+el\s+itinerario)\b/i.test(lastUserMsg)
+
+    if ((mentionsPresentingItinerary || userRequestedItinerary) && !hasDayHeaders) {
       const placesList = (parsedExtracted.specificPlaces || known.specificPlaces || [])
       const placeNames = placesList.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
       const daysCount = Number(parsedExtracted.durationDays || known.durationDays || 2)
       const dName = destName || known.destination || 'tu destino'
 
-      let reconstructed = `Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n`
+      let prefixIntro = ''
+      if (responseMessage.includes('¡') && responseMessage.includes('!')) {
+        const firstSentence = responseMessage.split(/[\n.!:]/)[0]
+        if (firstSentence && firstSentence.trim().length > 3) {
+          prefixIntro = `${firstSentence.trim()}!\n\n`
+        }
+      }
+
+      let reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n`
       if (placeNames.length > 0) {
         const perDay = Math.max(1, Math.ceil(placeNames.length / daysCount))
         for (let d = 1; d <= daysCount; d++) {

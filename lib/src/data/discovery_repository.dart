@@ -8,295 +8,153 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/config/app_config.dart';
 import '../domain/models.dart';
 
-class _CorrectedPlace {
-  const _CorrectedPlace({
-    required this.latitude,
-    required this.longitude,
-    this.imageUrl,
-  });
-
-  final double latitude;
-  final double longitude;
-  final String? imageUrl;
-}
-
-class _ParsedLocation {
-  const _ParsedLocation({
-    required this.latitude,
-    required this.longitude,
-    required this.imageUrl,
-  });
-
-  final double latitude;
-  final double longitude;
-  final String imageUrl;
-}
-
 class DiscoveryRepository {
-  static const Map<String, _CorrectedPlace> _correctedPlaces = {
-    'torre del reloj': _CorrectedPlace(
-      latitude: 10.4231,
-      longitude: -75.5501,
-      imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=800&q=80',
-    ),
-    'plaza de los coches': _CorrectedPlace(
-      latitude: 10.4230,
-      longitude: -75.5500,
-      imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=800&q=80',
-    ),
-    'museo del oro': _CorrectedPlace(
-      latitude: 10.4234,
-      longitude: -75.5512,
-      imageUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=800&q=80',
-    ),
-    'plaza santo domingo': _CorrectedPlace(
-      latitude: 10.4236,
-      longitude: -75.5521,
-      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
-    ),
-    'museo de arte moderno': _CorrectedPlace(
-      latitude: 10.4222,
-      longitude: -75.5518,
-      imageUrl: 'https://images.unsplash.com/photo-1580136579312-94651dfd596d?auto=format&fit=crop&w=800&q=80',
-    ),
-    'museo naval': _CorrectedPlace(
-      latitude: 10.4218,
-      longitude: -75.5524,
-      imageUrl: 'https://images.unsplash.com/photo-1566121318594-a4f65f3a4c12?auto=format&fit=crop&w=800&q=80',
-    ),
-    'catedral de santa catalina': _CorrectedPlace(
-      latitude: 10.4235,
-      longitude: -75.5506,
-      imageUrl: 'https://images.unsplash.com/photo-1548625361-155de6c7f54a?auto=format&fit=crop&w=800&q=80',
-    ),
-    'ciudad amurallada': _CorrectedPlace(
-      latitude: 10.4238,
-      longitude: -75.5500,
-      imageUrl: 'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=800&q=80',
-    ),
-    'museo historico': _CorrectedPlace(
-      latitude: 10.4232,
-      longitude: -75.5515,
-      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
-    ),
-    'inquisicion': _CorrectedPlace(
-      latitude: 10.4232,
-      longitude: -75.5515,
-      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
-    ),
-    'castillo de san sebastian del pastelillo': _CorrectedPlace(
-      latitude: 10.4192,
-      longitude: -75.5348,
-      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
-    ),
-    'pastelillo': _CorrectedPlace(
-      latitude: 10.4192,
-      longitude: -75.5348,
-      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
-    ),
-    'plaza de la trinidad': _CorrectedPlace(
-      latitude: 10.4208,
-      longitude: -75.5458,
-      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
-    ),
-    'getsemani': _CorrectedPlace(
-      latitude: 10.4208,
-      longitude: -75.5458,
-      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
-    ),
-    'castillo de san felipe': _CorrectedPlace(
-      latitude: 10.4223,
-      longitude: -75.5394,
-      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
-    ),
-    'san felipe': _CorrectedPlace(
-      latitude: 10.4223,
-      longitude: -75.5394,
-      imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80',
-    ),
-    'islas del rosario': _CorrectedPlace(
-      latitude: 10.1772,
-      longitude: -75.7482,
-      imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-    ),
-    'bocagrande': _CorrectedPlace(
-      latitude: 10.4042,
-      longitude: -75.5567,
-      imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-    ),
-    'obelisco': _CorrectedPlace(
-      latitude: 10.4225,
-      longitude: -75.5450,
-      imageUrl: 'https://images.unsplash.com/photo-1549693578-d683be217e58?auto=format&fit=crop&w=800&q=80',
-    ),
-    'declaracion de independencia': _CorrectedPlace(
-      latitude: 10.4225,
-      longitude: -75.5450,
-      imageUrl: 'https://images.unsplash.com/photo-1549693578-d683be217e58?auto=format&fit=crop&w=800&q=80',
-    ),
-    'joe arroyo': _CorrectedPlace(
-      latitude: 10.9948286,
-      longitude: -74.806177,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/b/be/EstatuaJoeArroyoBarranquilla.jpg',
-    ),
-    'isla salamanca': _CorrectedPlace(
-      latitude: 10.9782,
-      longitude: -74.7478,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/9c/Parque_Natural_Isla_Salamanca.jpg',
-    ),
-    'bocas de ceniza': _CorrectedPlace(
-      latitude: 11.1065,
-      longitude: -74.8511,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/5/5d/Barranquilla%2C_el_mar_desde_las_Bocas_de_Cenizas-20050625.jpg',
-    ),
-    'shakira': _CorrectedPlace(
-      latitude: 11.0279,
-      longitude: -74.7924,
-      imageUrl: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?auto=format&fit=crop&w=600&q=80',
-    ),
-    'ventana al mundo': _CorrectedPlace(
-      latitude: 11.03313,
-      longitude: -74.83142,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/f/f1/Ventanalmundo.jpg',
-    ),
-    'ventana de campeones': _CorrectedPlace(
-      latitude: 10.9842,
-      longitude: -74.7761,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/3/35/Ventana_de_Campeones.jpg',
-    ),
-    'aleta del tiburón': _CorrectedPlace(
-      latitude: 10.9842,
-      longitude: -74.7761,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/3/35/Ventana_de_Campeones.jpg',
-    ),
-    'museo del caribe': _CorrectedPlace(
-      latitude: 10.9822,
-      longitude: -74.7844,
-      imageUrl: 'https://images.unsplash.com/photo-1554816155-12df9643f363?auto=format&fit=crop&w=600&q=80',
-    ),
-    'catedral metropolitana': _CorrectedPlace(
-      latitude: 10.9888,
-      longitude: -74.7889,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Barranquilla_Catedral.jpg',
-    ),
-    'plaza de la paz': _CorrectedPlace(
-      latitude: 10.989,
-      longitude: -74.789,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Barranquilla_Catedral.jpg',
-    ),
-    'castillo de salgar': _CorrectedPlace(
-      latitude: 11.0223,
-      longitude: -74.9488,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/0/04/Castillo_de_Salgar.jpg',
-    ),
-    'gran malecon': _CorrectedPlace(
-      latitude: 11.0258,
-      longitude: -74.7986,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/1/11/GranMalecon1.jpg',
-    ),
-    'malecón del río': _CorrectedPlace(
-      latitude: 11.0258,
-      longitude: -74.7986,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/1/11/GranMalecon1.jpg',
-    ),
-    'zoologico': _CorrectedPlace(
-      latitude: 11.0102,
-      longitude: -74.7942,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/9b/Barranquilla_Zool%C3%B3gico_Flamencos.jpg',
-    ),
-    'zoológico': _CorrectedPlace(
-      latitude: 11.0102,
-      longitude: -74.7942,
-      imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/9/9b/Barranquilla_Zool%C3%B3gico_Flamencos.jpg',
-    ),
-    'aeropuerto': _CorrectedPlace(
-      latitude: 11.1196,
-      longitude: -74.2306,
-      imageUrl: 'https://images.unsplash.com/photo-1542296332-2e4473faf563?auto=format&fit=crop&w=800&q=80',
-    ),
-    'rodadero': _CorrectedPlace(
-      latitude: 11.2056,
-      longitude: -74.2253,
-      imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-    ),
-    'bahía': _CorrectedPlace(
-      latitude: 11.2447,
-      longitude: -74.2155,
-      imageUrl: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&w=800&q=80',
-    ),
-    'bahia': _CorrectedPlace(
-      latitude: 11.2447,
-      longitude: -74.2155,
-      imageUrl: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?auto=format&fit=crop&w=800&q=80',
-    ),
-    'basílica': _CorrectedPlace(
-      latitude: 11.2436,
-      longitude: -74.2117,
-      imageUrl: 'https://images.unsplash.com/photo-1548625361-18568c07802b?auto=format&fit=crop&w=800&q=80',
-    ),
-    'basilica': _CorrectedPlace(
-      latitude: 11.2436,
-      longitude: -74.2117,
-      imageUrl: 'https://images.unsplash.com/photo-1548625361-18568c07802b?auto=format&fit=crop&w=800&q=80',
-    ),
-    'sierra nevada': _CorrectedPlace(
-      latitude: 10.8753,
-      longitude: -73.6908,
-      imageUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
-    ),
-    'tayrona': _CorrectedPlace(
-      latitude: 11.3060,
-      longitude: -74.0539,
-      imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-    ),
-    'taganga': _CorrectedPlace(
-      latitude: 11.2672,
-      longitude: -74.1906,
-      imageUrl: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=800&q=80',
-    ),
-    'ziruma': _CorrectedPlace(
-      latitude: 11.2225,
-      longitude: -74.2150,
-      imageUrl: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80',
-    ),
-    'playa blanca': _CorrectedPlace(
-      latitude: 11.2186,
-      longitude: -74.2341,
-      imageUrl: 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=800&q=80',
-    ),
-    'novios': _CorrectedPlace(
-      latitude: 11.2425,
-      longitude: -74.2106,
-      imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
-    ),
-  };
+  static final Map<String, String> _imageCache = {};
 
-  static String? findCuratedImageForPlace(String name) {
-    final lower = name.toLowerCase();
-    for (final entry in _correctedPlaces.entries) {
-      if (lower.contains(entry.key)) {
-        return entry.value.imageUrl;
+  /// Asynchronously resolves the authentic photograph of a place from
+  /// Wikipedia Search API or Wikimedia Commons Search API, caching the result.
+  static Future<String> fetchRealPlaceImageUrl(
+    String name, {
+    String category = 'Atraccion',
+    String placeId = '',
+    Map<String, dynamic>? tags,
+  }) async {
+    final cacheKey = name.trim().toLowerCase();
+    if (_imageCache.containsKey(cacheKey) && _imageCache[cacheKey]!.isNotEmpty) {
+      return _imageCache[cacheKey]!;
+    }
+
+    // 1. Direct OSM image tags if present
+    if (tags != null) {
+      final imageTag = tags['image']?.toString().trim();
+      if (imageTag != null && imageTag.isNotEmpty) {
+        if (imageTag.startsWith('http://') || imageTag.startsWith('https://')) {
+          _imageCache[cacheKey] = imageTag;
+          return imageTag;
+        }
+        if (imageTag.startsWith('File:')) {
+          final fileName = imageTag.replaceFirst('File:', '').trim();
+          final url = 'https://commons.wikimedia.org/wiki/Special:FilePath/${Uri.encodeComponent(fileName)}?width=800';
+          _imageCache[cacheKey] = url;
+          return url;
+        }
+      }
+
+      final commonsTag = tags['wikimedia_commons']?.toString().trim();
+      if (commonsTag != null && commonsTag.isNotEmpty) {
+        final fileName = commonsTag.startsWith('File:') ? commonsTag.replaceFirst('File:', '').trim() : commonsTag;
+        final url = 'https://commons.wikimedia.org/wiki/Special:FilePath/${Uri.encodeComponent(fileName)}?width=800';
+        _imageCache[cacheKey] = url;
+        return url;
+      }
+    }
+
+    // 2. Wikipedia Search API (generator=search with pageimages)
+    final wikiUrl = await _fetchWikipediaSearchImage(name);
+    if (wikiUrl != null && wikiUrl.isNotEmpty) {
+      _imageCache[cacheKey] = wikiUrl;
+      return wikiUrl;
+    }
+
+    // 3. Wikimedia Commons Search API
+    final commonsUrl = await _fetchCommonsSearchImage(name);
+    if (commonsUrl != null && commonsUrl.isNotEmpty) {
+      _imageCache[cacheKey] = commonsUrl;
+      return commonsUrl;
+    }
+
+    // 4. Clean architectural fallback
+    final fallbackUrl = _getSafeFallbackImageUrl(category, name, placeId: placeId);
+    _imageCache[cacheKey] = fallbackUrl;
+    return fallbackUrl;
+  }
+
+  static String resolveDynamicImageForPlace(
+    String name, {
+    String category = 'Atraccion',
+    String placeId = '',
+    Map<String, dynamic>? tags,
+  }) {
+    final cacheKey = name.trim().toLowerCase();
+    if (_imageCache.containsKey(cacheKey) && _imageCache[cacheKey]!.isNotEmpty) {
+      return _imageCache[cacheKey]!;
+    }
+    return _getSafeFallbackImageUrl(category, name, placeId: placeId);
+  }
+
+  static Future<String?> _fetchWikipediaSearchImage(String rawQuery) async {
+    final searchTerms = <String>[rawQuery.trim()];
+    final clean = rawQuery.trim().replaceAll(
+      RegExp(r'^(Monumento\s+|Parque\s+|Iglesia\s+|Catedral\s+|Plaza\s+|Museo\s+|Castillo\s+|Centro\s+Comercial\s+|Malecon\s+|Malecón\s+)', caseSensitive: false),
+      '',
+    ).trim();
+    if (clean.isNotEmpty && clean.toLowerCase() != rawQuery.trim().toLowerCase()) {
+      searchTerms.add(clean);
+    }
+
+    for (final term in searchTerms) {
+      final endpoints = [
+        'https://es.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${Uri.encodeComponent(term)}&gsrlimit=1&prop=pageimages&pithumbsize=800&format=json',
+        'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${Uri.encodeComponent(term)}&gsrlimit=1&prop=pageimages&pithumbsize=800&format=json',
+      ];
+
+      for (final endpoint in endpoints) {
+        try {
+          final res = await http.get(
+            Uri.parse(endpoint),
+            headers: {'User-Agent': 'VIBETOURS/1.0 (contact=ops@vibetours.app)'},
+          ).timeout(const Duration(seconds: 4));
+
+          if (res.statusCode == 200) {
+            final json = jsonDecode(res.body) as Map<String, dynamic>;
+            final pages = (json['query'] as Map?)?['pages'] as Map?;
+            if (pages != null && pages.isNotEmpty) {
+              final page = pages.values.first as Map?;
+              final thumb = (page?['thumbnail'] as Map?)?['source']?.toString();
+              if (thumb != null && thumb.startsWith('http')) {
+                return thumb;
+              }
+              final original = (page?['original'] as Map?)?['source']?.toString();
+              if (original != null && original.startsWith('http')) {
+                return original;
+              }
+            }
+          }
+        } catch (_) {}
       }
     }
     return null;
   }
 
-  _ParsedLocation _correctLocation(String name, double defaultLat, double defaultLon, String defaultImg) {
-    final lower = name.toLowerCase();
-    for (final entry in _correctedPlaces.entries) {
-      if (lower.contains(entry.key)) {
-        return _ParsedLocation(
-          latitude: entry.value.latitude,
-          longitude: entry.value.longitude,
-          imageUrl: entry.value.imageUrl ?? defaultImg,
-        );
+  static Future<String?> _fetchCommonsSearchImage(String query) async {
+    try {
+      final uri = Uri.parse(
+        'https://commons.wikimedia.org/w/api.php?action=query&generator=search'
+        '&gsrsearch=${Uri.encodeComponent(query)}&gsrlimit=1&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json',
+      );
+      final res = await http.get(
+        uri,
+        headers: {'User-Agent': 'VIBETOURS/1.0 (contact=ops@vibetours.app)'},
+      ).timeout(const Duration(seconds: 4));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final queryObj = data['query'] as Map?;
+        final pages = queryObj?['pages'] as Map?;
+        if (pages != null && pages.isNotEmpty) {
+          final firstPage = pages.values.first as Map?;
+          final imageInfoList = firstPage?['imageinfo'] as List?;
+          if (imageInfoList != null && imageInfoList.isNotEmpty) {
+            final info = imageInfoList.first as Map?;
+            final thumbUrl = info?['thumburl']?.toString() ?? info?['url']?.toString();
+            if (thumbUrl != null && thumbUrl.startsWith('http')) {
+              return thumbUrl;
+            }
+          }
+        }
       }
-    }
-    return _ParsedLocation(
-      latitude: defaultLat,
-      longitude: defaultLon,
-      imageUrl: defaultImg,
-    );
+    } catch (_) {}
+    return null;
   }
 
   bool _isBlacklisted(String name, String type) {
@@ -389,13 +247,37 @@ class DiscoveryRepository {
   }) async {
     final tomtomPlaces = await _nearbyTomTomPlaces(latitude: latitude, longitude: longitude);
     if (tomtomPlaces.isNotEmpty) {
-      return tomtomPlaces;
+      return _enrichPlacesWithRealImages(tomtomPlaces);
     }
     final overpassPlaces = await _nearbyOverpassPlaces(latitude, longitude);
     if (overpassPlaces.isNotEmpty) {
-      return overpassPlaces;
+      return _enrichPlacesWithRealImages(overpassPlaces);
     }
-    return _fallbackPlaces(latitude: latitude, longitude: longitude);
+    final fallbacks = _fallbackPlaces(latitude: latitude, longitude: longitude);
+    return _enrichPlacesWithRealImages(fallbacks);
+  }
+
+  Future<List<NearbyPlace>> _enrichPlacesWithRealImages(List<NearbyPlace> places) async {
+    if (places.isEmpty) return places;
+    final enriched = await Future.wait(
+      places.map((place) async {
+        try {
+          final realUrl = await fetchRealPlaceImageUrl(
+            place.name,
+            category: place.category,
+            placeId: place.id,
+          );
+          if (realUrl.isNotEmpty) {
+            return place.copyWith(
+              imageUrl: realUrl,
+              thumbnailUrl: realUrl,
+            );
+          }
+        } catch (_) {}
+        return place;
+      }),
+    );
+    return enriched;
   }
 
   Future<List<NearbyPlace>> searchPlaces(String query) async {
@@ -403,7 +285,7 @@ class DiscoveryRepository {
     if (trimmed.length < 2) return const [];
     final tomTomResults = await _searchTomTomPlaces(trimmed);
     if (tomTomResults.isNotEmpty) {
-      return tomTomResults;
+      return _enrichPlacesWithRealImages(tomTomResults);
     }
     try {
       final uri = Uri.parse('https://photon.komoot.io/api/').replace(
@@ -422,7 +304,7 @@ class DiscoveryRepository {
             }
           }
         }
-        return places;
+        return _enrichPlacesWithRealImages(places);
       }
     } catch (_) {
       // Fall through
@@ -485,23 +367,21 @@ class DiscoveryRepository {
     final coordinates = geometry['coordinates'] is List ? geometry['coordinates'] as List : const [];
     final name = properties['name']?.toString() ?? properties['city']?.toString() ?? 'Lugar';
     final typeStr = properties['osm_value']?.toString() ?? properties['type']?.toString() ?? 'place';
-    final defaultLat = coordinates.length > 1 ? _double(coordinates[1]) : 0.0;
-    final defaultLng = coordinates.isNotEmpty ? _double(coordinates[0]) : 0.0;
+    final lat = coordinates.length > 1 ? _double(coordinates[1]) : 0.0;
+    final lng = coordinates.isNotEmpty ? _double(coordinates[0]) : 0.0;
     final category = _classifyAttraction(properties);
     final placeId = 'search-$index';
-    final defaultImg = _getRandomImageUrlForCategory(category, name, placeId: placeId);
-    
-    final corrected = _correctLocation(name, defaultLat, defaultLng, defaultImg);
+    final img = resolveDynamicImageForPlace(name, category: category, placeId: placeId, tags: properties);
 
     return NearbyPlace(
       id: placeId,
       name: name,
       type: _typeLabel(typeStr),
       distanceMeters: 0,
-      location: GeoPoint(latitude: corrected.latitude, longitude: corrected.longitude),
+      location: GeoPoint(latitude: lat, longitude: lng),
       category: category,
-      imageUrl: corrected.imageUrl,
-      thumbnailUrl: corrected.imageUrl,
+      imageUrl: img,
+      thumbnailUrl: img,
       statusLabel: 'Disponible',
       isOpenNow: true,
     );
@@ -516,12 +396,13 @@ class DiscoveryRepository {
         node(around:$radius,$latitude,$longitude)["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
         node(around:$radius,$latitude,$longitude)["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
         node(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve"];
+        node(around:$radius,$latitude,$longitude)["entrance"~"main|yes"];
         way(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
         way(around:$radius,$latitude,$longitude)["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
         way(around:$radius,$latitude,$longitude)["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
         way(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve"];
       );
-      out center tags 35;
+      out center tags 40;
     ''';
     try {
       final response = await http.post(
@@ -547,7 +428,6 @@ class DiscoveryRepository {
             if (rawName == null || rawName.trim().isEmpty) continue;
             var name = rawName.trim();
 
-            // Si el nombre es algo tan genérico como "Parque" o "Plaza", intentar usar un nombre alternativo/marca/operador o descartar
             if (name.toLowerCase() == 'parque' || name.toLowerCase() == 'plaza') {
               final alt = tags['alt_name']?.toString() ??
                   tags['official_name']?.toString() ??
@@ -558,29 +438,27 @@ class DiscoveryRepository {
               }
             }
 
-            final defaultLat = _double(element['lat'] ?? (element['center'] as Map?)?['lat']);
-            final defaultLon = _double(element['lon'] ?? (element['center'] as Map?)?['lon']);
+            final lat = _double(element['lat'] ?? (element['center'] as Map?)?['lat']);
+            final lon = _double(element['lon'] ?? (element['center'] as Map?)?['lon']);
             final typeStr = tags['tourism']?.toString() ?? tags['historic']?.toString() ?? tags['amenity']?.toString() ?? tags['leisure']?.toString() ?? tags['sport']?.toString() ?? tags['natural']?.toString() ?? 'place';
-            if (defaultLat == 0.0 || defaultLon == 0.0) continue;
+            if (lat == 0.0 || lon == 0.0) continue;
             if (_isAccommodation(typeStr)) continue;
             if (_isBlacklisted(name, typeStr)) continue;
             
             final category = _classifyAttraction(tags);
             final placeId = 'overpass-${element['id'] ?? idx++}';
-            final defaultImg = _getRandomImageUrlForCategory(category, name, placeId: placeId);
-            
-            final corrected = _correctLocation(name, defaultLat, defaultLon, defaultImg);
+            final img = resolveDynamicImageForPlace(name, category: category, placeId: placeId, tags: tags);
 
-            final distance = _distanceMeters(latitude, longitude, corrected.latitude, corrected.longitude);
+            final distance = _distanceMeters(latitude, longitude, lat, lon);
             places.add(NearbyPlace(
               id: placeId,
               name: name,
               type: _typeLabel(typeStr),
               distanceMeters: distance.round(),
-              location: GeoPoint(latitude: corrected.latitude, longitude: corrected.longitude),
+              location: GeoPoint(latitude: lat, longitude: lon),
               category: category,
-              imageUrl: corrected.imageUrl,
-              thumbnailUrl: corrected.imageUrl,
+              imageUrl: img,
+              thumbnailUrl: img,
               statusLabel: 'Abierto',
               isOpenNow: true,
             ));
@@ -777,15 +655,13 @@ class DiscoveryRepository {
         address['freeformAddress']?.toString() ??
         querySafe(address['municipality']);
     final placeId = json['id']?.toString() ?? name;
-    final defaultImg = _getRandomImageUrlForCategory(category, name, placeId: placeId);
+    final img = resolveDynamicImageForPlace(name, category: category, placeId: placeId);
     
-    final defaultLat = _double(position['lat']);
-    final defaultLon = _double(position['lon']);
-    
-    final corrected = _correctLocation(name, defaultLat, defaultLon, defaultImg);
+    final lat = _double(position['lat']);
+    final lon = _double(position['lon']);
     
     final distance = (userLat != null && userLon != null)
-        ? _distanceMeters(userLat, userLon, corrected.latitude, corrected.longitude).round()
+        ? _distanceMeters(userLat, userLon, lat, lon).round()
         : _int(json['dist']);
 
     return NearbyPlace(
@@ -794,12 +670,12 @@ class DiscoveryRepository {
       type: categories.isEmpty ? 'Atraccion' : _typeLabel(categories.first),
       distanceMeters: distance,
       location: GeoPoint(
-        latitude: corrected.latitude,
-        longitude: corrected.longitude,
+        latitude: lat,
+        longitude: lon,
       ),
       category: category,
-      imageUrl: corrected.imageUrl,
-      thumbnailUrl: corrected.imageUrl,
+      imageUrl: img,
+      thumbnailUrl: img,
       statusLabel: 'Abierto',
       isOpenNow: true,
     );
@@ -859,7 +735,7 @@ class DiscoveryRepository {
     }
   }
 
-  int _hashString(String input) {
+  static int _hashString(String input) {
     int h = 0;
     for (int i = 0; i < input.codeUnits.length; i++) {
       h = (31 * h + input.codeUnitAt(i)) & 0x7FFFFFFF;
@@ -867,7 +743,7 @@ class DiscoveryRepository {
     return h;
   }
 
-  String _getRandomImageUrlForCategory(String category, String name, {String placeId = ''}) {
+  static String _getSafeFallbackImageUrl(String category, String name, {String placeId = ''}) {
     final searchStr = '${category.toLowerCase()} ${name.toLowerCase()}';
     final seedStr = '${placeId}_${name}_$category';
     final hash = _hashString(seedStr);
@@ -919,21 +795,18 @@ class DiscoveryRepository {
         'https://images.unsplash.com/photo-1515238152791-8216bfdf89a7?auto=format&fit=crop&w=600&q=80',
       ];
     }
-    // 3. Atracciones, entretenimiento, diversiones y parques temáticos (Divercity, etc.)
+    // 3. Atracciones, parques de diversiones y entretenimiento familiar
     else if (searchStr.contains('divercity') ||
         searchStr.contains('atraccion') ||
         searchStr.contains('attraction') ||
         searchStr.contains('theme_park') ||
-        searchStr.contains('recreation') ||
-        searchStr.contains('recreativa') ||
+        searchStr.contains('amusement') ||
         searchStr.contains('diversion')) {
       pool = const [
         'https://images.unsplash.com/photo-1513889961551-628c1e5e2ee9?auto=format&fit=crop&w=600&q=80',
         'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80',
-        'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80',
         'https://images.unsplash.com/photo-1561489413-985b06da5bee?auto=format&fit=crop&w=600&q=80',
         'https://images.unsplash.com/photo-1572949645841-094f3a9c4c94?auto=format&fit=crop&w=600&q=80',
-        'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
       ];
     }
     // 4. Parques verdes, jardines y naturaleza urbana
@@ -961,9 +834,14 @@ class DiscoveryRepository {
         'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80',
       ];
     }
-    // 5. Museos y arte
+    // 5. Museos, monumentos históricos y arte
     else if (searchStr.contains('museo') ||
         searchStr.contains('museum') ||
+        searchStr.contains('monumento') ||
+        searchStr.contains('monument') ||
+        searchStr.contains('memorial') ||
+        searchStr.contains('escultura') ||
+        searchStr.contains('estatua') ||
         searchStr.contains('galeria') ||
         searchStr.contains('galería') ||
         searchStr.contains('gallery') ||
@@ -974,6 +852,7 @@ class DiscoveryRepository {
         'https://images.unsplash.com/photo-1565008447742-97f6f38c985c?auto=format&fit=crop&w=600&q=80',
         'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=600&q=80',
         'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=600&q=80',
       ];
     }
     // 6. Plazas, calles urbanas y paseos
@@ -983,7 +862,8 @@ class DiscoveryRepository {
         searchStr.contains('street') ||
         searchStr.contains('avenida') ||
         searchStr.contains('paseo') ||
-        searchStr.contains('castellana')) {
+        searchStr.contains('malecon') ||
+        searchStr.contains('malecón')) {
       pool = const [
         'https://images.unsplash.com/photo-1534430480872-3498386e7856?auto=format&fit=crop&w=600&q=80',
         'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80',
@@ -993,10 +873,10 @@ class DiscoveryRepository {
         'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=600&q=80',
       ];
     }
-    // 7. Fallback general urbano / turístico
+    // 7. Fallback general urbano / turístico arquitectónico
     else {
       pool = const [
-        'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80',
         'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=600&q=80',
         'https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&w=600&q=80',
         'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=80',

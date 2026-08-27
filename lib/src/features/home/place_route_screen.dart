@@ -1,12 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../core/design/app_theme.dart';
-import '../../core/design/openfree_route_map.dart';
+import '../../core/design/live_navigation_map.dart';
 import '../../core/design/premium_components.dart';
+import '../../core/services/road_route_service.dart';
 import '../../domain/models.dart';
 import '../../state/app_state.dart';
 import '../shared/location_disclosure_dialog.dart';
@@ -19,13 +20,219 @@ class PlaceRouteScreen extends ConsumerStatefulWidget {
 }
 
 class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
-  MapLibreMapController? _mapController;
+  final RoadRouteService _routeService = RoadRouteService();
+
+  StreamSubscription<Position>? _positionSubscription;
+  GeoPoint? _currentPoint;
+  double? _currentHeading;
+  RoadRouteResult? _liveRoute;
+  bool _isRouting = false;
+  bool _isTrackingMode = false;
+  GeoPoint? _initialOverviewPoint;
+  bool _hasUserManuallyToggledTracking = false;
+  DateTime? _lastRerouteAt;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startLiveNavigation();
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _startLiveNavigation() async {
+    final service = ref.read(locationServiceProvider);
+    final initialPosition = await service.currentPosition();
+    if (!mounted) return;
+
+    if (initialPosition != null) {
+      setState(() {
+        _currentPoint = GeoPoint(
+          latitude: initialPosition.latitude,
+          longitude: initialPosition.longitude,
+        );
+      });
+      unawaited(_recalculateRoute(force: true));
+    }
+
+    final stream = await service.positionStream(distanceFilterMeters: 2);
+    if (!mounted || stream == null) return;
+    await _positionSubscription?.cancel();
+    _positionSubscription = stream.listen(_handlePositionUpdate);
+  }
+
+  void _handlePositionUpdate(Position position) {
+    final point = GeoPoint(
+      latitude: position.latitude,
+      longitude: position.longitude,
+    );
+    if (!mounted) return;
+
+    _currentPoint = point;
+    if (position.heading >= 0) {
+      _currentHeading = position.heading;
+    }
+
+    // Auto-transition to tracking mode when movement is detected
+    if (!_isTrackingMode && !_hasUserManuallyToggledTracking) {
+      _initialOverviewPoint ??= point;
+      final movedDist = Geolocator.distanceBetween(
+        _initialOverviewPoint!.latitude,
+        _initialOverviewPoint!.longitude,
+        point.latitude,
+        point.longitude,
+      );
+      if (position.speed > 0.8 || movedDist > 12.0) {
+        _isTrackingMode = true;
+      }
+    }
+
+    setState(() {});
+
+    final route = _liveRoute;
+    if (route == null) {
+      _recalculateRoute(force: true);
+      return;
+    }
+
+    final distanceToRoute = _distanceToRouteMeters(point, route.geometry);
+    final now = DateTime.now();
+    final deviated = distanceToRoute > 35;
+
+    if (deviated) {
+      final last = _lastRerouteAt;
+      if (last == null || now.difference(last) > const Duration(seconds: 4)) {
+        unawaited(_recalculateRoute(force: true));
+      }
+    }
+  }
+
+  Future<void> _recalculateRoute({bool force = false}) async {
+    if (_isRouting && !force) return;
+    final place = ref.read(selectedNearbyPlaceProvider);
+    if (place == null) return;
+
+    var origin = _currentPoint;
+    if (origin == null) {
+      final position = await ref.read(locationServiceProvider).currentPosition();
+      if (!mounted || position == null) return;
+      origin = GeoPoint(latitude: position.latitude, longitude: position.longitude);
+      setState(() {
+        _currentPoint = origin;
+      });
+    }
+
+    setState(() => _isRouting = true);
+
+    try {
+      final route = await _routeService.resolveRoute(
+        [origin, place.location],
+        preferLiveTraffic: true,
+        forceRefresh: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _liveRoute = route;
+        _lastRerouteAt = DateTime.now();
+        _isRouting = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isRouting = false);
+      }
+    }
+  }
+
+  double _distanceToRouteMeters(GeoPoint point, List<GeoPoint> route) {
+    if (route.isEmpty) return double.infinity;
+    if (route.length == 1) {
+      return Geolocator.distanceBetween(
+        point.latitude,
+        point.longitude,
+        route.first.latitude,
+        route.first.longitude,
+      );
+    }
+    var best = double.infinity;
+    for (var i = 0; i < route.length - 1; i++) {
+      final p1 = route[i];
+      final p2 = route[i + 1];
+      final d = _distanceToSegmentMeters(point, p1, p2);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  double _distanceToSegmentMeters(GeoPoint point, GeoPoint start, GeoPoint end) {
+    final dLat = end.latitude - start.latitude;
+    final dLng = end.longitude - start.longitude;
+    final lenSq = dLat * dLat + dLng * dLng;
+    if (lenSq == 0) {
+      return Geolocator.distanceBetween(
+        point.latitude,
+        point.longitude,
+        start.latitude,
+        start.longitude,
+      );
+    }
+    final t = ((point.latitude - start.latitude) * dLat + (point.longitude - start.longitude) * dLng) / lenSq;
+    final clampedT = t.clamp(0.0, 1.0);
+    final projLat = start.latitude + clampedT * dLat;
+    final projLng = start.longitude + clampedT * dLng;
+    return Geolocator.distanceBetween(
+      point.latitude,
+      point.longitude,
+      projLat,
+      projLng,
+    );
+  }
+
+  String _distanceLabel(NearbyPlace place, RoadRouteResult? route) {
+    final current = _currentPoint;
+    if (route != null && route.distanceMeters > 0) {
+      final m = route.distanceMeters;
+      if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)} km';
+      return '${m.round()} m';
+    }
+    if (current != null) {
+      final m = Geolocator.distanceBetween(
+        current.latitude,
+        current.longitude,
+        place.location.latitude,
+        place.location.longitude,
+      );
+      if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)} km';
+      return '${m.round()} m';
+    }
+    return 'Calculando...';
+  }
+
+  String _timeLabel(RoadRouteResult? route) {
+    final seconds = route?.travelTimeSeconds;
+    if (seconds != null && seconds > 0) {
+      final mins = (seconds / 60).round();
+      if (mins < 60) return '$mins min';
+      return '${mins ~/ 60} h ${mins % 60} min';
+    }
+    final m = route?.distanceMeters ?? 0;
+    if (m > 0) {
+      final mins = (m / 1000.0 / 4.2 * 60).round().clamp(1, 120);
+      return '$mins min';
+    }
+    return 'Calculando...';
+  }
 
   @override
   Widget build(BuildContext context) {
     final place = ref.watch(selectedNearbyPlaceProvider);
-    final positionAsync = ref.watch(currentPositionProvider);
     final styleUrl = ref.watch(mapStyleProvider);
+
     if (place == null) {
       return PremiumScaffold(
         safeBottom: true,
@@ -41,49 +248,16 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
       child: Stack(
         children: [
           Positioned.fill(
-            child: positionAsync.when(
-              data: (position) => OpenFreeRouteMap(
-                key: ValueKey(
-                  '${place.name}-${position?.latitude}-${position?.longitude}',
-                ),
-                points: _pointsFor(position, place),
-                labels: const ['Tu ubicacion'],
-                styleUrl: styleUrl,
-                height: MediaQuery.of(context).size.height,
-                borderRadius: 0,
-                fitPadding: const EdgeInsets.fromLTRB(40, 120, 40, 280),
-                myLocationEnabled: position != null,
-                focusOnLast: false,
-                onMapCreated: (controller) {
-                  setState(() {
-                    _mapController = controller;
-                  });
-                },
-              ),
-              loading: () => OpenFreeRouteMap(
-                points: [place.location],
-                styleUrl: styleUrl,
-                height: MediaQuery.of(context).size.height,
-                borderRadius: 0,
-                focusOnLast: false,
-                onMapCreated: (controller) {
-                  setState(() {
-                    _mapController = controller;
-                  });
-                },
-              ),
-              error: (error, stackTrace) => OpenFreeRouteMap(
-                points: [place.location],
-                styleUrl: styleUrl,
-                height: MediaQuery.of(context).size.height,
-                borderRadius: 0,
-                focusOnLast: false,
-                onMapCreated: (controller) {
-                  setState(() {
-                    _mapController = controller;
-                  });
-                },
-              ),
+            child: LiveNavigationMap(
+              key: ValueKey('nearby-${place.name}-$styleUrl'),
+              destination: place.location,
+              destinationName: place.name,
+              styleUrl: styleUrl,
+              fitPadding: const EdgeInsets.fromLTRB(32, 110, 32, 300),
+              route: _liveRoute,
+              currentLocation: _currentPoint,
+              trackingMode: _isTrackingMode,
+              trackingHeading: _currentHeading,
             ),
           ),
           Positioned(
@@ -95,27 +269,26 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
               icon: const Icon(Icons.arrow_back_rounded),
             ),
           ),
+          // Tracking mode toggle / Recenter FAB
           Positioned(
             right: 16,
             bottom: 236 + MediaQuery.of(context).padding.bottom,
             child: FloatingActionButton.extended(
-              heroTag: 'focus_destination_fab',
+              heroTag: 'nearby_tracking_mode_fab',
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               onPressed: () {
-                if (_mapController != null) {
-                  _mapController!.animateCamera(
-                    CameraUpdate.newLatLngZoom(
-                      LatLng(place.location.latitude, place.location.longitude),
-                      16.0,
-                    ),
-                    duration: const Duration(milliseconds: 800),
-                  );
-                }
+                setState(() {
+                  _isTrackingMode = !_isTrackingMode;
+                  _hasUserManuallyToggledTracking = true;
+                });
               },
-              icon: const Icon(Icons.center_focus_strong_rounded, color: AppTheme.primary),
-              label: const Text(
-                'Enfocar Destino',
-                style: TextStyle(
+              icon: Icon(
+                _isTrackingMode ? Icons.explore_rounded : Icons.my_location_rounded,
+                color: AppTheme.primary,
+              ),
+              label: Text(
+                _isTrackingMode ? 'Vista general' : 'Seguir ubicación',
+                style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: AppTheme.primary,
                 ),
@@ -153,7 +326,9 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
                               place.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleLarge,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             Text(
                               place.type,
@@ -166,31 +341,63 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  positionAsync.when(
-                    data: (position) => Text(
-                      position == null
-                          ? 'Activa la ubicacion para trazar la ruta desde donde estas.'
-                          : '${_distance(position, place)} hasta el destino seleccionado.',
-                      style: Theme.of(context).textTheme.bodyLarge,
+                  const SizedBox(height: 12),
+                  // Telemetry Strip
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    loading: () => const LinearProgressIndicator(minHeight: 6),
-                    error: (error, stackTrace) => Text(
-                      'No pudimos leer tu ubicacion exacta. Se muestra el destino.',
-                      style: Theme.of(context).textTheme.bodyLarge,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.route_rounded, size: 16, color: AppTheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              _distanceLabel(place, _liveRoute),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                        Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+                        Row(
+                          children: [
+                            const Icon(Icons.schedule_rounded, size: 16, color: AppTheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              _timeLabel(_liveRoute),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                        if (_isRouting) ...[
+                          Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+                          const Row(
+                            children: [
+                              SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                              SizedBox(width: 6),
+                              Text('Ruta...', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
                         child: LiquidButton(
                           label: 'Recalcular',
-                          icon: Icons.my_location_rounded,
+                          icon: Icons.sync_rounded,
                           onPressed: () async {
                             final granted = await checkAndRequestLocationPermission(context, ref);
                             if (granted) {
-                              ref.invalidate(currentPositionProvider);
+                              _recalculateRoute(force: true);
                             } else if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Se requiere ubicación para esta acción.')),
@@ -214,24 +421,5 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
         ],
       ),
     );
-  }
-
-  List<GeoPoint> _pointsFor(Position? position, NearbyPlace place) {
-    if (position == null) return [place.location];
-    return [
-      GeoPoint(latitude: position.latitude, longitude: position.longitude),
-      place.location,
-    ];
-  }
-
-  String _distance(Position position, NearbyPlace place) {
-    final meters = Geolocator.distanceBetween(
-      position.latitude,
-      position.longitude,
-      place.location.latitude,
-      place.location.longitude,
-    );
-    if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1)} km';
-    return '${meters.round()} m';
   }
 }

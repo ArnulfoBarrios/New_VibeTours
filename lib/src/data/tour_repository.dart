@@ -186,14 +186,19 @@ class TourRepository {
 
   Future<void> moderateTour(String tourId, {required bool approved}) async {
     final client = _requireClient();
-    final newStatus = approved ? 'published' : 'rejected';
+    final newStatus = approved ? 'approved' : 'rejected';
     try {
       await client.rpc(
         'admin_moderate_tour',
         params: {'p_tour_id': tourId, 'p_approved': approved},
       );
     } catch (_) {
-      await client.from('tours').update({'status': newStatus}).eq('id', tourId);
+      await client.from('tours').update({
+        'status': newStatus,
+        'moderation_status': newStatus,
+        'is_published': approved,
+        'reviewed_at': DateTime.now().toIso8601String(),
+      }).eq('id', tourId);
     }
   }
 
@@ -876,9 +881,9 @@ class TourRepository {
         if (gallery.isNotEmpty && entry.key < gallery.length && gallery[entry.key].isNotEmpty) {
           img = gallery[entry.key];
         } else {
-          final curated = DiscoveryRepository.findCuratedImageForPlace(stop.name);
-          if (curated != null && curated.isNotEmpty) {
-            img = curated;
+          final dynamicImg = DiscoveryRepository.resolveDynamicImageForPlace(stop.name, placeId: stop.id);
+          if (dynamicImg.isNotEmpty) {
+            img = dynamicImg;
           } else if (gallery.isNotEmpty) {
             img = gallery[entry.key % gallery.length];
           }
@@ -994,8 +999,9 @@ class TourRepository {
       mainCategory: source['categoria_principal']?.toString() ?? json['main_category']?.toString() ?? '',
       budget: _budget(source['presupuesto_estimado_usd'] ?? json['budget']),
       additionalInfo: _additionalInfo(source['informacion_adicional'] ?? json['additional_info']),
-      isAiGenerated: true,
-      isPublished: json['is_published'] == true || json['status'] == 'approved',
+      isAiGenerated: json['is_ai_generated'] == true || source['is_ai_generated'] == true,
+      moderationStatus: json['moderation_status']?.toString() ?? (json['is_published'] == true ? 'approved' : 'pending'),
+      isPublished: (json['is_published'] == true || json['status'] == 'approved') && json['moderation_status'] != 'pending' && json['moderation_status'] != 'rejected',
     );
   }
 
@@ -1018,6 +1024,7 @@ class TourRepository {
     String ownerId, {
     required String difficultyValue,
   }) {
+    final isApproved = tour.moderationStatus == 'approved' && tour.isPublished;
     return {
       'owner_id': ownerId,
       'created_by': ownerId,
@@ -1034,9 +1041,9 @@ class TourRepository {
       'language': tour.language,
       'tags': tour.tags,
       'is_ai_generated': tour.isAiGenerated,
-      'is_published': tour.isPublished,
+      'is_published': isApproved,
       'is_private': !tour.isPublished,
-      'moderation_status': tour.isPublished ? 'approved' : 'approved',
+      'moderation_status': tour.moderationStatus,
       'creation_json': tour.toCreationJson(),
       'short_summary': tour.shortSummary,
       'subcategories': tour.subcategories,
