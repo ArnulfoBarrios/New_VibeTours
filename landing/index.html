@@ -64,7 +64,7 @@
   </header>
 
   <!-- ==========================================================================
-       1. HERO SECTION WITH 3D INTERACTIVE GLOBE & LIVE CARDS
+       1. HERO SECTION WITH CYBER HUD 3D GLOBE & LIVE CARDS
        ========================================================================== -->
   <section class="hero-section">
     <div class="hero-content reveal-on-scroll">
@@ -80,6 +80,22 @@
       <p class="hero-description" id="hero-desc">
         Itinerarios a tu ritmo, coordenadas reales de OpenStreetMap y audioguías contextuales mientras caminas.
       </p>
+
+      <!-- Live Telemetry Ticker -->
+      <div class="hero-telemetry-bar">
+        <div class="telemetry-chip">
+          <span class="dot"></span>
+          <span>IA < 0.8s</span>
+        </div>
+        <div class="telemetry-chip">
+          <span class="dot"></span>
+          <span>100% Satelital Real</span>
+        </div>
+        <div class="telemetry-chip">
+          <span class="dot"></span>
+          <span>50+ Ciudades</span>
+        </div>
+      </div>
 
       <div class="hero-buttons">
         <a href="register.html" id="hero-cta-primary" class="btn btn-primary btn-large glow-btn">
@@ -104,7 +120,7 @@
       </div>
     </div>
 
-    <!-- 3D Interactive Globe Visual Stage -->
+    <!-- 3D Interactive Globe Visual Stage (Centered 3D Sphere with Cyber HUD) -->
     <div class="hero-visual-wrapper reveal-on-scroll delay-1">
       
       <!-- Floating Card 1: Live Voice Guide (Top Left) -->
@@ -122,16 +138,22 @@
         </div>
       </div>
 
-      <!-- 3D Interactive Cobe Globe Canvas Container -->
-      <div class="globe-container" id="globeWrapper">
-        <div class="globe-halo"></div>
-        <canvas id="cobeGlobeCanvas" class="globe-canvas"></canvas>
+      <!-- 3D Globe HUD Stage -->
+      <div class="globe-hud-stage">
+        <div class="globe-orbital-ring"></div>
+        <div class="globe-container" id="globeWrapper">
+          <div class="globe-halo"></div>
+          <canvas id="cobeGlobeCanvas" class="globe-canvas"></canvas>
+        </div>
       </div>
 
-      <!-- Hint below globe -->
-      <div class="globe-drag-hint">
-        <span class="sparkle">✦</span>
-        <span id="globe-drag-hint">Arrastra para girar en 3D</span>
+      <!-- Mission Control City Quick Selector (Clicks spin globe to exact location) -->
+      <div class="globe-city-dock">
+        <button class="city-dock-btn active" data-phi="0" data-theta="0.15" data-city="cartagena">🌴 Cartagena</button>
+        <button class="city-dock-btn" data-phi="4.7" data-theta="0.25" data-city="tokio">⛩️ Tokio</button>
+        <button class="city-dock-btn" data-phi="1.5" data-theta="0.3" data-city="paris">🎨 París</button>
+        <button class="city-dock-btn" data-phi="0.2" data-theta="0.28" data-city="newyork">🗽 Nueva York</button>
+        <button class="city-dock-btn" data-phi="1.7" data-theta="0.28" data-city="roma">🏛️ Roma</button>
       </div>
 
       <!-- Floating Card 2: GPS Route Status (Bottom Right) -->
@@ -146,7 +168,7 @@
   </section>
 
   <!-- ==========================================================================
-       2. WIDGET INTERACTIVO: SIMULADOR DE TOURS IA
+       2. WIDGET INTERACTIVO: SIMULADOR DE TOURS IA COCKPIT
        ========================================================================== -->
   <section id="generador" class="section">
     <div class="section-header reveal-on-scroll">
@@ -246,7 +268,7 @@
   </section>
 
   <!-- ==========================================================================
-       3. BENTO GRID DE FUNCIONALIDADES
+       3. BENTO GRID DE FUNCIONALIDADES 2.0
        ========================================================================== -->
   <section id="funciones" class="section">
     <div class="section-header reveal-on-scroll">
@@ -306,7 +328,7 @@
           </div>
           <button id="simPlayBtn" class="btn btn-primary btn-small player-btn">
             <span id="simPlayIcon">▶</span>
-            <span id="simPlayText">Reproducir Demostración</span>
+            <span id="simPlayText">Reproducir</span>
           </button>
         </div>
       </div>

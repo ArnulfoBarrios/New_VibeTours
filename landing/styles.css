@@ -1,15 +1,17 @@
 /* ==========================================================================
-   VIBETOURS - LUXURY HIGH-TECH GLASSMORPHIC DESIGN SYSTEM & ANIMATIONS
+   VIBETOURS - NEO-LUXURY HIGH-TECH GLASSMORPHIC 2.0 DESIGN SYSTEM
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   1. COLOR TOKENS & DYNAMIC THEME SYSTEM
+   1. COLOR TOKENS & CYBER-LUXURY THEME SYSTEM
    -------------------------------------------------------------------------- */
 :root {
   /* Brand Core Palette */
   --primary: #007AFF;
   --primary-deep: #0056B3;
-  --primary-glow: rgba(0, 122, 255, 0.35);
+  --primary-glow: rgba(0, 122, 255, 0.4);
+  --primary-cyan: #00F0FF;
+  --cyan-glow: rgba(0, 240, 255, 0.35);
   --accent-indigo: #5856D6;
   --accent-purple: #AF52DE;
   --purple-glow: rgba(175, 82, 222, 0.35);
@@ -19,71 +21,81 @@
   /* Typography */
   --font-main: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
 
-  /* Theme: Light Mode (iOS Grouped Luxury) */
-  --bg-page: #F4F5FA;
-  --bg-mesh: radial-gradient(circle at 10% 10%, rgba(0, 122, 255, 0.1) 0%, transparent 40%),
-             radial-gradient(circle at 90% 80%, rgba(175, 82, 222, 0.09) 0%, transparent 40%);
+  /* Theme: Light Mode (Neo-Titanium Luxury) */
+  --bg-page: #F3F5FA;
+  --bg-mesh: radial-gradient(circle at 15% 15%, rgba(0, 122, 255, 0.12) 0%, transparent 45%),
+             radial-gradient(circle at 85% 75%, rgba(175, 82, 222, 0.1) 0%, transparent 45%),
+             radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.06) 0%, transparent 60%);
+  --cyber-grid: rgba(0, 122, 255, 0.04);
   --surface: #FFFFFF;
   --surface-secondary: #F8FAFD;
   --surface-tertiary: #E8EEF8;
 
-  --glass-card: rgba(255, 255, 255, 0.82);
-  --glass-card-hover: rgba(255, 255, 255, 0.95);
-  --glass-border: rgba(255, 255, 255, 0.9);
-  --glass-border-hover: rgba(0, 122, 255, 0.4);
-  --glass-subcard: rgba(248, 250, 252, 0.82);
+  --glass-card: rgba(255, 255, 255, 0.85);
+  --glass-card-hover: rgba(255, 255, 255, 0.98);
+  --glass-border: rgba(255, 255, 255, 0.95);
+  --glass-border-glow: rgba(0, 122, 255, 0.5);
+  --glass-subcard: rgba(248, 250, 253, 0.85);
 
-  --spotlight-color: rgba(0, 122, 255, 0.08);
+  --spotlight-color: rgba(0, 122, 255, 0.09);
 
-  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.03);
-  --shadow-md: 0 16px 36px -8px rgba(0, 80, 200, 0.07), 0 3px 8px rgba(0, 0, 0, 0.02);
-  --shadow-lg: 0 25px 60px -12px rgba(0, 80, 200, 0.12), 0 6px 18px rgba(0, 0, 0, 0.03);
-  --shadow-glow: 0 0 50px rgba(0, 122, 255, 0.22);
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 16px 36px -8px rgba(0, 80, 200, 0.08), 0 3px 8px rgba(0, 0, 0, 0.02);
+  --shadow-lg: 0 25px 60px -12px rgba(0, 80, 200, 0.15), 0 6px 20px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 50px rgba(0, 122, 255, 0.25);
 
-  --text-main: #0B0E14;
-  --text-muted: #526075;
-  --text-tertiary: #8E9BAE;
-  --border-subtle: rgba(0, 0, 0, 0.07);
+  --text-main: #0B0E17;
+  --text-muted: #4F5E74;
+  --text-tertiary: #8A97AC;
+  --border-subtle: rgba(0, 0, 0, 0.08);
 
-  --navbar-bg: rgba(244, 245, 250, 0.85);
+  --navbar-bg: rgba(243, 245, 250, 0.88);
   --orb-1: rgba(0, 122, 255, 0.18);
   --orb-2: rgba(175, 82, 222, 0.15);
-  --orb-3: rgba(88, 86, 214, 0.12);
+  --orb-3: rgba(0, 240, 255, 0.12);
+
+  --hud-ring-border: rgba(0, 122, 255, 0.2);
+  --hud-ring-active: rgba(0, 122, 255, 0.8);
 
   --transition-speed: 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 [data-theme="dark"] {
-  /* Theme: Dark Mode (OLED Deep Space) */
-  --bg-page: #000000;
-  --bg-mesh: radial-gradient(circle at 10% 10%, rgba(0, 122, 255, 0.22) 0%, transparent 45%),
-             radial-gradient(circle at 90% 80%, rgba(175, 82, 222, 0.18) 0%, transparent 45%);
-  --surface: #17181F;
-  --surface-secondary: #0F1017;
-  --surface-tertiary: #232533;
+  /* Theme: Dark Mode (Obsidian Deep Space HUD) */
+  --bg-page: #06070B;
+  --bg-mesh: radial-gradient(circle at 15% 15%, rgba(0, 122, 255, 0.25) 0%, transparent 50%),
+             radial-gradient(circle at 85% 75%, rgba(175, 82, 222, 0.22) 0%, transparent 50%),
+             radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.14) 0%, transparent 60%);
+  --cyber-grid: rgba(0, 240, 255, 0.04);
+  --surface: #11131C;
+  --surface-secondary: #0A0C13;
+  --surface-tertiary: #1E2130;
 
-  --glass-card: rgba(22, 24, 34, 0.82);
-  --glass-card-hover: rgba(28, 31, 46, 0.94);
-  --glass-border: rgba(255, 255, 255, 0.11);
-  --glass-border-hover: rgba(0, 122, 255, 0.55);
-  --glass-subcard: rgba(14, 15, 22, 0.88);
+  --glass-card: rgba(17, 19, 28, 0.85);
+  --glass-card-hover: rgba(24, 27, 40, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-glow: rgba(0, 240, 255, 0.6);
+  --glass-subcard: rgba(10, 12, 19, 0.88);
 
-  --spotlight-color: rgba(0, 122, 255, 0.15);
+  --spotlight-color: rgba(0, 240, 255, 0.16);
 
-  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 20px 45px -10px rgba(0, 0, 0, 0.7);
-  --shadow-lg: 0 30px 70px -15px rgba(0, 0, 0, 0.92);
-  --shadow-glow: 0 0 50px rgba(0, 122, 255, 0.3);
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 20px 45px -10px rgba(0, 0, 0, 0.8);
+  --shadow-lg: 0 30px 70px -15px rgba(0, 0, 0, 0.95);
+  --shadow-glow: 0 0 60px rgba(0, 122, 255, 0.35);
 
   --text-main: #FFFFFF;
-  --text-muted: #9AA8BC;
-  --text-tertiary: #616E82;
+  --text-muted: #9AA8BE;
+  --text-tertiary: #5E6C82;
   --border-subtle: rgba(255, 255, 255, 0.1);
 
-  --navbar-bg: rgba(0, 0, 0, 0.85);
-  --orb-1: rgba(0, 122, 255, 0.24);
-  --orb-2: rgba(175, 82, 222, 0.2);
-  --orb-3: rgba(88, 86, 214, 0.16);
+  --navbar-bg: rgba(6, 7, 11, 0.88);
+  --orb-1: rgba(0, 122, 255, 0.28);
+  --orb-2: rgba(175, 82, 222, 0.22);
+  --orb-3: rgba(0, 240, 255, 0.18);
+
+  --hud-ring-border: rgba(0, 240, 255, 0.22);
+  --hud-ring-active: rgba(0, 240, 255, 0.85);
 }
 
 /* --------------------------------------------------------------------------
@@ -113,6 +125,19 @@ body {
   position: relative;
 }
 
+/* Cyber Grid Background Matrix Overlay */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-size: 36px 36px;
+  background-image: 
+    linear-gradient(to right, var(--cyber-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--cyber-grid) 1px, transparent 1px);
+  pointer-events: none;
+  z-index: 0;
+}
+
 /* Top Scroll Progress Bar */
 .scroll-progress {
   position: fixed;
@@ -120,10 +145,10 @@ body {
   left: 0;
   height: 3px;
   width: 0%;
-  background: linear-gradient(90deg, var(--primary), var(--accent-purple), var(--accent-indigo));
+  background: linear-gradient(90deg, var(--primary-cyan), var(--primary), var(--accent-purple));
   z-index: 10000;
   transition: width 0.1s ease-out;
-  box-shadow: 0 0 10px var(--primary);
+  box-shadow: 0 0 12px var(--primary-cyan);
 }
 
 a {
@@ -136,7 +161,7 @@ a {
 .ambient-glow {
   position: fixed;
   border-radius: 50%;
-  filter: blur(100px);
+  filter: blur(110px);
   pointer-events: none;
   z-index: 0;
   opacity: 0.85;
@@ -144,34 +169,34 @@ a {
 }
 
 .orb-1 {
-  width: 520px;
-  height: 520px;
+  width: 550px;
+  height: 550px;
   top: -80px;
   left: -80px;
   background: var(--orb-1);
 }
 
 .orb-2 {
-  width: 480px;
-  height: 480px;
+  width: 500px;
+  height: 500px;
   top: 45%;
   right: -80px;
   background: var(--orb-2);
 }
 
 .orb-3 {
-  width: 620px;
-  height: 620px;
+  width: 650px;
+  height: 650px;
   bottom: -150px;
   left: 15%;
   background: var(--orb-3);
 }
 
-/* Luxury Glass Card with Dynamic Spotlight */
+/* Luxury Glass Card with Dynamic Spotlight & Prism Highlights */
 .glass-card {
   background: var(--glass-card);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-md);
   border-radius: 24px;
@@ -196,15 +221,15 @@ a {
 }
 
 .glass-card:hover {
-  border-color: var(--glass-border-hover);
-  box-shadow: var(--shadow-lg);
+  border-color: var(--glass-border-glow);
+  box-shadow: var(--shadow-lg), 0 0 25px rgba(0, 122, 255, 0.15);
   transform: translateY(-3px);
 }
 
 .glass-subcard {
   background: var(--glass-subcard);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   box-shadow: var(--shadow-sm);
@@ -429,7 +454,7 @@ a {
 }
 
 /* --------------------------------------------------------------------------
-   5. HERO SECTION & 3D INTERACTIVE GLOBE SHOWCASE
+   5. HERO SECTION & 3D INTERACTIVE GLOBE WITH ORBITAL HUD
    -------------------------------------------------------------------------- */
 .hero-section {
   max-width: 1200px;
@@ -483,7 +508,7 @@ a {
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent-purple) 60%, var(--accent-indigo) 100%);
+  background: linear-gradient(135deg, var(--primary-cyan) 0%, var(--primary) 40%, var(--accent-purple) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -492,8 +517,37 @@ a {
   font-size: 16px;
   color: var(--text-muted);
   line-height: 1.6;
-  margin-bottom: 26px;
+  margin-bottom: 24px;
   max-width: 480px;
+}
+
+/* Metric Telemetry Ticker */
+.hero-telemetry-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 26px;
+  flex-wrap: wrap;
+}
+
+.telemetry-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.telemetry-chip .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
 }
 
 .hero-buttons {
@@ -531,7 +585,7 @@ a {
   font-weight: 800;
 }
 
-/* 3D Interactive Globe Visual Container (Fixed & Centered 3D Sphere) */
+/* 3D Interactive Globe Visual Stage (Centered 3D Sphere with Orbital Ring) */
 .hero-visual-wrapper {
   position: relative;
   display: flex;
@@ -542,7 +596,7 @@ a {
   min-height: 480px;
 }
 
-.globe-container {
+.globe-hud-stage {
   position: relative;
   width: 380px;
   height: 380px;
@@ -552,14 +606,52 @@ a {
   align-items: center;
   justify-content: center;
   margin: 0 auto;
+}
+
+/* Orbital Cyber HUD Ring */
+.globe-orbital-ring {
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--hud-ring-border);
+  pointer-events: none;
+  animation: orbitalSpin 30s linear infinite;
+  z-index: 1;
+}
+
+.globe-orbital-ring::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: var(--primary-cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--primary-cyan);
+}
+
+@keyframes orbitalSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.globe-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   user-select: none;
+  z-index: 2;
 }
 
 .globe-canvas {
   width: 100%;
   height: 100%;
   opacity: 0;
-  transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   border-radius: 50%;
   touch-action: none;
   cursor: grab;
@@ -574,7 +666,7 @@ a {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 122, 255, 0.28) 0%, rgba(175, 82, 222, 0.18) 45%, transparent 70%);
+  background: radial-gradient(circle, rgba(0, 122, 255, 0.32) 0%, rgba(175, 82, 222, 0.22) 45%, transparent 70%);
   filter: blur(40px);
   z-index: -1;
   pointer-events: none;
@@ -586,30 +678,45 @@ a {
   100% { transform: scale(1.08); opacity: 1; }
 }
 
-.globe-drag-hint {
-  margin-top: 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
-  background: var(--glass-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
-  border-radius: 100px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  box-shadow: var(--shadow-sm);
-  pointer-events: none;
+/* Interactive Mission Control Quick City Selectors */
+.globe-city-dock {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
   z-index: 4;
 }
 
-.globe-drag-hint span.sparkle {
-  color: var(--primary);
+.city-dock-btn {
+  padding: 5px 12px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-speed);
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
-/* Floating Live Cards on Hero (Clean framing without covering globe) */
+.city-dock-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.city-dock-btn.active {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+/* Floating Live Cards on Hero */
 .floating-card {
   position: absolute;
   z-index: 5;
@@ -623,14 +730,14 @@ a {
 }
 
 .floating-top-left {
-  top: 0;
-  left: -10px;
+  top: -10px;
+  left: -20px;
   animation-delay: 0s;
 }
 
 .floating-bottom-right {
-  bottom: 15px;
-  right: -10px;
+  bottom: 45px;
+  right: -20px;
   animation-delay: -2.5s;
 }
 
@@ -695,7 +802,7 @@ a {
 }
 
 /* --------------------------------------------------------------------------
-   6. WIDGET INTERACTIVO: SIMULADOR DE TOURS IA
+   6. WIDGET INTERACTIVO: SIMULADOR DE TOURS IA COCKPIT
    -------------------------------------------------------------------------- */
 .section {
   max-width: 1200px;
@@ -893,7 +1000,7 @@ a {
 }
 
 /* --------------------------------------------------------------------------
-   7. BENTO GRID DE FUNCIONALIDADES
+   7. BENTO GRID DE FUNCIONALIDADES 2.0
    -------------------------------------------------------------------------- */
 .bento-grid {
   display: grid;
@@ -1128,7 +1235,7 @@ a {
   font-size: 28px;
   font-weight: 900;
   letter-spacing: -0.03em;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent-purple) 100%);
+  background: linear-gradient(135deg, var(--primary-cyan) 0%, var(--primary) 50%, var(--accent-purple) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 10px;
@@ -1330,10 +1437,10 @@ a {
   }
 
   .hero-description {
-    margin: 0 auto 22px;
+    margin: 0 auto 20px;
   }
 
-  .hero-buttons, .hero-trust-bar {
+  .hero-telemetry-bar, .hero-buttons, .hero-trust-bar {
     justify-content: center;
   }
 
@@ -1363,9 +1470,9 @@ a {
     font-size: 26px;
   }
 
-  .globe-container {
-    width: 300px;
-    height: 300px;
+  .globe-hud-stage {
+    width: 290px;
+    height: 290px;
   }
 
   .floating-card {

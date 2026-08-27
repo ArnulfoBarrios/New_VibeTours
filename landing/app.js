@@ -1,5 +1,5 @@
 /* ==========================================================================
-   VIBETOURS - MODERN INTERACTIVE LOGIC, 3D GLOBE & BILINGUAL ENGINE
+   VIBETOURS - CYBER-LUXURY 2.0 LOGIC, 3D GLOBE ENGINE & BILINGUAL ENGINE
    ========================================================================== */
 
 let currentLandingLang = localStorage.getItem('vibetours_lang') || 'es';
@@ -7,6 +7,7 @@ let currentLandingLang = localStorage.getItem('vibetours_lang') || 'es';
 document.addEventListener('DOMContentLoaded', () => {
   initThemeToggle();
   initInteractiveGlobe();
+  initCityDockControls();
   initScrollEffects();
   initCardSpotlight();
   initTourGeneratorWidget();
@@ -69,24 +70,26 @@ function initThemeToggle() {
 }
 
 /* --------------------------------------------------------------------------
-   2. 3D INTERACTIVE GLOBE (COBE) WITH HIGH DEFINITION & FLUID DRAG
+   2. 3D INTERACTIVE GLOBE (COBE) WITH PROPER 1:1 RATIO & TARGET GLIDING
    -------------------------------------------------------------------------- */
 let globeInstance = null;
 let globeCanvas = null;
 let globePhi = 0;
+let globeTargetPhi = 0;
 let globePhiOffset = 0;
 let globeThetaOffset = 0;
 let globeDragOffset = { phi: 0, theta: 0 };
 let isGlobePaused = false;
 let pointerInteracting = null;
+let isGlidingToCity = false;
 
 const VIBETOURS_MARKERS = [
-  { id: "cartagena", location: [10.39, -75.48], size: 0.05 },
-  { id: "paris", location: [48.85, 2.35], size: 0.05 },
-  { id: "tokyo", location: [35.68, 139.69], size: 0.05 },
-  { id: "newyork", location: [40.71, -74.0], size: 0.05 },
-  { id: "rome", location: [41.9, 12.49], size: 0.05 },
-  { id: "london", location: [51.5, -0.12], size: 0.05 }
+  { id: "cartagena", location: [10.39, -75.48], size: 0.055 },
+  { id: "paris", location: [48.85, 2.35], size: 0.055 },
+  { id: "tokyo", location: [35.68, 139.69], size: 0.055 },
+  { id: "newyork", location: [40.71, -74.0], size: 0.055 },
+  { id: "rome", location: [41.9, 12.49], size: 0.055 },
+  { id: "london", location: [51.5, -0.12], size: 0.055 }
 ];
 
 const VIBETOURS_ARCS = [
@@ -122,6 +125,7 @@ async function initInteractiveGlobe() {
     pointerInteracting = { x: e.clientX, y: e.clientY };
     globeCanvas.style.cursor = 'grabbing';
     isGlobePaused = true;
+    isGlidingToCity = false;
   });
 
   window.addEventListener('pointerup', () => {
@@ -159,16 +163,17 @@ async function initInteractiveGlobe() {
 
     // High Contrast Luxury Theme Configuration
     const darkFactor = isDark ? 1 : 0;
-    const baseColor = isDark ? [0.16, 0.20, 0.32] : [0.75, 0.80, 0.88];
+    const baseColor = isDark ? [0.15, 0.20, 0.32] : [0.72, 0.78, 0.88];
     const markerColor = [0.0, 0.48, 1.0]; // VibeTours Primary Blue (#007AFF)
-    const glowColor = isDark ? [0.0, 0.35, 0.95] : [0.65, 0.78, 0.98];
+    const glowColor = isDark ? [0.0, 0.4, 1.0] : [0.65, 0.78, 0.98];
     const arcColor = [0.68, 0.32, 0.87]; // AI Purple (#AF52DE)
-    const mapBrightness = isDark ? 8 : 5.5;
+    const mapBrightness = isDark ? 8 : 5.8;
 
+    // IMPORTANT: width passed to createGlobe is the dimension (cobe applies devicePixelRatio internally)
     globeInstance = createGlobe(globeCanvas, {
       devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
-      width: width * 2,
-      height: width * 2,
+      width: width,
+      height: width,
       phi: 0,
       theta: 0.15,
       dark: darkFactor,
@@ -182,11 +187,20 @@ async function initInteractiveGlobe() {
       markers: VIBETOURS_MARKERS,
       arcs: VIBETOURS_ARCS,
       arcColor: arcColor,
-      arcWidth: 0.6,
+      arcWidth: 0.7,
       arcHeight: 0.28,
-      opacity: 0.9,
+      opacity: 0.92,
       onRender: (state) => {
-        if (!isGlobePaused) globePhi += 0.003;
+        if (!isGlobePaused) {
+          if (isGlidingToCity) {
+            globePhi += (globeTargetPhi - globePhi) * 0.05;
+            if (Math.abs(globeTargetPhi - globePhi) < 0.01) {
+              isGlidingToCity = false;
+            }
+          } else {
+            globePhi += 0.003;
+          }
+        }
         state.phi = globePhi + globePhiOffset + globeDragOffset.phi;
         state.theta = 0.15 + globeThetaOffset + globeDragOffset.theta;
       }
@@ -213,7 +227,42 @@ async function initInteractiveGlobe() {
 }
 
 /* --------------------------------------------------------------------------
-   3. SCROLL EFFECTS: PROGRESS BAR, PARALLAX & REVEAL ANIMATIONS
+   3. MISSION CONTROL CITY DOCK CONTROLS (SMOOTH GLIDE TO TARGET CITY)
+   -------------------------------------------------------------------------- */
+function initCityDockControls() {
+  const cityButtons = document.querySelectorAll('.city-dock-btn');
+  const cityCoordinates = {
+    cartagena: { phi: 0, theta: 0.15, voice: "Torre del Reloj", stops: "6 Paradas • 2.4 km" },
+    tokio: { phi: 4.7, theta: 0.25, voice: "Templo Senso-ji", stops: "12 Paradas • 4.8 km" },
+    paris: { phi: 1.5, theta: 0.3, voice: "Torre Eiffel", stops: "10 Paradas • 4.1 km" },
+    newyork: { phi: 0.2, theta: 0.28, voice: "Central Park", stops: "9 Paradas • 3.5 km" },
+    roma: { phi: 1.7, theta: 0.28, voice: "Coliseo Romano", stops: "8 Paradas • 3.2 km" }
+  };
+
+  cityButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      cityButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const cityKey = btn.dataset.city;
+      const target = cityCoordinates[cityKey];
+      if (target) {
+        globeTargetPhi = target.phi;
+        globePhiOffset = 0;
+        globeThetaOffset = target.theta - 0.15;
+        isGlidingToCity = true;
+
+        const voiceSubEl = document.getElementById('float-voice-sub');
+        const gpsSubEl = document.getElementById('float-gps-sub');
+        if (voiceSubEl) voiceSubEl.innerText = target.voice;
+        if (gpsSubEl) gpsSubEl.innerText = target.stops;
+      }
+    });
+  });
+}
+
+/* --------------------------------------------------------------------------
+   4. SCROLL EFFECTS: PROGRESS BAR, PARALLAX & REVEAL ANIMATIONS
    -------------------------------------------------------------------------- */
 function initScrollEffects() {
   const progressBar = document.getElementById('scrollProgress');
@@ -248,7 +297,7 @@ function initScrollEffects() {
 }
 
 /* --------------------------------------------------------------------------
-   4. CARD SPOTLIGHT EFFECT (CURSOR REACTIVE GLOW)
+   5. CARD SPOTLIGHT EFFECT (CURSOR REACTIVE GLOW)
    -------------------------------------------------------------------------- */
 function initCardSpotlight() {
   const cards = document.querySelectorAll('.glass-card');
@@ -264,7 +313,7 @@ function initCardSpotlight() {
 }
 
 /* --------------------------------------------------------------------------
-   5. WIDGET INTERACTIVO: SIMULADOR DE TOURS IA
+   6. WIDGET INTERACTIVO: SIMULADOR DE TOURS IA
    -------------------------------------------------------------------------- */
 const tourTemplates = {
   cartagena: {
@@ -608,7 +657,7 @@ function updateGeneratedPreview() {
 }
 
 /* --------------------------------------------------------------------------
-   6. AUDIO DEMO SIMULATOR
+   7. AUDIO DEMO SIMULATOR
    -------------------------------------------------------------------------- */
 function initAudioSimulator() {
   const playBtn = document.getElementById('simPlayBtn');
@@ -657,7 +706,7 @@ function initAudioSimulator() {
 }
 
 /* --------------------------------------------------------------------------
-   7. FAQ ACCORDION INTERACTION
+   8. FAQ ACCORDION INTERACTION
    -------------------------------------------------------------------------- */
 function initFaqAccordion() {
   const faqCards = document.querySelectorAll('.faq-card');
@@ -677,7 +726,7 @@ function initFaqAccordion() {
 }
 
 /* --------------------------------------------------------------------------
-   8. BILINGUAL TRANSLATION ENGINE (ES / EN)
+   9. BILINGUAL TRANSLATION ENGINE (ES / EN)
    -------------------------------------------------------------------------- */
 const landingTranslations = {
   es: {
@@ -699,7 +748,6 @@ const landingTranslations = {
     floatVoiceSub: 'Torre del Reloj',
     floatGpsTitle: 'GPS Satelital Activo',
     floatGpsSub: '6 Paradas • 2.4 km',
-    globeDragHint: 'Arrastra para girar en 3D',
 
     genSubtitle: 'Simulador en Vivo',
     genTitle: 'Diseña tu Tour al Instante',
@@ -801,7 +849,6 @@ const landingTranslations = {
     floatVoiceSub: 'Clock Tower',
     floatGpsTitle: 'Active Satellite GPS',
     floatGpsSub: '6 Stops • 2.4 km',
-    globeDragHint: 'Drag to rotate in 3D',
 
     genSubtitle: 'Live Simulator',
     genTitle: 'Design Your Tour in Seconds',
@@ -918,7 +965,6 @@ window.setLandingLanguage = function(lang) {
   updateText('#float-voice-sub', t.floatVoiceSub);
   updateText('#float-gps-title', t.floatGpsTitle);
   updateText('#float-gps-sub', t.floatGpsSub);
-  updateText('#globe-drag-hint', t.globeDragHint);
 
   // Generator
   updateText('#gen-subtitle', t.genSubtitle);
