@@ -1883,6 +1883,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'Check weather conditions and rain alerts before starting your journey.';
 
   @override
+  String get tourHomeToursForYouTitle => 'Tours for You';
+
+  @override
+  String get tourHomeToursForYouDesc =>
+      'Explore tour recommendations personalized to your preferences and travel affinity.';
+
+  @override
+  String get tourHomeNearbyTitle => 'Nearby Places';
+
+  @override
+  String get tourHomeNearbyDesc =>
+      'Discover tourist attractions, parks, and points of interest within kilometers of your real-time location.';
+
+  @override
+  String get tourHomeEventsTitle => 'Upcoming Events';
+
+  @override
+  String get tourHomeEventsDesc =>
+      'Browse cultural festivals, fairs, and entertainment activities scheduled in the city.';
+
+  @override
   String get tourToursSearchTitle => 'Quick Search';
 
   @override

@@ -302,6 +302,42 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.equal(isValidSpecificPlace('Restaurante Celele'), true)
     assert.equal(isValidSpecificPlace('Islas del Rosario'), true)
     assert.equal(isValidSpecificPlace('Convento de la Popa'), true)
+    assert.equal(isValidSpecificPlace('Bahía de Cartagena'), true)
+  })
+
+  it('should clean Cartagena de Indias to canonical Cartagena', async () => {
+    const { cleanAdministrativeCityName } = await import('../services/destinationService.js')
+    assert.equal(cleanAdministrativeCityName('Cartagena de Indias'), 'Cartagena')
+    assert.equal(cleanAdministrativeCityName('cartagena de indias'), 'cartagena')
+    assert.equal(cleanAdministrativeCityName('Distrito Turístico de Cartagena de Indias'), 'Cartagena')
+  })
+
+  it('should preserve Bahia de Cartagena and Centro Historico de Cartagena as distinct non-colliding places', async () => {
+    const { normalizePlaceKey, deduplicatePlacesByName } = await import('../routes/ai.js')
+    
+    const keyBahia = normalizePlaceKey('Bahía de Cartagena')
+    const keyCentro = normalizePlaceKey('Centro Histórico de Cartagena')
+    
+    assert.notEqual(keyBahia, keyCentro)
+    assert.ok(keyBahia.includes('bahia'))
+    assert.ok(keyCentro.includes('centro historico'))
+
+    const places = [
+      { name: 'Centro Histórico de Cartagena', dia: 1 },
+      { name: 'Castillo San Felipe de Barajas', dia: 1 },
+      { name: 'Restaurante Celele', dia: 1 },
+      { name: 'Convento de la Popa', dia: 4 },
+      { name: 'Bahía de Cartagena', dia: 4 },
+      { name: 'Restaurante Sabor Costeño', dia: 4 }
+    ]
+
+    const deduped = deduplicatePlacesByName(places)
+    const dedupedNames = deduped.map(p => typeof p === 'string' ? p : p.name)
+    
+    assert.ok(dedupedNames.some(n => n.includes('Centro Histórico de Cartagena')))
+    assert.ok(dedupedNames.some(n => n.includes('Bahía de Cartagena')))
+    assert.equal(deduped.length, 6)
   })
 })
+
 

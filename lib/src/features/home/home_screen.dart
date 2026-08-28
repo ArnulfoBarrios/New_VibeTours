@@ -28,6 +28,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _weatherKey = GlobalKey();
   final _heroTourKey = GlobalKey();
   final _toursForYouKey = GlobalKey();
+  final _nearbyPlacesKey = GlobalKey();
+  final _upcomingEventsKey = GlobalKey();
   bool _tourChecked = false;
 
   @override
@@ -65,9 +67,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         TourStepItem(
           key: _toursForYouKey,
-          title: l10n.tourHomeHeroTitle,
-          description: l10n.tourHomeNavDesc,
+          title: l10n.tourHomeToursForYouTitle,
+          description: l10n.tourHomeToursForYouDesc,
           icon: Icons.explore_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 20,
+          align: ContentAlign.top,
+        ),
+        TourStepItem(
+          key: _nearbyPlacesKey,
+          title: l10n.tourHomeNearbyTitle,
+          description: l10n.tourHomeNearbyDesc,
+          icon: Icons.near_me_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 20,
+          align: ContentAlign.top,
+        ),
+        TourStepItem(
+          key: _upcomingEventsKey,
+          title: l10n.tourHomeEventsTitle,
+          description: l10n.tourHomeEventsDesc,
+          icon: Icons.event_rounded,
           shape: ShapeLightFocus.RRect,
           radius: 20,
           align: ContentAlign.top,
@@ -147,10 +167,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               SliverToBoxAdapter(
-                child: _NearbyPlacesSection(placesAsync: placesAsync),
+                child: KeyedSubtree(
+                  key: _nearbyPlacesKey,
+                  child: _NearbyPlacesSection(placesAsync: placesAsync),
+                ),
               ),
               SliverToBoxAdapter(
-                child: _UpcomingEventsSection(eventsAsync: eventsAsync),
+                child: KeyedSubtree(
+                  key: _upcomingEventsKey,
+                  child: _UpcomingEventsSection(eventsAsync: eventsAsync),
+                ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],

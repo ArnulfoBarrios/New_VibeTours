@@ -161,6 +161,10 @@ export function getDefaultActionChips(known = {}, lastMessage = '') {
     return ['Santa Marta', 'Cartagena', 'Medellín', 'Bogotá']
   }
 
+  if (/\b(itinerario|c[oó]mo va el itinerario|ver itinerario|mostrar itinerario)\b/i.test(lastMessage)) {
+    return ['🚀 Generar itinerario completo', '✏️ Modificar algún día', '➕ Agregar otra actividad']
+  }
+
   if (!known.datesSeason) {
     return ['Próximo mes', 'Este fin de semana', 'Vacaciones de mitad de año', 'Fin de año']
   }
@@ -316,6 +320,36 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = `Para generar tu tour en el mapa, aún necesitamos definir: **${missing.join(', ')}**. ¿Podrías indicarme este dato?`
       } else if (effectiveReadyToBuild) {
         fallbackMsg = `¡Perfecto! Todo está listo para tu viaje a ${destName}. Procedo a generar tu tour en el mapa.`
+      } else if (hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua)\b/i.test(lastUserMsg)) {
+        if (/casa la fe/i.test(lastUserMsg) && (/cartagena/i.test(destName) || !destName)) {
+          fallbackMsg = `¡Con mucho gusto! Aquí tienes los detalles del **Hotel Casa La Fe** en ${destName}: 🏨✨\n\n` +
+            `• 📍 **Ubicación**: Ubicado en la Plaza Fernández de Madrid en el Centro Histórico.\n` +
+            `• 🏊 **Instalaciones**: Piscina en la azotea con solárium y vistas panorámicas.\n` +
+            `• 🍳 **Servicios**: Desayuno gourmet incluido, Wi-Fi de alta velocidad y aire acondicionado.\n` +
+            `• 💰 **Tarifa estimada**: ~$90 - $130 USD/noche.\n\n` +
+            `¿Deseas confirmar el Hotel Casa La Fe como tu hospedaje?`
+        } else {
+          const hotelName = (preset.hotels && preset.hotels[0]?.name) || `Hotel Central de ${destName}`
+          fallbackMsg = `¡Con mucho gusto! Aquí tienes los detalles del **${hotelName}** en ${destName}: 🏨✨\n\n` +
+            `• 📍 **Ubicación**: Ubicado en el corazón de ${destName}.\n` +
+            `• 🏊 **Instalaciones**: Instalaciones modernas, vistas panorámicas y áreas de descanso.\n` +
+            `• 🍳 **Servicios**: Desayuno incluido, Wi-Fi de alta velocidad y recepción 24 horas.\n` +
+            `• 💰 **Tarifa estimada**: ~$100 - $180 USD/noche.\n\n` +
+            `¿Deseas confirmar este hospedaje?`
+        }
+      } else if (hasCity && /\b(detalles del d[íi]a\s*(\d+)|ver detalles del d[íi]a\s*(\d+)|ver d[íi]a\s*(\d+)|d[íi]a\s*(\d+))\b/i.test(lastUserMsg)) {
+        const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
+          ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
+          : []
+        const p1 = rawSpecifics[0] || preset.places[0] || 'Castillo San Felipe'
+        const p2 = rawSpecifics[1] || preset.places[1] || 'Ciudad Amurallada'
+        const r1 = preset.restaurants?.[0]?.name || 'Restaurante La Cevicheria'
+        fallbackMsg = `Día 1: ${destName}\n\n` +
+          `• 🏨 **Alojamiento / Punto de partida**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado'}\n` +
+          `• 🌅 **09:00 AM - Mañana**: Visita a ${p1}\n` +
+          `• 🍽️ **12:30 PM - Almuerzo**: ${r1}\n` +
+          `• 🌇 **03:30 PM - Tarde**: Recorrido por ${p2}\n\n` +
+          `¿Te gustaría generar el tour completo o ver otro día?`
       } else if (/\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|muestres el itinerario)\b/i.test(lastUserMsg)) {
         if (hasDurationOrDates) {
           const numDays = known.durationDays || 3
@@ -342,10 +376,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = `¡Lugares recomendados en ${destName}! 🌟\n\n` +
           (preset.places || []).slice(0, 6).map(p => `• **${p}**: Atractivo destacado para descubrir lo mejor del destino.`).join('\n') +
           `\n\n¿Cuáles de estos lugares te gustaría incluir en tu itinerario?`
-      } else if (/\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar)\b/i.test(lastUserMsg)) {
-        fallbackMsg = `¡Restaurantes y gastronomía en ${destName}! 🍽️\n\n` +
-          (preset.restaurants || []).slice(0, 4).map(r => `• **${r.name || r}**: Especialidad local deliciosa.`).join('\n') +
-          `\n\n¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
+      } else if (/\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|men[uú]s|carta|platos)\b/i.test(lastUserMsg)) {
+        if (/cartagena/i.test(destName)) {
+          fallbackMsg = `¡Restaurantes y platos recomendados en ${destName}! 🍽️\n\n` +
+            `• **Restaurante La Cevicheria**: Ceviches frescos y platos típicos caribeños.\n` +
+            `• **Restaurante Celele**: Cocina contemporánea del Caribe colombiano con platos de autor.\n` +
+            `• **Restaurante El Boliche Cebichería**: Deliciosa pesca del día y gastronomía local.\n\n` +
+            `¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
+        } else {
+          fallbackMsg = `¡Restaurantes y gastronomía en ${destName}! 🍽️\n\n` +
+            (preset.restaurants || []).slice(0, 4).map(r => `• **${r.name || r}**: Especialidad local de ${destName}.`).join('\n') +
+            `\n\n¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
+        }
       } else if (/\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastUserMsg)) {
         fallbackMsg = `¡Opciones de hospedaje en ${destName}! 🏨\n\n` +
           (preset.hotels || []).slice(0, 3).map(h => `• **${h.name}**: ${h.desc} (${h.price})`).join('\n') +
@@ -465,7 +507,7 @@ ETAPA 1: ASESORÍA DE DESTINOS, FECHAS / DURACIÓN Y ACOMPAÑANTES
 
 ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
 - Si el usuario pide recomendaciones de hotel/alojamiento o indica que aún no tiene alojamiento (ej: "¿qué recomiendas?", "recomiéndame hoteles"):
-  Presenta de inmediato 4 o 5 opciones de hoteles reales con nombre propio en ${destName || 'el destino'} (ej: ${realCatalog?.hotels?.map(h => h.name).join(', ') || 'Hotel Santa Marta Real, Hotel Boutique Casa Carolina, Hotel Tayrona, Hotel Irotama'}), con 1 línea concisa de cada uno, e invítalo a elegir uno para armar el itinerario.
+  Presenta de inmediato 4 o 5 opciones de hoteles reales con nombre propio de diversas categorías (boutique, colonial, resort o de playa según aplique) físicamente ubicados en ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas disponibles: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}, con 1 línea concisa de cada uno, e invítalo a elegir uno para armar el itinerario.
   NUNCA des consejos genéricos como "buscar en plataformas" ni vuelvas a preguntar por datos que ya estén CONFIRMADOS (presupuesto, transporte, fechas).
 - Si faltan datos de transporte, presupuesto o alojamiento:
   Pregunta en 1 sola línea directa ÚNICAMENTE por los campos que figuren como PENDIENTE en el ESTADO ACTUAL DE DATOS.

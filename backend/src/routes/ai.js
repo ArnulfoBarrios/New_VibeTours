@@ -162,8 +162,10 @@ export function normalizePlaceKey(placeName) {
     .replace(/\s+/g, ' ')
     .trim()
 
+  // Remove commercial/hospitality descriptors and action prefixes
+  // BUT PRESERVE distinct geographical accident nouns (bahia, cerro, isla, playa, castillo, convento, catedral, plaza, parque)
   const stripped = base
-    .replace(/\b(restaurante de la|restaurante del|restaurante de|restaurante el|restaurante la|restaurante los|restaurante las|restaurante|gastrobar de|gastrobar|bar de|bar el|bar la|bar|cafe de|cafe el|cafe la|cafe|discoteca de|discoteca la|discoteca el|discoteca|club de|club|pub de|pub|playa de la|playa de el|playa de|playa del|playa|quinta de|quinta|cerro de la|cerro de|cerro|bahia de|bahia|isla de|isla|islas de|islas|centro historico de|centro historico|centro de|centro|sector de|sector|camino a|sendero de|sendero)\b/g, ' ')
+    .replace(/\b(restaurante de la|restaurante del|restaurante de|restaurante el|restaurante la|restaurante los|restaurante las|restaurante|gastrobar de|gastrobar|bar de|bar el|bar la|bar|cafe de|cafe el|cafe la|cafe|discoteca de|discoteca la|discoteca el|discoteca|club de|club|pub de|pub)\b/g, ' ')
     .replace(/\b(la|el|los|las|un|una|unos|unas|del|de|de la|de los)\b/g, ' ') // remove articles
     .replace(/\b(visita a la|visita a|visita al|recorrido por el|recorrido por la|recorrido por|paseo en lancha a|paseo en lancha por|paseo en barco a|paseo en|paseo por|excursion a la|excursion a|excursión a|excursion al|ir a|entrada a|parada en|caminar por|recorrer el|visitar la|visitar el)\b/g, ' ') // remove action prefixes
     .replace(/\s+/g, ' ')
@@ -189,15 +191,27 @@ export function deduplicatePlacesByName(places = []) {
       const existingName = typeof item === 'string' ? item : (item.name || '')
       const existingKey = normalizePlaceKey(existingName)
       const existingType = getPlaceEntityType(existingName)
+      const existingDia = typeof item === 'object' ? (item.dia || item.day) : null
 
-      // Si tienen categorías explícitas incompatibles (ej: Museo vs Parque, Centro Comercial vs Restaurante), NUNCA son duplicados
+      // Si tienen categorías explícitas incompatibles (ej: beach_coastal vs cultural, food vs cultural), NUNCA son duplicados
       if (type !== 'generic' && existingType !== 'generic' && type !== existingType) {
         return false
       }
 
+      // Si están en días explícitamente distintos y las claves no son 100% idénticas, no fusionar
+      if (dia && existingDia && dia !== existingDia && key !== existingKey) {
+        return false
+      }
+
       if (key === existingKey) return true
-      if (key.length >= 4 && existingKey.length >= 4) {
-        if (key.includes(existingKey) || existingKey.includes(key)) return true
+
+      // Substring match: only when both keys have multi-word distinctive phrases and significant length
+      if (key.length >= 6 && existingKey.length >= 6) {
+        const wordsA = key.split(' ').filter(w => w.length >= 3)
+        const wordsB = existingKey.split(' ').filter(w => w.length >= 3)
+        if (wordsA.length > 1 && wordsB.length > 1) {
+          if (key.includes(existingKey) || existingKey.includes(key)) return true
+        }
       }
       return false
     })

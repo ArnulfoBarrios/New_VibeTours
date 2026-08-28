@@ -1896,6 +1896,27 @@ class AppLocalizationsEs extends AppLocalizations {
       'Monitorea el clima y alertas de lluvia antes de iniciar tu recorrido.';
 
   @override
+  String get tourHomeToursForYouTitle => 'Tours para ti';
+
+  @override
+  String get tourHomeToursForYouDesc =>
+      'Explora recomendaciones de tours personalizadas según tus preferencias y afinidad.';
+
+  @override
+  String get tourHomeNearbyTitle => 'Lugares Cercanos';
+
+  @override
+  String get tourHomeNearbyDesc =>
+      'Descubre atractivos turísticos, parques y puntos de interés a pocos kilómetros de tu ubicación en tiempo real.';
+
+  @override
+  String get tourHomeEventsTitle => 'Próximos Eventos';
+
+  @override
+  String get tourHomeEventsDesc =>
+      'Consulta ferias, festivales culturales y actividades de entretenimiento programadas en la ciudad.';
+
+  @override
   String get tourToursSearchTitle => 'Búsqueda Rápida';
 
   @override

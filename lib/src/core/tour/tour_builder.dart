@@ -57,10 +57,32 @@ class TourBuilder {
                       controller.skip();
                       onFinish();
                     } else {
+                      final nextKey = steps[i + 1].key;
+                      if (nextKey.currentContext != null) {
+                        Scrollable.ensureVisible(
+                          nextKey.currentContext!,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          alignment: 0.3,
+                        );
+                      }
                       controller.next();
                     }
                   },
-                  onPrevious: i > 0 ? () => controller.previous() : null,
+                  onPrevious: i > 0
+                      ? () {
+                          final prevKey = steps[i - 1].key;
+                          if (prevKey.currentContext != null) {
+                            Scrollable.ensureVisible(
+                              prevKey.currentContext!,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                              alignment: 0.3,
+                            );
+                          }
+                          controller.previous();
+                        }
+                      : null,
                   onSkip: () {
                     controller.skip();
                     onSkip();

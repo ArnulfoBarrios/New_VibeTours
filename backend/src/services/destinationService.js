@@ -93,7 +93,7 @@ export function cleanAdministrativeCityName(rawName = '') {
   let cleaned = rawName.trim()
 
   cleaned = cleaned.replace(/^(per[íi]metro\s+urbano\s+(de\s+)?)/i, '')
-  cleaned = cleaned.replace(/^(distrito\s+tur[íi]stico[,\s]+cultural\s+e\s+hist[óo]rico\s+de\s+)/i, '')
+  cleaned = cleaned.replace(/^(distrito\s+tur[íi]stico(?:[,\s]+cultural\s+e\s+hist[óo]rico)?\s+de\s+)/i, '')
   cleaned = cleaned.replace(/^(distrito\s+especial[,\s]+industrial\s+y\s+portuario\s+de\s+)/i, '')
   cleaned = cleaned.replace(/^(distrito\s+capital\s+de\s+)/i, '')
   cleaned = cleaned.replace(/^(distrito\s+especial\s+de\s+)/i, '')
@@ -103,6 +103,7 @@ export function cleanAdministrativeCityName(rawName = '') {
   cleaned = cleaned.replace(/^(área\s+metropolitana\s+de\s+)/i, '')
   cleaned = cleaned.replace(/^(area\s+metropolitana\s+de\s+)/i, '')
   cleaned = cleaned.replace(/,\s*(distrito\s+capital|d\.?\s*c\.?|per[íi]metro\s+urbano)$/i, '')
+  cleaned = cleaned.replace(/\s+de\s+indias$/i, '')
 
   return cleaned.trim()
 }

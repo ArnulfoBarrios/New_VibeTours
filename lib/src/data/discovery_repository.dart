@@ -304,7 +304,7 @@ class DiscoveryRepository {
             }
           }
         }
-        return _enrichPlacesWithRealImages(places);
+        return await _enrichPlacesWithRealImages(places);
       }
     } catch (_) {
       // Fall through

@@ -3471,6 +3471,42 @@ abstract class AppLocalizations {
   /// **'Monitorea el clima y alertas de lluvia antes de iniciar tu recorrido.'**
   String get tourHomeWeatherDesc;
 
+  /// No description provided for @tourHomeToursForYouTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Tours para ti'**
+  String get tourHomeToursForYouTitle;
+
+  /// No description provided for @tourHomeToursForYouDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Explora recomendaciones de tours personalizadas según tus preferencias y afinidad.'**
+  String get tourHomeToursForYouDesc;
+
+  /// No description provided for @tourHomeNearbyTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Lugares Cercanos'**
+  String get tourHomeNearbyTitle;
+
+  /// No description provided for @tourHomeNearbyDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Descubre atractivos turísticos, parques y puntos de interés a pocos kilómetros de tu ubicación en tiempo real.'**
+  String get tourHomeNearbyDesc;
+
+  /// No description provided for @tourHomeEventsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Próximos Eventos'**
+  String get tourHomeEventsTitle;
+
+  /// No description provided for @tourHomeEventsDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Consulta ferias, festivales culturales y actividades de entretenimiento programadas en la ciudad.'**
+  String get tourHomeEventsDesc;
+
   /// No description provided for @tourToursSearchTitle.
   ///
   /// In es, this message translates to:

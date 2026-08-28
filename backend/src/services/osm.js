@@ -178,6 +178,22 @@ export async function geocodePlace(query, lat = null, lon = null) {
   const cached = geocodeCache.get(key)
   if (cached) return cached
 
+  const normLower = normalizedQuery.toLowerCase().trim()
+  const rawClean = String(query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const KNOWN_ICONIC_LANDMARKS = {
+    'islas del rosario': { name: 'Islas del Rosario, Cartagena', latitude: 10.1772, longitude: -75.7428, city: 'Cartagena', country: 'Colombia' },
+    'castillo san felipe de barajas': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
+    'castillo san felipe': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
+    'paseo en chiva': { name: 'Paseo en Chiva - Torre del Reloj, Centro Histórico', latitude: 10.4225, longitude: -75.5478, city: 'Cartagena', country: 'Colombia' },
+    'cafe del mar': { name: 'Café del Mar, Baluarte de Santo Domingo', latitude: 10.4215, longitude: -75.5539, city: 'Cartagena', country: 'Colombia' }
+  }
+
+  if (KNOWN_ICONIC_LANDMARKS[normLower] || KNOWN_ICONIC_LANDMARKS[rawClean]) {
+    const res = KNOWN_ICONIC_LANDMARKS[normLower] || KNOWN_ICONIC_LANDMARKS[rawClean]
+    geocodeCache.set(key, res)
+    return res
+  }
+
   // 1. If lat and lon are provided, perform proximity search FIRST to bind results directly to the destination area
   if (lat && lon) {
     try {
