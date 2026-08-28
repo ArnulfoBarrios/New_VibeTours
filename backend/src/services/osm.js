@@ -398,12 +398,24 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
 
     if (results.length === 0) {
       console.warn('[osm] overpassAttractions returned empty or timed out, using multi-category Photon fallback...')
-      const [beachItems, islandItems, attrItems] = await Promise.all([
-        photonSearch('playa', 8, latitude, longitude).catch(() => []),
-        photonSearch('isla', 8, latitude, longitude).catch(() => []),
-        photonSearch('turismo', 8, latitude, longitude).catch(() => [])
+      const [monuments, museums, parks, plazas, beaches, islands, generalTourism] = await Promise.all([
+        photonSearch('monumento', 6, latitude, longitude).catch(() => []),
+        photonSearch('museo', 6, latitude, longitude).catch(() => []),
+        photonSearch('parque', 6, latitude, longitude).catch(() => []),
+        photonSearch('plaza', 6, latitude, longitude).catch(() => []),
+        photonSearch('playa', 4, latitude, longitude).catch(() => []),
+        photonSearch('isla', 4, latitude, longitude).catch(() => []),
+        photonSearch('turismo', 6, latitude, longitude).catch(() => [])
       ])
-      const combined = [...beachItems, ...islandItems, ...attrItems]
+      const combined = [
+        ...monuments,
+        ...museums,
+        ...parks,
+        ...plazas,
+        ...generalTourism,
+        ...beaches,
+        ...islands
+      ]
       const seen = new Set()
       results = []
       for (const item of combined) {

@@ -391,6 +391,17 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.ok(!placeNames.includes('Cabañas La Española'))
     assert.ok(!placeNames.includes('El Poblado'))
   })
+
+  it('should provide a diversified catalog for Barranquilla without beach monopoly', async () => {
+    const { getRealDestinationCatalog } = await import('../services/openai.js')
+    const catalog = await getRealDestinationCatalog('Barranquilla', 'Colombia')
+    
+    assert.ok(catalog && Array.isArray(catalog.places))
+    assert.ok(catalog.places.length >= 2)
+    
+    const beaches = catalog.places.filter(p => /playa|beach/i.test(typeof p === 'string' ? p : p.name))
+    assert.ok(beaches.length <= 4, 'Beaches should not exceed 4 in an urban catalog')
+  })
 })
 
 

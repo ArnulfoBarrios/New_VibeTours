@@ -263,7 +263,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
 
     if (widget.embedded) return content;
-    return PremiumScaffold(safeBottom: true, child: content);
+    return PremiumScaffold(safeTop: !widget.embedded, safeBottom: true, child: content);
   }
 
   String _mapStyleLabel(BuildContext context, MapStyleOption value) {

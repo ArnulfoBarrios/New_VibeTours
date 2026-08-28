@@ -55,19 +55,35 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     realPlaces = (osmAttractions || []).filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 15)
 
     if (realPlaces.length < 6) {
-      const [beachPlaces, islandPlaces, generalPlaces] = await Promise.all([
-        photonSearch('playa', 8, lat, lon).catch(() => []),
-        photonSearch('isla', 8, lat, lon).catch(() => []),
-        photonSearch('turismo', 8, lat, lon).catch(() => [])
+      const [monuments, museums, parks, plazas, generalPlaces, beachPlaces, islandPlaces] = await Promise.all([
+        photonSearch('monumento', 6, lat, lon).catch(() => []),
+        photonSearch('museo', 6, lat, lon).catch(() => []),
+        photonSearch('parque', 6, lat, lon).catch(() => []),
+        photonSearch('plaza', 6, lat, lon).catch(() => []),
+        photonSearch('turismo', 6, lat, lon).catch(() => []),
+        photonSearch('playa', 4, lat, lon).catch(() => []),
+        photonSearch('isla', 4, lat, lon).catch(() => [])
       ])
-      const additional = [...beachPlaces, ...islandPlaces, ...generalPlaces]
-        .filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !p.name.toLowerCase().includes('perímetro urbano'))
+      const additional = [
+        ...monuments,
+        ...museums,
+        ...parks,
+        ...plazas,
+        ...generalPlaces,
+        ...beachPlaces,
+        ...islandPlaces
+      ].filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !p.name.toLowerCase().includes('perímetro urbano'))
+
       const existingNames = new Set(realPlaces.map(p => (typeof p === 'string' ? p : p.name).toLowerCase().trim()))
+      let beachCount = realPlaces.filter(p => /playa|beach/i.test(typeof p === 'string' ? p : p.name)).length
       for (const p of additional) {
+        const isBeach = /playa|beach/i.test(p.name)
+        if (isBeach && beachCount >= 3) continue
         const k = p.name.toLowerCase().trim()
         if (!existingNames.has(k)) {
           existingNames.add(k)
           realPlaces.push(p)
+          if (isBeach) beachCount++
         }
       }
     }
@@ -550,6 +566,10 @@ REGLAS CRÍTICAS DEL ITINERARIO:
 3. En las viñetas (•), escribe ÚNICAMENTE el nombre propio y limpio del lugar físico o restaurante real.
 4. Si TODOS los datos previos (fechas, acompañantes, transporte, presupuesto, hospedaje) están confirmados:
    Pregunta al final del itinerario: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?"
+5. DIVERSIDAD Y EQUILIBRIO TEMÁTICO (NO MONOPOLIO DE PLAYAS EN CIUDADES URBANAS):
+   - En capitales y ciudades metropolitanas/culturales (ej: Barranquilla, Medellín, Bogotá, Cartagena, Roma, París, etc.):
+     Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas, arquitectura, parques y gastronomía local (ej. en Barranquilla: Gran Malecón del Río, Ventana al Mundo, Museo del Carnaval, Barrio El Prado, Catedral Metropolitana, Ciénaga de Mallorquín, Castillo de Salgar). Si la ciudad tiene costa o playas cercanas, incluye a lo sumo 1 o 2 visitas de playa, pero ESTÁ ESTRICTAMENTE PROHIBIDO llenar un tour urbano de 4 o 5 días exclusivamente con 10 paradas de playas repetidas.
+   - En destinos con vocación puramente balnearia (ej: Coveñas, San Andrés, Cancún): Las playas e islas sí son el atractivo central diario.
 
 ETAPA 4: GENERACIÓN DEL TOUR ("readyToBuild": true)
 - Si el usuario pide generar el tour:
