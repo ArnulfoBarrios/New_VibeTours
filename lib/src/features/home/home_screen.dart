@@ -8,10 +8,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
 import '../../core/design/premium_components.dart';
+import '../../core/tour/tour_builder.dart';
+import '../../core/tour/tour_controller.dart';
+import '../../core/tour/tour_phase.dart';
 import '../../core/utils/image_utils.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -21,11 +25,61 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _weatherKey = GlobalKey();
+  final _heroTourKey = GlobalKey();
+  final _toursForYouKey = GlobalKey();
+  bool _tourChecked = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestNotifications();
+    });
+  }
+
+  void _triggerTourIfNeeded() {
+    if (_tourChecked) return;
+    _tourChecked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      final steps = [
+        TourStepItem(
+          key: _weatherKey,
+          title: l10n.tourHomeWeatherTitle,
+          description: l10n.tourHomeWeatherDesc,
+          icon: Icons.wb_sunny_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 18,
+          align: ContentAlign.bottom,
+        ),
+        TourStepItem(
+          key: _heroTourKey,
+          title: l10n.tourHomeHeroTitle,
+          description: l10n.tourHomeHeroDesc,
+          icon: Icons.star_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 28,
+          align: ContentAlign.bottom,
+        ),
+        TourStepItem(
+          key: _toursForYouKey,
+          title: l10n.tourHomeHeroTitle,
+          description: l10n.tourHomeNavDesc,
+          icon: Icons.explore_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 20,
+          align: ContentAlign.top,
+        ),
+      ];
+
+      ref.read(tourControllerProvider.notifier).showTourIfPending(
+            context: context,
+            phase: TourPhase.home,
+            steps: steps,
+            delay: const Duration(milliseconds: 700),
+          );
     });
   }
 
@@ -53,6 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: Text(l10n.noToursAvailable, style: const TextStyle(fontWeight: FontWeight.w700)),
             );
           }
+          _triggerTourIfNeeded();
           final heroTour = tours.first;
           final restTours = tours.skip(1).toList();
           final metadata = user?.userMetadata;
@@ -72,6 +127,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _HeaderSection(
                   userName: finalName,
                   weatherAsync: weatherAsync,
+                  weatherKey: _weatherKey,
                 ),
               ),
               if (weatherAsync.asData?.value != null)
@@ -79,10 +135,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: _WeatherAlertBanner(weather: weatherAsync.asData!.value!),
                 ),
               SliverToBoxAdapter(
-                child: _HeroTourSection(tour: heroTour),
+                child: KeyedSubtree(
+                  key: _heroTourKey,
+                  child: _HeroTourSection(tour: heroTour),
+                ),
               ),
               SliverToBoxAdapter(
-                child: _ToursForYouSection(tours: restTours),
+                child: KeyedSubtree(
+                  key: _toursForYouKey,
+                  child: _ToursForYouSection(tours: restTours),
+                ),
               ),
               SliverToBoxAdapter(
                 child: _NearbyPlacesSection(placesAsync: placesAsync),
@@ -181,8 +243,13 @@ class _WeatherAlertBanner extends StatelessWidget {
 class _HeaderSection extends StatelessWidget {
   final String userName;
   final AsyncValue<WeatherSnapshot?> weatherAsync;
+  final GlobalKey? weatherKey;
 
-  const _HeaderSection({required this.userName, required this.weatherAsync});
+  const _HeaderSection({
+    required this.userName,
+    required this.weatherAsync,
+    this.weatherKey,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -258,7 +325,7 @@ class _HeaderSection extends StatelessWidget {
   }
 
   Widget _buildWeatherBadge(BuildContext context, WeatherSnapshot weather) {
-    return DynamicGlowBackground(
+    final badge = DynamicGlowBackground(
       child: GlassPanel(
         radius: 16,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -291,6 +358,11 @@ class _HeaderSection extends StatelessWidget {
         ),
       ),
     );
+
+    if (weatherKey != null) {
+      return KeyedSubtree(key: weatherKey!, child: badge);
+    }
+    return badge;
   }
 }
 

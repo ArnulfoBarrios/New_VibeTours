@@ -4,11 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/premium_components.dart';
+import '../../core/tour/tour_builder.dart';
+import '../../core/tour/tour_controller.dart';
+import '../../core/tour/tour_phase.dart';
 import '../../core/utils/debouncer.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../ads/presentation/widgets/native_ad_banner.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 class ToursScreen extends ConsumerStatefulWidget {
   const ToursScreen({super.key});
@@ -20,9 +24,59 @@ class ToursScreen extends ConsumerStatefulWidget {
 class _ToursScreenState extends ConsumerState<ToursScreen> {
   final _search = TextEditingController();
   final _debouncer = Debouncer(milliseconds: 300);
+  final _searchKey = GlobalKey();
+  final _filtersKey = GlobalKey();
+  final _tourCardKey = GlobalKey();
+  bool _tourChecked = false;
+
   String _country = '';
   String _city = '';
   TourType? _type;
+
+  void _triggerTourIfNeeded() {
+    if (_tourChecked) return;
+    _tourChecked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      final steps = [
+        TourStepItem(
+          key: _searchKey,
+          title: l10n.tourToursSearchTitle,
+          description: l10n.tourToursSearchDesc,
+          icon: Icons.search_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 12,
+          align: ContentAlign.bottom,
+        ),
+        TourStepItem(
+          key: _filtersKey,
+          title: l10n.tourToursFilterTitle,
+          description: l10n.tourToursFilterDesc,
+          icon: Icons.filter_alt_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 16,
+          align: ContentAlign.bottom,
+        ),
+        TourStepItem(
+          key: _tourCardKey,
+          title: l10n.tourToursCardTitle,
+          description: l10n.tourToursCardDesc,
+          icon: Icons.map_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 20,
+          align: ContentAlign.bottom,
+        ),
+      ];
+
+      ref.read(tourControllerProvider.notifier).showTourIfPending(
+            context: context,
+            phase: TourPhase.tours,
+            steps: steps,
+            delay: const Duration(milliseconds: 650),
+          );
+    });
+  }
 
   @override
   void dispose() {
@@ -54,6 +108,10 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
             return countryOk && cityOk && typeOk && searchOk;
           }).toList();
 
+          if (allTours.isNotEmpty) {
+            _triggerTourIfNeeded();
+          }
+
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
@@ -66,66 +124,72 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                  child: Container(
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: TextField(
-                      controller: _search,
-                      onChanged: (_) => _debouncer.run(() {
-                        if (mounted) setState(() {});
-                      }),
-                      style: const TextStyle(fontSize: 16),
-                      decoration: InputDecoration(
-                        hintText: l10n.searchDestination,
-                        prefixIcon: Icon(Icons.search_rounded, size: 20, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  child: KeyedSubtree(
+                    key: _searchKey,
+                    child: Container(
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: TextField(
+                        controller: _search,
+                        onChanged: (_) => _debouncer.run(() {
+                          if (mounted) setState(() {});
+                        }),
+                        style: const TextStyle(fontSize: 16),
+                        decoration: InputDecoration(
+                          hintText: l10n.searchDestination,
+                          prefixIcon: Icon(Icons.search_rounded, size: 20, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
               SliverToBoxAdapter(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      _MenuFilter(
-                        label: l10n.country,
-                        value: _country.isEmpty ? l10n.all : _country,
-                        values: [l10n.all, ...countries],
-                        onChanged: (value) => setState(() {
-                          _country = value == l10n.all ? '' : value;
-                          _city = '';
-                        }),
-                      ),
-                      const SizedBox(width: 8),
-                      _MenuFilter(
-                        label: l10n.city,
-                        value: _city.isEmpty ? l10n.allFem : _city,
-                        values: [l10n.allFem, ...cities],
-                        onChanged: (value) => setState(() {
-                          _city = value == l10n.allFem ? '' : value;
-                        }),
-                      ),
-                      const SizedBox(width: 8),
-                      _MenuFilter(
-                        label: l10n.type,
-                        value: _type == null ? l10n.any : tourTypeL10n(context, _type!),
-                        values: [l10n.any, ...TourType.values.map((t) => tourTypeL10n(context, t))],
-                        onChanged: (value) => setState(() {
-                          _type = value == l10n.any
-                              ? null
-                              : TourType.values.firstWhere((t) => tourTypeL10n(context, t) == value);
-                        }),
-                      ),
-                    ],
+                child: KeyedSubtree(
+                  key: _filtersKey,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        _MenuFilter(
+                          label: l10n.country,
+                          value: _country.isEmpty ? l10n.all : _country,
+                          values: [l10n.all, ...countries],
+                          onChanged: (value) => setState(() {
+                            _country = value == l10n.all ? '' : value;
+                            _city = '';
+                          }),
+                        ),
+                        const SizedBox(width: 8),
+                        _MenuFilter(
+                          label: l10n.city,
+                          value: _city.isEmpty ? l10n.allFem : _city,
+                          values: [l10n.allFem, ...cities],
+                          onChanged: (value) => setState(() {
+                            _city = value == l10n.allFem ? '' : value;
+                          }),
+                        ),
+                        const SizedBox(width: 8),
+                        _MenuFilter(
+                          label: l10n.type,
+                          value: _type == null ? l10n.any : tourTypeL10n(context, _type!),
+                          values: [l10n.any, ...TourType.values.map((t) => tourTypeL10n(context, t))],
+                          onChanged: (value) => setState(() {
+                            _type = value == l10n.any
+                                ? null
+                                : TourType.values.firstWhere((t) => tourTypeL10n(context, t) == value);
+                          }),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -147,6 +211,17 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
                       (context, index) {
                         final tour = tours[index];
                         final showAd = index > 0 && index % 4 == 0;
+                        final tourCardWidget = TourCard(
+                          tour: tour,
+                          onTap: () {
+                            ref.read(selectedTourProvider.notifier).state = tour;
+                            context.push('/tours/${tour.id}');
+                          },
+                        )
+                            .animate(delay: (index.clamp(0, 4) * 80).ms)
+                            .fadeIn(duration: 350.ms)
+                            .slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic);
+
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -156,16 +231,9 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
                               ),
                             Padding(
                               padding: const EdgeInsets.only(bottom: 16),
-                              child: TourCard(
-                                tour: tour,
-                                onTap: () {
-                                  ref.read(selectedTourProvider.notifier).state = tour;
-                                  context.push('/tours/${tour.id}');
-                                },
-                              )
-                                  .animate(delay: (index.clamp(0, 4) * 80).ms)
-                                  .fadeIn(duration: 350.ms)
-                                  .slideY(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
+                              child: index == 0
+                                  ? KeyedSubtree(key: _tourCardKey, child: tourCardWidget)
+                                  : tourCardWidget,
                             ),
                           ],
                         );

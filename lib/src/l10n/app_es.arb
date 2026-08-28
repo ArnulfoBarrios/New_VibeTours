@@ -685,5 +685,61 @@
         "type": "int"
       }
     }
-  }
+  },
+  "tourSkip": "Omitir",
+  "tourNext": "Siguiente",
+  "tourPrevious": "Anterior",
+  "tourFinish": "Entendido",
+  "tourStepIndicator": "Paso {current} de {total}",
+  "@tourStepIndicator": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "tourHomeNavTitle": "Navegación Principal",
+  "tourHomeNavDesc": "Accede a las secciones de Explorar, Chat IA, Catálogo de Tours y tu Perfil.",
+  "tourHomeHeroTitle": "Tour Destacado",
+  "tourHomeHeroDesc": "Descubre la experiencia más recomendada del día con fotos, reseñas y audioguía.",
+  "tourHomeWeatherTitle": "Clima en Tiempo Real",
+  "tourHomeWeatherDesc": "Monitorea el clima y alertas de lluvia antes de iniciar tu recorrido.",
+  "tourToursSearchTitle": "Búsqueda Rápida",
+  "tourToursSearchDesc": "Busca destinos por nombre, ciudad o palabras clave.",
+  "tourToursFilterTitle": "Filtros por Categoría",
+  "tourToursFilterDesc": "Filtra tours por país, ciudad o temática (cultural, gastronómico, etc.).",
+  "tourToursCardTitle": "Tarjetas de Tour",
+  "tourToursCardDesc": "Toca cualquier tour para ver sus paradas, escuchar una muestra de audio y comenzar.",
+  "tourDetailStartTitle": "Iniciar Tour en Vivo",
+  "tourDetailStartDesc": "Activa la navegación GPS en tiempo real con narraciones de voz automáticas.",
+  "tourDetailOfflineTitle": "Descarga Offline",
+  "tourDetailOfflineDesc": "Guarda el mapa y los audios en tu dispositivo para usarlos sin internet ni datos.",
+  "tourDetailStopsTitle": "Ruta y Paradas",
+  "tourDetailStopsDesc": "Explora la secuencia de waypoints y escucha muestras de cada parada.",
+  "tourLiveRecenterTitle": "Mapa y Recentrado",
+  "tourLiveRecenterDesc": "Sigue tu posición GPS en tiempo real y usa la brújula para orientarte.",
+  "tourLiveAudioTitle": "Audioguía Inteligente",
+  "tourLiveAudioDesc": "Controla la reproducción de historias y anécdotas de cada punto de interés.",
+  "tourLiveAiAssistantTitle": "Asistente de Voz IA",
+  "tourLiveAiAssistantDesc": "Pregúntale a la IA sobre restaurantes cercanos, datos curiosos o ayuda en ruta.",
+  "tourLiveSosTitle": "Botón de Seguridad SOS",
+  "tourLiveSosDesc": "Accede a números de emergencia locales y asistencia inmediata.",
+  "tourSettingsRefreshTitle": "Rendimiento y Pantalla",
+  "tourSettingsRefreshDesc": "Alterna entre 60Hz para ahorrar batería o 120Hz para máxima fluidez.",
+  "tourSettingsMapTitle": "Estilo del Mapa",
+  "tourSettingsMapDesc": "Elige entre vista automática, diurna, nocturna o satelital.",
+  "tourSettingsNotifTitle": "Notificaciones",
+  "tourSettingsNotifDesc": "Recibe avisos sobre lugares cercanos y eventos en tu zona.",
+  "tourSettingsGuidesSection": "Guías y Tutoriales",
+  "tourSettingsGuidesSubtitle": "Repasa cómo funciona cada sección de la app",
+  "tourReplayHome": "Guía de Inicio",
+  "tourReplayTours": "Guía de Exploración de Tours",
+  "tourReplayDetail": "Guía de Detalle de Tour",
+  "tourReplayLive": "Guía de Navegación en Vivo",
+  "tourReplaySettings": "Guía de Ajustes",
+  "tourResetAll": "Reiniciar todos los tutoriales",
+  "tourResetAllSuccess": "Tutoriales reiniciados. Se mostrarán al visitar cada pantalla."
 }

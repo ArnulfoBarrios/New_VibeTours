@@ -266,7 +266,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     var bestIndex = _lastMatchedIndex;
 
     final searchStart = (_lastMatchedIndex - 1).clamp(0, geometry.length - 1);
-    final searchEnd = (_lastMatchedIndex + 6).clamp(0, geometry.length - 1);
+    final searchEnd = (_lastMatchedIndex + 12).clamp(0, geometry.length - 1);
 
     for (var i = searchStart; i < searchEnd; i++) {
       final p1 = geometry[i];
@@ -281,11 +281,11 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       }
     }
     
-    if (minDistanceMeters <= 35.0) {
+    if (minDistanceMeters <= 65.0) {
       _lastMatchedIndex = math.max(_lastMatchedIndex, bestIndex);
     }
 
-    if (_lastMatchedIndex == 0 && minDistanceMeters > 25.0) {
+    if (_lastMatchedIndex == 0 && minDistanceMeters > 35.0) {
       return geometry;
     }
 

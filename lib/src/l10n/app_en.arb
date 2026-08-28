@@ -678,5 +678,61 @@
         "type": "int"
       }
     }
-  }
+  },
+  "tourSkip": "Skip",
+  "tourNext": "Next",
+  "tourPrevious": "Previous",
+  "tourFinish": "Got it",
+  "tourStepIndicator": "Step {current} of {total}",
+  "@tourStepIndicator": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "tourHomeNavTitle": "Main Navigation",
+  "tourHomeNavDesc": "Access Explore, AI Chat, Tours Catalog, and your Profile.",
+  "tourHomeHeroTitle": "Featured Tour",
+  "tourHomeHeroDesc": "Discover the top recommended experience of the day with photos, reviews, and audio guide.",
+  "tourHomeWeatherTitle": "Real-Time Weather",
+  "tourHomeWeatherDesc": "Check weather conditions and rain alerts before starting your journey.",
+  "tourToursSearchTitle": "Quick Search",
+  "tourToursSearchDesc": "Search destinations by name, city, or keywords.",
+  "tourToursFilterTitle": "Category Filters",
+  "tourToursFilterDesc": "Filter tours by country, city, or theme (cultural, gastronomic, etc.).",
+  "tourToursCardTitle": "Tour Cards",
+  "tourToursCardDesc": "Tap any tour to view stops, listen to an audio preview, and start.",
+  "tourDetailStartTitle": "Start Live Tour",
+  "tourDetailStartDesc": "Start real-time GPS navigation with automatic voice narrations.",
+  "tourDetailOfflineTitle": "Offline Download",
+  "tourDetailOfflineDesc": "Save maps and audios to your device to use without internet or mobile data.",
+  "tourDetailStopsTitle": "Route & Stops",
+  "tourDetailStopsDesc": "Explore the sequence of waypoints and preview audio for each stop.",
+  "tourLiveRecenterTitle": "Map & Recenter",
+  "tourLiveRecenterDesc": "Track your GPS position in real time and use the compass for orientation.",
+  "tourLiveAudioTitle": "Smart Audio Guide",
+  "tourLiveAudioDesc": "Control audio playback for stories and history at each point of interest.",
+  "tourLiveAiAssistantTitle": "AI Voice Assistant",
+  "tourLiveAiAssistantDesc": "Ask the AI about nearby restaurants, fun facts, or on-route assistance.",
+  "tourLiveSosTitle": "SOS Safety Button",
+  "tourLiveSosDesc": "Access local emergency numbers and immediate assistance.",
+  "tourSettingsRefreshTitle": "Performance & Display",
+  "tourSettingsRefreshDesc": "Switch between 60Hz for battery saving or 120Hz for maximum smoothness.",
+  "tourSettingsMapTitle": "Map Style",
+  "tourSettingsMapDesc": "Choose between auto, day, night, or satellite map views.",
+  "tourSettingsNotifTitle": "Notifications",
+  "tourSettingsNotifDesc": "Receive alerts about nearby places and local events.",
+  "tourSettingsGuidesSection": "Guides & Tutorials",
+  "tourSettingsGuidesSubtitle": "Review how each section of the app works",
+  "tourReplayHome": "Home Screen Guide",
+  "tourReplayTours": "Tours Catalog Guide",
+  "tourReplayDetail": "Tour Detail Guide",
+  "tourReplayLive": "Live Navigation Guide",
+  "tourReplaySettings": "Settings Guide",
+  "tourResetAll": "Reset all tutorials",
+  "tourResetAllSuccess": "Tutorials reset. They will show when visiting each screen."
 }

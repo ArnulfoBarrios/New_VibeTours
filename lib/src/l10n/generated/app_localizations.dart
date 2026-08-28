@@ -3404,6 +3404,282 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'{count, plural, =1{1 participante} other{{count} participantes}}'**
   String participantsCountLabel(int count);
+
+  /// No description provided for @tourSkip.
+  ///
+  /// In es, this message translates to:
+  /// **'Omitir'**
+  String get tourSkip;
+
+  /// No description provided for @tourNext.
+  ///
+  /// In es, this message translates to:
+  /// **'Siguiente'**
+  String get tourNext;
+
+  /// No description provided for @tourPrevious.
+  ///
+  /// In es, this message translates to:
+  /// **'Anterior'**
+  String get tourPrevious;
+
+  /// No description provided for @tourFinish.
+  ///
+  /// In es, this message translates to:
+  /// **'Entendido'**
+  String get tourFinish;
+
+  /// No description provided for @tourStepIndicator.
+  ///
+  /// In es, this message translates to:
+  /// **'Paso {current} de {total}'**
+  String tourStepIndicator(int current, int total);
+
+  /// No description provided for @tourHomeNavTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Navegación Principal'**
+  String get tourHomeNavTitle;
+
+  /// No description provided for @tourHomeNavDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Accede a las secciones de Explorar, Chat IA, Catálogo de Tours y tu Perfil.'**
+  String get tourHomeNavDesc;
+
+  /// No description provided for @tourHomeHeroTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Tour Destacado'**
+  String get tourHomeHeroTitle;
+
+  /// No description provided for @tourHomeHeroDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Descubre la experiencia más recomendada del día con fotos, reseñas y audioguía.'**
+  String get tourHomeHeroDesc;
+
+  /// No description provided for @tourHomeWeatherTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Clima en Tiempo Real'**
+  String get tourHomeWeatherTitle;
+
+  /// No description provided for @tourHomeWeatherDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Monitorea el clima y alertas de lluvia antes de iniciar tu recorrido.'**
+  String get tourHomeWeatherDesc;
+
+  /// No description provided for @tourToursSearchTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Búsqueda Rápida'**
+  String get tourToursSearchTitle;
+
+  /// No description provided for @tourToursSearchDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Busca destinos por nombre, ciudad o palabras clave.'**
+  String get tourToursSearchDesc;
+
+  /// No description provided for @tourToursFilterTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Filtros por Categoría'**
+  String get tourToursFilterTitle;
+
+  /// No description provided for @tourToursFilterDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Filtra tours por país, ciudad o temática (cultural, gastronómico, etc.).'**
+  String get tourToursFilterDesc;
+
+  /// No description provided for @tourToursCardTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Tarjetas de Tour'**
+  String get tourToursCardTitle;
+
+  /// No description provided for @tourToursCardDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Toca cualquier tour para ver sus paradas, escuchar una muestra de audio y comenzar.'**
+  String get tourToursCardDesc;
+
+  /// No description provided for @tourDetailStartTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Iniciar Tour en Vivo'**
+  String get tourDetailStartTitle;
+
+  /// No description provided for @tourDetailStartDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Activa la navegación GPS en tiempo real con narraciones de voz automáticas.'**
+  String get tourDetailStartDesc;
+
+  /// No description provided for @tourDetailOfflineTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Descarga Offline'**
+  String get tourDetailOfflineTitle;
+
+  /// No description provided for @tourDetailOfflineDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Guarda el mapa y los audios en tu dispositivo para usarlos sin internet ni datos.'**
+  String get tourDetailOfflineDesc;
+
+  /// No description provided for @tourDetailStopsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Ruta y Paradas'**
+  String get tourDetailStopsTitle;
+
+  /// No description provided for @tourDetailStopsDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Explora la secuencia de waypoints y escucha muestras de cada parada.'**
+  String get tourDetailStopsDesc;
+
+  /// No description provided for @tourLiveRecenterTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Mapa y Recentrado'**
+  String get tourLiveRecenterTitle;
+
+  /// No description provided for @tourLiveRecenterDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Sigue tu posición GPS en tiempo real y usa la brújula para orientarte.'**
+  String get tourLiveRecenterDesc;
+
+  /// No description provided for @tourLiveAudioTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Audioguía Inteligente'**
+  String get tourLiveAudioTitle;
+
+  /// No description provided for @tourLiveAudioDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Controla la reproducción de historias y anécdotas de cada punto de interés.'**
+  String get tourLiveAudioDesc;
+
+  /// No description provided for @tourLiveAiAssistantTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Asistente de Voz IA'**
+  String get tourLiveAiAssistantTitle;
+
+  /// No description provided for @tourLiveAiAssistantDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Pregúntale a la IA sobre restaurantes cercanos, datos curiosos o ayuda en ruta.'**
+  String get tourLiveAiAssistantDesc;
+
+  /// No description provided for @tourLiveSosTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Botón de Seguridad SOS'**
+  String get tourLiveSosTitle;
+
+  /// No description provided for @tourLiveSosDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Accede a números de emergencia locales y asistencia inmediata.'**
+  String get tourLiveSosDesc;
+
+  /// No description provided for @tourSettingsRefreshTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Rendimiento y Pantalla'**
+  String get tourSettingsRefreshTitle;
+
+  /// No description provided for @tourSettingsRefreshDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Alterna entre 60Hz para ahorrar batería o 120Hz para máxima fluidez.'**
+  String get tourSettingsRefreshDesc;
+
+  /// No description provided for @tourSettingsMapTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Estilo del Mapa'**
+  String get tourSettingsMapTitle;
+
+  /// No description provided for @tourSettingsMapDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Elige entre vista automática, diurna, nocturna o satelital.'**
+  String get tourSettingsMapDesc;
+
+  /// No description provided for @tourSettingsNotifTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Notificaciones'**
+  String get tourSettingsNotifTitle;
+
+  /// No description provided for @tourSettingsNotifDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Recibe avisos sobre lugares cercanos y eventos en tu zona.'**
+  String get tourSettingsNotifDesc;
+
+  /// No description provided for @tourSettingsGuidesSection.
+  ///
+  /// In es, this message translates to:
+  /// **'Guías y Tutoriales'**
+  String get tourSettingsGuidesSection;
+
+  /// No description provided for @tourSettingsGuidesSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Repasa cómo funciona cada sección de la app'**
+  String get tourSettingsGuidesSubtitle;
+
+  /// No description provided for @tourReplayHome.
+  ///
+  /// In es, this message translates to:
+  /// **'Guía de Inicio'**
+  String get tourReplayHome;
+
+  /// No description provided for @tourReplayTours.
+  ///
+  /// In es, this message translates to:
+  /// **'Guía de Exploración de Tours'**
+  String get tourReplayTours;
+
+  /// No description provided for @tourReplayDetail.
+  ///
+  /// In es, this message translates to:
+  /// **'Guía de Detalle de Tour'**
+  String get tourReplayDetail;
+
+  /// No description provided for @tourReplayLive.
+  ///
+  /// In es, this message translates to:
+  /// **'Guía de Navegación en Vivo'**
+  String get tourReplayLive;
+
+  /// No description provided for @tourReplaySettings.
+  ///
+  /// In es, this message translates to:
+  /// **'Guía de Ajustes'**
+  String get tourReplaySettings;
+
+  /// No description provided for @tourResetAll.
+  ///
+  /// In es, this message translates to:
+  /// **'Reiniciar todos los tutoriales'**
+  String get tourResetAll;
+
+  /// No description provided for @tourResetAllSuccess.
+  ///
+  /// In es, this message translates to:
+  /// **'Tutoriales reiniciados. Se mostrarán al visitar cada pantalla.'**
+  String get tourResetAllSuccess;
 }
 
 class _AppLocalizationsDelegate

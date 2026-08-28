@@ -34,7 +34,6 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
   final List<String> _travelerTypes = ['Solo', 'Pareja', 'Amigos', 'Familia'];
   final List<String> _budgets = ['Económico', 'Moderado', 'Lujo'];
   final List<String> _transportTypes = ['Caminando', 'Transporte Público', 'Auto Rentado', 'Taxis/Apps'];
-  final List<String> _timeOfDays = ['Mañanas', 'Tardes', 'Noches'];
   final List<TouristInterest> _availableInterests = TouristInterest.values;
 
   @override
@@ -97,7 +96,7 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
   }
 
   void _nextPage() {
-    if (_currentPage < 6) {
+    if (_currentPage < 4) {
       _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     } else {
       _saveAndFinish();
@@ -132,9 +131,7 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
       final answeredDetails = <String>[];
       if (_travelerType.isNotEmpty) answeredDetails.add('viajo ${_tx(_travelerType).toLowerCase()}');
       if (_budget.isNotEmpty) answeredDetails.add('con presupuesto ${_tx(_budget).toLowerCase()}');
-      if (_preferredPace.isNotEmpty) answeredDetails.add('a un ritmo ${_tx(_preferredPace).toLowerCase()}');
       if (_transportPreference.isNotEmpty) answeredDetails.add('moviéndome ${_tx(_transportPreference).toLowerCase()}');
-      if (_preferredTimeOfDay.isNotEmpty) answeredDetails.add('preferiblemente en las ${_tx(_preferredTimeOfDay).toLowerCase()}');
       if (_interests.isNotEmpty) answeredDetails.add('me interesan: ${_interests.map((i) => _tx(i.translationKey)).join(', ')}');
 
       final prompt = answeredDetails.isNotEmpty
@@ -171,14 +168,14 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          AppLocalizations.of(context).prefStepOf((_currentPage + 1).toString(), '7'),
+                          AppLocalizations.of(context).prefStepOf((_currentPage + 1).toString(), '5'),
                           style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
                           child: LinearProgressIndicator(
-                            value: (_currentPage + 1) / 7.0,
+                            value: (_currentPage + 1) / 5.0,
                             minHeight: 8,
                             backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
                             color: AppTheme.primary,
@@ -187,7 +184,7 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
                       ],
                     ),
                   ),
-                  if (_currentPage < 6)
+                  if (_currentPage < 4)
                     TextButton(
                       onPressed: _nextPage,
                       child: Text(
@@ -211,9 +208,7 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
                 children: [
                   _buildStep1Traveler().animate().fade().slideX(begin: 0.1, duration: 300.ms),
                   _buildStep2Budget().animate().fade().slideX(begin: 0.1, duration: 300.ms),
-                  _buildStep3Pace().animate().fade().slideX(begin: 0.1, duration: 300.ms),
                   _buildStep5Transport().animate().fade().slideX(begin: 0.1, duration: 300.ms),
-                  _buildStep6TimeOfDay().animate().fade().slideX(begin: 0.1, duration: 300.ms),
                   _buildStep4Interests().animate().fade().slideX(begin: 0.1, duration: 300.ms),
                   _buildStep7Location().animate().fade().slideX(begin: 0.1, duration: 300.ms),
                 ],
@@ -222,8 +217,8 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: LiquidButton(
-                label: _currentPage == 6 ? AppLocalizations.of(context).prefCompleteProfile : AppLocalizations.of(context).prefNext,
-                icon: _currentPage == 6 ? Icons.check_circle_rounded : Icons.arrow_forward_rounded,
+                label: _currentPage == 4 ? AppLocalizations.of(context).prefCompleteProfile : AppLocalizations.of(context).prefNext,
+                icon: _currentPage == 4 ? Icons.check_circle_rounded : Icons.arrow_forward_rounded,
                 onPressed: _nextPage,
               ),
             )
@@ -297,38 +292,6 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
     );
   }
 
-  Widget _buildStep3Pace() {
-    return _WizardPanel(
-      title: AppLocalizations.of(context).prefTitlePace,
-      subtitle: AppLocalizations.of(context).prefSubPace,
-      child: Column(
-        children: [
-          _RadioTile(
-            title: AppLocalizations.of(context).prefPaceRelaxed,
-            subtitle: AppLocalizations.of(context).prefPaceRelaxedDesc,
-            icon: Icons.self_improvement_rounded,
-            isSelected: _preferredPace == 'Relajado',
-            onTap: () => setState(() => _preferredPace = 'Relajado'),
-          ),
-          _RadioTile(
-            title: AppLocalizations.of(context).prefPaceBalanced,
-            subtitle: AppLocalizations.of(context).prefPaceBalancedDesc,
-            icon: Icons.balance_rounded,
-            isSelected: _preferredPace == 'Equilibrado',
-            onTap: () => setState(() => _preferredPace = 'Equilibrado'),
-          ),
-          _RadioTile(
-            title: AppLocalizations.of(context).prefPaceFast,
-            subtitle: AppLocalizations.of(context).prefPaceFastDesc,
-            icon: Icons.directions_run_rounded,
-            isSelected: _preferredPace == 'Intenso',
-            onTap: () => setState(() => _preferredPace = 'Intenso'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildStep5Transport() {
     IconData getIcon(String type) {
       switch (type) {
@@ -349,30 +312,6 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
           icon: getIcon(t),
           isSelected: _transportPreference == t,
           onTap: () => setState(() => _transportPreference = t),
-        )).toList(),
-      ),
-    );
-  }
-
-  Widget _buildStep6TimeOfDay() {
-    IconData getIcon(String type) {
-      switch (type) {
-        case 'Mañanas': return Icons.wb_sunny_rounded;
-        case 'Tardes': return Icons.wb_twilight_rounded;
-        case 'Noches': return Icons.nights_stay_rounded;
-        default: return Icons.access_time_rounded;
-      }
-    }
-
-    return _WizardPanel(
-      title: AppLocalizations.of(context).prefTitleTime,
-      subtitle: AppLocalizations.of(context).prefSubTime,
-      child: Column(
-        children: _timeOfDays.map((t) => _RadioTile(
-          title: _tx(t),
-          icon: getIcon(t),
-          isSelected: _preferredTimeOfDay == t,
-          onTap: () => setState(() => _preferredTimeOfDay = t),
         )).toList(),
       ),
     );
@@ -508,9 +447,8 @@ class _WizardPanel extends StatelessWidget {
 }
 
 class _RadioTile extends StatelessWidget {
-  const _RadioTile({required this.title, this.subtitle, this.icon, required this.isSelected, required this.onTap});
+  const _RadioTile({required this.title, this.icon, required this.isSelected, required this.onTap});
   final String title;
-  final String? subtitle;
   final IconData? icon;
   final bool isSelected;
   final VoidCallback onTap;
@@ -557,16 +495,7 @@ class _RadioTile extends StatelessWidget {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 4),
-                      Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
-                    ]
-                  ],
-                ),
+                child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               ),
             ],
           ),

@@ -15,12 +15,16 @@ import '../../core/design/live_navigation_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/services/road_route_service.dart';
 import '../../core/services/tour_runtime_services.dart';
+import '../../core/tour/tour_builder.dart';
+import '../../core/tour/tour_controller.dart';
+import '../../core/tour/tour_phase.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../../state/live_tour_state.dart';
 import '../ai/ai_builder_controller.dart';
 import 'tour_rating_dialog.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model for a voice assistant response from the backend
@@ -133,6 +137,65 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   double _ttsSpeedMultiplier = 1.0;
   bool _autoPlayProximityEnabled = true;
   final Set<String> _autoTriggeredStopIds = {};
+  final _menuFabKey = GlobalKey();
+  final _audioGuideKey = GlobalKey();
+  final _aiAssistantKey = GlobalKey();
+  final _nextStopKey = GlobalKey();
+  bool _tourChecked = false;
+
+  void _triggerTourIfNeeded() {
+    if (_tourChecked) return;
+    _tourChecked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      final steps = [
+        TourStepItem(
+          key: _menuFabKey,
+          title: l10n.tourLiveRecenterTitle,
+          description: l10n.tourLiveRecenterDesc,
+          icon: Icons.explore_rounded,
+          shape: ShapeLightFocus.Circle,
+          radius: 26,
+          align: ContentAlign.bottom,
+        ),
+        TourStepItem(
+          key: _audioGuideKey,
+          title: l10n.tourLiveAudioTitle,
+          description: l10n.tourLiveAudioDesc,
+          icon: Icons.record_voice_over_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 20,
+          align: ContentAlign.top,
+        ),
+        TourStepItem(
+          key: _aiAssistantKey,
+          title: l10n.tourLiveAiAssistantTitle,
+          description: l10n.tourLiveAiAssistantDesc,
+          icon: Icons.mic_rounded,
+          shape: ShapeLightFocus.Circle,
+          radius: 26,
+          align: ContentAlign.top,
+        ),
+        TourStepItem(
+          key: _nextStopKey,
+          title: l10n.stops,
+          description: l10n.tourLiveSosDesc,
+          icon: Icons.navigation_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 20,
+          align: ContentAlign.top,
+        ),
+      ];
+
+      ref.read(tourControllerProvider.notifier).showTourIfPending(
+            context: context,
+            phase: TourPhase.liveTour,
+            steps: steps,
+            delay: const Duration(milliseconds: 750),
+          );
+    });
+  }
 
   Future<void> _updateBatterySamplingMode(double speed, double distanceToStop) async {
     final isStopped = speed < 0.5 || distanceToStop < 30.0;
@@ -145,10 +208,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
 
     final stoppedDuration = _stoppedSince != null ? now.difference(_stoppedSince!) : Duration.zero;
-    final shouldBeStationary = isStopped && (stoppedDuration.inSeconds >= 15 || distanceToStop < 20.0);
+    final shouldBeStationary = isStopped && (stoppedDuration.inSeconds >= 30 || distanceToStop < 20.0);
     final targetMode = shouldBeStationary ? LocationSamplingMode.stationary : LocationSamplingMode.walking;
 
-    final canSwitch = _lastModeSwitchAt == null || now.difference(_lastModeSwitchAt!).inSeconds >= 15;
+    final canSwitch = _lastModeSwitchAt == null || now.difference(_lastModeSwitchAt!).inSeconds >= 30;
 
     if (_currentSamplingMode != targetMode && canSwitch) {
       _currentSamplingMode = targetMode;
@@ -158,8 +221,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       }
       final service = ref.read(locationServiceProvider);
       final stream = await service.positionStream(
-        // Keep distance filter responsive so the map does not freeze in traffic/stops
-        distanceFilterMeters: targetMode == LocationSamplingMode.stationary ? 6 : 2,
+        distanceFilterMeters: 0,
         mode: targetMode,
       );
       if (!mounted || stream == null) return;
@@ -542,6 +604,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   (item) => item.id == widget.tourId,
                   orElse: () => tours.first,
                 );
+          _triggerTourIfNeeded();
           final stop = tour.stops[_activeStop];
           final progress = (_activeStop + 1) / tour.stops.length;
           _navigationTour = tour;
@@ -705,17 +768,20 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    FloatingActionButton.small(
-                      heroTag: 'map_menu_hamburger_fab',
-                      backgroundColor: Theme.of(context).colorScheme.surface,
-                      onPressed: () {
-                        setState(() {
-                          _isMapMenuExpanded = !_isMapMenuExpanded;
-                        });
-                      },
-                      child: Icon(
-                        _isMapMenuExpanded ? Icons.close_rounded : Icons.menu_rounded,
-                        color: AppTheme.primary,
+                    KeyedSubtree(
+                      key: _menuFabKey,
+                      child: FloatingActionButton.small(
+                        heroTag: 'map_menu_hamburger_fab',
+                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        onPressed: () {
+                          setState(() {
+                            _isMapMenuExpanded = !_isMapMenuExpanded;
+                          });
+                        },
+                        child: Icon(
+                          _isMapMenuExpanded ? Icons.close_rounded : Icons.menu_rounded,
+                          color: AppTheme.primary,
+                        ),
                       ),
                     ),
                     if (_isMapMenuExpanded) ...[
@@ -1003,7 +1069,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         await _recalculateRoute(tour, force: true);
       }
     }
-    final stream = await service.positionStream(distanceFilterMeters: 2);
+    final stream = await service.positionStream(distanceFilterMeters: 0);
     if (!mounted || stream == null) return;
     await _positionSubscription?.cancel();
     _positionSubscription = stream.listen(_handlePositionUpdate);
@@ -1690,34 +1756,40 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         Row(
           children: [
             Expanded(
-              child: LiquidButton(
-                label: 'Audioguía',
-                icon: Icons.record_voice_over_rounded,
-                onPressed: () async {
-                  await ref.read(voiceGuideProvider).narrateStop(
-                    stop,
-                    lang: tour.language,
-                    onResolved: (name, description) {
-                      if (mounted) {
-                        setState(() {
-                          final updatedStops = tour.stops.map((s) {
-                            if (s.id == stop.id) {
-                              return s.copyWith(name: name, description: description);
-                            }
-                            return s;
-                          }).toList();
-                          final updatedTour = tour.copyWith(stops: updatedStops);
-                          _navigationTour = updatedTour;
-                          ref.read(selectedTourProvider.notifier).state = updatedTour;
-                        });
-                      }
-                    },
-                  );
-                },
+              child: KeyedSubtree(
+                key: _audioGuideKey,
+                child: LiquidButton(
+                  label: 'Audioguía',
+                  icon: Icons.record_voice_over_rounded,
+                  onPressed: () async {
+                    await ref.read(voiceGuideProvider).narrateStop(
+                      stop,
+                      lang: tour.language,
+                      onResolved: (name, description) {
+                        if (mounted) {
+                          setState(() {
+                            final updatedStops = tour.stops.map((s) {
+                              if (s.id == stop.id) {
+                                return s.copyWith(name: name, description: description);
+                              }
+                              return s;
+                            }).toList();
+                            final updatedTour = tour.copyWith(stops: updatedStops);
+                            _navigationTour = updatedTour;
+                            ref.read(selectedTourProvider.notifier).state = updatedTour;
+                          });
+                        }
+                      },
+                    );
+                  },
+                ),
               ),
             ),
             const SizedBox(width: 8),
-            _buildMicButton(context),
+            KeyedSubtree(
+              key: _aiAssistantKey,
+              child: _buildMicButton(context),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -1825,11 +1897,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
-          child: LiquidButton(
-            label: _activeStop == tour.stops.length - 1 ? 'Terminar tour' : l10n.nextStop,
-            icon: _activeStop == tour.stops.length - 1 ? Icons.flag_rounded : Icons.arrow_forward_rounded,
-            isPrimary: _activeStop == tour.stops.length - 1,
-            onPressed: () {
+          child: KeyedSubtree(
+            key: _nextStopKey,
+            child: LiquidButton(
+              label: _activeStop == tour.stops.length - 1 ? 'Terminar tour' : l10n.nextStop,
+              icon: _activeStop == tour.stops.length - 1 ? Icons.flag_rounded : Icons.arrow_forward_rounded,
+              isPrimary: _activeStop == tour.stops.length - 1,
+              onPressed: () {
               if (_activeStop == tour.stops.length - 1) {
                 final currentUser = ref.read(authServiceProvider).currentUser;
                 
@@ -1872,6 +1946,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             },
           ),
         ),
+      ),
       ],
     );
   }

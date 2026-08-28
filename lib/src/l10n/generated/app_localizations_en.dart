@@ -1843,4 +1843,162 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get tourSkip => 'Skip';
+
+  @override
+  String get tourNext => 'Next';
+
+  @override
+  String get tourPrevious => 'Previous';
+
+  @override
+  String get tourFinish => 'Got it';
+
+  @override
+  String tourStepIndicator(int current, int total) {
+    return 'Step $current of $total';
+  }
+
+  @override
+  String get tourHomeNavTitle => 'Main Navigation';
+
+  @override
+  String get tourHomeNavDesc =>
+      'Access Explore, AI Chat, Tours Catalog, and your Profile.';
+
+  @override
+  String get tourHomeHeroTitle => 'Featured Tour';
+
+  @override
+  String get tourHomeHeroDesc =>
+      'Discover the top recommended experience of the day with photos, reviews, and audio guide.';
+
+  @override
+  String get tourHomeWeatherTitle => 'Real-Time Weather';
+
+  @override
+  String get tourHomeWeatherDesc =>
+      'Check weather conditions and rain alerts before starting your journey.';
+
+  @override
+  String get tourToursSearchTitle => 'Quick Search';
+
+  @override
+  String get tourToursSearchDesc =>
+      'Search destinations by name, city, or keywords.';
+
+  @override
+  String get tourToursFilterTitle => 'Category Filters';
+
+  @override
+  String get tourToursFilterDesc =>
+      'Filter tours by country, city, or theme (cultural, gastronomic, etc.).';
+
+  @override
+  String get tourToursCardTitle => 'Tour Cards';
+
+  @override
+  String get tourToursCardDesc =>
+      'Tap any tour to view stops, listen to an audio preview, and start.';
+
+  @override
+  String get tourDetailStartTitle => 'Start Live Tour';
+
+  @override
+  String get tourDetailStartDesc =>
+      'Start real-time GPS navigation with automatic voice narrations.';
+
+  @override
+  String get tourDetailOfflineTitle => 'Offline Download';
+
+  @override
+  String get tourDetailOfflineDesc =>
+      'Save maps and audios to your device to use without internet or mobile data.';
+
+  @override
+  String get tourDetailStopsTitle => 'Route & Stops';
+
+  @override
+  String get tourDetailStopsDesc =>
+      'Explore the sequence of waypoints and preview audio for each stop.';
+
+  @override
+  String get tourLiveRecenterTitle => 'Map & Recenter';
+
+  @override
+  String get tourLiveRecenterDesc =>
+      'Track your GPS position in real time and use the compass for orientation.';
+
+  @override
+  String get tourLiveAudioTitle => 'Smart Audio Guide';
+
+  @override
+  String get tourLiveAudioDesc =>
+      'Control audio playback for stories and history at each point of interest.';
+
+  @override
+  String get tourLiveAiAssistantTitle => 'AI Voice Assistant';
+
+  @override
+  String get tourLiveAiAssistantDesc =>
+      'Ask the AI about nearby restaurants, fun facts, or on-route assistance.';
+
+  @override
+  String get tourLiveSosTitle => 'SOS Safety Button';
+
+  @override
+  String get tourLiveSosDesc =>
+      'Access local emergency numbers and immediate assistance.';
+
+  @override
+  String get tourSettingsRefreshTitle => 'Performance & Display';
+
+  @override
+  String get tourSettingsRefreshDesc =>
+      'Switch between 60Hz for battery saving or 120Hz for maximum smoothness.';
+
+  @override
+  String get tourSettingsMapTitle => 'Map Style';
+
+  @override
+  String get tourSettingsMapDesc =>
+      'Choose between auto, day, night, or satellite map views.';
+
+  @override
+  String get tourSettingsNotifTitle => 'Notifications';
+
+  @override
+  String get tourSettingsNotifDesc =>
+      'Receive alerts about nearby places and local events.';
+
+  @override
+  String get tourSettingsGuidesSection => 'Guides & Tutorials';
+
+  @override
+  String get tourSettingsGuidesSubtitle =>
+      'Review how each section of the app works';
+
+  @override
+  String get tourReplayHome => 'Home Screen Guide';
+
+  @override
+  String get tourReplayTours => 'Tours Catalog Guide';
+
+  @override
+  String get tourReplayDetail => 'Tour Detail Guide';
+
+  @override
+  String get tourReplayLive => 'Live Navigation Guide';
+
+  @override
+  String get tourReplaySettings => 'Settings Guide';
+
+  @override
+  String get tourResetAll => 'Reset all tutorials';
+
+  @override
+  String get tourResetAllSuccess =>
+      'Tutorials reset. They will show when visiting each screen.';
 }

@@ -11,6 +11,9 @@ import 'package:flutter_tts/flutter_tts.dart';
 import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
 import '../../core/design/premium_components.dart';
+import '../../core/tour/tour_builder.dart';
+import '../../core/tour/tour_controller.dart';
+import '../../core/tour/tour_phase.dart';
 import '../../core/utils/image_utils.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -20,6 +23,7 @@ import '../../core/services/sqlite-service.dart';
 import '../shared/location_disclosure_dialog.dart';
 import '../tour_live/tour_rating_dialog.dart';
 import 'widgets/image_viewer_dialog.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 String formatTourDuration(Tour tour) {
   final maxDay = tour.stops.isEmpty
@@ -35,13 +39,68 @@ String formatTourDuration(Tour tour) {
   return formatDuration(tour.durationHours);
 }
 
-class TourDetailScreen extends ConsumerWidget {
+class TourDetailScreen extends ConsumerStatefulWidget {
   const TourDetailScreen({super.key, required this.tourId});
 
   final String tourId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TourDetailScreen> createState() => _TourDetailScreenState();
+}
+
+class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
+  final _startTourKey = GlobalKey();
+  final _audioPreviewKey = GlobalKey();
+  final _optionsKey = GlobalKey();
+  bool _tourChecked = false;
+
+  void _triggerTourIfNeeded() {
+    if (_tourChecked) return;
+    _tourChecked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      final steps = [
+        TourStepItem(
+          key: _startTourKey,
+          title: l10n.tourDetailStartTitle,
+          description: l10n.tourDetailStartDesc,
+          icon: Icons.navigation_rounded,
+          shape: ShapeLightFocus.RRect,
+          radius: 20,
+          align: ContentAlign.top,
+        ),
+        TourStepItem(
+          key: _audioPreviewKey,
+          title: l10n.tourDetailStopsTitle,
+          description: l10n.tourDetailStopsDesc,
+          icon: Icons.spatial_audio_off_rounded,
+          shape: ShapeLightFocus.Circle,
+          radius: 24,
+          align: ContentAlign.top,
+        ),
+        TourStepItem(
+          key: _optionsKey,
+          title: l10n.tourDetailOfflineTitle,
+          description: l10n.tourDetailOfflineDesc,
+          icon: Icons.download_rounded,
+          shape: ShapeLightFocus.Circle,
+          radius: 24,
+          align: ContentAlign.bottom,
+        ),
+      ];
+
+      ref.read(tourControllerProvider.notifier).showTourIfPending(
+            context: context,
+            phase: TourPhase.tourDetail,
+            steps: steps,
+            delay: const Duration(milliseconds: 650),
+          );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final toursAsync = ref.watch(toursProvider);
     final mapStyle = ref.watch(mapStyleProvider);
@@ -60,8 +119,9 @@ class TourDetailScreen extends ConsumerWidget {
             ),
           );
         }
-        final Tour? matchedInAvailable = availableTours.where((item) => item.id == tourId).firstOrNull;
-        final tour = (selected?.id == tourId)
+        _triggerTourIfNeeded();
+        final Tour? matchedInAvailable = availableTours.where((item) => item.id == widget.tourId).firstOrNull;
+        final tour = (selected?.id == widget.tourId)
             ? selected!
             : (matchedInAvailable ?? selected ?? availableTours.first);
         final favorites = ref.watch(favoriteTourIdsProvider);
@@ -96,17 +156,23 @@ class TourDetailScreen extends ConsumerWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: LiquidButton(
-                      label: l10n.startTour,
-                      icon: Icons.navigation_rounded,
-                      onPressed: () => _startTourFlow(context, ref, tour),
+                    child: KeyedSubtree(
+                      key: _startTourKey,
+                      child: LiquidButton(
+                        label: l10n.startTour,
+                        icon: Icons.navigation_rounded,
+                        onPressed: () => _startTourFlow(context, ref, tour),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    tooltip: 'Escuchar Muestra Narrada (Audio Preview)',
-                    onPressed: () => _playTeaserAudio(context, tour),
-                    icon: const Icon(Icons.spatial_audio_off_rounded, color: Colors.blueAccent),
+                  KeyedSubtree(
+                    key: _audioPreviewKey,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Escuchar Muestra Narrada (Audio Preview)',
+                      onPressed: () => _playTeaserAudio(context, tour),
+                      icon: const Icon(Icons.spatial_audio_off_rounded, color: Colors.blueAccent),
+                    ),
                   ),
                   const SizedBox(width: 6),
                   IconButton.filledTonal(
@@ -142,7 +208,10 @@ class TourDetailScreen extends ConsumerWidget {
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 actions: [
-                  _TourOptionsMenuButton(tour: tour, ref: ref),
+                  KeyedSubtree(
+                    key: _optionsKey,
+                    child: _TourOptionsMenuButton(tour: tour, ref: ref),
+                  ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
                   stretchModes: const [

@@ -61,7 +61,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
       unawaited(_recalculateRoute(force: true));
     }
 
-    final stream = await service.positionStream(distanceFilterMeters: 2);
+    final stream = await service.positionStream(distanceFilterMeters: 0);
     if (!mounted || stream == null) return;
     await _positionSubscription?.cancel();
     _positionSubscription = stream.listen(_handlePositionUpdate);

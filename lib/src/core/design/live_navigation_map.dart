@@ -171,10 +171,10 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     // platform sends fixes every few seconds.
     final previousTargetAt = _lastLocationTargetAt;
     final observedCadenceMs = previousTargetAt == null
-        ? 900
+        ? 500
         : now.difference(previousTargetAt).inMilliseconds;
     _lastLocationTargetAt = now;
-    final durationMs = (observedCadenceMs * 0.85).round().clamp(500, 2800);
+    final durationMs = (observedCadenceMs * 0.95).round().clamp(300, 1200);
 
     _motionStart = current;
     _motionTarget = target;
@@ -306,8 +306,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     if (_fullGeometry.length < 2) return _fullGeometry;
 
     final startIdx = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
-    // Limit forward search window to nearby sequential segments (max 6 segments ahead)
-    final searchEndIdx = math.min(startIdx + 6, _fullGeometry.length - 1);
+    // Search forward through sequential segments (up to 12 segments ahead for curves and wide avenues)
+    final searchEndIdx = math.min(startIdx + 12, _fullGeometry.length - 1);
 
     int bestSegment = startIdx;
     double minDist = double.infinity;
@@ -325,8 +325,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
-    // Only advance segment index if user is actually within standard roadway corridor (<= 35m)
-    if (minDist <= 35.0) {
+    // Advance segment index when user is within the roadway corridor (up to 65m for multi-lane avenues and roundabouts)
+    if (minDist <= 65.0) {
       _lastSegmentIndex = math.max(_lastSegmentIndex, bestSegment);
     }
 
@@ -338,17 +338,15 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     final remaining = _fullGeometry.sublist(activeSegment + 1);
     final connectorDistance = _metricDistanceMeters(currentPos, activeProj);
 
-    // If user is directly on/near the roadway (<= 25m), attach smoothly to GPS puck.
-    // If user is off-road/inside residential complex (> 25m), start cleanly at road geometry
-    // without drawing a solid line cutting through buildings.
-    if (connectorDistance <= 25.0) {
+    // If user is near the roadway (<= 35m), attach smoothly to GPS puck.
+    // If user is off-road (> 35m), start cleanly at road geometry without cutting buildings.
+    if (connectorDistance <= 35.0) {
       return [
         if (connectorDistance > 1.0) currentPos,
         activeProj,
         ...remaining,
       ];
     } else {
-      // If user hasn't reached the roadway yet, display the full road route from its origin
       if (_lastSegmentIndex == 0) {
         return _fullGeometry;
       }
@@ -369,8 +367,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       _fullGeometry[activeSegment + 1],
     );
 
-    // Do not draw travelled grey lines if user is off-road (> 35m)
-    if (_metricDistanceMeters(currentPos, activeProj) > 35.0) {
+    // Do not draw travelled grey lines if user is off-road (> 65m)
+    if (_metricDistanceMeters(currentPos, activeProj) > 65.0) {
       return const [];
     }
 
@@ -764,8 +762,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     final destinationChanged = _renderedDestination == null ||
         _metricDistanceMeters(_renderedDestination!, destPos) > 2;
     if (destinationChanged) {
-      // Only reset annotation layers when the destination actually changes.
-      // Refreshing traffic must not make the puck or route blink.
       try {
         await controller.clearLines();
         await controller.clearCircles();
@@ -777,6 +773,20 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       _userPuckHalo = null;
       _destinationCircle = null;
       _renderedDestination = destPos;
+    } else {
+      // Atomic route line cleanup on reroutes to prevent old overlapping polylines
+      if (_routeLine != null) {
+        try {
+          await controller.removeLine(_routeLine!);
+        } catch (_) {}
+        _routeLine = null;
+      }
+      if (_travelledRouteLine != null) {
+        try {
+          await controller.removeLine(_travelledRouteLine!);
+        } catch (_) {}
+        _travelledRouteLine = null;
+      }
     }
 
     if (currentPos != null) {
@@ -786,12 +796,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     }
 
     final visualPosition = _displayedPosition ?? currentPos;
-    // The full-route overview must show the source geometry from the current
-    // GPS point through to the destination. Follow mode uses the trimmed
-    // geometry so travelled segments can be de-emphasised.
-    final lineGeometry = widget.trackingMode &&
-            visualPosition != null &&
-            _fullGeometry.length >= 2
+    // Always trim the route line ahead of the user position in all camera modes
+    final lineGeometry = visualPosition != null && _fullGeometry.length >= 2
         ? _getZeroGapTrimmedGeometry(visualPosition)
         : _fullGeometry;
 
