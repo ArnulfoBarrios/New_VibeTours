@@ -45,18 +45,31 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   if (lat && lon) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500))
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
-      Promise.race([overpassHotels(lat, lon, 'moderate', 8000).catch(() => []), timeoutPromise]),
-      Promise.race([overpassNearbyFood(lat, lon, 6000).catch(() => []), timeoutPromise]),
-      Promise.race([overpassAttractions(lat, lon, 8000).catch(() => []), timeoutPromise])
+      Promise.race([overpassHotels(lat, lon, 'moderate', 12000).catch(() => []), timeoutPromise]),
+      Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise]),
+      Promise.race([overpassAttractions(lat, lon, 25000).catch(() => []), timeoutPromise])
     ])
 
     realHotels = (osmHotels || []).filter(h => h && h.name && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
     realRests = (osmRests || []).filter(r => r && r.name && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 12)
     realPlaces = (osmAttractions || []).filter(p => p && p.name && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 15)
 
-    if (realPlaces.length === 0) {
-      const photonPlaces = await photonSearch(`${capitalCity} tourism`, 10, lat, lon).catch(() => [])
-      realPlaces = (photonPlaces || []).filter(p => p && p.name).slice(0, 10)
+    if (realPlaces.length < 6) {
+      const [beachPlaces, islandPlaces, generalPlaces] = await Promise.all([
+        photonSearch(`${capitalCity} playa`, 6, lat, lon).catch(() => []),
+        photonSearch(`${capitalCity} isla`, 6, lat, lon).catch(() => []),
+        photonSearch(`${capitalCity} tourism`, 6, lat, lon).catch(() => [])
+      ])
+      const additional = [...beachPlaces, ...islandPlaces, ...generalPlaces]
+        .filter(p => p && p.name && !p.name.toLowerCase().includes('perímetro urbano'))
+      const existingNames = new Set(realPlaces.map(p => (typeof p === 'string' ? p : p.name).toLowerCase().trim()))
+      for (const p of additional) {
+        const k = p.name.toLowerCase().trim()
+        if (!existingNames.has(k)) {
+          existingNames.add(k)
+          realPlaces.push(p)
+        }
+      }
     }
   }
 

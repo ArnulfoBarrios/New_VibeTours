@@ -264,7 +264,8 @@ export function isValidSpecificPlace(placeName) {
   }
 
   // 2. Descartar comodidades de hoteles, metadatos, acciones y frases meta de viaje
-  if (!/^(?:la\s+piscina|playa\s+la\s+piscina|piscina\s+natural)\b/i.test(cleanLower)) {
+  const isGeographicPlace = /^(?:playa|bah[íi]a|cabo|punta|isla|islas|ensenada|golfo|cerro|mirador|parque|reserva)\s+[a-z]+/i.test(cleanLower)
+  if (!isGeographicPlace && !/^(?:la\s+piscina|playa\s+la\s+piscina|piscina\s+natural)\b/i.test(cleanLower)) {
     const isMetaOrAmenity = /\b(hotel|hostal|resort|hospedaje|alojamiento|posada|caba[ñn]a|motel|irotama|zuana|decameron|hilton|marriott|movich|casa la fe|casa isabel|majagua|the meeting point|yivinaca|colonial inn|monaco real|canadiense|imperial|punto de partida|llegada|retorno|despedida|regreso|regreso a casa|regreso al hotel|check|check-in|check-out|checkin|checkout|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|estilo|ambiente|desayuno|wifi|sol[aá]rium|habitaciones|detalles|descanso|bailar|actividades|itinerario|ver men[uú]|sugerir|consultar|men[uú]|hotel elegido|hotel acordado|punto de encuentro|restaurante local|atracci[oó]n principal|restaurantes|destinos|por d[íi]a|aeropuerto|airport|notas?|resumen|descripci[óo]n|incluye|no incluye|opciones|presupuesto|transporte|acompañantes|fechas|duraci[oó]n|destino|gastos|medio de transporte)\b/i.test(cleanLower)
     if (isMetaOrAmenity) return false
   }
@@ -4543,19 +4544,39 @@ export async function collectTourCandidates(input, location) {
         }
 
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
-          if (placeName && isValidSpecificPlace(placeName) && canonicalDest && Number.isFinite(canonicalDest.latitude)) {
-            const angle = (index * 45) * (Math.PI / 180)
-            const r = 0.003 + (index * 0.0008)
-            geo = {
-              name: `${placeName}, ${city}`,
-              latitude: canonicalDest.latitude + (r * Math.cos(angle)),
-              longitude: canonicalDest.longitude + (r * Math.sin(angle)),
-              city,
-              country
+          // If direct geocode failed, attempt category-based search for real verified POIs in the municipality
+          if (destLat && destLon) {
+            if (entityType === 'food') {
+              const nearbyFood = await overpassNearbyFood(destLat, destLon, 15000).catch(() => [])
+              const validFood = nearbyFood.find(f => validateCandidateLocation(f, canonicalDest, 45))
+              if (validFood) {
+                geo = {
+                  name: validFood.name,
+                  latitude: validFood.latitude,
+                  longitude: validFood.longitude,
+                  city,
+                  country
+                }
+              }
+            } else if (entityType === 'beach_coastal' || entityType === 'nature') {
+              const nearbyBeaches = await photonSearch(`${city} playa`, 5, destLat, destLon).catch(() => [])
+              const validBeach = nearbyBeaches.find(b => validateCandidateLocation(b, canonicalDest, 45))
+              if (validBeach) {
+                geo = {
+                  name: validBeach.name,
+                  latitude: validBeach.latitude,
+                  longitude: validBeach.longitude,
+                  city,
+                  country
+                }
+              }
             }
-          } else {
-            return null
           }
+        }
+
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+          console.warn(`[tour-ai] Discarding unverified or out-of-bounds place "${placeName}" in ${city}. No synthetic coordinates generated.`)
+          return null
         }
 
         const finalLat = geo.latitude

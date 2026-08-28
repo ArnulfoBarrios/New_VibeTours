@@ -334,8 +334,8 @@ async function fetchOverpassWithMirrors(query, timeoutMs = 1200) {
   }
 }
 
-export async function overpassAttractions(latitude, longitude, radius = 4500) {
-  const effectiveRadius = Math.min(radius, 12000)
+export async function overpassAttractions(latitude, longitude, radius = 8000) {
+  const effectiveRadius = Math.min(Math.max(radius, 8000), 35000)
   const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${effectiveRadius}`
   const cached = attractionsCache.get(cacheKey)
   if (cached && Date.now() < cached.expiresAt) {
@@ -347,19 +347,19 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
     (
       node(around:${effectiveRadius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
       node(around:${effectiveRadius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
-      node(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
+      node(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre|ferry_terminal"];
       node(around:${effectiveRadius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
       node(around:${effectiveRadius},${latitude},${longitude})["natural"~"beach|water"];
-      node(around:${effectiveRadius},${latitude},${longitude})["place"="island"];
+      node(around:${effectiveRadius},${latitude},${longitude})["place"~"island|islet"];
       node(around:${effectiveRadius},${latitude},${longitude})["boundary"="national_park"];
       way(around:${effectiveRadius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
       way(around:${effectiveRadius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
-      way(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
+      way(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre|ferry_terminal"];
       way(around:${effectiveRadius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
       way(around:${effectiveRadius},${latitude},${longitude})["natural"~"beach|water"];
-      way(around:${effectiveRadius},${latitude},${longitude})["place"="island"];
+      way(around:${effectiveRadius},${latitude},${longitude})["place"~"island|islet"];
       way(around:${effectiveRadius},${latitude},${longitude})["boundary"="national_park"];
-      relation(around:${effectiveRadius},${latitude},${longitude})["place"="island"];
+      relation(around:${effectiveRadius},${latitude},${longitude})["place"~"island|islet"];
       relation(around:${effectiveRadius},${latitude},${longitude})["boundary"="national_park"];
     );
     out center tags 80;
@@ -390,16 +390,30 @@ export async function overpassAttractions(latitude, longitude, radius = 4500) {
     }
 
     if (results.length === 0) {
-      console.warn('[osm] overpassAttractions returned empty or timed out, using Photon fallback...')
-      const photonItems = await photonSearch('turismo', 15, latitude, longitude)
-      results = photonItems.map((item) => ({
-        name: item.name,
-        latitude: item.latitude,
-        longitude: item.longitude,
-        type: item.type ?? 'attraction',
-        category: 'attraction',
-        tags: {}
-      }))
+      console.warn('[osm] overpassAttractions returned empty or timed out, using multi-category Photon fallback...')
+      const [beachItems, islandItems, attrItems] = await Promise.all([
+        photonSearch('playa', 8, latitude, longitude).catch(() => []),
+        photonSearch('isla', 6, latitude, longitude).catch(() => []),
+        photonSearch('turismo', 8, latitude, longitude).catch(() => [])
+      ])
+      const combined = [...beachItems, ...islandItems, ...attrItems]
+      const seen = new Set()
+      results = []
+      for (const item of combined) {
+        if (!item || !item.name) continue
+        const k = item.name.toLowerCase().trim()
+        if (!seen.has(k)) {
+          seen.add(k)
+          results.push({
+            name: item.name,
+            latitude: item.latitude,
+            longitude: item.longitude,
+            type: item.type ?? 'attraction',
+            category: 'attraction',
+            tags: {}
+          })
+        }
+      }
     }
 
     if (results.length > 0) {
