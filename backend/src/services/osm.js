@@ -185,7 +185,13 @@ export async function geocodePlace(query, lat = null, lon = null) {
     'castillo san felipe de barajas': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
     'castillo san felipe': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
     'paseo en chiva': { name: 'Paseo en Chiva - Torre del Reloj, Centro Histórico', latitude: 10.4225, longitude: -75.5478, city: 'Cartagena', country: 'Colombia' },
-    'cafe del mar': { name: 'Café del Mar, Baluarte de Santo Domingo', latitude: 10.4215, longitude: -75.5539, city: 'Cartagena', country: 'Colombia' }
+    'cafe del mar': { name: 'Café del Mar, Baluarte de Santo Domingo', latitude: 10.4215, longitude: -75.5539, city: 'Cartagena', country: 'Colombia' },
+    'isla mucura': { name: 'Isla Múcura, Archipiélago de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
+    'isla tintipan': { name: 'Isla Tintipán, Archipiélago de San Bernardo', latitude: 9.7950, longitude: -75.8450, city: 'Coveñas', country: 'Colombia' },
+    'santa cruz del islote': { name: 'Santa Cruz del Islote, Archipiélago de San Bernardo', latitude: 9.7853, longitude: -75.8572, city: 'Coveñas', country: 'Colombia' },
+    'isla palma': { name: 'Isla Palma, Archipiélago de San Bernardo', latitude: 9.7420, longitude: -75.6490, city: 'Coveñas', country: 'Colombia' },
+    'cienaga de la caimanera': { name: 'Ciénaga de la Caimanera, Coveñas', latitude: 9.4580, longitude: -75.6200, city: 'Coveñas', country: 'Colombia' },
+    'parque museo infanteria de marina': { name: 'Parque Museo de la Infantería de Marina, Coveñas', latitude: 9.4080, longitude: -75.6880, city: 'Coveñas', country: 'Colombia' }
   }
 
   if (KNOWN_ICONIC_LANDMARKS[normLower] || KNOWN_ICONIC_LANDMARKS[rawClean]) {
@@ -335,7 +341,7 @@ async function fetchOverpassWithMirrors(query, timeoutMs = 1200) {
 }
 
 export async function overpassAttractions(latitude, longitude, radius = 8000) {
-  const effectiveRadius = Math.min(Math.max(radius, 8000), 35000)
+  const effectiveRadius = Math.min(Math.max(radius, 8000), 52000)
   const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${effectiveRadius}`
   const cached = attractionsCache.get(cacheKey)
   if (cached && Date.now() < cached.expiresAt) {
@@ -393,14 +399,14 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
       console.warn('[osm] overpassAttractions returned empty or timed out, using multi-category Photon fallback...')
       const [beachItems, islandItems, attrItems] = await Promise.all([
         photonSearch('playa', 8, latitude, longitude).catch(() => []),
-        photonSearch('isla', 6, latitude, longitude).catch(() => []),
+        photonSearch('isla', 8, latitude, longitude).catch(() => []),
         photonSearch('turismo', 8, latitude, longitude).catch(() => [])
       ])
       const combined = [...beachItems, ...islandItems, ...attrItems]
       const seen = new Set()
       results = []
       for (const item of combined) {
-        if (!item || !item.name) continue
+        if (!item || !item.name || isNonTouristFacility(item.tags) || isNonTouristFacility({ name: item.name })) continue
         const k = item.name.toLowerCase().trim()
         if (!seen.has(k)) {
           seen.add(k)
@@ -410,7 +416,7 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
             longitude: item.longitude,
             type: item.type ?? 'attraction',
             category: 'attraction',
-            tags: {}
+            tags: item.tags || {}
           })
         }
       }
@@ -494,12 +500,16 @@ function isAccommodation(type) {
   ].includes(type)
 }
 
-function isNonTouristFacility(tags = {}) {
+export function isNonTouristFacility(tags = {}) {
   if (!tags) return false
-  if (tags.office || tags.industrial) return true
+  if (tags.office || tags.industrial || tags.shop || tags.craft) return true
+  if (tags.man_made === 'pipeline' || tags.pipeline || tags.man_made === 'storage_tank' || tags.man_made === 'works') return true
 
   const name = String(tags.name ?? '').toLowerCase()
   if (
+    /\b(oleoducto|gasoducto|poliducto|refiner[íi]a|tuber[íi]a|estaci[oó]n de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(name) ||
+    /\b(supermercado|tienda|droguer[íi]a|farmacia|ferreter[íi]a|almac[ée]n|panader[íi]a|carnicer[íi]a|minimarket|estanco|miscel[aá]nea|bodega|dep[oó]sito)\b/i.test(name) ||
+    /\b(association|asociaci[oó]n|fundaci[oó]n|cooperativa|corporaci[oó]n|sindicato|gremio|oficina)\b/i.test(name) ||
     name.includes('aguas de') ||
     name.includes('acueducto') ||
     name.includes('alcantarillado') ||
@@ -525,7 +535,7 @@ function isNonTouristFacility(tags = {}) {
   }
 
   const landuse = String(tags.landuse ?? '').toLowerCase()
-  if (['industrial', 'residential', 'commercial', 'construction', 'quarry', 'cemetery'].includes(landuse)) {
+  if (['industrial', 'residential', 'commercial', 'construction', 'quarry', 'cemetery', 'retail'].includes(landuse)) {
     return true
   }
 

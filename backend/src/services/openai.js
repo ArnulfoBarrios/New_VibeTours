@@ -2,7 +2,7 @@ import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
-import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood } from './osm.js'
+import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility } from './osm.js'
 
 const planCache = new GeoCache(6 * 60 * 60 * 1000, 200)
 const destinationCatalogCache = new GeoCache(12 * 60 * 60 * 1000, 200)
@@ -45,23 +45,23 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   if (lat && lon) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500))
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
-      Promise.race([overpassHotels(lat, lon, 'moderate', 12000).catch(() => []), timeoutPromise]),
+      Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise]),
       Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise]),
-      Promise.race([overpassAttractions(lat, lon, 25000).catch(() => []), timeoutPromise])
+      Promise.race([overpassAttractions(lat, lon, 50000).catch(() => []), timeoutPromise])
     ])
 
-    realHotels = (osmHotels || []).filter(h => h && h.name && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
-    realRests = (osmRests || []).filter(r => r && r.name && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 12)
-    realPlaces = (osmAttractions || []).filter(p => p && p.name && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 15)
+    realHotels = (osmHotels || []).filter(h => h && h.name && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
+    realRests = (osmRests || []).filter(r => r && r.name && !isNonTouristFacility(r.tags) && !isNonTouristFacility({ name: r.name }) && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 12)
+    realPlaces = (osmAttractions || []).filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 15)
 
     if (realPlaces.length < 6) {
       const [beachPlaces, islandPlaces, generalPlaces] = await Promise.all([
-        photonSearch(`${capitalCity} playa`, 6, lat, lon).catch(() => []),
-        photonSearch(`${capitalCity} isla`, 6, lat, lon).catch(() => []),
-        photonSearch(`${capitalCity} tourism`, 6, lat, lon).catch(() => [])
+        photonSearch('playa', 8, lat, lon).catch(() => []),
+        photonSearch('isla', 8, lat, lon).catch(() => []),
+        photonSearch('turismo', 8, lat, lon).catch(() => [])
       ])
       const additional = [...beachPlaces, ...islandPlaces, ...generalPlaces]
-        .filter(p => p && p.name && !p.name.toLowerCase().includes('perímetro urbano'))
+        .filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !p.name.toLowerCase().includes('perímetro urbano'))
       const existingNames = new Set(realPlaces.map(p => (typeof p === 'string' ? p : p.name).toLowerCase().trim()))
       for (const p of additional) {
         const k = p.name.toLowerCase().trim()

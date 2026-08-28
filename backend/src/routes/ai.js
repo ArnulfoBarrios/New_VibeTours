@@ -286,6 +286,21 @@ export function isValidSpecificPlace(placeName) {
     return false
   }
 
+  // 2.4 Descartar infraestructura industrial (oleoductos, gasoductos, tuberías, refinerías, plantas)
+  if (/\b(oleoducto|gasoducto|poliducto|refiner[íi]a|tuber[íi]a|estaci[oó]n de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(cleanLower)) {
+    return false
+  }
+
+  // 2.5 Descartar tiendas, supermercados, droguerías, ferreterías y almacenes cotidianos
+  if (/\b(supermercado|droguer[íi]a|farmacia|ferreter[íi]a|almac[ée]n de cadena|minimarket|estanco|miscel[aá]nea|bodega de|dep[oó]sito de)\b/i.test(cleanLower)) {
+    return false
+  }
+
+  // 2.6 Descartar oficinas gremiales, asociaciones y fundaciones administrativas
+  if (/\b(association|asociaci[oó]n|fundaci[oó]n|cooperativa|corporaci[oó]n|sindicato|gremio)\b/i.test(cleanLower) && !/\b(parque|museo|teatro|restaurante)\b/i.test(cleanLower)) {
+    return false
+  }
+
   // 3. Descartar cementerios y servicios funerarios
   if (/cementerio|camposanto|jardines de cartagena|jardines del recuerdo|jardines de paz|jardin de paz|parque cementerio|graveyard|cemetery|funeraria|morgue|crematorio|mausoleo/i.test(cleanLower)) {
     return false

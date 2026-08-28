@@ -306,8 +306,15 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.equal(isValidSpecificPlace('Playa La Cabaña'), true)
     assert.equal(isValidSpecificPlace('Playa de Coveñas'), true)
     assert.equal(isValidSpecificPlace('Bahía de Coveñas'), true)
+    assert.equal(isValidSpecificPlace('Isla Múcura'), true)
+    assert.equal(isValidSpecificPlace('Isla Tintipán'), true)
+    assert.equal(isValidSpecificPlace('Santa Cruz del Islote'), true)
+    assert.equal(isValidSpecificPlace('Ciénaga de la Caimanera'), true)
     assert.equal(isValidSpecificPlace('Cabaña'), false)
     assert.equal(isValidSpecificPlace('Hotel Las Cabañas'), false)
+    assert.equal(isValidSpecificPlace('OLEODUCTO 16"'), false)
+    assert.equal(isValidSpecificPlace('Supermercado La Isla'), false)
+    assert.equal(isValidSpecificPlace('Turismo Association of Rincon'), false)
   })
 
   it('should clean Cartagena de Indias to canonical Cartagena', async () => {
