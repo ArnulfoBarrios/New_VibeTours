@@ -350,6 +350,47 @@ describe('Tour Planner AI Behavior and Filtering Rules', () => {
     assert.ok(dedupedNames.some(n => n.includes('Bahía de Cartagena')))
     assert.equal(deduped.length, 6)
   })
+
+  it('should preserve 100% of chat stops for a 4-day Covenas tour with San Bernardo islands', async () => {
+    const { collectTourCandidates, isValidTouristAttraction } = await import('../routes/ai.js')
+    
+    assert.equal(isValidTouristAttraction({ name: 'Cabañas La Española' }, {}), false)
+    assert.equal(isValidTouristAttraction({ name: 'El Poblado' }, {}), false)
+    assert.equal(isValidTouristAttraction({ name: 'OLEODUCTO 16"' }, {}), false)
+
+    const input = {
+      destination: 'Coveñas',
+      city: 'Coveñas',
+      country: 'Colombia',
+      durationDays: 4,
+      specificPlaces: [
+        { name: 'Playa Blanca', dia: 1 },
+        { name: 'Playa Hermosa', dia: 1 },
+        { name: 'Restaurante Coveñas', dia: 1 },
+        { name: 'Isla Tintipán', dia: 2 },
+        { name: 'Isla Múcura', dia: 2 },
+        { name: 'Restaurante Esmeralda', dia: 2 },
+        { name: 'Playa Divina', dia: 3 },
+        { name: 'Playa Caimán', dia: 3 },
+        { name: 'Restaurante el Montañero', dia: 3 },
+        { name: 'Playas de Punta Bolívar', dia: 4 },
+        { name: 'Isla Fuerte', dia: 4 },
+        { name: 'Restaurante La Fonda Antioqueña', dia: 4 }
+      ]
+    }
+
+    const result = await collectTourCandidates(input)
+    assert.ok(result && Array.isArray(result.places))
+    assert.equal(result.places.length, 12)
+    
+    const placeNames = result.places.map(p => p.name)
+    assert.ok(placeNames.includes('Isla Tintipán'))
+    assert.ok(placeNames.includes('Isla Múcura'))
+    assert.ok(placeNames.includes('Isla Fuerte'))
+    assert.ok(placeNames.includes('Playas de Punta Bolívar'))
+    assert.ok(!placeNames.includes('Cabañas La Española'))
+    assert.ok(!placeNames.includes('El Poblado'))
+  })
 })
 
 

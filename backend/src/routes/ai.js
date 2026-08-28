@@ -4602,7 +4602,8 @@ export async function collectTourCandidates(input, location) {
           const originLon = location?.longitude || canonicalDest?.longitude
           if (originLat && originLon) {
             const distKm = haversineMeters(finalLat, finalLon, originLat, originLon) / 1000
-            const maxBound = (isMicroDest || canonicalDest?.isMicroDestination) ? 18 : 45
+            const isCoastalOrMarine = isRegionalOrNature || /cove[ñn]as|tol[uú]|cartagena|santa marta|san andr[eé]s|canc[uú]n/i.test(city) || /isla|playa|bah[íi]a|caimanera|archipi[eé]lago/i.test(placeName)
+            const maxBound = (isMicroDest || canonicalDest?.isMicroDestination) ? 18 : (isCoastalOrMarine ? 65 : 45)
             if (distKm > maxBound) {
               console.warn(`[tour-ai] Discarding specific place "${placeName}" (${distKm.toFixed(1)}km from ${city}) because it exceeds boundary (${maxBound}km).`)
               return null
@@ -4866,7 +4867,7 @@ export function isValidTouristAttraction(place, input) {
   const nameLower = name.toLowerCase()
 
   // 0. Bloqueo estricto de metadatos (Presupuesto, Transporte, Alojamiento), comodidades y metadatos de hotel
-  if (/\b(presupuesto|transporte|alojamiento|hospedaje|acompañantes|duraci[oó]n|fechas|destino|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|hotel|hostal|resort)\b/i.test(nameLower)) {
+  if (/\b(presupuesto|transporte|alojamiento|hospedaje|acompañantes|duraci[oó]n|fechas|destino|comodidad|comodidades|comodidades principales|rango de precios|precios?|tarifas?|servicios?|instalaciones|ubicaci[oó]n|hotel|hostal|resort|caba[ñn]a|caba[ñn]as|posada|oleoducto|gasoducto|barrio|sector residencial|urbanizaci[oó]n)\b/i.test(nameLower) && !/^(?:playa|bah[íi]a|isla)\s+[a-z]+/i.test(nameLower)) {
     return false
   }
 
@@ -4879,7 +4880,11 @@ export function isValidTouristAttraction(place, input) {
   // 0.002 Bloqueo absoluto de estaciones policiales, CAI, puntos de información burocráticos y oficinas
   if (/\b(polic[íi]a|police|cai|punto de informaci[óo]n|tourist information|oficina de informaci[óo]n|oficina de turismo|alcald[íi]a|juzgado|notar[íi]a|embajada|consulado|banco|atm|cajero|supermercado|farmacia|droguer[íi]a|hospital|cl[íi]nica)\b/i.test(nameLower) ||
       place.tags?.amenity === 'police' ||
-      place.tags?.information === 'office') {
+      place.tags?.information === 'office' ||
+      place.tags?.place === 'neighbourhood' ||
+      place.tags?.place === 'suburb' ||
+      place.tags?.tourism === 'chalet' ||
+      place.tags?.tourism === 'guest_house') {
     return false
   }
 
@@ -4893,7 +4898,7 @@ export function isValidTouristAttraction(place, input) {
       place.tags?.waterway === 'ditch') {
     return false
   }
-  if (/^(santa marta|cartagena|barranquilla|medell[íi]n|bogot[áa]|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|cusco|cali|colombia|magdalena|bol[íi]var|antioquia|distrito tur[íi]stico|distrito)$/i.test(nameLower)) {
+  if (/^(santa marta|cartagena|barranquilla|medell[íi]n|bogot[áa]|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|cusco|cali|colombia|magdalena|bol[íi]var|antioquia|distrito tur[íi]stico|distrito|el poblado|poblado|bocagrande|el rodadero|costazul)$/i.test(nameLower)) {
     return false
   }
 
