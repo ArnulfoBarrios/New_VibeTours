@@ -27,7 +27,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
   double? _currentHeading;
   RoadRouteResult? _liveRoute;
   bool _isRouting = false;
-  bool _isTrackingMode = false;
+  bool _isTrackingMode = true;
   GeoPoint? _initialOverviewPoint;
   bool _hasUserManuallyToggledTracking = false;
   DateTime? _lastRerouteAt;
@@ -103,7 +103,8 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
 
     final distanceToRoute = _distanceToRouteMeters(point, route.geometry);
     final now = DateTime.now();
-    final deviated = distanceToRoute > 35;
+    // Real deviation threshold: 65m to prevent false recalculations on wide avenues
+    final deviated = distanceToRoute > 65;
 
     if (deviated) {
       final last = _lastRerouteAt;
@@ -135,6 +136,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
         [origin, place.location],
         preferLiveTraffic: true,
         forceRefresh: true,
+        originHeading: _currentHeading,
       );
       if (!mounted) return;
       setState(() {

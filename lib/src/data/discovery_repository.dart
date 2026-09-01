@@ -165,13 +165,14 @@ class DiscoveryRepository {
     const genericSingleWords = [
       'parque', 'puente', 'arroyo', 'plaza', 'lugar', 'calle', 'avenida',
       'camino', 'sendero', 'cancha', 'estadio', 'estacion', 'estación',
-      'edificio', 'torre', 'centro', 'local', 'zona', 'sitio', 'punto'
+      'edificio', 'torre', 'centro', 'local', 'zona', 'sitio', 'punto',
+      'bicicleta', 'placa', 'monolito', 'estela', 'hito', 'cruz', 'piedra'
     ];
     if (genericSingleWords.contains(lowerName)) {
       return true;
     }
 
-    // 2. Palabras clave prohibidas en el nombre (infraestructura o servicios no turísticos)
+    // 2. Palabras clave prohibidas en el nombre (infraestructura, comercios, proyectos residenciales o memoriales menores)
     const blacklistNameKeywords = [
       'cementerio', 'cemetery', 'funeraria', 'jardines del recuerdo', 'jardín del recuerdo',
       'universidad', 'university', 'colegio', 'school', 'hospital', 'clinica', 'clínica',
@@ -186,7 +187,11 @@ class DiscoveryRepository {
       'efecty', 'supergiros', 'western union', 'ferretería', 'ferreteria', 'panadería',
       'panaderia', 'supermercado', 'miscelánea', 'miscelanea', 'alcaldía', 'notaría',
       'notaria', 'juzgado', 'comisaría', 'comisaria', 'cai', 'estacion de policia',
-      'estación de policía'
+      'estación de policía', 'club rotario', 'rotary', 'club de leones', 'placa conmemorativa',
+      'monolito', 'bicicleta blanca', 'victimas', 'víctimas', 'oficina', 'bodega',
+      'distribuidora', 'empresa', 'inmobiliaria', 'logistica', 'logística', 'almacén', 'almacen',
+      'conjunto', 'urbanizacion', 'urbanización', 'santa monica', 'santa mónica', 'reserva',
+      'altos de', 'portal de', 'terrazas', 'villas de', 'palmetto', 'torres de'
     ];
     for (final kw in blacklistNameKeywords) {
       if (lowerName.contains(kw)) return true;
@@ -196,7 +201,8 @@ class DiscoveryRepository {
     const blacklistTypeKeywords = [
       'cemetery', 'university', 'college', 'hospital', 'clinic', 'dentist', 'physiotherapist',
       'doctor', 'residential', 'apartment', 'school', 'bridge', 'substation', 'fuel',
-      'parking', 'bank', 'atm', 'pharmacy'
+      'parking', 'bank', 'atm', 'pharmacy', 'memorial', 'artwork', 'wayside_shrine',
+      'wayside_cross', 'bench', 'waste_basket', 'vending_machine', 'real_estate', 'commercial'
     ];
     for (final kw in blacklistTypeKeywords) {
       if (lowerType.contains(kw)) return true;
@@ -245,16 +251,83 @@ class DiscoveryRepository {
     required double latitude,
     required double longitude,
   }) async {
-    final tomtomPlaces = await _nearbyTomTomPlaces(latitude: latitude, longitude: longitude);
-    if (tomtomPlaces.isNotEmpty) {
-      return _enrichPlacesWithRealImages(tomtomPlaces);
+    final wikiPlaces = await _nearbyWikipediaPlaces(latitude: latitude, longitude: longitude);
+    if (wikiPlaces.isNotEmpty) {
+      return _enrichPlacesWithRealImages(wikiPlaces);
     }
     final overpassPlaces = await _nearbyOverpassPlaces(latitude, longitude);
     if (overpassPlaces.isNotEmpty) {
       return _enrichPlacesWithRealImages(overpassPlaces);
     }
+    final tomtomPlaces = await _nearbyTomTomPlaces(latitude: latitude, longitude: longitude);
+    if (tomtomPlaces.isNotEmpty) {
+      return _enrichPlacesWithRealImages(tomtomPlaces);
+    }
     final fallbacks = _fallbackPlaces(latitude: latitude, longitude: longitude);
     return _enrichPlacesWithRealImages(fallbacks);
+  }
+
+  Future<List<NearbyPlace>> _nearbyWikipediaPlaces({
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final uri = Uri.parse(
+        'https://es.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=$latitude|$longitude&gsradius=10000&gslimit=25&format=json',
+      );
+      final response = await http
+          .get(uri, headers: const {'User-Agent': 'VIBETOURS/1.0 (contact@vibetours.app)'})
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final query = json['query'] as Map<String, dynamic>? ?? {};
+        final geosearch = query['geosearch'] as List<dynamic>? ?? const [];
+        final List<NearbyPlace> places = [];
+        for (final item in geosearch) {
+          if (item is Map) {
+            final rawTitle = item['title']?.toString() ?? '';
+            if (rawTitle.isEmpty) continue;
+            final cleanName = rawTitle.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+            if (_isBlacklisted(cleanName, 'tourism')) continue;
+
+            final lat = _double(item['lat']);
+            final lon = _double(item['lon']);
+            final dist = _double(item['dist']).round();
+            if (lat == 0.0 || lon == 0.0) continue;
+
+            final category = _classifyWikipediaTitle(cleanName);
+            final placeId = 'wiki-${item['pageid'] ?? cleanName}';
+            final img = resolveDynamicImageForPlace(cleanName, category: category, placeId: placeId);
+
+            places.add(NearbyPlace(
+              id: placeId,
+              name: cleanName,
+              type: _typeLabel(category),
+              distanceMeters: dist,
+              location: GeoPoint(latitude: lat, longitude: lon),
+              category: category,
+              imageUrl: img,
+              thumbnailUrl: img,
+              statusLabel: 'Abierto',
+              isOpenNow: true,
+            ));
+          }
+        }
+        return places;
+      }
+    } catch (_) {}
+    return const [];
+  }
+
+  String _classifyWikipediaTitle(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('parque') || lower.contains('ciénaga') || lower.contains('cienaga') || lower.contains('jardín')) return 'nature';
+    if (lower.contains('museo') || lower.contains('teatro') || lower.contains('casa')) return 'museum';
+    if (lower.contains('monumento') || lower.contains('estatua') || lower.contains('ventana') || lower.contains('faro') || lower.contains('castillo')) return 'historic';
+    if (lower.contains('estadio') || lower.contains('coliseo') || lower.contains('patinódromo')) return 'sports';
+    if (lower.contains('malecón') || lower.contains('malecon') || lower.contains('puerto') || lower.contains('bocas') || lower.contains('eventos')) return 'attraction';
+    if (lower.contains('catedral') || lower.contains('iglesia') || lower.contains('templo') || lower.contains('sinagoga')) return 'religious';
+    return 'attraction';
   }
 
   Future<List<NearbyPlace>> _enrichPlacesWithRealImages(List<NearbyPlace> places) async {
@@ -280,16 +353,31 @@ class DiscoveryRepository {
     return enriched;
   }
 
-  Future<List<NearbyPlace>> searchPlaces(String query) async {
+  Future<List<NearbyPlace>> searchPlaces(
+    String query, {
+    double? userLat,
+    double? userLon,
+  }) async {
     final trimmed = query.trim();
     if (trimmed.length < 2) return const [];
-    final tomTomResults = await _searchTomTomPlaces(trimmed);
+    final tomTomResults = await _searchTomTomPlaces(
+      trimmed,
+      userLat: userLat,
+      userLon: userLon,
+    );
     if (tomTomResults.isNotEmpty) {
       return _enrichPlacesWithRealImages(tomTomResults);
     }
     try {
       final uri = Uri.parse('https://photon.komoot.io/api/').replace(
-        queryParameters: {'q': trimmed, 'limit': '8'},
+        queryParameters: {
+          'q': trimmed,
+          'limit': '8',
+          if (userLat != null && userLon != null) ...{
+            'lat': userLat.toString(),
+            'lon': userLon.toString(),
+          },
+        },
       );
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -388,19 +476,29 @@ class DiscoveryRepository {
   }
 
   Future<List<NearbyPlace>> _nearbyOverpassPlaces(double latitude, double longitude) async {
-    const radius = 4500;
+    const radius = 6000;
     final query = '''
       [out:json][timeout:25];
       (
-        node(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
-        node(around:$radius,$latitude,$longitude)["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
-        node(around:$radius,$latitude,$longitude)["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
-        node(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve"];
-        node(around:$radius,$latitude,$longitude)["entrance"~"main|yes"];
-        way(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
-        way(around:$radius,$latitude,$longitude)["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
-        way(around:$radius,$latitude,$longitude)["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre"];
-        way(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve"];
+        node(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"]["wikidata"];
+        node(around:$radius,$latitude,$longitude)["historic"~"monument|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage|plaza|square"]["wikidata"];
+        node(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve|water_park"]["wikidata"];
+        node(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"]["wikipedia"];
+        node(around:$radius,$latitude,$longitude)["historic"~"monument|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage|plaza|square"]["wikipedia"];
+        node(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve|water_park"]["wikipedia"];
+        node(around:$radius,$latitude,$longitude)["tourism"~"attraction|museum|viewpoint|theme_park|zoo"];
+        node(around:$radius,$latitude,$longitude)["historic"~"castle|fort|ruins|cathedral"];
+        way(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"]["wikidata"];
+        way(around:$radius,$latitude,$longitude)["historic"~"monument|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage|plaza|square"]["wikidata"];
+        way(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve|water_park"]["wikidata"];
+        way(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"]["wikipedia"];
+        way(around:$radius,$latitude,$longitude)["historic"~"monument|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage|plaza|square"]["wikipedia"];
+        way(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve|water_park"]["wikipedia"];
+        way(around:$radius,$latitude,$longitude)["tourism"~"attraction|museum|viewpoint|theme_park|zoo"];
+        way(around:$radius,$latitude,$longitude)["historic"~"castle|fort|ruins|cathedral"];
+        relation(around:$radius,$latitude,$longitude)["boundary"="national_park"];
+        relation(around:$radius,$latitude,$longitude)["leisure"="nature_reserve"];
+        relation(around:$radius,$latitude,$longitude)["historic"~"heritage|monument|memorial|church"]["wikidata"];
       );
       out center tags 40;
     ''';
@@ -417,6 +515,7 @@ class DiscoveryRepository {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final elements = json['elements'] as List<dynamic>? ?? const [];
         final List<NearbyPlace> places = [];
+        final Set<String> seenNames = {};
         int idx = 0;
         for (final element in elements) {
           if (element is Map) {
@@ -438,18 +537,24 @@ class DiscoveryRepository {
               }
             }
 
+            final normalizedKey = name.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+            if (seenNames.contains(normalizedKey)) continue;
+
             final lat = _double(element['lat'] ?? (element['center'] as Map?)?['lat']);
             final lon = _double(element['lon'] ?? (element['center'] as Map?)?['lon']);
             final typeStr = tags['tourism']?.toString() ?? tags['historic']?.toString() ?? tags['amenity']?.toString() ?? tags['leisure']?.toString() ?? tags['sport']?.toString() ?? tags['natural']?.toString() ?? 'place';
             if (lat == 0.0 || lon == 0.0) continue;
             if (_isAccommodation(typeStr)) continue;
             if (_isBlacklisted(name, typeStr)) continue;
+
+            final distance = _distanceMeters(latitude, longitude, lat, lon);
+            if (distance > 6000) continue;
             
+            seenNames.add(normalizedKey);
             final category = _classifyAttraction(tags);
             final placeId = 'overpass-${element['id'] ?? idx++}';
             final img = resolveDynamicImageForPlace(name, category: category, placeId: placeId, tags: tags);
 
-            final distance = _distanceMeters(latitude, longitude, lat, lon);
             places.add(NearbyPlace(
               id: placeId,
               name: name,
@@ -465,7 +570,7 @@ class DiscoveryRepository {
           }
         }
         places.sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
-        return places.toList();
+        return places.take(20).toList();
       }
     } catch (_) {
       // Fall through
@@ -591,23 +696,32 @@ class DiscoveryRepository {
     return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
-  Future<List<NearbyPlace>> _searchTomTomPlaces(String query) async {
+  Future<List<NearbyPlace>> _searchTomTomPlaces(
+    String query, {
+    double? userLat,
+    double? userLon,
+  }) async {
     final key = AppConfig.tomTomApiKey.trim();
     if (key.isEmpty) return const [];
     try {
       final encodedQuery = Uri.encodeComponent(query);
-      final uri =
-          Uri.parse(
-            'https://api.tomtom.com/search/2/search/$encodedQuery.json',
-          ).replace(
-            queryParameters: {
-              'key': key,
-              'typeahead': 'true',
-              'limit': '8',
-              'openingHours': 'nextSevenDays',
-              'language': 'es-ES',
-            },
-          );
+      final uri = Uri.parse(
+        'https://api.tomtom.com/search/2/search/$encodedQuery.json',
+      ).replace(
+        queryParameters: {
+          'key': key,
+          'typeahead': 'true',
+          'limit': '10',
+          'countrySet': 'CO',
+          if (userLat != null && userLon != null) ...{
+            'lat': userLat.toString(),
+            'lon': userLon.toString(),
+            'radius': '50000',
+          },
+          'openingHours': 'nextSevenDays',
+          'language': 'es-ES',
+        },
+      );
       final response = await http
           .get(uri, headers: const {'User-Agent': 'VIBETOURS/1.0'})
           .timeout(const Duration(seconds: 8));
@@ -619,13 +733,17 @@ class DiscoveryRepository {
       final List<NearbyPlace> places = [];
       for (final item in results) {
         if (item is Map) {
-          final place = _tomTomPlaceFromJson(Map<String, dynamic>.from(item));
+          final place = _tomTomPlaceFromJson(
+            Map<String, dynamic>.from(item),
+            userLat: userLat,
+            userLon: userLon,
+          );
           if (!_isBlacklisted(place.name, place.type)) {
             places.add(place);
           }
         }
       }
-      return places.take(8).toList();
+      return places.take(10).toList();
     } catch (_) {
       return const [];
     }
@@ -703,9 +821,10 @@ class DiscoveryRepository {
           'lat': latitude.toString(),
           'lon': longitude.toString(),
           'radius': '5000',
-          'limit': '12',
+          'limit': '20',
+          'countrySet': 'CO',
           'language': 'es-ES',
-          'categorySet': '7376,9362,7318',
+          'categorySet': '7376,9362,7318,7374,7375',
         },
       );
       final response = await http
@@ -724,12 +843,12 @@ class DiscoveryRepository {
             userLat: latitude,
             userLon: longitude,
           );
-          if (!_isBlacklisted(place.name, place.type)) {
+          if (place.distanceMeters <= 5000 && !_isBlacklisted(place.name, place.type)) {
             places.add(place);
           }
         }
       }
-      return places;
+      return places.take(15).toList();
     } catch (_) {
       return const [];
     }

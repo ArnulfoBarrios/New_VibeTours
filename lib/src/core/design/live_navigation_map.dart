@@ -82,6 +82,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   LatLng? _pendingPuckPosition;
   bool _isUpdatingPuck = false;
   bool _isCreatingTravelledLine = false;
+  bool _userIsExploringMap = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -289,6 +290,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   }
 
   void _setRouteGeometry(List<LatLng> newPoints) {
+    final previousGeometry = _fullGeometry;
+    final previousIndex = _lastSegmentIndex;
     _fullGeometry = List.from(newPoints);
     _cumulativeDistances = [0.0];
     double total = 0.0;
@@ -299,7 +302,26 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       _cumulativeDistances.add(total);
     }
 
-    _lastSegmentIndex = 0;
+    final currentPos = _displayedPosition;
+    if (currentPos != null && previousGeometry.length >= 2 && previousIndex > 0) {
+      int bestSegment = 0;
+      double minDist = double.infinity;
+      for (int i = 0; i < _fullGeometry.length - 1; i++) {
+        final proj = _projectPointOntoSegmentMetric(currentPos, _fullGeometry[i], _fullGeometry[i + 1]);
+        final d = _metricDistanceMeters(currentPos, proj);
+        if (d < minDist) {
+          minDist = d;
+          bestSegment = i;
+        }
+      }
+      if (minDist <= 65.0) {
+        _lastSegmentIndex = bestSegment;
+      } else {
+        _lastSegmentIndex = 0;
+      }
+    } else {
+      _lastSegmentIndex = 0;
+    }
   }
 
   List<LatLng> _getZeroGapTrimmedGeometry(LatLng currentPos) {
@@ -607,12 +629,12 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     Duration duration = const Duration(milliseconds: 700),
   }) {
     final controller = _controller;
-    if (controller == null || !_styleLoaded || !widget.trackingMode) return;
+    if (controller == null || !_styleLoaded || !widget.trackingMode || _userIsExploringMap) return;
 
     final now = DateTime.now();
     if (_lastNativeCameraUpdateAt != null &&
         now.difference(_lastNativeCameraUpdateAt!) <
-            const Duration(milliseconds: 120)) {
+            const Duration(milliseconds: 60)) {
       return;
     }
     _lastNativeCameraUpdateAt = now;
@@ -632,9 +654,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     );
   }
 
-  void _updateCameraPosition() {
+  void _updateCameraPosition({bool force = false}) {
     final controller = _controller;
-    if (controller == null || !_styleLoaded) return;
+    if (controller == null || !_styleLoaded || (_userIsExploringMap && !force)) return;
 
     if (widget.trackingMode) {
       final target = _displayedPosition ??
@@ -718,12 +740,12 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         widget.currentLocation!.longitude,
       );
       _animateToLocation(currentPos, widget.trackingHeading);
-      if (!widget.trackingMode) {
-        _updateCameraPosition();
-      }
     }
 
-    if (trackingChanged || routeChanged || (widget.trackingMode && headingChanged && !locationChanged)) {
+    if (trackingChanged) {
+      _userIsExploringMap = false;
+      _updateCameraPosition(force: true);
+    } else if (routeChanged || (widget.trackingMode && headingChanged && !locationChanged)) {
       _updateCameraPosition();
     }
   }
@@ -759,34 +781,24 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       _updateCameraPosition();
     }
 
+    try {
+      await controller.clearLines();
+    } catch (_) {}
+    _routeLine = null;
+    _travelledRouteLine = null;
+    _isCreatingTravelledLine = false;
+
     final destinationChanged = _renderedDestination == null ||
         _metricDistanceMeters(_renderedDestination!, destPos) > 2;
     if (destinationChanged) {
       try {
-        await controller.clearLines();
         await controller.clearCircles();
         await controller.clearSymbols();
       } catch (_) {}
-      _routeLine = null;
-      _travelledRouteLine = null;
       _userPuckCircle = null;
       _userPuckHalo = null;
       _destinationCircle = null;
       _renderedDestination = destPos;
-    } else {
-      // Atomic route line cleanup on reroutes to prevent old overlapping polylines
-      if (_routeLine != null) {
-        try {
-          await controller.removeLine(_routeLine!);
-        } catch (_) {}
-        _routeLine = null;
-      }
-      if (_travelledRouteLine != null) {
-        try {
-          await controller.removeLine(_travelledRouteLine!);
-        } catch (_) {}
-        _travelledRouteLine = null;
-      }
     }
 
     if (currentPos != null) {
@@ -943,36 +955,81 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       children: [
         KeyedSubtree(
           key: ValueKey('live_map_$_retryKey'),
-          child: MapLibreMap(
-            styleString: widget.styleUrl,
-            initialCameraPosition: CameraPosition(
-              target: initialTarget,
-              zoom: widget.trackingMode ? 17.2 : 13.5,
-              tilt: widget.trackingMode ? 48.0 : 0.0,
-              bearing: widget.trackingMode ? (widget.trackingHeading ?? 0.0) : 0.0,
-            ),
-            compassEnabled: false,
-            rotateGesturesEnabled: true,
-            myLocationEnabled: false,
-            onMapCreated: (controller) {
-              _controller = controller;
-              if (widget.onMapCreated != null) {
-                widget.onMapCreated!(controller);
-              }
-            },
-            onStyleLoadedCallback: () {
-              _loadTimeoutTimer?.cancel();
-              if (mounted) {
+          child: Listener(
+            onPointerDown: (_) {
+              if (!_userIsExploringMap) {
                 setState(() {
-                  _styleLoaded = true;
-                  _hasMapError = false;
+                  _userIsExploringMap = true;
                 });
               }
-              _renderLiveRoute();
-              _updateCameraPosition();
             },
+            child: MapLibreMap(
+              styleString: widget.styleUrl,
+              initialCameraPosition: CameraPosition(
+                target: initialTarget,
+                zoom: widget.trackingMode ? 17.2 : 13.5,
+                tilt: widget.trackingMode ? 48.0 : 0.0,
+                bearing: widget.trackingMode ? (widget.trackingHeading ?? 0.0) : 0.0,
+              ),
+              compassEnabled: false,
+              rotateGesturesEnabled: true,
+              scrollGesturesEnabled: true,
+              zoomGesturesEnabled: true,
+              tiltGesturesEnabled: true,
+              myLocationEnabled: false,
+              trackCameraPosition: true,
+              onCameraTrackingDismissed: () {
+                if (!_userIsExploringMap) {
+                  setState(() {
+                    _userIsExploringMap = true;
+                  });
+                }
+              },
+              onMapCreated: (controller) {
+                _controller = controller;
+                if (widget.onMapCreated != null) {
+                  widget.onMapCreated!(controller);
+                }
+              },
+              onStyleLoadedCallback: () {
+                _loadTimeoutTimer?.cancel();
+                if (mounted) {
+                  setState(() {
+                    _styleLoaded = true;
+                    _hasMapError = false;
+                  });
+                }
+                _renderLiveRoute();
+                _updateCameraPosition();
+              },
+            ),
           ),
         ),
+        if (_userIsExploringMap)
+          Positioned(
+            right: 16,
+            bottom: 236 + MediaQuery.of(context).padding.bottom,
+            child: FloatingActionButton.extended(
+              heroTag: 'live_map_recenter_fab',
+              elevation: 4,
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              foregroundColor: Theme.of(context).colorScheme.primary,
+              onPressed: () {
+                setState(() {
+                  _userIsExploringMap = false;
+                });
+                _updateCameraPosition(force: true);
+              },
+              icon: Icon(Icons.my_location_rounded, color: Theme.of(context).colorScheme.primary),
+              label: Text(
+                'Re-centrar',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
         if (!_styleLoaded && !_hasMapError)
           Container(
             color: Theme.of(context).colorScheme.surface,

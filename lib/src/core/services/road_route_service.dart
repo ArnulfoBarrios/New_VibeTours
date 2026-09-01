@@ -85,6 +85,7 @@ class RoadRouteService {
     List<GeoPoint> points, {
     bool preferLiveTraffic = false,
     bool forceRefresh = false,
+    double? originHeading,
   }) {
     if (points.length < 2) {
       return Future.value(RoadRouteResult(geometry: points));
@@ -92,6 +93,7 @@ class RoadRouteService {
     final key = [
       preferLiveTraffic && hasLiveTrafficProvider ? 'traffic' : 'road',
       points.map(_pointKey).join('|'),
+      if (originHeading != null) 'h_${originHeading.round()}',
       if (preferLiveTraffic && hasLiveTrafficProvider)
         DateTime.now().millisecondsSinceEpoch ~/ Duration.millisecondsPerMinute,
     ].join('|');
@@ -99,6 +101,7 @@ class RoadRouteService {
       return _resolveRoute(
         points,
         preferLiveTraffic: preferLiveTraffic && hasLiveTrafficProvider,
+        originHeading: originHeading,
       );
     }
     return _routeCache.putIfAbsent(
@@ -106,6 +109,7 @@ class RoadRouteService {
       () => _resolveRoute(
         points,
         preferLiveTraffic: preferLiveTraffic && hasLiveTrafficProvider,
+        originHeading: originHeading,
       ),
     );
   }
@@ -113,6 +117,7 @@ class RoadRouteService {
   Future<RoadRouteResult> _resolveRoute(
     List<GeoPoint> points, {
     required bool preferLiveTraffic,
+    double? originHeading,
   }) async {
     final geometry = <GeoPoint>[];
     final maritimeSegments = <List<GeoPoint>>[];
@@ -132,6 +137,8 @@ class RoadRouteService {
     for (var index = 0; index < points.length - 1; index++) {
       final start = points[index];
       final end = points[index + 1];
+      final isFirstLeg = index == 0;
+      final legHeading = isFirstLeg ? originHeading : null;
       final directDistance = _distanceMeters(start, end);
 
       // Long-distance / Intercontinental transfer (> 400 km): Build Flight-aware route
@@ -151,9 +158,9 @@ class RoadRouteService {
 
       _DrivingRoute? roadRoute;
       if (preferLiveTraffic) {
-        roadRoute = await _fetchTomTomTrafficRoute(start, end);
+        roadRoute = await _fetchTomTomTrafficRoute(start, end, originHeading: legHeading);
       }
-      roadRoute ??= await _fetchDrivingRoute(start, end);
+      roadRoute ??= await _fetchDrivingRoute(start, end, originHeading: legHeading);
 
       final requiresPortTransfer =
           roadRoute == null ||
@@ -166,22 +173,14 @@ class RoadRouteService {
           final firstPoint = roadGeo.first;
           final lastPoint = roadGeo.last;
           
-          // Connect origin to main road network using local street routing if separated
-          if (_distanceMeters(start, firstPoint) > 40) {
-            final connector = await _fetchLocalStreetRoute(start, firstPoint);
-            if (connector != null && connector.isNotEmpty) {
-              _appendGeometry(fullLegGeometry, connector);
-            }
+          if (_distanceMeters(start, firstPoint) <= 15) {
+            fullLegGeometry.add(start);
           }
 
           _appendGeometry(fullLegGeometry, roadGeo);
 
-          // Connect road end to final destination
-          if (_distanceMeters(lastPoint, end) > 40) {
-            final endConnector = await _fetchLocalStreetRoute(lastPoint, end);
-            if (endConnector != null && endConnector.isNotEmpty) {
-              _appendGeometry(fullLegGeometry, endConnector);
-            }
+          if (_distanceMeters(lastPoint, end) <= 15) {
+            fullLegGeometry.add(end);
           }
         } else {
           fullLegGeometry = [start, end];
@@ -212,18 +211,12 @@ class RoadRouteService {
         if (roadGeo.isNotEmpty) {
           final firstPoint = roadGeo.first;
           final lastPoint = roadGeo.last;
-          if (_distanceMeters(start, firstPoint) > 40) {
-            final connector = await _fetchLocalStreetRoute(start, firstPoint);
-            if (connector != null && connector.isNotEmpty) {
-              _appendGeometry(fullLegGeometry, connector);
-            }
+          if (_distanceMeters(start, firstPoint) <= 15) {
+            fullLegGeometry.add(start);
           }
           _appendGeometry(fullLegGeometry, roadGeo);
-          if (_distanceMeters(lastPoint, end) > 40) {
-            final endConnector = await _fetchLocalStreetRoute(lastPoint, end);
-            if (endConnector != null && endConnector.isNotEmpty) {
-              _appendGeometry(fullLegGeometry, endConnector);
-            }
+          if (_distanceMeters(lastPoint, end) <= 15) {
+            fullLegGeometry.add(end);
           }
         } else {
           fullLegGeometry = [start, end];
@@ -493,18 +486,23 @@ out center tags 10;
 
   Future<_DrivingRoute?> _fetchDrivingRoute(
     GeoPoint start,
-    GeoPoint end,
-  ) async {
+    GeoPoint end, {
+    double? originHeading,
+  }) async {
     final baseUrls = [
       _osrmBaseUrl,
       'https://routing.openstreetmap.de/routed-car',
     ];
 
+    final headingParam = originHeading != null && originHeading >= 0
+        ? '&bearings=${originHeading.round()},45;'
+        : '';
+
     for (final baseUrl in baseUrls) {
       final uri = Uri.parse(
         '$baseUrl/route/v1/driving/'
         '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
-        '?overview=full&geometries=geojson&steps=true&alternatives=false',
+        '?overview=full&geometries=geojson&steps=true&alternatives=false&radiuses=350;350$headingParam',
       );
       try {
         final response = await _client
@@ -537,8 +535,9 @@ out center tags 10;
 
   Future<_DrivingRoute?> _fetchTomTomTrafficRoute(
     GeoPoint start,
-    GeoPoint end,
-  ) async {
+    GeoPoint end, {
+    double? originHeading,
+  }) async {
     final key = _tomTomApiKey.trim();
     if (key.isEmpty) return null;
     final locations =
@@ -554,6 +553,8 @@ out center tags 10;
             'travelMode': 'car',
             'computeTravelTimeFor': 'all',
             'instructionsType': 'text',
+            if (originHeading != null && originHeading >= 0)
+              'heading': originHeading.round().toString(),
           },
         );
     try {
@@ -584,52 +585,6 @@ out center tags 10;
     } on Object {
       return null;
     }
-  }
-
-  Future<List<GeoPoint>?> _fetchLocalStreetRoute(
-    GeoPoint origin,
-    GeoPoint target,
-  ) async {
-    final dist = _distanceMeters(origin, target);
-    if (dist <= 30) return [origin, target];
-
-    // 1. Attempt TomTom which supports newer residential urban street networks
-    if (_tomTomApiKey.trim().isNotEmpty) {
-      final tt = await _fetchTomTomTrafficRoute(origin, target);
-      if (tt != null && tt.geometry.length >= 2) {
-        return tt.geometry;
-      }
-    }
-
-    // 2. Attempt OSM routing profiles with wider snapping radius for residential zones
-    final profiles = [
-      ('https://routing.openstreetmap.de/routed-foot', 'foot'),
-      ('https://routing.openstreetmap.de/routed-car', 'driving'),
-      (_osrmBaseUrl, 'driving'),
-    ];
-    for (final profile in profiles) {
-      final base = profile.$1;
-      final mode = profile.$2;
-      final uri = Uri.parse(
-        '$base/route/v1/$mode/'
-        '${origin.longitude},${origin.latitude};${target.longitude},${target.latitude}'
-        '?overview=full&geometries=geojson&radiuses=350;350',
-      );
-      try {
-        final res = await _client.get(uri).timeout(const Duration(seconds: 4));
-        if (res.statusCode == 200) {
-          final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-          if (decoded['code'] == 'Ok') {
-            final routes = decoded['routes'] as List<dynamic>? ?? const [];
-            if (routes.isNotEmpty) {
-              final geo = _parseGeoJsonGeometry((routes.first as Map<String, dynamic>)['geometry']);
-              if (geo.length >= 2) return geo;
-            }
-          }
-        }
-      } catch (_) {}
-    }
-    return null;
   }
 
 

@@ -573,9 +573,14 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
       return;
     }
     setState(() => _isSearching = true);
+    final pos = ref.read(currentPositionProvider).valueOrNull;
     List<NearbyPlace> remote = const [];
     try {
-      remote = await ref.read(discoveryRepositoryProvider).searchPlaces(query);
+      remote = await ref.read(discoveryRepositoryProvider).searchPlaces(
+        query,
+        userLat: pos?.latitude,
+        userLon: pos?.longitude,
+      );
     } catch (_) {
       remote = const [];
     }

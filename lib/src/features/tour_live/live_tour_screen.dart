@@ -14,7 +14,6 @@ import '../../core/design/app_theme.dart';
 import '../../core/design/live_navigation_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/services/road_route_service.dart';
-import '../../core/services/tour_runtime_services.dart';
 import '../../core/tour/tour_builder.dart';
 import '../../core/tour/tour_controller.dart';
 import '../../core/tour/tour_phase.dart';
@@ -124,16 +123,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _isOffRoute = false;
   bool _locationStreamRequested = false;
   bool _noLandRouteAvailable = false;
-  // Live navigation opens in overview mode by default, then smoothly transitions to tracking mode on movement.
-  bool _isTrackingMode = false;
+  // Live navigation opens in close vehicle tracking mode (zoom 16.5-17.0) by default for immediate navigation.
+  bool _isTrackingMode = true;
   GeoPoint? _initialOverviewPoint;
   bool _hasUserManuallyToggledTracking = false;
   bool _navigatingToHotel = false;
   double? _currentHeading;
   bool _stopsEnriched = false;
-  LocationSamplingMode _currentSamplingMode = LocationSamplingMode.walking;
-  DateTime? _stoppedSince;
-  DateTime? _lastModeSwitchAt;
   double _ttsSpeedMultiplier = 1.0;
   bool _autoPlayProximityEnabled = true;
   final Set<String> _autoTriggeredStopIds = {};
@@ -197,38 +193,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     });
   }
 
-  Future<void> _updateBatterySamplingMode(double speed, double distanceToStop) async {
-    final isStopped = speed < 0.5 || distanceToStop < 30.0;
-    final now = DateTime.now();
+  // GPS stream is maintained fixed and uninterrupted throughout the active tour
 
-    if (isStopped) {
-      _stoppedSince ??= now;
-    } else {
-      _stoppedSince = null;
-    }
-
-    final stoppedDuration = _stoppedSince != null ? now.difference(_stoppedSince!) : Duration.zero;
-    final shouldBeStationary = isStopped && (stoppedDuration.inSeconds >= 30 || distanceToStop < 20.0);
-    final targetMode = shouldBeStationary ? LocationSamplingMode.stationary : LocationSamplingMode.walking;
-
-    final canSwitch = _lastModeSwitchAt == null || now.difference(_lastModeSwitchAt!).inSeconds >= 30;
-
-    if (_currentSamplingMode != targetMode && canSwitch) {
-      _currentSamplingMode = targetMode;
-      _lastModeSwitchAt = now;
-      if (mounted) {
-        setState(() {});
-      }
-      final service = ref.read(locationServiceProvider);
-      final stream = await service.positionStream(
-        distanceFilterMeters: 0,
-        mode: targetMode,
-      );
-      if (!mounted || stream == null) return;
-      await _positionSubscription?.cancel();
-      _positionSubscription = stream.listen(_handlePositionUpdate);
-    }
-  }
 
   // ── Pocket Mode & Map Menu State ───────────────────────────────────────────
   bool _isPocketModeEnabled = false;
@@ -1106,7 +1072,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final distanceToActiveStop = activeStopPoint != null
         ? Geolocator.distanceBetween(point.latitude, point.longitude, activeStopPoint.latitude, activeStopPoint.longitude)
         : double.infinity;
-    _updateBatterySamplingMode(position.speed, distanceToActiveStop);
 
     // Audioguía automática por proximidad (< 30 metros)
     if (_autoPlayProximityEnabled && _activeStop < tour.stops.length) {
@@ -1150,7 +1115,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               _lastTrafficRefreshAt ?? DateTime.fromMillisecondsSinceEpoch(0),
             ) >
             const Duration(minutes: 2);
-    final deviated = distanceToRoute > 35;
+    // Real deviation threshold: 65m to accommodate wide multi-lane boulevards and service roads
+    final deviated = distanceToRoute > 65;
     if (deviated || refreshTraffic || route == null) {
       if (_canReroute(now, isOffRoute: deviated)) {
         if (deviated) {
@@ -1214,6 +1180,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       [origin, destination],
       preferLiveTraffic: true,
       forceRefresh: true,
+      originHeading: _currentHeading,
     );
     if (!mounted) return;
     
