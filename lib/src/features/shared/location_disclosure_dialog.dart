@@ -7,7 +7,11 @@ Future<bool> checkAndRequestLocationPermission(BuildContext context, WidgetRef r
   final service = ref.read(locationServiceProvider);
   
   if (service.hasAcceptedDisclosure) {
-    return service.requestPermissionExplicitly();
+    final granted = await service.requestPermissionExplicitly();
+    if (granted) {
+      ref.invalidate(currentPositionProvider);
+    }
+    return granted;
   }
 
   final result = await showDialog<bool>(
@@ -199,7 +203,11 @@ Future<bool> checkAndRequestLocationPermission(BuildContext context, WidgetRef r
 
   if (result == true) {
     await service.acceptDisclosure();
-    return service.requestPermissionExplicitly();
+    final granted = await service.requestPermissionExplicitly();
+    if (granted) {
+      ref.invalidate(currentPositionProvider);
+    }
+    return granted;
   }
   
   return false;

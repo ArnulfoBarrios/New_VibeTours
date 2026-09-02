@@ -3716,6 +3716,18 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Tutoriales reiniciados. Se mostrarán al visitar cada pantalla.'**
   String get tourResetAllSuccess;
+
+  /// No description provided for @nearbyEnableLocationPrompt.
+  ///
+  /// In es, this message translates to:
+  /// **'Activa tu ubicación para explorar atracciones y lugares turísticos a tu alrededor.'**
+  String get nearbyEnableLocationPrompt;
+
+  /// No description provided for @enableLocationBtn.
+  ///
+  /// In es, this message translates to:
+  /// **'Activar ubicación'**
+  String get enableLocationBtn;
 }
 
 class _AppLocalizationsDelegate

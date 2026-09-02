@@ -747,5 +747,7 @@
   "tourReplayLive": "Guía de Navegación en Vivo",
   "tourReplaySettings": "Guía de Ajustes",
   "tourResetAll": "Reiniciar todos los tutoriales",
-  "tourResetAllSuccess": "Tutoriales reiniciados. Se mostrarán al visitar cada pantalla."
+  "tourResetAllSuccess": "Tutoriales reiniciados. Se mostrarán al visitar cada pantalla.",
+  "nearbyEnableLocationPrompt": "Activa tu ubicación para explorar atracciones y lugares turísticos a tu alrededor.",
+  "enableLocationBtn": "Activar ubicación"
 }

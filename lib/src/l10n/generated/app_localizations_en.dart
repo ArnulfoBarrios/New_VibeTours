@@ -2022,4 +2022,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get tourResetAllSuccess =>
       'Tutorials reset. They will show when visiting each screen.';
+
+  @override
+  String get nearbyEnableLocationPrompt =>
+      'Enable your location to explore attractions and tourist spots around you.';
+
+  @override
+  String get enableLocationBtn => 'Enable location';
 }

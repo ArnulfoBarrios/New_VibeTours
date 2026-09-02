@@ -2035,4 +2035,11 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get tourResetAllSuccess =>
       'Tutoriales reiniciados. Se mostrarán al visitar cada pantalla.';
+
+  @override
+  String get nearbyEnableLocationPrompt =>
+      'Activa tu ubicación para explorar atracciones y lugares turísticos a tu alrededor.';
+
+  @override
+  String get enableLocationBtn => 'Activar ubicación';
 }

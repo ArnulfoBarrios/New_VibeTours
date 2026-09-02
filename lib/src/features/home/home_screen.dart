@@ -15,6 +15,7 @@ import '../../core/utils/image_utils.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import '../shared/location_disclosure_dialog.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -31,13 +32,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _nearbyPlacesKey = GlobalKey();
   final _upcomingEventsKey = GlobalKey();
   bool _tourChecked = false;
+  bool _locationChecked = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestNotifications();
+      _checkLocationPermission();
     });
+  }
+
+  Future<void> _checkLocationPermission() async {
+    if (_locationChecked) return;
+    _locationChecked = true;
+    final locationService = ref.read(locationServiceProvider);
+    if (!locationService.hasAcceptedDisclosure) {
+      try {
+        final granted = await checkAndRequestLocationPermission(context, ref);
+        if (granted && mounted) {
+          ref.invalidate(currentPositionProvider);
+        }
+      } catch (_) {}
+    }
   }
 
   void _triggerTourIfNeeded() {
@@ -736,7 +753,89 @@ class _NearbyPlacesSection extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     return placesAsync.when(
       data: (places) {
-        if (places.isEmpty) return const SizedBox.shrink();
+        if (places.isEmpty) {
+          final position = ref.watch(currentPositionProvider).valueOrNull;
+          if (position == null) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: GlassPanel(
+                radius: 24,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            color: AppTheme.primary,
+                            size: 26,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.nearbyPlaces,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                l10n.nearbyEnableLocationPrompt,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () async {
+                          final granted = await checkAndRequestLocationPermission(context, ref);
+                          if (granted) {
+                            ref.invalidate(currentPositionProvider);
+                          }
+                        },
+                        icon: const Icon(Icons.my_location_rounded, size: 20),
+                        label: Text(
+                          l10n.enableLocationBtn,
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return const SizedBox.shrink();
+        }
         return Padding(
           padding: const EdgeInsets.only(top: 16, bottom: 24),
           child: Column(

@@ -740,5 +740,7 @@
   "tourReplayLive": "Live Navigation Guide",
   "tourReplaySettings": "Settings Guide",
   "tourResetAll": "Reset all tutorials",
-  "tourResetAllSuccess": "Tutorials reset. They will show when visiting each screen."
+  "tourResetAllSuccess": "Tutorials reset. They will show when visiting each screen.",
+  "nearbyEnableLocationPrompt": "Enable your location to explore attractions and tourist spots around you.",
+  "enableLocationBtn": "Enable location"
 }

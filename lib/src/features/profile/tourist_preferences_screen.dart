@@ -112,6 +112,13 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
   }
 
   Future<void> _saveAndFinish() async {
+    final locationService = ref.read(locationServiceProvider);
+    if (!locationService.hasAcceptedDisclosure) {
+      try {
+        await checkAndRequestLocationPermission(context, ref);
+      } catch (_) {}
+    }
+
     await ref.read(touristProfileProvider.notifier).updatePreferences(
       travelerType: _travelerType,
       budget: _budget,
