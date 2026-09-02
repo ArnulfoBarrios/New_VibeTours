@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
@@ -15,6 +14,7 @@ import '../../core/tour/tour_builder.dart';
 import '../../core/tour/tour_controller.dart';
 import '../../core/tour/tour_phase.dart';
 import '../../core/utils/image_utils.dart';
+import '../../core/utils/tour_guide_formatter.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -124,6 +124,19 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
         final tour = (selected?.id == widget.tourId)
             ? selected!
             : (matchedInAvailable ?? selected ?? availableTours.first);
+
+        // Pre-cache first stops of the tour in the background for instant audio playback
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(voiceGuideProvider).precacheTourStops(
+              tour.stops,
+              startIndex: 0,
+              maxCount: 2,
+              lang: tour.language,
+            );
+          }
+        });
+
         final favorites = ref.watch(favoriteTourIdsProvider);
         final isFavorite = favorites.contains(tour.id);
         final commentsAsync = ref.watch(tourCommentsProvider(tour.id));
@@ -170,7 +183,7 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
                     key: _audioPreviewKey,
                     child: IconButton.filledTonal(
                       tooltip: 'Escuchar Muestra Narrada (Audio Preview)',
-                      onPressed: () => _playTeaserAudio(context, tour),
+                      onPressed: () => _playTeaserAudio(context, ref, tour),
                       icon: const Icon(Icons.spatial_audio_off_rounded, color: Colors.blueAccent),
                     ),
                   ),
@@ -1053,7 +1066,7 @@ class _Metric extends StatelessWidget {
   }
 }
 
-void _showStopDetailsSheet(BuildContext context, TourStop stop) {
+void _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? tour}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -1188,18 +1201,12 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop) {
                             borderRadius: BorderRadius.circular(16),
                             onTap: () async {
                               final voiceService = ref.read(voiceGuideProvider);
-                              final cleanName = stop.name.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
-                              final cleanDesc = stop.description.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
-                              final narrateText = cleanDesc.isNotEmpty && cleanDesc != cleanName
-                                  ? '$cleanName. $cleanDesc'
-                                  : (RegExp(r'restaurante|comida|cafe|bar|gastronom', caseSensitive: false).hasMatch(cleanName)
-                                      ? '$cleanName es un destacado lugar gastronómico para probar exquisitos sabores locales.'
-                                      : (RegExp(r'playa|beach|bah[íi]a|cabo|piscina|isla|arrecife', caseSensitive: false).hasMatch(cleanName)
-                                          ? '$cleanName es una hermosa playa perfecta para disfrutar del mar y la brisa marina.'
-                                          : (RegExp(r'sendero|pueblito|trek|camino|hiking', caseSensitive: false).hasMatch(cleanName)
-                                              ? '$cleanName es una fascinante ruta de senderismo rodeada de naturaleza y miradores.'
-                                              : '$cleanName es uno de los atractivos imperdibles en este recorrido. Disfruta de la experiencia.')));
-                              await voiceService.speak(narrateText);
+                              await voiceService.narrateStop(
+                                stop,
+                                stopIndex: stop.order,
+                                totalStops: tour?.stops.length ?? 1,
+                                lang: tour?.language ?? 'es',
+                              );
                             },
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1390,14 +1397,15 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop) {
 }
 
 class _StopTile extends StatelessWidget {
-  const _StopTile({required this.stop});
+  const _StopTile({required this.stop, this.tour});
 
   final TourStop stop;
+  final Tour? tour;
 
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
-      onTap: () => _showStopDetailsSheet(context, stop),
+      onTap: () => _showStopDetailsSheet(context, stop, tour: tour),
       padding: const EdgeInsets.all(12),
       radius: 22,
       child: Row(
@@ -1700,7 +1708,7 @@ class _StopsTimelineList extends StatelessWidget {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: _StopTile(stop: stop)
+                    child: _StopTile(stop: stop, tour: tour)
                         .animate(delay: (currIndex.clamp(0, 4) * 80).ms)
                         .fadeIn(duration: 350.ms)
                         .slideX(begin: 0.08, end: 0, curve: Curves.easeOutCubic),
@@ -2130,24 +2138,12 @@ void _shareTourItinerary(Tour tour) {
   SharePlus.instance.share(ShareParams(text: buffer.toString()));
 }
 
-Future<void> _playTeaserAudio(BuildContext context, Tour tour) async {
+Future<void> _playTeaserAudio(BuildContext context, WidgetRef ref, Tour tour) async {
   final messenger = ScaffoldMessenger.of(context);
   messenger.hideCurrentSnackBar();
 
-  final tts = FlutterTts();
-  await tts.setLanguage('es-ES');
-  await tts.setPitch(1.0);
-  await tts.setSpeechRate(0.5);
-
-  tts.setCompletionHandler(() {
-    messenger.hideCurrentSnackBar();
-  });
-  tts.setCancelHandler(() {
-    messenger.hideCurrentSnackBar();
-  });
-
-  final firstStop = tour.stops.isNotEmpty ? tour.stops.first.name : tour.city;
-  final sampleText = 'Bienvenido a ${tour.title} en ${tour.city}. Este recorrido te llevará a conocer fascinantes sitios como $firstStop. ${tour.description}';
+  final voiceGuide = ref.read(voiceGuideProvider);
+  final teaserText = TourGuideFormatter.formatTourTeaser(tour);
 
   if (context.mounted) {
     messenger.showSnackBar(
@@ -2156,14 +2152,14 @@ Future<void> _playTeaserAudio(BuildContext context, Tour tour) async {
           children: [
             const Icon(Icons.spatial_audio_rounded, color: Colors.lightBlueAccent),
             const SizedBox(width: 10),
-            Expanded(child: Text('Reproduciendo muestra de audio para ${tour.title}...')),
+            Expanded(child: Text('Reproduciendo narración de muestra para ${tour.title}...')),
           ],
         ),
-        duration: const Duration(seconds: 4),
+        duration: const Duration(seconds: 10),
         action: SnackBarAction(
           label: 'Detener',
           onPressed: () {
-            tts.stop();
+            voiceGuide.stop();
             messenger.hideCurrentSnackBar();
           },
         ),
@@ -2171,7 +2167,7 @@ Future<void> _playTeaserAudio(BuildContext context, Tour tour) async {
     );
   }
 
-  await tts.speak(sampleText);
+  await voiceGuide.speak(teaserText, lang: tour.language);
 }
 
 void _showReportDialog(BuildContext context, WidgetRef ref, Tour tour) {

@@ -133,7 +133,12 @@ class AudioMiniPlayerWidget extends ConsumerWidget {
                           } else if (currentStop != null) {
                             ref
                                 .read(voiceGuideProvider)
-                                .narrateStop(currentStop, lang: tour.language);
+                                .narrateStop(
+                                  currentStop,
+                                  stopIndex: playbackState.currentStopIndex,
+                                  totalStops: tour.stops.length,
+                                  lang: tour.language,
+                                );
                           }
                         },
                         child: Container(

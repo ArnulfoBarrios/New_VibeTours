@@ -127,6 +127,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _isTrackingMode = true;
   GeoPoint? _initialOverviewPoint;
   bool _hasUserManuallyToggledTracking = false;
+  bool _hasInitialAccurateRoute = false;
   bool _navigatingToHotel = false;
   double? _currentHeading;
   bool _stopsEnriched = false;
@@ -1024,21 +1025,35 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   Future<void> _startLiveNavigation() async {
     final service = ref.read(locationServiceProvider);
+
+    // Start live high-accuracy satellite stream immediately
+    final stream = await service.positionStream(distanceFilterMeters: 0);
+    if (mounted && stream != null) {
+      await _positionSubscription?.cancel();
+      _positionSubscription = stream.listen(_handlePositionUpdate);
+    }
+
     final initialPosition = await service.currentPosition();
     if (!mounted) return;
     if (initialPosition != null) {
       setState(() {
         _currentPoint = _pointFromPosition(initialPosition);
+        if (initialPosition.heading >= 0) {
+          _currentHeading = initialPosition.heading;
+        }
       });
       final tour = _navigationTour;
       if (tour != null) {
+        // Pre-cache upcoming stops in the background for 0 ms playback
+        ref.read(voiceGuideProvider).precacheTourStops(
+          tour.stops,
+          startIndex: _activeStop,
+          maxCount: 3,
+          lang: tour.language,
+        );
         await _recalculateRoute(tour, force: true);
       }
     }
-    final stream = await service.positionStream(distanceFilterMeters: 0);
-    if (!mounted || stream == null) return;
-    await _positionSubscription?.cancel();
-    _positionSubscription = stream.listen(_handlePositionUpdate);
   }
 
   void _handlePositionUpdate(Position position) {
@@ -1068,6 +1083,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final tour = _navigationTour;
     if (tour == null || tour.stops.isEmpty) return;
 
+    final route = _liveRoute;
+    // Auto-refine to optimal live route as soon as verified satellite fix arrives
+    if (route == null || (!_hasInitialAccurateRoute && position.accuracy <= 25.0)) {
+      _hasInitialAccurateRoute = true;
+      unawaited(_recalculateRoute(tour, force: true));
+      return;
+    }
+
     final activeStopPoint = _activeStop < tour.stops.length ? tour.stops[_activeStop].location : null;
     final distanceToActiveStop = activeStopPoint != null
         ? Geolocator.distanceBetween(point.latitude, point.longitude, activeStopPoint.latitude, activeStopPoint.longitude)
@@ -1082,6 +1105,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         unawaited(
           ref.read(voiceGuideProvider).narrateStop(
             currentStop,
+            stopIndex: _activeStop,
+            totalStops: tour.stops.length,
             lang: tour.language,
             onResolved: (name, description) {
               if (mounted) {
@@ -1103,13 +1128,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
       }
     }
-    final route = _liveRoute;
-    final distanceToRoute = route == null
-        ? double.infinity
-        : _distanceToRouteMeters(point, route.geometry);
+    final distanceToRoute = _distanceToRouteMeters(point, route.geometry);
     final now = DateTime.now();
     final refreshTraffic =
-        route != null &&
         _routeService.hasLiveTrafficProvider &&
         now.difference(
               _lastTrafficRefreshAt ?? DateTime.fromMillisecondsSinceEpoch(0),
@@ -1117,7 +1138,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             const Duration(minutes: 2);
     // Real deviation threshold: 65m to accommodate wide multi-lane boulevards and service roads
     final deviated = distanceToRoute > 65;
-    if (deviated || refreshTraffic || route == null) {
+    if (deviated || refreshTraffic) {
       if (_canReroute(now, isOffRoute: deviated)) {
         if (deviated) {
           setState(() {
@@ -1127,7 +1148,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         unawaited(
           _recalculateRoute(
             tour,
-            force: route == null || refreshTraffic || deviated,
+            force: refreshTraffic || deviated,
             markOffRoute: deviated,
           ),
         );
@@ -1731,6 +1752,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   onPressed: () async {
                     await ref.read(voiceGuideProvider).narrateStop(
                       stop,
+                      stopIndex: _activeStop,
+                      totalStops: tour.stops.length,
                       lang: tour.language,
                       onResolved: (name, description) {
                         if (mounted) {
@@ -1908,6 +1931,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   _voiceFoodPlaces = []; // Clear food markers on stop change
                   _selectedVoicePlace = null; // Clear selected restaurant on stop change
                 });
+                ref.read(voiceGuideProvider).precacheTourStops(
+                  tour.stops,
+                  startIndex: _activeStop,
+                  maxCount: 2,
+                  lang: tour.language,
+                );
                 _recalculateRoute(tour, force: true);
               }
             },

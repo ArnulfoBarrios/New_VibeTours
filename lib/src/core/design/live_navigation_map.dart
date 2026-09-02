@@ -324,6 +324,19 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     }
   }
 
+  LatLng _getSnappedPosition(LatLng rawPos) {
+    if (_fullGeometry.length < 2) return rawPos;
+    final activeSegment = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
+    final a = _fullGeometry[activeSegment];
+    final b = _fullGeometry[activeSegment + 1];
+    final proj = _projectPointOntoSegmentMetric(rawPos, a, b);
+    final dist = _metricDistanceMeters(rawPos, proj);
+    if (dist <= 35.0) {
+      return proj;
+    }
+    return rawPos;
+  }
+
   List<LatLng> _getZeroGapTrimmedGeometry(LatLng currentPos) {
     if (_fullGeometry.length < 2) return _fullGeometry;
 
@@ -360,11 +373,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     final remaining = _fullGeometry.sublist(activeSegment + 1);
     final connectorDistance = _metricDistanceMeters(currentPos, activeProj);
 
-    // If user is near the roadway (<= 35m), attach smoothly to GPS puck.
-    // If user is off-road (> 35m), start cleanly at road geometry without cutting buildings.
+    // If user is near roadway (<= 35m), start cleanly at the projected road position (no lateral hook)
     if (connectorDistance <= 35.0) {
       return [
-        if (connectorDistance > 1.0) currentPos,
         activeProj,
         ...remaining,
       ];
@@ -411,10 +422,12 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     } catch (_) {}
 
+    final puckPos = _getSnappedPosition(currentPos);
+
     try {
       _userPuckHalo = await controller.addCircle(
         CircleOptions(
-          geometry: currentPos,
+          geometry: puckPos,
           circleRadius: 18,
           circleColor: '#007AFF',
           circleOpacity: 0.20,
@@ -422,7 +435,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       );
       _userPuckCircle = await controller.addCircle(
         CircleOptions(
-          geometry: currentPos,
+          geometry: puckPos,
           circleRadius: 9,
           circleColor: '#007AFF',
           circleOpacity: 1.0,
@@ -434,7 +447,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   }
 
   void _queueUserPuckUpdate(LatLng currentPos) {
-    _pendingPuckPosition = currentPos;
+    final snapped = _getSnappedPosition(currentPos);
+    _pendingPuckPosition = snapped;
     if (_isUpdatingPuck) return;
     unawaited(_flushUserPuckUpdate());
   }

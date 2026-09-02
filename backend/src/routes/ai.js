@@ -11,21 +11,22 @@ import { resolveCanonicalDestination, validateCandidateLocation, haversineDistan
 
 export const aiRouter = Router()
 
-// Endpoint de síntesis de voz humana mediante OpenAI TTS (tts-1)
+// Endpoint de síntesis de voz humana mediante ElevenLabs / OpenAI TTS
 aiRouter.post('/speech', async (req, res, next) => {
   try {
     const speechSchema = z.object({
       text: z.string().min(1),
       voice: z.string().optional().default('nova'),
       speed: z.number().min(0.25).max(4.0).optional().default(1.0),
-      model: z.string().optional().default('tts-1')
+      model: z.string().optional().default('tts-1'),
+      provider: z.enum(['auto', 'elevenlabs', 'openai']).optional().default('auto')
     })
-    const { text, voice, speed, model } = speechSchema.parse(req.body)
-    const audioBuffer = await generateSpeechAudio({ text, voice, speed, model })
+    const { text, voice, speed, model, provider } = speechSchema.parse(req.body)
+    const audioBuffer = await generateSpeechAudio({ text, voice, speed, model, provider })
     res.set({
       'Content-Type': 'audio/mpeg',
       'Content-Length': audioBuffer.length,
-      'Cache-Control': 'public, max-age=86400'
+      'Cache-Control': 'public, max-age=86400, immutable'
     })
     res.send(audioBuffer)
   } catch (error) {
@@ -40,14 +41,15 @@ aiRouter.post('/tts', async (req, res, next) => {
       text: z.string().min(1),
       voice: z.string().optional().default('nova'),
       speed: z.number().min(0.25).max(4.0).optional().default(1.0),
-      model: z.string().optional().default('tts-1')
+      model: z.string().optional().default('tts-1'),
+      provider: z.enum(['auto', 'elevenlabs', 'openai']).optional().default('auto')
     })
-    const { text, voice, speed, model } = speechSchema.parse(req.body)
-    const audioBuffer = await generateSpeechAudio({ text, voice, speed, model })
+    const { text, voice, speed, model, provider } = speechSchema.parse(req.body)
+    const audioBuffer = await generateSpeechAudio({ text, voice, speed, model, provider })
     res.set({
       'Content-Type': 'audio/mpeg',
       'Content-Length': audioBuffer.length,
-      'Cache-Control': 'public, max-age=86400'
+      'Cache-Control': 'public, max-age=86400, immutable'
     })
     res.send(audioBuffer)
   } catch (error) {

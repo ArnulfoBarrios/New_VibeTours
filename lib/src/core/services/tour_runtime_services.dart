@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../config/app_config.dart';
+import '../utils/tour_guide_formatter.dart';
 import '../../domain/models.dart';
 import 'sqlite-service.dart';
 
@@ -139,7 +140,7 @@ class VoiceGuideService {
     }
     await setLanguage('es');
     await setSpeedMultiplier(1.0);
-    await _tts.setPitch(1.04);
+    await _tts.setPitch(1.0); // Natural human pitch
   }
 
   Future<void> setLanguage(String lang) async {
@@ -197,9 +198,68 @@ class VoiceGuideService {
     try {
       await _audioPlayer.setPlaybackRate(multiplier);
     } catch (_) {}
-    // Baseline speech rate for 1.0x is 0.46 on mobile FlutterTts (coincide con el ritmo de la landing page)
-    final rawRate = (0.46 * multiplier).clamp(0.2, 1.0);
+    // Natural speech rate for mobile FlutterTts
+    final rawRate = (0.48 * multiplier).clamp(0.2, 1.0);
     await _tts.setSpeechRate(rawRate);
+  }
+
+  /// Checks if the audio for a given stop has already been pre-cached.
+  bool isStopAudioCached(
+    TourStop stop, {
+    int stopIndex = 0,
+    int totalStops = 1,
+    String lang = 'es',
+    String? voice,
+  }) {
+    final script = TourGuideFormatter.formatStopNarration(
+      stop,
+      stopIndex: stopIndex,
+      totalStops: totalStops,
+      lang: lang,
+    );
+    final v = voice ?? _selectedOpenAiVoice;
+    final s = _currentMultiplier;
+    final cacheKey = 'tts-1_${v}_${s.toStringAsFixed(2)}_$script';
+    final elevenKey = 'eleven_${AppConfig.elevenLabsVoiceId}_${s.toStringAsFixed(2)}_$script';
+    return _speechMemoryCache.containsKey(cacheKey) || _speechMemoryCache.containsKey(elevenKey);
+  }
+
+  /// Pre-caches stop narration audio in the background so it plays with 0 ms latency when reached.
+  Future<void> precacheStopAudio(
+    TourStop stop, {
+    int stopIndex = 0,
+    int totalStops = 1,
+    String lang = 'es',
+    String? voice,
+  }) async {
+    final script = TourGuideFormatter.formatStopNarration(
+      stop,
+      stopIndex: stopIndex,
+      totalStops: totalStops,
+      lang: lang,
+    );
+    await _fetchSpeechAudio(script, voice: voice, model: 'tts-1');
+  }
+
+  /// Pre-caches upcoming tour stops in background (typically the first 2-3 stops).
+  Future<void> precacheTourStops(
+    List<TourStop> stops, {
+    int startIndex = 0,
+    int maxCount = 3,
+    String lang = 'es',
+  }) async {
+    if (stops.isEmpty || startIndex >= stops.length) return;
+    final end = (startIndex + maxCount).clamp(0, stops.length);
+    for (int i = startIndex; i < end; i++) {
+      unawaited(
+        precacheStopAudio(
+          stops[i],
+          stopIndex: i,
+          totalStops: stops.length,
+          lang: lang,
+        ),
+      );
+    }
   }
 
   Future<Map<String, String>?> fetchWikipediaAndGeocodingDetails(
@@ -281,49 +341,38 @@ class VoiceGuideService {
     return null;
   }
 
+  /// Narrates a tour stop with human tour guide storytelling and instant audio start.
   Future<void> narrateStop(
     TourStop stop, {
+    int stopIndex = 0,
+    int totalStops = 1,
     String lang = 'es',
     void Function(String name, String description)? onResolved,
   }) async {
-    String title = stop.name.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
-    String description = stop.description.replaceAll(RegExp(r'^(Atracci[oó]n(\s*/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*', caseSensitive: false), '').trim();
+    // Generate warm, human storytelling script immediately (zero blocking delays)
+    final script = TourGuideFormatter.formatStopNarration(
+      stop,
+      stopIndex: stopIndex,
+      totalStops: totalStops,
+      lang: lang,
+    );
 
-    final isGenericName = title.isEmpty ||
-                          title.toLowerCase() == 'parada' ||
-                          title.toLowerCase().startsWith('parada ') ||
-                          title.toLowerCase().startsWith('atracción del recorrido');
-
-    final isDescriptionEmpty = description.isEmpty ||
-                               description.length < 20 ||
-                               description.toLowerCase() == 'parada' ||
-                               description.toLowerCase() == 'parada turistica' ||
-                               description.toLowerCase() == title.toLowerCase();
-
-    if (isGenericName || isDescriptionEmpty) {
-      final details = await fetchWikipediaAndGeocodingDetails(
-        stop.location.latitude,
-        stop.location.longitude,
-        lang: lang,
+    // If description was empty, resolve Wikipedia metadata asynchronously in the background
+    if (onResolved != null && (stop.description.isEmpty || stop.description.length < 20)) {
+      unawaited(
+        fetchWikipediaAndGeocodingDetails(
+          stop.location.latitude,
+          stop.location.longitude,
+          lang: lang,
+        ).then((details) {
+          if (details != null && details['description'] != null && details['description']!.length > 20) {
+            onResolved(details['name'] ?? stop.name, details['description']!);
+          }
+        }),
       );
-
-      if (details != null && details['description'] != null && details['description']!.length > 20) {
-        title = details['name'] ?? title;
-        description = details['description'] ?? description;
-        if (onResolved != null) {
-          onResolved(title, description);
-        }
-      }
     }
 
-    if (title.isEmpty || title.toLowerCase() == 'parada') {
-      title = 'Atracción del recorrido ${stop.order + 1}';
-    }
-    if (description.isEmpty || description.toLowerCase() == 'parada' || description.length < 20) {
-      description = '$title es uno de los atractivos más emblemáticos y destacados para disfrutar en esta ruta. Tómate un momento para apreciar su historia, ambiente y detalles visuales.';
-    }
-
-    await speak('$title. $description', lang: lang);
+    await speak(script, lang: lang);
   }
 
   Future<Uint8List?> _fetchSpeechAudio(String text, {String? voice, double? speed, String model = 'tts-1'}) async {
@@ -338,7 +387,43 @@ class VoiceGuideService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
 
-    // 1. Intentar llamada directa ultra-rápida si OpenAI API Key está configurada en la app
+    // 1. Intentar llamada directa a ElevenLabs si API Key está configurada en la app
+    final elevenLabsKey = AppConfig.elevenLabsApiKey;
+    if (elevenLabsKey.isNotEmpty) {
+      try {
+        final voiceId = AppConfig.elevenLabsVoiceId;
+        final uri = Uri.parse('https://api.elevenlabs.io/v1/text-to-speech/$voiceId');
+        final response = await http.post(
+          uri,
+          headers: {
+            'xi-api-key': elevenLabsKey,
+            'Content-Type': 'application/json',
+            'Accept': 'audio/mpeg',
+          },
+          body: jsonEncode({
+            'text': trimmed,
+            'model_id': 'eleven_multilingual_v2',
+            'voice_settings': {
+              'stability': 0.5,
+              'similarity_boost': 0.75,
+              'style': 0.3,
+              'use_speaker_boost': true,
+            },
+          }),
+        ).timeout(const Duration(seconds: 4));
+
+        if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+          _speechMemoryCache[cacheKey] = response.bodyBytes;
+          return response.bodyBytes;
+        } else {
+          debugPrint('[VoiceGuide] ElevenLabs HTTP ${response.statusCode}: ${response.body}');
+        }
+      } catch (e) {
+        debugPrint('[VoiceGuide] ElevenLabs note: $e');
+      }
+    }
+
+    // 2. Intentar llamada directa ultra-rápida si OpenAI API Key está configurada en la app
     final openAiKey = AppConfig.openAiApiKey;
     if (openAiKey.isNotEmpty) {
       try {
@@ -356,7 +441,7 @@ class VoiceGuideService {
             'speed': s.clamp(0.25, 4.0),
             'response_format': 'mp3',
           }),
-        ).timeout(const Duration(seconds: 5));
+        ).timeout(const Duration(seconds: 4));
 
         if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
           _speechMemoryCache[cacheKey] = response.bodyBytes;
@@ -369,7 +454,7 @@ class VoiceGuideService {
       }
     }
 
-    // 2. Intentar únicamente con la URL base principal configurada (con timeout corto de 3s para no demorar la reproducción)
+    // 3. Intentar con la URL base principal configurada en backend
     final mainApiUrl = AppConfig.apiBaseUrl;
     if (mainApiUrl.isNotEmpty) {
       try {
@@ -390,7 +475,7 @@ class VoiceGuideService {
           return response.bodyBytes;
         }
       } catch (e) {
-        debugPrint('[VoiceGuide] Nota: backend $mainApiUrl no respondió speech ($e)');
+        debugPrint('[VoiceGuide] Backend speech note ($mainApiUrl): $e');
       }
     }
 
@@ -403,24 +488,24 @@ class VoiceGuideService {
 
     await stop();
 
-    // 1. Intentar reproducir con voz humana femenina de OpenAI TTS (Nova)
+    // 1. Intentar reproducir con voz hiperrealista (ElevenLabs / OpenAI TTS)
     try {
       final audioBytes = await _fetchSpeechAudio(value, voice: voice, model: 'tts-1');
       if (audioBytes != null && audioBytes.isNotEmpty) {
         await _audioPlayer.setPlaybackRate(_currentMultiplier);
         await _audioPlayer.play(BytesSource(audioBytes));
-        debugPrint('[VoiceGuide] Reproduciendo narración con voz humana femenina OpenAI TTS ($selectedOpenAiVoice)');
+        debugPrint('[VoiceGuide] Reproduciendo narración con voz humana de alta fidelidad');
         return;
       }
     } catch (e) {
-      debugPrint('[VoiceGuide] Excepción al procesar OpenAI TTS: $e');
+      debugPrint('[VoiceGuide] Excepción al procesar síntesis de voz en la nube: $e');
     }
 
-    // 2. Fallback offline: motor nativo del dispositivo con FlutterTts
+    // 2. Fallback offline: motor nativo del dispositivo con FlutterTts optimizado
     try {
       await setLanguage(lang);
       await _tts.speak(value);
-      debugPrint('[VoiceGuide] Reproduciendo narración con TTS nativo (fallback)');
+      debugPrint('[VoiceGuide] Reproduciendo narración con TTS nativo optimizado (fallback offline)');
     } catch (e) {
       debugPrint('[VoiceGuide] Error al reproducir síntesis de voz nativa: $e');
     }

@@ -494,15 +494,11 @@ out center tags 10;
       'https://routing.openstreetmap.de/routed-car',
     ];
 
-    final headingParam = originHeading != null && originHeading >= 0
-        ? '&bearings=${originHeading.round()},45;'
-        : '';
-
     for (final baseUrl in baseUrls) {
       final uri = Uri.parse(
         '$baseUrl/route/v1/driving/'
         '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
-        '?overview=full&geometries=geojson&steps=true&alternatives=false&radiuses=350;350$headingParam',
+        '?overview=full&geometries=geojson&steps=true&alternatives=true&continue_straight=true&radiuses=250;250',
       );
       try {
         final response = await _client
@@ -515,17 +511,25 @@ out center tags 10;
         if (decoded['code'] != 'Ok') continue;
         final routes = decoded['routes'] as List<dynamic>? ?? const [];
         if (routes.isEmpty) continue;
-        final route = routes.first as Map<String, dynamic>;
-        final geometry = _parseGeoJsonGeometry(route['geometry']);
-        if (geometry.length < 2) continue;
-        return _DrivingRoute(
-          geometry: geometry,
-          distanceMeters: (route['distance'] as num?)?.toDouble() ?? 0,
-          travelTimeSeconds: (route['duration'] as num?)?.round(),
-          trafficDelaySeconds: null,
-          usesLiveTraffic: false,
-          hasFerrySegment: _containsFerryStep(route),
-        );
+
+        final candidates = <_DrivingRoute>[];
+        for (final item in routes) {
+          if (item is Map<String, dynamic>) {
+            final geometry = _parseGeoJsonGeometry(item['geometry']);
+            if (geometry.length < 2) continue;
+            candidates.add(_DrivingRoute(
+              geometry: geometry,
+              distanceMeters: (item['distance'] as num?)?.toDouble() ?? 0,
+              travelTimeSeconds: (item['duration'] as num?)?.round(),
+              trafficDelaySeconds: null,
+              usesLiveTraffic: false,
+              hasFerrySegment: _containsFerryStep(item),
+            ));
+          }
+        }
+
+        final best = _selectBestBalancedRoute(candidates);
+        if (best != null) return best;
       } on Object {
         continue;
       }
@@ -542,6 +546,9 @@ out center tags 10;
     if (key.isEmpty) return null;
     final locations =
         '${start.latitude},${start.longitude}:${end.latitude},${end.longitude}';
+    final directDistance = _distanceMeters(start, end);
+    final isIntraUrban = directDistance < 35000;
+
     final uri =
         Uri.parse(
           '$_tomTomRoutingBaseUrl/routing/1/calculateRoute/$locations/json',
@@ -551,6 +558,8 @@ out center tags 10;
             'traffic': 'true',
             'routeType': 'fastest',
             'travelMode': 'car',
+            'maxAlternatives': '2',
+            if (isIntraUrban) 'avoid': 'unpavedRoads',
             'computeTravelTimeFor': 'all',
             'instructionsType': 'text',
             if (originHeading != null && originHeading >= 0)
@@ -567,24 +576,65 @@ out center tags 10;
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
       final routes = decoded['routes'] as List<dynamic>? ?? const [];
       if (routes.isEmpty) return null;
-      final route = routes.first as Map<String, dynamic>;
-      final geometry = _parseTomTomRouteGeometry(route);
-      if (geometry.length < 2) return null;
-      final summary = route['summary'] as Map<String, dynamic>? ?? const {};
-      return _DrivingRoute(
-        geometry: geometry,
-        distanceMeters:
-            (summary['lengthInMeters'] as num?)?.toDouble() ??
-            _geometryDistanceMeters(geometry),
-        travelTimeSeconds: (summary['travelTimeInSeconds'] as num?)?.round(),
-        trafficDelaySeconds:
-            (summary['trafficDelayInSeconds'] as num?)?.round() ?? 0,
-        usesLiveTraffic: true,
-        hasFerrySegment: _containsFerryStep(route),
-      );
+
+      final candidates = <_DrivingRoute>[];
+      for (final item in routes) {
+        if (item is Map<String, dynamic>) {
+          final geometry = _parseTomTomRouteGeometry(item);
+          if (geometry.length < 2) continue;
+          final summary = item['summary'] as Map<String, dynamic>? ?? const {};
+          candidates.add(_DrivingRoute(
+            geometry: geometry,
+            distanceMeters:
+                (summary['lengthInMeters'] as num?)?.toDouble() ??
+                _geometryDistanceMeters(geometry),
+            travelTimeSeconds: (summary['travelTimeInSeconds'] as num?)?.round(),
+            trafficDelaySeconds:
+                (summary['trafficDelayInSeconds'] as num?)?.round() ?? 0,
+            usesLiveTraffic: true,
+            hasFerrySegment: _containsFerryStep(item),
+          ));
+        }
+      }
+
+      return _selectBestBalancedRoute(candidates);
     } on Object {
       return null;
     }
+  }
+
+  _DrivingRoute? _selectBestBalancedRoute(List<_DrivingRoute> candidates) {
+    if (candidates.isEmpty) return null;
+    if (candidates.length == 1) return candidates.first;
+
+    final minDistance = candidates
+        .map((c) => c.distanceMeters)
+        .reduce((a, b) => a < b ? a : b);
+
+    _DrivingRoute best = candidates.first;
+    double bestScore = double.infinity;
+
+    for (final candidate in candidates) {
+      final distKm = candidate.distanceMeters / 1000.0;
+      final timeMin = (candidate.travelTimeSeconds ?? 0) / 60.0;
+      final distanceRatio = candidate.distanceMeters / math.max(minDistance, 1.0);
+
+      // Distance sanity filter:
+      // If a highway bypass adds > 30% extra distance for minimal time savings,
+      // apply a steep penalty to favor the direct urban avenue.
+      double detourPenalty = 0.0;
+      if (distanceRatio > 1.30) {
+        detourPenalty = (distanceRatio - 1.0) * 30.0;
+      }
+
+      final score = timeMin + (distKm * 0.5) + detourPenalty;
+      if (score < bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+
+    return best;
   }
 
 

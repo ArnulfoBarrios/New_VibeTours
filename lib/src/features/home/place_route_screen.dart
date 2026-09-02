@@ -32,6 +32,8 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
   bool _hasUserManuallyToggledTracking = false;
   DateTime? _lastRerouteAt;
 
+  bool _hasInitialAccurateRoute = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +50,14 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
 
   Future<void> _startLiveNavigation() async {
     final service = ref.read(locationServiceProvider);
+    
+    // Start live high-accuracy position stream immediately
+    final stream = await service.positionStream(distanceFilterMeters: 0);
+    if (mounted && stream != null) {
+      await _positionSubscription?.cancel();
+      _positionSubscription = stream.listen(_handlePositionUpdate);
+    }
+
     final initialPosition = await service.currentPosition();
     if (!mounted) return;
 
@@ -57,14 +67,12 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
           latitude: initialPosition.latitude,
           longitude: initialPosition.longitude,
         );
+        if (initialPosition.heading >= 0) {
+          _currentHeading = initialPosition.heading;
+        }
       });
       unawaited(_recalculateRoute(force: true));
     }
-
-    final stream = await service.positionStream(distanceFilterMeters: 0);
-    if (!mounted || stream == null) return;
-    await _positionSubscription?.cancel();
-    _positionSubscription = stream.listen(_handlePositionUpdate);
   }
 
   void _handlePositionUpdate(Position position) {
@@ -96,7 +104,9 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
     setState(() {});
 
     final route = _liveRoute;
-    if (route == null) {
+    // Auto-refine to optimal live route as soon as verified satellite fix arrives
+    if (route == null || (!_hasInitialAccurateRoute && position.accuracy <= 25.0)) {
+      _hasInitialAccurateRoute = true;
       _recalculateRoute(force: true);
       return;
     }

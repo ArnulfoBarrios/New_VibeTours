@@ -28,6 +28,8 @@ class AppConfig {
   );
   static const _definedTomTomApiKey = String.fromEnvironment('TOMTOM_API_KEY');
   static const _definedOpenAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
+  static const _definedElevenLabsApiKey = String.fromEnvironment('ELEVENLABS_API_KEY');
+  static const _definedElevenLabsVoiceId = String.fromEnvironment('ELEVENLABS_VOICE_ID');
   static const _definedAdminEmail = String.fromEnvironment('ADMIN_EMAIL');
   static const _definedAdminUserId = String.fromEnvironment('ADMIN_USER_ID');
 
@@ -79,6 +81,16 @@ class AppConfig {
       : _asset('OPENAI_API_KEY');
 
   static bool get hasOpenAi => openAiApiKey.isNotEmpty;
+
+  static String get elevenLabsApiKey => _definedElevenLabsApiKey.isNotEmpty
+      ? _definedElevenLabsApiKey
+      : _asset('ELEVENLABS_API_KEY');
+
+  static String get elevenLabsVoiceId => _definedElevenLabsVoiceId.isNotEmpty
+      ? _definedElevenLabsVoiceId
+      : (_asset('ELEVENLABS_VOICE_ID').isNotEmpty ? _asset('ELEVENLABS_VOICE_ID') : 'EXAVITQu4vr4xnSDxMaL');
+
+  static bool get hasElevenLabs => elevenLabsApiKey.isNotEmpty;
 
   static String get adminEmail => _definedAdminEmail.isNotEmpty
       ? _definedAdminEmail.trim().toLowerCase()
