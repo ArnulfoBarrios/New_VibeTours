@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -1353,14 +1353,21 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       const centerLat = location?.latitude ?? lat ?? 11.2408
       const centerLon = location?.longitude ?? lon ?? -74.2110
 
-      for (let i = 0; i < rawAiList.length; i++) {
-        const item = rawAiList[i]
-        if (item?.name && !isDuplicatePlace(item.name, null) && isQualityTouristPlace(item)) {
-          const geo = await geocodePlace(`${item.name} ${city} ${country}`, centerLat, centerLon).catch(() => null)
-          const realLat = geo?.latitude ?? (centerLat + (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1))
-          const realLon = geo?.longitude ?? (centerLon + (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1))
+      const validAiItems = rawAiList
+        .filter(item => item?.name && !isDuplicatePlace(item.name, null) && isQualityTouristPlace(item))
+        .slice(0, 6)
 
-          available.push({
+      const geocodedAiItems = await Promise.all(
+        validAiItems.map(async (item, i) => {
+          const geo = await geocodePlace(`${item.name} ${city} ${country}`, centerLat, centerLon).catch(() => null)
+          const realLat = (geo && hasUsableCoordinates(geo.latitude, geo.longitude))
+            ? geo.latitude
+            : (centerLat + (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1))
+          const realLon = (geo && hasUsableCoordinates(geo.latitude, geo.longitude))
+            ? geo.longitude
+            : (centerLon + (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1))
+
+          return {
             placeId: `ai-real-${Date.now()}-${i}`,
             name: item.name,
             latitude: realLat,
@@ -1372,9 +1379,11 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
             description: item.description || `Bienvenido a ${item.name}, uno de los puntos imperdibles de ${city}.`,
             reason: item.description || `Atractivo imperdible recomendado para visitar en ${city}.`,
             minutes: 35
-          })
-        }
-      }
+          }
+        })
+      )
+
+      available.push(...geocodedAiItems)
     }
 
     // 5. Build rich alternative DTOs with REAL geocoded coordinates, unique AI reasons & images for each place
@@ -1397,22 +1406,13 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
 
     const alternatives = await Promise.all(
       candidatePlaces.map(async (place) => {
-        let realLat = place.latitude
-        let realLon = place.longitude
-
-        // Ensure exact geocoding if coordinates are missing or default
-        if (!hasUsableCoordinates(realLat, realLon) || realLat === location?.latitude) {
-          const geo = await geocodePlace(`${place.name} ${city} ${country}`, location?.latitude, location?.longitude).catch(() => null)
-          if (geo && hasUsableCoordinates(geo.latitude, geo.longitude)) {
-            realLat = geo.latitude
-            realLon = geo.longitude
-          }
-        }
+        const realLat = place.latitude
+        const realLon = place.longitude
 
         let imageUrl = place.imageUrl || place.images?.[0] || ''
         if (!imageUrl) {
           try {
-            imageUrl = await imageForPlace(place.name, city)
+            imageUrl = await imageForPlace(place.name, city).catch(() => '')
           } catch (e) {
             console.warn('[alternatives] Image fetch error for place:', place.name)
           }
@@ -1645,7 +1645,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       nivel_dificultad: sourceTour.nivel_dificultad ?? planner.difficulty,
       idiomas_disponibles: normalizeList(sourceTour.idiomas_disponibles, [input.language]),
       publico_recomendado: normalizeAudience(sourceTour.publico_recomendado, input.type, input.touristInterests),
-      mejor_epoca: sourceTour.mejor_epoca ?? planner.bestSeason,
+      mejor_epoca: (sourceTour.mejor_epoca || plannerContext?.datesSeason || planner.bestSeason || 'Todo el año').toString().replace(/\bano\b/gi, 'año'),
       horario_recomendado: sourceTour.horario_recomendado ?? planner.recommendedSchedule,
       punto_encuentro: hotelPuntoEncuentro || normalizeLocationInfo(sourceTour.punto_encuentro, publicStops[0], input),
       imagen_portada: coverUrl,
@@ -1886,7 +1886,7 @@ async function processTourGeneration(jobId, input) {
           input.type,
           input.touristInterests,
         ),
-        mejor_epoca: sourceTour.mejor_epoca ?? planner.bestSeason,
+        mejor_epoca: (sourceTour.mejor_epoca || planner.bestSeason || 'Todo el año').toString().replace(/\bano\b/gi, 'año'),
         horario_recomendado: sourceTour.horario_recomendado ?? planner.recommendedSchedule,
         punto_encuentro: normalizeLocationInfo(sourceTour.punto_encuentro, stops[0], input),
         imagen_portada: sourceTour.imagen_portada ?? sourceTour.coverUrl ?? coverUrl,
@@ -2318,7 +2318,7 @@ export function buildTourPlanner(input, location = null, places = []) {
     distanceKm,
     recommendedSchedule,
     difficulty,
-    bestSeason: bestSeasonFor(input.type),
+    bestSeason: bestSeasonFor(input.type, input.datesSeason || input.dates, input.specialEvent),
     audience: audienceFor(input.type, input.touristInterests),
     subcategories: subcategoriesFor(input.type, selectedPlaces),
     accessibility: accessibilityFor(input.type),
@@ -2861,16 +2861,22 @@ function profileScoreFor(input, place) {
   return score
 }
 
-function bestSeasonFor(type) {
+function bestSeasonFor(type, datesSeason = null, specialEvent = null) {
+  if (specialEvent && typeof specialEvent === 'string' && specialEvent.trim().length > 0) {
+    return datesSeason ? `${datesSeason} (${specialEvent})` : `Temporada de ${specialEvent}`
+  }
+  if (datesSeason && typeof datesSeason === 'string' && datesSeason.trim().length > 0) {
+    return datesSeason.trim()
+  }
   switch (type) {
     case 'ecological':
       return 'Temporada seca o clima estable'
     case 'night':
-      return 'Todo el ano, preferiblemente fines de semana'
+      return 'Todo el año, preferiblemente fines de semana'
     case 'gastronomic':
-      return 'Todo el ano'
+      return 'Todo el año'
     default:
-      return 'Todo el ano'
+      return 'Todo el año'
   }
 }
 
@@ -3094,50 +3100,47 @@ export function buildRecommendationReason(place, input = {}, aiReason = null) {
   }
 
   const category = place.category || place.type || 'place'
-  const tags = place.rawTags || place.tags || {}
   const placeName = place.name || ''
-
-  const city = input.city || input.destination || ''
-  const destinationPlace = input.destinationPlace || input.destination || ''
-  const isStart = place.rawTags?.start_point === 'true' || place.type === 'start_point' || (input.originPlace && normalizeKey(placeName) === normalizeKey(input.originPlace))
-  const isEnd = place.rawTags?.end_point === 'true' || place.type === 'end_point' || (input.destinationPlace && normalizeKey(placeName) === normalizeKey(input.destinationPlace))
+  const city = input.city || input.destination || 'este destino'
+  const isStart = place.rawTags?.start_point === 'true' || place.type === 'start_point'
+  const isEnd = place.rawTags?.end_point === 'true' || place.type === 'end_point'
 
   if (isStart) {
-    return `Elegido como el punto de partida inicial de tu recorrido en ${city || 'la ciudad'}.`
+    return `Punto de encuentro y partida seleccionado estratégicamente para dar inicio a tu recorrido por ${city}.`
   }
 
   if (isEnd) {
-    return `Seleccionado como el destino principal y punto culminante de tu viaje en ${placeName || city}.`
+    return `Broche de oro y punto culminante elegido para cerrar con una experiencia memorable tu visita a ${city}.`
   }
 
   const normCat = category.toLowerCase()
   const normName = placeName.toLowerCase()
 
   if (normCat.includes('island') || normCat.includes('beach') || normName.includes('isla') || normName.includes('cayo') || normName.includes('playa')) {
-    return `${placeName} es un destino imperdible en ${city} para admirar las aguas cristalinas, arrecifes y paisajes insulares en tu ruta a ${destinationPlace}.`
+    return `${placeName} destaca por sus paisajes costeros, aguas cristalinas y atmósfera marina única para relajarse.`
   }
 
   if (normName.includes('malecon') || normName.includes('mirador') || normCat.includes('viewpoint')) {
-    return `${placeName} ofrece un espacio panorámico único en ${city} para contemplar el horizonte, tomar fotos y sentir la brisa antes de continuar hacia ${destinationPlace}.`
+    return `${placeName} ofrece una panorámica excepcional de ${city}, perfecta para admirar el horizonte, tomar fotos y sentir la brisa.`
   }
 
-  if (normName.includes('catedral') || normName.includes('iglesia') || normCat.includes('religious') || tags.historic === 'church') {
-    return `${placeName} destaca en ${city} por su valor arquitectónico e historia sacra, siendo una parada cultural clave camino a ${destinationPlace}.`
+  if (normName.includes('catedral') || normName.includes('iglesia') || normCat.includes('religious') || place.rawTags?.historic === 'church') {
+    return `${placeName} es un tesoro arquitectónico y cultural imprescindible para comprender la historia viva de ${city}.`
   }
 
   if (normCat.includes('museum') || normName.includes('museo')) {
-    return `${placeName} es un centro cultural destacado en ${city} que resguarda la memoria, el arte y la identidad de la región.`
+    return `${placeName} resguarda la memoria, el arte y el legado histórico más representativo de la región.`
   }
 
   if (normCat.includes('nature') || normCat.includes('park') || normName.includes('parque')) {
-    return `${placeName} brinda un respiro verde y natural en ${city}, ideal para caminar bajo la sombra y descansar en tu trayecto a ${destinationPlace}.`
+    return `${placeName} brinda un entorno natural y sombreado ideal para pasear al aire libre y conectar con la biodiversidad local.`
   }
 
   if (normCat.includes('restaurant') || normCat.includes('cafe') || normName.includes('restaurante')) {
-    return `${placeName} fue seleccionado para saborear la gastronomía típica y la sazón local de ${city} antes de llegar a ${destinationPlace}.`
+    return `${placeName} es un referente culinario reconocido para deleitarse con la auténtica gastronomía y sazón tradicional de ${city}.`
   }
 
-  return `Ubicado en ${city}, ${placeName} fue seleccionado por su gran relevancia local para enriquecer tu recorrido directo hacia ${destinationPlace}.`
+  return `${placeName} es una parada emblemática de ${city}, elegida para enriquecer tu recorrido con historia, cultura y autenticidad local.`
 }
 
 function buildTips(place, type) {
@@ -5376,16 +5379,15 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          response_format: { type: 'json_object' },
+        body: JSON.stringify(buildOpenAiPayload({
           messages: [
             { role: 'system', content: ROUTE_ASSISTANT_SYSTEM_PROMPT },
             { role: 'user', content: userMessage }
           ],
-          max_tokens: 300,
-          temperature: 0.4
-        }),
+          response_format: { type: 'json_object' },
+          temperature: 0.4,
+          extra: { max_tokens: 300 }
+        })),
         signal: controller.signal
       })
       clearTimeout(timeout)

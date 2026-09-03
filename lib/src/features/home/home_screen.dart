@@ -89,7 +89,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           icon: Icons.explore_rounded,
           shape: ShapeLightFocus.RRect,
           radius: 20,
-          align: ContentAlign.top,
+          align: ContentAlign.bottom,
         ),
         TourStepItem(
           key: _nearbyPlacesKey,

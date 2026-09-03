@@ -589,7 +589,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         'request': request.toJson(),
         'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
         'excludeIds': excludeIds,
-      }).timeout(const Duration(seconds: 25));
+      }).timeout(const Duration(seconds: 45));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

@@ -494,11 +494,14 @@ out center tags 10;
       'https://routing.openstreetmap.de/routed-car',
     ];
 
+    final hasHeading = originHeading != null && originHeading >= 0;
+    final headingParam = hasHeading ? '&bearings=${originHeading.round()},80;' : '';
+
     for (final baseUrl in baseUrls) {
       final uri = Uri.parse(
         '$baseUrl/route/v1/driving/'
         '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
-        '?overview=full&geometries=geojson&steps=true&alternatives=true&continue_straight=true&radiuses=250;250',
+        '?overview=full&geometries=geojson&steps=true&alternatives=true&continue_straight=true&radiuses=250;250$headingParam',
       );
       try {
         final response = await _client

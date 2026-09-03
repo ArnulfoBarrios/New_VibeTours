@@ -17,7 +17,7 @@
 
 ### Backend & Servicios API
 - **Node.js & Express**: Servidor REST para la orquestación de IA y geodatos.
-- **OpenAI API (`gpt-4o-mini`)**: Extracción semántica, generación de guías narrativas de voz e itinerarios.
+- **OpenAI API (`gpt-5.6-luna`)**: Extracción semántica, generación de guías narrativas de voz e itinerarios con razonamiento avanzado.
 - **OpenStreetMap (OSM)**: 
   - **Nominatim**: Geocodificación directa y reversa.
   - **Photon**: Búsqueda global de lugares con autocompletado.

@@ -46,7 +46,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   bool _styleLoaded = false;
   bool _hasMapError = false;
   Line? _routeLine;
-  Line? _travelledRouteLine;
   Circle? _userPuckCircle;
   Circle? _userPuckHalo;
   Circle? _destinationCircle;
@@ -56,6 +55,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   int _lastSegmentIndex = 0;
   int _retryKey = 0;
   Timer? _loadTimeoutTimer;
+  Timer? _autoRecenterTimer;
 
   // Walking approach segment annotations tracking
   final List<Line> _walkingLines = [];
@@ -81,7 +81,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   DateTime? _lastNativeCameraUpdateAt;
   LatLng? _pendingPuckPosition;
   bool _isUpdatingPuck = false;
-  bool _isCreatingTravelledLine = false;
   bool _userIsExploringMap = false;
 
   @override
@@ -92,6 +91,18 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     super.initState();
     _motionTicker = createTicker(_onMotionFrame);
     _startMapLoadTimeout();
+  }
+
+  void _startAutoRecenterTimer() {
+    _autoRecenterTimer?.cancel();
+    _autoRecenterTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted && _userIsExploringMap) {
+        setState(() {
+          _userIsExploringMap = false;
+        });
+        _updateCameraPosition(force: true);
+      }
+    });
   }
 
   void _startMapLoadTimeout() {
@@ -326,13 +337,28 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
 
   LatLng _getSnappedPosition(LatLng rawPos) {
     if (_fullGeometry.length < 2) return rawPos;
-    final activeSegment = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
-    final a = _fullGeometry[activeSegment];
-    final b = _fullGeometry[activeSegment + 1];
-    final proj = _projectPointOntoSegmentMetric(rawPos, a, b);
-    final dist = _metricDistanceMeters(rawPos, proj);
-    if (dist <= 35.0) {
-      return proj;
+    final startIdx = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
+    final searchEndIdx = math.min(startIdx + 12, _fullGeometry.length - 1);
+
+    LatLng bestProj = rawPos;
+    double minDist = double.infinity;
+    int bestSegment = startIdx;
+
+    for (int i = startIdx; i < searchEndIdx; i++) {
+      final a = _fullGeometry[i];
+      final b = _fullGeometry[i + 1];
+      final proj = _projectPointOntoSegmentMetric(rawPos, a, b);
+      final dist = _metricDistanceMeters(rawPos, proj);
+      if (dist < minDist) {
+        minDist = dist;
+        bestProj = proj;
+        bestSegment = i;
+      }
+    }
+
+    if (minDist <= 35.0) {
+      _lastSegmentIndex = math.max(_lastSegmentIndex, bestSegment);
+      return bestProj;
     }
     return rawPos;
   }
@@ -388,24 +414,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         ...remaining,
       ];
     }
-  }
-
-  List<LatLng> _getTravelledGeometry(LatLng currentPos) {
-    if (_fullGeometry.length < 2 || _lastSegmentIndex == 0) return const [];
-
-    final activeSegment = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
-    final activeProj = _projectPointOntoSegmentMetric(
-      currentPos,
-      _fullGeometry[activeSegment],
-      _fullGeometry[activeSegment + 1],
-    );
-
-    // Do not draw travelled grey lines if user is off-road (> 65m)
-    if (_metricDistanceMeters(currentPos, activeProj) > 65.0) {
-      return const [];
-    }
-
-    return [..._fullGeometry.take(activeSegment + 1), activeProj];
   }
 
   Future<void> _createPuckCircles(LatLng currentPos) async {
@@ -596,45 +604,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         }
       }
     }
-
-    final travelled = _getTravelledGeometry(currentPos);
-    if (travelled.length >= 2) {
-      if (_travelledRouteLine == null) {
-        _createTravelledLine(controller, travelled);
-      } else {
-        try {
-          controller.updateLine(
-            _travelledRouteLine!,
-            LineOptions(geometry: travelled),
-          );
-        } catch (_) {}
-      }
-    }
-  }
-
-  void _createTravelledLine(
-    MapLibreMapController controller,
-    List<LatLng> geometry,
-  ) {
-    if (_isCreatingTravelledLine) return;
-    _isCreatingTravelledLine = true;
-    unawaited(() async {
-      try {
-        _travelledRouteLine = await controller.addLine(
-          LineOptions(
-            geometry: geometry,
-            lineColor: '#64748B',
-            lineWidth: 7,
-            lineOpacity: 0.8,
-            lineJoin: 'round',
-          ),
-        );
-      } catch (_) {
-        // The map may be re-styling; the next GPS frame can retry safely.
-      } finally {
-        _isCreatingTravelledLine = false;
-      }
-    }());
   }
 
   void _animateTrackingCamera(
@@ -735,8 +704,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     if (oldWidget.styleUrl != widget.styleUrl) {
       _styleLoaded = false;
       _routeLine = null;
-      _travelledRouteLine = null;
-      _isCreatingTravelledLine = false;
       _userPuckCircle = null;
       _userPuckHalo = null;
       _destinationCircle = null;
@@ -766,6 +733,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
 
   @override
   void dispose() {
+    _autoRecenterTimer?.cancel();
     _loadTimeoutTimer?.cancel();
     _motionTicker.dispose();
     super.dispose();
@@ -799,8 +767,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       await controller.clearLines();
     } catch (_) {}
     _routeLine = null;
-    _travelledRouteLine = null;
-    _isCreatingTravelledLine = false;
 
     final destinationChanged = _renderedDestination == null ||
         _metricDistanceMeters(_renderedDestination!, destPos) > 2;
@@ -874,30 +840,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         await controller.removeLine(_routeLine!);
       } catch (_) {}
       _routeLine = null;
-    }
-
-    if (visualPosition != null) {
-      final travelled = _getTravelledGeometry(visualPosition);
-      if (travelled.length >= 2) {
-        try {
-          if (_travelledRouteLine == null) {
-            _travelledRouteLine = await controller.addLine(
-              LineOptions(
-                geometry: travelled,
-                lineColor: '#64748B',
-                lineWidth: 7,
-                lineOpacity: 0.8,
-                lineJoin: 'round',
-              ),
-            );
-          } else {
-            await controller.updateLine(
-              _travelledRouteLine!,
-              LineOptions(geometry: travelled),
-            );
-          }
-        } catch (_) {}
-      }
     }
 
     // Clear previous walking annotations before drawing new ones
@@ -976,6 +918,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                   _userIsExploringMap = true;
                 });
               }
+              _startAutoRecenterTimer();
             },
             child: MapLibreMap(
               styleString: widget.styleUrl,
@@ -998,6 +941,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                     _userIsExploringMap = true;
                   });
                 }
+                _startAutoRecenterTimer();
               },
               onMapCreated: (controller) {
                 _controller = controller;
@@ -1029,6 +973,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
               backgroundColor: Theme.of(context).colorScheme.surface,
               foregroundColor: Theme.of(context).colorScheme.primary,
               onPressed: () {
+                _autoRecenterTimer?.cancel();
                 setState(() {
                   _userIsExploringMap = false;
                 });

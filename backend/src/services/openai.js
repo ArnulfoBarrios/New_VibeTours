@@ -7,6 +7,36 @@ import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpa
 const planCache = new GeoCache(6 * 60 * 60 * 1000, 200)
 const destinationCatalogCache = new GeoCache(12 * 60 * 60 * 1000, 200)
 
+export function getOpenAiModelConfig() {
+  const model = process.env.OPENAI_MODEL || 'gpt-5.6-luna'
+  const isReasoning = model.includes('luna') || model.includes('o1') || model.includes('o3') || model.includes('sol') || model.includes('terra')
+  const reasoningEffort = process.env.OPENAI_REASONING_EFFORT || 'high'
+  return { model, isReasoning, reasoningEffort }
+}
+
+export function buildOpenAiPayload({
+  modelConfig = getOpenAiModelConfig(),
+  messages,
+  temperature = 0.5,
+  response_format = { type: 'json_object' },
+  extra = {}
+}) {
+  const payload = {
+    model: modelConfig.model,
+    messages,
+    ...extra
+  }
+  if (response_format) {
+    payload.response_format = response_format
+  }
+  if (modelConfig.isReasoning) {
+    payload.reasoning_effort = modelConfig.reasoningEffort
+  } else if (typeof temperature === 'number') {
+    payload.temperature = temperature
+  }
+  return payload
+}
+
 /**
  * Curated real catalog for popular destinations to ensure 100% authentic POIs,
  * hotels, restaurants, and real annual events with zero generic synthetic strings.
@@ -457,6 +487,13 @@ REGLA FUNDAMENTAL DE BREVEDAD Y SIMPLICIDAD:
 - Al preguntar información al usuario (fechas, días, acompañantes, hospedaje, presupuesto, transporte), formula preguntas concretas y directas de 1 o 2 líneas.
 - Responde de forma concisa y amigable a cualquier duda turística específica (clima, festividades, gastronomía, playas) y continúa el flujo de inmediato.
 
+REGLA CRÍTICA PARA CONSULTAS SOBRE EVENTOS, FESTIVALES O FECHAS ESPECIALES:
+- Si el usuario pregunta por eventos especiales, festividades, qué época ir o qué pasa en una fecha/ciudad (ej. festivales en Cartagena, carnavales, etc.):
+  1. PROHIBIDO redactar párrafos largos o bloques densos de texto corrido. CERO rodeos introductorios ("Cartagena es conocida por sus vibrantes...").
+  2. Presenta ÚNICAMENTE de 2 a 3 eventos emblemáticos y reales en formato de viñetas claras, concisas y visualmente atractivas:
+     • [Nombre del Evento] ([Mes o Fechas habituales]): [1 o 2 oraciones concisas explicando qué tipo de música/arte/ambiente tiene y en qué lugares o escenarios emblemáticos se vive].
+  3. Cierra con una sola pregunta amable y directa: "¿Te llama la atención alguno de estos eventos para ajustar las fechas de tu tour?"
+
 TAXONOMÍA DE LAS 6 MODALIDADES DE TOURS Y REGLAS TERRITORIALES DINÁMICAS:
 
 1. TOUR DE MICRO-DESTINO / LUGAR AISLADO:
@@ -624,15 +661,14 @@ REGLAS PARA "specificPlaces":
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
+      body: JSON.stringify(buildOpenAiPayload({
         messages: [
           { role: 'system', content: systemPrompt },
           ...formattedHistory
         ],
-        temperature: 0.5,
+        temperature: 0.4,
         response_format: { type: 'json_object' }
-      })
+      }))
     })
 
     if (!response.ok) {
@@ -853,6 +889,7 @@ Devuelve ÚNICAMENTE un JSON con:
 - "budget": "Económico", "Moderado", "Lujo", "Ajustado" o null.
 - "transport": "Caminando", "Auto rentado", "Transporte público", "Bicicleta", "Taxi / Uber" o null.
 - "interests": lista de intereses mencionados.
+- "specialEvent": nombre explícito de fiesta, festival o evento especial (ej: "Festival Internacional de Música de Cartagena", "Carnaval de Barranquilla") o null.
 - "selectedHotel": { "name": "Nombre del hotel" } o null si no se ha elegido.
 - "accommodationStatus": "Casa propia / familiar", "Hotel elegido", "Por definir" o null.
 - "specificPlaces": lista de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Cabo San Juan", "dia": 1 }, { "name": "Playa Cristal", "dia": 2 }]). NUNCA incluir actividades genéricas ("Llegada", "Despedida", "Tiempo libre", "Día libre").`
@@ -864,12 +901,11 @@ Devuelve ÚNICAMENTE un JSON con:
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
+      body: JSON.stringify(buildOpenAiPayload({
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
         response_format: { type: 'json_object' }
-      })
+      }))
     })
 
     if (response.ok) {
@@ -1029,6 +1065,12 @@ export async function planWithOpenAI({
     description: p.description || ''
   })).slice(0, 30)
 
+  const datesContext = userPreferences?.datesSeason || userPreferences?.dates || ''
+  const specialEventContext = userPreferences?.specialEvent || ''
+  const defaultBestSeason = datesContext
+    ? `${datesContext}${specialEventContext ? ` (${specialEventContext})` : ''}`
+    : (specialEventContext ? `Temporada de ${specialEventContext}` : 'Todo el año')
+
   const system = `Eres Tour Planner AI 🤖, el motor oficial de diseño de itinerarios turísticos de VibeTours.
 Tu misión es diseñar un tour profesional, inmersivo, geográficamente viable y 100% fiel al destino "${cleanCity}, ${targetCountry}".
 
@@ -1047,7 +1089,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
   "distancia_total": "5.5 km",
   "idiomas_disponibles": ["Español", "Inglés"],
   "publico_recomendado": ["Adultos", "Familias", "Parejas"],
-  "mejor_epoca": "Todo el año",
+  "mejor_epoca": "${defaultBestSeason}",
   "horario_recomendado": "09:00 AM - 06:00 PM",
   "punto_encuentro": {
     "nombre_lugar": "${selectedHotel?.name || 'Punto de encuentro principal en ' + cleanCity}",
@@ -1115,7 +1157,8 @@ REGLAS DE CALIDAD:
 4. El título "nombre_tour" DEBE ser sobre ${cleanCity} (ej: "Tour Cultural por ${cleanCity}" o "Experiencia por ${cleanCity}"). NUNCA nombres el tour con el nombre de una sola tienda, restaurante o parada individual.
 5. NO agregues hoteles ni alojamientos como paradas de actividad dentro del itinerario.
 6. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras.
-7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.`
+7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.
+8. REGLA ESTRICTA PARA 'mejor_epoca': Si el viaje cuenta con fechas o evento especial indicado (${defaultBestSeason !== 'Todo el año' ? `"${defaultBestSeason}"` : 'como un festival o mes específico'}), 'mejor_epoca' DEBE reflejar exactamente ese rango de fechas o festividad (ej: "${defaultBestSeason}"). De lo contrario, indica "Todo el año" (siempre con 'ñ').`
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1124,15 +1167,20 @@ REGLAS DE CALIDAD:
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        response_format: { type: 'json_object' },
+      body: JSON.stringify(buildOpenAiPayload({
         messages: [
           { role: 'system', content: system },
-          { role: 'user', content: `Genera el tour completo para ${cleanCity}, ${targetCountry} con estos lugares: ${JSON.stringify(selectedPlaces)}` }
+          {
+            role: 'user',
+            content: `Genera el tour completo para ${cleanCity}, ${targetCountry}.
+Fechas / Época: ${datesContext || 'Todo el año'}
+Evento o Festival: ${specialEventContext || 'No especificado'}
+Lugares obligatorios: ${JSON.stringify(selectedPlaces)}`
+          }
         ],
-        temperature: 0.4
-      })
+        temperature: 0.3,
+        response_format: { type: 'json_object' }
+      }))
     })
 
     if (response.ok) {
@@ -1155,9 +1203,7 @@ export async function suggestFallbackPlacesWithOpenAI({ destination, city, count
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        response_format: { type: 'json_object' },
+      body: JSON.stringify(buildOpenAiPayload({
         messages: [
           {
             role: 'system',
@@ -1176,8 +1222,9 @@ Devuelve ÚNICAMENTE un JSON:
           },
           { role: 'user', content: `Lugares alternativos para ${targetLocation}.${excludeStr}` }
         ],
-        temperature: 0.6
-      })
+        temperature: 0.5,
+        response_format: { type: 'json_object' }
+      }))
     })
     if (response.ok) {
       const data = await response.json()
@@ -1238,16 +1285,15 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${apiKey}`
             },
-            body: JSON.stringify({
-              model: 'gpt-4o-mini',
+            body: JSON.stringify(buildOpenAiPayload({
               messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `Destino: ${destination || city || 'Colombia'}\nLugares obligatorios a describir con riqueza de detalles:\n${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}` }
               ],
               response_format: { type: 'json_object' },
-              temperature: 0.7,
-              max_tokens: 700
-            }),
+              temperature: 0.5,
+              extra: { max_tokens: 700 }
+            })),
             signal: AbortSignal.timeout(10000)
           })
 
@@ -1327,11 +1373,85 @@ function buildRichFallbackDescription(name, city = '') {
   return `Destacado atractivo turístico de ${city || 'la región'}, que cautiva a los viajeros por su atmósfera singular, historia envolvente y paisajes representativos para explorar durante el recorrido.`
 }
 
-export async function generateCustomPlaceReasons(places = [], city = '', country = '') {
-  return places.map(p => ({
-    name: p.name || p,
-    reason: `Parada emblemática de gran atractivo turístico en ${city || 'el destino'}.`
-  }))
+export async function generateCustomPlaceReasons(arg1 = [], arg2 = '', arg3 = '') {
+  const apiKey = process.env.OPENAI_API_KEY
+  let places = []
+  let destination = ''
+  let city = ''
+  let prompt = ''
+
+  if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1)) {
+    places = Array.isArray(arg1.places) ? arg1.places : []
+    destination = arg1.destination || arg1.city || ''
+    city = arg1.city || arg1.destination || ''
+    prompt = arg1.prompt || ''
+  } else {
+    places = Array.isArray(arg1) ? arg1 : []
+    city = typeof arg2 === 'string' ? arg2 : ''
+    destination = city
+  }
+
+  const cleanPlaces = places.map(p => (typeof p === 'string' ? p : p?.name || '')).filter(Boolean)
+  if (!apiKey || cleanPlaces.length === 0) return {}
+
+  const destStr = destination || city || 'la ciudad'
+
+  try {
+    const payload = buildOpenAiPayload({
+      messages: [
+        {
+          role: 'system',
+          content: `Eres un guía turístico local experto en ${destStr}.
+Tu tarea es redactar para CADA uno de los lugares turísticos listados una justificación breve y cautivadora (de MÁXIMO 1 a 2 oraciones, entre 15 y 30 palabras) explicando POR QUÉ ese lugar fue seleccionado para este tour y qué valor cultural, histórico, paisajístico o gastronómico único ofrece al viajero.
+PROHIBIDO USAR PLANTILLAS REPETITIVAS O CLICHÉS como:
+- "fue seleccionado por su gran relevancia local..."
+- "fue seleccionado para saborear..."
+- "ubicado en [ciudad]..."
+- "antes de llegar a..."
+Cada explicación debe ser auténtica, directa y hablar exclusivamente de la esencia de ese sitio en particular.
+Devuelve ÚNICAMENTE un objeto JSON donde cada clave es el nombre exacto del lugar y el valor es la justificación:
+{
+  "Nombre del lugar": "Justificación única y natural..."
+}`
+        },
+        {
+          role: 'user',
+          content: `Genera las justificaciones de selección para estos lugares de ${destStr}:\n${cleanPlaces.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.4
+    })
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(12000)
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      const content = data.choices?.[0]?.message?.content
+      if (content) {
+        const parsed = JSON.parse(content)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[generateCustomPlaceReasons] Error:', err.message)
+  }
+
+  const fallbackMap = {}
+  for (const name of cleanPlaces) {
+    fallbackMap[name] = `Parada destacada de ${destStr}, seleccionada para apreciar su historia, arquitectura y autenticidad local.`
+  }
+  return fallbackMap
 }
 
 export async function extractLocation(prompt) {

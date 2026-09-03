@@ -25,7 +25,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   final _placeSearch = TextEditingController();
-  final _bestSeason = TextEditingController(text: 'Todo el ano');
+  final _bestSeason = TextEditingController(text: 'Todo el año');
   final _recommendedSchedule = TextEditingController(
     text: 'Manana o tarde con buena luz natural',
   );
@@ -622,7 +622,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
     if (index < 0 || index >= _stops.length) return;
     final stop = _stops[index];
 
-    _message('✨ Redactando detalles con IA (gpt-4o-mini) para "${stop.name}"...');
+    _message('✨ Redactando detalles con IA (GPT-5.6 Luna) para "${stop.name}"...');
 
     try {
       final cityName = _name.text.trim().isNotEmpty ? _name.text.trim() : 'la ciudad';
@@ -645,7 +645,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
         );
       });
 
-      _message('✅ ¡Detalles de "${stop.name}" redactados con IA (gpt-4o-mini)!');
+      _message('✅ ¡Detalles de "${stop.name}" redactados con IA (GPT-5.6 Luna)!');
     } catch (_) {
       _message('No se pudo generar con IA. Revisa tu conexión.');
     }
@@ -1131,7 +1131,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
                   _name.clear();
                   _description.clear();
                   _placeSearch.clear();
-                  _bestSeason.text = 'Todo el ano';
+                  _bestSeason.text = 'Todo el año';
                   _recommendedSchedule.text =
                       'Manana o tarde con buena luz natural';
                   _meetingPoint.clear();
@@ -1728,7 +1728,7 @@ class _StopOrderTile extends StatelessWidget {
             icon: const Icon(Icons.edit_note_rounded, color: Colors.blueAccent),
           ),
           IconButton(
-            tooltip: 'Redactar detalles con IA (gpt-4o-mini)',
+            tooltip: 'Redactar detalles con IA (GPT-5.6 Luna)',
             onPressed: onAiEnrich,
             icon: const Icon(Icons.auto_awesome_rounded, color: Colors.amber),
           ),
