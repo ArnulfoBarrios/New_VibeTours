@@ -19,18 +19,33 @@ export function buildOpenAiPayload({
   messages,
   temperature = 0.5,
   response_format = { type: 'json_object' },
+  reasoning_effort = null,
   extra = {}
 }) {
   const payload = {
     model: modelConfig.model,
     messages,
-    ...extra
   }
+
+  // Handle token limits: automatically map max_tokens -> max_completion_tokens for models that require it
+  for (const [key, value] of Object.entries(extra)) {
+    if (key === 'max_tokens') {
+      if (modelConfig.isReasoning) {
+        payload.max_completion_tokens = value
+      } else {
+        payload.max_tokens = value
+      }
+    } else {
+      payload[key] = value
+    }
+  }
+
   if (response_format) {
     payload.response_format = response_format
   }
+
   if (modelConfig.isReasoning) {
-    payload.reasoning_effort = modelConfig.reasoningEffort
+    payload.reasoning_effort = reasoning_effort || modelConfig.reasoningEffort || 'low'
   } else if (typeof temperature === 'number') {
     payload.temperature = temperature
   }
@@ -667,7 +682,8 @@ REGLAS PARA "specificPlaces":
           ...formattedHistory
         ],
         temperature: 0.4,
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
+        reasoning_effort: 'low'
       }))
     })
 
@@ -904,7 +920,8 @@ Devuelve ÚNICAMENTE un JSON con:
       body: JSON.stringify(buildOpenAiPayload({
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
+        reasoning_effort: 'low'
       }))
     })
 
@@ -1223,8 +1240,10 @@ Devuelve ÚNICAMENTE un JSON:
           { role: 'user', content: `Lugares alternativos para ${targetLocation}.${excludeStr}` }
         ],
         temperature: 0.5,
-        response_format: { type: 'json_object' }
-      }))
+        response_format: { type: 'json_object' },
+        reasoning_effort: 'low'
+      })),
+      signal: AbortSignal.timeout(25000)
     })
     if (response.ok) {
       const data = await response.json()
@@ -1292,9 +1311,10 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
               ],
               response_format: { type: 'json_object' },
               temperature: 0.5,
-              extra: { max_tokens: 700 }
+              reasoning_effort: 'low',
+              extra: { max_tokens: 1500 }
             })),
-            signal: AbortSignal.timeout(10000)
+            signal: AbortSignal.timeout(25000)
           })
 
           if (response.ok) {
@@ -1420,7 +1440,8 @@ Devuelve ÚNICAMENTE un objeto JSON donde cada clave es el nombre exacto del lug
         }
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.4
+      temperature: 0.4,
+      reasoning_effort: 'low'
     })
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1430,7 +1451,7 @@ Devuelve ÚNICAMENTE un objeto JSON donde cada clave es el nombre exacto del lug
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(12000)
+      signal: AbortSignal.timeout(25000)
     })
 
     if (response.ok) {
