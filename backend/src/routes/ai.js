@@ -3468,55 +3468,61 @@ function generateDynamicTips(name, category, city) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
   if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada|costa/i.test(cleanName) || /beach|playa|coastal/i.test(category)) {
     return [
-      `Lleva protector solar biodegradable, abundante agua y calzado adecuado para caminar en arena o senderos.`,
-      `Ten precaución con el oleaje y atiende las banderas y recomendaciones de los guardavidas o guías locales.`
+      `Llevar protección solar, toalla e hidratación para disfrutar de ${cleanName}.`,
+      `Respetar las indicaciones de los salvavidas y consultar por zonas seguras para nadar.`
     ]
   }
   if (/sendero|pueblito|trek|camino|hiking|bosque|reserva|chairama/i.test(cleanName) || /trail|nature|park/i.test(category)) {
     return [
-      `Usa calzado de trekking con buen agarre, ropa fresca y lleva repelente de insectos e hidratación.`,
-      `Transita únicamente por los senderos autorizados para proteger los ecosistemas y restos arqueológicos.`
+      `Usar calzado con buen agarre, ropa transpirable y llevar repelente para recorrer ${cleanName}.`,
+      `Transitar exclusivamente por las rutas marcadas y regresar antes del anochecer.`
     ]
   }
-  if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom/i.test(cleanName) || /food|restaurant/i.test(category)) {
+  if (/bar|discoteca|club|nightclub|pub|rumba|salsa|cantina/i.test(cleanName) || /nightlife|bar/i.test(category)) {
     return [
-      `Prueba las especialidades gastronómicas locales, pescados frescos o preparaciones tradicionales de la región.`,
-      `Lleva efectivo por si el establecimiento tiene conectividad limitada en zonas de reserva o playa.`
+      `Llegar temprano para encontrar buena ubicación cerca de la pista o música en vivo en ${cleanName}.`,
+      `Cuidar las pertenencias personales y coordinar el transporte de regreso con anticipación.`
+    ]
+  }
+  if (/restaurante|comida|cafe|café|bistro|parador|kiosko|asador|gourmet|gastronom/i.test(cleanName) || /food|restaurant/i.test(category)) {
+    return [
+      `Preguntar por el plato insignia o las recomendaciones del chef de ${cleanName}.`,
+      `Consultar si admiten reservaciones previas en horas pico para evitar esperas.`
     ]
   }
   if (/biblioteca|library|museo|museum|galeria/i.test(cleanName)) {
     return [
-      `Explora con calma las salas principales y verifica las exposiciones temporales de ${cleanName}.`,
-      `Conserva un tono de voz moderado dentro de las instalaciones para disfrutar de la experiencia.`
+      `Consultar las exposiciones temporales y salas principales en ${cleanName}.`,
+      `Aprovechar las visitas guiadas o audioguías para conocer la historia detrás de cada pieza.`
     ]
   }
   if (/puente|bridge|mirador|vessel|tower|observatorio/i.test(cleanName)) {
     return [
-      `Visita ${cleanName} durante la hora dorada al atardecer para capturar las mejores vistas del horizonte.`,
-      `Lleva calzado cómodo para el recorrido a pie y una chaqueta si sopla el viento.`
+      `Aprovechar la hora dorada o el atardecer para capturar las mejores panorámicas desde ${cleanName}.`,
+      `Llevar una prenda ligera si sube el viento en zonas altas.`
     ]
   }
-  if (/estatua|libertad|statue|monumento|memorial/i.test(cleanName)) {
+  if (/estatua|libertad|statue|monumento|memorial|plaza|catedral|iglesia|fuerte|castillo/i.test(cleanName)) {
     return [
-      `Reserva tus entradas con la mayor antelación posible para asegurar el acceso a ${cleanName}.`,
-      `Inicia el recorrido temprano por la mañana para evitar filas y disfrutar de mayor tranquilidad.`
+      `Apreciar los detalles arquitectónicos y placas conmemorativas de ${cleanName}.`,
+      `Iniciar el recorrido por la mañana para obtener fotografías con óptima iluminación natural.`
     ]
   }
   if (/opera|teatro|theatre/i.test(cleanName)) {
     return [
-      `Consulta la programación oficial por si deseas asistir a funciones o recorridos guiados en ${cleanName}.`,
-      `Tómate unos minutos para admirar la arquitectura del vestíbulo y las obras de arte expuestas.`
+      `Admirar la arquitectura del vestíbulo y consultar la cartelera cultural de ${cleanName}.`,
+      `Llegar con anticipación a la apertura de puertas para recorrer el recinto.`
     ]
   }
   if (/parque|park|garden/i.test(cleanName)) {
     return [
-      `Disfruta de las áreas verdes y camina por los senderos a un ritmo relajado.`,
-      `Mantén limpios los espacios depositando la basura en los puntos ecológicos correspondientes.`
+      `Caminar a ritmo pausado y disfrutar de las zonas de descanso arboladas en ${cleanName}.`,
+      `Aprovechar para hidratarse y observar la vida local y cotidiana del sector.`
     ]
   }
   return [
-    `Recorre ${cleanName} con tiempo suficiente para disfrutar de su entorno y atractivos locales.`,
-    `Toma fotografías desde los mejores ángulos y consulta a los guías o anfitriones del lugar.`
+    `Conocer la historia y atractivos circundantes que hacen especial a ${cleanName}.`,
+    `Planificar la visita con tiempo suficiente para apreciar el entorno y la vida local.`
   ]
 }
 

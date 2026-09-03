@@ -1386,6 +1386,8 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? tour}) {
                           .toList(),
                     ),
                   ],
+                  // Safe bottom padding so system navigation bar never obstructs the chips
+                  SizedBox(height: 36 + MediaQuery.of(context).viewPadding.bottom),
                 ],
               ),
             ),

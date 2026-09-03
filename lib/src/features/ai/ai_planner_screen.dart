@@ -527,8 +527,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           const SizedBox(height: 8),
           _buildProgressStep(
             icon: Icons.auto_awesome_rounded,
-            title: 'Redactando guías de voz y notas culturales con IA',
-            subtitle: 'GPT-5.6 Luna creando detalles inmersivos...',
+            title: 'Redactando guías de voz y notas culturales',
+            subtitle: 'Personalizando historias y recomendaciones para ti...',
             isDark: isDark,
           ),
           const SizedBox(height: 12),

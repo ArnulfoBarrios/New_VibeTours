@@ -622,7 +622,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
     if (index < 0 || index >= _stops.length) return;
     final stop = _stops[index];
 
-    _message('✨ Redactando detalles con IA (GPT-5.6 Luna) para "${stop.name}"...');
+    _message('✨ Redactando detalles con IA para "${stop.name}"...');
 
     try {
       final cityName = _name.text.trim().isNotEmpty ? _name.text.trim() : 'la ciudad';
@@ -645,7 +645,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
         );
       });
 
-      _message('✅ ¡Detalles de "${stop.name}" redactados con IA (GPT-5.6 Luna)!');
+      _message('✅ ¡Detalles de "${stop.name}" redactados con IA!');
     } catch (_) {
       _message('No se pudo generar con IA. Revisa tu conexión.');
     }
@@ -1728,7 +1728,7 @@ class _StopOrderTile extends StatelessWidget {
             icon: const Icon(Icons.edit_note_rounded, color: Colors.blueAccent),
           ),
           IconButton(
-            tooltip: 'Redactar detalles con IA (GPT-5.6 Luna)',
+            tooltip: 'Redactar detalles con IA',
             onPressed: onAiEnrich,
             icon: const Icon(Icons.auto_awesome_rounded, color: Colors.amber),
           ),
