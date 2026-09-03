@@ -595,7 +595,7 @@ ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
 ETAPA 3: PRESENTACIÓN COMPLETA DEL ITINERARIO POR DÍAS (ENTREGA INMEDIATA)
 - Si el usuario acaba de elegir hotel, o indicó su casa/alojamiento, o ya tenemos los datos clave (destino, fechas, acompañantes, presupuesto, transporte, hospedaje):
   DEBES GENERAR Y MOSTRAR OBLIGATORIAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE.
-  PROHIBIDO TERMINAR EL MENSAJE DICIENDO SOLO "aquí tienes tu itinerario:" SIN INCLUIR TODO EL BLOQUE DE DÍAS Y VIÑETAS A CONTINUACIÓN.
+  PROHIBIDO TERMINAR EL MENSAJE CON UN SIMPLE ACUSE DE RECIBO (ej: "Con casa propia y carro...") O DICIENDO "aquí tienes tu itinerario" SIN INCLUIR DE INMEDIATO TODO EL BLOQUE DE DÍAS Y VIÑETAS A CONTINUACIÓN.
 - DURACIÓN EXACTA: Debes estructurar EXACTAMENTE ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))} días en el itinerario (desde Día 1 hasta Día ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))}), sin omitir ningún día ni generar días de menos.
 
 Formato OBLIGATORIO del Itinerario:
@@ -717,23 +717,42 @@ REGLAS PARA "specificPlaces":
       })
     }
 
-    // Safeguard: If the bot claimed to present the itinerary but omitted the "Día 1:" block, reconstruct the complete day-by-day text
+    // Evaluar estado completo de información clave
+    const finalHasLodging = Boolean(hasLodging || hasValidValue(parsedExtracted.selectedHotel) || hasValidValue(parsedExtracted.accommodationStatus))
+    const finalHasTransport = Boolean(hasValidValue(known.transport) || hasValidValue(parsedExtracted.transport))
+    const finalHasBudget = Boolean(hasValidValue(known.budget) || hasValidValue(parsedExtracted.budget))
+    const finalHasCompanions = Boolean(hasValidValue(known.companions) || hasValidValue(parsedExtracted.companions))
+    const finalHasCity = Boolean(hasCity || hasValidValue(parsedExtracted.city))
+    const finalHasDates = Boolean(
+      hasDurationOrDates ||
+      hasValidValue(parsedExtracted.datesSeason) ||
+      (parsedExtracted.durationDays && Number(parsedExtracted.durationDays) > 0)
+    )
+
+    const isAllKeyInfoComplete = Boolean(
+      finalHasCity &&
+      finalHasDates &&
+      finalHasCompanions &&
+      finalHasLodging &&
+      finalHasTransport &&
+      finalHasBudget
+    )
+
+    // Safeguard: Si el bot omitió el bloque "Día 1:" pero ya tenemos TODOS los datos clave confirmados,
+    // O si mencionó presentar el itinerario, O si el usuario lo pidió: RECONSTRUIR E INYECTAR EL ITINERARIO DE FORMA OBLIGATORIA
     const mentionsPresentingItinerary = /\b(aqu[íi]\s+(?:tienes|est[áa]|te\s+dejo|te\s+presento|va)\s+(?:un|el|tu|este)?\s*itinerario|itinerario\s+para\s+tu\s+viaje|itinerario\s+para|este\s+es\s+(?:el|tu|un)\s+itinerario|itinerario\s+de\s+viaje|itinerario\s+sugerido|itinerario\s+personalizado|aqu[íi]\s+tienes\s+tu\s+itinerario|aqu[íi]\s+est[áa]\s+tu\s+itinerario|aqu[íi]\s+tienes\s+el\s+itinerario|aqu[íi]\s+est[áa]\s+el\s+itinerario|tu\s+itinerario\s+para|itinerario\s*:)\b/i.test(responseMessage)
     const hasDayHeaders = /d[íi]a\s*1\s*:/i.test(responseMessage)
     const userRequestedItinerary = /\b(mu[ée]strame\s+(el\s+|tu\s+)?itinerario|ver\s+(el\s+|tu\s+)?itinerario|cu[aá]l\s+es\s+el\s+itinerario|quiero\s+ver\s+el\s+itinerario|dame\s+el\s+itinerario)\b/i.test(lastUserMsg)
 
-    if ((mentionsPresentingItinerary || userRequestedItinerary) && !hasDayHeaders) {
+    if (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || userRequestedItinerary)) {
       const placesList = (parsedExtracted.specificPlaces || known.specificPlaces || [])
       const placeNames = placesList.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
       const daysCount = Number(parsedExtracted.durationDays || known.durationDays || 2)
       const dName = destName || known.destination || 'tu destino'
 
-      let prefixIntro = ''
-      if (responseMessage.includes('¡') && responseMessage.includes('!')) {
-        const firstSentence = responseMessage.split(/[\n.!:]/)[0]
-        if (firstSentence && firstSentence.trim().length > 3) {
-          prefixIntro = `${firstSentence.trim()}!\n\n`
-        }
+      let prefixIntro = responseMessage.trim()
+      if (prefixIntro.length > 0) {
+        prefixIntro = `${prefixIntro}\n\n`
       }
 
       let reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n`
@@ -765,27 +784,6 @@ REGLAS PARA "specificPlaces":
       reconstructed += '¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?'
       responseMessage = reconstructed
     }
-
-    // Evaluar estado completo de información clave
-    const finalHasLodging = Boolean(hasLodging || hasValidValue(parsedExtracted.selectedHotel) || hasValidValue(parsedExtracted.accommodationStatus))
-    const finalHasTransport = Boolean(hasValidValue(known.transport) || hasValidValue(parsedExtracted.transport))
-    const finalHasBudget = Boolean(hasValidValue(known.budget) || hasValidValue(parsedExtracted.budget))
-    const finalHasCompanions = Boolean(hasValidValue(known.companions) || hasValidValue(parsedExtracted.companions))
-    const finalHasCity = Boolean(hasCity || hasValidValue(parsedExtracted.city))
-    const finalHasDates = Boolean(
-      hasDurationOrDates ||
-      hasValidValue(parsedExtracted.datesSeason) ||
-      (parsedExtracted.durationDays && Number(parsedExtracted.durationDays) > 0)
-    )
-
-    const isAllKeyInfoComplete = Boolean(
-      finalHasCity &&
-      finalHasDates &&
-      finalHasCompanions &&
-      finalHasLodging &&
-      finalHasTransport &&
-      finalHasBudget
-    )
 
     // Detección explícita de comando de generación enviado por el usuario
     const isUserExplicitlyOrderingBuild = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+generar|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
