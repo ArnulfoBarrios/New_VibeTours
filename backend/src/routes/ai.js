@@ -4647,14 +4647,25 @@ export async function collectTourCandidates(input, location) {
                   city,
                   country
                 }
-              } else if (/santa marta/i.test(city)) {
-                // Fallback iconic nightlife stop in Santa Marta
-                geo = {
-                  name: 'La Brisa Loca',
-                  latitude: 11.2443,
-                  longitude: -74.2120,
-                  city: 'Santa Marta',
-                  country: 'Colombia'
+              } else {
+                // Dynamically fetch a real verified venue in this city via AI without hardcoding
+                const aiVenue = await suggestFallbackPlacesWithOpenAI({
+                  destination: `${placeName} en ${city}`,
+                  city,
+                  country,
+                  type: 'nightlife'
+                }).then(list => list?.[0]).catch(() => null)
+                if (aiVenue) {
+                  const geoAi = await geocodePlace(`${aiVenue.name}, ${city}, ${country}`, destLat, destLon).catch(() => null)
+                  if (geoAi && validateCandidateLocation(geoAi, canonicalDest, 50)) {
+                    geo = {
+                      name: aiVenue.name,
+                      latitude: geoAi.latitude,
+                      longitude: geoAi.longitude,
+                      city,
+                      country
+                    }
+                  }
                 }
               }
             }
