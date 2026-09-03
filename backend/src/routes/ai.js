@@ -419,19 +419,23 @@ aiRouter.post('/chat', async (req, res, next) => {
     const isExplicitMultiRoute = Boolean(validExtracted.isMultiCity || validExtracted.isMultiCountry || /\b(de\s+[a-záéíóúñ\s]+\s+a\s+[a-záéíóúñ\s]+|ruta\s+entre|road\s*trip)\b/i.test(message))
 
     if (hasExistingCity && !isExplicitCityChange && !isExplicitMultiRoute) {
-      const existingBaseCity = (currentPreferences.city || currentPreferences.destination || '').toLowerCase().trim()
-      const newCityOrDest = (validExtracted.city || validExtracted.destination || '').toLowerCase().trim()
+      const existingBaseCity = (currentPreferences.destination || currentPreferences.city || '').toLowerCase().trim()
+      const newDest = (validExtracted.destination || '').toLowerCase().trim()
 
-      if (newCityOrDest && newCityOrDest !== existingBaseCity) {
-        // If user is planning days or activities (e.g. "el día 2 quiero ir a Tayrona y el día 3 a Minca"),
-        // preserve the base hub destination and convert the subordinate mention into a day stop
+      const isSubordinateParkOrAttraction = (dest) => {
+        if (!dest) return false
+        return /tayrona|minca|guatap[eé]|valle de cocora|islas del rosario|isla bar[uú]|san bernardo|taganga|rodadero/i.test(dest) ||
+               /\b(parque|reserva|isla|playa|valle|mirador)\b/i.test(dest)
+      }
+
+      if (isSubordinateParkOrAttraction(validExtracted.destination) || (newDest && newDest !== existingBaseCity)) {
         console.info(`[ai/chat] Preserving base hub destination "${currentPreferences.destination || currentPreferences.city}" - keeping mentioned "${validExtracted.destination || validExtracted.city}" as a day stop.`)
         
         if (validExtracted.destination && !/^(santa marta|cartagena|medell[íi]n|bogot[áa])$/i.test(validExtracted.destination)) {
           if (!validExtracted.specificPlaces) validExtracted.specificPlaces = []
           const alreadyHas = validExtracted.specificPlaces.some(p => (typeof p === 'string' ? p : p.name).toLowerCase().includes(validExtracted.destination.toLowerCase()))
           if (!alreadyHas) {
-            validExtracted.specificPlaces.push({ name: validExtracted.destination })
+            validExtracted.specificPlaces.push({ name: validExtracted.destination, dia: 2 })
           }
         }
         delete validExtracted.city
@@ -536,11 +540,18 @@ aiRouter.post('/chat', async (req, res, next) => {
             delete updatedPreferences.specificPlaces
             delete updatedPreferences.selectedHotel
           }
-          updatedPreferences.canonicalDestination = canonical
-          updatedPreferences.city = canonical.isMicroDestination ? canonical.entityName : cleanAdministrativeCityName(canonical.city)
+          if (canonical.isMicroDestination && (currentPreferences.destination || currentPreferences.city) && !isExplicitCityChange) {
+            // Keep macro base city, do not let microdestination overwrite it
+            updatedPreferences.canonicalDestination = canonical
+            updatedPreferences.destination = currentPreferences.destination || currentPreferences.city
+            updatedPreferences.city = currentPreferences.city || currentPreferences.destination
+          } else {
+            updatedPreferences.canonicalDestination = canonical
+            updatedPreferences.city = canonical.isMicroDestination ? canonical.entityName : cleanAdministrativeCityName(canonical.city)
+            updatedPreferences.destination = canonical.isMicroDestination ? canonical.entityName : (canonical.entityName || canonical.displayName || canonical.city)
+          }
           updatedPreferences.country = canonical.country
           updatedPreferences.region = canonical.region
-          updatedPreferences.destination = canonical.isMicroDestination ? canonical.entityName : (canonical.entityName || canonical.displayName || canonical.city)
           if (Number.isFinite(canonical.latitude) && Number.isFinite(canonical.longitude)) {
             updatedPreferences.latitude = canonical.latitude
             updatedPreferences.longitude = canonical.longitude
@@ -4623,6 +4634,27 @@ export async function collectTourCandidates(input, location) {
                   longitude: validBeach.longitude,
                   city,
                   country
+                }
+              }
+            } else if (/discoteca|bar|club|nightclub|pub|rumba|fiesta|vida nocturna/i.test(placeName)) {
+              const nearbyClubs = await photonSearch(`${city} discoteca`, 6, destLat, destLon).catch(() => [])
+              const validClub = nearbyClubs.find(b => validateCandidateLocation(b, canonicalDest, 45))
+              if (validClub) {
+                geo = {
+                  name: validClub.name,
+                  latitude: validClub.latitude,
+                  longitude: validClub.longitude,
+                  city,
+                  country
+                }
+              } else if (/santa marta/i.test(city)) {
+                // Fallback iconic nightlife stop in Santa Marta
+                geo = {
+                  name: 'La Brisa Loca',
+                  latitude: 11.2443,
+                  longitude: -74.2120,
+                  city: 'Santa Marta',
+                  country: 'Colombia'
                 }
               }
             }

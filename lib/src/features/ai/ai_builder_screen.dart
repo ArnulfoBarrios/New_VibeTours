@@ -225,12 +225,16 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      Text(
-                                        rec.category.toUpperCase(),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppTheme.primary,
-                                          fontWeight: FontWeight.w600,
+                                      Expanded(
+                                        child: Text(
+                                          rec.category.toUpperCase(),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppTheme.primary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       const SizedBox(width: 8),
