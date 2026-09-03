@@ -1282,19 +1282,23 @@ export async function generateRichPlaceDescriptionsBatch({ destination = '', cit
     }
 
     const systemPrompt = `Eres un guía turístico profesional y narrador experto de VibeTours.
-Tu misión es redactar para CADA parada turística listada una descripción inmersiva, detallada, evocadora y cinematográfica (entre 60 y 90 palabras por lugar) en español.
+Tu misión es generar contenido 100% auténtico, inmersivo, diferenciado y SIN plantillas repetitivas para CADA parada turística listada en español.
 
-ESTÁNDAR DE EXCELENCIA (Como guía experto presencial hablándole al viajero):
-- Narra la historia, el ambiente, la arquitectura, los colores, sonidos y la experiencia viva y única que vivirá el visitante en ese lugar específico.
-- Para iglesias, catedrales y monumentos: describe su arquitectura, valor histórico y atmósfera solemne.
-- Para malecones, paseos costeros y miradores: describe las vistas panorámicas, la brisa, el ambiente vibrante y los puntos de encuentro.
-- Para museos y centros culturales: describe las exposiciones, el viaje histórico y la riqueza cultural que alberga.
-- Para playas, senderos y naturaleza: describe el oleaje, tipo de arena, vegetación, senderos y fauna.
-- Para bares, centros nocturnos y restaurantes: describe la música en vivo, los vinilos de salsa, el baile callejero, sabores típicos auténticos y la fiesta cultural caribeña.
-- PROHIBIDO TERMINANTEMENTE usar frases clónicas como "es un punto de visita indispensable" o plantillas repetitivas. Cada lugar debe tener un texto 100% único, fluido y enriquecedor.
+Para CADA lugar, debes generar un objeto con:
+1. "descripcion": Narración inmersiva, evocadora y cinematográfica (entre 60 y 90 palabras). Destaca lo que hace único y especial a este sitio específico frente a otros de la misma región (su historia real, arquitectura, ambiente, contrastes y la vivencia en el sitio). PROHIBIDO usar metáforas clichés o fórmulas clónicas como "las aguas turquesas acarician", "un manto dorado" o "es un punto de visita indispensable".
+2. "actividades": Array de 3 actividades o vivencias tangibles que SOLO apliquen a ese lugar en particular (ej: para un fuerte militar colonial: "Recorrer las baterías de cañones de Bocachica", no "tomar fotos y descansar").
+3. "datos_curiosos": Array de 1 o 2 datos históricos verídicos, leyendas locales o secretos arquitectónicos documentados de ese sitio exacto. PROHIBIDO poner frases vacías como "es uno de los puntos emblemáticos de la zona".
+4. "consejos": Array de 1 o 2 recomendaciones prácticas de guía local (mejor hora, calzado, hidratación o consejos de seguridad).
 
-Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del lugar y el valor es la descripción:
-{"Lugar": "texto inmersivo de 60-90 palabras"}`
+Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del lugar:
+{
+  "Nombre del Lugar": {
+    "descripcion": "texto inmersivo único...",
+    "actividades": ["Actividad específica 1", "Actividad específica 2", "Actividad específica 3"],
+    "datos_curiosos": ["Dato real 1", "Dato real 2"],
+    "consejos": ["Consejo útil 1"]
+  }
+}`
 
     try {
       const chunkResults = await Promise.allSettled(
@@ -1313,7 +1317,7 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
               response_format: { type: 'json_object' },
               temperature: 0.5,
               reasoning_effort: 'none',
-              extra: { max_tokens: 1500 }
+              extra: { max_tokens: 2200 }
             })),
             signal: AbortSignal.timeout(25000)
           })
@@ -1337,8 +1341,31 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
       }
 
       for (const name of placeNames) {
-        if (!merged[name] || merged[name].length < 20) {
-          merged[name] = buildRichFallbackDescription(name, destination || city)
+        const item = merged[name]
+        if (!item) {
+          merged[name] = {
+            descripcion: buildRichFallbackDescription(name, destination || city),
+            actividades: [`Explorar las áreas principales y miradores de ${name}`, `Conocer el contexto cultural de ${name}`, `Apreciar la gastronomía y tradiciones locales`],
+            datos_curiosos: [`${name} destaca por su valor patrimonial y natural dentro de ${destination || city}.`],
+            consejos: [`Llevar calzado cómodo y protección solar para recorrer ${name}.`]
+          }
+        } else if (typeof item === 'string') {
+          merged[name] = {
+            descripcion: item,
+            actividades: [`Explorar los alrededores de ${name}`, `Disfrutar de las vistas y ambiente de ${name}`, `Conocer la identidad local de ${name}`],
+            datos_curiosos: [`${name} forma parte destacada del recorrido en ${destination || city}.`],
+            consejos: [`Visitar ${name} en horas de la mañana para una mejor experiencia.`]
+          }
+        } else if (typeof item === 'object') {
+          if (!item.descripcion || item.descripcion.length < 20) {
+            item.descripcion = buildRichFallbackDescription(name, destination || city)
+          }
+          if (!Array.isArray(item.actividades) || item.actividades.length === 0) {
+            item.actividades = [`Explorar ${name}`, `Conocer las tradiciones de ${name}`, `Disfrutar de la experiencia local`]
+          }
+          if (!Array.isArray(item.datos_curiosos) || item.datos_curiosos.length === 0) {
+            item.datos_curiosos = [`${name} es uno de los atractivos que definen la esencia de ${destination || city}.`]
+          }
         }
       }
       return merged
@@ -1350,7 +1377,12 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
   // Fallback rico e individualizado por categoría en caso de desconexión
   const fallback = {}
   for (const name of placeNames) {
-    fallback[name] = buildRichFallbackDescription(name, destination || city)
+    fallback[name] = {
+      descripcion: buildRichFallbackDescription(name, destination || city),
+      actividades: [`Recorrer y descubrir ${name}`, `Conocer los puntos clave de ${name}`, `Disfrutar de la gastronomía y vistas locales`],
+      datos_curiosos: [`${name} preserva historia y valor paisajístico en ${destination || city}.`],
+      consejos: [`Planificar la visita con anticipación para disfrutar al máximo de ${name}.`]
+    }
   }
   return fallback
 }

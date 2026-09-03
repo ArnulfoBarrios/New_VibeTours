@@ -1172,7 +1172,8 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         assignedUrls.add(imageUrl)
 
         const aiReason = customReasonsMap[place.name] || null
-        const richDesc = richDescriptionsMap[place.name] || place.description || place.history || ''
+        const richItem = richDescriptionsMap[place.name]
+        const richDesc = typeof richItem === 'object' ? (richItem?.descripcion || '') : (richItem || place.description || place.history || '')
 
         return {
           id: place.placeId || place.id || `rec-${index}`,
@@ -3521,31 +3522,67 @@ function generateDynamicTips(name, category, city) {
 
 function generateDynamicActivities(name, category) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
-  if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada/i.test(cleanName)) {
-    return ['Disfrutar del mar, la brisa y arena cristalina', 'Nadar y hacer snorkel en los arrecifes', 'Caminar por la orilla y descansar']
+  if (/playa|beach|bah[íi]a|cala|cabo|ensenada/i.test(cleanName)) {
+    return [
+      `Caminar y relajarse junto a la orilla de ${cleanName}`,
+      `Bañarse en las aguas y contemplar el horizonte marino en ${cleanName}`,
+      `Apreciar la brisa y la atmósfera costera de ${cleanName}`
+    ]
   }
-  if (/sendero|pueblito|trek|camino|hiking|bosque|reserva/i.test(cleanName)) {
-    return ['Recorrer el sendero ecológico natural', 'Apreciar la flora, fauna y miradores panorámicos', 'Tomar fotos del paisaje natural']
+  if (/isla|cayo|archipi[eé]lago/i.test(cleanName)) {
+    return [
+      `Llegada y desembarco para recorrer los alrededores de ${cleanName}`,
+      `Descubrir las playas vírgenes y senderos rústicos de ${cleanName}`,
+      `Degustar la gastronomía insular tradicional frente al mar`
+    ]
   }
-  if (/restaurante|comida|cafe|bistro|bar|parador|kiosko|asador/i.test(cleanName)) {
-    return ['Degustar la gastronomía típica local y mariscos', 'Probar bebidas y postres tradicionales', 'Relajarse con la vista del lugar']
+  if (/sendero|pueblito|trek|camino|hiking|bosque|reserva|cerro/i.test(cleanName)) {
+    return [
+      `Recorrer los senderos naturales hacia los miradores de ${cleanName}`,
+      `Observar la flora, fauna y formaciones geológicas autóctonas`,
+      `Fotografiar el paisaje panorámico desde las alturas de ${cleanName}`
+    ]
+  }
+  if (/restaurante|comida|cafe|bistro|bar|parador|kiosko|asador|gastrobar/i.test(cleanName)) {
+    return [
+      `Degustar los platillos y especialidades culinarias de ${cleanName}`,
+      `Probar las bebidas tradicionales y postres locales`,
+      `Disfrutar del ambiente acogedor y hospitalidad de ${cleanName}`
+    ]
   }
   if (/biblioteca|library|museo|museum|galeria/i.test(cleanName)) {
-    return ['Recorrer las galerías principales', 'Visitar la tienda de recuerdos y exposiciones', 'Fotografiar los detalles de la arquitectura']
+    return [
+      `Recorrer las salas de exhibición permanente y colecciones de ${cleanName}`,
+      `Aprender sobre los momentos y personajes históricos clave`,
+      `Apreciar el diseño y la curaduría artística de ${cleanName}`
+    ]
   }
   if (/puente|bridge/i.test(cleanName)) {
-    return ['Caminar por el pasillo peatonal', 'Contemplar la vista panorámica de la ciudad', 'Tomar fotos del paisaje al atardecer']
+    return [
+      `Cruzar el paso peatonal con vistas panorámicas de la ciudad`,
+      `Apreciar la ingeniería y detalles arquitectónicos de ${cleanName}`,
+      `Capturar fotografías del skyline y el entorno fluvial o marítimo`
+    ]
   }
-  if (/estatua|libertad|statue|monumento|memorial/i.test(cleanName)) {
-    return ['Pasear por la explanada monumental', 'Apreciar la escultura desde los mejores miradores', 'Conocer la historia del monumento']
-  }
-  if (/opera|teatro|theatre/i.test(cleanName)) {
-    return ['Admirar los ornamentos y esculturas del vestíbulo', 'Conocer la historia de las grandes producciones', 'Fotografiar la fachada emblemática']
+  if (/estatua|monumento|memorial|plaza|catedral|iglesia|fuerte|castillo/i.test(cleanName)) {
+    return [
+      `Contemplar la majestuosidad histórica y arquitectura de ${cleanName}`,
+      `Conocer los hitos y eventos coloniales o patrióticos vinculados`,
+      `Tomar fotos de la fachada y plazas emblemáticas circundantes`
+    ]
   }
   if (/parque|park|garden/i.test(cleanName)) {
-    return ['Pasear por los senderos arbolados', 'Descansar en las áreas verdes', 'Disfrutar del paisaje natural']
+    return [
+      `Pasear con tranquilidad por las arboledas y avenidas de ${cleanName}`,
+      `Descansar en las áreas verdes integradas con la vida urbana`,
+      `Observar las actividades culturales y cotidianas locales`
+    ]
   }
-  return [`Visitar y explorar ${cleanName}`, 'Tomar fotos representativas de la parada', 'Disfrutar del ambiente y cultura local']
+  return [
+    `Visitar y explorar los rincones destacados de ${cleanName}`,
+    `Conocer el valor cultural y la identidad de ${cleanName}`,
+    `Disfrutar del ambiente característico y las vistas del lugar`
+  ]
 }
 
 async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lon = null, targetCityCoords = null) {
@@ -3644,7 +3681,10 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
     resolvedName = cleanPlacePhysicalName(candidateFallback?.name || fallbackPlace?.name || `${input.destination}`)
   }
-  let description = options?.descriptionsMap?.[resolvedName] || options?.descriptionsMap?.[sourceName] || source.descripcion || source.description || ''
+  const richData = options?.descriptionsMap?.[resolvedName] || options?.descriptionsMap?.[sourceName]
+  const richObj = (richData && typeof richData === 'object') ? richData : null
+
+  let description = richObj?.descripcion || (typeof richData === 'string' ? richData : '') || source.descripcion || source.description || ''
   description = description.replace(/^(Atracci[oó]n(\s*\/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*/i, '').trim()
 
   const isGenericDesc = !description || 
@@ -3701,8 +3741,8 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     image = imageStatus.url
   }
 
-  // Normalizar lista de actividades evitando genéricos "Explorar" / "Fotografiar" sueltos
-  let rawActivities = normalizeList(source.actividades ?? source.activities, [])
+  // Normalizar lista de actividades priorizando las generadas específicamente para este lugar por la IA
+  let rawActivities = normalizeList(richObj?.actividades ?? source.actividades ?? source.activities, [])
   if (rawName && rawName.toLowerCase() !== resolvedName.toLowerCase() && rawName.length > 5) {
     const activityPhrase = rawName.trim()
     if (!rawActivities.includes(activityPhrase)) {
@@ -3716,12 +3756,19 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   }
 
   // Normalizar lista de consejos evitando el aviso genérico de horarios
-  let rawTips = normalizeList(source.consejos ?? source.tips, [])
+  let rawTips = normalizeList(richObj?.consejos ?? source.consejos ?? source.tips, [])
   const isGenericTips = rawTips.length === 0 || 
                         rawTips.every(t => t.includes('Confirma horarios') || t.includes('horarios locales'));
   if (isGenericTips) {
     rawTips = generateDynamicTips(resolvedName, rawCategory, input.city || input.destination)
   }
+
+  // Normalizar datos curiosos con anécdotas e historia real de la IA
+  const rawCuriousFacts = normalizeList(richObj?.datos_curiosos ?? source.datos_curiosos, [])
+  const validCuriousFacts = rawCuriousFacts.filter(f => typeof f === 'string' && f.trim().length > 15 && !f.includes('es uno de los puntos emblemáticos más destacados'))
+  const datos_curiosos = validCuriousFacts.length > 0 
+    ? validCuriousFacts 
+    : [`${resolvedName} posee una notable relevancia histórica, arquitectónica y cultural en ${input.city || input.destination}.`]
 
   const sourceDay = Number(source.dia ?? source.day ?? fallbackPlace?.dia ?? fallbackPlace?.day ?? anchorPlace?.dia ?? anchorPlace?.day ?? 0)
   const stopDay = (sourceDay > 0) ? sourceDay : (calculatedDay !== null ? calculatedDay : 1)
@@ -3734,7 +3781,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     descripcion: description,
     duracion_estimada: durationText,
     actividades: rawActivities,
-    datos_curiosos: normalizeList(source.datos_curiosos, [`${resolvedName} es uno de los puntos emblemáticos más destacados de la zona.`]),
+    datos_curiosos,
     consejos: rawTips,
     ubicacion: {
       nombre_lugar: cleanPlacePhysicalName(fallbackPlace?.name ?? ubicacion.nombre_lugar ?? resolvedName),
