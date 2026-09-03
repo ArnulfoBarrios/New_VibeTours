@@ -292,22 +292,26 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     url.searchParams.set('lat', String(lat))
     url.searchParams.set('lon', String(lon))
   }
-  const response = await fetch(url)
-  if (!response.ok) return []
-  const json = await response.json()
-  const results = (json.features ?? []).map((feature) => ({
-    name: feature.properties.name ?? feature.properties.city ?? query,
-    city: feature.properties.city,
-    country: feature.properties.country,
-    latitude: feature.geometry.coordinates[1],
-    longitude: feature.geometry.coordinates[0],
-    type: feature.properties.osm_value ?? feature.properties.type ?? 'place',
-    tags: feature.properties
-  }))
-  if (results.length > 0) {
-    photonCache.set(key, results)
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(4000) })
+    if (!response.ok) return []
+    const json = await response.json()
+    const results = (json.features ?? []).map((feature) => ({
+      name: feature.properties.name ?? feature.properties.city ?? query,
+      city: feature.properties.city,
+      country: feature.properties.country,
+      latitude: feature.geometry.coordinates[1],
+      longitude: feature.geometry.coordinates[0],
+      type: feature.properties.osm_value ?? feature.properties.type ?? 'place',
+      tags: feature.properties
+    }))
+    if (results.length > 0) {
+      photonCache.set(key, results)
+    }
+    return results
+  } catch (err) {
+    return []
   }
-  return results
 }
 
 const OVERPASS_SERVERS = [
@@ -398,23 +402,15 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
 
     if (results.length === 0) {
       console.warn('[osm] overpassAttractions returned empty or timed out, using multi-category Photon fallback...')
-      const [monuments, museums, parks, plazas, beaches, islands, generalTourism] = await Promise.all([
-        photonSearch('monumento', 6, latitude, longitude).catch(() => []),
+      const [generalTourism, museums, parks] = await Promise.all([
+        photonSearch('turismo', 8, latitude, longitude).catch(() => []),
         photonSearch('museo', 6, latitude, longitude).catch(() => []),
-        photonSearch('parque', 6, latitude, longitude).catch(() => []),
-        photonSearch('plaza', 6, latitude, longitude).catch(() => []),
-        photonSearch('playa', 4, latitude, longitude).catch(() => []),
-        photonSearch('isla', 4, latitude, longitude).catch(() => []),
-        photonSearch('turismo', 6, latitude, longitude).catch(() => [])
+        photonSearch('parque', 6, latitude, longitude).catch(() => [])
       ])
       const combined = [
-        ...monuments,
-        ...museums,
-        ...parks,
-        ...plazas,
         ...generalTourism,
-        ...beaches,
-        ...islands
+        ...museums,
+        ...parks
       ]
       const seen = new Set()
       results = []

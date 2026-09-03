@@ -320,6 +320,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   _buildMessageBubble(msg, builderState.isLoading || builderState.isBuilding),
                   const SizedBox(height: 16),
                 ],
+                if (builderState.isLoading || builderState.isBuilding) ...[
+                  _buildTourBuildingProgressCard(),
+                  const SizedBox(height: 16),
+                ],
                 if (builderState.recommendations.isNotEmpty ||
                     (builderState.builtTour != null && builderState.builtTour!.stops.isNotEmpty)) ...[
                   _buildMapCard(builderState),
@@ -330,7 +334,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   _buildErrorBanner(builderState.error!),
                   const SizedBox(height: 16),
                 ],
-                if (builderState.isTyping || builderState.isLoading || builderState.isBuilding)
+                if (builderState.isTyping && !builderState.isLoading && !builderState.isBuilding)
                   _buildTypingIndicator(),
               ],
             ),
@@ -453,6 +457,158 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTourBuildingProgressCard() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2638) : const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2E4068) : const Color(0xFFBFDBFE),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withValues(alpha: 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isDark ? Colors.blue.shade300 : Colors.blue.shade600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Diseñando tu tour personalizado...',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: isDark ? Colors.blue.shade200 : Colors.blue.shade900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildProgressStep(
+            icon: Icons.location_on_rounded,
+            title: 'Identificando paradas y atractivos emblemáticos',
+            subtitle: 'Ubicando monumentos, miradores y museos...',
+            isDark: isDark,
+          ),
+          const SizedBox(height: 8),
+          _buildProgressStep(
+            icon: Icons.alt_route_rounded,
+            title: 'Estructurando itinerario y tiempos de traslado',
+            subtitle: 'Optimizando traslados para cada día de viaje...',
+            isDark: isDark,
+          ),
+          const SizedBox(height: 8),
+          _buildProgressStep(
+            icon: Icons.auto_awesome_rounded,
+            title: 'Redactando guías de voz y notas culturales con IA',
+            subtitle: 'GPT-5.6 Luna creando detalles inmersivos...',
+            isDark: isDark,
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black26 : Colors.white.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 14,
+                  color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Estamos preparando todo en el mapa. Esto tomará solo unos segundos.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.05, end: 0);
+  }
+
+  Widget _buildProgressStep({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool isDark,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF19325C) : Colors.blue.shade100,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            size: 14,
+            color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.grey.shade200 : Colors.grey.shade900,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

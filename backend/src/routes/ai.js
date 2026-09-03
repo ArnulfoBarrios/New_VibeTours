@@ -4698,7 +4698,7 @@ export async function collectTourCandidates(input, location) {
   }
 
   const query = `${input.destination} ${city} ${country}`.trim()
-  const photonPlaces = await photonSearch(query, 30)
+  const photonPlaces = await photonSearch(query, 30).catch(() => [])
 
   const radiusPrimary = isRegionalOrNature ? 15000 : 4500
   const radiusWide = isRegionalOrNature ? 55000 : 9000
@@ -4714,15 +4714,12 @@ export async function collectTourCandidates(input, location) {
     console.info(`[collectTourCandidates] Using subzone centroid (${searchCenterLat.toFixed(4)}, ${searchCenterLon.toFixed(4)}) derived from ${validSpecifics.length} user selected stops.`)
   }
 
-  const [overpassPrimary, overpassWide] = (searchCenterLat && searchCenterLon)
-    ? await Promise.all([
-        overpassAttractions(searchCenterLat, searchCenterLon, radiusPrimary),
-        overpassAttractions(searchCenterLat, searchCenterLon, radiusWide)
-      ])
-    : [[], []]
+  const overpassPlaces = (searchCenterLat && searchCenterLon)
+    ? await overpassAttractions(searchCenterLat, searchCenterLon, radiusWide).catch(() => [])
+    : []
   
   // Prioritize specific chat places and geocoded iconic landmarks first in the pool
-  let pool = [...geocodedSpecifics, ...geocodedIconics, ...overpassPrimary, ...overpassWide, ...photonPlaces]
+  let pool = [...geocodedSpecifics, ...geocodedIconics, ...overpassPlaces, ...photonPlaces]
 
   // Proximity filter against subzone centroid to prevent mixing distant downtown POIs with nature reserves
   if (validSpecifics.length > 0 && searchCenterLat && searchCenterLon) {
