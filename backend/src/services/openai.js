@@ -683,7 +683,7 @@ REGLAS PARA "specificPlaces":
         ],
         temperature: 0.4,
         response_format: { type: 'json_object' },
-        reasoning_effort: 'low'
+        reasoning_effort: 'none'
       }))
     })
 
@@ -921,7 +921,7 @@ Devuelve ÚNICAMENTE un JSON con:
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
         response_format: { type: 'json_object' },
-        reasoning_effort: 'low'
+        reasoning_effort: 'none'
       }))
     })
 
@@ -1196,7 +1196,8 @@ Lugares obligatorios: ${JSON.stringify(selectedPlaces)}`
           }
         ],
         temperature: 0.3,
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
+        reasoning_effort: 'low'
       }))
     })
 
@@ -1241,7 +1242,7 @@ Devuelve ÚNICAMENTE un JSON:
         ],
         temperature: 0.5,
         response_format: { type: 'json_object' },
-        reasoning_effort: 'low'
+        reasoning_effort: 'none'
       })),
       signal: AbortSignal.timeout(25000)
     })
@@ -1311,7 +1312,7 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
               ],
               response_format: { type: 'json_object' },
               temperature: 0.5,
-              reasoning_effort: 'low',
+              reasoning_effort: 'none',
               extra: { max_tokens: 1500 }
             })),
             signal: AbortSignal.timeout(25000)
@@ -1441,7 +1442,7 @@ Devuelve ÚNICAMENTE un objeto JSON donde cada clave es el nombre exacto del lug
       ],
       response_format: { type: 'json_object' },
       temperature: 0.4,
-      reasoning_effort: 'low'
+      reasoning_effort: 'none'
     })
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
