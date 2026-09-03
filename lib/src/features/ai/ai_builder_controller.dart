@@ -722,8 +722,17 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        if (data['status'] == 'completed' && data['tour'] != null) {
+          // Direct synchronous tour build (e.g. on Vercel Serverless)
+          _handleCompletedTour(Map<String, dynamic>.from(data['tour']));
+          return;
+        }
         final jobId = data['jobId'];
-        await _pollBuildJob(jobId);
+        if (jobId != null) {
+          await _pollBuildJob(jobId.toString());
+        } else {
+          state = state.copyWith(isBuilding: false, error: 'Respuesta inesperada del servidor al construir el tour.');
+        }
       } else {
         state = state.copyWith(isBuilding: false, error: '¡Ups! Hubo un problema al iniciar la creación del tour. Intenta de nuevo.');
       }
@@ -732,118 +741,135 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     }
   }
 
+  void _handleCompletedTour(Map<String, dynamic> tourData) {
+    tourData['isPublished'] = false;
+    tourData['isAiGenerated'] = true;
+    
+    final List<TourStop> stops = [];
+    final rawStops = (tourData['itinerario'] as List).asMap().entries.map((entry) {
+      final s = entry.value;
+      return TourStop(
+        id: 'stop_${entry.key}',
+        name: s['nombre'],
+        location: GeoPoint(
+          latitude: s['ubicacion']['latitud'] ?? 0,
+          longitude: s['ubicacion']['longitud'] ?? 0,
+        ),
+        imageUrl: (s['imagenes'] as List?)?.first ?? '',
+        description: s['descripcion'],
+        activities: List<String>.from(s['actividades'] ?? []),
+        tips: List<String>.from(s['consejos'] ?? []),
+        suggestedMinutes: int.tryParse(s['duracion_estimada'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 25,
+        order: entry.key,
+        day: int.tryParse(s['dia']?.toString() ?? '1') ?? 1,
+        curiousFacts: List<String>.from(s['datos_curiosos'] ?? []),
+        isFallbackImage: s['isFallbackImage'] == true,
+      );
+    }).toList();
+
+    stops.addAll(rawStops);
+
+    final currentUser = ref.read(authServiceProvider).currentUser;
+    final tour = Tour(
+      id: tourData['id'] ?? 'ai-${DateTime.now().millisecondsSinceEpoch}',
+      ownerId: currentUser?.id,
+      isPublished: false,
+      isAiGenerated: true,
+      title: tourData['nombre_tour'] ?? 'Tour VibeTours',
+      country: tourData['country']?.toString() ?? state.request?.country ?? '',
+      city: tourData['city']?.toString() ?? state.request?.city ?? '',
+      type: TourType.values.firstWhere(
+        (e) => e.name == tourData['tipo_tour'] || tourTypeLabel(e).toLowerCase() == tourData['tipo_tour'].toString().toLowerCase(),
+        orElse: () => TourType.custom,
+      ),
+      description: tourData['descripcion_tour'] ?? '',
+      coverUrl: tourData['imagen_portada'] ?? '',
+      gallery: List<String>.from(tourData['galeria_tour'] ?? []),
+      durationHours: () {
+        final maxDay = stops.isEmpty ? 1 : stops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
+        final rawDurationStr = tourData['duracion_estimada']?.toString().toLowerCase() ?? '';
+        final parsedNum = double.tryParse(rawDurationStr.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 4.0;
+        final isDays = rawDurationStr.contains('día') || rawDurationStr.contains('dia') || rawDurationStr.contains('day') || maxDay > 1;
+        final days = maxDay > 1 ? maxDay : (isDays ? parsedNum.toInt() : 1);
+        return (isDays || maxDay > 1) ? (days * 24.0) : parsedNum;
+      }(),
+      distanceKm: double.tryParse(tourData['distancia_total'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0,
+      rating: 5.0,
+      reviewCount: 0,
+      likes: 0,
+      difficulty: TourDifficulty.moderate,
+      language: (tourData['idiomas_disponibles'] as List?)?.first ?? 'es',
+      tags: List<String>.from(tourData['etiquetas'] ?? []),
+      stops: stops,
+      shortSummary: tourData['resumen_corto']?.toString() ?? '',
+      subcategories: List<String>.from(tourData['subcategorias'] ?? []),
+      featuredExperience: tourData['experiencia_destacada']?.toString() ?? '',
+      placeHistory: tourData['historia_del_lugar']?.toString() ?? '',
+      culturalContext: tourData['contexto_cultural']?.toString() ?? '',
+      availableLanguages: List<String>.from(tourData['idiomas_disponibles'] ?? []),
+      recommendedAudience: List<String>.from(tourData['publico_recomendado'] ?? []),
+      bestSeason: tourData['mejor_epoca']?.toString() ?? '',
+      recommendedSchedule: tourData['horario_recomendado']?.toString() ?? '',
+      meetingPoint: tourData['punto_encuentro'] is Map
+          ? (tourData['punto_encuentro']['nombre_lugar']?.toString() ?? '')
+          : (tourData['punto_encuentro']?.toString() ?? ''),
+      includes: List<String>.from(tourData['incluye'] ?? []),
+      excludes: List<String>.from(tourData['no_incluye'] ?? []),
+      recommendations: List<String>.from(tourData['recomendaciones'] ?? []),
+      whatToBring: List<String>.from(tourData['que_llevar'] ?? []),
+      tourRules: List<String>.from(tourData['normas_del_tour'] ?? []),
+      keywords: List<String>.from(tourData['palabras_clave'] ?? []),
+      mainCategory: tourData['categoria_principal']?.toString() ?? '',
+      additionalInfo: tourData['informacion_adicional'] != null && tourData['informacion_adicional'] is Map
+          ? TourAdditionalInfo(
+              accesibilidad: tourData['informacion_adicional']['accesibilidad']?.toString() ?? 'Consultar condiciones de accesibilidad.',
+              mascotasPermitidas: tourData['informacion_adicional']['mascotas_permitidas'] == true,
+              aptoParaNinos: tourData['informacion_adicional']['apto_para_ninos'] == true,
+              aptoParaAdultosMayores: tourData['informacion_adicional']['apto_para_adultos_mayores'] == true,
+            )
+          : TourAdditionalInfo.standard,
+    );
+    final aiMsg = ChatMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      text: '¡Tu tour personalizado está listo! Aquí tienes el itinerario detallado:',
+      type: ChatMessageType.ai,
+      timestamp: DateTime.now(),
+      embeddedTour: tour,
+    );
+    
+    state = state.copyWith(
+      isBuilding: false, 
+      builtTour: tour,
+      messages: [...state.messages, aiMsg],
+    );
+  }
+
   Future<void> _pollBuildJob(String jobId) async {
-    while (state.isBuilding) {
+    int attempts = 0;
+    const maxAttempts = 35; // 35 * 2s = 70s maximum
+    int notFoundCount = 0;
+
+    while (state.isBuilding && attempts < maxAttempts) {
+      attempts++;
       await Future.delayed(const Duration(seconds: 2));
       try {
         final response = await _getJson('/ai/tours/status/$jobId');
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           if (data['status'] == 'completed') {
-            final tourData = data['tour'];
-            tourData['isPublished'] = false;
-            tourData['isAiGenerated'] = true;
-            
-            final List<TourStop> stops = [];
-            final rawStops = (tourData['itinerario'] as List).asMap().entries.map((entry) {
-              final s = entry.value;
-              return TourStop(
-                id: 'stop_${entry.key}',
-                name: s['nombre'],
-                location: GeoPoint(
-                  latitude: s['ubicacion']['latitud'] ?? 0,
-                  longitude: s['ubicacion']['longitud'] ?? 0,
-                ),
-                imageUrl: (s['imagenes'] as List?)?.first ?? '',
-                description: s['descripcion'],
-                activities: List<String>.from(s['actividades'] ?? []),
-                tips: List<String>.from(s['consejos'] ?? []),
-                suggestedMinutes: int.tryParse(s['duracion_estimada'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 25,
-                order: entry.key,
-                day: int.tryParse(s['dia']?.toString() ?? '1') ?? 1,
-                curiousFacts: List<String>.from(s['datos_curiosos'] ?? []),
-                isFallbackImage: s['isFallbackImage'] == true,
-              );
-            }).toList();
-
-            stops.addAll(rawStops);
-
-            final currentUser = ref.read(authServiceProvider).currentUser;
-            final tour = Tour(
-              id: tourData['id'] ?? 'ai-${DateTime.now().millisecondsSinceEpoch}',
-              ownerId: currentUser?.id,
-              isPublished: false,
-              isAiGenerated: true,
-              title: tourData['nombre_tour'] ?? 'Tour VibeTours',
-              country: tourData['country']?.toString() ?? state.request?.country ?? '',
-              city: tourData['city']?.toString() ?? state.request?.city ?? '',
-              type: TourType.values.firstWhere(
-                (e) => e.name == tourData['tipo_tour'] || tourTypeLabel(e).toLowerCase() == tourData['tipo_tour'].toString().toLowerCase(),
-                orElse: () => TourType.custom,
-              ),
-              description: tourData['descripcion_tour'] ?? '',
-              coverUrl: tourData['imagen_portada'] ?? '',
-              gallery: List<String>.from(tourData['galeria_tour'] ?? []),
-              durationHours: () {
-                final maxDay = stops.isEmpty ? 1 : stops.map((s) => s.day).reduce((a, b) => a > b ? a : b);
-                final rawDurationStr = tourData['duracion_estimada']?.toString().toLowerCase() ?? '';
-                final parsedNum = double.tryParse(rawDurationStr.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 4.0;
-                final isDays = rawDurationStr.contains('día') || rawDurationStr.contains('dia') || rawDurationStr.contains('day') || maxDay > 1;
-                final days = maxDay > 1 ? maxDay : (isDays ? parsedNum.toInt() : 1);
-                return (isDays || maxDay > 1) ? (days * 24.0) : parsedNum;
-              }(),
-              distanceKm: double.tryParse(tourData['distancia_total'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0,
-              rating: 5.0,
-              reviewCount: 0,
-              likes: 0,
-              difficulty: TourDifficulty.moderate,
-              language: (tourData['idiomas_disponibles'] as List?)?.first ?? 'es',
-              tags: List<String>.from(tourData['etiquetas'] ?? []),
-              stops: stops,
-              shortSummary: tourData['resumen_corto']?.toString() ?? '',
-              subcategories: List<String>.from(tourData['subcategorias'] ?? []),
-              featuredExperience: tourData['experiencia_destacada']?.toString() ?? '',
-              placeHistory: tourData['historia_del_lugar']?.toString() ?? '',
-              culturalContext: tourData['contexto_cultural']?.toString() ?? '',
-              availableLanguages: List<String>.from(tourData['idiomas_disponibles'] ?? []),
-              recommendedAudience: List<String>.from(tourData['publico_recomendado'] ?? []),
-              bestSeason: tourData['mejor_epoca']?.toString() ?? '',
-              recommendedSchedule: tourData['horario_recomendado']?.toString() ?? '',
-              meetingPoint: tourData['punto_encuentro'] is Map
-                  ? (tourData['punto_encuentro']['nombre_lugar']?.toString() ?? '')
-                  : (tourData['punto_encuentro']?.toString() ?? ''),
-              includes: List<String>.from(tourData['incluye'] ?? []),
-              excludes: List<String>.from(tourData['no_incluye'] ?? []),
-              recommendations: List<String>.from(tourData['recomendaciones'] ?? []),
-              whatToBring: List<String>.from(tourData['que_llevar'] ?? []),
-              tourRules: List<String>.from(tourData['normas_del_tour'] ?? []),
-              keywords: List<String>.from(tourData['palabras_clave'] ?? []),
-              mainCategory: tourData['categoria_principal']?.toString() ?? '',
-              additionalInfo: tourData['informacion_adicional'] != null && tourData['informacion_adicional'] is Map
-                  ? TourAdditionalInfo(
-                      accesibilidad: tourData['informacion_adicional']['accesibilidad']?.toString() ?? 'Consultar condiciones de accesibilidad.',
-                      mascotasPermitidas: tourData['informacion_adicional']['mascotas_permitidas'] == true,
-                      aptoParaNinos: tourData['informacion_adicional']['apto_para_ninos'] == true,
-                      aptoParaAdultosMayores: tourData['informacion_adicional']['apto_para_adultos_mayores'] == true,
-                    )
-                  : TourAdditionalInfo.standard,
-            );
-            final aiMsg = ChatMessage(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              text: '¡Tu tour personalizado está listo! Aquí tienes el itinerario detallado:',
-              type: ChatMessageType.ai,
-              timestamp: DateTime.now(),
-              embeddedTour: tour,
-            );
-            
-            state = state.copyWith(
-              isBuilding: false, 
-              builtTour: tour,
-              messages: [...state.messages, aiMsg],
-            );
+            _handleCompletedTour(Map<String, dynamic>.from(data['tour']));
             return;
           } else if (data['status'] == 'failed') {
             state = state.copyWith(isBuilding: false, error: data['message']);
+            return;
+          }
+        } else if (response.statusCode == 404) {
+          notFoundCount++;
+          if (notFoundCount >= 4) {
+            state = state.copyWith(
+              isBuilding: false, 
+              error: 'No se pudo verificar el estado en el servidor. Por favor intenta de nuevo.',
+            );
             return;
           }
         }
@@ -851,6 +877,13 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         state = state.copyWith(isBuilding: false, error: _friendlyError(e));
         return;
       }
+    }
+
+    if (state.isBuilding) {
+      state = state.copyWith(
+        isBuilding: false,
+        error: 'El proceso tardó demasiado tiempo. Por favor intenta de nuevo en unos segundos.',
+      );
     }
   }
 

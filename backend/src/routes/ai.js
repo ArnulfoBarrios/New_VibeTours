@@ -412,14 +412,28 @@ aiRouter.post('/chat', async (req, res, next) => {
       })
     }
 
-    // Safeguard: Protect confirmed city from accidental overwrite when user mentions a city in correction/complaint
+    // Safeguard: Protect confirmed destination from accidental overwrite when user mentions day stops or attractions
     const hasExistingCity = Boolean(currentPreferences.city || currentPreferences.destination)
     const isCorrectionOrNegation = /\b(te equivocaste|es de|son de|queda en|quedan en|no es de|no son de|no queda en|no quedan en|confusi[oó]n|en realidad|pertenece a|pertenecen a|equivocaci[oó]n|eso est[aá] en)\b/i.test(message)
     const isExplicitCityChange = /\b(cambiemos a|cambiar a|cambiar destino|nuevo destino|mejor vamos a|ahora quiero ir a|vamos mejor a|prefiero ir a)\b/i.test(message)
+    const isExplicitMultiRoute = Boolean(validExtracted.isMultiCity || validExtracted.isMultiCountry || /\b(de\s+[a-záéíóúñ\s]+\s+a\s+[a-záéíóúñ\s]+|ruta\s+entre|road\s*trip)\b/i.test(message))
 
-    if (hasExistingCity && validExtracted.city && validExtracted.city.toLowerCase() !== (currentPreferences.city || currentPreferences.destination || '').toLowerCase()) {
-      if (isCorrectionOrNegation && !isExplicitCityChange) {
-        console.info(`[ai/chat] Preserving original city "${currentPreferences.city || currentPreferences.destination}" - ignoring mentioned city "${validExtracted.city}" from correction message.`)
+    if (hasExistingCity && !isExplicitCityChange && !isExplicitMultiRoute) {
+      const existingBaseCity = (currentPreferences.city || currentPreferences.destination || '').toLowerCase().trim()
+      const newCityOrDest = (validExtracted.city || validExtracted.destination || '').toLowerCase().trim()
+
+      if (newCityOrDest && newCityOrDest !== existingBaseCity) {
+        // If user is planning days or activities (e.g. "el día 2 quiero ir a Tayrona y el día 3 a Minca"),
+        // preserve the base hub destination and convert the subordinate mention into a day stop
+        console.info(`[ai/chat] Preserving base hub destination "${currentPreferences.destination || currentPreferences.city}" - keeping mentioned "${validExtracted.destination || validExtracted.city}" as a day stop.`)
+        
+        if (validExtracted.destination && !/^(santa marta|cartagena|medell[íi]n|bogot[áa])$/i.test(validExtracted.destination)) {
+          if (!validExtracted.specificPlaces) validExtracted.specificPlaces = []
+          const alreadyHas = validExtracted.specificPlaces.some(p => (typeof p === 'string' ? p : p.name).toLowerCase().includes(validExtracted.destination.toLowerCase()))
+          if (!alreadyHas) {
+            validExtracted.specificPlaces.push({ name: validExtracted.destination })
+          }
+        }
         delete validExtracted.city
         delete validExtracted.destination
         delete validExtracted.canonicalDestination
@@ -1214,6 +1228,23 @@ aiRouter.post('/tours/build', async (req, res, next) => {
         input.country = location.country || ''
       }
     }
+
+    // Serverless environments like Vercel: process synchronously to avoid 404 polling errors
+    if (process.env.VERCEL) {
+      console.info('[tour-ai] Serverless runtime detected (Vercel). Processing tour build synchronously.')
+      try {
+        const result = await processTourBuild(null, input, places, plannerContext)
+        return res.json({
+          status: 'completed',
+          message: 'Tour generado con éxito',
+          tour: result.tour,
+          route: result.route
+        })
+      } catch (err) {
+        console.error('[tour-ai] Synchronous tour build failed:', err.message)
+        return res.status(500).json({ error: err.message || 'Error al generar el tour.' })
+      }
+    }
     
     const jobId = crypto.randomUUID()
     tourJobs.set(jobId, {
@@ -1493,7 +1524,9 @@ aiRouter.post('/tours/hotels', async (req, res, next) => {
 })
 
 async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
+  const isSync = !jobId
   const updateJob = (updates) => {
+    if (isSync) return
     const job = tourJobs.get(jobId)
     if (job) Object.assign(job, updates)
   }
@@ -1683,9 +1716,11 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       await persistTour(tour, route, input, input.userId)
     }
     updateJob({ status: 'completed', message: 'Tour generado con éxito', tour, route })
+    return { tour, route }
   } catch (error) {
     console.error('[tour-ai] fatal process error (build)', error)
     updateJob({ status: 'failed', message: 'Error fatal durante la generación.', error: String(error) })
+    if (isSync) throw error
   }
 }
 
