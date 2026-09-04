@@ -281,7 +281,7 @@ export function isValidSpecificPlace(placeName) {
   }
 
   // 2.2 Descartar palabras genéricas o fragmentos sueltos no identificables
-  const isGenericFragment = /^(local|un local|el local|restaurante local|un restaurante local|bar local|la zona|zona|en la zona|la ciudad|ciudad|en la ciudad|casa propia|alojamiento propio|en casa|casa|casa de un familiar|casa familiar|para explorar|explorar|fiesta nocturna|las cascadas|cascadas|el r[íi]o|r[íi]o|tubbing en el r[íi]o|tubbing|tubing|la playa|playa|playas|las playas|el mar|la costa|la bahía|la bahia|la montaña|la sierra|el parque|la plaza)$/i.test(cleanLower)
+  const isGenericFragment = /^(local|un local|el local|restaurante|el restaurante|un restaurante|bar|el bar|un bar|caf[ée]|el caf[ée]|un caf[ée]|restaurante local|un restaurante local|bar local|la zona|zona|en la zona|la ciudad|ciudad|en la ciudad|casa propia|alojamiento propio|en casa|casa|casa de un familiar|casa familiar|para explorar|explorar|fiesta nocturna|las cascadas|cascadas|el r[íi]o|r[íi]o|tubbing en el r[íi]o|tubbing|tubing|la playa|playa|playas|las playas|el mar|la costa|la bahía|la bahia|la montaña|la sierra|el parque|la plaza)$/i.test(cleanLower)
   if (isGenericFragment) return false
 
   // 2.3 Descartar estructuras físicas genéricas o no turísticas que no son atracciones (canchas de barrio, paradas de bus, pérgolas)
@@ -816,7 +816,8 @@ aiRouter.post('/chat', async (req, res, next) => {
         return isValidSpecificPlace(pName)
       })
 
-      const combinedSpecifics = isConfirmedItineraryMsg && extractedFromMsg.length >= 2
+      const existingCount = Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces.length : 0
+      const combinedSpecifics = (isConfirmedItineraryMsg && extractedFromMsg.length >= Math.max(2, existingCount))
         ? deduplicatePlacesByName(extractedFromMsg.filter(p => isValidSpecificPlace(typeof p === 'object' ? p.name : p)))
         : deduplicatePlacesByName(rawCombined)
 

@@ -898,13 +898,20 @@ REGLAS PARA "specificPlaces":
 
     const isBotConfirmingBuild = /\b(procedo a generar tu tour|procedo a generar|voy a generar tu tour|genero tu tour)\b/i.test(responseMessage)
 
-    // Solo se activa readyToBuild si TODA la información clave está completa Y el usuario lo ordenó explícitamente (sin que la IA esté a media propuesta/pregunta de actividades)
+    // Cuando el usuario ordena explícitamente construir el tour y toda la información clave está completa,
+    // readyToBuild DEBE ser true de inmediato (la orden del usuario tiene prioridad sobre cualquier pregunta retórica del bot).
     const effectiveReadyToBuild = Boolean(
       isAllKeyInfoComplete &&
-      ((isUserExplicitlyOrderingBuild && !isBotAskingOrProposing) || (isBotConfirmingBuild && !isBotAskingOrProposing))
+      (isUserExplicitlyOrderingBuild || (isBotConfirmingBuild && !isBotAskingOrProposing))
     )
 
-    if (isUserExplicitlyOrderingBuild && !isAllKeyInfoComplete) {
+    if (isUserExplicitlyOrderingBuild && isAllKeyInfoComplete) {
+      if (Array.isArray(known.specificPlaces) && known.specificPlaces.length >= 2) {
+        parsedExtracted.specificPlaces = known.specificPlaces
+      }
+      responseMessage = `¡Excelente! Procedo a generar tu tour en el mapa para que disfrutes tu viaje a ${destName || 'tu destino'}.`
+      actionChips = [`🚀 Generar tour en ${destName || known.destination || 'el mapa'}`]
+    } else if (isUserExplicitlyOrderingBuild && !isAllKeyInfoComplete) {
       const missing = []
       if (!finalHasCity) missing.push('el destino')
       if (!finalHasDates) missing.push('las fechas o días de viaje')
