@@ -277,6 +277,30 @@ export async function geocodePlace(query, lat = null, lon = null) {
     console.warn('[geocodePlace] Nominatim search failed:', err.message)
   }
 
+  // 4. Dynamic OpenAI geocode fallback if OSM providers fail
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const { geocodePlacesWithOpenAI } = await import('./openai.js')
+      const aiResults = await geocodePlacesWithOpenAI({
+        places: [query],
+        centerLat: lat,
+        centerLon: lon
+      })
+      const foundAi = aiResults?.[query] || Object.values(aiResults || {})[0]
+      if (foundAi && Number.isFinite(foundAi.latitude) && Number.isFinite(foundAi.longitude)) {
+        const res = {
+          name: query,
+          latitude: Number(foundAi.latitude),
+          longitude: Number(foundAi.longitude),
+          city: '',
+          country: ''
+        }
+        geocodeCache.set(key, res)
+        return res
+      }
+    } catch (_) {}
+  }
+
   return null
 }
 
@@ -286,7 +310,7 @@ export function isPhotonCircuitOpen() {
   return Date.now() < photonCircuitOpenUntil
 }
 
-export function tripPhotonCircuit(durationMs = 60000) {
+export function tripPhotonCircuit(durationMs = (process.env.NODE_ENV === 'test' ? 2000 : 15000)) {
   photonCircuitOpenUntil = Date.now() + durationMs
   console.warn(`[osm] Photon circuit breaker tripped for ${durationMs / 1000}s`)
 }
@@ -308,7 +332,7 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     const response = await fetch(url, { signal: AbortSignal.timeout(1500) })
     if (!response.ok) {
       if (response.status === 429 || response.status >= 500) {
-        tripPhotonCircuit(45000)
+        tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 15000)
       }
       return []
     }
@@ -327,7 +351,7 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     }
     return results
   } catch (err) {
-    tripPhotonCircuit(60000)
+    tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 15000)
     return []
   }
 }

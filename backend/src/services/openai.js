@@ -352,6 +352,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     known.accommodationStatus = 'Casa propia / familiar'
   }
 
+  const allUserChatText = [
+    ...(history || []).filter(m => m.role === 'user').map(m => m.content || ''),
+    lastUserMsg
+  ].join(' ')
+
+  if (!known.companions && /\b(nos\s+vamos|nos\s+quedamos|nos\s+hospedamos|tenemos|vamos\s+con|viajamos|somos)\b/i.test(allUserChatText)) {
+    known.companions = 'En grupo'
+  }
+
   const hasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
   const hasTransport = hasValidValue(known.transport)
   const hasBudget = hasValidValue(known.budget)
@@ -377,7 +386,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
       const fbHasCompanions = hasValidValue(known.companions)
-      const fbAllKeyInfoComplete = Boolean(hasCity && hasDurationOrDates && fbHasCompanions && fbHasLodging && fbHasTransport && fbHasBudget)
+      const fbAllKeyInfoComplete = Boolean(hasCity && hasDurationOrDates && fbHasLodging && fbHasTransport && fbHasBudget)
 
       const isExplicitBuildRequestedByUser = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+generar|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
       effectiveReadyToBuild = Boolean(fbAllKeyInfoComplete && isExplicitBuildRequestedByUser)
@@ -386,7 +395,6 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         const missing = []
         if (!hasCity) missing.push('el destino')
         if (!hasDurationOrDates) missing.push('las fechas o días de viaje')
-        if (!fbHasCompanions) missing.push('tus acompañantes')
         if (!fbHasLodging) missing.push('tu alojamiento u hotel')
         if (!fbHasTransport) missing.push('tu medio de transporte')
         if (!fbHasBudget) missing.push('tu presupuesto')
@@ -466,10 +474,28 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = `¡Opciones de hospedaje en ${destName}! 🏨\n\n` +
           (preset.hotels || []).slice(0, 3).map(h => `• **${h.name}**: ${h.desc} (${h.price})`).join('\n') +
           `\n\n¿Cuál de estos te gustaría elegir?`
-      } else if (!hasCompanions) {
+      } else if (!hasCompanions && !fbHasLodging) {
         fallbackMsg = `¡Excelente! ¿Viajas solo, en pareja, con amigos o en familia con niños a ${destName}?`
       } else if (!hasBudget || !hasTransport || !hasLodging) {
         fallbackMsg = `¡Genial! ¿Cuál es tu presupuesto estimado (económico, moderado, lujo), en qué medio de transporte te moverás y si ya tienes alojamiento definido?`
+      } else if (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging)) {
+        const numDays = Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))
+        const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
+          ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
+          : []
+        const pool = Array.from(new Set([...rawSpecifics, ...(preset.places || [])]))
+
+        let dayBlocks = []
+        for (let d = 1; d <= numDays; d++) {
+          const p1 = pool[(d - 1) * 2] || preset.places[0] || 'Centro Histórico'
+          const p2 = pool[(d - 1) * 2 + 1] || preset.places[1] || 'Plaza Principal'
+          const r = preset.restaurants?.[(d - 1) % Math.max(1, preset.restaurants?.length || 1)]?.name || 'Restaurante Típico'
+          dayBlocks.push(`Día ${d}: ${destName}\n • ${p1}\n • ${p2}\n • ${r}`)
+        }
+
+        fallbackMsg = `¡Perfecto! Con tu hospedaje confirmado en ${known.selectedHotel?.name || 'tu estancia'} y movilidad definida, aquí tienes tu plan:\n\nItinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
+          dayBlocks.join('\n\n') +
+          `\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
       } else if (hasDurationOrDates) {
         fallbackMsg = `¡Excelente! Para tu viaje a ${destName} de ${known.datesSeason || `${known.durationDays} días`}, ¿qué lugares o tipo de actividades te gustaría incluir?`
       } else {
@@ -480,6 +506,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     return {
       responseMessage: fallbackMsg,
       actionChips: fallbackChips,
+      extractedPreferences: { ...known },
       specificPlaces: Array.isArray(known.specificPlaces) ? known.specificPlaces : [],
       destinationSuggestions: (!hasCity) ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : [],
       readyToBuild: Boolean(effectiveReadyToBuild),
@@ -597,10 +624,10 @@ ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
   Pregunta en 1 sola línea directa ÚNICAMENTE por los campos que figuren como PENDIENTE en el ESTADO ACTUAL DE DATOS.
 
 ETAPA 3: PRESENTACIÓN COMPLETA DEL ITINERARIO POR DÍAS (ENTREGA INMEDIATA)
-- Si el usuario acaba de elegir hotel, o indicó su casa/alojamiento, o ya tenemos los datos clave (destino, fechas, acompañantes, presupuesto, transporte, hospedaje):
+- Si el usuario acaba de responder dónde se hospedará (ej: "en mi casa", un hotel, etc.), o si ya contamos con destino, fechas, transporte, presupuesto y hospedaje:
   DEBES GENERAR Y MOSTRAR OBLIGATORIAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE.
-  PROHIBIDO TERMINAR EL MENSAJE CON UN SIMPLE ACUSE DE RECIBO (ej: "Con casa propia y carro...") O DICIENDO "aquí tienes tu itinerario" SIN INCLUIR DE INMEDIATO TODO EL BLOQUE DE DÍAS Y VIÑETAS A CONTINUACIÓN.
-- DURACIÓN EXACTA: Debes estructurar EXACTAMENTE ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))} días en el itinerario (desde Día 1 hasta Día ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))}), sin omitir ningún día ni generar días de menos.
+  PROHIBIDO TERMINAR EL MENSAJE CON UN SIMPLE ACUSE DE RECIBO (ej: "Con su casa como base, taxis y presupuesto de lujo...") SIN EL ITINERARIO COMPLETO. Si el usuario ya dio su hospedaje, NO te detengas en palabras amables ni felicitaciones aisladas: ENTREGA DE INMEDIATO EL ITINERARIO COMPLETO (Día 1 a Día N con todas sus viñetas •).
+- DURACIÓN EXACTA: Debes estructurar EXACTAMENTE ${Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))} días en el itinerario (desde Día 1 hasta Día ${Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))}), sin omitir ningún día ni generar días de menos.
 
 Formato OBLIGATORIO del Itinerario:
 Itinerario de Viaje: ${destName || known.destination} (${known.datesSeason || `${known.durationDays || 2} días`})
@@ -712,7 +739,19 @@ REGLAS PARA "specificPlaces":
       .replace(/\\n/g, '\n')
       .replace(/\\r/g, '\n')
       .trim()
-    const actionChips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
+    let actionChips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
+    const defaultChips = getDefaultActionChips(known, lastUserMsg)
+    if (actionChips.length === 0) {
+      actionChips = defaultChips
+    } else {
+      if (!known.datesSeason && !actionChips.some(c => /mes|semana|año|vacaciones/i.test(c))) {
+        actionChips = defaultChips
+      } else if (!known.durationDays && !known.durationHours && !actionChips.some(c => /día|días|semana/i.test(c))) {
+        actionChips = defaultChips
+      } else if (!known.companions && !actionChips.some(c => /familia|pareja|amigos|solo/i.test(c))) {
+        actionChips = defaultChips
+      }
+    }
     const parsedExtracted = parsed.extractedPreferences || {}
 
     // Filtrar estrictamente cualquier hotel que se haya colado en specificPlaces
@@ -742,11 +781,16 @@ REGLAS PARA "specificPlaces":
     const isAllKeyInfoComplete = Boolean(
       finalHasCity &&
       finalHasDates &&
-      finalHasCompanions &&
       finalHasLodging &&
       finalHasTransport &&
       finalHasBudget
     )
+
+    if (!finalHasCompanions && isAllKeyInfoComplete) {
+      if (!parsedExtracted.companions) {
+        parsedExtracted.companions = known.companions || 'En grupo'
+      }
+    }
 
     // Sanitizar frases de formato que rompen el personaje del asistente
     responseMessage = responseMessage
@@ -762,14 +806,30 @@ REGLAS PARA "specificPlaces":
     const hasDayHeaders = /d[íi]a\s*1\s*:/i.test(responseMessage)
     const mentionsPresentingItinerary = /\b(aqu[íi]\s+(?:tienes|est[áa]|te\s+dejo|te\s+presento|va)\s+(?:un|el|tu|este)?\s*itinerario|itinerario\s+para\s+tu\s+viaje|itinerario\s+para|este\s+es\s+(?:el|tu|un)\s+itinerario|itinerario\s+de\s+viaje|itinerario\s+sugerido|itinerario\s+personalizado|aqu[íi]\s+tienes\s+tu\s+itinerario|aqu[íi]\s+est[áa]\s+tu\s+itinerario|aqu[íi]\s+tienes\s+el\s+itinerario|aqu[íi]\s+est[áa]\s+el\s+itinerario|tu\s+itinerario\s+para|itinerario\s*:)\b/i.test(responseMessage)
     const userRequestedItinerary = /\b(mu[ée]strame\s+(el\s+|tu\s+)?itinerario|ver\s+(el\s+|tu\s+)?itinerario|cu[aá]l\s+es\s+el\s+itinerario|quiero\s+ver\s+el\s+itinerario|dame\s+el\s+itinerario)\b/i.test(lastUserMsg)
+    const hasLodgingJustProvided = Boolean(
+      finalHasLodging &&
+      finalHasCity &&
+      finalHasDates &&
+      (finalHasTransport || finalHasBudget)
+    )
 
-    const shouldReconstructItinerary = (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || userRequestedItinerary || isUserAskingForMoreStops)) ||
+    const shouldReconstructItinerary = (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || userRequestedItinerary || isUserAskingForMoreStops || hasLodgingJustProvided)) ||
       (isUserAskingForMoreStops && !hasDayHeaders)
 
     if (shouldReconstructItinerary) {
       let placesList = (parsedExtracted.specificPlaces || known.specificPlaces || [])
       let placeNames = placesList.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
-      const daysCount = Number(parsedExtracted.durationDays || known.durationDays || 2)
+      let daysCount = Number(parsedExtracted.durationDays || known.durationDays || 0)
+      if (!daysCount || daysCount < 1) {
+        const datesText = `${known.datesSeason || ''} ${parsedExtracted.datesSeason || ''} ${lastUserMsg}`
+        if (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(datesText)) {
+          daysCount = 7
+        } else if (/\b(puente|fin de semana largo|3 d[íi]as)\b/i.test(datesText)) {
+          daysCount = 3
+        } else {
+          daysCount = 2
+        }
+      }
       const dName = destName || known.destination || 'tu destino'
 
       const cat = realCatalog || (hasCity ? await getRealDestinationCatalog(destName, destCountry).catch(() => null) : null)
@@ -813,8 +873,17 @@ REGLAS PARA "specificPlaces":
         parsedExtracted.specificPlaces.push({ name: r, dia: d, type: 'food' })
       }
 
-      reconstructed += '¿Qué te parece este itinerario ampliado? ¿Deseas hacer algún otro ajuste o procedemos a generar el tour en el mapa?'
+      reconstructed += isUserAskingForMoreStops
+        ? '¿Qué te parece este itinerario ampliado? ¿Deseas hacer algún otro ajuste o procedemos a generar el tour en el mapa?'
+        : '¿Qué te parece este itinerario? ¿Deseas hacer algún ajuste o procedemos a generar el tour en el mapa?'
       responseMessage = reconstructed
+    }
+
+    if ((shouldReconstructItinerary || hasDayHeaders || isAllKeyInfoComplete) && !actionChips.some(c => /generar tour/i.test(c))) {
+      actionChips.unshift(`🚀 Generar tour en ${destName || known.destination || 'el mapa'}`)
+      if (!actionChips.some(c => /paradas|atractivos/i.test(c))) {
+        actionChips.push('➕ Agregar más paradas')
+      }
     }
 
     // Detección explícita de comando de generación enviado por el usuario
@@ -836,7 +905,6 @@ REGLAS PARA "specificPlaces":
       const missing = []
       if (!finalHasCity) missing.push('el destino')
       if (!finalHasDates) missing.push('las fechas o días de viaje')
-      if (!finalHasCompanions) missing.push('tus acompañantes')
       if (!finalHasLodging) missing.push('tu alojamiento u hotel')
       if (!finalHasTransport) missing.push('tu medio de transporte')
       if (!finalHasBudget) missing.push('tu presupuesto estimado')
@@ -979,6 +1047,10 @@ Devuelve ÚNICAMENTE un JSON con:
         parsed.destination = parsed.city
       }
 
+      if (!parsed.companions && /\b(nos\s+vamos|nos\s+quedamos|nos\s+hospedamos|tenemos|vamos\s+con|viajamos|somos)\b/i.test(userMessage)) {
+        parsed.companions = 'En grupo'
+      }
+
       // Safeguard: Do NOT overwrite known destination if user is making a correction/negation
       const isCorrectionOrNegation = /\b(te equivocaste|es de|son de|queda en|quedan en|no es de|no son de|no queda en|no quedan en|confusi[oó]n|en realidad|pertenece a|pertenecen a|equivocaci[oó]n|eso est[aá] en)\b/i.test(userMessage)
       const isExplicitCityChange = /\b(cambiemos a|cambiar a|cambiar destino|nuevo destino|mejor vamos a|ahora quiero ir a|vamos mejor a|prefiero ir a|desde|hasta|tour de|de\s+[a-z]+\s+a\s+[a-z]+)\b/i.test(userMessage)
@@ -1053,6 +1125,8 @@ export function extractChatInformationFallback(prompt) {
   } else if (/\b(solo|sola|viajo solo|viajo sola)\b/i.test(text)) {
     res.companions = 'Solo'
     res.groupSize = 1
+  } else if (/\b(nos\s+vamos|nos\s+quedamos|nos\s+hospedamos|tenemos|vamos\s+con|viajamos|somos)\b/i.test(text)) {
+    res.companions = 'En grupo'
   }
 
   if (/\b(econ[oó]mico|mochilero|barato|ajustado|bajo presupuesto)\b/i.test(text)) {

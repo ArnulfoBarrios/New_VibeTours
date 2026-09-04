@@ -173,7 +173,9 @@ export function normalizePlaceKey(placeName) {
     .replace(/\s+/g, ' ')
     .trim()
 
-  return stripped.length >= 2 ? stripped : base
+  let result = stripped.length >= 2 ? stripped : base
+  if (result === 'playa rodadero') result = 'rodadero'
+  return result
 }
 
 // Deduplica una lista de nombres de lugares usando su clave canónica y similitud de subcadenas
@@ -483,6 +485,10 @@ aiRouter.post('/chat', async (req, res, next) => {
         delete updatedPreferences.selectedHotel
         delete updatedPreferences.accommodationStatus
       }
+    }
+
+    if (!updatedPreferences.companions && /\b(nos\s+vamos|nos\s+quedamos|nos\s+hospedamos|tenemos|vamos\s+con|viajamos|somos)\b/i.test(message)) {
+      updatedPreferences.companions = 'En grupo'
     }
 
     // Normalización determinística de duración por expresiones clave y rangos de fechas
