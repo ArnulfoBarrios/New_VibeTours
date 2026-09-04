@@ -58,139 +58,7 @@ export function buildOpenAiPayload({
  * Curated real catalog for popular destinations to ensure 100% authentic POIs,
  * hotels, restaurants, and real annual events with zero generic synthetic strings.
  */
-export const DESTINATION_LOCAL_PRESETS = {
-  barranquilla: {
-    name: 'Barranquilla',
-    country: 'Colombia',
-    hotels: [
-      { name: 'Hotel Dann Carlton Barranquilla', desc: 'Alojamiento 5 estrellas en el norte de Barranquilla con piscina y suites de lujo.', price: '~$90 - $150 USD/noche' },
-      { name: 'Hotel Mónaco Real', desc: 'Hospedaje confortable y funcional con excelente ubicación central.', price: '~$45 - $75 USD/noche' },
-      { name: 'GHL Hotel Barranquilla', desc: 'Moderno hotel ejecutivo con terraza panorámica y gastronomía gourmet.', price: '~$80 - $130 USD/noche' },
-      { name: 'The Meeting Point', desc: 'Alojamiento acogedor ideal para grupos de viajeros y amigos.', price: '~$35 - $60 USD/noche' },
-      { name: 'Movich Buró 51', desc: 'Hotel de diseño exclusivo con spa y alta cocina caribeña.', price: '~$100 - $170 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante Manuel', specialty: 'Alta cocina de autor caribeña contemporánea' },
-      { name: 'Restaurante El Celler', specialty: 'Cocina mediterránea y tapas de autor' },
-      { name: 'La Guayaba Restaurante Bar', specialty: 'Comida típica costeña y mariscos' },
-      { name: 'Restaurante Varadero', specialty: 'Pescados, mariscos y gastronomía cubano-caribeña' },
-      { name: 'Caimán del Río', specialty: 'Mercado gastronómico con variedad de sabores frente al río Magdalena' },
-      { name: 'Restaurante Narcobollo', specialty: 'Fritos tradicionales, bollos y gastronomía típica barranquillera' }
-    ],
-    places: [
-      'Gran Malecón del Río',
-      'Ventana al Mundo',
-      'Monumento Ventana de Campeones (Aleta del Tiburón)',
-      'Casa del Carnaval',
-      'Museo del Carnaval',
-      'Barrio El Prado y Mansiones Republicanas',
-      'Catedral Metropolitana María Reina',
-      'Plaza de la Paz',
-      'Zoológico de Barranquilla',
-      'Bocas de Ceniza',
-      'Ecoparque Ciénaga de Mallorquín',
-      'Castillo de Salgar',
-      'Muelle y Malecón de Puerto Colombia',
-      'Museo Mapuka'
-    ]
-  },
-  cartagena: {
-    name: 'Cartagena',
-    country: 'Colombia',
-    hotels: [
-      { name: 'Hotel Santa Clara Sofitel', desc: 'Lujoso hotel en antiguo convento del siglo XVII en el centro histórico.', price: '~$250 - $450 USD/noche' },
-      { name: 'Hotel Bastión Luxury', desc: 'Hotel boutique de alta gama con terraza y piscina panorámica.', price: '~$180 - $320 USD/noche' },
-      { name: 'Casa San Agustín', desc: 'Exclusivo hotel colonial con arquitectura restaurada y spa de lujo.', price: '~$220 - $380 USD/noche' },
-      { name: 'Hotel Caribe by Faranda', desc: 'Tradicional resort en Bocagrande con arquitectura clásica y jardines.', price: '~$90 - $160 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante Celele', specialty: 'Cocina contemporánea del Caribe colombiano' },
-      { name: 'La Cevicheria', specialty: 'Ceviches frescos, mariscos y cocina costeña' },
-      { name: 'Restaurante Candé', specialty: 'Auténtica gastronomía 100% cartagenera' },
-      { name: 'Restaurante Carmen', specialty: 'Cocina de autor con ingredientes locales' }
-    ],
-    places: [
-      'Castillo San Felipe de Barajas',
-      'Ciudad Amurallada de Cartagena',
-      'Torre del Reloj y Plaza de los Coches',
-      'Palacio de la Inquisición',
-      'Convento de la Popa',
-      'Barrio Getsemaní y Plaza de la Trinidad',
-      'Las Bóvedas',
-      'Islas del Rosario'
-    ]
-  },
-  santamarta: {
-    name: 'Santa Marta',
-    country: 'Colombia',
-    hotels: [
-      { name: 'Hotel Santa Marta Marriott Resort Playa Dormida', desc: 'Resort frente a la playa con piscina y alta cocina.', price: '~$140 - $260 USD/noche' },
-      { name: 'Hotel Boutique Don Pepe', desc: 'Elegancia colonial y terraza en el centro histórico.', price: '~$110 - $190 USD/noche' },
-      { name: 'Placita Vieja Hotel Boutique', desc: 'Encanto en el Parque de los Novios.', price: '~$80 - $140 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante Ostrería Donde Chucho', specialty: 'Pescados y mariscos tradicionales' },
-      { name: 'Restaurante Guásimo', specialty: 'Cocina de autor inspirada en la Sierra Nevada' },
-      { name: 'Restaurante Lulo', specialty: 'Cocina fresca, arepas gourmet y jugos naturales' }
-    ],
-    places: [
-      'Quinta de San Pedro Alejandrino',
-      'Parque Nacional Natural Tayrona',
-      'Bahía de Santa Marta y Camellón de Bastidas',
-      'Catedral Basílica de Santa Marta',
-      'Parque de los Novios',
-      'Playa Rodadero',
-      'Playa Cristal',
-      'Minca y Cascadas de Marinka'
-    ]
-  },
-  medellin: {
-    name: 'Medellín',
-    country: 'Colombia',
-    hotels: [
-      { name: 'The Click Clack Hotel Medellín', desc: 'Hotel de vanguardia y diseño en El Poblado.', price: '~$120 - $210 USD/noche' },
-      { name: 'Hotel Diez Categoria Colombia', desc: 'Hotel temático con vistas al valle de Aburrá.', price: '~$80 - $140 USD/noche' },
-      { name: 'Novotel Medellín El Tesoro', desc: 'Alojamiento moderno conectado a zonas comerciales exclusivas.', price: '~$90 - $160 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Restaurante El Cielo', specialty: 'Cocina molecular y experiencias sensoriales de autor' },
-      { name: 'Restaurante Mondongo\'s', specialty: 'Platos típicos antioqueños y bandeja paisa' },
-      { name: 'Restaurante Oci.Mde', specialty: 'Gastronomía contemporánea con técnicas de cocción lenta' }
-    ],
-    places: [
-      'Plaza Botero y Esculturas',
-      'Parque Arví y Metrocable',
-      'Comuna 13 y Graffitour',
-      'Jardín Botánico de Medellín',
-      'Parque Explora',
-      'Pueblito Paisa y Cerro Nutibara',
-      'Museo de Arte Moderno de Medellín (MAMM)'
-    ]
-  },
-  bogota: {
-    name: 'Bogotá',
-    country: 'Colombia',
-    hotels: [
-      { name: 'Grand Hyatt Bogotá', desc: 'Lujo contemporáneo cerca de la embajada y Corferias.', price: '~$140 - $260 USD/noche' },
-      { name: 'Hotel de la Opera', desc: 'Arquitectura colonial en pleno corazón de La Candelaria.', price: '~$90 - $160 USD/noche' },
-      { name: 'Four Seasons Hotel Casa Medina', desc: 'Monumento arquitectónico en la Zona G.', price: '~$250 - $450 USD/noche' }
-    ],
-    restaurants: [
-      { name: 'Andrés Carne de Res', specialty: 'Carnes a la parrilla, rumba y gastronomía colombiana' },
-      { name: 'Restaurante Leo', specialty: 'Cocina biocultural colombiana de reconocimiento internacional' },
-      { name: 'Restaurante Harry Sasson', specialty: 'Alta cocina latinoamericana en mansión patrimonial' }
-    ],
-    places: [
-      'Cerro de Monserrate',
-      'Museo del Oro',
-      'Barrio La Candelaria y Plaza de Bolívar',
-      'Museo Botero',
-      'Jardín Botánico de Bogotá',
-      'Parque Metropolitano Simón Bolívar',
-      'Usaquén y Mercado de las Pulgas'
-    ]
-  }
-}
+export const DESTINATION_LOCAL_PRESETS = {}
 
 /**
  * 100% Dynamic Global Catalog Resolver.
@@ -1519,11 +1387,69 @@ Devuelve ÚNICAMENTE un JSON:
   return []
 }
 
-export async function fetchCityIconicLandmarks(city, country) {
-  const clean = cleanAdministrativeCityName(city).toLowerCase()
-  if (DESTINATION_LOCAL_PRESETS[clean]) {
-    return DESTINATION_LOCAL_PRESETS[clean].places
+const cityLandmarksCache = new Map()
+
+export async function fetchCityIconicLandmarks(city, country = '') {
+  if (!city || !city.trim()) return []
+  const clean = cleanAdministrativeCityName(city).trim()
+  const cacheKey = `${clean.toLowerCase()}__${(country || '').toLowerCase()}`
+  if (cityLandmarksCache.has(cacheKey)) {
+    return cityLandmarksCache.get(cacheKey)
   }
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (apiKey) {
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(buildOpenAiPayload({
+          messages: [
+            {
+              role: 'system',
+              content: `Eres un guía turístico profesional de VibeTours con conocimiento exhaustivo de geografía mundial. Tu misión es devolver un listado de los 10 a 14 lugares turísticos, plazas, monumentos, museos, miradores y experiencias más icónicos, reconocidos y visitados de la ciudad indicada.
+Devuelve ÚNICAMENTE un JSON válido con este formato:
+{
+  "places": [
+    { "name": "Nombre exacto del atractivo", "category": "historic | culture | nature | viewpoint | park | beach | gastronomy" }
+  ]
+}`
+            },
+            {
+              role: 'user',
+              content: `Ciudad: "${clean}", País: "${country || ''}". Lista los principales atractivos turísticos y monumentos imprescindibles.`
+            }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+          reasoning_effort: 'low'
+        })),
+        signal: AbortSignal.timeout(8000)
+      })
+
+      if (response.ok) {
+        const json = await response.json()
+        const content = json.choices?.[0]?.message?.content
+        if (content) {
+          const parsed = JSON.parse(content)
+          const rawPlaces = Array.isArray(parsed.places) ? parsed.places : []
+          const list = rawPlaces
+            .map(p => typeof p === 'string' ? { name: p, category: 'historic' } : p)
+            .filter(p => p && p.name && !isNonTouristFacility({ name: p.name }))
+          if (list.length >= 3) {
+            cityLandmarksCache.set(cacheKey, list)
+            return list
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[fetchCityIconicLandmarks] Dynamic OpenAI call failed:', err.message)
+    }
+  }
+
   const catalog = await getRealDestinationCatalog(city, country).catch(() => null)
   return catalog?.places || []
 }
@@ -1652,34 +1578,7 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
 }
 
 function buildRichFallbackDescription(name, city = '') {
-  const clean = String(name || '')
-  if (/cabo san juan/i.test(clean)) {
-    return 'Emblemático rincón del Caribe colombiano famoso por su icónico mirador en la colina sobre el mar, dos bahías gemelas de arena dorada y aguas color esmeralda ideales para nadar y relajarse bajo las palmeras.'
-  } else if (/la piscina/i.test(clean)) {
-    return 'Una serena ensenada marina protegida naturalmente por una barrera de arrecifes de coral, creando una piscina de agua salada calmada y cristalina perfecta para hacer snorkel y contemplar peces tropicales.'
-  } else if (/pueblito|chairama/i.test(clean)) {
-    return 'Un fascinante sendero ancestral empedrado que atraviesa la selva tropical húmeda, conectando vestigios arqueológicos de terrazas indígenas rodeadas de exuberante flora, aves exóticas y monos aulladores.'
-  } else if (/cristal/i.test(clean)) {
-    return 'Paradisíaca playa de arena blanca brillante y aguas turquesas de increíble visibilidad, rodeada de colinas selváticas y famosa por sus coloridos fondos coralinos repletos de vida marina.'
-  } else if (/bah[íi]a concha/i.test(clean)) {
-    return 'Una amplia y tranquila bahía de arenas suaves flanqueada por montañas boscosas, donde el mar quieto invita a nadar plácidamente y disfrutar de la sombra de los árboles costeros.'
-  } else if (/arrecifes/i.test(clean)) {
-    return 'Impresionante sector costero caracterizado por gigantescos bloques de granito pulidos por el mar, oleaje imponente y un paisaje agreste donde la selva tropical se encuentra con el océano.'
-  } else if (/ventana al mundo/i.test(clean)) {
-    return 'Imponente monumento de arte público y vanguardia arquitectónica compuesto por miles de cristales de colores, convertido en el símbolo moderno de Barranquilla y homenaje a su espíritu pionero.'
-  } else if (/ventana de campeones|aleta del tibur[oó]n/i.test(clean)) {
-    return 'Majestuosa estructura luminosa en forma de aleta erigida junto al río Magdalena en honor a la pasión deportiva y las glorias del fútbol caribeño, ofreciendo una vista panorámica espectacular.'
-  } else if (/malec[oó]n|caim[aá]n del r[íi]o/i.test(clean)) {
-    return 'Espectacular bulevar peatonal ribereño frente al río Magdalena, reconocido por su brisa caribeña, animada oferta gastronómica al aire libre y una vista privilegiada de las puestas de sol.'
-  } else if (/casa del carnaval|museo del carnaval/i.test(clean)) {
-    return 'Santuario de la cultura, el folclor y la alegría barranquillera, donde disfraces legendarios, máscaras de marimonda e instrumentos de cumbia preservan la memoria viva de la fiesta patrimonial.'
-  } else if (/barrio el prado|republican/i.test(clean)) {
-    return 'Joya urbanística y patrimonial caracterizada por sus frondosos árboles, amplias avenidas y señoriales mansiones neoclásicas que narran la época de oro del desarrollo arquitectónico local.'
-  } else if (/ci[eé]naga de mallorqu[ií]n|ecoparque/i.test(clean)) {
-    return 'Valioso pulmón ecológico y santuario de humedales costeros con senderos de madera sobre el manglar, predilecto para el avistamiento de aves y la reconexión con la naturaleza.'
-  } else if (/castillo de salgar|puerto colombia|muelle/i.test(clean)) {
-    return 'Histórico enclave junto al mar Caribe que atesora memorias coloniales e historias de la inmigración, brindando una brisa marina reconfortante y vistas inolvidables del océano.'
-  }
+  const clean = String(name || '').trim()
 
   const isChurch = /\b(catedral|iglesia|bas[íi]lica|templo|santuario|parroquia)\b/i.test(clean)
   if (isChurch) {
