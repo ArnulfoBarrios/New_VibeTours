@@ -297,7 +297,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     : ''
 
   const history = state.history || []
-  const lastUserMsg = history[history.length - 1]?.content || ''
+  const lastUserMsg = state.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
 
   if (isNonTouristicInput(lastUserMsg)) {
     return {
@@ -551,10 +551,14 @@ REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
    - Para CUALQUIER ciudad o destino del mundo solicitado (${destName || 'el destino seleccionado'}), selecciona ÚNICAMENTE los atractivos turísticos, culturales, históricos, arquitectónicos y paisajísticos MÁS POPULARES, EMBLEMÁTICOS E ICÓNICOS que existan FÍSICAMENTE en ese destino específico.
    - PROHIBIDO TERMINANTEMENTE asignar atractivos de una ciudad a otra (por ejemplo, nunca pongas lugares de una ciudad en otra distinta ni mezcles destinos ajenos).
    - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o supermercados como paradas turísticas.
-2. BALANCE DIARIO RECOMENDADO Y FLEXIBILIDAD TOTAL:
-   - Por defecto, un ritmo equilibrado sugiere entre 2 y 3 atractivos destacados y 1 parada gastronómica o nocturna por día.
-   - CONTROL TOTAL DEL VIAJERO: Si el usuario solicita agregar más paradas, vida nocturna (bares, discotecas), miradores o un itinerario más intenso, ADÁPTALO de inmediato con entusiasmo.
-   - PROHIBIDO TERMINANTEMENTE revelar formatos internos, restricciones del sistema o decir frases como "para respetar el formato de 2 atractivos y 1 gastronómica". El usuario es quien decide la cantidad de paradas de su viaje.
+2. CONTROL TOTAL DEL VIAJERO Y AMPLIACIÓN DE PARADAS:
+   - Por defecto, sugiere un ritmo equilibrado de atractivos destacados y parada gastronómica.
+   - Si el usuario solicita agregar más paradas, incluir más atractivos, vida nocturna o actividades ("agrega más paradas", "añade más lugares", "¿puedes agregar más paradas?", etc.):
+     * ACEPTA CON ENTUSIASMO DE INMEDIATO.
+     * Incorpora 1 o 2 paradas o experiencias reales adicionales a cada día (pudiendo tener 3, 4 o más atractivos por día según lo pida).
+     * MUESTRA OBLIGATORIAMENTE EL ITINERARIO COMPLETO ACTUALIZADO (desde Día 1 hasta Día N) con las nuevas paradas visibles en viñetas (•).
+     * PROHIBIDO responder con un texto explicativo sin mostrar el itinerario modificado.
+     * NUNCA menciones formatos internos, límites ni restricciones; el viajero siempre tiene la libertad de ampliar su recorrido.
 
 REGLAS CRÍTICAS DE RESTAURANTES Y GASTRONOMÍA:
 - PROHIBIDO inventar nombres de restaurantes concatenando la palabra "Restaurante" + el nombre de una atracción o playa (ej: NUNCA inventes "Restaurante [Nombre de Playa]").
@@ -621,6 +625,12 @@ REGLAS CRÍTICAS DEL ITINERARIO:
    - En capitales y ciudades metropolitanas/culturales (ej: Barranquilla, Medellín, Bogotá, Cartagena, Roma, París, etc.):
      Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas, arquitectura, parques y gastronomía local (ej. en Barranquilla: Gran Malecón del Río, Ventana al Mundo, Museo del Carnaval, Barrio El Prado, Catedral Metropolitana, Ciénaga de Mallorquín, Castillo de Salgar). Si la ciudad tiene costa o playas cercanas, incluye a lo sumo 1 o 2 visitas de playa, pero ESTÁ ESTRICTAMENTE PROHIBIDO llenar un tour urbano de 4 o 5 días exclusivamente con 10 paradas de playas repetidas.
    - En destinos con vocación puramente balnearia (ej: Coveñas, San Andrés, Cancún): Las playas e islas sí son el atractivo central diario.
+
+ETAPA DE AJUSTE O AMPLIACIÓN DE ITINERARIO (AÑADIR O CAMBIAR PARADAS):
+- Si el usuario pide agregar más paradas, añadir más sitios, o enriquecer el plan ("puedes agregar más paradas", "añade más paradas", "más lugares", etc.):
+  1. ACEPTA CON ENTUSIASMO.
+  2. MUESTRA OBLIGATORIAMENTE EL ITINERARIO COMPLETO ACTUALIZADO (desde Día 1 hasta Día ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))}) agregando 1 o 2 paradas adicionales reales a cada día (3 a 4 paradas por día).
+  3. ESTÁ TOTALMENTE PROHIBIDO responder únicamente con un texto explicativo o evasivo. Si dices que agregaste paradas, el bloque completo de días con sus viñetas DEBE estar impreso en tu respuesta.
 
 ETAPA 4: GENERACIÓN DEL TOUR ("readyToBuild": true)
 - Si el usuario pide generar el tour:
@@ -738,50 +748,72 @@ REGLAS PARA "specificPlaces":
       finalHasBudget
     )
 
-    // Safeguard: Si el bot omitió el bloque "Día 1:" pero ya tenemos TODOS los datos clave confirmados,
-    // O si mencionó presentar el itinerario, O si el usuario lo pidió: RECONSTRUIR E INYECTAR EL ITINERARIO DE FORMA OBLIGATORIA
-    const mentionsPresentingItinerary = /\b(aqu[íi]\s+(?:tienes|est[áa]|te\s+dejo|te\s+presento|va)\s+(?:un|el|tu|este)?\s*itinerario|itinerario\s+para\s+tu\s+viaje|itinerario\s+para|este\s+es\s+(?:el|tu|un)\s+itinerario|itinerario\s+de\s+viaje|itinerario\s+sugerido|itinerario\s+personalizado|aqu[íi]\s+tienes\s+tu\s+itinerario|aqu[íi]\s+est[áa]\s+tu\s+itinerario|aqu[íi]\s+tienes\s+el\s+itinerario|aqu[íi]\s+est[áa]\s+el\s+itinerario|tu\s+itinerario\s+para|itinerario\s*:)\b/i.test(responseMessage)
+    // Sanitizar frases de formato que rompen el personaje del asistente
+    responseMessage = responseMessage
+      .replace(/para respetar el formato[^.!?\n]*[.!?]?/gi, '')
+      .replace(/respetar el formato del tour[^.!?\n]*[.!?]?/gi, '')
+      .replace(/dejo dos atractivos principales y una parada gastron[oó]mica por d[íi]a[^.!?\n]*[.!?]?/gi, '')
+      .replace(/las paradas adicionales pueden incorporarse como visitas opcionales[^.!?\n]*[.!?]?/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+
+    // Detección de petición de agregar paradas
+    const isUserAskingForMoreStops = /\b(agr(egar?|ega|egues?|eguen?)|a[ñn](adir?|ade|ades?|adan?)|inclu(ir?|ye|yes?|yan?)|m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|aumentar\s+(las\s+)?paradas|sumar\s+(m[aá]s\s+)?paradas|paradas\s+adicionales)\b/i.test(lastUserMsg)
     const hasDayHeaders = /d[íi]a\s*1\s*:/i.test(responseMessage)
+    const mentionsPresentingItinerary = /\b(aqu[íi]\s+(?:tienes|est[áa]|te\s+dejo|te\s+presento|va)\s+(?:un|el|tu|este)?\s*itinerario|itinerario\s+para\s+tu\s+viaje|itinerario\s+para|este\s+es\s+(?:el|tu|un)\s+itinerario|itinerario\s+de\s+viaje|itinerario\s+sugerido|itinerario\s+personalizado|aqu[íi]\s+tienes\s+tu\s+itinerario|aqu[íi]\s+est[áa]\s+tu\s+itinerario|aqu[íi]\s+tienes\s+el\s+itinerario|aqu[íi]\s+est[áa]\s+el\s+itinerario|tu\s+itinerario\s+para|itinerario\s*:)\b/i.test(responseMessage)
     const userRequestedItinerary = /\b(mu[ée]strame\s+(el\s+|tu\s+)?itinerario|ver\s+(el\s+|tu\s+)?itinerario|cu[aá]l\s+es\s+el\s+itinerario|quiero\s+ver\s+el\s+itinerario|dame\s+el\s+itinerario)\b/i.test(lastUserMsg)
 
-    if (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || userRequestedItinerary)) {
-      const placesList = (parsedExtracted.specificPlaces || known.specificPlaces || [])
-      const placeNames = placesList.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
+    const shouldReconstructItinerary = (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || userRequestedItinerary || isUserAskingForMoreStops)) ||
+      (isUserAskingForMoreStops && !hasDayHeaders)
+
+    if (shouldReconstructItinerary) {
+      let placesList = (parsedExtracted.specificPlaces || known.specificPlaces || [])
+      let placeNames = placesList.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
       const daysCount = Number(parsedExtracted.durationDays || known.durationDays || 2)
       const dName = destName || known.destination || 'tu destino'
 
-      let prefixIntro = responseMessage.trim()
-      if (prefixIntro.length > 0) {
-        prefixIntro = `${prefixIntro}\n\n`
+      const cat = realCatalog || (hasCity ? await getRealDestinationCatalog(destName, destCountry).catch(() => null) : null)
+      const perDayPlacesCount = isUserAskingForMoreStops ? 3 : 2
+      const totalPlacesNeeded = daysCount * perDayPlacesCount
+
+      // Obtener atractivos adicionales del catálogo si el usuario pidió más paradas o si faltan
+      const catPlaces = cat?.places || []
+      const extraPlaces = catPlaces.filter(p => !placeNames.some(existing => existing.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(existing.toLowerCase())))
+
+      let allPlacesPool = [...placeNames]
+      for (const ep of extraPlaces) {
+        if (allPlacesPool.length >= totalPlacesNeeded) break
+        allPlacesPool.push(ep)
+      }
+
+      let prefixIntro = ''
+      if (isUserAskingForMoreStops) {
+        prefixIntro = `¡Por supuesto! He añadido paradas y atractivos adicionales para enriquecer cada día de tu viaje a ${dName}. Aquí tienes el itinerario ampliado:\n\n`
+      } else {
+        const cleanedIntro = responseMessage.replace(/Itinerario de Viaje:[^]*$/i, '').trim()
+        if (cleanedIntro.length > 0) {
+          prefixIntro = `${cleanedIntro}\n\n`
+        }
       }
 
       let reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n`
-      if (placeNames.length > 0) {
-        const perDay = Math.max(1, Math.ceil(placeNames.length / daysCount))
-        for (let d = 1; d <= daysCount; d++) {
-          reconstructed += `Día ${d}: ${dName}\n`
-          const dayPlaces = placeNames.slice((d - 1) * perDay, d * perDay)
-          dayPlaces.forEach(p => {
-            reconstructed += ` • ${p}\n`
-          })
-          reconstructed += '\n'
+      const sampleRests = (cat?.restaurants || []).slice(0, daysCount)
+      if (!parsedExtracted.specificPlaces) parsedExtracted.specificPlaces = []
+
+      for (let d = 1; d <= daysCount; d++) {
+        reconstructed += `Día ${d}: ${dName}\n`
+        for (let s = 0; s < perDayPlacesCount; s++) {
+          const idx = (d - 1) * perDayPlacesCount + s
+          const pName = allPlacesPool[idx] || (catPlaces[idx % Math.max(1, catPlaces.length)]) || `Atractivo ${s + 1} de ${dName}`
+          reconstructed += ` • ${pName}\n`
+          parsedExtracted.specificPlaces.push({ name: pName, dia: d, type: 'cultural' })
         }
-      } else {
-        const cat = realCatalog || (hasCity ? await getRealDestinationCatalog(destName, destCountry).catch(() => null) : null)
-        const samplePlaces = (cat?.places || []).slice(0, daysCount * 2)
-        const sampleRests = (cat?.restaurants || []).slice(0, daysCount)
-        if (!parsedExtracted.specificPlaces) parsedExtracted.specificPlaces = []
-        for (let d = 1; d <= daysCount; d++) {
-          const p1 = samplePlaces[(d - 1) * 2] || `Atractivo destacado de ${dName}`
-          const p2 = samplePlaces[(d - 1) * 2 + 1] || `Centro histórico de ${dName}`
-          const r = sampleRests[(d - 1) % Math.max(1, sampleRests.length)]?.name || 'Restaurante Típico'
-          reconstructed += `Día ${d}: ${dName}\n • ${p1}\n • ${p2}\n • ${r}\n\n`
-          parsedExtracted.specificPlaces.push({ name: p1, dia: d, type: 'cultural' })
-          parsedExtracted.specificPlaces.push({ name: p2, dia: d, type: 'cultural' })
-          parsedExtracted.specificPlaces.push({ name: r, dia: d, type: 'food' })
-        }
+        const r = sampleRests[(d - 1) % Math.max(1, sampleRests.length)]?.name || 'Restaurante Típico'
+        reconstructed += ` • ${r}\n\n`
+        parsedExtracted.specificPlaces.push({ name: r, dia: d, type: 'food' })
       }
-      reconstructed += '¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?'
+
+      reconstructed += '¿Qué te parece este itinerario ampliado? ¿Deseas hacer algún otro ajuste o procedemos a generar el tour en el mapa?'
       responseMessage = reconstructed
     }
 
