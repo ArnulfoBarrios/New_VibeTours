@@ -1,7 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/models.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../core/config/app_config.dart';
 import '../../state/app_state.dart';
@@ -226,12 +228,25 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           timestamp: DateTime.now(),
         );
 
+        Map<String, dynamic>? newHotel = state.selectedHotel;
+        if (updatedPreferences['selectedHotel'] is Map) {
+          newHotel = Map<String, dynamic>.from(updatedPreferences['selectedHotel'] as Map);
+        }
+
         state = state.copyWith(
           isTyping: false,
           messages: [...state.messages, aiMsg],
           preferences: updatedPreferences,
           webSearchDone: webSearchDone,
+          selectedHotel: newHotel,
         );
+
+        if (newHotel != null) {
+          final city = (updatedPreferences['city'] ?? updatedPreferences['destination'] ?? '').toString();
+          if (city.trim().isNotEmpty) {
+            unawaited(_saveUserLodging(city, newHotel));
+          }
+        }
 
         // Construir el tour ÚNICAMENTE si el backend confirmó que tenemos todos los datos necesarios (readyToBuild == true)
         if (readyToBuild) {
@@ -671,6 +686,12 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
   void selectHotel(Map<String, dynamic>? hotel) {
     state = state.copyWithHotel(hotel);
+    if (hotel != null) {
+      final city = state.request?.city ?? (state.preferences['city']?.toString() ?? '');
+      if (city.trim().isNotEmpty) {
+        unawaited(_saveUserLodging(city, hotel));
+      }
+    }
   }
 
   void prepareForEditing([Tour? tour]) {
@@ -829,6 +850,18 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             )
           : TourAdditionalInfo.standard,
     );
+    final Map<String, dynamic>? hotelToSave = state.selectedHotel ??
+        (state.preferences['selectedHotel'] is Map
+            ? Map<String, dynamic>.from(state.preferences['selectedHotel'] as Map)
+            : null) ??
+        (tourData['user_hotel'] is Map
+            ? Map<String, dynamic>.from(tourData['user_hotel'] as Map)
+            : null);
+
+    if (hotelToSave != null && tour.city.trim().isNotEmpty) {
+      unawaited(_saveUserLodging(tour.city, hotelToSave));
+    }
+
     final aiMsg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       text: '¡Tu tour personalizado está listo! Aquí tienes el itinerario detallado:',
@@ -842,6 +875,31 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       builtTour: tour,
       messages: [...state.messages, aiMsg],
     );
+  }
+
+  Future<void> _saveUserLodging(String city, Map<String, dynamic> hotel) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'user_lodging_${city.trim().toLowerCase()}';
+      final name = hotel['name'] ?? hotel['nombre'] ?? hotel['nombre_lugar'] ?? 'Mi hotel';
+      final lat = hotel['latitude'] ?? hotel['lat'] ?? hotel['latitud'];
+      final lon = hotel['longitude'] ?? hotel['lon'] ?? hotel['lng'] ?? hotel['longitud'];
+      if (lat != null && lon != null) {
+        final doubleLat = (lat as num).toDouble();
+        final doubleLon = (lon as num).toDouble();
+        if (doubleLat != 0.0 || doubleLon != 0.0) {
+          await prefs.setString(
+            key,
+            jsonEncode({
+              'name': name.toString(),
+              'latitude': doubleLat,
+              'longitude': doubleLon,
+              'type': hotel['type']?.toString() ?? 'hotel',
+            }),
+          );
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _pollBuildJob(String jobId) async {

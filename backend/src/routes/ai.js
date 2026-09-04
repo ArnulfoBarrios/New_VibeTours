@@ -1709,6 +1709,12 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         apto_para_ninos: sourceTour.informacion_adicional?.apto_para_ninos ?? planner.familyFriendly,
         apto_para_adultos_mayores: sourceTour.informacion_adicional?.apto_para_adultos_mayores ?? true,
       },
+      user_hotel: hotelPuntoEncuentro || (chosenHotel ? {
+        nombre_lugar: chosenHotel.name,
+        latitud: Number(chosenHotel.latitude) || 0,
+        longitud: Number(chosenHotel.longitude) || 0,
+        direccion: chosenHotel.address || ''
+      } : null),
     }
     
     const route = {
@@ -3515,10 +3521,17 @@ function generateDynamicTips(name, category, city) {
       `Transitar exclusivamente por las rutas marcadas y regresar antes del anochecer.`
     ]
   }
-  if (/bar|discoteca|club|nightclub|pub|rumba|salsa|cantina/i.test(cleanName) || /nightlife|bar/i.test(category)) {
+  const isMonumentOrHeritage = /monumento|estatua|busto|obelisco|memorial|rotario|leones|iglesia|catedral|plaza|parque|escultura|hito/i.test(cleanName)
+  if (!isMonumentOrHeritage && (/\b(bar|discoteca|nightclub|pub|rumba|salsa|cantina)\b/i.test(cleanName) || /nightlife|bar/i.test(category))) {
     return [
       `Llegar temprano para encontrar buena ubicación cerca de la pista o música en vivo en ${cleanName}.`,
       `Cuidar las pertenencias personales y coordinar el transporte de regreso con anticipación.`
+    ]
+  }
+  if (isMonumentOrHeritage) {
+    return [
+      `Apreciar con calma los detalles arquitectónicos, placas conmemorativas y simbolismos históricos en ${cleanName}.`,
+      `Aprovechar la luz de la mañana o el atardecer para capturar las mejores fotografías del monumento.`
     ]
   }
 
@@ -5717,16 +5730,19 @@ ACCIONES DISPONIBLES (actionType):
    - Extrae el nombre o dirección en "destinationAddress" si el usuario lo mencionó.
 4. "REQUEST_ACCOMMODATION_LOCATION": el usuario dice que quiere volver a su hotel/alojamiento/casa, pero NO hay ningún hotel en el contexto y NO dio ningún nombre ni dirección.
    - Tu responseText DEBE preguntar amablemente: "¿En qué hotel o dirección te estás hospedando para guiarte hasta allá?"
-5. "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre la parada actual.
-6. "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro punto del recorrido.
-7. null: consulta informativa general (clima, tips, etc.).
+5. "SET_ACCOMMODATION": el usuario quiere cambiar, actualizar o registrar su hotel o alojamiento (ej: "cambié de hotel a [nombre]", "ahora me hospedo en [nombre]", "mi nuevo hotel es [nombre]", "actualiza mi alojamiento a [nombre]").
+   - Extrae el nuevo nombre o dirección en "destinationAddress".
+   - Tu responseText DEBE confirmar: "Entendido, he actualizado tu hotel a [nombre]."
+6. "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre la parada actual.
+7. "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro punto del recorrido.
+8. null: consulta informativa general (clima, tips, etc.).
 
 RESPUESTA (responseText): En español colombiano/latinoamericano, natural, cálido, conciso (máximo 2 oraciones).
 Devuelve ÚNICAMENTE un JSON válido con este esquema:
 {
   "isRelatedToTravel": boolean,
   "responseText": "string",
-  "actionType": "SEARCH_RESTAURANTS" | "SEARCH_PLACES" | "RETURN_TO_ACCOMMODATION" | "REQUEST_ACCOMMODATION_LOCATION" | "DESCRIBE_CURRENT_POI" | "CHANGE_DESTINATION" | null,
+  "actionType": "SEARCH_RESTAURANTS" | "SEARCH_PLACES" | "RETURN_TO_ACCOMMODATION" | "REQUEST_ACCOMMODATION_LOCATION" | "SET_ACCOMMODATION" | "DESCRIBE_CURRENT_POI" | "CHANGE_DESTINATION" | null,
   "searchQuery": "string", // opcional, término o lugar específico para SEARCH_PLACES
   "destinationAddress": "string" // opcional, si el usuario dio una dirección o nombre de hotel explícito
 }`
@@ -5856,49 +5872,76 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
       }
     }
 
-    // 3. Manejo de RETURN_TO_ACCOMMODATION / REQUEST_ACCOMMODATION_LOCATION
-    if (aiResult.isRelatedToTravel && (aiResult.actionType === 'RETURN_TO_ACCOMMODATION' || aiResult.actionType === 'REQUEST_ACCOMMODATION_LOCATION')) {
-      const hasHotelInContext = Boolean(tourContext.hotelLat && tourContext.hotelLon) || Boolean(tourContext.hotelName && tourContext.hotelName.trim().length > 0)
-      const hasAddressInQuery = Boolean(aiResult.destinationAddress && aiResult.destinationAddress.trim().length > 0)
-
-      if (!hasHotelInContext && !hasAddressInQuery) {
-        aiResult.actionType = 'REQUEST_ACCOMMODATION_LOCATION'
-        targetDestination = null
-        if (!aiResult.responseText || aiResult.responseText.length < 10) {
-          aiResult.responseText = '¿En qué hotel o dirección te estás hospedando para guiarte hasta allá?'
-        }
-      } else {
-        aiResult.actionType = 'RETURN_TO_ACCOMMODATION'
-        if (tourContext.hotelLat && tourContext.hotelLon) {
-          targetDestination = {
-            name: tourContext.hotelName || 'Alojamiento',
-            latitude: tourContext.hotelLat,
-            longitude: tourContext.hotelLon,
-            address: tourContext.hotelAddress || '',
-            type: 'hotel'
-          }
-        } else if (aiResult.destinationAddress) {
-          const query = `${aiResult.destinationAddress}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
+    // 3. Manejo de RETURN_TO_ACCOMMODATION / REQUEST_ACCOMMODATION_LOCATION / SET_ACCOMMODATION
+    if (aiResult.isRelatedToTravel && (aiResult.actionType === 'RETURN_TO_ACCOMMODATION' || aiResult.actionType === 'REQUEST_ACCOMMODATION_LOCATION' || aiResult.actionType === 'SET_ACCOMMODATION')) {
+      if (aiResult.actionType === 'SET_ACCOMMODATION') {
+        const hotelNameOrAddr = (aiResult.destinationAddress || '').trim() ||
+          userQuery.replace(/\b(cambi[eé]|cambiar|ahora|nuevo|hotel|alojamiento|hospedaje|me hospedo en|estoy en el hotel)\b/gi, '').trim()
+        if (hotelNameOrAddr) {
+          const query = `${hotelNameOrAddr}, ${tourContext?.city || ''} ${tourContext?.country || ''}`.trim()
           const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
           if (geo?.latitude && geo?.longitude) {
             targetDestination = {
-              name: aiResult.destinationAddress,
+              name: geo.name || hotelNameOrAddr,
               latitude: geo.latitude,
               longitude: geo.longitude,
-              address: aiResult.destinationAddress,
+              address: hotelNameOrAddr,
+              type: 'hotel'
+            }
+          } else {
+            targetDestination = {
+              name: hotelNameOrAddr,
+              latitude: centerLat,
+              longitude: centerLon,
+              address: hotelNameOrAddr,
               type: 'hotel'
             }
           }
-        } else if (tourContext.hotelName) {
-          const query = `${tourContext.hotelName}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
-          const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
-          if (geo?.latitude && geo?.longitude) {
+        }
+      } else {
+        const hasHotelInContext = Boolean(tourContext.hotelLat && tourContext.hotelLon) || Boolean(tourContext.hotelName && tourContext.hotelName.trim().length > 0)
+        const hasAddressInQuery = Boolean(aiResult.destinationAddress && aiResult.destinationAddress.trim().length > 0)
+
+        if (!hasHotelInContext && !hasAddressInQuery) {
+          aiResult.actionType = 'REQUEST_ACCOMMODATION_LOCATION'
+          targetDestination = null
+          if (!aiResult.responseText || aiResult.responseText.length < 10) {
+            aiResult.responseText = '¿En qué hotel o dirección te estás hospedando para guiarte hasta allá?'
+          }
+        } else {
+          aiResult.actionType = 'RETURN_TO_ACCOMMODATION'
+          if (aiResult.destinationAddress) {
+            const query = `${aiResult.destinationAddress}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
+            const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
+            if (geo?.latitude && geo?.longitude) {
+              targetDestination = {
+                name: aiResult.destinationAddress,
+                latitude: geo.latitude,
+                longitude: geo.longitude,
+                address: aiResult.destinationAddress,
+                type: 'hotel'
+              }
+            }
+          }
+          if (!targetDestination && tourContext.hotelLat && tourContext.hotelLon) {
             targetDestination = {
-              name: tourContext.hotelName,
-              latitude: geo.latitude,
-              longitude: geo.longitude,
-              address: tourContext.hotelAddress || tourContext.hotelName,
+              name: tourContext.hotelName || 'Alojamiento',
+              latitude: tourContext.hotelLat,
+              longitude: tourContext.hotelLon,
+              address: tourContext.hotelAddress || '',
               type: 'hotel'
+            }
+          } else if (!targetDestination && tourContext.hotelName) {
+            const query = `${tourContext.hotelName}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
+            const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
+            if (geo?.latitude && geo?.longitude) {
+              targetDestination = {
+                name: tourContext.hotelName,
+                latitude: geo.latitude,
+                longitude: geo.longitude,
+                address: tourContext.hotelAddress || tourContext.hotelName,
+                type: 'hotel'
+              }
             }
           }
         }

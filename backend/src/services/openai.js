@@ -58,7 +58,139 @@ export function buildOpenAiPayload({
  * Curated real catalog for popular destinations to ensure 100% authentic POIs,
  * hotels, restaurants, and real annual events with zero generic synthetic strings.
  */
-export const DESTINATION_LOCAL_PRESETS = {}
+export const DESTINATION_LOCAL_PRESETS = {
+  barranquilla: {
+    name: 'Barranquilla',
+    country: 'Colombia',
+    hotels: [
+      { name: 'Hotel Dann Carlton Barranquilla', desc: 'Alojamiento 5 estrellas en el norte de Barranquilla con piscina y suites de lujo.', price: '~$90 - $150 USD/noche' },
+      { name: 'Hotel Mónaco Real', desc: 'Hospedaje confortable y funcional con excelente ubicación central.', price: '~$45 - $75 USD/noche' },
+      { name: 'GHL Hotel Barranquilla', desc: 'Moderno hotel ejecutivo con terraza panorámica y gastronomía gourmet.', price: '~$80 - $130 USD/noche' },
+      { name: 'The Meeting Point', desc: 'Alojamiento acogedor ideal para grupos de viajeros y amigos.', price: '~$35 - $60 USD/noche' },
+      { name: 'Movich Buró 51', desc: 'Hotel de diseño exclusivo con spa y alta cocina caribeña.', price: '~$100 - $170 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante Manuel', specialty: 'Alta cocina de autor caribeña contemporánea' },
+      { name: 'Restaurante El Celler', specialty: 'Cocina mediterránea y tapas de autor' },
+      { name: 'La Guayaba Restaurante Bar', specialty: 'Comida típica costeña y mariscos' },
+      { name: 'Restaurante Varadero', specialty: 'Pescados, mariscos y gastronomía cubano-caribeña' },
+      { name: 'Caimán del Río', specialty: 'Mercado gastronómico con variedad de sabores frente al río Magdalena' },
+      { name: 'Restaurante Narcobollo', specialty: 'Fritos tradicionales, bollos y gastronomía típica barranquillera' }
+    ],
+    places: [
+      'Gran Malecón del Río',
+      'Ventana al Mundo',
+      'Monumento Ventana de Campeones (Aleta del Tiburón)',
+      'Casa del Carnaval',
+      'Museo del Carnaval',
+      'Barrio El Prado y Mansiones Republicanas',
+      'Catedral Metropolitana María Reina',
+      'Plaza de la Paz',
+      'Zoológico de Barranquilla',
+      'Bocas de Ceniza',
+      'Ecoparque Ciénaga de Mallorquín',
+      'Castillo de Salgar',
+      'Muelle y Malecón de Puerto Colombia',
+      'Museo Mapuka'
+    ]
+  },
+  cartagena: {
+    name: 'Cartagena',
+    country: 'Colombia',
+    hotels: [
+      { name: 'Hotel Santa Clara Sofitel', desc: 'Lujoso hotel en antiguo convento del siglo XVII en el centro histórico.', price: '~$250 - $450 USD/noche' },
+      { name: 'Hotel Bastión Luxury', desc: 'Hotel boutique de alta gama con terraza y piscina panorámica.', price: '~$180 - $320 USD/noche' },
+      { name: 'Casa San Agustín', desc: 'Exclusivo hotel colonial con arquitectura restaurada y spa de lujo.', price: '~$220 - $380 USD/noche' },
+      { name: 'Hotel Caribe by Faranda', desc: 'Tradicional resort en Bocagrande con arquitectura clásica y jardines.', price: '~$90 - $160 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante Celele', specialty: 'Cocina contemporánea del Caribe colombiano' },
+      { name: 'La Cevicheria', specialty: 'Ceviches frescos, mariscos y cocina costeña' },
+      { name: 'Restaurante Candé', specialty: 'Auténtica gastronomía 100% cartagenera' },
+      { name: 'Restaurante Carmen', specialty: 'Cocina de autor con ingredientes locales' }
+    ],
+    places: [
+      'Castillo San Felipe de Barajas',
+      'Ciudad Amurallada de Cartagena',
+      'Torre del Reloj y Plaza de los Coches',
+      'Palacio de la Inquisición',
+      'Convento de la Popa',
+      'Barrio Getsemaní y Plaza de la Trinidad',
+      'Las Bóvedas',
+      'Islas del Rosario'
+    ]
+  },
+  santamarta: {
+    name: 'Santa Marta',
+    country: 'Colombia',
+    hotels: [
+      { name: 'Hotel Santa Marta Marriott Resort Playa Dormida', desc: 'Resort frente a la playa con piscina y alta cocina.', price: '~$140 - $260 USD/noche' },
+      { name: 'Hotel Boutique Don Pepe', desc: 'Elegancia colonial y terraza en el centro histórico.', price: '~$110 - $190 USD/noche' },
+      { name: 'Placita Vieja Hotel Boutique', desc: 'Encanto en el Parque de los Novios.', price: '~$80 - $140 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante Ostrería Donde Chucho', specialty: 'Pescados y mariscos tradicionales' },
+      { name: 'Restaurante Guásimo', specialty: 'Cocina de autor inspirada en la Sierra Nevada' },
+      { name: 'Restaurante Lulo', specialty: 'Cocina fresca, arepas gourmet y jugos naturales' }
+    ],
+    places: [
+      'Quinta de San Pedro Alejandrino',
+      'Parque Nacional Natural Tayrona',
+      'Bahía de Santa Marta y Camellón de Bastidas',
+      'Catedral Basílica de Santa Marta',
+      'Parque de los Novios',
+      'Playa Rodadero',
+      'Playa Cristal',
+      'Minca y Cascadas de Marinka'
+    ]
+  },
+  medellin: {
+    name: 'Medellín',
+    country: 'Colombia',
+    hotels: [
+      { name: 'The Click Clack Hotel Medellín', desc: 'Hotel de vanguardia y diseño en El Poblado.', price: '~$120 - $210 USD/noche' },
+      { name: 'Hotel Diez Categoria Colombia', desc: 'Hotel temático con vistas al valle de Aburrá.', price: '~$80 - $140 USD/noche' },
+      { name: 'Novotel Medellín El Tesoro', desc: 'Alojamiento moderno conectado a zonas comerciales exclusivas.', price: '~$90 - $160 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Restaurante El Cielo', specialty: 'Cocina molecular y experiencias sensoriales de autor' },
+      { name: 'Restaurante Mondongo\'s', specialty: 'Platos típicos antioqueños y bandeja paisa' },
+      { name: 'Restaurante Oci.Mde', specialty: 'Gastronomía contemporánea con técnicas de cocción lenta' }
+    ],
+    places: [
+      'Plaza Botero y Esculturas',
+      'Parque Arví y Metrocable',
+      'Comuna 13 y Graffitour',
+      'Jardín Botánico de Medellín',
+      'Parque Explora',
+      'Pueblito Paisa y Cerro Nutibara',
+      'Museo de Arte Moderno de Medellín (MAMM)'
+    ]
+  },
+  bogota: {
+    name: 'Bogotá',
+    country: 'Colombia',
+    hotels: [
+      { name: 'Grand Hyatt Bogotá', desc: 'Lujo contemporáneo cerca de la embajada y Corferias.', price: '~$140 - $260 USD/noche' },
+      { name: 'Hotel de la Opera', desc: 'Arquitectura colonial en pleno corazón de La Candelaria.', price: '~$90 - $160 USD/noche' },
+      { name: 'Four Seasons Hotel Casa Medina', desc: 'Monumento arquitectónico en la Zona G.', price: '~$250 - $450 USD/noche' }
+    ],
+    restaurants: [
+      { name: 'Andrés Carne de Res', specialty: 'Carnes a la parrilla, rumba y gastronomía colombiana' },
+      { name: 'Restaurante Leo', specialty: 'Cocina biocultural colombiana de reconocimiento internacional' },
+      { name: 'Restaurante Harry Sasson', specialty: 'Alta cocina latinoamericana en mansión patrimonial' }
+    ],
+    places: [
+      'Cerro de Monserrate',
+      'Museo del Oro',
+      'Barrio La Candelaria y Plaza de Bolívar',
+      'Museo Botero',
+      'Jardín Botánico de Bogotá',
+      'Parque Metropolitano Simón Bolívar',
+      'Usaquén y Mercado de las Pulgas'
+    ]
+  }
+}
 
 /**
  * 100% Dynamic Global Catalog Resolver.
@@ -67,6 +199,9 @@ export const DESTINATION_LOCAL_PRESETS = {}
  */
 export async function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null) {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
+  const baseKey = clean.split(',')[0].trim().replace(/^(ciudad de|san|santa)\s+/i, '').trim()
+  const preset = DESTINATION_LOCAL_PRESETS[clean] || DESTINATION_LOCAL_PRESETS[baseKey]
+
   const cacheKey = `catalog_${clean}_${countryName}`
   const cached = destinationCatalogCache.get(cacheKey)
   if (cached) return cached
@@ -85,11 +220,11 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const capitalCity = clean ? clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Destino'
   const targetCountry = countryName || 'Local'
 
-  let realHotels = []
-  let realRests = []
-  let realPlaces = []
+  let realHotels = preset?.hotels ? [...preset.hotels] : []
+  let realRests = preset?.restaurants ? [...preset.restaurants] : []
+  let realPlaces = preset?.places ? [...preset.places] : []
 
-  if (lat && lon) {
+  if (lat && lon && realPlaces.length < 8) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500))
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
       Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise]),
@@ -97,28 +232,32 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       Promise.race([overpassAttractions(lat, lon, 50000).catch(() => []), timeoutPromise])
     ])
 
-    realHotels = (osmHotels || []).filter(h => h && h.name && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
-    realRests = (osmRests || []).filter(r => r && r.name && !isNonTouristFacility(r.tags) && !isNonTouristFacility({ name: r.name }) && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 12)
-    realPlaces = (osmAttractions || []).filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 15)
+    const fetchedHotels = (osmHotels || []).filter(h => h && h.name && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
+    const fetchedRests = (osmRests || []).filter(r => r && r.name && !isNonTouristFacility(r.tags) && !isNonTouristFacility({ name: r.name }) && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 12)
+    const fetchedPlaces = (osmAttractions || []).filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 15)
+
+    if (realHotels.length === 0) realHotels = fetchedHotels
+    if (realRests.length === 0) realRests = fetchedRests
+    for (const fp of fetchedPlaces) {
+      if (!realPlaces.some(rp => rp.toLowerCase() === fp.name.toLowerCase())) {
+        realPlaces.push(fp.name)
+      }
+    }
 
     if (realPlaces.length < 6) {
-      const [monuments, museums, parks, plazas, generalPlaces, beachPlaces, islandPlaces] = await Promise.all([
-        photonSearch('monumento', 6, lat, lon).catch(() => []),
-        photonSearch('museo', 6, lat, lon).catch(() => []),
-        photonSearch('parque', 6, lat, lon).catch(() => []),
-        photonSearch('plaza', 6, lat, lon).catch(() => []),
-        photonSearch('turismo', 6, lat, lon).catch(() => []),
-        photonSearch('playa', 4, lat, lon).catch(() => []),
-        photonSearch('isla', 4, lat, lon).catch(() => [])
+      const [generalPlaces, museums, plazas, coastal, viewpoints] = await Promise.all([
+        photonSearch(`turismo ${clean}`, 6, lat, lon).catch(() => []),
+        photonSearch(`museo ${clean}`, 6, lat, lon).catch(() => []),
+        photonSearch(`plaza ${clean}`, 6, lat, lon).catch(() => []),
+        photonSearch(`playa ${clean}`, 4, lat, lon).catch(() => []),
+        photonSearch(`mirador ${clean}`, 4, lat, lon).catch(() => [])
       ])
       const additional = [
-        ...monuments,
-        ...museums,
-        ...parks,
-        ...plazas,
         ...generalPlaces,
-        ...beachPlaces,
-        ...islandPlaces
+        ...museums,
+        ...plazas,
+        ...coastal,
+        ...viewpoints
       ].filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !p.name.toLowerCase().includes('perímetro urbano'))
 
       const existingNames = new Set(realPlaces.map(p => (typeof p === 'string' ? p : p.name).toLowerCase().trim()))
@@ -129,7 +268,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         const k = p.name.toLowerCase().trim()
         if (!existingNames.has(k)) {
           existingNames.add(k)
-          realPlaces.push(p)
+          realPlaces.push(p.name)
           if (isBeach) beachCount++
         }
       }
@@ -425,9 +564,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
           ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
           : []
-        const p1 = rawSpecifics[0] || preset.places[0] || 'Castillo San Felipe'
-        const p2 = rawSpecifics[1] || preset.places[1] || 'Ciudad Amurallada'
-        const r1 = preset.restaurants?.[0]?.name || 'Restaurante La Cevicheria'
+        const p1 = rawSpecifics[0] || preset.places[0] || `Centro histórico de ${destName}`
+        const p2 = rawSpecifics[1] || preset.places[1] || `Plaza principal de ${destName}`
+        const r1 = preset.restaurants?.[0]?.name || `Restaurante tradicional de ${destName}`
         fallbackMsg = `Día 1: ${destName}\n\n` +
           `• 🏨 **Alojamiento / Punto de partida**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado'}\n` +
           `• 🌅 **09:00 AM - Mañana**: Visita a ${p1}\n` +
@@ -1526,6 +1665,20 @@ function buildRichFallbackDescription(name, city = '') {
     return 'Una amplia y tranquila bahía de arenas suaves flanqueada por montañas boscosas, donde el mar quieto invita a nadar plácidamente y disfrutar de la sombra de los árboles costeros.'
   } else if (/arrecifes/i.test(clean)) {
     return 'Impresionante sector costero caracterizado por gigantescos bloques de granito pulidos por el mar, oleaje imponente y un paisaje agreste donde la selva tropical se encuentra con el océano.'
+  } else if (/ventana al mundo/i.test(clean)) {
+    return 'Imponente monumento de arte público y vanguardia arquitectónica compuesto por miles de cristales de colores, convertido en el símbolo moderno de Barranquilla y homenaje a su espíritu pionero.'
+  } else if (/ventana de campeones|aleta del tibur[oó]n/i.test(clean)) {
+    return 'Majestuosa estructura luminosa en forma de aleta erigida junto al río Magdalena en honor a la pasión deportiva y las glorias del fútbol caribeño, ofreciendo una vista panorámica espectacular.'
+  } else if (/malec[oó]n|caim[aá]n del r[íi]o/i.test(clean)) {
+    return 'Espectacular bulevar peatonal ribereño frente al río Magdalena, reconocido por su brisa caribeña, animada oferta gastronómica al aire libre y una vista privilegiada de las puestas de sol.'
+  } else if (/casa del carnaval|museo del carnaval/i.test(clean)) {
+    return 'Santuario de la cultura, el folclor y la alegría barranquillera, donde disfraces legendarios, máscaras de marimonda e instrumentos de cumbia preservan la memoria viva de la fiesta patrimonial.'
+  } else if (/barrio el prado|republican/i.test(clean)) {
+    return 'Joya urbanística y patrimonial caracterizada por sus frondosos árboles, amplias avenidas y señoriales mansiones neoclásicas que narran la época de oro del desarrollo arquitectónico local.'
+  } else if (/ci[eé]naga de mallorqu[ií]n|ecoparque/i.test(clean)) {
+    return 'Valioso pulmón ecológico y santuario de humedales costeros con senderos de madera sobre el manglar, predilecto para el avistamiento de aves y la reconexión con la naturaleza.'
+  } else if (/castillo de salgar|puerto colombia|muelle/i.test(clean)) {
+    return 'Histórico enclave junto al mar Caribe que atesora memorias coloniales e historias de la inmigración, brindando una brisa marina reconfortante y vistas inolvidables del océano.'
   }
 
   const isChurch = /\b(catedral|iglesia|bas[íi]lica|templo|santuario|parroquia)\b/i.test(clean)
@@ -1548,6 +1701,11 @@ function buildRichFallbackDescription(name, city = '') {
     return `Punto neurálgico al aire libre en ${city || 'la ciudad'}, predilecto por locales y foráneos para caminar junto a la brisa, contemplar el horizonte urbano y disfrutar de la calidez cotidiana que caracteriza a sus paseantes.`
   }
 
+  const isMonument = /\b(monumento|estatua|busto|obelisco|escultura|hito|memorial)\b/i.test(clean)
+  if (isMonument) {
+    return `Emblemático hito escultórico en ${city || 'la ciudad'}, erigido como tributo a hechos y personajes trascendentales que forjaron la identidad histórica, artística y cultural de la comunidad.`
+  }
+
   const isSeafood = /mariscos|pescado|ceviche|costeñ|mar|playa|puerto/i.test(clean)
   if (isSeafood) {
     return `Destino gastronómico de referencia donde brillan los frutos del mar, arroces aromatizados y sazón costera, ofreciendo una experiencia culinaria fresca y profundamente ligada a las aguas de la región.`
@@ -1563,7 +1721,13 @@ function buildRichFallbackDescription(name, city = '') {
     return `Reconocido establecimiento culinario en ${city || 'la región'}, famoso por rescatar recetas emblemáticas mediante técnicas cuidadas, ingredientes de proximidad y una propuesta pensada para compartir momentos memorables alrededor del plato.`
   }
 
-  return `Punto de interés destacado en ${city || 'la región'}, que sobresale por su personalidad arquitectónica, arraigo comunitario y la singular perspectiva que ofrece a quienes recorren sus inmediaciones.`
+  const seed = clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  const variants = [
+    `Destacado atractivo en ${city || 'la región'}, apreciado por su atmósfera auténtica, valor testimonial y la singular perspectiva que brinda a quienes lo visitan.`,
+    `Punto de interés emblemático en ${city || 'la ciudad'}, reconocido por conectar a los viajeros con la historia viva y el pulso cotidiano del entorno local.`,
+    `Espacio representativo de ${city || 'la localidad'}, ideal para admirar contrastes urbanos, capturar fotografías memorables y disfrutar de la calidez del destino.`
+  ]
+  return variants[Math.abs(seed) % variants.length]
 }
 
 export async function generateCustomPlaceReasons(arg1 = [], arg2 = '', arg3 = '') {

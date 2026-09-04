@@ -568,7 +568,8 @@ export function isNonTouristFacility(tags = {}) {
   if (
     /\b(oleoducto|gasoducto|poliducto|refiner[íi]a|tuber[íi]a|estaci[oó]n de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(name) ||
     /\b(supermercado|tienda|droguer[íi]a|farmacia|ferreter[íi]a|almac[ée]n|panader[íi]a|carnicer[íi]a|minimarket|estanco|miscel[aá]nea|bodega|dep[oó]sito)\b/i.test(name) ||
-    /\b(association|asociaci[oó]n|fundaci[oó]n|cooperativa|corporaci[oó]n|sindicato|gremio|oficina)\b/i.test(name) ||
+    /\b(parque industrial|zona franca|parque empresarial|pol[íi]gono industrial|complejo log[íi]stico|centro log[íi]stico|bodegas|parque log[íi]stico)\b/i.test(name) ||
+    /\b(rotario|club rotario|club de leones|club social|asociaci[oó]n|fundaci[oó]n|cooperativa|corporaci[oó]n|sindicato|gremio|oficina)\b/i.test(name) ||
     name.includes('aguas de') ||
     name.includes('acueducto') ||
     name.includes('alcantarillado') ||

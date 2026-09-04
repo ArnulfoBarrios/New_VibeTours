@@ -769,8 +769,27 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           );
         }
 
+      case 'SET_ACCOMMODATION':
+        if (response.targetDestination != null && tour != null) {
+          final newHotel = response.targetDestination!;
+          setState(() {
+            _userLodgingPlace = newHotel;
+          });
+          unawaited(_saveUserLodging(tour.city, newHotel));
+          final voiceGuide = ref.read(voiceGuideProvider);
+          await voiceGuide.speak(
+            'He actualizado tu hotel a ${newHotel.name}.',
+          );
+        }
+
       case 'RETURN_TO_ACCOMMODATION':
         if (response.targetDestination != null) {
+          if (tour != null && response.targetDestination!.type == 'hotel') {
+            setState(() {
+              _userLodgingPlace = response.targetDestination;
+            });
+            unawaited(_saveUserLodging(tour.city, response.targetDestination!));
+          }
           setState(() {
             _selectedVoicePlace = response.targetDestination;
             _navigatingToHotel = true;
@@ -1074,6 +1093,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                 onTap: () {
                                   setState(() => _isMapMenuExpanded = false);
                                   _startHotelNavigation();
+                                },
+                              ),
+                            ],
+                            if (_userLodgingPlace != null) ...[
+                              const SizedBox(height: 4),
+                              _MapMenuItem(
+                                icon: Icons.edit_location_alt_rounded,
+                                label: 'Cambiar mi hotel',
+                                isActive: false,
+                                onTap: () {
+                                  setState(() => _isMapMenuExpanded = false);
+                                  _promptForAccommodation(tour);
                                 },
                               ),
                             ],
@@ -1928,11 +1959,26 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           ],
         ),
         const SizedBox(height: 6),
-        Text(
-          hotelStop?.name ?? 'Hotel de alojamiento',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                hotelStop?.name ?? 'Hotel de alojamiento',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
               ),
+            ),
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                visualDensity: VisualDensity.compact,
+              ),
+              icon: const Icon(Icons.edit_location_alt_rounded, size: 16),
+              label: const Text('Cambiar', style: TextStyle(fontSize: 12)),
+              onPressed: () => _promptForAccommodation(tour),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -2421,12 +2467,15 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       isDismissible: true,
       backgroundColor: Colors.transparent,
       builder: (modalContext) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
+        final bottomInset = MediaQuery.of(modalContext).padding.bottom;
+        return SafeArea(
+          top: false,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -2489,8 +2538,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               ),
             ],
           ),
-        );
-      },
+        ),
+      );
+    },
     );
   }
 
