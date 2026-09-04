@@ -252,7 +252,8 @@ export async function geocodePlace(query, lat = null, lon = null) {
   url.searchParams.set('q', normalizedQuery)
   try {
     const response = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT }
+      headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(1500)
     })
     if (response.ok) {
       const results = await response.json()
@@ -279,8 +280,19 @@ export async function geocodePlace(query, lat = null, lon = null) {
   return null
 }
 
+let photonCircuitOpenUntil = 0
+
+export function isPhotonCircuitOpen() {
+  return Date.now() < photonCircuitOpenUntil
+}
+
+export function tripPhotonCircuit(durationMs = 60000) {
+  photonCircuitOpenUntil = Date.now() + durationMs
+  console.warn(`[osm] Photon circuit breaker tripped for ${durationMs / 1000}s`)
+}
+
 export async function photonSearch(query, limit = 8, lat = null, lon = null) {
-  if (!query) return []
+  if (!query || isPhotonCircuitOpen()) return []
   const key = `photon_${query.toLowerCase().trim()}_${limit}_${lat ?? ''}_${lon ?? ''}`
   const cached = photonCache.get(key)
   if (cached) return cached
@@ -293,8 +305,13 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     url.searchParams.set('lon', String(lon))
   }
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(4000) })
-    if (!response.ok) return []
+    const response = await fetch(url, { signal: AbortSignal.timeout(1500) })
+    if (!response.ok) {
+      if (response.status === 429 || response.status >= 500) {
+        tripPhotonCircuit(45000)
+      }
+      return []
+    }
     const json = await response.json()
     const results = (json.features ?? []).map((feature) => ({
       name: feature.properties.name ?? feature.properties.city ?? query,
@@ -310,6 +327,7 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     }
     return results
   } catch (err) {
+    tripPhotonCircuit(60000)
     return []
   }
 }

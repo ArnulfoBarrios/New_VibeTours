@@ -80,7 +80,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  const capitalCity = clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : 'Destino'
+  const capitalCity = clean ? clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Destino'
   const targetCountry = countryName || 'Local'
 
   let realHotels = []
@@ -1559,6 +1559,59 @@ export async function buildVisualDestinationSuggestions(chips = []) {
     }
   }
   return results
+}
+
+export async function geocodePlacesWithOpenAI({ city = '', country = '', places = [], centerLat = null, centerLon = null }) {
+  if (!places || places.length === 0) return {}
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) return {}
+
+  const placeNames = places.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
+  if (placeNames.length === 0) return {}
+
+  try {
+    const systemPrompt = `Eres un geocodificador ultra-preciso de VibeTours.
+Dada una ciudad y una lista de lugares o paradas turísticas, devuelve UN ÚNICO objeto JSON donde cada clave es el nombre exacto del lugar y el valor es un objeto con:
+- "latitude": número flotante con la latitud real del lugar en esa ciudad
+- "longitude": número flotante con la longitud real del lugar en esa ciudad
+- "address": dirección o zona dentro de la ciudad
+Si el lugar es un restaurante, parque, monumento o museo emblemático de la ciudad, proporciona sus coordenadas geográficas exactas. Si no conoces el lugar exacto pero pertenece a la ciudad, sitúalo en el área turística o centro de la ciudad indicada.`
+
+    const userPrompt = `Ciudad: ${city}, ${country || ''}
+${centerLat && centerLon ? `Coordenadas aproximadas de la ciudad: ${centerLat}, ${centerLon}` : ''}
+Lugares a geocodificar con precisión:
+${placeNames.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
+
+    const payload = buildOpenAiPayload({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+      reasoning_effort: 'none'
+    })
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(6000)
+    })
+
+    if (!response.ok) return {}
+    const json = await response.json()
+    const content = json.choices?.[0]?.message?.content
+    if (!content) return {}
+    const parsed = JSON.parse(content)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch (err) {
+    console.warn('[openai] geocodePlacesWithOpenAI failed:', err.message)
+    return {}
+  }
 }
 
 import { generateSpeechAudio } from './ttsService.js'

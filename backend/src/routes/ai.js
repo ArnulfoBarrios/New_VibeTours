@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, geocodePlacesWithOpenAI, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -1242,8 +1242,9 @@ aiRouter.post('/tours/build', async (req, res, next) => {
     }
 
     // Serverless environments like Vercel: process synchronously to avoid 404 polling errors
-    if (process.env.VERCEL) {
-      console.info('[tour-ai] Serverless runtime detected (Vercel). Processing tour build synchronously.')
+    const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME)
+    if (isServerless) {
+      console.info('[tour-ai] Serverless runtime detected. Processing tour build synchronously.')
       try {
         const result = await processTourBuild(null, input, places, plannerContext)
         return res.json({
@@ -3687,7 +3688,20 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
     resolvedName = cleanPlacePhysicalName(candidateFallback?.name || fallbackPlace?.name || `${input.destination}`)
   }
-  const richData = options?.descriptionsMap?.[resolvedName] || options?.descriptionsMap?.[sourceName]
+  let richData = options?.descriptionsMap?.[resolvedName] || options?.descriptionsMap?.[sourceName]
+  if (!richData && options?.descriptionsMap && typeof options.descriptionsMap === 'object') {
+    const cleanTarget = resolvedName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    const cleanSource = (sourceName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    const foundKey = Object.keys(options.descriptionsMap).find(k => {
+      const cleanK = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      return cleanK === cleanTarget || cleanK === cleanSource ||
+             (cleanTarget.length >= 5 && cleanK.includes(cleanTarget)) ||
+             (cleanK.length >= 5 && cleanTarget.includes(cleanK))
+    })
+    if (foundKey) {
+      richData = options.descriptionsMap[foundKey]
+    }
+  }
   const richObj = (richData && typeof richData === 'object') ? richData : null
 
   let description = richObj?.descripcion || (typeof richData === 'string' ? richData : '') || source.descripcion || source.description || ''
@@ -4769,6 +4783,69 @@ export async function collectTourCandidates(input, location) {
       .map(r => r.status === 'fulfilled' ? r.value : null)
       .filter(Boolean)
 
+    // Dynamic AI Geocoding Fallback: If any requested places failed OSM lookup, batch-geocode them dynamically with OpenAI
+    const geocodedNames = new Set(geocodedSpecifics.map(p => p.name.toLowerCase()))
+    const missingSpecifics = mergedSpecifics.filter(raw => {
+      const name = typeof raw === 'string' ? raw : (raw?.name || '')
+      return name && !geocodedNames.has(name.toLowerCase())
+    })
+
+    if (missingSpecifics.length > 0) {
+      console.info(`[collectTourCandidates] ${missingSpecifics.length} specific places missing coordinates after OSM lookup. Resolving dynamically via OpenAI geocoding fallback...`)
+      const missingNames = missingSpecifics.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
+      const aiCoords = await geocodePlacesWithOpenAI({
+        city,
+        country,
+        places: missingNames,
+        centerLat: canonicalDest?.latitude ?? cityCenterLat,
+        centerLon: canonicalDest?.longitude ?? cityCenterLon
+      }).catch(() => ({}))
+
+      for (const raw of missingSpecifics) {
+        let placeName = ''
+        let placeDay = null
+        if (typeof raw === 'string') {
+          const str = raw.trim()
+          if (str.startsWith('{') && str.includes('name:')) {
+            const m = str.match(/name\s*:\s*([^,\}]+)/)
+            placeName = m ? m[1].trim() : str
+            const d = str.match(/(?:dia|day)\s*:\s*(\d+)/)
+            if (d) placeDay = parseInt(d[1], 10)
+          } else {
+            placeName = str
+          }
+        } else if (raw && typeof raw === 'object') {
+          placeName = (raw.name || '').trim()
+          placeDay = raw.dia || raw.day || null
+        }
+        if (!placeName) continue
+
+        const coords = aiCoords[placeName] ||
+                       Object.entries(aiCoords).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
+                                                              placeName.toLowerCase().includes(k.toLowerCase()) ||
+                                                              k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
+
+        if (coords && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)) {
+          const entityType = getPlaceEntityType(placeName)
+          const isRestaurant = entityType === 'food' || /restaurante|bistro|cafe|comida|asador|gourmet|bar|pub/i.test(placeName)
+          geocodedSpecifics.push({
+            name: placeName,
+            latitude: Number(coords.latitude),
+            longitude: Number(coords.longitude),
+            type: isRestaurant ? 'restaurant' : 'tourism',
+            category: isRestaurant ? 'restaurant' : 'requested',
+            dia: placeDay,
+            day: placeDay,
+            city,
+            country,
+            address: coords.address || `${placeName}, ${city}`,
+            description: '',
+            tags: { requested_place: 'true', ai_geocoded: 'true' }
+          })
+        }
+      }
+    }
+
     // Day Anchor Alignment: Si una parada usó fallback de cuadrante y su compañera de día tiene coordenadas precisas,
     // ajustar el pin hacia la zona de su compañera
     for (const p of geocodedSpecifics) {
@@ -4783,7 +4860,7 @@ export async function collectTourCandidates(input, location) {
 
     // Fast-path: Si el usuario ya seleccionó paradas específicas en el chat y todas están geocodificadas con éxito,
     // retornar directamente ahorrando múltiples llamadas lentas y timeouts a Overpass/Photon/OpenAI
-    if (geocodedSpecifics.length >= 3 && mergedSpecifics.length >= 3) {
+    if (geocodedSpecifics.length >= 3) {
       console.info(`[collectTourCandidates] Fast-path: Successfully geocoded ${geocodedSpecifics.length} user selected stops directly. Skipping generic city scrapers.`)
       return {
         rawCount: geocodedSpecifics.length,
