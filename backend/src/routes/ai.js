@@ -1248,7 +1248,14 @@ aiRouter.post('/tours/build', async (req, res, next) => {
     }
 
     // Serverless environments like Vercel: process synchronously to avoid 404 polling errors
-    const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME)
+    const isServerless = Boolean(
+      process.env.VERCEL ||
+      process.env.VERCEL_ENV ||
+      process.env.NOW_REGION ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      req.headers['x-vercel-id'] ||
+      req.headers.host?.includes('vercel.app')
+    )
     if (isServerless) {
       console.info('[tour-ai] Serverless runtime detected. Processing tour build synchronously.')
       try {
