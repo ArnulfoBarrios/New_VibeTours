@@ -414,8 +414,8 @@
                     <button class="cat-pill">🌿 Naturaleza</button>
                   </div>
 
-                  <div class="featured-tour-card" id="simFeaturedTourCard" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentMap', true)">
-                    <img class="featured-cover-img" id="simFeaturedImg" src="assets/screenshots/Modo claro/Detalles de tour 1.jpeg" alt="Featured Tour">
+                  <div class="featured-tour-card" id="simFeaturedTourCard" onclick="simulatorInstance && simulatorInstance.openTourDetail()">
+                    <img class="featured-cover-img" id="simFeaturedImg" src="https://images.unsplash.com/photo-1583997052103-b4a1cb974ce3?w=600&auto=format&fit=crop&q=80" alt="Featured Tour">
                     <div class="featured-overlay">
                       <div class="featured-badge">✨ Recomendado por IA</div>
                       <h4 class="featured-title" id="simFeaturedTitle">Cartagena Colonial: Murallas y Plazas</h4>
@@ -433,6 +433,54 @@
                   </div>
 
                   <div class="popular-tours-list" id="simPopularToursList"></div>
+                </div>
+              </div>
+
+              <!-- ================= SCREEN 1B: DETALLE DEL TOUR ================= -->
+              <div class="phone-tab-content" id="tabContentDetail">
+                <div class="detail-appbar">
+                  <button class="detail-back-btn" id="simDetailBackBtn" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentExplore', true)">
+                    ← <span id="detail-back-label">Explorar</span>
+                  </button>
+                  <span class="detail-header-city" id="simDetailHeaderCity">Cartagena</span>
+                  <span class="detail-share-icon">📍</span>
+                </div>
+
+                <div class="flutter-scroll-body" data-lenis-prevent>
+                  <div class="detail-hero-banner">
+                    <img id="simDetailImg" class="detail-cover-img" src="https://images.unsplash.com/photo-1583997052103-b4a1cb974ce3?w=600&auto=format&fit=crop&q=80" alt="Tour Cover">
+                    <div class="detail-hero-gradient"></div>
+                    <div class="detail-badge-pill" id="simDetailBadge">✨ Itinerario Verificado</div>
+                  </div>
+
+                  <div class="detail-main-info">
+                    <h3 class="detail-title" id="simDetailTitle">Cartagena Colonial: Murallas y Plazas</h3>
+                    
+                    <div class="detail-meta-pills">
+                      <span class="meta-pill" id="simDetailDuration">⏱️ 2h 30m</span>
+                      <span class="meta-pill" id="simDetailDistance">🚶 2.4 km</span>
+                      <span class="meta-pill" id="simDetailRating">⭐ 4.9 (128)</span>
+                      <span class="meta-pill pill-cyan">🎧 Audio GPS</span>
+                    </div>
+
+                    <p class="detail-desc" id="simDetailDesc">
+                      Ruta histórica por fortalezas coloniales, plazas emblemáticas y baluartes con audioguía GPS contextual.
+                    </p>
+
+                    <div class="detail-stops-header">
+                      <h5 id="simDetailStopsTitle">Itinerario de Paradas (4)</h5>
+                      <span class="detail-audioguide-tag">Audio incluido</span>
+                    </div>
+
+                    <div class="detail-stops-timeline" id="simDetailStopsList"></div>
+                  </div>
+
+                  <div class="detail-action-footer">
+                    <button class="btn-start-tour" id="btnStartTourFromDetail" onclick="simulatorInstance && simulatorInstance.startTourFromDetail()">
+                      <span id="detail-start-label">Iniciar Tour con GPS</span>
+                      <span class="btn-arrow">🚶 →</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

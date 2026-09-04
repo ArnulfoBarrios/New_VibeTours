@@ -703,43 +703,109 @@ const SIMULATOR_DATA = {
     desc: "Ruta histórica por fortalezas coloniales, plazas emblemáticas y baluartes con audioguía GPS contextual.",
     duration: "2h 30m",
     distance: "2.4 km",
-    rating: "⭐ 4.9",
+    rating: "⭐ 4.9 (142)",
     center: [10.4236, -75.5501],
     zoom: 16,
-    imgClaro: "assets/screenshots/Modo claro/Detalles de tour 1.jpeg",
-    imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 1.jpeg",
+    img: "https://images.unsplash.com/photo-1583997052103-b4a1cb974ce3?w=600&auto=format&fit=crop&q=80",
     popular: [
-      { title: "Getsemaní Arte Callejero y Sabores", duration: "3h", distance: "3.2 km", rating: "4.8 ⭐", img: "assets/screenshots/Modo claro/Explorar 1.jpeg" },
-      { title: "Baluartes & Atardecer Caribe", duration: "1.5h", distance: "1.8 km", rating: "4.9 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 2.jpeg" }
+      {
+        title: "Getsemaní Arte Callejero y Sabores",
+        duration: "3h",
+        distance: "3.2 km",
+        rating: "⭐ 4.8",
+        img: "https://images.unsplash.com/photo-1533105079780-92b9be482077?w=300&auto=format&fit=crop&q=80",
+        desc: "Murales vibrantes, gastronomía callejera caribeña y vida bohemia en el barrio más auténtico de Cartagena."
+      },
+      {
+        title: "Baluartes & Atardecer Caribe",
+        duration: "1.5h",
+        distance: "1.8 km",
+        rating: "⭐ 4.9",
+        img: "https://images.unsplash.com/photo-1518684079-3c830dcef090?w=300&auto=format&fit=crop&q=80",
+        desc: "Paseo por las murallas centenarias contemplando el mar Caribe bajo la brisa del ocaso."
+      }
     ],
     stops: [
-      { name: "1. Torre del Reloj & Plaza de los Coches", latlng: [10.4236, -75.5501], voice: "Bienvenido a la Torre del Reloj, entrada principal a la ciudad amurallada de Cartagena construida en el siglo diecinueve." },
-      { name: "2. Plaza de la Aduana & Museo de Arte", latlng: [10.4222, -75.5492], voice: "Plaza de la Aduana: la plaza más amplia de la ciudad colonial, sede de mercaderes y casas reales." },
-      { name: "3. Santuario San Pedro Claver", latlng: [10.4215, -75.5480], voice: "Santuario San Pedro Claver, iglesia barroca de piedra coralina dedicada al defensor de los derechos humanos." },
-      { name: "4. Baluarte de Santo Domingo", latlng: [10.4245, -75.5530], voice: "Baluarte de Santo Domingo: la fortificación más antigua frente al mar Caribe, ideal para ver el atardecer." }
+      {
+        name: "1. Torre del Reloj & Plaza de los Coches",
+        sub: "Entrada triunfal a la ciudad amurallada",
+        latlng: [10.4236, -75.5501],
+        voice: "Bienvenido a la Torre del Reloj, entrada principal a la ciudad amurallada de Cartagena construida en el siglo diecinueve sobre el puente levadizo colonial."
+      },
+      {
+        name: "2. Plaza de la Aduana & Museo de Arte",
+        sub: "Epicentro administrativo y comercial colonial",
+        latlng: [10.4222, -75.5492],
+        voice: "Plaza de la Aduana: la plaza más amplia de la ciudad colonial, sede de mercaderes de ultramar y antiguas casas reales de gobierno."
+      },
+      {
+        name: "3. Santuario San Pedro Claver",
+        sub: "Joya de piedra coralina y claustro jesuita",
+        latlng: [10.4215, -75.5480],
+        voice: "Santuario de San Pedro Claver, iglesia barroca de piedra coralina construida en honor al defensor de los derechos humanos en el Caribe."
+      },
+      {
+        name: "4. Baluarte de Santo Domingo",
+        sub: "Fortificación sobre el mar Caribe",
+        latlng: [10.4245, -75.5530],
+        voice: "Baluarte de Santo Domingo: la fortificación más antigua frente al mar Caribe, baluarte defensivo clave y el mejor lugar para ver el atardecer."
+      }
     ]
   },
   paris: {
     name: "París, Francia",
     weather: "⛅ 19°C",
     title: "París Imperial: Notre-Dame al Louvre",
-    desc: "Recorrido histórico por la Île de la Cité, puentes del Sena y monumentos del corazón parisino.",
+    desc: "Recorrido histórico por la Île de la Cité, puentes emblemáticos del Sena y monumentos del corazón parisino.",
     duration: "3h 00m",
     distance: "3.5 km",
-    rating: "⭐ 4.9",
+    rating: "⭐ 4.9 (210)",
     center: [48.8566, 2.3450],
     zoom: 15,
-    imgClaro: "assets/screenshots/Modo claro/Detalles de tour 2.jpeg",
-    imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 2.jpeg",
+    img: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&auto=format&fit=crop&q=80",
     popular: [
-      { title: "Montmartre Bohemio & Cafés de Arte", duration: "3h", distance: "3.5 km", rating: "4.9 ⭐", img: "assets/screenshots/Modo claro/Explorar 2.jpeg" },
-      { title: "Bistrós de Saint-Germain", duration: "2.5h", distance: "2.8 km", rating: "4.7 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 1.jpeg" }
+      {
+        title: "Montmartre Bohemio & Cafés de Arte",
+        duration: "3h",
+        distance: "3.5 km",
+        rating: "⭐ 4.9",
+        img: "https://images.unsplash.com/photo-1509299349698-dd22323b5963?w=300&auto=format&fit=crop&q=80",
+        desc: "Colina de artistas, pintores callejeros, la basílica del Sacré-Cœur y miradores panorámicos de la ciudad."
+      },
+      {
+        title: "Bistrós de Saint-Germain",
+        duration: "2.5h",
+        distance: "2.8 km",
+        rating: "⭐ 4.7",
+        img: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=300&auto=format&fit=crop&q=80",
+        desc: "La esencia bohemia parisina entre librerías legendarias, cafés históricos y galerías de arte."
+      }
     ],
     stops: [
-      { name: "1. Catedral de Notre-Dame", latlng: [48.8530, 2.3499], voice: "Notre-Dame de París, obra maestra gótica en la Isla de la Cité a orillas del río Sena." },
-      { name: "2. Puente de las Artes", latlng: [48.8584, 2.3375], voice: "Puente de las Artes, famoso mirador peatonal con vistas panorámicas al Museo del Louvre." },
-      { name: "3. Patio de la Pirámide del Louvre", latlng: [48.8606, 2.3376], voice: "Museo del Louvre y su icónica pirámide de cristal diseñada por I.M. Pei." },
-      { name: "4. Jardines de las Tullerías", latlng: [48.8635, 2.3275], voice: "Jardines de las Tullerías, parque histórico que conecta el Louvre con la Plaza de la Concordia." }
+      {
+        name: "1. Catedral de Notre-Dame",
+        sub: "Obra cumbre del gótico medieval",
+        latlng: [48.8530, 2.3499],
+        voice: "Notre-Dame de París, obra maestra de la arquitectura gótica en la Isla de la Cité, testigo de ocho siglos de historia de Francia."
+      },
+      {
+        name: "2. Puente de las Artes & Río Sena",
+        sub: "Paseo peatonal y mirador sobre el Sena",
+        latlng: [48.8584, 2.3375],
+        voice: "Puente de las Artes, famoso mirador peatonal con vistas directas al Instituto de Francia y al Palacio del Louvre."
+      },
+      {
+        name: "3. Patio de la Pirámide del Louvre",
+        sub: "Fusión de palacio real y modernismo",
+        latlng: [48.8606, 2.3376],
+        voice: "Museo del Louvre y su icónica pirámide de cristal diseñada por I.M. Pei, entrada al museo más visitado del mundo."
+      },
+      {
+        name: "4. Jardines de las Tullerías",
+        sub: "Parque real entre el Louvre y Concorde",
+        latlng: [48.8635, 2.3275],
+        voice: "Jardines de las Tullerías, parque histórico renacentista creado por Catalina de Médici con fuentes y esculturas clásicas."
+      }
     ]
   },
   tokio: {
@@ -749,20 +815,53 @@ const SIMULATOR_DATA = {
     desc: "Recorrido espiritual desde los templos milenarios de Asakusa hasta los jardines del Palacio Imperial.",
     duration: "3h 30m",
     distance: "4.2 km",
-    rating: "⭐ 5.0",
+    rating: "⭐ 5.0 (98)",
     center: [35.7000, 139.7750],
     zoom: 14,
-    imgClaro: "assets/screenshots/Modo claro/Detalles de tour 3.jpeg",
-    imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 3.jpeg",
+    img: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80",
     popular: [
-      { title: "Ruta de Ramen & Izakayas en Shinjuku", duration: "3h", distance: "3.8 km", rating: "5.0 ⭐", img: "assets/screenshots/Modo claro/Explorar 1.jpeg" },
-      { title: "Akihabara Tech & Shibuya Sky", duration: "4h", distance: "5.0 km", rating: "4.8 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 2.jpeg" }
+      {
+        title: "Ruta de Ramen & Izakayas en Shinjuku",
+        duration: "3h",
+        distance: "3.8 km",
+        rating: "⭐ 5.0",
+        img: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=300&auto=format&fit=crop&q=80",
+        desc: "Callejones Omoide Yokocho, templos de ramen de autor y gastronomía nocturna japonesa."
+      },
+      {
+        title: "Akihabara Tech & Shibuya Sky",
+        duration: "4h",
+        distance: "5.0 km",
+        rating: "⭐ 4.8",
+        img: "https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=300&auto=format&fit=crop&q=80",
+        desc: "De la meca tecnológica y retro de Akihabara al cruce más transitado y mirador de Shibuya."
+      }
     ],
     stops: [
-      { name: "1. Templo Senso-ji & Kaminarimon", latlng: [35.7147, 139.7967], voice: "Templo Senso-ji en Asakusa, el templo budista más antiguo y venerado de Tokio, fundado en el año 628." },
-      { name: "2. Calle Comercial Nakamise", latlng: [35.7128, 139.7966], voice: "Calle Nakamise, centenario paseo comercial con delicias tradicionales y artesanías japonesas." },
-      { name: "3. Jardines del Palacio Imperial", latlng: [35.6852, 139.7528], voice: "Jardines del Palacio Imperial de Tokio, residencia del Emperador de Japón entre fosos y murallas." },
-      { name: "4. Santuario Meiji Jingu", latlng: [35.6764, 139.6993], voice: "Santuario Meiji, oasis de bosque sagrado y paz en medio del vibrante distrito de Shibuya." }
+      {
+        name: "1. Templo Senso-ji & Kaminarimon",
+        sub: "El templo budista más antiguo de Tokio (628 d.C.)",
+        latlng: [35.7147, 139.7967],
+        voice: "Templo Senso-ji en Asakusa, fundado en el año 628, con su gigantesco farol rojo en la Puerta del Trueno."
+      },
+      {
+        name: "2. Calle Comercial Nakamise",
+        sub: "Centenario paseo de artesanías y dulces",
+        latlng: [35.7128, 139.7966],
+        voice: "Calle Nakamise, histórico paseo peatonal repleto de dulces tradicionales ningyo-yaki y artesanías japonesas."
+      },
+      {
+        name: "3. Jardines del Palacio Imperial",
+        sub: "Residencia del Emperador entre fosos",
+        latlng: [35.6852, 139.7528],
+        voice: "Jardines del Palacio Imperial de Tokio, residencia del Emperador de Japón entre antiguos fosos y murallas del Castillo Edo."
+      },
+      {
+        name: "4. Santuario Meiji Jingu",
+        sub: "Bosque sagrado en el corazón urbano",
+        latlng: [35.6764, 139.6993],
+        voice: "Santuario Meiji Jingu, oasis de bosque sagrado con más de cien mil árboles donados de todo Japón."
+      }
     ]
   },
   roma: {
@@ -772,20 +871,53 @@ const SIMULATOR_DATA = {
     desc: "Sumérgete en dos milenios de historia imperial visitando los monumentos cumbre de Roma.",
     duration: "2h 45m",
     distance: "3.1 km",
-    rating: "⭐ 4.9",
+    rating: "⭐ 4.9 (185)",
     center: [41.8950, 12.4850],
     zoom: 15,
-    imgClaro: "assets/screenshots/Modo claro/Detalles del tour 4.jpeg",
-    imgOscuro: "assets/screenshots/Modo oscuro/Detalles de tour 4.jpeg",
+    img: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=600&auto=format&fit=crop&q=80",
     popular: [
-      { title: "Trattorias & Gelato en Trastevere", duration: "2.5h", distance: "2.6 km", rating: "4.9 ⭐", img: "assets/screenshots/Modo claro/Explorar 2.jpeg" },
-      { title: "Barroco & Plazas de Bernini", duration: "3h", distance: "3.4 km", rating: "4.8 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 1.jpeg" }
+      {
+        title: "Trattorias & Gelato en Trastevere",
+        duration: "2.5h",
+        distance: "2.6 km",
+        rating: "⭐ 4.9",
+        img: "https://images.unsplash.com/photo-1515542622106-78bda8ba0e5b?w=300&auto=format&fit=crop&q=80",
+        desc: "Callejones medievales adoquinados, auténtica pasta carbonara y las mejores heladerías artesanales."
+      },
+      {
+        title: "Barroco & Plazas de Bernini",
+        duration: "3h",
+        distance: "3.4 km",
+        rating: "⭐ 4.8",
+        img: "https://images.unsplash.com/photo-1525874684015-58379d421a52?w=300&auto=format&fit=crop&q=80",
+        desc: "Piazza Navona, Campo de' Fiori y las espectaculares fuentes del barroco romano."
+      }
     ],
     stops: [
-      { name: "1. Coliseo Romano", latlng: [41.8902, 12.4922], voice: "El Coliseo Romano, el anfiteatro más grande de la antigüedad y símbolo eterno de la civilización romana." },
-      { name: "2. Foro Romano & Palatino", latlng: [41.8925, 12.4853], voice: "Foro Romano, el epicentro político, religioso y judicial de la antigua Roma." },
-      { name: "3. Panteón de Agripa", latlng: [41.8986, 12.4769], voice: "Panteón de Agripa, templo romano con la cúpula de hormigón no armado más grande del mundo." },
-      { name: "4. Fontana di Trevi", latlng: [41.9009, 12.4833], voice: "Fontana di Trevi, joya del barroco donde la tradición manda lanzar una moneda para asegurar el regreso." }
+      {
+        name: "1. Coliseo Romano",
+        sub: "El anfiteatro más grande de la antigüedad",
+        latlng: [41.8902, 12.4922],
+        voice: "El Coliseo Romano, imponente anfiteatro del imperio con capacidad para cincuenta mil espectadores."
+      },
+      {
+        name: "2. Foro Romano & Palatino",
+        sub: "Epicentro político y religioso de Roma",
+        latlng: [41.8925, 12.4853],
+        voice: "Foro Romano, corazón de la vida pública imperial flanqueado por templos, basílicas y arcos de triunfo."
+      },
+      {
+        name: "3. Panteón de Agripa",
+        sub: "Cúpula de hormigón más grande del mundo",
+        latlng: [41.8986, 12.4769],
+        voice: "Panteón de Agripa, templo romano intacto con su óculo abierto al cielo y una cúpula arquitectónicamente milagrosa."
+      },
+      {
+        name: "4. Fontana di Trevi",
+        sub: "Joya cumbre del barroco romano",
+        latlng: [41.9009, 12.4833],
+        voice: "Fontana di Trevi, majestuosa fuente monumental donde la tradición manda lanzar una moneda para asegurar el regreso a Roma."
+      }
     ]
   },
   newyork: {
@@ -795,20 +927,53 @@ const SIMULATOR_DATA = {
     desc: "Itinerario vibrante cruzando miradores, rascacielos históricos y avenidas icónicas.",
     duration: "3h 15m",
     distance: "3.8 km",
-    rating: "⭐ 4.8",
+    rating: "⭐ 4.8 (167)",
     center: [40.7550, -73.9800],
     zoom: 14,
-    imgClaro: "assets/screenshots/Modo claro/Explorar 1.jpeg",
-    imgOscuro: "assets/screenshots/Modo oscuro/Explorar 1.jpeg",
+    img: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&auto=format&fit=crop&q=80",
     popular: [
-      { title: "High Line & Chelsea Market Gourmet", duration: "2h", distance: "2.3 km", rating: "4.9 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 2.jpeg" },
-      { title: "Ruta de Arte en SoHo & Village", duration: "3h", distance: "3.8 km", rating: "4.7 ⭐", img: "assets/screenshots/Modo claro/Detalles de tour 3.jpeg" }
+      {
+        title: "High Line & Chelsea Market Gourmet",
+        duration: "2h",
+        distance: "2.3 km",
+        rating: "⭐ 4.9",
+        img: "https://images.unsplash.com/photo-1534430480872-3498386e7856?w=300&auto=format&fit=crop&q=80",
+        desc: "Parque elevado sobre antiguas vías de tren, galerías de arte contemporáneo y comida gourmet."
+      },
+      {
+        title: "Ruta de Arte en SoHo & Village",
+        duration: "3h",
+        distance: "3.8 km",
+        rating: "⭐ 4.7",
+        img: "https://images.unsplash.com/photo-1518391846015-55a9cc003b25?w=300&auto=format&fit=crop&q=80",
+        desc: "Edificios de hierro fundido, clubes de jazz, boutiques independientes y cafeterías de autor."
+      }
     ],
     stops: [
-      { name: "1. Central Park (Bethesda)", latlng: [40.7739, -73.9708], voice: "Central Park y la emblemática terraza Bethesda en el pulmón verde de Manhattan." },
-      { name: "2. Times Square & Broadway", latlng: [40.7580, -73.9855], voice: "Times Square, la encrucijada del mundo iluminada por pantallas gigantes y teatros legendarios." },
-      { name: "3. Empire State Building", latlng: [40.7484, -73.9857], voice: "Empire State Building, rascacielos art déco que definió el horizonte de Nueva York." },
-      { name: "4. Puente de Brooklyn", latlng: [40.7061, -73.9969], voice: "Puente de Brooklyn, maravilla de la ingeniería del siglo diecinueve con vistas al skyline." }
+      {
+        name: "1. Central Park (Bethesda)",
+        sub: "El corazón verde y escénico de Manhattan",
+        latlng: [40.7739, -73.9708],
+        voice: "Central Park y la icónica terraza Bethesda con su fuente Angel of the Waters en el pulmón de la ciudad."
+      },
+      {
+        name: "2. Times Square & Broadway",
+        sub: "El cruce del mundo y marquesinas teatrales",
+        latlng: [40.7580, -73.9855],
+        voice: "Times Square, la encrucijada del mundo iluminada por pantallas colosales y el pulso vibrante de Broadway."
+      },
+      {
+        name: "3. Empire State Building",
+        sub: "Rascacielos art déco inmortal",
+        latlng: [40.7484, -73.9857],
+        voice: "Empire State Building, joya art déco que definió para siempre el horizonte de rascacielos de Nueva York."
+      },
+      {
+        name: "4. Puente de Brooklyn",
+        sub: "Maravilla de cables de acero y piedra gótica",
+        latlng: [40.7061, -73.9969],
+        voice: "Puente de Brooklyn, maravilla de la ingeniería del siglo diecinueve con vistas panorámicas al skyline de Manhattan."
+      }
     ]
   }
 };
@@ -859,16 +1024,6 @@ class AppSimulator {
       });
     });
 
-    // Pace Chips in Cockpit
-    const paceChips = document.querySelectorAll('#simPaceChips .cockpit-chip');
-    paceChips.forEach(chip => {
-      chip.addEventListener('click', () => {
-        paceChips.forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        this.currentPace = chip.dataset.simPace || 'relaxed';
-      });
-    });
-
     // Quick Screen Switchers
     const btnExplore = document.getElementById('btnSwitchToExplore');
     const btnChat = document.getElementById('btnSwitchToChat');
@@ -909,6 +1064,7 @@ class AppSimulator {
   updateJourneyTracker(tabId) {
     const tabToStep = {
       'tabContentExplore': 0,
+      'tabContentDetail': 0,
       'tabContentChat': 1,
       'tabContentMap': 2,
       'tabContentProfile': 3
@@ -939,9 +1095,10 @@ class AppSimulator {
       tab.classList.toggle('active', tab.id === tabId);
     });
 
-    // Update bottom nav active state
+    // Update bottom nav active state (Detail screen keeps Explore active)
     document.querySelectorAll('.phone-nav-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.targetTab === tabId);
+      const isTarget = item.dataset.targetTab === tabId || (tabId === 'tabContentDetail' && item.dataset.targetTab === 'tabContentExplore');
+      item.classList.toggle('active', isTarget);
     });
 
     // Update Cockpit button styles
@@ -950,7 +1107,7 @@ class AppSimulator {
     const btnMap = document.getElementById('btnSwitchToMap');
     const btnProfile = document.getElementById('btnSwitchToProfile');
 
-    if (btnExplore) btnExplore.classList.toggle('active-sim-mode', tabId === 'tabContentExplore');
+    if (btnExplore) btnExplore.classList.toggle('active-sim-mode', tabId === 'tabContentExplore' || tabId === 'tabContentDetail');
     if (btnChat) btnChat.classList.toggle('active-sim-mode', tabId === 'tabContentChat');
     if (btnMap) btnMap.classList.toggle('active-sim-mode', tabId === 'tabContentMap');
     if (btnProfile) btnProfile.classList.toggle('active-sim-mode', tabId === 'tabContentProfile');
@@ -1004,9 +1161,9 @@ class AppSimulator {
   }
 
   updateCityState(cityKey) {
+    this.currentCityKey = cityKey;
     const city = SIMULATOR_DATA[cityKey] || SIMULATOR_DATA['cartagena'];
     this.currentStepIdx = 0;
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
     // Update Explorar (Home Screen)
     const homeCityName = document.getElementById('simHomeCityName');
@@ -1019,15 +1176,15 @@ class AppSimulator {
 
     if (homeCityName) homeCityName.innerText = city.name;
     if (homeWeatherChip) homeWeatherChip.innerText = city.weather;
-    if (featuredImg) featuredImg.src = isDark ? city.imgOscuro : city.imgClaro;
+    if (featuredImg) featuredImg.src = city.img;
     if (featuredTitle) featuredTitle.innerText = city.title;
     if (featuredDuration) featuredDuration.innerText = `⏱️ ${city.duration}`;
     if (featuredDistance) featuredDistance.innerText = `🚶 ${city.distance}`;
 
     if (popularList) {
-      popularList.innerHTML = city.popular.map(item => `
-        <div class="popular-tour-item" onclick="simulatorInstance.switchTab('tabContentMap')">
-          <img class="popular-tour-img" src="${item.img}" alt="${item.title}" onerror="this.src='assets/screenshots/Modo claro/Detalles de tour 1.jpeg'">
+      popularList.innerHTML = city.popular.map((item, idx) => `
+        <div class="popular-tour-item" onclick="simulatorInstance.openTourDetail(null, ${idx})">
+          <img class="popular-tour-img" src="${item.img}" alt="${item.title}">
           <div class="popular-tour-info">
             <h6 class="popular-tour-title">${item.title}</h6>
             <div class="popular-tour-meta">
@@ -1094,9 +1251,107 @@ class AppSimulator {
     this.updateAudioCard(0);
   }
 
+  openTourDetail(cityKey = null, popularTourIdx = null) {
+    if (cityKey) {
+      this.currentCityKey = cityKey;
+    }
+    const city = SIMULATOR_DATA[this.currentCityKey] || SIMULATOR_DATA['cartagena'];
+
+    const tourData = (popularTourIdx !== null && city.popular[popularTourIdx])
+      ? {
+          title: city.popular[popularTourIdx].title,
+          desc: city.popular[popularTourIdx].desc || city.desc,
+          duration: city.popular[popularTourIdx].duration,
+          distance: city.popular[popularTourIdx].distance,
+          rating: city.popular[popularTourIdx].rating,
+          img: city.popular[popularTourIdx].img,
+          stops: city.stops
+        }
+      : {
+          title: city.title,
+          desc: city.desc,
+          duration: city.duration,
+          distance: city.distance,
+          rating: city.rating,
+          img: city.img,
+          stops: city.stops
+        };
+
+    const headerCity = document.getElementById('simDetailHeaderCity');
+    const detailImg = document.getElementById('simDetailImg');
+    const detailTitle = document.getElementById('simDetailTitle');
+    const detailDuration = document.getElementById('simDetailDuration');
+    const detailDistance = document.getElementById('simDetailDistance');
+    const detailRating = document.getElementById('simDetailRating');
+    const detailDesc = document.getElementById('simDetailDesc');
+    const stopsTitle = document.getElementById('simDetailStopsTitle');
+    const stopsList = document.getElementById('simDetailStopsList');
+
+    if (headerCity) headerCity.innerText = city.name.split(',')[0];
+    if (detailImg) detailImg.src = tourData.img;
+    if (detailTitle) detailTitle.innerText = tourData.title;
+    if (detailDuration) detailDuration.innerText = `⏱️ ${tourData.duration}`;
+    if (detailDistance) detailDistance.innerText = `🚶 ${tourData.distance}`;
+    if (detailRating) detailRating.innerText = tourData.rating;
+    if (detailDesc) detailDesc.innerText = tourData.desc;
+    if (stopsTitle) {
+      stopsTitle.innerText = (typeof currentLandingLang !== 'undefined' && currentLandingLang === 'en')
+        ? `Stop Itinerary (${tourData.stops.length})`
+        : `Itinerario de Paradas (${tourData.stops.length})`;
+    }
+
+    if (stopsList) {
+      stopsList.innerHTML = tourData.stops.map((stop, idx) => `
+        <div class="timeline-stop-item">
+          <div class="stop-pin-col">
+            <span class="stop-num">${idx + 1}</span>
+            ${idx < tourData.stops.length - 1 ? '<span class="stop-line"></span>' : ''}
+          </div>
+          <div class="stop-details">
+            <div class="stop-name">${stop.name}</div>
+            <div class="stop-sub">${stop.sub || 'Parada satelital verificada'}</div>
+            <button class="stop-audio-badge" onclick="simulatorInstance.previewStopAudio(${idx}, event)">
+              <span>🎧 Escuchar demo (30s)</span>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    this.switchTab('tabContentDetail', true);
+  }
+
+  startTourFromDetail() {
+    this.currentStepIdx = 0;
+    this.switchTab('tabContentMap', true);
+
+    const city = SIMULATOR_DATA[this.currentCityKey];
+    if (city && city.stops.length > 0) {
+      const firstStop = city.stops[0];
+      if (this.userGpsMarker) {
+        this.userGpsMarker.setLatLng(firstStop.latlng);
+      }
+      if (this.mapInstance) {
+        this.mapInstance.panTo(firstStop.latlng, { animate: true, duration: 0.8 });
+      }
+      this.updateAudioCard(0);
+      this.playVoiceNarration(firstStop.voice);
+    }
+  }
+
+  previewStopAudio(idx, event) {
+    if (event) event.stopPropagation();
+    const city = SIMULATOR_DATA[this.currentCityKey];
+    if (city && city.stops[idx]) {
+      this.currentStepIdx = idx;
+      this.updateAudioCard(idx);
+      this.playVoiceNarration(city.stops[idx].voice);
+    }
+  }
+
   simulateWalkStep() {
     const city = SIMULATOR_DATA[this.currentCityKey];
-    if (!city) return;
+    if (!city || !city.stops.length) return;
 
     this.currentStepIdx = (this.currentStepIdx + 1) % city.stops.length;
     const currentStop = city.stops[this.currentStepIdx];
@@ -1147,11 +1402,15 @@ class AppSimulator {
     if (islandLive) islandLive.classList.add('active');
 
     if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
       this.speechUtterance = new SpeechSynthesisUtterance(text);
-      this.speechUtterance.lang = currentLandingLang === 'es' ? 'es-ES' : 'en-US';
+      this.speechUtterance.lang = (typeof currentLandingLang !== 'undefined' && currentLandingLang === 'en') ? 'en-US' : 'es-ES';
       this.speechUtterance.rate = 0.95;
 
       this.speechUtterance.onend = () => {
+        this.stopVoiceNarration();
+      };
+      this.speechUtterance.onerror = () => {
         this.stopVoiceNarration();
       };
 
@@ -1224,10 +1483,10 @@ class AppSimulator {
             <div class="sim-tour-meta-row">
               <span>⏱️ ${city.duration}</span>
               <span>🚶 ${city.distance}</span>
-              <span>💵 $15 USD</span>
+              <span>⭐ 4.9</span>
             </div>
-            <button class="btn-card-action" onclick="simulatorInstance.switchTab('tabContentMap')">
-              📍 Iniciar Navegación GPS
+            <button class="btn-card-action" onclick="simulatorInstance.startTourFromDetail()">
+              📍 Iniciar Tour en Mapa GPS
             </button>
           </div>
         </div>
@@ -1633,6 +1892,8 @@ window.setLandingLanguage = function(lang) {
   updateText('#sim-step2-label', t.simStep2Label);
   updateText('#sim-step3-label', t.simStep3Label);
   updateText('#sim-step4-label', t.simStep4Label);
+  updateText('#detail-back-label', lang === 'es' ? 'Explorar' : 'Explore');
+  updateText('#detail-start-label', lang === 'es' ? 'Iniciar Tour con GPS' : 'Start Tour with GPS');
 
   // How it Works
   updateText('#how-subtitle', t.howSubtitle);
