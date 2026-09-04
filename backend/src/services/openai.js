@@ -798,7 +798,10 @@ REGLAS PARA "specificPlaces":
       .replace(/respetar el formato del tour[^.!?\n]*[.!?]?/gi, '')
       .replace(/dejo dos atractivos principales y una parada gastron[oó]mica por d[íi]a[^.!?\n]*[.!?]?/gi, '')
       .replace(/las paradas adicionales pueden incorporarse como visitas opcionales[^.!?\n]*[.!?]?/gi, '')
-      .replace(/\s{2,}/g, ' ')
+      .replace(/[^\S\r\n]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/([^\n])\s*(D[íi]a\s+\d+\s*:)/gi, '$1\n\n$2')
+      .replace(/([^\n])\s*(¿(?:Qué te parece|Deseas hacer))/gi, '$1\n\n$2')
       .trim()
 
     // Detección de petición de agregar paradas
@@ -917,6 +920,13 @@ REGLAS PARA "specificPlaces":
     const destinationSuggestions = (!hasCity && !parsedExtracted.city)
       ? await buildVisualDestinationSuggestions(actionChips).catch(() => [])
       : []
+
+    responseMessage = responseMessage
+      .replace(/[^\S\r\n]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/([^\n])\s*(D[íi]a\s+\d+\s*:)/gi, '$1\n\n$2')
+      .replace(/([^\n])\s*(¿(?:Qué te parece|Deseas hacer))/gi, '$1\n\n$2')
+      .trim()
 
     return {
       responseMessage,
