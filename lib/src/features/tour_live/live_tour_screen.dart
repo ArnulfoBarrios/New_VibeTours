@@ -860,7 +860,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   destination: destinationPoint,
                   destinationName: destinationName,
                   styleUrl: mapStyle,
-                  fitPadding: const EdgeInsets.fromLTRB(28, 100, 28, 390),
+                  fitPadding: const EdgeInsets.fromLTRB(28, 100, 28, 200),
                   route: liveRoute,
                   currentLocation: _currentPoint,
                   additionalWaypoints: _voiceFoodPlaces.isNotEmpty
@@ -1014,7 +1014,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                     if (_isMapMenuExpanded) ...[
                       const SizedBox(height: 8),
                       Container(
-                        width: 170,
+                        width: 180,
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.surface,
@@ -1099,6 +1099,63 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                 );
                               },
                             ),
+                            const SizedBox(height: 4),
+                            _MapMenuItem(
+                              icon: _autoPlayProximityEnabled ? Icons.sensors_rounded : Icons.sensors_off_rounded,
+                              label: _autoPlayProximityEnabled ? 'Auto-Voz: ON' : 'Auto-Voz: OFF',
+                              isActive: _autoPlayProximityEnabled,
+                              onTap: () {
+                                setState(() {
+                                  _autoPlayProximityEnabled = !_autoPlayProximityEnabled;
+                                  _isMapMenuExpanded = false;
+                                });
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      _autoPlayProximityEnabled
+                                          ? 'Audioguía automática por proximidad activada'
+                                          : 'Audioguía automática por proximidad desactivada',
+                                    ),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 4),
+                            _MapMenuItem(
+                              icon: Icons.speed_rounded,
+                              label: 'Voz: ${_ttsSpeedMultiplier}x',
+                              isActive: false,
+                              onTap: () async {
+                                const speeds = [0.75, 1.0, 1.25, 1.5];
+                                final currentIdx = speeds.indexOf(_ttsSpeedMultiplier);
+                                final nextSpeed = speeds[(currentIdx + 1) % speeds.length];
+                                setState(() {
+                                  _ttsSpeedMultiplier = nextSpeed;
+                                });
+                                final messenger = ScaffoldMessenger.of(context);
+                                await ref.read(voiceGuideProvider).setSpeedMultiplier(nextSpeed);
+                                if (!mounted) return;
+                                messenger.hideCurrentSnackBar();
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text('Velocidad de voz: ${nextSpeed}x'),
+                                    duration: const Duration(seconds: 1),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 4),
+                            _MapMenuItem(
+                              icon: Icons.sync_rounded,
+                              label: 'Recalcular ruta',
+                              isActive: false,
+                              onTap: () {
+                                setState(() => _isMapMenuExpanded = false);
+                                _recalculateRoute(tour, force: true);
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -1154,7 +1211,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               if (!_isTrackingMode)
                 Positioned(
                   right: 16,
-                  bottom: 236 + MediaQuery.of(context).padding.bottom,
+                  bottom: 140 + MediaQuery.of(context).padding.bottom,
                   child: FloatingActionButton.extended(
                     heroTag: 'live_tour_follow_fab',
                     backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -1953,26 +2010,29 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final stopCounterText = maxDays > 1 && stopIdxInDay != -1
         ? 'Día $_selectedDay • Parada ${stopIdxInDay + 1}/${dayStops.length}'
         : '${_activeStop + 1}/${tour.stops.length}';
+    final isVoicePlaying = ref.watch(liveTourPlaybackProvider).isPlaying;
+    final isLastStop = _activeStop == tour.stops.length - 1;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Row 1: Header (Stop Name & Badge)
         Row(
           children: [
             Expanded(
               child: Text(
                 stop.name,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
               ),
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(999),
@@ -1981,74 +2041,90 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 stopCounterText,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 12,
+                  fontSize: 11,
                   color: Theme.of(context).colorScheme.onPrimaryContainer,
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
+        // Row 1 Subtitle: Integrated Telemetry Strip
+        Row(
+          children: [
+            Icon(Icons.directions_walk_rounded, size: 14, color: AppTheme.primary),
+            const SizedBox(width: 3),
+            Text(
+              _distanceLabel(tour, progress, liveRoute),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 6),
+            Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+            const SizedBox(width: 6),
+            Icon(Icons.schedule_rounded, size: 14, color: AppTheme.primary),
+            const SizedBox(width: 3),
+            Text(
+              _timeLabel(tour, progress, liveRoute),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            if (_trafficLabel(liveRoute).isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+              const SizedBox(width: 6),
+              Icon(Icons.traffic_rounded, size: 14, color: Colors.orange.shade700),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  _trafficLabel(liveRoute),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange.shade700,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
         LinearProgressIndicator(
           value: progress,
-          minHeight: 4,
+          minHeight: 3,
           borderRadius: BorderRadius.circular(999),
         ),
         const SizedBox(height: 10),
-        // Unified Telemetry Strip
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.25),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.route_rounded, size: 14, color: AppTheme.primary),
-                  const SizedBox(width: 4),
-                  Text(_distanceLabel(tour, progress, liveRoute), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                ],
-              ),
-              Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
-              Row(
-                children: [
-                  Icon(Icons.schedule_rounded, size: 14, color: AppTheme.primary),
-                  const SizedBox(width: 4),
-                  Text(_timeLabel(tour, progress, liveRoute), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                ],
-              ),
-              if (_trafficLabel(liveRoute).isNotEmpty) ...[
-                Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
-                Row(
-                  children: [
-                    Icon(Icons.traffic_rounded, size: 14, color: AppTheme.primary),
-                    const SizedBox(width: 4),
-                    Text(_trafficLabel(liveRoute), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        // Action Controls Row 1: Primary Voice, Manual Arrival & AI Assistant
+        // Row 2: Action Controls (Ya llegué + Audioguía + Asistente IA + Siguiente/Finalizar)
         Row(
           children: [
             Expanded(
-              child: KeyedSubtree(
-                key: _audioGuideKey,
-                child: LiquidButton(
-                  label: 'Audioguía',
-                  icon: Icons.record_voice_over_rounded,
-                  onPressed: () async {
-                    await ref.read(voiceGuideProvider).narrateStop(
+              child: LiquidButton(
+                label: 'Ya llegué',
+                icon: Icons.pin_drop_rounded,
+                isPrimary: true,
+                onPressed: () => _enterAtStopMode(stop),
+              ),
+            ),
+            const SizedBox(width: 8),
+            KeyedSubtree(
+              key: _audioGuideKey,
+              child: IconButton.filledTonal(
+                tooltip: isVoicePlaying ? 'Pausar audioguía' : 'Escuchar audioguía',
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(48, 48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  backgroundColor: isVoicePlaying ? AppTheme.primary : null,
+                  foregroundColor: isVoicePlaying ? Colors.white : null,
+                ),
+                onPressed: () async {
+                  final voiceGuide = ref.read(voiceGuideProvider);
+                  if (isVoicePlaying) {
+                    await voiceGuide.stop();
+                    ref.read(liveTourPlaybackProvider.notifier).setPlaying(false);
+                  } else {
+                    ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
+                    await voiceGuide.narrateStop(
                       stop,
                       stopIndex: _activeStop,
                       totalStops: tour.stops.length,
@@ -2069,19 +2145,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                         }
                       },
                     );
-                  },
+                  }
+                },
+                icon: Icon(
+                  isVoicePlaying ? Icons.pause_rounded : Icons.record_voice_over_rounded,
+                  size: 20,
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _enterAtStopMode(stop),
-              icon: const Icon(Icons.pin_drop_rounded, size: 16, color: Colors.green),
-              label: const Text('Ya llegué', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.green.withValues(alpha: 0.5)),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
             const SizedBox(width: 8),
@@ -2089,122 +2158,23 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               key: _aiAssistantKey,
               child: _buildMicButton(context),
             ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // Action Controls Row 2: Settings & Tools
-        Row(
-          children: [
-            Expanded(
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    setState(() {
-                      _autoPlayProximityEnabled = !_autoPlayProximityEnabled;
-                    });
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          _autoPlayProximityEnabled
-                              ? 'Audioguía automática por proximidad activada'
-                              : 'Audioguía automática por proximidad desactivada',
-                        ),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: _autoPlayProximityEnabled
-                          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.85)
-                          : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _autoPlayProximityEnabled ? Icons.sensors_rounded : Icons.sensors_off_rounded,
-                          size: 16,
-                          color: _autoPlayProximityEnabled
-                              ? Theme.of(context).colorScheme.onPrimaryContainer
-                              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _autoPlayProximityEnabled ? 'Auto Voz: ON' : 'Auto Voz: OFF',
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                color: _autoPlayProximityEnabled
-                                    ? Theme.of(context).colorScheme.onPrimaryContainer
-                                    : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
+            const SizedBox(width: 8),
+            KeyedSubtree(
+              key: _nextStopKey,
+              child: IconButton.filledTonal(
+                tooltip: isLastStop ? 'Terminar tour' : l10n.nextStop,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(48, 48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () => _advanceToNextStop(tour),
+                icon: Icon(
+                  isLastStop ? Icons.flag_rounded : Icons.skip_next_rounded,
+                  size: 20,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            PopupMenuButton<double>(
-              tooltip: 'Velocidad de voz',
-              initialValue: _ttsSpeedMultiplier,
-              onSelected: (speed) async {
-                setState(() {
-                  _ttsSpeedMultiplier = speed;
-                });
-                await ref.read(voiceGuideProvider).setSpeedMultiplier(speed);
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 0.75, child: Text('0.75x (Lento)')),
-                PopupMenuItem(value: 1.0, child: Text('1.0x (Normal)')),
-                PopupMenuItem(value: 1.25, child: Text('1.25x (Rápido)')),
-                PopupMenuItem(value: 1.5, child: Text('1.5x (Muy rápido)')),
-              ],
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.speed_rounded, size: 16, color: AppTheme.primary),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${_ttsSpeedMultiplier}x',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filledTonal(
-              tooltip: l10n.recalculate,
-              onPressed: () => _recalculateRoute(tour, force: true),
-              icon: const Icon(Icons.sync_rounded, size: 18),
-            ),
           ],
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: KeyedSubtree(
-            key: _nextStopKey,
-            child: LiquidButton(
-              label: _activeStop == tour.stops.length - 1 ? 'Terminar tour' : l10n.nextStop,
-              icon: _activeStop == tour.stops.length - 1 ? Icons.flag_rounded : Icons.arrow_forward_rounded,
-              isPrimary: _activeStop == tour.stops.length - 1,
-              onPressed: () => _advanceToNextStop(tour),
-            ),
-          ),
         ),
       ],
     );
@@ -2571,11 +2541,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       return IconButton.filledTonal(
         tooltip: 'Asistente de voz',
         onPressed: _isProcessingVoice ? null : _onMicPressed,
-        style: _isProcessingVoice
-            ? IconButton.styleFrom(
-                backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.6),
-              )
-            : null,
+        style: IconButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          backgroundColor: _isProcessingVoice
+              ? theme.colorScheme.primary.withValues(alpha: 0.6)
+              : null,
+        ),
         icon: micIcon,
       );
     }
