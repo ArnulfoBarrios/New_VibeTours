@@ -1378,7 +1378,7 @@ export async function generateRichPlaceDescriptionsBatch({ destination = '', cit
   if (placeNames.length === 0) return {}
 
   if (apiKey) {
-    const chunkSize = 4
+    const chunkSize = 8
     const chunks = []
     for (let i = 0; i < placeNames.length; i += chunkSize) {
       chunks.push(placeNames.slice(i, i + chunkSize))
@@ -1705,7 +1705,7 @@ ${placeNames.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(6000)
+      signal: AbortSignal.timeout(15000)
     })
 
     if (!response.ok) return {}

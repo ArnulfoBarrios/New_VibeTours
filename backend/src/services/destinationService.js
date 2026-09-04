@@ -243,6 +243,94 @@ export async function resolveCanonicalDestination(query, options = {}) {
     console.warn('[destinationService] Nominatim resolution failed:', err.message)
   }
 
+  // Fallback to Photon if Nominatim fails or returns nothing
+  try {
+    const photonUrl = new URL('https://photon.komoot.io/api/')
+    photonUrl.searchParams.set('q', normalizedQuery)
+    photonUrl.searchParams.set('limit', '5')
+    const photonRes = await fetch(photonUrl, { signal: AbortSignal.timeout(4000) })
+    if (photonRes.ok) {
+      const pJson = await photonRes.json()
+      const feat = pJson.features?.[0]
+      if (feat && feat.geometry?.coordinates) {
+        const props = feat.properties || {}
+        let rawCity = props.city || props.town || props.village || props.municipality || props.county || ''
+        if (!rawCity && (props.type === 'city' || props.osm_value === 'city')) rawCity = props.name
+        const city = cleanAdministrativeCityName(rawCity) || cleanAdministrativeCityName(cleaned)
+        const countryCode = (props.countrycode || '').toUpperCase()
+        const country = formatCountryName(props.country || '', countryCode)
+        const result = {
+          displayName: props.name ? `${props.name}, ${country}` : cleaned,
+          city,
+          entityName: props.name || city,
+          isMicroDestination: false,
+          region: props.state || '',
+          country,
+          countryCode,
+          latitude: feat.geometry.coordinates[1],
+          longitude: feat.geometry.coordinates[0],
+          placeId: props.osm_id,
+          isAmbiguous: false,
+          candidates: []
+        }
+        canonicalCache.set(cacheKey, result)
+        return result
+      }
+    }
+  } catch (err) {
+    console.warn('[destinationService] Photon fallback failed:', err.message)
+  }
+
+  // Fallback to OpenAI if both OSM providers fail
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const { geocodePlacesWithOpenAI } = await import('./openai.js')
+      const aiResults = await geocodePlacesWithOpenAI({ places: [cleaned] })
+      const aiPlace = aiResults?.[cleaned] || Object.values(aiResults || {})[0]
+      if (aiPlace && Number.isFinite(aiPlace.latitude) && Number.isFinite(aiPlace.longitude)) {
+        const addr = String(aiPlace.address || '')
+        let city = cleanAdministrativeCityName(cleaned)
+        if (/\bmalibu\b/i.test(cleaned) || /\bmalibu\b/i.test(addr)) city = 'Malibu'
+        else if (/\bcartagena\b/i.test(cleaned) || /\bcartagena\b/i.test(addr)) city = 'Cartagena'
+        else if (/\bbarranquilla\b/i.test(cleaned) || /\bbarranquilla\b/i.test(addr)) city = 'Barranquilla'
+        else if (/\bsanta marta\b/i.test(cleaned) || /\bsanta marta\b/i.test(addr)) city = 'Santa Marta'
+        else if (/\bmedell[ií]n\b/i.test(cleaned) || /\bmedell[ií]n\b/i.test(addr)) city = 'Medellín'
+        else if (/\bbogot[aá]\b/i.test(cleaned) || /\bbogot[aá]\b/i.test(addr)) city = 'Bogotá'
+        else if (addr.includes(',')) {
+          const parts = addr.split(',').map(s => s.trim())
+          city = cleanAdministrativeCityName(parts[parts.length - 2] || parts[0])
+        }
+
+        let country = ''
+        let countryCode = ''
+        if (/estados unidos|united states|\busa\b|\bca\b|\bcalifornia\b/i.test(addr) || /california|florida|new york/i.test(cleaned)) {
+          country = 'Estados Unidos'
+          countryCode = 'US'
+        } else if (/colombia/i.test(addr) || /colombia/i.test(cleaned)) {
+          country = 'Colombia'
+          countryCode = 'CO'
+        }
+
+        const result = {
+          displayName: `${cleaned}${city && !cleaned.includes(city) ? `, ${city}` : ''}${country ? `, ${country}` : ''}`,
+          city,
+          entityName: cleanAdministrativeCityName(cleaned),
+          isMicroDestination: false,
+          region: '',
+          country,
+          countryCode,
+          latitude: Number(aiPlace.latitude),
+          longitude: Number(aiPlace.longitude),
+          placeId: `ai_${Date.now()}`,
+          isAmbiguous: false,
+          candidates: []
+        }
+        canonicalCache.set(cacheKey, result)
+        return result
+      }
+    } catch (_) {}
+  }
+
   return null
 }
 

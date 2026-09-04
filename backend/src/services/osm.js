@@ -230,15 +230,18 @@ export async function geocodePlace(query, lat = null, lon = null) {
     const globalResults = await photonSearch(normalizedQuery, 5, null, null)
     const photonGlobal = selectBestPoiResult(globalResults, query)
     if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
-      const res = {
-        name: photonGlobal.name,
-        latitude: Number(photonGlobal.latitude),
-        longitude: Number(photonGlobal.longitude),
-        city: photonGlobal.city || '',
-        country: photonGlobal.country || ''
+      const isWithinBounds = !lat || !lon || haversineMeters(lat, lon, photonGlobal.latitude, photonGlobal.longitude) <= 75000
+      if (isWithinBounds) {
+        const res = {
+          name: photonGlobal.name,
+          latitude: Number(photonGlobal.latitude),
+          longitude: Number(photonGlobal.longitude),
+          city: photonGlobal.city || '',
+          country: photonGlobal.country || ''
+        }
+        geocodeCache.set(key, res)
+        return res
       }
-      geocodeCache.set(key, res)
-      return res
     }
   } catch (err) {
     console.warn('[geocodePlace] Global Photon search failed:', err.message)
@@ -259,18 +262,23 @@ export async function geocodePlace(query, lat = null, lon = null) {
       const results = await response.json()
       const [result] = Array.isArray(results) ? results : []
       if (result) {
-        const address = result.address || {}
-        const city = address.city || address.town || address.village || address.municipality || address.county || ''
-        const country = address.country || ''
-        const res = {
-          name: result.display_name,
-          latitude: Number(result.lat),
-          longitude: Number(result.lon),
-          city,
-          country
+        const rLat = Number(result.lat)
+        const rLon = Number(result.lon)
+        const isWithinBounds = !lat || !lon || haversineMeters(lat, lon, rLat, rLon) <= 75000
+        if (isWithinBounds) {
+          const address = result.address || {}
+          const city = address.city || address.town || address.village || address.municipality || address.county || ''
+          const country = address.country || ''
+          const res = {
+            name: result.display_name,
+            latitude: rLat,
+            longitude: rLon,
+            city,
+            country
+          }
+          geocodeCache.set(key, res)
+          return res
         }
-        geocodeCache.set(key, res)
-        return res
       }
     }
   } catch (err) {

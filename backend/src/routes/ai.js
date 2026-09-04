@@ -826,7 +826,7 @@ aiRouter.post('/chat', async (req, res, next) => {
         const geocodedCheck = await Promise.allSettled(
           combinedSpecifics.map(async p => {
             const pName = typeof p === 'object' ? (p.name || '') : String(p)
-            const geo = await geocodePlace(`${pName}, ${canonicalDest.city || updatedPreferences.city || ''}, ${canonicalDest.country || ''}`).catch(() => null)
+            const geo = await geocodePlace(`${pName}, ${canonicalDest.city || updatedPreferences.city || ''}, ${canonicalDest.country || ''}`, canonicalDest.latitude, canonicalDest.longitude).catch(() => null)
             if (geo && !validateCandidateLocation(geo, canonicalDest, 70)) {
               console.warn(`[/ai/chat geofence] Dropping distant hallucinated place "${pName}" for destination "${canonicalDest.city}"`)
               return null
@@ -4594,6 +4594,31 @@ export async function collectTourCandidates(input, location) {
       country
     } : null)
 
+    let preGeocodedAi = {}
+    if (mergedSpecifics.length >= 3 && process.env.OPENAI_API_KEY) {
+      const allNames = mergedSpecifics.map(p => {
+        if (typeof p === 'string') {
+          const str = p.trim()
+          if (str.startsWith('{') && str.includes('name:')) {
+            const m = str.match(/name\s*:\s*([^,\}]+)/)
+            return m ? m[1].trim() : str
+          }
+          return str
+        }
+        return p?.name || ''
+      }).filter(pName => isValidSpecificPlace(pName))
+
+      if (allNames.length > 0) {
+        preGeocodedAi = await geocodePlacesWithOpenAI({
+          city,
+          country,
+          places: allNames,
+          centerLat: canonicalDest?.latitude ?? cityCenterLat,
+          centerLon: canonicalDest?.longitude ?? cityCenterLon
+        }).catch(() => ({}))
+      }
+    }
+
     const specificSettled = await Promise.allSettled(
       mergedSpecifics.map(async (rawPlace, index) => {
         let placeName = ''
@@ -4621,10 +4646,33 @@ export async function collectTourCandidates(input, location) {
         const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
         const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
 
-        // Tier 0: Consulta directa por nombre de lugar con sesgo de proximidad al destino
-        if (/pueblito|chairama/i.test(placeName)) {
+        // Step A: Si OpenAI pre-geocodificó este lugar por lote, verificarlo con máxima prioridad
+        const aiCoord = preGeocodedAi[placeName] ||
+          Object.entries(preGeocodedAi).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
+            placeName.toLowerCase().includes(k.toLowerCase()) ||
+            k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
+
+        if (aiCoord && Number.isFinite(aiCoord.latitude) && Number.isFinite(aiCoord.longitude)) {
+          const candidate = {
+            name: placeName,
+            latitude: Number(aiCoord.latitude),
+            longitude: Number(aiCoord.longitude),
+            city,
+            country
+          }
+          if (validateCandidateLocation(candidate, canonicalDest, 70)) {
+            geo = candidate
+          }
+        }
+
+        // Tier 0: Consulta directa con contexto de ciudad y país con sesgo de proximidad al destino
+        if (!geo && /pueblito|chairama/i.test(placeName)) {
           geo = await geocodePlace('Pueblito Tayrona', destLat, destLon).catch(() => null)
           if (!geo) geo = await geocodePlace('El Pueblito Chairama', destLat, destLon).catch(() => null)
+        }
+        if (!geo) {
+          const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
+          geo = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
         }
         if (!geo && destLat && destLon) {
           geo = await geocodePlace(placeName, destLat, destLon).catch(() => null)
