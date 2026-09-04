@@ -32,6 +32,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
     this.focusOnLast = false,
     this.onMapCreated,
     this.onPointSelected,
+    this.onMapClick,
     this.onRouteResolvingChanged,
   });
 
@@ -100,6 +101,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
   final bool focusOnLast;
   final void Function(MapLibreMapController)? onMapCreated;
   final void Function(GeoPoint)? onPointSelected;
+  final void Function(GeoPoint)? onMapClick;
   final void Function(bool isResolving)? onRouteResolvingChanged;
 
   @override
@@ -566,6 +568,14 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
                 compassEnabled: true,
                 rotateGesturesEnabled: false,
                 myLocationEnabled: widget.myLocationEnabled,
+                onMapClick: (point, latLng) {
+                  if (widget.onMapClick != null) {
+                    widget.onMapClick!(GeoPoint(
+                      latitude: latLng.latitude,
+                      longitude: latLng.longitude,
+                    ));
+                  }
+                },
                 onMapCreated: (controller) {
                   _controller = controller;
                   controller.onCircleTapped.add((circle) {

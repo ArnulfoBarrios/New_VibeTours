@@ -45,7 +45,9 @@ export function buildOpenAiPayload({
   }
 
   if (modelConfig.isReasoning) {
-    payload.reasoning_effort = reasoning_effort || modelConfig.reasoningEffort || 'low'
+    const validEfforts = ['low', 'medium', 'high']
+    const effort = reasoning_effort || modelConfig.reasoningEffort || 'low'
+    payload.reasoning_effort = validEfforts.includes(effort) ? effort : 'low'
   } else if (typeof temperature === 'number') {
     payload.temperature = temperature
   }
@@ -1229,8 +1231,8 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
   "mejor_epoca": "${defaultBestSeason}",
   "horario_recomendado": "09:00 AM - 06:00 PM",
   "punto_encuentro": {
-    "nombre_lugar": "${selectedHotel?.name || 'Punto de encuentro principal en ' + cleanCity}",
-    "direccion": "Dirección céntrica o del hotel",
+    "nombre_lugar": "Punto de encuentro público en ${cleanCity} (ej: plaza o monumento emblemático)",
+    "direccion": "Dirección céntrica y pública",
     "ciudad": "${cleanCity}",
     "region": "",
     "pais": "${targetCountry}",
@@ -1291,7 +1293,7 @@ REGLAS DE CALIDAD:
 1. Utiliza exactamente la lista de lugares seleccionados recibida (${selectedPlaces.map((item, i) => `${i + 1}. ${item.name} (Día ${item.dia})`).join(', ')}). Respeta fielmente su orden secuencial y asigna cada parada a su día indicado en el itinerario ("dia": 1..${totalDays}).
 2. Cada parada del itinerario debe corresponder a un lugar físico real de la lista.
 3. El tour dura ${totalDays} días. Debes estructurar el itinerario distribuyendo las paradas según los días indicados, asegurando que existan paradas para cada uno de los ${totalDays} días ("dia": 1..${totalDays}).
-4. El título "nombre_tour" DEBE ser sobre ${cleanCity} (ej: "Tour Cultural por ${cleanCity}" o "Experiencia por ${cleanCity}"). NUNCA nombres el tour con el nombre de una sola tienda, restaurante o parada individual.
+4. El título "nombre_tour" DEBE ser original, evocador, cautivador y con identidad temática única sobre ${cleanCity} (ej: "Joyas y Leyendas de ${cleanCity}", "Sabores y Brisas: De El Prado al Río", "Ruta Secreta de Arquitectura y Tradición en ${cleanCity}"). PROHIBIDO usar títulos planos y repetitivos como "Tour Cultural por ${cleanCity}" o "Tour Personalizado por ${cleanCity}". Tampoco nombres el tour con el nombre de una sola parada.
 5. NO agregues hoteles ni alojamientos como paradas de actividad dentro del itinerario.
 6. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras.
 7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.
@@ -1436,7 +1438,7 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
               ],
               response_format: { type: 'json_object' },
               temperature: 0.5,
-              reasoning_effort: 'none',
+              reasoning_effort: 'low',
               extra: { max_tokens: 2200 }
             })),
             signal: AbortSignal.timeout(25000)
@@ -1448,6 +1450,9 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
             if (content) {
               return JSON.parse(content)
             }
+          } else {
+            const errText = await response.text().catch(() => '')
+            console.warn(`[openai] generateRichPlaceDescriptionsBatch HTTP ${response.status}:`, errText)
           }
           return {}
         })
@@ -1525,25 +1530,40 @@ function buildRichFallbackDescription(name, city = '') {
 
   const isChurch = /\b(catedral|iglesia|bas[íi]lica|templo|santuario|parroquia)\b/i.test(clean)
   if (isChurch) {
-    return `Majestuoso recinto de gran valor histórico y espiritual en ${city || 'la ciudad'}, reconocido por su impresionante diseño arquitectónico, imponentes vitrales y un ambiente de serenidad que invita a contemplar el patrimonio cultural de la región.`
+    return `Majestuoso recinto de gran valor arquitectónico y espiritual en ${city || 'la ciudad'}, distinguido por su sobrio diseño, valor patrimonial y un ambiente de recogimiento que atesora momentos clave en la historia local.`
   }
 
-  const isMuseum = /\b(museo|casa museo|galer[íi]a|centro cultural|casa del carnaval)\b/i.test(clean)
+  const isCarnaval = /carnaval|comparsa|folclor/i.test(clean)
+  if (isCarnaval) {
+    return `Vibrante templo de la tradición y la alegría en ${city || 'la ciudad'}, donde las máscaras de marimonda, los disfraces de congo y los ritmos de cumbia y tambora transmiten la pasión de una fiesta declarada patrimonio inmaterial de la humanidad.`
+  }
+
+  const isMuseum = /\b(museo|casa museo|galer[íi]a|centro cultural)\b/i.test(clean)
   if (isMuseum) {
-    return `Fascinante espacio cultural e interactivo en ${city || 'la región'}, donde se preserva la memoria viva, las tradiciones folclóricas, vestigios arqueológicos y expresiones artísticas que definen la identidad de sus habitantes.`
+    return `Espacio emblemático de enriquecimiento cultural en ${city || 'la región'}, concebido para divulgar la memoria viva, colecciones históricas y expresiones creativas que ilustran la evolución identitaria de sus comunidades.`
   }
 
   const isWaterOrPark = /\b(malec[óo]n|parque|plaza|mirador|paseo|boulevard|jard[íi]n|cerro)\b/i.test(clean)
   if (isWaterOrPark) {
-    return `Un vibrante punto de encuentro al aire libre en ${city || 'la ciudad'}, ideal para pasear junto a la brisa, contemplar panorámicas inolvidables, disfrutar de eventos al aire libre y conectar con la vida cotidiana local.`
+    return `Punto neurálgico al aire libre en ${city || 'la ciudad'}, predilecto por locales y foráneos para caminar junto a la brisa, contemplar el horizonte urbano y disfrutar de la calidez cotidiana que caracteriza a sus paseantes.`
   }
 
-  const isFood = /\b(restaurante|comida|asador|bistro|caf[ée]|bar|gastronom[íi]a|taquer[íi]a|pizzer[íi]a|parador)\b/i.test(clean)
+  const isSeafood = /mariscos|pescado|ceviche|costeñ|mar|playa|puerto/i.test(clean)
+  if (isSeafood) {
+    return `Destino gastronómico de referencia donde brillan los frutos del mar, arroces aromatizados y sazón costera, ofreciendo una experiencia culinaria fresca y profundamente ligada a las aguas de la región.`
+  }
+
+  const isCafe = /caf[ée]|bistro|bakery|panader[íi]a|dulce/i.test(clean)
+  if (isCafe) {
+    return `Acogedor rincón de tertulia y descanso en ${city || 'la ciudad'}, donde los aromas de café selecto, bocados artesanales y un servicio atento crean la atmósfera idónea para pausar el recorrido.`
+  }
+
+  const isFood = /\b(restaurante|comida|asador|bistro|bar|gastronom[íi]a|taquer[íi]a|pizzer[íi]a|parador)\b/i.test(clean)
   if (isFood) {
-    return `Auténtico espacio gastronómico donde deleitarse con las recetas más representativas de la región, disfrutando de ingredientes frescos, sazón tradicional y un ambiente acogedor para compartir en la mesa.`
+    return `Reconocido establecimiento culinario en ${city || 'la región'}, famoso por rescatar recetas emblemáticas mediante técnicas cuidadas, ingredientes de proximidad y una propuesta pensada para compartir momentos memorables alrededor del plato.`
   }
 
-  return `Destacado atractivo turístico de ${city || 'la región'}, que cautiva a los viajeros por su atmósfera singular, historia envolvente y paisajes representativos para explorar durante el recorrido.`
+  return `Punto de interés destacado en ${city || 'la región'}, que sobresale por su personalidad arquitectónica, arraigo comunitario y la singular perspectiva que ofrece a quienes recorren sus inmediaciones.`
 }
 
 export async function generateCustomPlaceReasons(arg1 = [], arg2 = '', arg3 = '') {
@@ -1594,7 +1614,7 @@ Devuelve ÚNICAMENTE un objeto JSON donde cada clave es el nombre exacto del lug
       ],
       response_format: { type: 'json_object' },
       temperature: 0.4,
-      reasoning_effort: 'none'
+      reasoning_effort: 'low'
     })
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

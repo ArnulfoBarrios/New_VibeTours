@@ -1,9 +1,27 @@
 import { Router } from 'express'
 import { z } from 'zod'
 
-import { overpassAttractions, photonSearch } from '../services/osm.js'
+import { overpassAttractions, photonSearch, reverseGeocodeLocation } from '../services/osm.js'
 
 export const discoveryRouter = Router()
+
+discoveryRouter.get('/reverse-geocode', async (req, res, next) => {
+  try {
+    const query = z.object({
+      lat: z.coerce.number(),
+      lng: z.coerce.number()
+    }).parse(req.query)
+    const geo = await reverseGeocodeLocation(query.lat, query.lng)
+    res.json({
+      name: geo?.name || geo?.displayName || 'Ubicación seleccionada',
+      address: geo?.displayName || '',
+      city: geo?.city || '',
+      country: geo?.country || ''
+    })
+  } catch (error) {
+    next(error)
+  }
+})
 
 discoveryRouter.get('/search', async (req, res, next) => {
   try {

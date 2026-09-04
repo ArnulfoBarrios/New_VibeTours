@@ -59,6 +59,9 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
   bool _petsAllowed = false;
   bool _childFriendly = true;
   bool _seniorFriendly = true;
+  bool _useMapPickerMode = false;
+  GeoPoint? _tappedMapLocation;
+  bool _isReverseGeocoding = false;
 
   @override
   void initState() {
@@ -311,48 +314,185 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
               label: '4. Lugares para tu ruta',
             ),
             const SizedBox(height: 12),
-            _PlaceSearchBar(
-              controller: _placeSearch,
-              isSearching: _isSearching,
-              onSearch: _searchPlaces,
+            Row(
+              children: [
+                Expanded(
+                  child: ChoiceChip(
+                    avatar: const Icon(Icons.search_rounded, size: 16),
+                    label: const Text('Buscar por texto'),
+                    selected: !_useMapPickerMode,
+                    onSelected: (val) {
+                      if (val) setState(() => _useMapPickerMode = false);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ChoiceChip(
+                    avatar: const Icon(Icons.touch_app_rounded, size: 16),
+                    label: const Text('Elegir en mapa'),
+                    selected: _useMapPickerMode,
+                    onSelected: (val) {
+                      if (val) setState(() => _useMapPickerMode = true);
+                    },
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            _PlaceResults(
-              places: _placeResults,
-              selectedPlace: _previewPlace,
-              onSelect: (place) => setState(() => _previewPlace = place),
-            ),
-            if (_previewPlace != null) ...[
+            if (!_useMapPickerMode) ...[
+              _PlaceSearchBar(
+                controller: _placeSearch,
+                isSearching: _isSearching,
+                onSearch: _searchPlaces,
+              ),
               const SizedBox(height: 12),
+              _PlaceResults(
+                places: _placeResults,
+                selectedPlace: _previewPlace,
+                onSelect: (place) => setState(() => _previewPlace = place),
+              ),
+              if (_previewPlace != null) ...[
+                const SizedBox(height: 12),
+                _CreatorCard(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    children: [
+                      OpenFreeRouteMap(
+                        key: ValueKey(
+                          '${_previewPlace!.name}-${_previewPlace!.location.latitude}-${_previewPlace!.location.longitude}-${_stops.length}',
+                        ),
+                        points: [
+                          ..._stops.map((s) => s.location),
+                          _previewPlace!.location,
+                        ],
+                        labels: [
+                          ..._stops.map((s) => s.name),
+                          _previewPlace!.name,
+                        ],
+                        styleUrl: mapStyle,
+                        height: 180,
+                        fitPadding: const EdgeInsets.all(24),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: LiquidButton(
+                          label: 'Agregar parada seleccionada',
+                          icon: Icons.add_location_alt_rounded,
+                          onPressed: () => _addPlace(_previewPlace!),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ] else ...[
               _CreatorCard(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(12),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.touch_app_rounded, size: 16, color: AppTheme.primary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Toca cualquier punto del mapa para ubicar una parada libremente',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     OpenFreeRouteMap(
                       key: ValueKey(
-                        '${_previewPlace!.name}-${_previewPlace!.location.latitude}-${_previewPlace!.location.longitude}-${_stops.length}',
+                        'map-picker-${_stops.length}-${_tappedMapLocation?.latitude}-${_tappedMapLocation?.longitude}',
                       ),
                       points: [
                         ..._stops.map((s) => s.location),
-                        _previewPlace!.location,
+                        ?_tappedMapLocation,
                       ],
                       labels: [
                         ..._stops.map((s) => s.name),
-                        _previewPlace!.name,
+                        if (_tappedMapLocation != null) (_previewPlace?.name ?? 'Punto marcado'),
                       ],
                       styleUrl: mapStyle,
-                      height: 180,
+                      height: 240,
                       fitPadding: const EdgeInsets.all(24),
+                      onMapClick: _handleMapTap,
                     ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: LiquidButton(
-                        label: 'Agregar parada seleccionada',
-                        icon: Icons.add_location_alt_rounded,
-                        onPressed: () => _addPlace(_previewPlace!),
+                    if (_isReverseGeocoding) ...[
+                      const SizedBox(height: 12),
+                      const Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 8),
+                            Text('Identificando lugar en el mapa...', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
                       ),
-                    ),
+                    ] else if (_previewPlace != null && _tappedMapLocation != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const CircleAvatar(
+                              radius: 16,
+                              backgroundColor: AppTheme.primary,
+                              child: Icon(Icons.place_rounded, color: Colors.white, size: 16),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _previewPlace!.name,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    _previewPlace!.type,
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit_rounded, size: 18),
+                              tooltip: 'Editar nombre',
+                              onPressed: _editSelectedPointName,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: LiquidButton(
+                          label: 'Agregar "${_previewPlace!.name}"',
+                          icon: Icons.add_location_alt_rounded,
+                          onPressed: () {
+                            _addPlace(_previewPlace!);
+                            setState(() {
+                              _tappedMapLocation = null;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -598,6 +738,87 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
     if (_placeResults.isEmpty) {
       _message('No encontramos ese lugar. Prueba con ciudad y nombre.');
     }
+  }
+
+  Future<void> _handleMapTap(GeoPoint point) async {
+    setState(() {
+      _tappedMapLocation = point;
+      _isReverseGeocoding = true;
+    });
+
+    try {
+      final geo = await ref.read(discoveryRepositoryProvider).reverseGeocode(
+        point.latitude,
+        point.longitude,
+      );
+      if (!mounted) return;
+      final placeName = geo['name']?.isNotEmpty == true ? geo['name']! : 'Parada ${_stops.length + 1}';
+      final address = geo['address']?.isNotEmpty == true ? geo['address']! : '${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)}';
+
+      final newPlace = NearbyPlace(
+        name: placeName,
+        type: address,
+        distanceMeters: 0,
+        location: point,
+      );
+      setState(() {
+        _previewPlace = newPlace;
+        _isReverseGeocoding = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      final fallbackPlace = NearbyPlace(
+        name: 'Parada ${_stops.length + 1}',
+        type: '${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)}',
+        distanceMeters: 0,
+        location: point,
+      );
+      setState(() {
+        _previewPlace = fallbackPlace;
+        _isReverseGeocoding = false;
+      });
+    }
+  }
+
+  void _editSelectedPointName() {
+    if (_previewPlace == null) return;
+    final controller = TextEditingController(text: _previewPlace!.name);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nombre de la parada'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Ej. Mirador de la Bahía',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty) {
+                setState(() {
+                  _previewPlace = NearbyPlace(
+                    name: newName,
+                    type: _previewPlace!.type,
+                    distanceMeters: _previewPlace!.distanceMeters,
+                    location: _previewPlace!.location,
+                  );
+                });
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _addPlace(NearbyPlace place) {

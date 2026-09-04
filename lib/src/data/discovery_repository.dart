@@ -394,10 +394,89 @@ class DiscoveryRepository {
         }
         return await _enrichPlacesWithRealImages(places);
       }
-    } catch (_) {
-      // Fall through
+    } catch (_) {}
+
+    // Fallback to backend discovery search
+    for (final base in AppConfig.apiBaseUrls) {
+      try {
+        final uri = Uri.parse('$base/discovery/search?q=${Uri.encodeComponent(trimmed)}');
+        final response = await http.get(uri).timeout(const Duration(seconds: 5));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          final list = json['places'] as List<dynamic>? ?? [];
+          if (list.isNotEmpty) {
+            final places = list.map((item) {
+              final map = item as Map<String, dynamic>;
+              final name = (map['name'] ?? '').toString();
+              final category = (map['category'] ?? map['type'] ?? 'attraction').toString();
+              final placeId = map['id']?.toString() ?? 'search-$name';
+              final img = resolveDynamicImageForPlace(name, category: category, placeId: placeId);
+              return NearbyPlace(
+                id: placeId,
+                name: name,
+                type: (map['type'] ?? 'Atraccion').toString(),
+                distanceMeters: 0,
+                location: GeoPoint(
+                  latitude: (map['latitude'] as num?)?.toDouble() ?? 0.0,
+                  longitude: (map['longitude'] as num?)?.toDouble() ?? 0.0,
+                ),
+                category: category,
+                imageUrl: img,
+                thumbnailUrl: img,
+                statusLabel: 'Disponible',
+                isOpenNow: true,
+              );
+            }).toList();
+            return await _enrichPlacesWithRealImages(places);
+          }
+        }
+      } catch (_) {}
     }
+
     return const [];
+  }
+
+  /// Reverse geocodes a coordinate to obtain a readable place name and address.
+  Future<Map<String, String>> reverseGeocode(double lat, double lon) async {
+    for (final base in AppConfig.apiBaseUrls) {
+      try {
+        final uri = Uri.parse('$base/discovery/reverse-geocode?lat=$lat&lng=$lon');
+        final response = await http.get(uri).timeout(const Duration(seconds: 5));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          final name = (data['name'] ?? '').toString().trim();
+          if (name.isNotEmpty && name != 'Ubicación seleccionada') {
+            return {
+              'name': name,
+              'address': (data['address'] ?? '').toString().trim(),
+              'city': (data['city'] ?? '').toString().trim(),
+            };
+          }
+        }
+      } catch (_) {}
+    }
+
+    try {
+      final uri = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lon');
+      final response = await http.get(uri, headers: {'User-Agent': 'VibeToursApp/1.0'}).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final address = data['address'] as Map<String, dynamic>? ?? {};
+        final name = (data['name'] ?? address['tourism'] ?? address['historic'] ?? address['amenity'] ?? address['road'] ?? 'Ubicación seleccionada').toString();
+        final display = (data['display_name'] ?? '').toString();
+        return {
+          'name': name,
+          'address': display,
+          'city': (address['city'] ?? address['town'] ?? address['municipality'] ?? '').toString(),
+        };
+      }
+    } catch (_) {}
+
+    return {
+      'name': 'Punto en el mapa',
+      'address': '$lat, $lon',
+      'city': '',
+    };
   }
 
   Future<List<LocalEvent>> localEvents({

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/config/app_config.dart';
@@ -17,11 +18,11 @@ import '../../core/services/road_route_service.dart';
 import '../../core/tour/tour_builder.dart';
 import '../../core/tour/tour_controller.dart';
 import '../../core/tour/tour_phase.dart';
+import '../../data/discovery_repository.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../../state/live_tour_state.dart';
-import '../ai/ai_builder_controller.dart';
 import 'tour_rating_dialog.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
@@ -129,6 +130,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _hasUserManuallyToggledTracking = false;
   bool _hasInitialAccurateRoute = false;
   bool _navigatingToHotel = false;
+  bool _isAtStopMode = false;
+  int _selectedDay = 1;
+  _NearbyFoodPlace? _userLodgingPlace;
+  bool _progressLoaded = false;
   double? _currentHeading;
   bool _stopsEnriched = false;
   double _ttsSpeedMultiplier = 1.0;
@@ -139,6 +144,109 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   final _aiAssistantKey = GlobalKey();
   final _nextStopKey = GlobalKey();
   bool _tourChecked = false;
+
+  int _calculateMaxDays(Tour tour) {
+    if (tour.stops.isEmpty) return 1;
+    int maxDay = 1;
+    for (final s in tour.stops) {
+      if (s.day > maxDay) maxDay = s.day;
+    }
+    return maxDay;
+  }
+
+  bool _isDayCompleted(Tour tour, int day) {
+    final dayStops = tour.stops.where((s) => s.day == day).toList();
+    if (dayStops.isEmpty) return false;
+    final lastStopOfDay = dayStops.last;
+    final lastIndex = tour.stops.indexOf(lastStopOfDay);
+    return _activeStop > lastIndex;
+  }
+
+  void _onSelectDay(Tour tour, int day) {
+    final targetIndex = tour.stops.indexWhere((s) => s.day == day);
+    if (targetIndex != -1) {
+      setState(() {
+        _selectedDay = day;
+        _activeStop = targetIndex;
+        _isAtStopMode = false;
+        _liveRoute = null;
+        _liveRouteStopIndex = null;
+        _isOffRoute = false;
+        _selectedVoicePlace = null;
+      });
+      _saveProgress(targetIndex);
+      _recalculateRoute(tour, force: true);
+    }
+  }
+
+  double _getStopProximityRadius(TourStop stop) {
+    final nameLower = stop.name.toLowerCase();
+    final descLower = stop.description.toLowerCase();
+    final text = '$nameLower $descLower';
+
+    // 1. Large venues / Complexes (140m): Stadiums, boardwalks, beaches, large parks, airports
+    if (text.contains('estadio') ||
+        text.contains('malecón') ||
+        text.contains('malecon') ||
+        text.contains('playa') ||
+        text.contains('parque metropolitano') ||
+        text.contains('complejo') ||
+        text.contains('puerto') ||
+        text.contains('aeropuerto') ||
+        text.contains('zoologico') ||
+        text.contains('zoológico')) {
+      return 140.0;
+    }
+
+    // 2. Medium open venues (75m): Plazas, squares, parks, cathedrals, campuses, boulevards
+    if (text.contains('plaza') ||
+        text.contains('parque') ||
+        text.contains('plazoleta') ||
+        text.contains('catedral') ||
+        text.contains('boulevard') ||
+        text.contains('paseo') ||
+        text.contains('mirador') ||
+        text.contains('castillo')) {
+      return 75.0;
+    }
+
+    // 3. Standard POIs (40m): Restaurants, shops, boutique museums, normal urban spots
+    return 40.0;
+  }
+
+  void _enterAtStopMode(TourStop currentStop) {
+    final tour = _navigationTour;
+    if (tour == null) return;
+    setState(() {
+      _isAtStopMode = true;
+    });
+    if (_autoPlayProximityEnabled) {
+      unawaited(
+        ref.read(voiceGuideProvider).narrateStop(
+          currentStop,
+          stopIndex: _activeStop,
+          totalStops: tour.stops.length,
+          lang: tour.language,
+          onResolved: (name, description) {
+            if (mounted) {
+              setState(() {
+                final updatedStops = tour.stops.map((s) {
+                  if (s.id == currentStop.id) {
+                    return s.copyWith(name: name, description: description);
+                  }
+                  return s;
+                }).toList();
+                final updatedTour = tour.copyWith(stops: updatedStops);
+                _navigationTour = updatedTour;
+                ref.read(selectedTourProvider.notifier).state = updatedTour;
+              });
+            }
+          },
+        ),
+      );
+      ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
+    }
+  }
 
   void _triggerTourIfNeeded() {
     if (_tourChecked) return;
@@ -280,76 +388,218 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
   }
 
-  TourStop? _findHotelStop(Tour tour) {
-    for (final stop in tour.stops) {
-      if (stop.id == 'hotel_end' || stop.id == 'hotel_start') return stop;
-    }
-    for (final stop in tour.stops.reversed) {
-      final nameLower = stop.name.toLowerCase();
-      if (nameLower.contains('hotel') ||
-          nameLower.contains('hostal') ||
-          nameLower.contains('resort') ||
-          nameLower.contains('boutique') ||
-          nameLower.contains('posada') ||
-          nameLower.contains('hospedaje') ||
-          nameLower.contains('alojamiento')) {
-        return stop;
+  Future<void> _saveUserLodging(String city, _NearbyFoodPlace place) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'user_lodging_${city.trim().toLowerCase()}';
+    await prefs.setString(
+      key,
+      jsonEncode({
+        'name': place.name,
+        'latitude': place.latitude,
+        'longitude': place.longitude,
+        'type': place.type,
+      }),
+    );
+  }
+
+  Future<void> _saveProgress(int stopIndex) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('tour_progress_${widget.tourId}', stopIndex);
+  }
+
+  Future<void> _loadSavedProgressAndLodging(Tour tour) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // 1. Progress
+    final savedIndex = prefs.getInt('tour_progress_${widget.tourId}');
+    if (savedIndex != null && savedIndex > 0 && savedIndex < tour.stops.length) {
+      if (mounted) {
+        setState(() {
+          _activeStop = savedIndex;
+          _selectedDay = tour.stops[savedIndex].day;
+        });
       }
     }
 
-    final mpName = tour.meetingPointInfo.nombreLugar.isNotEmpty
-        ? tour.meetingPointInfo.nombreLugar
-        : tour.meetingPoint;
-
-    if (mpName.isNotEmpty) {
-      final nameLower = mpName.toLowerCase();
-      if (nameLower.contains('hotel') ||
-          nameLower.contains('hostal') ||
-          nameLower.contains('resort') ||
-          nameLower.contains('boutique') ||
-          nameLower.contains('posada') ||
-          nameLower.contains('casa carolina') ||
-          nameLower.contains('dann carlton') ||
-          nameLower.contains('hospedaje') ||
-          nameLower.contains('alojamiento')) {
-        double lat = 0.0;
-        double lon = 0.0;
-        if (tour.meetingPointInfo.urlMapa.contains('?q=')) {
-          final parts = tour.meetingPointInfo.urlMapa.split('?q=').last.split(',');
-          if (parts.length == 2) {
-            lat = double.tryParse(parts[0]) ?? 0.0;
-            lon = double.tryParse(parts[1]) ?? 0.0;
-          }
+    // 2. User Lodging for this city
+    final cityKey = 'user_lodging_${tour.city.trim().toLowerCase()}';
+    final rawLodging = prefs.getString(cityKey);
+    if (rawLodging != null) {
+      try {
+        final decoded = jsonDecode(rawLodging) as Map<String, dynamic>;
+        if (mounted) {
+          setState(() {
+            _userLodgingPlace = _NearbyFoodPlace.fromJson(decoded);
+          });
         }
-        return TourStop(
-          id: 'hotel_meeting',
-          name: mpName,
-          location: (lat != 0.0 && lon != 0.0)
-              ? GeoPoint(latitude: lat, longitude: lon)
-              : const GeoPoint(latitude: 0, longitude: 0),
-          imageUrl: '',
-          description: 'Punto de alojamiento del tour',
-          activities: const ['Alojamiento', 'Descanso'],
-          tips: const ['Punto de estancia del tour'],
-          suggestedMinutes: 15,
-          locationInfo: tour.meetingPointInfo,
-        );
-      }
+      } catch (_) {}
     }
+  }
 
+  TourStop? _findHotelStop(Tour tour) {
+    if (_userLodgingPlace != null) {
+      return TourStop(
+        id: 'user_hotel',
+        name: _userLodgingPlace!.name,
+        location: _userLodgingPlace!.toGeoPoint(),
+        imageUrl: '',
+        description: 'Tu lugar de alojamiento registrado',
+        activities: const ['Descanso', 'Alojamiento'],
+        tips: const ['Lugar de hospedaje'],
+        suggestedMinutes: 30,
+      );
+    }
     return null;
   }
 
   void _startHotelNavigation() {
     final tour = _navigationTour;
     if (tour == null) return;
+    if (_userLodgingPlace == null) {
+      _promptForAccommodation(tour);
+      return;
+    }
     setState(() {
       _navigatingToHotel = true;
       _selectedVoicePlace = null;
+      _isAtStopMode = false;
       _liveRoute = null;
       _liveRouteStopIndex = null;
     });
     _recalculateRoute(tour, force: true);
+  }
+
+  Future<void> _promptForAccommodation(Tour tour) async {
+    final textController = TextEditingController();
+    bool isSearching = false;
+    String? searchError;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Icon(Icons.hotel_rounded, color: AppTheme.primary),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Tu Alojamiento',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ingresa el nombre o dirección de tu hotel o alojamiento en ${tour.city}:',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: textController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Ej: Hotel El Prado, Cra 54 #70',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      filled: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  if (searchError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      searchError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                  if (isSearching) ...[
+                    const SizedBox(height: 12),
+                    const Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(width: 8),
+                          Text('Buscando ubicación...', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSearching ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton.icon(
+                  icon: const Icon(Icons.navigation_rounded, size: 16),
+                  label: const Text('Ir al hotel'),
+                  onPressed: isSearching
+                      ? null
+                      : () async {
+                          final query = textController.text.trim();
+                          if (query.isEmpty) return;
+                          setDialogState(() {
+                            isSearching = true;
+                            searchError = null;
+                          });
+                          try {
+                            final refLoc = _currentPoint ?? (tour.stops.isNotEmpty ? tour.stops.first.location : null);
+                            final results = await DiscoveryRepository().searchPlaces(
+                              '$query, ${tour.city}',
+                              userLat: refLoc?.latitude,
+                              userLon: refLoc?.longitude,
+                            );
+                            if (results.isEmpty) {
+                              setDialogState(() {
+                                isSearching = false;
+                                searchError = 'No se encontró el lugar. Intenta con otra dirección.';
+                              });
+                              return;
+                            }
+                            final place = results.first;
+                            final hotelPlace = _NearbyFoodPlace(
+                              name: place.name,
+                              latitude: place.location.latitude,
+                              longitude: place.location.longitude,
+                              type: place.category,
+                            );
+                            await _saveUserLodging(tour.city, hotelPlace);
+                            if (dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop();
+                            }
+                            if (mounted) {
+                              setState(() {
+                                _userLodgingPlace = hotelPlace;
+                              });
+                              _startHotelNavigation();
+                              final voiceGuide = ref.read(voiceGuideProvider);
+                              unawaited(voiceGuide.speak('Alojamiento guardado. Trazando ruta a ${hotelPlace.name}.'));
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isSearching = false;
+                              searchError = 'Error al buscar la ubicación.';
+                            });
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   // ── Voice assistant ────────────────────────────────────────────────────────
@@ -447,13 +697,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ? tour.stops[_activeStop]
         : null;
 
-    final hotelStop = tour != null ? _findHotelStop(tour) : null;
-    final builderState = ref.read(aiBuilderProvider);
-    final selectedHotel = builderState.selectedHotel;
-    final hotelName = hotelStop?.name ?? selectedHotel?['name']?.toString() ?? '';
-    final hotelAddress = hotelStop?.locationInfo.direccion ?? selectedHotel?['address']?.toString() ?? selectedHotel?['direccion']?.toString() ?? '';
-    final hotelLat = hotelStop?.location.latitude ?? double.tryParse(selectedHotel?['latitude']?.toString() ?? '');
-    final hotelLon = hotelStop?.location.longitude ?? double.tryParse(selectedHotel?['longitude']?.toString() ?? '');
+    final savedLodging = _userLodgingPlace;
+    final hotelName = savedLodging?.name ?? '';
+    final hotelAddress = savedLodging?.type ?? '';
+    final hotelLat = savedLodging?.latitude;
+    final hotelLon = savedLodging?.longitude;
 
     final body = <String, dynamic>{
       'userQuery': userQuery,
@@ -526,14 +774,22 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           setState(() {
             _selectedVoicePlace = response.targetDestination;
             _navigatingToHotel = true;
+            _isAtStopMode = false;
             _liveRoute = null;
             _liveRouteStopIndex = null;
           });
           if (tour != null) {
             _recalculateRoute(tour, force: true);
           }
-        } else if (tour != null && _findHotelStop(tour) != null) {
+        } else if (_userLodgingPlace != null) {
           _startHotelNavigation();
+        } else if (tour != null) {
+          _promptForAccommodation(tour);
+        }
+
+      case 'REQUEST_ACCOMMODATION_LOCATION':
+        if (tour != null) {
+          _promptForAccommodation(tour);
         }
 
       // DESCRIBE_CURRENT_POI and CHANGE_DESTINATION are handled
@@ -572,7 +828,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   orElse: () => tours.first,
                 );
           _triggerTourIfNeeded();
+          final int maxDays = _calculateMaxDays(tour);
           final stop = tour.stops[_activeStop];
+          if (stop.day != _selectedDay && _activeStop < tour.stops.length) {
+            _selectedDay = stop.day;
+          }
           final progress = (_activeStop + 1) / tour.stops.length;
           _navigationTour = tour;
           _scheduleLiveNavigation(tour);
@@ -596,7 +856,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             children: [
               Positioned.fill(
                 child: LiveNavigationMap(
-                  key: ValueKey('${tour.id}-$mapStyle-${_selectedVoicePlace != null ? "voice" : _navigatingToHotel ? "hotel" : "stop"}'),
+                  key: ValueKey('${tour.id}-$mapStyle-${_selectedVoicePlace != null ? "voice" : _navigatingToHotel ? "hotel" : "stop"}-$_selectedDay'),
                   destination: destinationPoint,
                   destinationName: destinationName,
                   styleUrl: mapStyle,
@@ -607,7 +867,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                       ? _voiceFoodPlaces.map((p) => p.toGeoPoint()).toList()
                       : (_selectedVoicePlace != null
                           ? null
-                          : tour.stops.map((s) => s.location).toList()),
+                          : tour.stops.where((s) => s.day == _selectedDay).map((s) => s.location).toList()),
                   trackingMode: _isTrackingMode,
                   trackingHeading: _currentHeading,
                   onPointSelected: (point) {
@@ -805,7 +1065,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                 setState(() => _isMapMenuExpanded = false);
                               },
                             ),
-                            if (_findHotelStop(tour) != null && !_navigatingToHotel) ...[
+                            if (!_navigatingToHotel) ...[
                               const SizedBox(height: 4),
                               _MapMenuItem(
                                 icon: Icons.hotel_rounded,
@@ -846,6 +1106,51 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   ],
                 ),
               ),
+
+              // ── Day Selector Chips (Top Center - for multi-day tours) ──────────────
+              if (maxDays > 1)
+                Positioned(
+                  left: 68,
+                  right: 68,
+                  top: MediaQuery.of(context).padding.top + 12,
+                  child: Center(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(maxDays, (idx) {
+                          final dayNum = idx + 1;
+                          final isSelected = _selectedDay == dayNum;
+                          final isCompleted = _isDayCompleted(tour, dayNum);
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: FilterChip(
+                              avatar: isCompleted
+                                  ? const Icon(Icons.check_circle_rounded, size: 14, color: Colors.green)
+                                  : null,
+                              label: Text(
+                                'Día $dayNum',
+                                style: TextStyle(
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              selected: isSelected,
+                              onSelected: (_) => _onSelectDay(tour, dayNum),
+                              backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+                ),
+
               if (!_isTrackingMode)
                 Positioned(
                   right: 16,
@@ -880,7 +1185,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                       ? _buildRestaurantNavigationPanel(context, tour)
                       : _navigatingToHotel
                           ? _buildHotelNavigationPanel(context, tour)
-                          : _buildStandardNavigationPanel(context, tour, stop, progress, liveRoute, l10n),
+                          : _isAtStopMode
+                              ? _buildAtStopModePanel(context, tour, stop, l10n)
+                              : _buildStandardNavigationPanel(context, tour, stop, progress, liveRoute, l10n),
                 ),
               ),
               if (_isPocketModeEnabled)
@@ -989,6 +1296,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   void _scheduleLiveNavigation(Tour tour) {
+    if (!_progressLoaded) {
+      _progressLoaded = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadSavedProgressAndLodging(tour);
+      });
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final playback = ref.read(liveTourPlaybackProvider);
@@ -1096,36 +1409,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ? Geolocator.distanceBetween(point.latitude, point.longitude, activeStopPoint.latitude, activeStopPoint.longitude)
         : double.infinity;
 
-    // Audioguía automática por proximidad (< 30 metros)
-    if (_autoPlayProximityEnabled && _activeStop < tour.stops.length) {
+    // Audioguía automática y activación de Modo En Parada por proximidad adaptable
+    if (_activeStop < tour.stops.length) {
       final currentStop = tour.stops[_activeStop];
-      if (distanceToActiveStop <= 30.0 && !_autoTriggeredStopIds.contains(currentStop.id)) {
+      final proximityRadius = _getStopProximityRadius(currentStop);
+      if (distanceToActiveStop <= proximityRadius && !_autoTriggeredStopIds.contains(currentStop.id)) {
         _autoTriggeredStopIds.add(currentStop.id);
-        debugPrint('[ProximityTTS] Disparando narración automática para parada ${currentStop.name} (distancia: ${distanceToActiveStop.toStringAsFixed(1)}m)');
-        unawaited(
-          ref.read(voiceGuideProvider).narrateStop(
-            currentStop,
-            stopIndex: _activeStop,
-            totalStops: tour.stops.length,
-            lang: tour.language,
-            onResolved: (name, description) {
-              if (mounted) {
-                setState(() {
-                  final updatedStops = tour.stops.map((s) {
-                    if (s.id == currentStop.id) {
-                      return s.copyWith(name: name, description: description);
-                    }
-                    return s;
-                  }).toList();
-                  final updatedTour = tour.copyWith(stops: updatedStops);
-                  _navigationTour = updatedTour;
-                  ref.read(selectedTourProvider.notifier).state = updatedTour;
-                });
-              }
-            },
-          ),
-        );
-        ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
+        debugPrint('[ProximityTTS] Disparando llegada a parada ${currentStop.name} (distancia: ${distanceToActiveStop.toStringAsFixed(1)}m <= ${proximityRadius.toStringAsFixed(0)}m)');
+        _enterAtStopMode(currentStop);
       }
     }
     final distanceToRoute = _distanceToRouteMeters(point, route.geometry);
@@ -1656,6 +1947,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     RoadRouteResult? liveRoute,
     AppLocalizations l10n,
   ) {
+    final int maxDays = _calculateMaxDays(tour);
+    final dayStops = tour.stops.where((s) => s.day == _selectedDay).toList();
+    final stopIdxInDay = dayStops.indexWhere((s) => s.id == stop.id);
+    final stopCounterText = maxDays > 1 && stopIdxInDay != -1
+        ? 'Día $_selectedDay • Parada ${stopIdxInDay + 1}/${dayStops.length}'
+        : '${_activeStop + 1}/${tour.stops.length}';
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1680,7 +1978,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                '${_activeStop + 1}/${tour.stops.length}',
+                stopCounterText,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
@@ -1740,7 +2038,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           ),
         ),
         const SizedBox(height: 10),
-        // Action Controls Row 1: Primary Voice & AI Assistant
+        // Action Controls Row 1: Primary Voice, Manual Arrival & AI Assistant
         Row(
           children: [
             Expanded(
@@ -1773,6 +2071,17 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                     );
                   },
                 ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: () => _enterAtStopMode(stop),
+              icon: const Icon(Icons.pin_drop_rounded, size: 16, color: Colors.green),
+              label: const Text('Ya llegué', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.green.withValues(alpha: 0.5)),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
             const SizedBox(width: 8),
@@ -1893,58 +2202,353 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               label: _activeStop == tour.stops.length - 1 ? 'Terminar tour' : l10n.nextStop,
               icon: _activeStop == tour.stops.length - 1 ? Icons.flag_rounded : Icons.arrow_forward_rounded,
               isPrimary: _activeStop == tour.stops.length - 1,
-              onPressed: () {
-              if (_activeStop == tour.stops.length - 1) {
-                final currentUser = ref.read(authServiceProvider).currentUser;
-                
-                if (currentUser == null) {
-                  context.pop(); // Guests cannot rate
-                  return;
-                }
-
-                final canRate = tour.canBeRatedBy(currentUser.id);
-                
-                if (!canRate) {
-                  context.pop();
-                } else {
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (context) => TourRatingDialog(
-                      tour: tour,
-                      popScreenOnComplete: true,
-                    ),
-                  );
-                }
-              } else {
-                setState(() {
-                  _activeStop =
-                      ((_activeStop + 1) % tour.stops.length)
-                          .toInt();
-                  _liveRoute = null;
-                  _liveRouteStopIndex = null;
-                  _isOffRoute = false;
-                  _noLandRouteAvailable = false;
-                  _isTrackingMode = false;
-                  _initialOverviewPoint = null;
-                  _hasUserManuallyToggledTracking = false;
-                  _voiceFoodPlaces = []; // Clear food markers on stop change
-                  _selectedVoicePlace = null; // Clear selected restaurant on stop change
-                });
-                ref.read(voiceGuideProvider).precacheTourStops(
-                  tour.stops,
-                  startIndex: _activeStop,
-                  maxCount: 2,
-                  lang: tour.language,
-                );
-                _recalculateRoute(tour, force: true);
-              }
-            },
+              onPressed: () => _advanceToNextStop(tour),
+            ),
           ),
         ),
-      ),
       ],
     );
+  }
+
+  Widget _buildAtStopModePanel(
+    BuildContext context,
+    Tour tour,
+    TourStop stop,
+    AppLocalizations l10n,
+  ) {
+    final int maxDays = _calculateMaxDays(tour);
+    final dayStops = tour.stops.where((s) => s.day == _selectedDay).toList();
+    final stopIdxInDay = dayStops.indexWhere((s) => s.id == stop.id);
+    final stopCounterText = maxDays > 1 && stopIdxInDay != -1
+        ? 'Día $_selectedDay • Parada ${stopIdxInDay + 1}/${dayStops.length}'
+        : '${_activeStop + 1}/${tour.stops.length}';
+
+    final isLastStop = _activeStop == tour.stops.length - 1;
+    final isVoicePlaying = ref.watch(liveTourPlaybackProvider).isPlaying;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle_rounded, size: 14, color: Colors.green),
+                  SizedBox(width: 4),
+                  Text(
+                    'En la parada',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                stopCounterText,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          stop.name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        if (stop.activities.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Actividades recomendadas aquí:',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: stop.activities.take(3).map((act) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  act,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+        if (stop.tips.isNotEmpty || stop.curiousFacts.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  stop.tips.isNotEmpty ? Icons.lightbulb_outline_rounded : Icons.auto_awesome_rounded,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    stop.tips.isNotEmpty ? stop.tips.first : stop.curiousFacts.first,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: LiquidButton(
+                label: isVoicePlaying ? 'Pausar audio' : 'Repetir audioguía',
+                icon: isVoicePlaying ? Icons.pause_rounded : Icons.record_voice_over_rounded,
+                onPressed: () async {
+                  final voiceGuide = ref.read(voiceGuideProvider);
+                  if (isVoicePlaying) {
+                    await voiceGuide.stop();
+                    ref.read(liveTourPlaybackProvider.notifier).setPlaying(false);
+                  } else {
+                    ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
+                    await voiceGuide.narrateStop(
+                      stop,
+                      stopIndex: _activeStop,
+                      totalStops: tour.stops.length,
+                      lang: tour.language,
+                    );
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            _buildMicButton(context),
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              tooltip: 'Ver ruta en mapa',
+              onPressed: () {
+                setState(() {
+                  _isAtStopMode = false;
+                });
+              },
+              icon: const Icon(Icons.map_rounded, size: 18),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: LiquidButton(
+            label: isLastStop ? 'Terminar tour' : l10n.nextStop,
+            icon: isLastStop ? Icons.flag_rounded : Icons.arrow_forward_rounded,
+            isPrimary: true,
+            onPressed: () => _advanceToNextStop(tour),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _advanceToNextStop(Tour tour) {
+    if (_activeStop == tour.stops.length - 1) {
+      _finishTour(tour);
+      return;
+    }
+
+    final currentStop = tour.stops[_activeStop];
+    final nextIndex = _activeStop + 1;
+    final nextStop = tour.stops[nextIndex];
+
+    if (nextStop.day > currentStop.day) {
+      _showEndOfDayDialog(tour, currentStop.day, nextStop.day, nextIndex);
+    } else {
+      _onAdvanceToStop(tour, nextIndex, currentStop.day);
+    }
+  }
+
+  void _onAdvanceToStop(Tour tour, int nextIndex, int day) {
+    setState(() {
+      _activeStop = nextIndex;
+      _selectedDay = day;
+      _isAtStopMode = false;
+      _liveRoute = null;
+      _liveRouteStopIndex = null;
+      _isOffRoute = false;
+      _noLandRouteAvailable = false;
+      _isTrackingMode = false;
+      _initialOverviewPoint = null;
+      _hasUserManuallyToggledTracking = false;
+      _voiceFoodPlaces = [];
+      _selectedVoicePlace = null;
+    });
+    _saveProgress(nextIndex);
+    ref.read(voiceGuideProvider).precacheTourStops(
+      tour.stops,
+      startIndex: _activeStop,
+      maxCount: 2,
+      lang: tour.language,
+    );
+    _recalculateRoute(tour, force: true);
+  }
+
+  Future<void> _showEndOfDayDialog(
+    Tour tour,
+    int finishedDay,
+    int nextDay,
+    int nextStopIndex,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isDismissible: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Icon(Icons.wb_sunny_rounded, size: 48, color: Colors.amber),
+              const SizedBox(height: 12),
+              Text(
+                '¡Completaste el Día $finishedDay! 🎉',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Has recorrido todas las paradas programadas para hoy. ¿Qué deseas hacer ahora?',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.hotel_rounded),
+                      label: const Text('Ir a mi hotel'),
+                      onPressed: () {
+                        Navigator.of(modalContext).pop();
+                        setState(() {
+                          _activeStop = nextStopIndex;
+                          _selectedDay = nextDay;
+                          _isAtStopMode = false;
+                        });
+                        _saveProgress(nextStopIndex);
+                        _startHotelNavigation();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.arrow_forward_rounded),
+                      label: Text('Iniciar Día $nextDay'),
+                      onPressed: () {
+                        Navigator.of(modalContext).pop();
+                        _onAdvanceToStop(tour, nextStopIndex, nextDay);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _finishTour(Tour tour) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('tour_progress_${widget.tourId}');
+
+    final currentUser = ref.read(authServiceProvider).currentUser;
+    if (currentUser == null) {
+      if (mounted) context.pop();
+      return;
+    }
+
+    final canRate = tour.canBeRatedBy(currentUser.id);
+    if (!canRate) {
+      if (mounted) context.pop();
+    } else {
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => TourRatingDialog(
+            tour: tour,
+            popScreenOnComplete: true,
+          ),
+        );
+      }
+    }
   }
 
   /// The animated microphone button that replaces the hands-free button

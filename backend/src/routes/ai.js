@@ -2945,20 +2945,62 @@ function accessibilityFor(type) {
 
 function buildTourTitle(input, planner) {
   const city = cleanAdministrativeCityName(input.city || input.destination || 'Destino')
-  const labels = {
-    historical: 'Histórico por',
-    gastronomic: 'Sabores de',
-    ecological: 'Ruta Verde por',
-    night: 'Nocturno por',
-    family: 'Familiar por',
-    cultural: 'Cultural por',
-    romantic: 'Romántico por',
-    sports: 'Activo por',
-    urban: 'Urbano por',
-    custom: 'Personalizado por',
+  const creativeVariations = {
+    historical: [
+      `Huellas y Memorias de ${city}`,
+      `Ruta del Patrimonio y Leyendas en ${city}`,
+      `Secretos Coloniales y Memoria Viva de ${city}`
+    ],
+    gastronomic: [
+      `Sabores de Barrio y Fogones de ${city}`,
+      `Ruta del Paladar: Tradición Culinaria en ${city}`,
+      `Sazón y Tradición Gastronómica en ${city}`
+    ],
+    ecological: [
+      `Ruta Verde y Brisas Naturales de ${city}`,
+      `Senderos y Paisajes Escondidos de ${city}`,
+      `Oasis Urbano y Ecosistemas de ${city}`
+    ],
+    night: [
+      `Luces, Ritmo y Noche Bohemia en ${city}`,
+      `Bajo las Estrellas: Vida Nocturna de ${city}`,
+      `Ecos y Terrazas: La Noche en ${city}`
+    ],
+    family: [
+      `Aventura en Familia: Descubriendo ${city}`,
+      `Ruta de Parques, Cultura y Diversión en ${city}`,
+      `Tesoros Urbanos para Todas las Edades en ${city}`
+    ],
+    cultural: [
+      `Joyas, Arte y Tradiciones de ${city}`,
+      `Cultura Viva: De Plazas a Murales en ${city}`,
+      `Ecos de Identidad y Patrimonio en ${city}`
+    ],
+    romantic: [
+      `Rincones Románticos y Miradores de ${city}`,
+      `Atesorando Recuerdos: Paseo para Dos en ${city}`,
+      `Magia y Atardeceres en ${city}`
+    ],
+    sports: [
+      `Ruta Activa y Pasión Deportiva en ${city}`,
+      `Paso a Paso por la Energía Urbana de ${city}`
+    ],
+    urban: [
+      `Contrastes, Calles y Pulso Urbano de ${city}`,
+      `Explorando la Auténtica Esencia de ${city}`,
+      `De Barrio en Barrio: El Ritmo de ${city}`
+    ],
+    custom: [
+      `Inmersión Total: Lo Mejor de ${city}`,
+      `Experiencia Inolvidable por ${city}`,
+      `Tesoros Imperdibles en ${city}`
+    ]
   }
-  const prefix = labels[input.type] || 'Personalizado por'
-  return `Tour ${prefix} ${city}`.replace(/\s+/g, ' ').trim()
+
+  const list = creativeVariations[input.type] || creativeVariations.custom
+  const seed = city.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) + (planner?.selectedPlaces?.length || 0)
+  const index = Math.abs(seed) % list.length
+  return list[index]
 }
 
 function buildShortSummary(input, planner) {
@@ -3459,6 +3501,8 @@ function generateDynamicDescription(name, category, city) {
 
 function generateDynamicTips(name, category, city) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
+  const seed = cleanName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+
   if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada|costa/i.test(cleanName) || /beach|playa|coastal/i.test(category)) {
     return [
       `Llevar protección solar, toalla e hidratación para disfrutar de ${cleanName}.`,
@@ -3477,17 +3521,67 @@ function generateDynamicTips(name, category, city) {
       `Cuidar las pertenencias personales y coordinar el transporte de regreso con anticipación.`
     ]
   }
-  if (/restaurante|comida|cafe|café|bistro|parador|kiosko|asador|gourmet|gastronom/i.test(cleanName) || /food|restaurant/i.test(category)) {
+
+  // Comida y Gastronomía variada
+  if (/cafe|café|bistro|bakery|panader[íi]a/i.test(cleanName)) {
     return [
-      `Preguntar por el plato insignia o las recomendaciones del chef de ${cleanName}.`,
-      `Consultar si admiten reservaciones previas en horas pico para evitar esperas.`
+      `Acompañar la pausa con un café de origen y consultar por las especialidades de repostería artesanal en ${cleanName}.`,
+      `Elegir un asiento cómodo para observar el ambiente local y recargar energías para el resto del tour.`
+    ]
+  }
+  if (/mariscos|pescado|ceviche|costeñ/i.test(cleanName)) {
+    return [
+      `Preguntar por la pesca fresca del día o una cazuela marinera insignia en ${cleanName}.`,
+      `Acompañar los sabores del mar con bebidas cítricas refrescantes como limonada de coco o jugo natural.`
+    ]
+  }
+  if (/asador|parrilla|carnes|steak/i.test(cleanName)) {
+    return [
+      `Consultar el punto de cocción sugerido para los cortes emblemáticos de ${cleanName}.`,
+      `Probar las guarniciones tradicionales como arepas asadas o papas criollas al vapor.`
+    ]
+  }
+  if (/restaurante|comida|parador|kiosko|gourmet|gastronom/i.test(cleanName) || /food|restaurant/i.test(category)) {
+    const foodVariants = [
+      [
+        `Preguntar al anfitrión por el plato más representativo o la receta estrella de ${cleanName}.`,
+        `Dejar espacio para probar los postres o dulces típicos elaborados en el lugar.`
+      ],
+      [
+        `Llegar con apetito para compartir varias entradas antes de ordenar el plato fuerte en ${cleanName}.`,
+        `Consultar las opciones de jugos de frutas exóticas de temporada disponibles.`
+      ],
+      [
+        `Si visitas en grupo, ordenar preparaciones al centro de la mesa en ${cleanName} para degustar variedad.`,
+        `Verificar si disponen de terraza o zona ventilada para una velada más placentera.`
+      ]
+    ]
+    return foodVariants[Math.abs(seed) % foodVariants.length]
+  }
+
+  // Museos y Cultura variada
+  if (/carnaval|folclor|comparsa/i.test(cleanName)) {
+    return [
+      `Apreciar la destreza artesanal de las máscaras de madera y los trajes de comparsa en ${cleanName}.`,
+      `Disfrutar de las salas sonoras interactivas para identificar los ritmos de cumbia y tambora.`
     ]
   }
   if (/biblioteca|library|museo|museum|galeria/i.test(cleanName)) {
-    return [
-      `Consultar las exposiciones temporales y salas principales en ${cleanName}.`,
-      `Aprovechar las visitas guiadas o audioguías para conocer la historia detrás de cada pieza.`
+    const museumVariants = [
+      [
+        `Consultar en el ingreso si disponen de audioguías o mapa de salas para optimizar la visita en ${cleanName}.`,
+        `Apreciar con calma las obras principales antes de recorrer las exposiciones temporales.`
+      ],
+      [
+        `Dedicar tiempo a leer las reseñas de contexto histórico para entender el valor de cada pieza en ${cleanName}.`,
+        `Tomar nota de los detalles arquitectónicos del edificio que acoge la exhibición.`
+      ],
+      [
+        `Aprovechar las visitas guiadas por mediadores culturales en ${cleanName} para descubrir anécdotas ocultas.`,
+        `Respetar las políticas sobre el uso de flash fotográfico dentro de las salas.`
+      ]
     ]
+    return museumVariants[Math.abs(seed) % museumVariants.length]
   }
   if (/puente|bridge|mirador|vessel|tower|observatorio/i.test(cleanName)) {
     return [
@@ -3521,6 +3615,8 @@ function generateDynamicTips(name, category, city) {
 
 function generateDynamicActivities(name, category) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
+  const seed = cleanName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+
   if (/playa|beach|bah[íi]a|cala|cabo|ensenada/i.test(cleanName)) {
     return [
       `Caminar y relajarse junto a la orilla de ${cleanName}`,
@@ -3542,19 +3638,63 @@ function generateDynamicActivities(name, category) {
       `Fotografiar el paisaje panorámico desde las alturas de ${cleanName}`
     ]
   }
-  if (/restaurante|comida|cafe|bistro|bar|parador|kiosko|asador|gastrobar/i.test(cleanName)) {
+
+  // Actividades gastronómicas variadas
+  if (/cafe|café|bistro|bakery/i.test(cleanName)) {
     return [
-      `Degustar los platillos y especialidades culinarias de ${cleanName}`,
-      `Probar las bebidas tradicionales y postres locales`,
-      `Disfrutar del ambiente acogedor y hospitalidad de ${cleanName}`
+      `Saborear café artesanal de especialidad y preparaciones calientes en ${cleanName}`,
+      `Elegir bocados de pastelería fresca o repostería local`,
+      `Disfrutar de un momento de descanso y lectura en el acogedor salón`
+    ]
+  }
+  if (/restaurante|comida|asador|parador|kiosko|gastrobar/i.test(cleanName)) {
+    const foodActivityVariants = [
+      [
+        `Deleitarse con la sazón y recetas representativas de ${cleanName}`,
+        `Acompañar la comida con refrescos naturales o bebidas tradicionales`,
+        `Conectar con la hospitalidad del equipo y la cultura culinaria del sitio`
+      ],
+      [
+        `Degustar las entradas de autor y platos fuertes insignia en ${cleanName}`,
+        `Descubrir los secretos de preparación conversando con el personal`,
+        `Apreciar el diseño ambiental y la propuesta gastronómica del establecimiento`
+      ],
+      [
+        `Compartir una mesa festiva con variedad de platillos típicos en ${cleanName}`,
+        `Probar los postres artesanales y digestivos tradicionales`,
+        `Capturar recuerdos fotográficos del ambiente y la presentación de los platos`
+      ]
+    ]
+    return foodActivityVariants[Math.abs(seed) % foodActivityVariants.length]
+  }
+
+  // Actividades en museos y recintos culturales variados
+  if (/carnaval|folclor/i.test(cleanName)) {
+    return [
+      `Descubrir la historia de las comparsas, disfraces e insignias en ${cleanName}`,
+      `Escuchar los testimonios de los portadores de la tradición cultural`,
+      `Tomar fotos junto a las carrozas y figuras monumentales de la fiesta`
     ]
   }
   if (/biblioteca|library|museo|museum|galeria/i.test(cleanName)) {
-    return [
-      `Recorrer las salas de exhibición permanente y colecciones de ${cleanName}`,
-      `Aprender sobre los momentos y personajes históricos clave`,
-      `Apreciar el diseño y la curaduría artística de ${cleanName}`
+    const museumActivityVariants = [
+      [
+        `Recorrer las salas de exhibición permanente y colecciones de ${cleanName}`,
+        `Aprender sobre los momentos y personajes históricos clave de la región`,
+        `Apreciar la curaduría artística y elementos patrimoniales expuestos`
+      ],
+      [
+        `Explorar la cronología y documentos visuales custodiados en ${cleanName}`,
+        `Profundizar en la evolución social y artística a través de las obras`,
+        `Descubrir detalles arquitectónicos del inmueble que alberga el acervo`
+      ],
+      [
+        `Interpretar los mensajes y técnicas de los creadores en ${cleanName}`,
+        `Participar de las proyecciones o estaciones interactivas del recinto`,
+        `Visitar la sala de memoria para comprender el impacto cultural de la colección`
+      ]
     ]
+    return museumActivityVariants[Math.abs(seed) % museumActivityVariants.length]
   }
   if (/puente|bridge/i.test(cleanName)) {
     return [
@@ -5572,21 +5712,23 @@ CLASIFICACIÓN:
 ACCIONES DISPONIBLES (actionType):
 1. "SEARCH_RESTAURANTS": el usuario tiene hambre, busca comida, restaurantes, cafés o bares en la zona. (Importante: la búsqueda se realiza alrededor de la posición del usuario).
 2. "SEARCH_PLACES": el usuario busca lugares interesantes, atractivos turísticos, miradores, plazas, parques o sitios para ver cerca de su posición.
-3. "RETURN_TO_ACCOMMODATION": el usuario quiere regresar a su hotel, alojamiento o casa, o está mencionando/respondiendo el nombre de su hotel o dirección (ej: "Hotel Boutique Casa Carolina", "mi hotel es Casa Carolina", "calle 84 # 51B", "llévame al hotel").
-   - Si en el contexto ya existe un hotel confirmado (hotelName / hotelAddress / hotelLat), confírmale de inmediato y con entusiasmo que trazas la ruta hacia su hotel (menciona el nombre del hotel en responseText). NUNCA le pidas la dirección ni el nombre si ya está en el contexto.
-   - Si el usuario menciona o responde el nombre de un hotel, hostal o una dirección (ej: "Hotel Boutique Casa Carolina", "mi casa en...", "calle 84 # 51B"), clasifícalo de inmediato como "RETURN_TO_ACCOMMODATION", extrae el nombre o dirección en "destinationAddress" y confirma que trazas la ruta hacia allá.
-   - Solo si NO hay ningún hotel en el contexto y el usuario dijo únicamente "llévame a mi hotel / quiero ir a mi hotel" sin mencionar ningún nombre ni dirección, pídele amablemente que te indique el nombre de su hotel.
-4. "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre la parada actual.
-5. "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro punto del recorrido.
-6. null: consulta informativa general (clima, tips, etc.).
+   - Extrae en "searchQuery" el término o nombre concreto del lugar buscado (ej: "estadio", "parque", "museo", "mirador", "malecón", "playa").
+3. "RETURN_TO_ACCOMMODATION": el usuario quiere regresar a su hotel, alojamiento o casa, y YA existe un hotel en el contexto O el usuario indicó el nombre/dirección de su hotel en el mensaje actual.
+   - Extrae el nombre o dirección en "destinationAddress" si el usuario lo mencionó.
+4. "REQUEST_ACCOMMODATION_LOCATION": el usuario dice que quiere volver a su hotel/alojamiento/casa, pero NO hay ningún hotel en el contexto y NO dio ningún nombre ni dirección.
+   - Tu responseText DEBE preguntar amablemente: "¿En qué hotel o dirección te estás hospedando para guiarte hasta allá?"
+5. "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre la parada actual.
+6. "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro punto del recorrido.
+7. null: consulta informativa general (clima, tips, etc.).
 
 RESPUESTA (responseText): En español colombiano/latinoamericano, natural, cálido, conciso (máximo 2 oraciones).
 Devuelve ÚNICAMENTE un JSON válido con este esquema:
 {
   "isRelatedToTravel": boolean,
   "responseText": "string",
-  "actionType": "SEARCH_RESTAURANTS" | "SEARCH_PLACES" | "RETURN_TO_ACCOMMODATION" | "DESCRIBE_CURRENT_POI" | "CHANGE_DESTINATION" | null,
-  "destinationAddress": "string" // opcional, si el usuario dio una dirección explícita
+  "actionType": "SEARCH_RESTAURANTS" | "SEARCH_PLACES" | "RETURN_TO_ACCOMMODATION" | "REQUEST_ACCOMMODATION_LOCATION" | "DESCRIBE_CURRENT_POI" | "CHANGE_DESTINATION" | null,
+  "searchQuery": "string", // opcional, término o lugar específico para SEARCH_PLACES
+  "destinationAddress": "string" // opcional, si el usuario dio una dirección o nombre de hotel explícito
 }`
 
 aiRouter.post('/chat/route-assistant', async (req, res, next) => {
@@ -5630,8 +5772,8 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
             { role: 'user', content: userMessage }
           ],
           response_format: { type: 'json_object' },
-          temperature: 0.4,
-          extra: { max_tokens: 300 }
+          temperature: 0.3,
+          reasoning_effort: 'low'
         })),
         signal: controller.signal
       })
@@ -5639,20 +5781,21 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
 
       if (response.ok) {
         const json = await response.json()
-        const raw = json.choices?.[0]?.message?.content ?? '{}'
-        aiResult = JSON.parse(raw)
+        const content = json.choices?.[0]?.message?.content
+        if (content) {
+          aiResult = JSON.parse(content)
+        }
       }
     } catch (err) {
-      console.warn('[route-assistant] OpenAI call failed:', err.message)
+      console.warn('[route-assistant] OpenAI call error:', err.message)
     }
 
-    // Fallback si la IA no respondió
-    if (!aiResult || typeof aiResult.isRelatedToTravel !== 'boolean') {
-      aiResult = {
-        isRelatedToTravel: false,
-        responseText: 'Lo siento, no pude procesar tu consulta en este momento. Intenta de nuevo.',
+    if (!aiResult) {
+      return res.json({
+        isRelatedToTravel: true,
+        responseText: 'No logré procesar tu solicitud con el asistente de voz. Por favor, intenta de nuevo.',
         actionType: null
-      }
+      })
     }
 
     let nearbyPlaces = []
@@ -5676,8 +5819,12 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
 
     // 2. Manejo de SEARCH_PLACES
     if (aiResult.isRelatedToTravel && aiResult.actionType === 'SEARCH_PLACES') {
+      const cleanTerm = (aiResult.searchQuery || '').trim() ||
+        userQuery.replace(/\b(busca|buscar|encuentra|d[oó]nde est[aá]|donde queda|mu[eé]strame|ver|lugares|atracciones|paradas)\b/gi, '').trim() ||
+        'turismo'
+
       try {
-        const photonSpots = await photonSearch('tourism attraction viewpoint', 10, centerLat, centerLon)
+        const photonSpots = await photonSearch(cleanTerm, 10, centerLat, centerLon)
         if (photonSpots && photonSpots.length > 0) {
           nearbyPlaces = photonSpots.map(p => ({
             name: p.name,
@@ -5690,43 +5837,69 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
 
       if (!nearbyPlaces || nearbyPlaces.length === 0) {
         try {
-          nearbyPlaces = await overpassAttractions(centerLat, centerLon, 2500)
+          nearbyPlaces = await overpassAttractions(centerLat, centerLon, 3500)
+        } catch (_) {}
+      }
+
+      if (!nearbyPlaces || nearbyPlaces.length === 0) {
+        try {
+          const fallbackSpots = await photonSearch('parque plaza museo mirador', 8, centerLat, centerLon)
+          if (fallbackSpots && fallbackSpots.length > 0) {
+            nearbyPlaces = fallbackSpots.map(p => ({
+              name: p.name,
+              latitude: p.latitude,
+              longitude: p.longitude,
+              type: 'attraction'
+            }))
+          }
         } catch (_) {}
       }
     }
 
-    // 3. Manejo de RETURN_TO_ACCOMMODATION
-    if (aiResult.isRelatedToTravel && aiResult.actionType === 'RETURN_TO_ACCOMMODATION') {
-      if (tourContext.hotelLat && tourContext.hotelLon) {
-        targetDestination = {
-          name: tourContext.hotelName || 'Alojamiento',
-          latitude: tourContext.hotelLat,
-          longitude: tourContext.hotelLon,
-          address: tourContext.hotelAddress || '',
-          type: 'hotel'
+    // 3. Manejo de RETURN_TO_ACCOMMODATION / REQUEST_ACCOMMODATION_LOCATION
+    if (aiResult.isRelatedToTravel && (aiResult.actionType === 'RETURN_TO_ACCOMMODATION' || aiResult.actionType === 'REQUEST_ACCOMMODATION_LOCATION')) {
+      const hasHotelInContext = Boolean(tourContext.hotelLat && tourContext.hotelLon) || Boolean(tourContext.hotelName && tourContext.hotelName.trim().length > 0)
+      const hasAddressInQuery = Boolean(aiResult.destinationAddress && aiResult.destinationAddress.trim().length > 0)
+
+      if (!hasHotelInContext && !hasAddressInQuery) {
+        aiResult.actionType = 'REQUEST_ACCOMMODATION_LOCATION'
+        targetDestination = null
+        if (!aiResult.responseText || aiResult.responseText.length < 10) {
+          aiResult.responseText = '¿En qué hotel o dirección te estás hospedando para guiarte hasta allá?'
         }
-      } else if (aiResult.destinationAddress) {
-        const query = `${aiResult.destinationAddress}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
-        const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
-        if (geo?.latitude && geo?.longitude) {
+      } else {
+        aiResult.actionType = 'RETURN_TO_ACCOMMODATION'
+        if (tourContext.hotelLat && tourContext.hotelLon) {
           targetDestination = {
-            name: aiResult.destinationAddress,
-            latitude: geo.latitude,
-            longitude: geo.longitude,
-            address: aiResult.destinationAddress,
+            name: tourContext.hotelName || 'Alojamiento',
+            latitude: tourContext.hotelLat,
+            longitude: tourContext.hotelLon,
+            address: tourContext.hotelAddress || '',
             type: 'hotel'
           }
-        }
-      } else if (tourContext.hotelName) {
-        const query = `${tourContext.hotelName}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
-        const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
-        if (geo?.latitude && geo?.longitude) {
-          targetDestination = {
-            name: tourContext.hotelName,
-            latitude: geo.latitude,
-            longitude: geo.longitude,
-            address: tourContext.hotelAddress || tourContext.hotelName,
-            type: 'hotel'
+        } else if (aiResult.destinationAddress) {
+          const query = `${aiResult.destinationAddress}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
+          const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
+          if (geo?.latitude && geo?.longitude) {
+            targetDestination = {
+              name: aiResult.destinationAddress,
+              latitude: geo.latitude,
+              longitude: geo.longitude,
+              address: aiResult.destinationAddress,
+              type: 'hotel'
+            }
+          }
+        } else if (tourContext.hotelName) {
+          const query = `${tourContext.hotelName}, ${tourContext.city || ''} ${tourContext.country || ''}`.trim()
+          const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
+          if (geo?.latitude && geo?.longitude) {
+            targetDestination = {
+              name: tourContext.hotelName,
+              latitude: geo.latitude,
+              longitude: geo.longitude,
+              address: tourContext.hotelAddress || tourContext.hotelName,
+              type: 'hotel'
+            }
           }
         }
       }
