@@ -821,22 +821,6 @@ aiRouter.post('/chat', async (req, res, next) => {
         : deduplicatePlacesByName(rawCombined)
 
       let validatedSpecifics = combinedSpecifics
-      const canonicalDest = updatedPreferences.canonicalDestination || (hasConfirmedCity ? await resolveCanonicalDestination(updatedPreferences.city || updatedPreferences.destination).catch(() => null) : null)
-      if (canonicalDest && Number.isFinite(canonicalDest.latitude) && Number.isFinite(canonicalDest.longitude)) {
-        const geocodedCheck = await Promise.allSettled(
-          combinedSpecifics.map(async p => {
-            const pName = typeof p === 'object' ? (p.name || '') : String(p)
-            const geo = await geocodePlace(`${pName}, ${canonicalDest.city || updatedPreferences.city || ''}, ${canonicalDest.country || ''}`, canonicalDest.latitude, canonicalDest.longitude).catch(() => null)
-            if (geo && !validateCandidateLocation(geo, canonicalDest, 70)) {
-              console.warn(`[/ai/chat geofence] Dropping distant hallucinated place "${pName}" for destination "${canonicalDest.city}"`)
-              return null
-            }
-            return p
-          })
-        )
-        validatedSpecifics = geocodedCheck.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean)
-      }
-
       if (validatedSpecifics.length > 0) {
         updatedPreferences.specificPlaces = validatedSpecifics
       } else {
@@ -864,9 +848,10 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
       input.destination = input.city.trim()
     }
 
-    // Serverless environments like Vercel: process synchronously to avoid 404 polling errors
-    if (process.env.VERCEL) {
-      console.info('[tour-ai] Serverless runtime detected (Vercel). Processing tour generation synchronously.')
+    // Default to synchronous generation to avoid 404 polling errors and container-freezing on serverless runtimes
+    const runAsync = req.body.async === true
+    if (!runAsync) {
+      console.info('[tour-ai] Processing tour generation synchronously.')
       try {
         const result = await processTourGeneration(null, input)
         return res.json({
@@ -1247,17 +1232,10 @@ aiRouter.post('/tours/build', async (req, res, next) => {
       }
     }
 
-    // Serverless environments like Vercel: process synchronously to avoid 404 polling errors
-    const isServerless = Boolean(
-      process.env.VERCEL ||
-      process.env.VERCEL_ENV ||
-      process.env.NOW_REGION ||
-      process.env.AWS_LAMBDA_FUNCTION_NAME ||
-      req.headers['x-vercel-id'] ||
-      req.headers.host?.includes('vercel.app')
-    )
-    if (isServerless) {
-      console.info('[tour-ai] Serverless runtime detected. Processing tour build synchronously.')
+    // Default to synchronous tour build to avoid 404 polling errors and container-freezing on serverless runtimes
+    const runAsync = req.body.async === true
+    if (!runAsync) {
+      console.info('[tour-ai] Processing tour build synchronously.')
       try {
         const result = await processTourBuild(null, input, places, plannerContext)
         return res.json({
