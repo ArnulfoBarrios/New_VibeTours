@@ -985,7 +985,9 @@ class AiRecommendation {
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       category: json['category'] as String? ?? '',
       imageUrl: json['imageUrl'] as String? ?? '',
-      description: json['description'] as String? ?? '',
+      description: (json['description'] is Map
+          ? (json['description']['descripcion'] ?? json['description']['description'] ?? '').toString()
+          : json['description']?.toString()) ?? '',
       reason: json['reason'] as String? ?? '',
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 25,
       day: parsedDay,

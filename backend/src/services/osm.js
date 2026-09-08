@@ -215,6 +215,15 @@ export async function geocodePlace(query, lat = null, lon = null) {
     return res
   }
 
+  const resolveCityFromPhoton = (item) => {
+    const rawCounty = cleanAdministrativeCityName(item?.tags?.county || '')
+    const rawCity = cleanAdministrativeCityName(item?.city || item?.tags?.city || '')
+    if (rawCounty && normalizedQuery.toLowerCase().includes(rawCounty.toLowerCase())) {
+      return rawCounty
+    }
+    return rawCity || rawCounty || ''
+  }
+
   // 1. If lat and lon are provided, perform proximity search FIRST to bind results directly to the destination area
   if (lat && lon) {
     try {
@@ -227,7 +236,7 @@ export async function geocodePlace(query, lat = null, lon = null) {
             name: photonProx.name,
             latitude: Number(photonProx.latitude),
             longitude: Number(photonProx.longitude),
-            city: cleanAdministrativeCityName(photonProx.city || photonProx.tags?.city || '') || '',
+            city: resolveCityFromPhoton(photonProx),
             country: photonProx.country || ''
           }
           geocodeCache.set(key, res)
@@ -250,7 +259,7 @@ export async function geocodePlace(query, lat = null, lon = null) {
           name: photonGlobal.name,
           latitude: Number(photonGlobal.latitude),
           longitude: Number(photonGlobal.longitude),
-          city: cleanAdministrativeCityName(photonGlobal.city || photonGlobal.tags?.city || '') || '',
+          city: resolveCityFromPhoton(photonGlobal),
           country: photonGlobal.country || ''
         }
         geocodeCache.set(key, res)
@@ -317,12 +326,12 @@ export async function geocodePlace(query, lat = null, lon = null) {
             const address = validResult.address || {}
             const county = cleanAdministrativeCityName(address.county || '')
             const matchedContextCity = commaParts.length > 1 ? cleanAdministrativeCityName(commaParts[1]) : ''
-            let rawCity = address.city || address.town || ''
-            if (!rawCity && county && matchedContextCity && county.toLowerCase() === matchedContextCity.toLowerCase()) {
+            let rawCity = address.city || ''
+            if (county && matchedContextCity && county.toLowerCase() === matchedContextCity.toLowerCase()) {
               rawCity = county
             }
             if (!rawCity) {
-              rawCity = address.village || address.municipality || address.county || matchedContextCity || ''
+              rawCity = address.town || address.village || address.municipality || address.county || matchedContextCity || ''
             }
             const city = cleanAdministrativeCityName(rawCity)
             const country = address.country || ''
@@ -658,6 +667,7 @@ export function isNonTouristFacility(tags = {}) {
     /\b(urbanizaci[oó]n|condominio|conjunto\s+residencial|complejo\s+residencial|torre\s+residencial|viviendas|barrio\s+residencial|rotonda|glorieta|retorno\s+vial|intercambiador\s+vial|redoma)\b/i.test(name) ||
     /\b(etapa\s+\d+|manzana\s+[a-z\d]+|bloque\s+\d+|apto\b|apartamentos|torre\s+\d+)\b/i.test(name) ||
     /\b(mirador\s+del\s+mar\s+[ivx\d]+)\b/i.test(name) ||
+    /\b(universidad\s+sim[oó]n\s+bol[íi]var|sede\s+\d+|facultad\s+de|instituto\s+t[ée]cnico|sena\s+-\s+hoteler[íi]a)\b/i.test(name) ||
     name.includes('aguas de') ||
     name.includes('acueducto') ||
     name.includes('alcantarillado') ||
@@ -936,7 +946,10 @@ export function arePlacesSimilar(a, b) {
   // Strip cross-typology prefixes to extract geographic/landmark core
   const stripPrefix = (str) =>
     str.replace(
-      /^(?:gran\s+|nuevo\s+|nueva\s+|antiguo\s+|antigua\s+)?(?:ecoparque|parque\s+ecologico|parque\s+cultural|centro\s+cultural|parque\s+rotonda|plaza\s+rotonda|casa\s+museo|iglesia|catedral|basilica|templo|parroquia|santuario|plaza|parque|museo|monumento|estatua|busto|obelisco|malecon|mirador|playa|teatro|jardin|puerto|rotonda|glorieta|urbanizacion|paseo|boulevard|reserva\s+natural|reserva)\s+(?:de\s+|del?\s+|y\s+|la\s+|las\s+|el\s+|los\s+|a\s+la\s+|al\s+)?/gi,
+      /^(?:gran\s+|nuevo\s+|nueva\s+|antiguo\s+|antigua\s+)?(?:ecoparque|parque\s+ecologico|parque\s+cultural|centro\s+cultural|parque\s+rotonda|plaza\s+rotonda|casa\s+museo|casa|sala|sitio|centro|iglesia|catedral|basilica|templo|parroquia|santuario|plaza|parque|museo|monumento|estatua|busto|obelisco|malecon|mirador|playa|teatro|jardin|puerto|rotonda|glorieta|urbanizacion|paseo|boulevard|reserva\s+natural|reserva)\s+(?:de\s+|del?\s+|y\s+|la\s+|las\s+|el\s+|los\s+|a\s+la\s+|al\s+)?/gi,
+      ''
+    ).replace(
+      /\s+(?:de\s+|en\s+)?(?:barranquilla|santa\s+marta|cartagena|bogota|medellin|cali|colombia)$/gi,
       ''
     ).trim()
 

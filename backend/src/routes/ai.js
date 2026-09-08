@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, geocodePlacesWithOpenAI, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
@@ -318,6 +318,18 @@ export function isValidSpecificPlace(placeName) {
   // 5. Descartar categorías de turismo generales, eventos/festivales y etiquetas temáticas
   const isCategoryOrTheme = /^(gastronom[íi]a|gastronom[íi]a local|cultura|cultura e historia|historia|naturaleza|aventura|aventuras|actividades de aventura|playa|playas|tour de caf[ée]|vida nocturna|compras|entretenimiento|arte|m[úu]sica|deportes?|bienestar|relax|ecoturismo|excursi[óo]n|excursiones|paseo|paseos|bailar|senderismo|buceo|snorkel|avistamiento|degustaci[óo]n|cata|visita|recorrido|actividad|actividades|opciones|imperdibles|destacados|llegada|salida|check|check-in|check-out|checkin|checkout|despedida|aeropuerto|fiesta del mar|fiestas del mar|carnaval|carnavales|festival|festivales|feria|ferias|desfile|desfiles|semana santa|evento|eventos|descripci[óo]n|resumen|notas?|presupuesto|transporte|alojamiento|hospedaje|acompañantes|fechas|duraci[oó]n|destino)$/i.test(cleanLower)
   if (isCategoryOrTheme) return false
+
+  // 5.1 Descartar fiestas, carnavales y festivales de calendario a menos que indiquen una sede física permanente (casa, museo, centro, parque, plaza)
+  if (/\b(carnaval\s+de|festival\s+de|feria\s+de|fiesta\s+del?|reinado\s+de|desfile\s+de)\b/i.test(cleanLower)) {
+    const isPhysicalVenue = /\b(museo|casa|centro|parque|plaza|sala|galer[íi]a|teatro|estadio|concha|complejo)\b/i.test(cleanLower)
+    if (!isPhysicalVenue) return false
+  }
+
+  // 5.2 Descartar sedes universitarias, facultades y dependencias académicas no turísticas
+  if (/\b(universidad\s+sim[oó]n\s+bol[íi]var|sede\s+\d+|facultad\s+de|instituto\s+t[ée]cnico|sena\s+-\s+hoteler[íi]a)\b/i.test(cleanLower)) {
+    const isMajorHeritage = /\b(jard[íi]n\s+bot[áa]nico|museo|bellas\s+artes|teatro)\b/i.test(cleanLower)
+    if (!isMajorHeritage) return false
+  }
 
   // 6. Descartar si es país o "Ciudad, País"
   if (/, (m[ée]xico|espa[ñn]a|colombia|ee\.?\s*uu\.?|estados unidos|francia|italia|brasil|argentina|per[úu]|chile|reino unido|alemania)\b/i.test(cleanLower)) {
@@ -813,12 +825,15 @@ aiRouter.post('/chat', async (req, res, next) => {
         ...extractedFromMsg
       ].filter(p => {
         const pName = typeof p === 'object' ? (p.name || '') : String(p)
-        return isValidSpecificPlace(pName)
+        return isValidSpecificPlace(pName) && !isNonTouristFacility({ name: pName })
       })
 
       const existingCount = Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces.length : 0
       const combinedSpecifics = (isConfirmedItineraryMsg && extractedFromMsg.length >= Math.max(2, existingCount))
-        ? deduplicatePlacesByName(extractedFromMsg.filter(p => isValidSpecificPlace(typeof p === 'object' ? p.name : p)))
+        ? deduplicatePlacesByName(extractedFromMsg.filter(p => {
+            const pName = typeof p === 'object' ? p.name : p
+            return isValidSpecificPlace(pName) && !isNonTouristFacility({ name: pName })
+          }))
         : deduplicatePlacesByName(rawCombined)
 
       let validatedSpecifics = combinedSpecifics
@@ -1333,13 +1348,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       (async () => {
         if (!location?.latitude) return []
         try {
-          return await photonTourAttractions({
-            city,
-            country,
-            latitude: location.latitude,
-            longitude: location.longitude,
-            limit: 12
-          })
+          return await photonSearch(`${city} ${country}`, 15, location.latitude, location.longitude)
         } catch (_) {
           return []
         }
@@ -1358,6 +1367,9 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       const normKey = normalizeKey(name || '')
       if (normKey && currentKeys.has(normKey)) return true
       if (pId && currentIds.has(String(pId).toLowerCase().trim())) return true
+      for (const cp of currentPlaces) {
+        if (arePlacesSimilar(cp, name)) return true
+      }
       return false
     }
 
@@ -1458,7 +1470,9 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
         }
 
         const aiReason = customReasonsMap[place.name] || place.reason || null
-        const richDesc = richDescriptionsMap[place.name] || place.description || `Explora ${place.name}, una parada imprescindible en ${city} llena de cultura e historia local.`
+        const descObj = richDescriptionsMap[place.name]
+        const rawDesc = (descObj && typeof descObj === 'object' ? descObj.descripcion : descObj) || place.description || `Explora ${place.name}, una parada imprescindible en ${city} llena de cultura e historia local.`
+        const richDesc = typeof rawDesc === 'object' ? (rawDesc.descripcion || '') : String(rawDesc || '')
         return {
           id: place.placeId || place.id || place.name,
           name: place.name,
@@ -1635,6 +1649,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     }
     
     const publicStops = normalizedStops.map(s => s.publicStop)
+    const routeStops = normalizedStops.map(s => s.routeStop)
     const targetCity = input.city || input.destination || ''
     const targetCountry = input.country || 'Colombia'
     const coverUrl = (planner?.selectedPlaces?.[0]?.imageUrl && !planner.selectedPlaces[0].imageUrl.includes('fallback'))
@@ -1905,6 +1920,7 @@ async function processTourGeneration(jobId, input) {
       }
       
       const stops = normalizedStops.map((stop) => stop.publicStop)
+      const routeStops = normalizedStops.map((stop) => stop.routeStop)
       const targetCity = input.city || input.destination || ''
       const targetCountry = input.country || 'Colombia'
       const coverUrl = (planner?.selectedPlaces?.[0]?.imageUrl && !planner.selectedPlaces[0].imageUrl.includes('fallback'))
@@ -3796,7 +3812,7 @@ async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lo
   const CITY_EXCLUSIVE_LANDMARKS = {
     'cartagena': ['bocagrande', 'castillo san felipe', 'getsemani', 'islas del rosario', 'baru', 'la popa'],
     'barranquilla': ['malecon del rio', 'ventana al mundo', 'boca de ceniza', 'casa del carnaval', 'edgar renteria'],
-    'santa marta': ['tayrona', 'rodadero', 'taganga', 'minca', 'quinta de san pedro'],
+    'santa marta': ['tayrona', 'rodadero', 'taganga', 'minca', 'quinta de san pedro', 'museo bolivariano'],
     'medellin': ['comuna 13', 'pueblito paisa', 'parque botero', 'el penol', 'guatape'],
     'bogota': ['monserrate', 'la candelaria', 'plaza de bolivar', 'zipaquira']
   }
@@ -4830,10 +4846,11 @@ export async function collectTourCandidates(input, location) {
           placeName = (rawPlace.name || '').trim()
           placeDay = rawPlace.dia || rawPlace.day || null
         }
-        if (!isValidSpecificPlace(placeName)) return null
+        if (!isValidSpecificPlace(placeName) || isNonTouristFacility({ name: placeName })) return null
 
-        const entityType = getPlaceEntityType(placeName)
-        const isRestaurant = entityType === 'food' || /restaurante|bistro|cafe|comida|asador|gourmet|bar|pub/i.test(placeName)
+        const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
+        const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
+        const isRestaurant = isExplicitDining && !isCulturalVenue
         
         let geo = null
         const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
@@ -5069,7 +5086,7 @@ export async function collectTourCandidates(input, location) {
           placeName = (raw.name || '').trim()
           placeDay = raw.dia || raw.day || null
         }
-        if (!placeName) continue
+        if (!placeName || !isValidSpecificPlace(placeName) || isNonTouristFacility({ name: placeName })) continue
 
         const coords = aiCoords[placeName] ||
                        Object.entries(aiCoords).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
@@ -5077,8 +5094,9 @@ export async function collectTourCandidates(input, location) {
                                                               k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
 
         if (coords && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)) {
-          const entityType = getPlaceEntityType(placeName)
-          const isRestaurant = entityType === 'food' || /restaurante|bistro|cafe|comida|asador|gourmet|bar|pub/i.test(placeName)
+          const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
+          const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
+          const isRestaurant = isExplicitDining && !isCulturalVenue
           geocodedSpecifics.push({
             name: placeName,
             latitude: Number(coords.latitude),

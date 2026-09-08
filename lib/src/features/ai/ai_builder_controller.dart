@@ -557,14 +557,15 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       longitude: baseLon,
     );
 
-    final currentNamesAndIds = <String>{};
+    final currentNames = <String>{};
+    final currentIds = <String>{};
     for (final e in state.recommendations) {
-      currentNamesAndIds.add(e.name.toLowerCase().trim());
-      currentNamesAndIds.add(e.id.toLowerCase().trim());
+      if (e.name.trim().isNotEmpty) currentNames.add(e.name.toLowerCase().trim());
+      if (e.id.trim().isNotEmpty) currentIds.add(e.id.toLowerCase().trim());
     }
     for (final e in state.removedRecommendations) {
-      currentNamesAndIds.add(e.name.toLowerCase().trim());
-      currentNamesAndIds.add(e.id.toLowerCase().trim());
+      if (e.name.trim().isNotEmpty) currentNames.add(e.name.toLowerCase().trim());
+      if (e.id.trim().isNotEmpty) currentIds.add(e.id.toLowerCase().trim());
     }
 
     final excludeIds = <String>[
@@ -574,24 +575,26 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       ...state.removedRecommendations.map((e) => e.name),
     ];
 
-    bool isDuplicatePlace(String name, String id, Set<String> currentNamesAndIds) {
+    bool isDuplicatePlace(String name, String id) {
       final normName = name.toLowerCase().trim().replaceAll(RegExp(r'^(el|la|los|las|del)\s+'), '');
       final normId = id.toLowerCase().trim();
 
       if (normName.isEmpty && normId.isEmpty) return true;
-      if (normId.isNotEmpty && currentNamesAndIds.contains(normId)) return true;
-      if (normName.isNotEmpty && currentNamesAndIds.contains(normName)) return true;
+      if (normId.isNotEmpty && currentIds.contains(normId)) return true;
+      if (normName.isNotEmpty && currentNames.contains(normName)) return true;
 
-      final words = normName.split(RegExp(r'\s+')).where((w) => w.length > 3).toList();
-      for (final existing in currentNamesAndIds) {
+      final stopWords = {'barranquilla', 'colombia', 'santa', 'marta', 'cartagena', 'medellin', 'bogota'};
+      final words = normName.split(RegExp(r'\s+')).where((w) => w.length > 3 && !stopWords.contains(w)).toList();
+      for (final existing in currentNames) {
         final normExisting = existing.replaceAll(RegExp(r'^(el|la|los|las|del)\s+'), '');
         if (normExisting.length > 3 && normName.length > 3) {
-          if (normExisting == normName || normExisting.contains(normName) || normName.contains(normExisting)) {
-            return true;
+          if (normExisting == normName) return true;
+          if (normName.length >= 8 && normExisting.length >= 8) {
+            if (normExisting.contains(normName) || normName.contains(normExisting)) return true;
           }
           if (words.length >= 2) {
             final matchingWords = words.where((w) => normExisting.contains(w)).toList();
-            if (matchingWords.length >= 2) {
+            if (matchingWords.length >= 2 && matchingWords.length == words.length) {
               return true;
             }
           }
@@ -611,7 +614,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         final data = jsonDecode(response.body);
         final list = (data['alternatives'] as List)
             .map((e) => AiRecommendation.fromJson(e))
-            .where((rec) => !isDuplicatePlace(rec.name, rec.id, currentNamesAndIds))
+            .where((rec) => !isDuplicatePlace(rec.name, rec.id))
             .toList();
         if (list.isNotEmpty) return list;
       }

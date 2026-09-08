@@ -1592,9 +1592,9 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
           ],
           response_format: { type: 'json_object' },
           temperature: 0.3,
-          reasoning_effort: 'low'
+          reasoning_effort: 'none'
         })),
-        signal: AbortSignal.timeout(8000)
+        signal: AbortSignal.timeout(25000)
       })
 
       if (response.ok) {
