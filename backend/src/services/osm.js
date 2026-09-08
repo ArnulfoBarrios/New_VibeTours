@@ -436,7 +436,7 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
           const name = element.tags?.name
           const type = element.tags?.tourism ?? element.tags?.historic ?? element.tags?.amenity ?? element.tags?.leisure ?? element.tags?.sport ?? element.tags?.natural ?? element.tags?.place ?? element.tags?.boundary ?? 'place'
           if (lat == null || lon == null || !name) return null
-          if (isAccommodation(type) || isNonTouristFacility(element.tags)) return null
+          if (isAccommodation(type) || isNonTouristFacility(element.tags) || isFoodOrDrinkEstablishment(name)) return null
           return {
             name,
             latitude: lat,
@@ -465,7 +465,7 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
       const seen = new Set()
       results = []
       for (const item of combined) {
-        if (!item || !item.name || isNonTouristFacility(item.tags) || isNonTouristFacility({ name: item.name })) continue
+        if (!item || !item.name || isNonTouristFacility(item.tags) || isNonTouristFacility({ name: item.name }) || isFoodOrDrinkEstablishment(item.name)) continue
         const k = item.name.toLowerCase().trim()
         if (!seen.has(k)) {
           seen.add(k)
@@ -572,6 +572,11 @@ export function isGenericFacilityName(rawName = '') {
   if (genericList.includes(clean)) return true
   if (/^(restaurante|restaurant|bar|café|cafe|hotel|hostal|atractivo)\s*#?\d*$/i.test(clean)) return true
   return false
+}
+
+export function isFoodOrDrinkEstablishment(name = '') {
+  if (!name || typeof name !== 'string') return false
+  return /\b(restaurante|restaurant|parrilla|asador|bistro|pizzer[íi]a|panader[íi]a|pasteler[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero)\b/i.test(name)
 }
 
 export function isNonTouristFacility(tags = {}) {
