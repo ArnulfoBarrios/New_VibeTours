@@ -38,34 +38,23 @@ function escapeSqlJsonb(obj) {
   return `'${jsonStr}'::jsonb`;
 }
 
-function generateSql() {
-  const allTours = [
-    ...colombiaTours,
-    ...latamTours,
-    ...europeTours,
-    ...worldTours,
-    ...modalityTours
-  ];
-
-  console.log(`Loaded ${allTours.length} tours across all 5 seed modules.`);
-
+function buildSqlForTours(toursList, sectionTitle, partNumber = null, totalParts = null) {
   const sqlLines = [];
 
+  const partHeader = partNumber
+    ? ` (Parte ${partNumber} de ${totalParts})`
+    : ' (Completo)';
+
   sqlLines.push(`-- ===================================================================`);
-  sqlLines.push(`-- VibeTours - Seed Data: 50 Comprehensive Curated Multi-Day Tours`);
+  sqlLines.push(`-- VibeTours - Seed Data: ${sectionTitle}${partHeader}`);
   sqlLines.push(`-- Creator: ${CREATOR_NAME} (${CREATOR_USER_ID})`);
   sqlLines.push(`-- Generated: ${new Date().toISOString()}`);
-  sqlLines.push(`-- Description: Includes 50 rich multi-day tours (3 to 15 days) covering:`);
-  sqlLines.push(`--   1. Colombia Destacada (Tours 1 - 10)`);
-  sqlLines.push(`--   2. Latinoamérica & Caribe (Tours 11 - 16)`);
-  sqlLines.push(`--   3. Europa Monumental (Tours 17 - 23)`);
-  sqlLines.push(`--   4. Asia, Medio Oriente, África & Oceanía (Tours 24 - 30)`);
-  sqlLines.push(`--   5. Modalidades de Viaje: Single City, Micro-Dest, Coastal, City-to-City, Multi-City (Tours 31 - 50)`);
+  sqlLines.push(`-- Total Tours in this script: ${toursList.length}`);
   sqlLines.push(`-- ===================================================================\n`);
 
   sqlLines.push(`BEGIN;\n`);
 
-  // 1. Ensure User in auth.users and public.users
+  // 1. Ensure Creator Account exists
   sqlLines.push(`-- 1. Ensure Creator Account exists in auth.users and public.users`);
   sqlLines.push(`DO $$`);
   sqlLines.push(`BEGIN`);
@@ -112,27 +101,27 @@ function generateSql() {
   sqlLines.push(`  END IF;`);
   sqlLines.push(`END $$;\n`);
 
-  // 2. Clean existing tours with these slugs for idempotency
-  const slugsList = allTours.map((t) => `'${t.slug}'`).join(',\n  ');
-  sqlLines.push(`-- 2. Remove any previous versions of these 50 tours (cascades to days and stops)`);
+  // 2. Ensure image_metadata exists on tour_stops
+  sqlLines.push(`-- Ensure required image_metadata column exists on tour_stops`);
+  sqlLines.push(`ALTER TABLE public.tour_stops ADD COLUMN IF NOT EXISTS image_metadata jsonb DEFAULT '{}'::jsonb;\n`);
+
+  // 3. Remove existing versions of these tours
+  const slugsList = toursList.map((t) => `'${t.slug}'`).join(',\n  ');
+  sqlLines.push(`-- 2. Remove any previous versions of these tours (cascades to days, stops, comments)`);
   sqlLines.push(`DELETE FROM public.tours WHERE slug IN (\n  ${slugsList}\n);\n`);
 
-  sqlLines.push(`-- Ensure required columns exist on tour_stops for metadata & days`);
-  sqlLines.push(`ALTER TABLE public.tour_stops ADD COLUMN IF NOT EXISTS image_metadata jsonb DEFAULT '{}'::jsonb;`);
-  sqlLines.push(`ALTER TABLE public.tour_stops ADD COLUMN IF NOT EXISTS day integer DEFAULT 1;\n`);
+  // 4. Insert tours, days, stops, comments
+  sqlLines.push(`-- 3. Insert Tours, Tour Days, georeferenced Stops, and Verified Reviews\n`);
 
-  // 3. Process Tours, Days, and Stops
-  sqlLines.push(`-- 3. Insert 50 Tours, their Tour Days, and georeferenced Tour Stops\n`);
+  let daysCount = 0;
+  let stopsCount = 0;
 
-  let totalDays = 0;
-  let totalStops = 0;
-
-  for (let tIdx = 0; tIdx < allTours.length; tIdx++) {
-    const tour = allTours[tIdx];
+  for (let tIdx = 0; tIdx < toursList.length; tIdx++) {
+    const tour = toursList[tIdx];
     const tourId = deterministicUuid(`vibetour:${tour.slug}`);
 
     sqlLines.push(`-- -------------------------------------------------------------`);
-    sqlLines.push(`-- Tour #${tIdx + 1}: ${tour.title} (${tour.city}, ${tour.country})`);
+    sqlLines.push(`-- Tour: ${tour.title} (${tour.city}, ${tour.country})`);
     sqlLines.push(`-- -------------------------------------------------------------`);
 
     const creationJson = {
@@ -185,11 +174,11 @@ function generateSql() {
     sqlLines.push(`  now()`);
     sqlLines.push(`);\n`);
 
-    // Days
+    // Days & Stops
     let tourStopIndex = 0;
     if (tour.days && Array.isArray(tour.days)) {
       for (const day of tour.days) {
-        totalDays++;
+        daysCount++;
         const dayId = deterministicUuid(`vibetour-day:${tour.slug}:${day.day_number}`);
 
         sqlLines.push(`INSERT INTO public.tour_days (`);
@@ -203,16 +192,13 @@ function generateSql() {
         sqlLines.push(`  now()`);
         sqlLines.push(`);`);
 
-        // Stops
         if (day.stops && Array.isArray(day.stops)) {
           for (const stop of day.stops) {
-            totalStops++;
+            stopsCount++;
             tourStopIndex++;
             const position = tourStopIndex;
             const stopOrder = tourStopIndex;
-            const stopId = deterministicUuid(
-              `vibetour-stop:${tour.slug}:${tourStopIndex}`
-            );
+            const stopId = deterministicUuid(`vibetour-stop:${tour.slug}:${tourStopIndex}`);
 
             const imageMetadata = {
               dia: day.day_number,
@@ -236,7 +222,7 @@ function generateSql() {
             sqlLines.push(`INSERT INTO public.tour_stops (`);
             sqlLines.push(`  id, tour_id, day_id, stop_order, position, name, latitude, longitude,`);
             sqlLines.push(`  image_url, images, description, activities, tips, curious_facts,`);
-            sqlLines.push(`  location_info, suggested_minutes, day, image_metadata, created_at`);
+            sqlLines.push(`  location_info, suggested_minutes, image_metadata, created_at`);
             sqlLines.push(`) VALUES (`);
             sqlLines.push(`  '${stopId}',`);
             sqlLines.push(`  '${tourId}',`);
@@ -254,7 +240,6 @@ function generateSql() {
             sqlLines.push(`  ${escapeSqlArray(stop.curious_facts || [])},`);
             sqlLines.push(`  ${escapeSqlJsonb(enrichedLocationInfo)},`);
             sqlLines.push(`  ${stop.suggested_minutes || 45},`);
-            sqlLines.push(`  ${day.day_number},`);
             sqlLines.push(`  ${escapeSqlJsonb(imageMetadata)},`);
             sqlLines.push(`  now()`);
             sqlLines.push(`);`);
@@ -264,6 +249,7 @@ function generateSql() {
       }
     }
 
+    // Comment
     const commentId = deterministicUuid(`vibetour-comment:${tour.slug}`);
     sqlLines.push(`INSERT INTO public.tour_comments (`);
     sqlLines.push(`  id, tour_id, user_id, rating, body, photos, created_at, updated_at`);
@@ -281,18 +267,57 @@ function generateSql() {
 
   sqlLines.push(`COMMIT;\n`);
   sqlLines.push(`-- ===================================================================`);
-  sqlLines.push(`-- End of Seed Data: 50 Tours, ${totalDays} Days, ${totalStops} Stops inserted.`);
+  sqlLines.push(`-- End of Seed Data: ${toursList.length} Tours, ${daysCount} Days, ${stopsCount} Stops.`);
   sqlLines.push(`-- ===================================================================`);
 
-  const outputPath = path.resolve(__dirname, '../../../supabase/seed_50_vibetours.sql');
-  const finalSql = sqlLines.join('\n');
-  fs.writeFileSync(outputPath, finalSql, 'utf8');
-
-  console.log(`Successfully generated SQL script at: ${outputPath}`);
-  console.log(`Tours: ${allTours.length}`);
-  console.log(`Days: ${totalDays}`);
-  console.log(`Stops: ${totalStops}`);
-  console.log(`File size: ${(Buffer.byteLength(finalSql, 'utf8') / 1024).toFixed(2)} KB`);
+  return {
+    sql: sqlLines.join('\n'),
+    toursCount: toursList.length,
+    daysCount,
+    stopsCount
+  };
 }
 
-generateSql();
+function generateAll() {
+  const allTours = [
+    ...colombiaTours,
+    ...latamTours,
+    ...europeTours,
+    ...worldTours,
+    ...modalityTours
+  ];
+
+  const part1Tours = [...colombiaTours, ...latamTours]; // 10 + 6 = 16 tours
+  const part2Tours = [...europeTours, ...worldTours];   // 7 + 7 = 14 tours
+  const part3Tours = [...modalityTours];                // 20 modality tours
+
+  console.log(`Loaded ${allTours.length} tours across all 5 seed modules.`);
+
+  const outputDir = path.resolve(__dirname, '../../../supabase');
+
+  // 1. Full 50 tours file
+  const fullResult = buildSqlForTours(allTours, '50 Tours Completos VibeTours');
+  const fullPath = path.join(outputDir, 'seed_50_vibetours.sql');
+  fs.writeFileSync(fullPath, fullResult.sql, 'utf8');
+  console.log(`[FULL] seed_50_vibetours.sql: ${fullResult.toursCount} tours, ${(Buffer.byteLength(fullResult.sql, 'utf8') / 1024).toFixed(2)} KB`);
+
+  // 2. Part 1: Colombia & LATAM
+  const p1Result = buildSqlForTours(part1Tours, 'Parte 1: Colombia & Latinoamérica (Tours 1 - 16)', 1, 3);
+  const p1Path = path.join(outputDir, 'seed_part1_colombia_latam.sql');
+  fs.writeFileSync(p1Path, p1Result.sql, 'utf8');
+  console.log(`[PART 1] seed_part1_colombia_latam.sql: ${p1Result.toursCount} tours, ${(Buffer.byteLength(p1Result.sql, 'utf8') / 1024).toFixed(2)} KB`);
+
+  // 3. Part 2: Europe & World
+  const p2Result = buildSqlForTours(part2Tours, 'Parte 2: Europa, Asia, África & Oceanía (Tours 17 - 30)', 2, 3);
+  const p2Path = path.join(outputDir, 'seed_part2_europe_world.sql');
+  fs.writeFileSync(p2Path, p2Result.sql, 'utf8');
+  console.log(`[PART 2] seed_part2_europe_world.sql: ${p2Result.toursCount} tours, ${(Buffer.byteLength(p2Result.sql, 'utf8') / 1024).toFixed(2)} KB`);
+
+  // 4. Part 3: Modalities
+  const p3Result = buildSqlForTours(part3Tours, 'Parte 3: Las 5 Modalidades de Viaje (Tours 31 - 50)', 3, 3);
+  const p3Path = path.join(outputDir, 'seed_part3_modalities.sql');
+  fs.writeFileSync(p3Path, p3Result.sql, 'utf8');
+  console.log(`[PART 3] seed_part3_modalities.sql: ${p3Result.toursCount} tours, ${(Buffer.byteLength(p3Result.sql, 'utf8') / 1024).toFixed(2)} KB`);
+}
+
+generateAll();

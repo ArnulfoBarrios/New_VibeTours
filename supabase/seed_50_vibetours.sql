@@ -1,13 +1,8 @@
 -- ===================================================================
--- VibeTours - Seed Data: 50 Comprehensive Curated Multi-Day Tours
+-- VibeTours - Seed Data: 50 Tours Completos VibeTours (Completo)
 -- Creator: Emotiva VibeTours (7b767010-fc97-4299-9ae3-5a4985da1da3)
--- Generated: 2026-09-08T16:15:31.417Z
--- Description: Includes 50 rich multi-day tours (3 to 15 days) covering:
---   1. Colombia Destacada (Tours 1 - 10)
---   2. Latinoamérica & Caribe (Tours 11 - 16)
---   3. Europa Monumental (Tours 17 - 23)
---   4. Asia, Medio Oriente, África & Oceanía (Tours 24 - 30)
---   5. Modalidades de Viaje: Single City, Micro-Dest, Coastal, City-to-City, Multi-City (Tours 31 - 50)
+-- Generated: 2026-09-08T16:21:54.261Z
+-- Total Tours in this script: 50
 -- ===================================================================
 
 BEGIN;
@@ -58,7 +53,10 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Remove any previous versions of these 50 tours (cascades to days and stops)
+-- Ensure required image_metadata column exists on tour_stops
+ALTER TABLE public.tour_stops ADD COLUMN IF NOT EXISTS image_metadata jsonb DEFAULT '{}'::jsonb;
+
+-- 2. Remove any previous versions of these tours (cascades to days, stops, comments)
 DELETE FROM public.tours WHERE slug IN (
   'vibetour-cartagena-islas-del-rosario-3d',
   'vibetour-santa-marta-tayrona-minca-4d',
@@ -112,14 +110,10 @@ DELETE FROM public.tours WHERE slug IN (
   'vibetour-gran-travesia-cono-sur-chile-argentina-12d'
 );
 
--- Ensure required columns exist on tour_stops for metadata & days
-ALTER TABLE public.tour_stops ADD COLUMN IF NOT EXISTS image_metadata jsonb DEFAULT '{}'::jsonb;
-ALTER TABLE public.tour_stops ADD COLUMN IF NOT EXISTS day integer DEFAULT 1;
-
--- 3. Insert 50 Tours, their Tour Days, and georeferenced Tour Stops
+-- 3. Insert Tours, Tour Days, georeferenced Stops, and Verified Reviews
 
 -- -------------------------------------------------------------
--- Tour #1: Cartagena & Islas del Rosario: Magia Colonial y Caribe Esmeralda (Cartagena, Colombia)
+-- Tour: Cartagena & Islas del Rosario: Magia Colonial y Caribe Esmeralda (Cartagena, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -178,7 +172,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7fa2db96-512a-9e1b-a3af-422a11f37543',
   'ea0f7061-68d8-13e7-f2af-c8c0c22e76c2',
@@ -196,14 +190,13 @@ INSERT INTO public.tour_stops (
   ARRAY['Originalmente contaba con un puente levadizo que salvaba el foso entre Getsemaní y el centro', 'El reloj suizo actual fue instalado a principios del siglo XX en reemplazo del mecanismo colonial']::text[],
   '{"address":"Plaza de los Coches, Centro Histórico","priceRange":"$ - Gratis acceso a plaza","dia":1,"day":1}'::jsonb,
   45,
-  1,
   '{"dia":1,"day":1,"activities":["Fotografiar la fachada de la Torre del Reloj (Gratis)","Probar dulces típicos en el Portal de los Dulces ($5.000 - $12.000 COP)","Apreciar la estatua de Pedro de Heredia (Gratis)"],"datos_curiosos":["Originalmente contaba con un puente levadizo que salvaba el foso entre Getsemaní y el centro","El reloj suizo actual fue instalado a principios del siglo XX en reemplazo del mecanismo colonial"],"consejos":["Visitar a primera hora de la mañana para evitar tumultos","Llevar monedas o billetes pequeños para los dulceros tradicionales"],"location_info":{"address":"Plaza de los Coches, Centro Histórico","priceRange":"$ - Gratis acceso a plaza","dia":1,"day":1}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4e75019d-df81-6f96-2b95-ebb08e1acaf0',
   'ea0f7061-68d8-13e7-f2af-c8c0c22e76c2',
@@ -221,14 +214,13 @@ INSERT INTO public.tour_stops (
   ARRAY['Durante las mareas altas coloniales el agua del mar llegaba casi hasta la base de las celdas', 'Fue la última gran obra militar edificada por los españoles en Cartagena antes de su emancipación']::text[],
   '{"address":"Calle Zerrezuela, San Diego","priceRange":"$ - Entrada libre","dia":1,"day":1}'::jsonb,
   60,
-  1,
   '{"dia":1,"day":1,"activities":["Caminar sobre el parapeto de la muralla con vista al Mar Caribe (Gratis)","Comprar artesanías locales y café gourmet ($20.000 - $80.000 COP)","Observar los cañones coloniales originales (Gratis)"],"datos_curiosos":["Durante las mareas altas coloniales el agua del mar llegaba casi hasta la base de las celdas","Fue la última gran obra militar edificada por los españoles en Cartagena antes de su emancipación"],"consejos":["La brisa marina en lo alto de la muralla es perfecta entre las 4:30 PM y 6:00 PM","Subir la rampa de piedra con calzado antideslizante"],"location_info":{"address":"Calle Zerrezuela, San Diego","priceRange":"$ - Entrada libre","dia":1,"day":1}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7a90deda-b8fd-9f41-c979-0e7e02bd1f3f',
   'ea0f7061-68d8-13e7-f2af-c8c0c22e76c2',
@@ -246,7 +238,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Este baluarte resistió el feroz ataque del barón de Pointis en 1697', 'Gabriel García Márquez situó varias escenas de sus novelas en estas esquinas empedradas']::text[],
   '{"address":"Baluarte de Santo Domingo, Muralla Oeste","priceRange":"$$ - Consumos opcionales","dia":1,"day":1}'::jsonb,
   90,
-  1,
   '{"dia":1,"day":1,"activities":["Disfrutar de un cóctel caribeño o copa de vino al atardecer ($35.000 - $55.000 COP)","Fotografía romántica de siluetas sobre las murallas (Gratis)","Recorrido nocturno por las farolas coloniales de Santo Domingo (Gratis)"],"datos_curiosos":["Este baluarte resistió el feroz ataque del barón de Pointis en 1697","Gabriel García Márquez situó varias escenas de sus novelas en estas esquinas empedradas"],"consejos":["Llegar sobre las 5:00 PM para asegurar buena ubicación frente al mar","Las calles adyacentes son ideales para una cena a la luz de las velas"],"location_info":{"address":"Baluarte de Santo Domingo, Muralla Oeste","priceRange":"$$ - Consumos opcionales","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -264,7 +255,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'fc5aacb7-cc4c-05c4-b4de-c6bb3fb8ae75',
   'ea0f7061-68d8-13e7-f2af-c8c0c22e76c2',
@@ -282,14 +273,13 @@ INSERT INTO public.tour_stops (
   ARRAY['Los túneles fueron diseñados para que los pasos de los soldados invasores resonaran con eco, delatando su posición', 'Nunca fue tomado por asalto militar directo tras su reconstrucción en 1762']::text[],
   '{"address":"Pie del Cerro, Avenida Antonio de Arévalo","priceRange":"$$ - Entrada $30.000 COP","dia":2,"day":2}'::jsonb,
   120,
-  2,
   '{"dia":2,"day":2,"activities":["Recorrer el laberinto de túneles subterráneos (Entrada general: $30.000 COP / $7.5 USD)","Alquiler de audioguía interactiva ($15.000 COP)","Fotografiar la bandera monumental y la panorámica del mar (Gratis con entrada)"],"datos_curiosos":["Los túneles fueron diseñados para que los pasos de los soldados invasores resonaran con eco, delatando su posición","Nunca fue tomado por asalto militar directo tras su reconstrucción en 1762"],"consejos":["Llevar agua y protector solar, no hay sombra en las explanadas superiores","Los túneles son estrechos; si sufre de claustrofobia use las rampas exteriores"],"location_info":{"address":"Pie del Cerro, Avenida Antonio de Arévalo","priceRange":"$$ - Entrada $30.000 COP","dia":2,"day":2}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5f3f1438-1f49-1ccf-64d3-f13feeee2b93',
   'ea0f7061-68d8-13e7-f2af-c8c0c22e76c2',
@@ -307,7 +297,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los marineros coloniales la llamaban La Popa porque desde la distancia el cerro parecía la popa de una gigantesca carabela', 'El libertador Simón Bolívar pernoctó en sus celdas durante sus campañas militares']::text[],
   '{"address":"Cerro de La Popa","priceRange":"$ - Entrada $15.000 COP","dia":2,"day":2}'::jsonb,
   75,
-  2,
   '{"dia":2,"day":2,"activities":["Visita guiada al claustro colonial y capilla de la Virgen de la Candelaria (Entrada: $15.000 COP)","Mirador panorámico de 360 grados sobre toda Cartagena (Gratis con entrada)","Compra de recuerdos religiosos y postales ($10.000 - $30.000 COP)"],"datos_curiosos":["Los marineros coloniales la llamaban La Popa porque desde la distancia el cerro parecía la popa de una gigantesca carabela","El libertador Simón Bolívar pernoctó en sus celdas durante sus campañas militares"],"consejos":["Subir en taxi de confianza o transporte contratado (aprox. $25.000 COP ida y vuelta)","No subir a pie por razones de seguridad en el tramo de la colina"],"location_info":{"address":"Cerro de La Popa","priceRange":"$ - Entrada $15.000 COP","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -325,7 +314,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '02e4f469-5418-dbcf-face-a5e52f0cdf2e',
   'ea0f7061-68d8-13e7-f2af-c8c0c22e76c2',
@@ -343,7 +332,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El archipiélago está compuesto por 28 islas de origen coralino emergido', 'Por la noche algunas de sus lagunas internas presentan el fenómeno de bioluminiscencia marina']::text[],
   '{"address":"Parque Nacional Natural Corales del Rosario","priceRange":"$$$ - Pasadía $160.000 - $280.000 COP con lancha","dia":3,"day":3}'::jsonb,
   300,
-  3,
   '{"dia":3,"day":3,"activities":["Sesión de snorkel en arrecife protegido con guía certificado ($50.000 - $70.000 COP)","Paseo en kayak transparente por los túneles de manglar ($40.000 COP)","Almuerzo caribeño: pescado frito, arroz de coco y patacones ($45.000 - $75.000 COP)"],"datos_curiosos":["El archipiélago está compuesto por 28 islas de origen coralino emergido","Por la noche algunas de sus lagunas internas presentan el fenómeno de bioluminiscencia marina"],"consejos":["Las lanchas salen temprano (entre 8:00 AM y 8:30 AM) desde el Muelle de La Bodeguita","Pagar la tasa portuaria en efectivo en el muelle ($26.500 COP)"],"location_info":{"address":"Parque Nacional Natural Corales del Rosario","priceRange":"$$$ - Pasadía $160.000 - $280.000 COP con lancha","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -362,7 +350,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #2: Santa Marta, Minca y Parque Tayrona: Selva, Montaña y Mar (Santa Marta, Colombia)
+-- Tour: Santa Marta, Minca y Parque Tayrona: Selva, Montaña y Mar (Santa Marta, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -421,7 +409,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7f6fc29c-feb3-5608-dc3a-5ea4d5a833f5',
   'c034e473-6b1a-fc0b-a2af-0abe309f7276',
@@ -439,14 +427,13 @@ INSERT INTO public.tour_stops (
   ARRAY['El reloj de la alcoba principal permanece detenido a la 1:03 PM, hora exacta del deceso de Bolívar', 'Sus árboles de ceiba tienen más de dos siglos de antigüedad']::text[],
   '{"address":"Avenida del Libertador s/n","priceRange":"$ - Entrada $23.000 COP","dia":1,"day":1}'::jsonb,
   110,
-  1,
   '{"dia":1,"day":1,"activities":["Visita histórica guiada a la alcoba de Bolívar (Entrada: $23.000 COP)","Observación de iguanas gigantes y ceibas en el Jardín Botánico (Gratis con entrada)","Recorrido por el Altar de la Patria (Gratis con entrada)"],"datos_curiosos":["El reloj de la alcoba principal permanece detenido a la 1:03 PM, hora exacta del deceso de Bolívar","Sus árboles de ceiba tienen más de dos siglos de antigüedad"],"consejos":["Llevar agua y protector solar para recorrer los jardines botánicos","Contratar los guías locales acreditados en la taquilla"],"location_info":{"address":"Avenida del Libertador s/n","priceRange":"$ - Entrada $23.000 COP","dia":1,"day":1}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd7b18600-2a11-f915-7b77-40eb8b540576',
   'c034e473-6b1a-fc0b-a2af-0abe309f7276',
@@ -464,7 +451,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El parque solía llamarse Plaza Santander, pero la tradición popular de parejas paseando lo rebautizó oficialmente']::text[],
   '{"address":"Calle 19 con Carrera 3, Centro Histórico","priceRange":"$$ - Acceso libre, consumos moderados","dia":1,"day":1}'::jsonb,
   90,
-  1,
   '{"dia":1,"day":1,"activities":["Caminata al atardecer por el Malecón de Bastidas (Gratis)","Cena marinera de cazuela de mariscos ($35.000 - $60.000 COP)","Música en vivo y coctelería tropical en el Parque de los Novios ($20.000 - $35.000 COP)"],"datos_curiosos":["El parque solía llamarse Plaza Santander, pero la tradición popular de parejas paseando lo rebautizó oficialmente"],"consejos":["La brisa baja desde la Sierra al atardecer refrescando el centro","Excelente punto para cambiar divisas o retirar efectivo antes de ir a Tayrona"],"location_info":{"address":"Calle 19 con Carrera 3, Centro Histórico","priceRange":"$$ - Acceso libre, consumos moderados","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -482,7 +468,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '73c2f92c-b49f-444f-ee6b-eae6b59618de',
   'c034e473-6b1a-fc0b-a2af-0abe309f7276',
@@ -500,14 +486,13 @@ INSERT INTO public.tour_stops (
   ARRAY['Los senderos siguen las antiguas calzadas empedradas trazadas por los pueblos indígenas Tayrona hace más de 500 años']::text[],
   '{"address":"Entrada Zaino, Vía Santa Marta - Riohacha","priceRange":"$$ - Entrada oficial","dia":2,"day":2}'::jsonb,
   120,
-  2,
   '{"dia":2,"day":2,"activities":["Registro en la taquilla de Parques Nacionales (Entrada nacional: ~$35.000 COP / extranjero: ~$73.500 COP)","Adquisición del seguro de asistencia médica obligatorio ($6.000 COP/día)","Senderismo guiado por caminos elevados de madera (Gratis con entrada)"],"datos_curiosos":["Los senderos siguen las antiguas calzadas empedradas trazadas por los pueblos indígenas Tayrona hace más de 500 años"],"consejos":["Llegar antes de las 8:00 AM para evitar aglomeraciones en taquilla","En Playa Cañaveral el oleaje es peligroso; está estrictamente prohibido nadar allí"],"location_info":{"address":"Entrada Zaino, Vía Santa Marta - Riohacha","priceRange":"$$ - Entrada oficial","dia":2,"day":2}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '41bb534f-e0e4-514f-f4f3-2d7e3608640e',
   'c034e473-6b1a-fc0b-a2af-0abe309f7276',
@@ -525,7 +510,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La choza en lo alto del Cabo dispone de hamacas donde los viajeros pueden pernoctar con vista al mar abierto']::text[],
   '{"address":"Sector Cabo San Juan, PNN Tayrona","priceRange":"$$ - Consumos en restaurante","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Baño y natación segura en las aguas calmas de La Piscina y Cabo San Juan (Gratis)","Fotografía panorámica desde el mirador de la colina rocosa (Gratis)","Almuerzo en el restaurante del campamento: arroz con coco y pescado ($38.000 - $55.000 COP)"],"datos_curiosos":["La choza en lo alto del Cabo dispone de hamacas donde los viajeros pueden pernoctar con vista al mar abierto"],"consejos":["El regreso a pie toma 2 horas y media; comenzar el retorno hacia Zaino a más tardar a las 3:00 PM o tomar lancha a Taganga ($80.000 COP)"],"location_info":{"address":"Sector Cabo San Juan, PNN Tayrona","priceRange":"$$ - Consumos en restaurante","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -543,7 +527,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2f695c2d-3973-1fb3-8905-a462617d2294',
   'c034e473-6b1a-fc0b-a2af-0abe309f7276',
@@ -561,14 +545,13 @@ INSERT INTO public.tour_stops (
   ARRAY['La maquinaria de la finca funciona sin electricidad de la red pública, impulsada únicamente por caídas de agua de montaña']::text[],
   '{"address":"Vereda El Campano, Minca","priceRange":"$ - Tour $25.000 COP","dia":3,"day":3}'::jsonb,
   120,
-  3,
   '{"dia":3,"day":3,"activities":["Tour del café orgánico y maquinaria histórica ($25.000 COP)","Degustación de café especial de altura ($5.000 - $10.000 COP)","Probar la cerveza artesanal local elaborada con café o cacao ($12.000 - $16.000 COP)"],"datos_curiosos":["La maquinaria de la finca funciona sin electricidad de la red pública, impulsada únicamente por caídas de agua de montaña"],"consejos":["El clima en Minca es más templado y fresco que en la costa (22-26°C)","Se puede subir desde el pueblo de Minca en moto-taxi ($20.000 COP) o en caminata escénica"],"location_info":{"address":"Vereda El Campano, Minca","priceRange":"$ - Tour $25.000 COP","dia":3,"day":3}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0c3dc822-1746-9c46-f0ea-37fec6d578e5',
   'c034e473-6b1a-fc0b-a2af-0abe309f7276',
@@ -586,7 +569,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Minca es considerada un paraíso mundial para ornitólogos con más de 300 especies de aves registradas en su microclima']::text[],
   '{"address":"Cascadas de Marinka, Minca","priceRange":"$ - Entrada $10.000 COP","dia":3,"day":3}'::jsonb,
   150,
-  3,
   '{"dia":3,"day":3,"activities":["Baño refrescante en las pozas naturales (Entrada ecológica Marinka: $10.000 COP)","Descanso en las redes colgantes gigantes con vista al cañón ($5.000 COP)","Avistamiento de tucanes y colibríes en los comederos naturales (Gratis)"],"datos_curiosos":["Minca es considerada un paraíso mundial para ornitólogos con más de 300 especies de aves registradas en su microclima"],"consejos":["El agua es fresca de montaña (unos 18°C); llevar toalla y muda seca de ropa","Evitar pisar piedras resbalosas descalzo"],"location_info":{"address":"Cascadas de Marinka, Minca","priceRange":"$ - Entrada $10.000 COP","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -604,7 +586,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f8ae49d3-8e69-2f3d-9676-c4822b7cd042',
   'c034e473-6b1a-fc0b-a2af-0abe309f7276',
@@ -622,7 +604,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Taganga fue originalmente un asentamiento indígena de pescadores de la etnia Taganga antes de la llegada de los colonizadores']::text[],
   '{"address":"Bahía de Taganga, Magdalena","priceRange":"$$ - Entrada libre","dia":4,"day":4}'::jsonb,
   180,
-  4,
   '{"dia":4,"day":4,"activities":["Fotografía desde el mirador de la colina de acceso a Taganga (Gratis)","Almuerzo de pargo rojo con patacones frente a la playa ($30.000 - $45.000 COP)","Bautizo de buceo o snorkel guiado opcional ($120.000 - $180.000 COP)"],"datos_curiosos":["Taganga fue originalmente un asentamiento indígena de pescadores de la etnia Taganga antes de la llegada de los colonizadores"],"consejos":["Tomar un taxi desde Santa Marta hasta el mirador toma solo 15 minutos ($15.000 COP)","Las tardes son espectaculares para ver regresar las faenas de pesca artesanal"],"location_info":{"address":"Bahía de Taganga, Magdalena","priceRange":"$$ - Entrada libre","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -641,7 +622,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #3: Cali, Buga y Río San Cipriano: Salsa, Mística y Naturaleza (Cali, Colombia)
+-- Tour: Cali, Buga y Río San Cipriano: Salsa, Mística y Naturaleza (Cali, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -700,7 +681,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'cf93a44b-f51d-038f-31ba-25c52363480f',
   'd43896e1-4ebd-e59f-e94c-1a357b19c937',
@@ -718,14 +699,13 @@ INSERT INTO public.tour_stops (
   ARRAY['La capilla fue construida gracias a una donación de 1.000 patacones de oro en honor a San Antonio de Padua en 1747']::text[],
   '{"address":"Carrera 10 con Calle 1 Oeste, San Antonio","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   120,
-  1,
   '{"dia":1,"day":1,"activities":["Subir a la colina de San Antonio para la panorámica de la ciudad (Gratis)","Degustar empanadas vallunas con ají y lulada tradicional ($12.000 - $22.000 COP)","Visitar las tiendas de cuero y cerámica artesanal (Gratis)"],"datos_curiosos":["La capilla fue construida gracias a una donación de 1.000 patacones de oro en honor a San Antonio de Padua en 1747"],"consejos":["A las 5:00 PM la colina se llena de cuenteros tradicionales y brisa refrescante","Caminar con calzado cómodo por los adoquines"],"location_info":{"address":"Carrera 10 con Calle 1 Oeste, San Antonio","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a77bea02-88d7-78ba-071e-3d36030300ec',
   'd43896e1-4ebd-e59f-e94c-1a357b19c937',
@@ -743,7 +723,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Gato de Tejada pesa más de 3 toneladas y fue transportado e instalado en 1996 como símbolo de reconciliación urbana']::text[],
   '{"address":"Avenida del Río Cali","priceRange":"$ - Entrada libre","dia":1,"day":1}'::jsonb,
   90,
-  1,
   '{"dia":1,"day":1,"activities":["Caminata fotográfica por el paseo de las gatas (Gratis)","Disfrutar de un raspao de hielo con leche condensada ($6.000 COP)","Visita a la Iglesia Ermita de estilo neogótico frente al río (Gratis)"],"datos_curiosos":["El Gato de Tejada pesa más de 3 toneladas y fue transportado e instalado en 1996 como símbolo de reconciliación urbana"],"consejos":["La brisa que baja del cañón del río Cali al final de la tarde es célebre por su frescura","Zona vigilada y muy segura para pasear en familia"],"location_info":{"address":"Avenida del Río Cali","priceRange":"$ - Entrada libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -761,7 +740,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'fd88174b-c4b2-b7f8-f376-0e329e4a3cc5',
   'd43896e1-4ebd-e59f-e94c-1a357b19c937',
@@ -779,14 +758,13 @@ INSERT INTO public.tour_stops (
   ARRAY['Las cuatro trompetas forman las letras de la palabra N-I-C-H-E cuando se observan en perspectiva']::text[],
   '{"address":"Avenida 2 Norte con Calle 10","priceRange":"$ - Acceso libre","dia":2,"day":2}'::jsonb,
   90,
-  2,
   '{"dia":2,"day":2,"activities":["Ubicarse bajo las campanas de las trompetas para escuchar las pistas sonoras (Gratis)","Visitar la sala museo de Jairo Varela con partituras y trajes originales (Gratis)","Clase exprés de pasos básicos de salsa estilo caleño ($25.000 - $40.000 COP)"],"datos_curiosos":["Las cuatro trompetas forman las letras de la palabra N-I-C-H-E cuando se observan en perspectiva"],"consejos":["Alrededor de la plaza hay cafés con aire acondicionado y wifi para descansar"],"location_info":{"address":"Avenida 2 Norte con Calle 10","priceRange":"$ - Acceso libre","dia":2,"day":2}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f54574df-45bb-72de-a09f-0c3a159fb7cc',
   'd43896e1-4ebd-e59f-e94c-1a357b19c937',
@@ -804,7 +782,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cali ostenta el título de Capital Mundial de la Salsa por tener más de 120 escuelas de baile activas y orquestas vivas']::text[],
   '{"address":"Calle 8 con Carrera 26, Alameda","priceRange":"$$ - Moderado","dia":2,"day":2}'::jsonb,
   200,
-  2,
   '{"dia":2,"day":2,"activities":["Almorzar cazuela de mariscos o sancocho de gallina en Alameda ($25.000 - $45.000 COP)","Noche de baile social de salsa en La Topa Tolondra (Entrada: $15.000 - $25.000 COP)","Apreciar bailarines profesionales de salsa en pista viva"],"datos_curiosos":["Cali ostenta el título de Capital Mundial de la Salsa por tener más de 120 escuelas de baile activas y orquestas vivas"],"consejos":["En Alameda pedir el jugo de borojó o chontaduro con miel","En La Topa llevar ropa ligera porque el baile es continuo y caluroso"],"location_info":{"address":"Calle 8 con Carrera 26, Alameda","priceRange":"$$ - Moderado","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -822,7 +799,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '163cc521-fbec-0004-ecb1-7c5f19eb9ac0',
   'd43896e1-4ebd-e59f-e94c-1a357b19c937',
@@ -840,7 +817,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Según la leyenda de 1580, una humilde lavandera indígena encontró la pequeña cruz que luego creció milagrosamente en tamaño']::text[],
   '{"address":"Carrera 14 # 3-62, Buga","priceRange":"$ - Entrada libre","dia":3,"day":3}'::jsonb,
   150,
-  3,
   '{"dia":3,"day":3,"activities":["Visita a la nave central y camarín del Señor de los Milagros (Gratis)","Recorrido por el museo de exvotos y objetos históricos ($8.000 COP)","Degustación del manjar blanco de Buga tradicional en calabaza ($10.000 - $18.000 COP)"],"datos_curiosos":["Según la leyenda de 1580, una humilde lavandera indígena encontró la pequeña cruz que luego creció milagrosamente en tamaño"],"consejos":["Buga queda a solo 1 hora y 15 minutos en bus expreso desde el terminal de Cali ($18.000 COP)","Los fines de semana hay gran afluencia; los días entre semana son ideales para visitas tranquilas"],"location_info":{"address":"Carrera 14 # 3-62, Buga","priceRange":"$ - Entrada libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -858,7 +834,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f4154582-edb1-355c-73ee-5b4e442398c7',
   'd43896e1-4ebd-e59f-e94c-1a357b19c937',
@@ -876,7 +852,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las brujitas fueron inventadas ingeniosamente por los propios lugareños para no quedar aislados tras el cierre de la línea férrea del Pacífico']::text[],
   '{"address":"Córdoba / San Cipriano, Valle del Cauca","priceRange":"$$ - Costos de brujita y actividades","dia":4,"day":4}'::jsonb,
   300,
-  4,
   '{"dia":4,"day":4,"activities":["Paseo emocionante en brujita sobre la vía férrea (Pasaje ida y vuelta: $20.000 COP)","Tubing: descenso suave por el río en neumáticos gigantes inflados ($15.000 - $20.000 COP)","Almuerzo afrodescendiente de encocao de pescado fresco ($25.000 - $35.000 COP)"],"datos_curiosos":["Las brujitas fueron inventadas ingeniosamente por los propios lugareños para no quedar aislados tras el cierre de la línea férrea del Pacífico"],"consejos":["Llevar bolsa impermeable para proteger teléfonos y pertenencias de salpicaduras","El agua del río es refrescante y cristalina, perfecta para nadar con gafas de snorkel"],"location_info":{"address":"Córdoba / San Cipriano, Valle del Cauca","priceRange":"$$ - Costos de brujita y actividades","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -895,7 +870,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #4: La Guajira Mística: Travesía 4x4, Dunas y Cabo de la Vela (Riohacha, Colombia)
+-- Tour: La Guajira Mística: Travesía 4x4, Dunas y Cabo de la Vela (Riohacha, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -954,7 +929,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ed1f5181-65cb-f094-3d2a-7a916ae87ef9',
   '2a656d80-85a5-6629-8c73-d4c09e388129',
@@ -972,14 +947,13 @@ INSERT INTO public.tour_stops (
   ARRAY['Los patrones kanasú representan animales, constelaciones y elementos del desierto inspirados en la araña mítica Wale’kerü']::text[],
   '{"address":"Avenida La Marina, Riohacha","priceRange":"$ - Compras artesanales","dia":1,"day":1}'::jsonb,
   90,
-  1,
   '{"dia":1,"day":1,"activities":["Comprar mochilas auténticas directamente a las tejedoras ($50.000 - $120.000 COP)","Paseo por el muelle de madera histórica sobre el mar (Gratis)","Desayuno guajiro con arepa de chichimoya y café ($12.000 COP)"],"datos_curiosos":["Los patrones kanasú representan animales, constelaciones y elementos del desierto inspirados en la araña mítica Wale’kerü"],"consejos":["Comprar las artesanías directamente a las mujeres locales para apoyar la economía familiar","Asegurarse de llevar billetes de baja denominación"],"location_info":{"address":"Avenida La Marina, Riohacha","priceRange":"$ - Compras artesanales","dia":1,"day":1}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7dba1ea5-ebe1-aebf-527b-f75e31a7f218',
   '2a656d80-85a5-6629-8c73-d4c09e388129',
@@ -997,7 +971,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Manaure produce más del 70% de la sal marina que se consume en todo el territorio colombiano']::text[],
   '{"address":"Complejo Salinero, Manaure","priceRange":"$ - Tour local $10.000 COP","dia":1,"day":1}'::jsonb,
   75,
-  1,
   '{"dia":1,"day":1,"activities":["Tour guiado por las charcas salineras con guía Wayúu local ($10.000 COP)","Fotografía de los flamencos rosados y las montañas de sal blanca (Gratis)","Explicación del proceso ancestral de cosecha manual de sal"],"datos_curiosos":["Manaure produce más del 70% de la sal marina que se consume en todo el territorio colombiano"],"consejos":["El resplandor del sol sobre la sal es extremo; usar gafas de sol con protección UV alta","No caminar sobre las piscinas activas de evaporación"],"location_info":{"address":"Complejo Salinero, Manaure","priceRange":"$ - Tour local $10.000 COP","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -1015,7 +988,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'fcf8afd0-32ed-0f38-a599-d6fd80617da1',
   '2a656d80-85a5-6629-8c73-d4c09e388129',
@@ -1033,14 +1006,13 @@ INSERT INTO public.tour_stops (
   ARRAY['Para la cosmogonía Wayúu, este cerro (llamado Kamaici) es el portal por donde transitan las almas de los difuntos hacia Jepirra']::text[],
   '{"address":"Cabo de la Vela, Uribia","priceRange":"$ - Entrada libre","dia":2,"day":2}'::jsonb,
   120,
-  2,
   '{"dia":2,"day":2,"activities":["Subida a pie a la cima del cerro sagrado (Gratis - 15 minutos)","Baño de mar en Playa Dorada a los pies del cerro (Gratis)","Almuerzo de langosta fresca o chivo asado en ranchería ($35.000 - $60.000 COP)"],"datos_curiosos":["Para la cosmogonía Wayúu, este cerro (llamado Kamaici) es el portal por donde transitan las almas de los difuntos hacia Jepirra"],"consejos":["El viento en la cima es sumamente fuerte; asegurar sombreros y lentes","Llevar calzado cerrado para subir por el sendero rocoso"],"location_info":{"address":"Cabo de la Vela, Uribia","priceRange":"$ - Entrada libre","dia":2,"day":2}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7c043c7d-7f19-da1c-e597-6fc95f1021ae',
   '2a656d80-85a5-6629-8c73-d4c09e388129',
@@ -1058,7 +1030,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Por la noche la ausencia casi total de contaminación lumínica permite ver la Vía Láctea a simple vista con absoluta nitidez']::text[],
   '{"address":"Acantilado del Faro, Cabo de la Vela","priceRange":"$ - Entrada libre","dia":2,"day":2}'::jsonb,
   90,
-  2,
   '{"dia":2,"day":2,"activities":["Contemplar la puesta de sol sobre el horizonte infinito (Gratis)","Fotografía de paisajes acantilados (Gratis)","Dormir en chinchorro Wayúu en ranchería tradicional ($25.000 - $40.000 COP por noche)"],"datos_curiosos":["Por la noche la ausencia casi total de contaminación lumínica permite ver la Vía Láctea a simple vista con absoluta nitidez"],"consejos":["Llegar 40 minutos antes del ocaso para encontrar buen sitio en las rocas","Llevar una linterna para descender hacia la ranchería una vez oscurezca"],"location_info":{"address":"Acantilado del Faro, Cabo de la Vela","priceRange":"$ - Entrada libre","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -1076,7 +1047,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b2e7ee63-f507-fca2-763d-0b8cef4bc663',
   '2a656d80-85a5-6629-8c73-d4c09e388129',
@@ -1094,7 +1065,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Punta Gallinas se encuentra a 12° 27′ de latitud norte, marcando el límite físico superior de toda la masa continental sudamericana']::text[],
   '{"address":"Dunas de Taroa, Punta Gallinas","priceRange":"$$ - Costos de expedición 4x4","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Sandboarding o rodar por las pendientes de arena hacia la orilla del mar (Gratis / alquiler tabla $20.000 COP)","Baño en el mar caribeño al pie de la duna (Gratis)","Fotografiar el Faro de Punta Gallinas, extremo norte de Suramérica (Gratis)"],"datos_curiosos":["Punta Gallinas se encuentra a 12° 27′ de latitud norte, marcando el límite físico superior de toda la masa continental sudamericana"],"consejos":["Subir la duna sin zapatos para mejor tracción en la arena suave","El trayecto en camioneta 4x4 cruza arenales profundos; no intentar ir sin guía local experto"],"location_info":{"address":"Dunas de Taroa, Punta Gallinas","priceRange":"$$ - Costos de expedición 4x4","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -1112,7 +1082,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '9c066aa1-3a6c-1348-e23a-6aa59fdcc16d',
   '2a656d80-85a5-6629-8c73-d4c09e388129',
@@ -1130,7 +1100,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En Uribia más del 90% de la población pertenece a la etnia Wayúu y conserva sus clanes matrilineales']::text[],
   '{"address":"Plaza Principal, Uribia","priceRange":"$ - Comida típica","dia":4,"day":4}'::jsonb,
   90,
-  4,
   '{"dia":4,"day":4,"activities":["Probar el friche de chivo tradicional con arepa de maíz ($18.000 - $28.000 COP)","Observar el comercio de tejidos y chinchorros de doble faz","Despedida de la travesía desértica antes de tomar el transporte de regreso"],"datos_curiosos":["En Uribia más del 90% de la población pertenece a la etnia Wayúu y conserva sus clanes matrilineales"],"consejos":["Comprar café o agua para el trayecto final de carretera hacia Riohacha"],"location_info":{"address":"Plaza Principal, Uribia","priceRange":"$ - Comida típica","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -1149,7 +1118,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #5: Eje Cafetero Tradicional: Salento, Cocora y Fincas Vivas (Salento, Colombia)
+-- Tour: Eje Cafetero Tradicional: Salento, Cocora y Fincas Vivas (Salento, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -1208,7 +1177,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '9f1f986e-67f6-1dae-4f9f-1683b3b40123',
   'e60779c4-4813-9e7b-ae82-9764e6a9d363',
@@ -1226,7 +1195,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Salento fue fundado en 1842 por colonos antioqueños y sirvió de paso crucial en la histórica Ruta del Quindío transitada por Humboldt y Bolívar']::text[],
   '{"address":"Calle Real, Salento","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   120,
-  1,
   '{"dia":1,"day":1,"activities":["Subir los 253 escalones hasta el mirador con vista al cañón (Gratis)","Comprar artesanías en guadua y madera de café ($15.000 - $50.000 COP)","Tomar un café campesino preparado en prensa o máquina de espresso ($5.000 - $12.000 COP)"],"datos_curiosos":["Salento fue fundado en 1842 por colonos antioqueños y sirvió de paso crucial en la histórica Ruta del Quindío transitada por Humboldt y Bolívar"],"consejos":["Subir al mirador al atardecer cuando la neblina comienza a descender sobre la montaña","Probar el postre tradicional de arequipe con queso campesino"],"location_info":{"address":"Calle Real, Salento","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -1244,7 +1212,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e5019537-9648-0d6c-8658-dca90b0db6a4',
   'e60779c4-4813-9e7b-ae82-9764e6a9d363',
@@ -1262,7 +1230,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La palma de cera puede vivir más de 200 años y es el hogar exclusivo del loro orejiamarillo, especie en peligro de extinción']::text[],
   '{"address":"Valle de Cocora, Salento","priceRange":"$$ - Moderado","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Paseo en Jeep Willys colectivo desde la plaza de Salento ($5.000 COP por trayecto)","Entrada al sendero de las palmas gigantes ($10.000 - $20.000 COP)","Almuerzo de trucha al ajillo servida sobre patacón gigante ($30.000 - $48.000 COP)"],"datos_curiosos":["La palma de cera puede vivir más de 200 años y es el hogar exclusivo del loro orejiamarillo, especie en peligro de extinción"],"consejos":["Alquilar botas de caucho en la entrada si ha llovido ($6.000 COP)","Hacer el circuito corto de 2 horas si va con niños o adultos mayores"],"location_info":{"address":"Valle de Cocora, Salento","priceRange":"$$ - Moderado","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -1280,7 +1247,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '88d68fa1-9090-1e41-f2fb-5bd8bcba8b46',
   'e60779c4-4813-9e7b-ae82-9764e6a9d363',
@@ -1298,7 +1265,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En Colombia el café se recolecta exclusivamente a mano grano a grano para garantizar que solo las cerezas en su punto óptimo de azúcar se procesen']::text[],
   '{"address":"Vereda Palestina, Salento","priceRange":"$$ - Tour $45.000 COP","dia":3,"day":3}'::jsonb,
   150,
-  3,
   '{"dia":3,"day":3,"activities":["Vestirse con canasto campesino y recolectar granos maduros (Tour: $45.000 COP)","Taller de cata sensorial de perfiles de café (Gratis con el tour)","Comprar café tostado en grano recién empacado para llevar ($25.000 - $45.000 COP)"],"datos_curiosos":["En Colombia el café se recolecta exclusivamente a mano grano a grano para garantizar que solo las cerezas en su punto óptimo de azúcar se procesen"],"consejos":["Llevar pantalón largo y repelente para caminar entre los cafetales","Preguntar por las variedades Geisha y Borbón Rosado"],"location_info":{"address":"Vereda Palestina, Salento","priceRange":"$$ - Tour $45.000 COP","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -1316,7 +1282,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e355fc3e-ecec-4c22-c190-832d5e1cda79',
   'e60779c4-4813-9e7b-ae82-9764e6a9d363',
@@ -1334,7 +1300,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El nombre de Filandia proviene del latín *Filia* (hija) y del inglés *Andia* (Andes), significando "Hija de los Andes"']::text[],
   '{"address":"Mirador Colina Iluminada, Filandia","priceRange":"$$ - Moderado","dia":4,"day":4}'::jsonb,
   180,
-  4,
   '{"dia":4,"day":4,"activities":["Subir al Mirador Colina Iluminada con vista a los tres departamentos del Eje Cafetero ($10.000 COP)","Conocer a los maestros cesteros del bejuco en el Centro de Interpretación ($5.000 COP)","Almorzar en el célebre restaurante Helena Adentro ($40.000 - $75.000 COP)"],"datos_curiosos":["El nombre de Filandia proviene del latín *Filia* (hija) y del inglés *Andia* (Andes), significando \"Hija de los Andes\""],"consejos":["Filandia queda a solo 30 minutos de Salento en Willys o taxi ($10.000 COP pasaje colectivo)","Reservar mesa con anticipación en Helena Adentro para fines de semana"],"location_info":{"address":"Mirador Colina Iluminada, Filandia","priceRange":"$$ - Moderado","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -1352,7 +1317,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0d1250ad-2e35-ca00-8dfb-2f36505118fe',
   'e60779c4-4813-9e7b-ae82-9764e6a9d363',
@@ -1370,7 +1335,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las aguas termales de Santa Rosa son telúricas, inodoras y ricas en minerales alcalinos beneficiosos para la piel y articulaciones']::text[],
   '{"address":"Kilómetro 4 Vereda San Ramón, Santa Rosa de Cabal","priceRange":"$$ - Entrada $45.000 - $65.000 COP","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Baño hidrotermal en piscinas escalonadas (Entrada: $45.000 - $65.000 COP según temporada)","Contraste térmico bajo el rocío de la cascada natural (Gratis con entrada)","Probar el famoso chorizo santarrosano tradicional con arepa ($15.000 - $22.000 COP)"],"datos_curiosos":["Las aguas termales de Santa Rosa son telúricas, inodoras y ricas en minerales alcalinos beneficiosos para la piel y articulaciones"],"consejos":["Llevar sandalias antideslizantes y toalla","Ideal visitar en la mañana o al atardecer para una experiencia relajante"],"location_info":{"address":"Kilómetro 4 Vereda San Ramón, Santa Rosa de Cabal","priceRange":"$$ - Entrada $45.000 - $65.000 COP","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -1389,7 +1353,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #6: Bogotá Histórica y Villa de Leyva: Tesoros Andinos y Fósiles (Bogotá, Colombia)
+-- Tour: Bogotá Histórica y Villa de Leyva: Tesoros Andinos y Fósiles (Bogotá, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -1448,7 +1412,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '735568a6-645f-3d9a-e82e-4be9b061a064',
   'ca2cebb2-dce5-3769-236f-f1532a178303',
@@ -1466,14 +1430,13 @@ INSERT INTO public.tour_stops (
   ARRAY['La Balsa Muisca fue encontrada en 1969 por tres campesinos dentro de una cueva en el municipio de Pasca dentro de una vasija de barro']::text[],
   '{"address":"Carrera 6 # 15-88, Parque Santander","priceRange":"$ - Entrada $5.000 COP","dia":1,"day":1}'::jsonb,
   120,
-  1,
   '{"dia":1,"day":1,"activities":["Admirar la mítica Balsa Muisca de la leyenda de El Dorado (Entrada: $5.000 COP / domingos gratis)","Experimentar la sala oscura de la Ofrenda con cantos ceremoniales (Gratis con entrada)","Comprar réplicas certificadas en la tienda oficial del museo ($30.000 - $120.000 COP)"],"datos_curiosos":["La Balsa Muisca fue encontrada en 1969 por tres campesinos dentro de una cueva en el municipio de Pasca dentro de una vasija de barro"],"consejos":["Cierra los días lunes; planificar la visita de martes a domingo","Alquilar la audioguía multilingüe para profundizar en la cosmovisión indígena ($10.000 COP)"],"location_info":{"address":"Carrera 6 # 15-88, Parque Santander","priceRange":"$ - Entrada $5.000 COP","dia":1,"day":1}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c145061e-c428-e0e0-3c09-d1dae45a145a',
   'ca2cebb2-dce5-3769-236f-f1532a178303',
@@ -1491,7 +1454,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En el Chorro de Quevedo estableció Gonzalo Jiménez de Quesada su guarnición militar con 12 chozas en 1538']::text[],
   '{"address":"Carrera 7 con Calle 11, La Candelaria","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   120,
-  1,
   '{"dia":1,"day":1,"activities":["Fotografiar la arquitectura neoclásica y republicana de la plaza (Gratis)","Probar un ajiaco santafereño tradicional con alcaparras y crema de leche ($28.000 - $45.000 COP)","Disfrutar de un vaso de chicha de maíz en el Chorro de Quevedo ($5.000 COP)"],"datos_curiosos":["En el Chorro de Quevedo estableció Gonzalo Jiménez de Quesada su guarnición militar con 12 chozas en 1538"],"consejos":["El Chorro de Quevedo tiene gran vida universitaria y cuenteros al atardecer","Cuidar pertenencias en zonas concurridas"],"location_info":{"address":"Carrera 7 con Calle 11, La Candelaria","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -1509,7 +1471,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '49a14420-fb6e-fdcc-cd0d-66a5aaec8e58',
   'ca2cebb2-dce5-3769-236f-f1532a178303',
@@ -1527,7 +1489,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los cerros de Monserrate y Guadalupe eran considerados lugares sagrados por los muiscas mucho antes de la colonia, asociados a los solsticios']::text[],
   '{"address":"Cerro de Monserrate","priceRange":"$ - Funicular $27.000 COP","dia":2,"day":2}'::jsonb,
   150,
-  2,
   '{"dia":2,"day":2,"activities":["Subida en teleférico o funicular panorámico (Ticket ida y vuelta: ~$27.000 COP)","Visita al santuario y recorrido por las estaciones del viacrucis en bronce (Gratis)","Probar agua de panela con queso y almojábana en los puestos del mirador ($8.000 - $14.000 COP)"],"datos_curiosos":["Los cerros de Monserrate y Guadalupe eran considerados lugares sagrados por los muiscas mucho antes de la colonia, asociados a los solsticios"],"consejos":["Subir en la mañana para encontrar el cielo despejado antes de que bajen nubes","Llevar abrigo; en la cumbre la temperatura suele rondar los 10°C con viento"],"location_info":{"address":"Cerro de Monserrate","priceRange":"$ - Funicular $27.000 COP","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -1545,7 +1506,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '78fda7db-a588-0f04-e017-a866b09bd312',
   'ca2cebb2-dce5-3769-236f-f1532a178303',
@@ -1563,7 +1524,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los depósitos de sal de Zipaquirá se formaron hace más de 250 millones de años por la evaporación de un antiguo mar interior cretácico']::text[],
   '{"address":"Parque de la Sal, Zipaquirá","priceRange":"$$ - Entrada oficial","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Recorrido subterráneo con audioguía oficial (Entrada general: ~$60.000 COP / extranjero: ~$98.000 COP)","Show de luces LED en la nave central de la catedral (Gratis con entrada)","Probar obleas con arequipe y mora en el parque central de Zipaquirá ($6.000 COP)"],"datos_curiosos":["Los depósitos de sal de Zipaquirá se formaron hace más de 250 millones de años por la evaporación de un antiguo mar interior cretácico"],"consejos":["La temperatura dentro de la mina es constante a 14°C; llevar chaqueta cómoda","El bus desde el Portal Norte de Bogotá a Zipaquirá tarda 45 minutos ($8.500 COP)"],"location_info":{"address":"Parque de la Sal, Zipaquirá","priceRange":"$$ - Entrada oficial","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -1581,7 +1541,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c6799be6-6a15-2ff9-8504-d5cf7fdc8759',
   'ca2cebb2-dce5-3769-236f-f1532a178303',
@@ -1599,7 +1559,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La pila de agua de piedra tallada en el centro de la plaza surtió de agua potable a los habitantes durante más de cuatro siglos']::text[],
   '{"address":"Plaza Mayor, Villa de Leyva, Boyacá","priceRange":"$ - Acceso libre","dia":4,"day":4}'::jsonb,
   120,
-  4,
   '{"dia":4,"day":4,"activities":["Caminar por la inmensidad empedrada de la plaza y tomar fotos panorámicas (Gratis)","Cena gourmet con vino boyacense en los restaurantes de los arcos ($45.000 - $80.000 COP)","Degustar amasijos típicos: almojábanas, garullas y pan de yuca ($5.000 - $10.000 COP)"],"datos_curiosos":["La pila de agua de piedra tallada en el centro de la plaza surtió de agua potable a los habitantes durante más de cuatro siglos"],"consejos":["Usar zapatos planos y cómodos; los cantos rodados pueden ser difíciles de caminar con tacones o calzado liso","En la noche la iluminación tenue de los faroles coloniales crea un ambiente mágico"],"location_info":{"address":"Plaza Mayor, Villa de Leyva, Boyacá","priceRange":"$ - Acceso libre","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -1617,7 +1576,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'dfb6eb96-3009-3410-2e10-890ab8877403',
   'ca2cebb2-dce5-3769-236f-f1532a178303',
@@ -1635,7 +1594,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Kronosaurus medía casi 10 metros de largo y poseía mandíbulas más poderosas que las de un tiranosaurio rex']::text[],
   '{"address":"Vereda Monquirá, Villa de Leyva","priceRange":"$ - Entradas combinadas ~$30.000 COP","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Observar el fósil gigante preservado en la misma roca donde murió (Entrada: $12.000 COP)","Caminata escénica por los senderos de los Pozos Azules ($15.000 COP)","Visita a la singular Casa Terracota, la cerámica habitable más grande del mundo ($20.000 COP)"],"datos_curiosos":["El Kronosaurus medía casi 10 metros de largo y poseía mandíbulas más poderosas que las de un tiranosaurio rex"],"consejos":["Se puede alquilar bicicleta o cuatrimoto para recorrer el circuito de los fósiles ($40.000 - $70.000 COP/hora)","Llevar protector solar; el sol en el valle es intenso"],"location_info":{"address":"Vereda Monquirá, Villa de Leyva","priceRange":"$ - Entradas combinadas ~$30.000 COP","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -1654,7 +1612,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #7: Santander Extremo: San Gil, Cañón del Chicamocha y Barichara (San Gil, Colombia)
+-- Tour: Santander Extremo: San Gil, Cañón del Chicamocha y Barichara (San Gil, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -1713,7 +1671,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '40717a74-3cb6-487f-496a-ad8f18908da9',
   '7383dfe0-8d25-584c-b93c-8b0b1863494d',
@@ -1731,7 +1689,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El musgo "barba de viejo" (*Tillandsia usneoides*) es un bioindicador de aire puro; solo crece donde no hay polución industrial']::text[],
   '{"address":"Malecón Turístico, San Gil","priceRange":"$ - Entrada $6.000 COP","dia":1,"day":1}'::jsonb,
   120,
-  1,
   '{"dia":1,"day":1,"activities":["Caminata por senderos ecológicos bajo las barbas de viejo (Entrada: $6.000 COP)","Piscina natural alimentada por aguas del manantial (Gratis con entrada)","Probar carne oreada santandereana con arepa de maíz pelado ($22.000 - $35.000 COP)"],"datos_curiosos":["El musgo \"barba de viejo\" (*Tillandsia usneoides*) es un bioindicador de aire puro; solo crece donde no hay polución industrial"],"consejos":["Llevar repelente de insectos para la caminata ribereña","Excelente lugar para descansar tras el viaje por carretera"],"location_info":{"address":"Malecón Turístico, San Gil","priceRange":"$ - Entrada $6.000 COP","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -1749,7 +1706,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5a73c573-dc86-ca3c-8e00-35740ba4a178',
   '7383dfe0-8d25-584c-b93c-8b0b1863494d',
@@ -1767,7 +1724,6 @@ INSERT INTO public.tour_stops (
   ARRAY['San Gil fue declarada oficialmente Capital Turística de Santander en 2004 gracias a su desarrollo pionero de deportes de aventura']::text[],
   '{"address":"Punto de partida El Arenal, Río Fonce","priceRange":"$$ - Actividad ~$55.000 COP","dia":2,"day":2}'::jsonb,
   180,
-  2,
   '{"dia":2,"day":2,"activities":["Descenso guiado en balsa inflable con instructores certificados ($50.000 - $65.000 COP por persona)","Saltos de prueba al agua en pozas mansas (Incluido en el tour)","Reportaje fotográfico digital de acción ($20.000 COP opcional)"],"datos_curiosos":["San Gil fue declarada oficialmente Capital Turística de Santander en 2004 gracias a su desarrollo pionero de deportes de aventura"],"consejos":["No llevar joyas, anillos ni relojes que puedan perderse en el río","Usar tenis viejos amarrados, no chancletas ni sandalias sueltas"],"location_info":{"address":"Punto de partida El Arenal, Río Fonce","priceRange":"$$ - Actividad ~$55.000 COP","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -1785,7 +1741,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7dbfd30b-826f-fbb0-03c8-65e0bd8c8921',
   '7383dfe0-8d25-584c-b93c-8b0b1863494d',
@@ -1803,7 +1759,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Cañón del Chicamocha es más profundo que el Gran Cañón del Colorado, superando los dos kilómetros desde la cima hasta el lecho del río']::text[],
   '{"address":"Kilómetro 54 Vía Bucaramanga - San Gil","priceRange":"$$$ - Parque y atracciones","dia":3,"day":3}'::jsonb,
   240,
-  3,
   '{"dia":3,"day":3,"activities":["Cruce en teleférico sobre el cañón (Entrada Parque + Teleférico: ~$65.000 COP)","Vuelo en parapente tándem sobre el abismo del cañón ($200.000 - $250.000 COP)","Almuerzo típico de cabro con pepitoria ($30.000 - $45.000 COP)"],"datos_curiosos":["El Cañón del Chicamocha es más profundo que el Gran Cañón del Colorado, superando los dos kilómetros desde la cima hasta el lecho del río"],"consejos":["Llevar sombrero con barboquejo para que no se vuele con el viento huracanado del mirador","El teleférico puede suspenderse temporalmente por ráfagas de viento fuertes; tener paciencia"],"location_info":{"address":"Kilómetro 54 Vía Bucaramanga - San Gil","priceRange":"$$$ - Parque y atracciones","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -1821,7 +1776,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '3dd06a68-fd4f-6e49-893f-e713141bd0e8',
   '7383dfe0-8d25-584c-b93c-8b0b1863494d',
@@ -1839,7 +1794,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Toda la catedral y las calles fueron labradas a mano por canteros locales con piedra extraída de las canteras amarillas de la meseta']::text[],
   '{"address":"Plaza Principal, Barichara","priceRange":"$ - Acceso libre","dia":4,"day":4}'::jsonb,
   180,
-  4,
   '{"dia":4,"day":4,"activities":["Visitar el interior de la catedral sostenida por 10 columnas monolíticas (Gratis)","Caminar hasta el Mirador de Barichara sobre el cañón del río Suárez (Gratis)","Taller práctico en la Fundación San Lorenzo de elaboración de papel de fique ($15.000 COP)"],"datos_curiosos":["Toda la catedral y las calles fueron labradas a mano por canteros locales con piedra extraída de las canteras amarillas de la meseta"],"consejos":["Barichara queda a solo 30 minutos de San Gil en bus local ($6.000 COP)","Al atardecer la temperatura es perfecta para pasear por las calles desiertas"],"location_info":{"address":"Plaza Principal, Barichara","priceRange":"$ - Acceso libre","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -1857,7 +1811,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b6414aef-0db0-14fa-65cf-d2cab9f3e577',
   '7383dfe0-8d25-584c-b93c-8b0b1863494d',
@@ -1875,7 +1829,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En el museo de Guane se conserva la momia indígena Guane de una mujer joven con deformación craneal ritual prehispánica']::text[],
   '{"address":"Salida Glorieta de Barichara hacia Guane","priceRange":"$ - Senderismo libre","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Caminata ecológica y fotográfica de 2 horas por el sendero histórico (Gratis)","Visita al Museo Arqueológico y Paleontológico de Guane ($8.000 COP)","Probar el sabajón casero de Guane y helados artesanales ($6.000 - $12.000 COP)"],"datos_curiosos":["En el museo de Guane se conserva la momia indígena Guane de una mujer joven con deformación craneal ritual prehispánica"],"consejos":["Iniciar la caminata antes de las 8:30 AM para evitar el calor sofocante del mediodía","Para regresar de Guane a Barichara se puede tomar el bus chiva local ($4.000 COP)"],"location_info":{"address":"Salida Glorieta de Barichara hacia Guane","priceRange":"$ - Senderismo libre","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -1894,7 +1847,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #8: Medellín Innovadora, Guatapé y Santa Fe de Antioquia (Medellín, Colombia)
+-- Tour: Medellín Innovadora, Guatapé y Santa Fe de Antioquia (Medellín, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -1953,7 +1906,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a84137d3-50d3-ea25-a7cd-6d7ae72c8349',
   '1b3fbbe3-5740-c62b-fa2b-545502e04733',
@@ -1971,14 +1924,13 @@ INSERT INTO public.tour_stops (
   ARRAY['Botero donó personalmente las esculturas con la condición expresa de que estuvieran en un parque público al alcance del pueblo']::text[],
   '{"address":"Carrera 52 # 52-43, Centro","priceRange":"$ - Museo $24.000 COP","dia":1,"day":1}'::jsonb,
   120,
-  1,
   '{"dia":1,"day":1,"activities":["Fotografiar las 23 esculturas de Botero en la plaza pública (Gratis)","Entrar a las salas de pintura del maestro Botero y Pedro Nel Gómez en el Museo de Antioquia (Entrada: $24.000 COP)","Tomar un tinto campesino en los cafés tradicionales del centro ($3.000 COP)"],"datos_curiosos":["Botero donó personalmente las esculturas con la condición expresa de que estuvieran en un parque público al alcance del pueblo"],"consejos":["Visitar en la mañana cuando la plaza está activa y vigilada por la policía turística","El Palacio de la Cultura tiene una terraza mirador de acceso libre"],"location_info":{"address":"Carrera 52 # 52-43, Centro","priceRange":"$ - Museo $24.000 COP","dia":1,"day":1}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '12f1f0e5-2409-5cd0-29fa-5669133991fb',
   '1b3fbbe3-5740-c62b-fa2b-545502e04733',
@@ -1996,7 +1948,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Metrocable de Medellín redujo los tiempos de viaje de los habitantes de las laderas de 2 horas a tan solo 20 minutos']::text[],
   '{"address":"Estación Acevedo / Santo Domingo / Arví","priceRange":"$ - Pasaje integrado","dia":1,"day":1}'::jsonb,
   150,
-  1,
   '{"dia":1,"day":1,"activities":["Vuelo panorámico sobre las comunas de Medellín en Metrocable (Pasaje integrado Metro: ~$3.600 COP)","Cruce de la niebla en el cable turístico hacia Arví ($13.500 COP)","Mercado campesino de frutas del bosque, fresas con crema y miel en la estación Arví ($10.000 - $20.000 COP)"],"datos_curiosos":["El Metrocable de Medellín redujo los tiempos de viaje de los habitantes de las laderas de 2 horas a tan solo 20 minutos"],"consejos":["Los lunes el Parque Arví está cerrado por mantenimiento del cable (excepto lunes festivos)"],"location_info":{"address":"Estación Acevedo / Santo Domingo / Arví","priceRange":"$ - Pasaje integrado","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -2014,7 +1965,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8dcb11bf-cdae-e86f-0a5e-bb61bac6eddc',
   '1b3fbbe3-5740-c62b-fa2b-545502e04733',
@@ -2032,7 +1983,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las escaleras eléctricas son públicas y completamente gratuitas para los vecinos de la comunidad']::text[],
   '{"address":"Barrio Las Independencias, Comuna 13","priceRange":"$ - Tour local accesible","dia":2,"day":2}'::jsonb,
   180,
-  2,
   '{"dia":2,"day":2,"activities":["Tour guiado con líderes juveniles locales del barrio ($35.000 - $50.000 COP)","Probar las célebres paletas artesanales de mango biche con sal y limón ($5.000 COP)","Presenciar los shows de danza urbana y rap en los miradores (Propina voluntaria)"],"datos_curiosos":["Las escaleras eléctricas son públicas y completamente gratuitas para los vecinos de la comunidad"],"consejos":["Tomar el Metro hasta San Javier y luego el autobús alimentador o taxi ($10.000 COP)","Comprar arte directamente a los grafiteros locales en sus galerías"],"location_info":{"address":"Barrio Las Independencias, Comuna 13","priceRange":"$ - Tour local accesible","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -2050,7 +2000,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f253b04d-0e64-a88e-3374-0404594172c8',
   '1b3fbbe3-5740-c62b-fa2b-545502e04733',
@@ -2068,14 +2018,13 @@ INSERT INTO public.tour_stops (
   ARRAY['La piedra pesa más de 10 millones de toneladas y fue escalada por primera vez de manera oficial en 1954 por Luis Eduardo Villegas']::text[],
   '{"address":"Vereda La Piedra, Guatapé","priceRange":"$$ - Entrada $25.000 COP","dia":3,"day":3}'::jsonb,
   150,
-  3,
   '{"dia":3,"day":3,"activities":["Ascender los 740 escalones hasta el mirador de la cumbre (Entrada: $25.000 COP)","Tomar una michelada o jugo de maracuyá en la cima mientras se contempla el embalse ($12.000 - $18.000 COP)","Fotografía panorámica de 360 grados sobre el archipiélago de la represa (Gratis)"],"datos_curiosos":["La piedra pesa más de 10 millones de toneladas y fue escalada por primera vez de manera oficial en 1954 por Luis Eduardo Villegas"],"consejos":["Subir a paso constante y llevar agua; hay descansos numerados cada 50 escalones","Los buses salen cada 20 minutos desde la Terminal del Norte de Medellín ($19.000 COP)"],"location_info":{"address":"Vereda La Piedra, Guatapé","priceRange":"$$ - Entrada $25.000 COP","dia":3,"day":3}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a53a0bad-f58f-022a-530d-4485ba8f5d71',
   '1b3fbbe3-5740-c62b-fa2b-545502e04733',
@@ -2093,7 +2042,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La tradición de los zócalos comenzó a principios del siglo XX cuando don José María Parra empezó a adornar la fachada de su casa con figuras de borregos']::text[],
   '{"address":"Centro de Guatapé, Antioquia","priceRange":"$ - Entrada libre","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Caminar por la Calle del Recuerdo y la Plazoleta de los Zócalos (Gratis)","Paseo en lancha rápida o barco rumbero por el embalse ($25.000 - $40.000 COP)","Almorzar bandeja paisa con chicharrón crocante y frijoles ($32.000 - $45.000 COP)"],"datos_curiosos":["La tradición de los zócalos comenzó a principios del siglo XX cuando don José María Parra empezó a adornar la fachada de su casa con figuras de borregos"],"consejos":["Tomar un motocarro decorado para moverse entre la Piedra y el pueblo de Guatapé ($12.000 COP)","Comprar café gourmet local cultivado alrededor del embalse"],"location_info":{"address":"Centro de Guatapé, Antioquia","priceRange":"$ - Entrada libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -2111,7 +2059,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '513ef7fb-1fe7-b5f5-fdb4-98c043e39740',
   '1b3fbbe3-5740-c62b-fa2b-545502e04733',
@@ -2129,14 +2077,13 @@ INSERT INTO public.tour_stops (
   ARRAY['En el momento de su inauguración en 1895 era considerado el séptimo puente colgante más largo del mundo']::text[],
   '{"address":"Río Cauca, Vía Olaya - Santa Fe","priceRange":"$ - Acceso simbólico","dia":4,"day":4}'::jsonb,
   90,
-  4,
   '{"dia":4,"day":4,"activities":["Cruzar a pie el puente histórico de madera sobre el río Cauca ($3.000 COP)","Paseo en mototaxi tradicional desde el parque de Santa Fe ($15.000 COP)","Probar frutas exóticas locales como tamarindo y zapote con sal ($5.000 COP)"],"datos_curiosos":["En el momento de su inauguración en 1895 era considerado el séptimo puente colgante más largo del mundo"],"consejos":["El clima en Santa Fe de Antioquia es cálido y soleado (28-34°C); llevar ropa muy fresca y protector solar","En el puente no transitan automóviles particulares grandes, solo mototaxis y peatones"],"location_info":{"address":"Río Cauca, Vía Olaya - Santa Fe","priceRange":"$ - Acceso simbólico","dia":4,"day":4}}'::jsonb,
   now()
 );
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e84433d7-1729-efd4-35be-febd85620fcc',
   '1b3fbbe3-5740-c62b-fa2b-545502e04733',
@@ -2154,7 +2101,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Sus calles empedradas conservan el nombre original de la época colonial como la Calle de la Amargura y la Calle del Medio']::text[],
   '{"address":"Parque Principal Simón Bolívar, Santa Fe de Antioquia","priceRange":"$ - Acceso libre","dia":4,"day":4}'::jsonb,
   120,
-  4,
   '{"dia":4,"day":4,"activities":["Visitar la Catedral Basílica de la Inmaculada Concepción (Gratis)","Conocer los talleres de orfebres de filigrana en oro y plata de la región","Tomar una cerveza helada o jugo de tamarindo en la Plaza Mayor ($5.000 - $8.000 COP)"],"datos_curiosos":["Sus calles empedradas conservan el nombre original de la época colonial como la Calle de la Amargura y la Calle del Medio"],"consejos":["Santa Fe de Antioquia queda a solo 1 hora y 15 minutos de Medellín gracias al Túnel de Occidente"],"location_info":{"address":"Parque Principal Simón Bolívar, Santa Fe de Antioquia","priceRange":"$ - Acceso libre","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -2172,7 +2118,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f41c6b25-4ce8-bbbd-6d5e-7e9470d5bd08',
   '1b3fbbe3-5740-c62b-fa2b-545502e04733',
@@ -2190,7 +2136,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La revista británica *Time Out* clasificó a Provenza como una de las calles más "cool" y atractivas del planeta en su ranking mundial']::text[],
   '{"address":"Carrera 35 con Calle 8A, El Poblado","priceRange":"$$ - Restaurantes y cafés","dia":5,"day":5}'::jsonb,
   150,
-  5,
   '{"dia":5,"day":5,"activities":["Cata de cafés especiales filtrados en Pergamino Café o Café Velvet ($8.000 - $16.000 COP)","Almuerzo de cocina colombiana contemporánea ($45.000 - $90.000 COP)","Paseo por las tiendas de moda urbana colombiana"],"datos_curiosos":["La revista británica *Time Out* clasificó a Provenza como una de las calles más \"cool\" y atractivas del planeta en su ranking mundial"],"consejos":["Zona peatonal muy segura y agradable para caminar a cualquier hora del día","Ideal para comprar café de especialidad empacado al vacío para el vuelo de regreso"],"location_info":{"address":"Carrera 35 con Calle 8A, El Poblado","priceRange":"$$ - Restaurantes y cafés","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -2209,7 +2154,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #9: Amazonas Colombiano Profundo: Selva, Delfines Rosados y Etnias (Leticia, Colombia)
+-- Tour: Amazonas Colombiano Profundo: Selva, Delfines Rosados y Etnias (Leticia, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -2268,7 +2213,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '59fb7f72-b990-bd7f-9551-346e807bc3f6',
   '366ad79d-3237-74ee-ed03-238efaf38045',
@@ -2286,7 +2231,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Se calcula que más de 50.000 pericos de la especie *Brotogeris versicolurus* llegan al parque cada tarde en menos de media hora']::text[],
   '{"address":"Carrera 11 con Calle 8, Leticia","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   120,
-  1,
   '{"dia":1,"day":1,"activities":["Subir a la torre campanario de la iglesia parroquial para ver el enjambre de loros ($5.000 COP)","Probar el pez pirarucú ahumado o frito con fariña en los restaurantes del muelle ($25.000 - $40.000 COP)","Caminar cruzando la frontera seca hacia Tabatinga (Brasil) sin trámites aduaneros (Gratis)"],"datos_curiosos":["Se calcula que más de 50.000 pericos de la especie *Brotogeris versicolurus* llegan al parque cada tarde en menos de media hora"],"consejos":["Llevar sombrilla durante el espectáculo de los loros para protegerse de las deposiciones de las aves","Pagar el impuesto de turismo de Leticia al aterrizar en el aeropuerto (~$38.000 COP)"],"location_info":{"address":"Carrera 11 con Calle 8, Leticia","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -2304,7 +2248,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '9fb8be34-37e9-7db2-cc07-d9835fed42ac',
   '366ad79d-3237-74ee-ed03-238efaf38045',
@@ -2322,7 +2266,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La estructura inferior de la hoja de la Victoria Regia inspiró el diseño estructural del Crystal Palace de Londres en el siglo XIX']::text[],
   '{"address":"Río Amazonas, margen izquierda","priceRange":"$ - Entrada $15.000 COP","dia":2,"day":2}'::jsonb,
   150,
-  2,
   '{"dia":2,"day":2,"activities":["Observar las gigantescas hojas de la Victoria Regia flotando sobre el agua (Entrada: $15.000 COP)","Paseo en canoa de madera entre los lagos de nenúfares (Gratis con entrada)","Probar frutos amazónicos exóticos como copoazú, arazá y camu-camu ($8.000 COP)"],"datos_curiosos":["La estructura inferior de la hoja de la Victoria Regia inspiró el diseño estructural del Crystal Palace de Londres en el siglo XIX"],"consejos":["Las flores de la Victoria Regia se abren al anochecer y cambian de color blanco a rosado en 48 horas","Llevar repelente y protector solar para el paseo en bote"],"location_info":{"address":"Río Amazonas, margen izquierda","priceRange":"$ - Entrada $15.000 COP","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -2340,7 +2283,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c4bba2e1-1b71-a44b-4845-0392186c79c3',
   '366ad79d-3237-74ee-ed03-238efaf38045',
@@ -2358,7 +2301,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Es considerado el primer municipio certificado como destino turístico sostenible de Colombia por su manejo ecológico de residuos']::text[],
   '{"address":"Puerto Nariño, Amazonas","priceRange":"$ - Entrada al pueblo $10.000 COP","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Subir a la torre mirador Naipata para vista panorámica del río Loretoyacu ($5.000 COP)","Visitar el Centro de Interpretación Natütama dedicado a la conservación de manatíes ($12.000 COP)","Almorzar pescado gamitana o sábalo asado en hoja de plátano ($22.000 - $35.000 COP)"],"datos_curiosos":["Es considerado el primer municipio certificado como destino turístico sostenible de Colombia por su manejo ecológico de residuos"],"consejos":["La lancha rápida desde Leticia a Puerto Nariño tarda 1 hora y 45 minutos ($42.000 COP por trayecto)","En Puerto Nariño todo el transporte es a pie"],"location_info":{"address":"Puerto Nariño, Amazonas","priceRange":"$ - Entrada al pueblo $10.000 COP","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -2376,7 +2318,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '173a630b-473e-d102-c441-72c1a54234f3',
   '366ad79d-3237-74ee-ed03-238efaf38045',
@@ -2394,7 +2336,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los delfines rosados del Amazonas poseen vértebras cervicales no fusionadas, lo que les permite girar el cuello 90 grados para cazar entre los troncos sumergidos']::text[],
   '{"address":"Lagos de Tarapoto, Puerto Nariño","priceRange":"$$ - Excursión en lancha","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Navegación lenta en bote artesanal para avistar delfines rosados emergiendo a respirar ($60.000 - $90.000 COP por bote)","Baño en aguas cálidas y tranquilas del lago (Gratis)","Senderismo de interpretación de árboles gigantes de ceiba y matapalo con guía nativo ($25.000 COP)"],"datos_curiosos":["Los delfines rosados del Amazonas poseen vértebras cervicales no fusionadas, lo que les permite girar el cuello 90 grados para cazar entre los troncos sumergidos"],"consejos":["Apagar el motor del bote para escuchar el soplido característico del delfín al respirar","No intentar tocar a los delfines para no alterar su conducta silvestre"],"location_info":{"address":"Lagos de Tarapoto, Puerto Nariño","priceRange":"$$ - Excursión en lancha","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -2412,7 +2353,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b9a4efe4-430e-6d88-a62c-cdd13139327d',
   '366ad79d-3237-74ee-ed03-238efaf38045',
@@ -2430,7 +2371,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La fibra de chambira proviene de una palmera espinosa y se tiñe exclusivamente con raíces, frutos y barro silvestre']::text[],
   '{"address":"Comunidad San Martín, Parque Amacayacu","priceRange":"$ - Aporte comunitario","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Taller de tejido con fibra de chambira con mujeres artesanas ($15.000 COP)","Demostración de tiro con cerbatana tradicional indígena ($10.000 COP)","Alquiler de artesanías talladas en palo de sangre ($20.000 - $60.000 COP)"],"datos_curiosos":["La fibra de chambira proviene de una palmera espinosa y se tiñe exclusivamente con raíces, frutos y barro silvestre"],"consejos":["Preguntar siempre respetuosamente antes de tomar fotografías a los miembros de la comunidad","Aportar directamente comprando artesanías familiares"],"location_info":{"address":"Comunidad San Martín, Parque Amacayacu","priceRange":"$ - Aporte comunitario","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -2448,7 +2388,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f867b788-cd9e-cdf5-bb8e-85dfcb48ce41',
   '366ad79d-3237-74ee-ed03-238efaf38045',
@@ -2466,7 +2406,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En esta triple frontera la gente habla cotidianamente el "portuñol", una mezcla fluida de español y portugués sin barreras lingüísticas']::text[],
   '{"address":"Malecón Fluvial, Leticia","priceRange":"$ - Compras locales","dia":6,"day":6}'::jsonb,
   120,
-  6,
   '{"dia":6,"day":6,"activities":["Comprar bombones de chocolate con acai y copoazú en Tabatinga ($15.000 - $30.000 COP)","Desayuno de tapioca brasileña con queso y café con leche en Tabatinga ($12.000 COP)","Fotografía de la confluencia fronteriza sobre el río Amazonas (Gratis)"],"datos_curiosos":["En esta triple frontera la gente habla cotidianamente el \"portuñol\", una mezcla fluida de español y portugués sin barreras lingüísticas"],"consejos":["En Tabatinga se puede pagar en pesos colombianos, reales brasileños o dólares","Verificar el peso del equipaje antes de dirigirse al aeropuerto Vásquez Cobo"],"location_info":{"address":"Malecón Fluvial, Leticia","priceRange":"$ - Compras locales","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -2485,7 +2424,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #10: La Gran Vuelta a Colombia: De los Andes al Caribe Mágico (Bogotá, Colombia)
+-- Tour: La Gran Vuelta a Colombia: De los Andes al Caribe Mágico (Bogotá, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -2544,7 +2483,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '3a5618ac-5e10-abbd-daa2-33a00fffe8f6',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2562,7 +2501,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Plaza de Bolívar ha sido testigo de los eventos republicanos más cruciales de Colombia desde 1819']::text[],
   '{"address":"La Candelaria, Bogotá","priceRange":"$ - Entrada $5.000 COP","dia":1,"day":1}'::jsonb,
   150,
-  1,
   '{"dia":1,"day":1,"activities":["Visita a la Balsa Muisca (Entrada: $5.000 COP)","Caminata por la Plaza de Bolívar (Gratis)","Cena de ajiaco santafereño ($32.000 COP)"],"datos_curiosos":["La Plaza de Bolívar ha sido testigo de los eventos republicanos más cruciales de Colombia desde 1819"],"consejos":["Aclimatarse con calma a los 2.600 metros de altitud de Bogotá"],"location_info":{"address":"La Candelaria, Bogotá","priceRange":"$ - Entrada $5.000 COP","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -2580,7 +2518,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '1f6e8da4-c34a-e824-d215-2951bd74cfd0',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2598,7 +2536,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El templo alberga una talla del siglo XVII atribuida al escultor Pedro de Lugo y Albarracín']::text[],
   '{"address":"Monserrate, Bogotá","priceRange":"$ - Funicular","dia":2,"day":2}'::jsonb,
   120,
-  2,
   '{"dia":2,"day":2,"activities":["Subida en funicular o teleférico ($27.000 COP)","Mirador panorámico (Gratis)","Café de altura con almojábana ($10.000 COP)"],"datos_curiosos":["El templo alberga una talla del siglo XVII atribuida al escultor Pedro de Lugo y Albarracín"],"consejos":["Subir en la mañana para evitar las lloviznas de la tarde"],"location_info":{"address":"Monserrate, Bogotá","priceRange":"$ - Funicular","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -2616,7 +2553,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f18e11ab-464a-a468-0d9b-688d0e359527',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2634,7 +2571,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Contiene 14 estaciones que representan el viacrucis talladas directamente en la sal']::text[],
   '{"address":"Zipaquirá, Cundinamarca","priceRange":"$$ - Entrada","dia":3,"day":3}'::jsonb,
   150,
-  3,
   '{"dia":3,"day":3,"activities":["Recorrido guiado subterráneo (Entrada: ~$60.000 COP)","Traslado al aeropuerto El Dorado para vuelo al Quindío"],"datos_curiosos":["Contiene 14 estaciones que representan el viacrucis talladas directamente en la sal"],"consejos":["Llevar abrigo ligero para la mina (14°C)"],"location_info":{"address":"Zipaquirá, Cundinamarca","priceRange":"$$ - Entrada","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -2652,7 +2588,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '55fa42b9-1fef-7f67-872a-3b8a0ee18c8d',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2670,7 +2606,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La palma de cera era utilizada por los indígenas para extraer cera de alumbrado ceremonial']::text[],
   '{"address":"Valle de Cocora, Salento","priceRange":"$$ - Moderado","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Jeep Willys colectivo ($5.000 COP)","Caminata entre palmas ($15.000 COP)","Almuerzo de trucha con patacón ($35.000 COP)"],"datos_curiosos":["La palma de cera era utilizada por los indígenas para extraer cera de alumbrado ceremonial"],"consejos":["Llevar calzado con buen agarre para el sendero húmedo"],"location_info":{"address":"Valle de Cocora, Salento","priceRange":"$$ - Moderado","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -2688,7 +2623,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ae4a568c-3063-44c5-e485-d37265877686',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2706,7 +2641,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El café colombiano es suave por su altitud de cultivo y recolección manual']::text[],
   '{"address":"Salento, Quindío","priceRange":"$$ - Tour","dia":5,"day":5}'::jsonb,
   120,
-  5,
   '{"dia":5,"day":5,"activities":["Tour de café especial ($45.000 COP)","Degustación y cata guiada (Gratis con tour)"],"datos_curiosos":["El café colombiano es suave por su altitud de cultivo y recolección manual"],"consejos":["Comprar café recién tostado en la finca"],"location_info":{"address":"Salento, Quindío","priceRange":"$$ - Tour","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -2724,7 +2658,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'dd69a54b-cd5b-ab61-00f3-f8c1fd072697',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2742,7 +2676,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Medellín fue nombrada Ciudad Más Innovadora del Mundo por el Wall Street Journal']::text[],
   '{"address":"Plaza Botero, Medellín","priceRange":"$ - Moderado","dia":6,"day":6}'::jsonb,
   200,
-  6,
   '{"dia":6,"day":6,"activities":["Fotos en la plaza (Gratis)","Entrada al Museo de Antioquia ($24.000 COP)","Metrocable al Parque Arví ($13.500 COP)"],"datos_curiosos":["Medellín fue nombrada Ciudad Más Innovadora del Mundo por el Wall Street Journal"],"consejos":["Disfrutar de las frutas exóticas del mercado campesino en Arví"],"location_info":{"address":"Plaza Botero, Medellín","priceRange":"$ - Moderado","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -2760,7 +2693,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4682d4b4-8419-f8a6-abb3-d4c271985a64',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2778,7 +2711,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El hip-hop salvó a cientos de jóvenes de la violencia barrial']::text[],
   '{"address":"Comuna 13, Medellín","priceRange":"$ - Tour","dia":7,"day":7}'::jsonb,
   180,
-  7,
   '{"dia":7,"day":7,"activities":["Tour guiado con líderes locales ($40.000 COP)","Paleta de mango con limón ($5.000 COP)"],"datos_curiosos":["El hip-hop salvó a cientos de jóvenes de la violencia barrial"],"consejos":["Usar ropa ligera; hay muchas escaleras mecánicas y miradores"],"location_info":{"address":"Comuna 13, Medellín","priceRange":"$ - Tour","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -2796,7 +2728,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '82a223b4-6c2f-b0dd-e05d-2bbe59f7b04c',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2814,7 +2746,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La represa de Guatapé produce cerca del 15% de la electricidad de Colombia']::text[],
   '{"address":"Guatapé, Antioquia","priceRange":"$$ - Moderado","dia":8,"day":8}'::jsonb,
   240,
-  8,
   '{"dia":8,"day":8,"activities":["Subida a la piedra ($25.000 COP)","Fotos en la Plazoleta de los Zócalos (Gratis)","Vuelo nocturno Medellín - Santa Marta"],"datos_curiosos":["La represa de Guatapé produce cerca del 15% de la electricidad de Colombia"],"consejos":["Tomar transporte temprano para llegar a tiempo al aeropuerto de Rionegro"],"location_info":{"address":"Guatapé, Antioquia","priceRange":"$$ - Moderado","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -2832,7 +2763,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd783bffe-e196-5ea5-5450-9fbdbb09a892',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2850,7 +2781,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La quinta conserva el árbol de tamarindo bajo cuya sombra solía reposar Bolívar']::text[],
   '{"address":"Santa Marta, Magdalena","priceRange":"$ - Entrada","dia":9,"day":9}'::jsonb,
   120,
-  9,
   '{"dia":9,"day":9,"activities":["Tour histórico ($23.000 COP)","Atardecer en el Parque de los Novios (Gratis)"],"datos_curiosos":["La quinta conserva el árbol de tamarindo bajo cuya sombra solía reposar Bolívar"],"consejos":["Probar la limonada de coco típica de la costa"],"location_info":{"address":"Santa Marta, Magdalena","priceRange":"$ - Entrada","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -2868,7 +2798,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e18102e2-224a-8853-f3cc-f2848148d33b',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2886,7 +2816,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Sierra Nevada de Santa Marta es la montaña costera más alta del mundo']::text[],
   '{"address":"PNN Tayrona, Magdalena","priceRange":"$$ - Entrada oficial","dia":10,"day":10}'::jsonb,
   300,
-  10,
   '{"dia":10,"day":10,"activities":["Entrada al parque (~$35.000 / $73.500 COP)","Baño en La Piscina y Cabo San Juan (Gratis)","Almuerzo de pescado frito ($38.000 COP)"],"datos_curiosos":["La Sierra Nevada de Santa Marta es la montaña costera más alta del mundo"],"consejos":["Llevar suficiente agua y comenzar el regreso a media tarde"],"location_info":{"address":"PNN Tayrona, Magdalena","priceRange":"$$ - Entrada oficial","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -2904,7 +2833,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '6a39d87d-e835-bfc7-862b-8b5b8ade86cc',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2922,7 +2851,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las murallas de Cartagena tienen más de 11 kilómetros de longitud conservada']::text[],
   '{"address":"Santo Domingo, Cartagena","priceRange":"$$ - Consumos","dia":11,"day":11}'::jsonb,
   120,
-  11,
   '{"dia":11,"day":11,"activities":["Cóctel al atardecer sobre las murallas ($35.000 COP)","Caminata nocturna por Getsemaní (Gratis)"],"datos_curiosos":["Las murallas de Cartagena tienen más de 11 kilómetros de longitud conservada"],"consejos":["Getsemaní es el epicentro de la música caribeña y vida nocturna"],"location_info":{"address":"Santo Domingo, Cartagena","priceRange":"$$ - Consumos","dia":11,"day":11}}'::jsonb,
   now()
 );
@@ -2940,7 +2868,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'cf1254db-ae3d-0b76-b603-8f5c504cd7e5',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2958,7 +2886,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La fortaleza fue construida con una mezcla de cal, arena y sangre de ganado para mayor resistencia']::text[],
   '{"address":"Pie del Cerro, Cartagena","priceRange":"$ - Entrada $30.000 COP","dia":12,"day":12}'::jsonb,
   120,
-  12,
   '{"dia":12,"day":12,"activities":["Túneles subterráneos (Entrada: $30.000 COP)","Fotografía panorámica del mar y la ciudad antigua (Gratis)"],"datos_curiosos":["La fortaleza fue construida con una mezcla de cal, arena y sangre de ganado para mayor resistencia"],"consejos":["Visitar a primera hora de la mañana para evitar el calor intenso"],"location_info":{"address":"Pie del Cerro, Cartagena","priceRange":"$ - Entrada $30.000 COP","dia":12,"day":12}}'::jsonb,
   now()
 );
@@ -2976,7 +2903,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5b925cce-8f18-a33c-0b27-4442f0da1a6c',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -2994,7 +2921,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El parque marino protege más de 120.000 hectáreas de ecosistemas coralinos submarinos']::text[],
   '{"address":"PNN Corales del Rosario","priceRange":"$$$ - Pasadía en lancha","dia":13,"day":13}'::jsonb,
   300,
-  13,
   '{"dia":13,"day":13,"activities":["Snorkel en arrecife de coral ($50.000 COP)","Almuerzo de mariscos ($45.000 COP)","Descanso bajo las palmeras"],"datos_curiosos":["El parque marino protege más de 120.000 hectáreas de ecosistemas coralinos submarinos"],"consejos":["Llevar protector solar ecológico reef-safe"],"location_info":{"address":"PNN Corales del Rosario","priceRange":"$$$ - Pasadía en lancha","dia":13,"day":13}}'::jsonb,
   now()
 );
@@ -3012,7 +2938,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '3ddbe48a-3084-a3e0-89d2-b546dbfb32a3',
   'e26c05af-2ee1-14af-f967-a72bb5751fc1',
@@ -3030,7 +2956,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cartagena de Indias fue declarada Patrimonio de la Humanidad por la UNESCO en 1984']::text[],
   '{"address":"Centro Histórico, Cartagena","priceRange":"$ - Libre","dia":14,"day":14}'::jsonb,
   120,
-  14,
   '{"dia":14,"day":14,"activities":["Comprar artesanías finas y café gourmet ($25.000 - $80.000 COP)","Último almuerzo caribeño de despedida ($40.000 COP)"],"datos_curiosos":["Cartagena de Indias fue declarada Patrimonio de la Humanidad por la UNESCO en 1984"],"consejos":["Tomar taxi con tarifa regulada hacia el aeropuerto Rafael Núñez (15 minutos)"],"location_info":{"address":"Centro Histórico, Cartagena","priceRange":"$ - Libre","dia":14,"day":14}}'::jsonb,
   now()
 );
@@ -3049,7 +2974,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #11: Ciudad de México y Valle de los Dioses: Tenochtitlán y Arte Vivo (Ciudad de México, México)
+-- Tour: Ciudad de México y Valle de los Dioses: Tenochtitlán y Arte Vivo (Ciudad de México, México)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -3108,7 +3033,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0ea3816a-a3c9-cb3b-6f95-61f27a8f7f6c',
   '6b554568-596a-022f-f605-e77f5abf6739',
@@ -3126,7 +3051,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Catedral se hunde varios centímetros cada año debido al suelo blando del antiguo lecho lacustre de Texcoco']::text[],
   '{"address":"Plaza de la Constitución S/N, Centro Histórico","priceRange":"$ - Museo $95 MXN","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Visitar la zona arqueológica y museo del Templo Mayor (Entrada: $95 MXN)","Entrar a la Catedral Metropolitana y apreciar sus retablos dorados (Gratis)","Probar tacos al pastor con piña en taquería tradicional ($60 - $120 MXN)"],"datos_curiosos":["La Catedral se hunde varios centímetros cada año debido al suelo blando del antiguo lecho lacustre de Texcoco"],"consejos":["Los domingos el acceso a museos del INAH es gratuito para residentes nacionales; entre semana es más tranquilo","No perderse la enorme escultura del monolito de Coyolxauhqui en el museo"],"location_info":{"address":"Plaza de la Constitución S/N, Centro Histórico","priceRange":"$ - Museo $95 MXN","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -3144,7 +3068,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e83dee74-4294-4be8-72e5-2154ca4bd428',
   '6b554568-596a-022f-f605-e77f5abf6739',
@@ -3162,7 +3086,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cuando los aztecas encontraron Teotihuacán en el siglo XIV, la ciudad ya llevaba más de 600 años abandonada y la creyeron obra de gigantes']::text[],
   '{"address":"San Juan Teotihuacán, Estado de México","priceRange":"$$ - Entrada oficial + transporte","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Recorrido por la Calzada de los Muertos (Entrada general INAH: $95 MXN)","Visita al Palacio de Quetzalpapálotl con murales originales (Gratis con entrada)","Almorzar dentro de una cueva volcánica en el restaurante La Gruta ($450 - $800 MXN)"],"datos_curiosos":["Cuando los aztecas encontraron Teotihuacán en el siglo XIV, la ciudad ya llevaba más de 600 años abandonada y la creyeron obra de gigantes"],"consejos":["Tomar el autobús desde la Terminal de Autobuses del Norte (Autobuses Teotihuacán: $120 MXN ida y vuelta)","Llegar a las 8:30 AM cuando abren para evitar el sol abrasador del mediodía"],"location_info":{"address":"San Juan Teotihuacán, Estado de México","priceRange":"$$ - Entrada oficial + transporte","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -3180,7 +3103,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '951f6c88-e98f-d330-490e-d95d696ac443',
   '6b554568-596a-022f-f605-e77f5abf6739',
@@ -3198,7 +3121,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Diego Rivera recreó aquí el famoso mural que Nelson Rockefeller ordenó destruir en el Rockefeller Center de Nueva York por incluir el rostro de Lenin']::text[],
   '{"address":"Avenida Juárez S/N, Centro Histórico","priceRange":"$ - Entrada $90 MXN","dia":3,"day":3}'::jsonb,
   150,
-  3,
   '{"dia":3,"day":3,"activities":["Contemplar el mural \"El hombre controlador del universo\" de Rivera (Entrada museo: $90 MXN)","Subir a la cafetería del Sears frente al palacio para la mejor foto aérea (Consumo de café: $60 MXN)","Caminar por la arbolada Alameda Central con sus fuentes barrocas (Gratis)"],"datos_curiosos":["Diego Rivera recreó aquí el famoso mural que Nelson Rockefeller ordenó destruir en el Rockefeller Center de Nueva York por incluir el rostro de Lenin"],"consejos":["La cortina del teatro de Bellas Artes está hecha con cerca de un millón de piezas de cristal por Tiffany de Nueva York","Comprar churros calientes con chocolate en la legendaria Churrería El Moro ($70 MXN)"],"location_info":{"address":"Avenida Juárez S/N, Centro Histórico","priceRange":"$ - Entrada $90 MXN","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -3216,7 +3138,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '858027b1-725a-8f2e-6e92-7cd46cd71601',
   '6b554568-596a-022f-f605-e77f5abf6739',
@@ -3234,7 +3156,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La urna con las cenizas de Frida Kahlo reposa en su dormitorio principal dentro de una figura de barro en forma de sapo']::text[],
   '{"address":"Londres 247, Del Carmen, Coyoacán","priceRange":"$$ - Entrada $320 MXN","dia":4,"day":4}'::jsonb,
   180,
-  4,
   '{"dia":4,"day":4,"activities":["Recorrido por las habitaciones y el estudio de arte de Frida (Entrada general extranjero: ~$320 MXN / nacional: ~$130 MXN)","Paseo por la Plaza Hidalgo y el Jardín Centenario en Coyoacán (Gratis)","Degustar tostadas de tinga y aguas frescas en el Mercado de Coyoacán ($80 - $140 MXN)"],"datos_curiosos":["La urna con las cenizas de Frida Kahlo reposa en su dormitorio principal dentro de una figura de barro en forma de sapo"],"consejos":["No venden boletos en taquilla física; es estrictamente necesario reservar en línea con horario asignado","El permiso para tomar fotografías sin flash dentro de la casa cuesta $30 MXN adicionales"],"location_info":{"address":"Londres 247, Del Carmen, Coyoacán","priceRange":"$$ - Entrada $320 MXN","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -3252,7 +3173,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '36e4a4fa-f8f9-185c-0b46-e9d61116d569',
   '6b554568-596a-022f-f605-e77f5abf6739',
@@ -3270,7 +3191,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Chapultepec es el parque urbano más antiguo de América, con ahuehuetes plantados por el rey Nezahualcóyotl en el siglo XV']::text[],
   '{"address":"Bosque de Chapultepec I Sección","priceRange":"$$ - Entradas combinadas $190 MXN","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Visitar los salones imperiales y jardines colgantes del Castillo (Entrada: $95 MXN)","Asombrarse ante el monolito de la Piedra del Sol azteca en el Museo de Antropología (Entrada: $95 MXN)","Caminar bajo el enorme paraguas de agua del patio central del museo"],"datos_curiosos":["Chapultepec es el parque urbano más antiguo de América, con ahuehuetes plantados por el rey Nezahualcóyotl en el siglo XV"],"consejos":["El Museo de Antropología es inmenso; dedicar al menos 2 horas a las salas Mexica y Maya","Cierra los lunes; planear la visita de martes a domingo"],"location_info":{"address":"Bosque de Chapultepec I Sección","priceRange":"$$ - Entradas combinadas $190 MXN","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -3289,7 +3209,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #12: Cusco Sagrado y Machu Picchu: El Corazón del Imperio Inca (Cusco, Perú)
+-- Tour: Cusco Sagrado y Machu Picchu: El Corazón del Imperio Inca (Cusco, Perú)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -3348,7 +3268,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '96fb9603-517b-b423-ab3b-35f4ae9eca73',
   'eb7b8162-92d8-1691-b3d8-4c8e59a5b4e4',
@@ -3366,7 +3286,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los muros del Qorikancha estaban originalmente recubiertos de planchas de oro macizo que fueron arrancadas para pagar el rescate del inca Atahualpa']::text[],
   '{"address":"Avenida El Sol con Calle Santo Domingo, Cusco","priceRange":"$ - Entrada 15 PEN","dia":1,"day":1}'::jsonb,
   150,
-  1,
   '{"dia":1,"day":1,"activities":["Visitar los recintos incas de piedra pulida dentro del Qorikancha (Entrada: 15 PEN / ~$4 USD)","Tocar con respeto la célebre Piedra de los 12 Ángulos en la calle Hatun Rumiyoc (Gratis)","Tomar té de muña o coca en una cafetería colonial de la plaza (8 PEN / ~$2 USD)"],"datos_curiosos":["Los muros del Qorikancha estaban originalmente recubiertos de planchas de oro macizo que fueron arrancadas para pagar el rescate del inca Atahualpa"],"consejos":["Caminar muy despacio y comer ligero durante las primeras 24 horas para evitar el soroche","No apoyarse bruscamente sobre las piedras incas patrimoniales"],"location_info":{"address":"Avenida El Sol con Calle Santo Domingo, Cusco","priceRange":"$ - Entrada 15 PEN","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -3384,7 +3303,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '38784661-9036-8c96-48a4-3c1d8e66c54e',
   'eb7b8162-92d8-1691-b3d8-4c8e59a5b4e4',
@@ -3402,7 +3321,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cada 24 de junio se escenifica en su explanada principal el milenario Inti Raymi (Fiesta del Sol)']::text[],
   '{"address":"Sacsayhuamán, Cusco","priceRange":"$$ - Incluido en Boleto Turístico","dia":2,"day":2}'::jsonb,
   180,
-  2,
   '{"dia":2,"day":2,"activities":["Recorrido por las murallas megalíticas con el Boleto Turístico BTC (Boleto Turístico Parcial: 70 PEN / Integral: 130 PEN)","Deslizarse por las formaciones de rodaderos naturales de Suchuna (Gratis)","Fotografía de la vista panorámica de la ciudad de Cusco en forma de puma (Gratis)"],"datos_curiosos":["Cada 24 de junio se escenifica en su explanada principal el milenario Inti Raymi (Fiesta del Sol)"],"consejos":["Se puede subir en taxi desde la Plaza de Armas por 10 PEN o en caminata empinada de 25 minutos","Llevar sombrero de ala ancha y bloqueador solar"],"location_info":{"address":"Sacsayhuamán, Cusco","priceRange":"$$ - Incluido en Boleto Turístico","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -3420,7 +3338,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2794d44d-ca44-3c7a-26d4-eb6b932cd7cd',
   'eb7b8162-92d8-1691-b3d8-4c8e59a5b4e4',
@@ -3438,7 +3356,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las andenerías agrícolas incas no solo evitaban la erosión de las laderas, sino que sus piedras absorbían el calor diurno para irradiarlo de noche contra las heladas']::text[],
   '{"address":"Písac, Valle Sagrado","priceRange":"$$ - Boleto Turístico","dia":3,"day":3}'::jsonb,
   200,
-  3,
   '{"dia":3,"day":3,"activities":["Caminar entre los recintos militares y el reloj solar Intihuatana de Písac (Incluido en Boleto Turístico)","Comprar chompas de alpaca y platería en el mercado dominical (40 - 150 PEN)","Probar empanadas calientes recién horneadas en los hornos de barro coloniales (5 PEN)"],"datos_curiosos":["Las andenerías agrícolas incas no solo evitaban la erosión de las laderas, sino que sus piedras absorbían el calor diurno para irradiarlo de noche contra las heladas"],"consejos":["El Valle Sagrado se encuentra a 2.800 msnm (600 metros más bajo que Cusco), lo que facilita respirar mejor"],"location_info":{"address":"Písac, Valle Sagrado","priceRange":"$$ - Boleto Turístico","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -3456,7 +3373,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '265b011c-e9ce-d0a3-0385-f60f90fead5c',
   'eb7b8162-92d8-1691-b3d8-4c8e59a5b4e4',
@@ -3474,7 +3391,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Ollantaytambo es la única ciudad inca que ha permanecido continuamente habitada por los mismos linajes desde el siglo XV']::text[],
   '{"address":"Ollantaytambo, Valle Sagrado","priceRange":"$$$ - Tren a Machu Picchu","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Subir las escalinatas de piedra hacia los seis monolitos gigantes de pórfido rosa (Boleto Turístico)","Abordar el tren escénico con techos panorámicos hacia Aguas Calientes (~$70 - $90 USD)","Cena andina en Aguas Calientes (lomo saltado con cerveza cusqueña: 40 - 65 PEN)"],"datos_curiosos":["Ollantaytambo es la única ciudad inca que ha permanecido continuamente habitada por los mismos linajes desde el siglo XV"],"consejos":["El equipaje grande se deja en el hotel de Cusco; al tren solo se permite subir con mochila de mano de hasta 5 kilos","Apreciar cómo el paisaje cambia de cordillera árida a selva tropical exuberante durante el trayecto en tren"],"location_info":{"address":"Ollantaytambo, Valle Sagrado","priceRange":"$$$ - Tren a Machu Picchu","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -3492,7 +3408,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '279b17ed-17e7-0b97-8ceb-77aeda105a05',
   'eb7b8162-92d8-1691-b3d8-4c8e59a5b4e4',
@@ -3510,7 +3426,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La ciudadela está construida con un sistema antisísmico de piedras machihembradas sin argamasa que rebotan y vuelven a su lugar durante los terremotos']::text[],
   '{"address":"Santuario Histórico de Machu Picchu, Cusco","priceRange":"$$$ - Entrada oficial + tren","dia":5,"day":5}'::jsonb,
   300,
-  5,
   '{"dia":5,"day":5,"activities":["Recorrido guiado de 2.5 horas por el Circuito clásico: Casa del Guardián, Templo del Sol y Plaza Sagrada (Entrada oficial: 152 PEN / ~$41 USD)","Subida en autobús ecológico Consettur desde Aguas Calientes ($24 USD ida y vuelta)","Fotografía icónica de postal clásica frente al Huayna Picchu (Gratis con entrada)"],"datos_curiosos":["La ciudadela está construida con un sistema antisísmico de piedras machihembradas sin argamasa que rebotan y vuelven a su lugar durante los terremotos"],"consejos":["Es obligatorio ingresar acompañado de un guía oficial colegiado en el primer ingreso","Llevar el pasaporte original físicamente en mano; hay un sello conmemorativo de Machu Picchu en la salida"],"location_info":{"address":"Santuario Histórico de Machu Picchu, Cusco","priceRange":"$$$ - Entrada oficial + tren","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -3528,7 +3443,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '42b11140-8851-6545-152b-39effb929afe',
   'eb7b8162-92d8-1691-b3d8-4c8e59a5b4e4',
@@ -3546,7 +3461,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El mercado de San Pedro fue inaugurado en 1925 y su estructura de vigas de hierro fue diseñada en los talleres franceses de Eiffel']::text[],
   '{"address":"Calle Tupac Yupanqui, Cusco","priceRange":"$ - Acceso libre","dia":6,"day":6}'::jsonb,
   150,
-  6,
   '{"dia":6,"day":6,"activities":["Caminar por las callejuelas estrechas y talleres de imaginería de San Blas (Gratis)","Desayunar jugo fresco de lúcuma o chirimoya en el Mercado San Pedro (6 - 10 PEN)","Últimas compras de chocolate amargo cusqueño de Quillabamba y sal de Maras (15 - 30 PEN)"],"datos_curiosos":["El mercado de San Pedro fue inaugurado en 1925 y su estructura de vigas de hierro fue diseñada en los talleres franceses de Eiffel"],"consejos":["Tomar un mate de coca antes del traslado al aeropuerto Alejandro Velasco Astete"],"location_info":{"address":"Calle Tupac Yupanqui, Cusco","priceRange":"$ - Acceso libre","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -3565,7 +3479,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #13: Costa Rica Pura Vida: Volcanes, Bosque Nuboso y Playas (San José, Costa Rica)
+-- Tour: Costa Rica Pura Vida: Volcanes, Bosque Nuboso y Playas (San José, Costa Rica)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -3624,7 +3538,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '1e66a1f6-d347-8864-2e11-fba1571c338c',
   '91187e57-361a-5f69-08dc-5ed1578c6702',
@@ -3642,7 +3556,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La célebre pintura del techo "Alegoría al café y al banano" muestra a un hombre sosteniendo un racimo de plátanos al revés, pues el artista italiano nunca había visto un banano en planta real']::text[],
   '{"address":"Avenida 2, Calle 1, San José","priceRange":"$ - Tour $12 USD","dia":1,"day":1}'::jsonb,
   120,
-  1,
   '{"dia":1,"day":1,"activities":["Tour guiado por el foyer y sala principal del teatro ($12 USD)","Tomar un café chorreado tradicional con pastel de maracuyá en la cafetería del teatro ($6 USD)","Paseo por las galerías de arte de Barrio Amón (Gratis)"],"datos_curiosos":["La célebre pintura del techo \"Alegoría al café y al banano\" muestra a un hombre sosteniendo un racimo de plátanos al revés, pues el artista italiano nunca había visto un banano en planta real"],"consejos":["Excelente punto de inicio para descansar tras el vuelo internacional"],"location_info":{"address":"Avenida 2, Calle 1, San José","priceRange":"$ - Tour $12 USD","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -3660,7 +3573,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7253d48f-dbb0-a29e-cba7-ca7bb16495eb',
   '91187e57-361a-5f69-08dc-5ed1578c6702',
@@ -3678,7 +3591,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El volcán permaneció dormido durante más de 400 años hasta que despertó súbitamente en julio de 1968 creando tres nuevos cráteres']::text[],
   '{"address":"La Fortuna de San Carlos, Alajuela","priceRange":"$$ - Entrada $15 USD","dia":2,"day":2}'::jsonb,
   180,
-  2,
   '{"dia":2,"day":2,"activities":["Caminata por el Sendero Colada 1968 con vista directa al cráter (Entrada: $15 USD)","Avistamiento de tucanes pico iris y pizotes (coatíes) silvestres (Gratis con entrada)","Probar el casado costarricense en una soda tradicional ($8 - $12 USD)"],"datos_curiosos":["El volcán permaneció dormido durante más de 400 años hasta que despertó súbitamente en julio de 1968 creando tres nuevos cráteres"],"consejos":["Llevar agua y poncho impermeable; las nubes volcánicas pueden dejar lloviznas rápidas","El trayecto desde San José toma unas 3 horas por carretera escénica"],"location_info":{"address":"La Fortuna de San Carlos, Alajuela","priceRange":"$$ - Entrada $15 USD","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -3696,7 +3608,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '78f2dfa1-c0b5-e309-77cd-def49217b428',
   '91187e57-361a-5f69-08dc-5ed1578c6702',
@@ -3714,7 +3626,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las aguas termales de La Fortuna se enriquecen con minerales a más de 1.000 metros bajo tierra antes de emerger a la superficie']::text[],
   '{"address":"La Fortuna, Alajuela","priceRange":"$$ - Moderado","dia":3,"day":3}'::jsonb,
   240,
-  3,
   '{"dia":3,"day":3,"activities":["Descender los 500 escalones hacia la poza cristalina de la catarata (Entrada: $18 USD)","Baño en el río termal público Chollín (Gratis) o balneario termal privado ($40 - $85 USD)","Cena típica en La Fortuna con batido de guanábana ($15 - $25 USD)"],"datos_curiosos":["Las aguas termales de La Fortuna se enriquecen con minerales a más de 1.000 metros bajo tierra antes de emerger a la superficie"],"consejos":["Llevar calzado de agua para caminar sobre las piedras del río termal"],"location_info":{"address":"La Fortuna, Alajuela","priceRange":"$$ - Moderado","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -3732,7 +3643,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '05f38e86-2318-e8de-2493-7f0e554358e5',
   '91187e57-361a-5f69-08dc-5ed1578c6702',
@@ -3750,7 +3661,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El bosque nuboso fue fundado y protegido inicialmente en la década de 1950 por un grupo de familias cuáqueras pacifistas de Alabama']::text[],
   '{"address":"Monteverde, Puntarenas","priceRange":"$$ - Puentes colgantes $26 USD","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Caminata sobre 8 puentes colgantes suspendidos sobre la copa de los árboles (Entrada: $26 USD)","Tour de canopy / tirolesa más larga de Centroamérica ($50 USD opcional)","Visita al jardín de colibríes donde revolotean decenas a centímetros de los visitantes ($6 USD)"],"datos_curiosos":["El bosque nuboso fue fundado y protegido inicialmente en la década de 1950 por un grupo de familias cuáqueras pacifistas de Alabama"],"consejos":["Monteverde es fresco y húmedo (15-20°C); llevar impermeable y chaqueta abrigada"],"location_info":{"address":"Monteverde, Puntarenas","priceRange":"$$ - Puentes colgantes $26 USD","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -3768,7 +3678,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0e93a59b-58b4-36d6-98cc-46fc4ca055be',
   '91187e57-361a-5f69-08dc-5ed1578c6702',
@@ -3786,7 +3696,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Manuel Antonio es el parque nacional más pequeño de Costa Rica, pero a su vez el más visitado por la concentración increíble de perezosos']::text[],
   '{"address":"Manuel Antonio, Puntarenas","priceRange":"$ - Acceso libre","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Atardecer y natación en Playa Espadilla (Gratis)","Ceviche tico de corvina con platanitos fritos en la orilla ($10 - $18 USD)","Paseo por la Marina Pez Vela en Quepos (Gratis)"],"datos_curiosos":["Manuel Antonio es el parque nacional más pequeño de Costa Rica, pero a su vez el más visitado por la concentración increíble de perezosos"],"consejos":["Playa Espadilla es pública y no requiere boleto de entrada a diferencia del interior del parque nacional"],"location_info":{"address":"Manuel Antonio, Puntarenas","priceRange":"$ - Acceso libre","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -3804,7 +3713,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b350c9a4-b6fc-d5ef-9d9e-68c19b28d8bb',
   '91187e57-361a-5f69-08dc-5ed1578c6702',
@@ -3822,7 +3731,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Punta Catedral era antiguamente una isla que quedó unida a tierra firme por una barra de arena formando un tómbolo geológico perfecto']::text[],
   '{"address":"Parque Nacional Manuel Antonio","priceRange":"$$ - Entrada $18 USD","dia":6,"day":6}'::jsonb,
   300,
-  6,
   '{"dia":6,"day":6,"activities":["Senderismo por el Sendero Punta Catedral (Entrada SINAC: $18 USD por adulto)","Baño de mar en la bahía protegida de Playa Manuel Antonio (Gratis con entrada)","Snorkel entre rocas volcánicas para ver peces loro y mantarrayas (Gratis con equipo propio)"],"datos_curiosos":["Punta Catedral era antiguamente una isla que quedó unida a tierra firme por una barra de arena formando un tómbolo geológico perfecto"],"consejos":["Cierra los martes por conservación; reservar entrada online en la web del SINAC con fecha exacta","Cuidar las mochilas en la arena: los monos capuchinos y mapaches saben abrir cremalleras para buscar comida"],"location_info":{"address":"Parque Nacional Manuel Antonio","priceRange":"$$ - Entrada $18 USD","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -3840,7 +3748,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7d7ea65e-40ef-bb37-8780-6c08b25cd161',
   '91187e57-361a-5f69-08dc-5ed1578c6702',
@@ -3858,7 +3766,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El río Tárcoles alberga una de las poblaciones de cocodrilo americano (*Crocodylus acutus*) más densas del mundo']::text[],
   '{"address":"Puente Río Tárcoles, Garabito","priceRange":"$ - Parada libre","dia":7,"day":7}'::jsonb,
   90,
-  7,
   '{"dia":7,"day":7,"activities":["Avistamiento seguro de cocodrilos desde lo alto del puente (Gratis)","Comprar café gourmet costarricense (Tarrazú) en las tiendas artesanales ($8 - $15 USD)","Almuerzo de gallo pinto tradicional antes de llegar al aeropuerto Juan Santamaría ($10 USD)"],"datos_curiosos":["El río Tárcoles alberga una de las poblaciones de cocodrilo americano (*Crocodylus acutus*) más densas del mundo"],"consejos":["El puente tiene acera protegida con baranda peatonal; mantenerse siempre detrás de ella"],"location_info":{"address":"Puente Río Tárcoles, Garabito","priceRange":"$ - Parada libre","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -3877,7 +3784,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #14: Ruta Maya de Yucatán: Chichén Itzá, Cenotes y Tulum (Mérida, México)
+-- Tour: Ruta Maya de Yucatán: Chichén Itzá, Cenotes y Tulum (Mérida, México)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -3936,7 +3843,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '163cc578-727a-9769-371d-37fb547d8032',
   '64b0b824-8955-82ed-7787-6f6825f1cd62',
@@ -3954,7 +3861,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Mérida fue llamada Ciudad Blanca por el encalado tradicional de sus muros coloniales y la piedra caliza que refleja la luz']::text[],
   '{"address":"Paseo de Montejo, Mérida","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   150,
-  1,
   '{"dia":1,"day":1,"activities":["Caminata nocturna por Paseo de Montejo y Monumento a la Patria (Gratis)","Cena yucateca en Museo de la Gastronomía Yucateca: cochinita pibil y panuchos ($250 - $450 MXN)","Probar una marquesita de queso de bola en el parque ($45 MXN)"],"datos_curiosos":["Mérida fue llamada Ciudad Blanca por el encalado tradicional de sus muros coloniales y la piedra caliza que refleja la luz"],"consejos":["Los domingos Paseo de Montejo se vuelve peatonal para bicicletas (Bici-ruta Mérida)"],"location_info":{"address":"Paseo de Montejo, Mérida","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -3972,7 +3878,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'fd7ef293-c6be-16f5-1c06-e602727cc30a',
   '64b0b824-8955-82ed-7787-6f6825f1cd62',
@@ -3990,7 +3896,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La leyenda maya relata que la Pirámide del Adivino fue construida en una sola noche por un enano nacido de un huevo']::text[],
   '{"address":"Carretera Federal 261, Uxmal","priceRange":"$$ - Entrada $530 MXN","dia":2,"day":2}'::jsonb,
   200,
-  2,
   '{"dia":2,"day":2,"activities":["Recorrido guiado por el Cuadrángulo de las Monjas y Palacio del Gobernador (Entrada: ~$530 MXN total INAH+CULTUR)","Fotografiar los mascarones geométricos de Chaac (Gratis con entrada)","Visita al Museo del Chocolate Choco-Story frente a la zona arqueológica ($190 MXN)"],"datos_curiosos":["La leyenda maya relata que la Pirámide del Adivino fue construida en una sola noche por un enano nacido de un huevo"],"consejos":["Uxmal es mucho menos concurrida que Chichén Itzá, permitiendo apreciar los detalles en paz"],"location_info":{"address":"Carretera Federal 261, Uxmal","priceRange":"$$ - Entrada $530 MXN","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -4008,7 +3913,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '022ad976-b94f-b4c5-66a7-769758fab778',
   '64b0b824-8955-82ed-7787-6f6825f1cd62',
@@ -4026,7 +3931,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La pirámide cuenta con 91 escalones en cada uno de sus 4 lados, sumando con la plataforma superior exactamente 365 días del año solar maya']::text[],
   '{"address":"Pisté, Yucatán","priceRange":"$$$ - Entrada oficial","dia":3,"day":3}'::jsonb,
   240,
-  3,
   '{"dia":3,"day":3,"activities":["Aplaudir frente a la escalinata de El Castillo para escuchar el eco acústico que imita el canto del quetzal (Gratis)","Visitar el Gran Juego de Pelota, el más grande de Mesoamérica (Gratis con entrada)","Ver el Cenote Sagrado de los sacrificios (Gratis con entrada)"],"datos_curiosos":["La pirámide cuenta con 91 escalones en cada uno de sus 4 lados, sumando con la plataforma superior exactamente 365 días del año solar maya"],"consejos":["Llegar a las 8:00 AM en punto para entrar antes de que lleguen los autobuses de Cancún a las 10:30 AM","Costo de entrada para extranjeros: $614 MXN / nacionales: $272 MXN"],"location_info":{"address":"Pisté, Yucatán","priceRange":"$$$ - Entrada oficial","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -4044,7 +3948,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'cadf023c-610b-2e26-d15c-3467589a459d',
   '64b0b824-8955-82ed-7787-6f6825f1cd62',
@@ -4062,7 +3966,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Para los sacerdotes mayas los cenotes eran el *Xibalbá*, el portal sagrado hacia el inframundo']::text[],
   '{"address":"Valladolid, Yucatán","priceRange":"$$ - Entradas cenotes","dia":4,"day":4}'::jsonb,
   210,
-  4,
   '{"dia":4,"day":4,"activities":["Nadar en las aguas frescas del cenote Ik Kil (Entrada: $180 MXN con chaleco)","Fotografía en la plataforma central de Cenote Suytun ($200 MXN)","Paseo por el zócalo de Valladolid colonial y cata de marquesitas ($50 MXN)"],"datos_curiosos":["Para los sacerdotes mayas los cenotes eran el *Xibalbá*, el portal sagrado hacia el inframundo"],"consejos":["Obligatorio ducharse antes de ingresar al cenote para no contaminar el agua con lociones o cremas"],"location_info":{"address":"Valladolid, Yucatán","priceRange":"$$ - Entradas cenotes","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -4080,7 +3983,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e6194b3e-c721-2e10-faba-ed81e946e9c3',
   '64b0b824-8955-82ed-7787-6f6825f1cd62',
@@ -4098,7 +4001,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El pueblo se pintó de amarillo en 1993 en honor a los colores pontificios del Vaticano con motivo de la visita del Papa Juan Pablo II']::text[],
   '{"address":"Izamal, Yucatán","priceRange":"$ - Entrada libre","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Subir a la pirámide maya Kinich Kakmó en medio del pueblo (Entrada libre INAH)","Caminar por el atrio monumental del convento de 1561 (Gratis)","Almorzar sopa de lima y poc chuc en el restaurante Kinich ($250 - $400 MXN)"],"datos_curiosos":["El pueblo se pintó de amarillo en 1993 en honor a los colores pontificios del Vaticano con motivo de la visita del Papa Juan Pablo II"],"consejos":["Hacer un paseo en calesa tirada por caballo para recorrer las calles amarillas ($200 MXN)"],"location_info":{"address":"Izamal, Yucatán","priceRange":"$ - Entrada libre","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -4116,7 +4018,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '43765a62-c50a-1e15-f851-bd757cd22e33',
   '64b0b824-8955-82ed-7787-6f6825f1cd62',
@@ -4134,7 +4036,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cobá posee el sacbé (camino blanco de piedra) más largo del mundo maya, extendiéndose por más de 100 kilómetros hasta Yaxuná']::text[],
   '{"address":"Cobá, Quintana Roo","priceRange":"$ - Entrada $95 MXN","dia":6,"day":6}'::jsonb,
   180,
-  6,
   '{"dia":6,"day":6,"activities":["Alquilar una bicicleta en la entrada para recorrer los sacbés de la selva ($65 MXN)","Entrada a la zona arqueológica de Cobá ($95 MXN)","Probar ceviche de caracol o camarón a orillas de la laguna de Cobá ($180 - $280 MXN)"],"datos_curiosos":["Cobá posee el sacbé (camino blanco de piedra) más largo del mundo maya, extendiéndose por más de 100 kilómetros hasta Yaxuná"],"consejos":["El recorrido en bici es plano, sombreado y muy agradable entre la selva"],"location_info":{"address":"Cobá, Quintana Roo","priceRange":"$ - Entrada $95 MXN","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -4152,7 +4053,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '6ec3c328-cafe-bf30-2b27-951340206715',
   '64b0b824-8955-82ed-7787-6f6825f1cd62',
@@ -4170,7 +4071,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Su nombre original era *Zamá*, que en maya significa "amanecer", pues sus templos miran directamente hacia donde sale el sol sobre el Caribe']::text[],
   '{"address":"Carretera Federal 307 Km 128, Tulum","priceRange":"$$ - Entrada oficial","dia":7,"day":7}'::jsonb,
   180,
-  7,
   '{"dia":7,"day":7,"activities":["Fotografiar el Templo de los Frescos y El Castillo frente al mar (Entrada INAH: $95 MXN + acceso parque Jaguar)","Bajar a nadar a la playa al pie de las ruinas si el oleaje lo permite (Gratis)","Almuerzo de mariscos en el pueblo bohemio de Tulum ($250 - $500 MXN)"],"datos_curiosos":["Su nombre original era *Zamá*, que en maya significa \"amanecer\", pues sus templos miran directamente hacia donde sale el sol sobre el Caribe"],"consejos":["Llegar a las 8:00 AM para evitar las altas temperaturas y las largas filas turísticas","Llevar traje de baño puesto debajo de la ropa"],"location_info":{"address":"Carretera Federal 307 Km 128, Tulum","priceRange":"$$ - Entrada oficial","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -4188,7 +4088,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2426f0bc-cb62-3bc8-ff2c-57b87a8f06ed',
   '64b0b824-8955-82ed-7787-6f6825f1cd62',
@@ -4206,7 +4106,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En lengua maya Sian Ka''an significa "Puerta del cielo" o "Lugar donde nace el cielo"']::text[],
   '{"address":"Muyil, Reserva de Sian Ka''an","priceRange":"$$$ - Tour de manglar","dia":8,"day":8}'::jsonb,
   240,
-  8,
   '{"dia":8,"day":8,"activities":["Flotación relajante con chaleco por los canales de corriente suave de manglar ($850 - $1.200 MXN tour comunitario en lancha)","Subir a la torre mirador de madera sobre el dosel de la selva (Gratis con entrada)","Despedida caribeña antes del traslado al aeropuerto de Tulum o Cancún"],"datos_curiosos":["En lengua maya Sian Ka''an significa \"Puerta del cielo\" o \"Lugar donde nace el cielo\""],"consejos":["La corriente del canal es lenta y tranquila; solo hay que dejarse llevar boca arriba contemplando el cielo"],"location_info":{"address":"Muyil, Reserva de Sian Ka''an","priceRange":"$$$ - Tour de manglar","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -4225,7 +4124,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #15: Buenos Aires Romántica y Glaciares de la Patagonia (Buenos Aires, Argentina)
+-- Tour: Buenos Aires Romántica y Glaciares de la Patagonia (Buenos Aires, Argentina)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -4284,7 +4183,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '41851bb5-6e97-c514-772a-177e7dfa0a2b',
   'bf13aff0-ff75-927e-6cfe-ba070026a565',
@@ -4302,7 +4201,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Casa Rosada debe su color característico del siglo XIX a una mezcla de cal con sangre de buey para impermeabilizar las paredes']::text[],
   '{"address":"Plaza de Mayo, Buenos Aires","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Caminata por Plaza de Mayo y Catedral Metropolitana donde reposa San Martín (Gratis)","Tomar un café con medialunas en el histórico Café Tortoni de 1858 ($8 USD)","Paseo por la Feria de Antigüedades de Plaza Dorrego en San Telmo (Gratis)"],"datos_curiosos":["La Casa Rosada debe su color característico del siglo XIX a una mezcla de cal con sangre de buey para impermeabilizar las paredes"],"consejos":["El Café Tortoni suele tener fila en la tarde; ir sobre las 10:00 AM para entrar directo"],"location_info":{"address":"Plaza de Mayo, Buenos Aires","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -4320,7 +4218,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '58aa4c95-2d90-100a-ed2a-b77515890827',
   'bf13aff0-ff75-927e-6cfe-ba070026a565',
@@ -4338,7 +4236,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La cúpula del Ateneo conserva los frescos originales pintados por Nazareno Orlandi en 1919 celebrando el fin de la Primera Guerra Mundial']::text[],
   '{"address":"Avenida Santa Fe 1860, Recoleta","priceRange":"$$ - Moderado","dia":2,"day":2}'::jsonb,
   180,
-  2,
   '{"dia":2,"day":2,"activities":["Visitar el mausoleo de Eva Perón en el Cementerio de la Recoleta (Entrada turista no residente: ~$15 USD)","Tomar un café sobre el escenario del teatro rodeado de miles de libros ($6 USD)","Almorzar un bife de chorizo en una parrilla tradicional de Recoleta ($25 - $40 USD)"],"datos_curiosos":["La cúpula del Ateneo conserva los frescos originales pintados por Nazareno Orlandi en 1919 celebrando el fin de la Primera Guerra Mundial"],"consejos":["La librería National Geographic clasificó a El Ateneo como la librería comercial más hermosa del mundo"],"location_info":{"address":"Avenida Santa Fe 1860, Recoleta","priceRange":"$$ - Moderado","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -4356,7 +4253,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8ddaa7f0-655d-bd32-127a-b84f29fa15e6',
   'bf13aff0-ff75-927e-6cfe-ba070026a565',
@@ -4374,7 +4271,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Caminito fue transformado en museo peatonal por iniciativa del célebre pintor boquense Benito Quinquela Martín en los años 50']::text[],
   '{"address":"Caminito, La Boca / Puerto Madero","priceRange":"$$$ - Cena Show Tango","dia":3,"day":3}'::jsonb,
   200,
-  3,
   '{"dia":3,"day":3,"activities":["Fotografiar los conventillos de chapa y bailarines de Caminito (Gratis)","Cena show de tango con orquesta en vivo y vino Malbec ($70 - $110 USD)","Caminar por el Puente de la Mujer iluminado diseñado por Santiago Calatrava (Gratis)"],"datos_curiosos":["Caminito fue transformado en museo peatonal por iniciativa del célebre pintor boquense Benito Quinquela Martín en los años 50"],"consejos":["En La Boca mantenerse dentro del perímetro turístico vigilado de Caminito"],"location_info":{"address":"Caminito, La Boca / Puerto Madero","priceRange":"$$$ - Cena Show Tango","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -4392,7 +4288,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '17f2852a-2f43-2e93-f0a4-ce31f3ef6062',
   'bf13aff0-ff75-927e-6cfe-ba070026a565',
@@ -4410,7 +4306,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La leyenda dice que quien come el fruto silvestre del calafate siempre regresa a la Patagonia']::text[],
   '{"address":"El Calafate, Santa Cruz","priceRange":"$$ - Restaurantes","dia":4,"day":4}'::jsonb,
   150,
-  4,
   '{"dia":4,"day":4,"activities":["Caminar por la Avenida del Libertador y probar chocolates artesanales (Gratis / compra $10 USD)","Avistamiento de flamencos patagónicos en la Reserva Laguna Nimez ($10 USD)","Cena tradicional de cordero patagónico al palo con copa de Pinot Noir ($30 - $45 USD)"],"datos_curiosos":["La leyenda dice que quien come el fruto silvestre del calafate siempre regresa a la Patagonia"],"consejos":["El vuelo desde Buenos Aires a El Calafate dura 3 horas y 15 minutos"],"location_info":{"address":"El Calafate, Santa Cruz","priceRange":"$$ - Restaurantes","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -4428,7 +4323,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0a994927-1ae9-c6a8-a1be-6a2a23bf6d36',
   'bf13aff0-ff75-927e-6cfe-ba070026a565',
@@ -4446,7 +4341,6 @@ INSERT INTO public.tour_stops (
   ARRAY['A diferencia de la mayoría de los glaciares del planeta, el Perito Moreno se encuentra en equilibrio dinámico y no retrocede']::text[],
   '{"address":"Parque Nacional Los Glaciares, Santa Cruz","priceRange":"$$$ - Parque y navegación","dia":5,"day":5}'::jsonb,
   300,
-  5,
   '{"dia":5,"day":5,"activities":["Recorrer los 4 kilómetros de pasarelas escalonadas frente al glaciar (Entrada Parque Nacional: ~$35 USD)","Safaris náuticos en catamarán acercándose a 300 metros de la pared de hielo ($35 USD)","Escuchar en silencio los sobrecogedores estruendos de fractura del hielo milenario (Gratis)"],"datos_curiosos":["A diferencia de la mayoría de los glaciares del planeta, el Perito Moreno se encuentra en equilibrio dinámico y no retrocede"],"consejos":["Llevar guantes y bufanda; la brisa que emana del glaciar es gélida incluso en verano","El espectáculo es aún más activo en las horas de sol de la tarde cuando el deshielo genera más desprendimientos"],"location_info":{"address":"Parque Nacional Los Glaciares, Santa Cruz","priceRange":"$$$ - Parque y navegación","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -4464,7 +4358,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a4148ec7-d57e-3520-8f20-99d7b37a3dc6',
   'bf13aff0-ff75-927e-6cfe-ba070026a565',
@@ -4482,7 +4376,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El hielo más profundo del glaciar tiene miles de años y es tan denso que absorbe todas las longitudes de onda de la luz excepto el azul brillante']::text[],
   '{"address":"Sector Sur, Glaciar Perito Moreno","priceRange":"$$$$ - Excursión exclusiva","dia":6,"day":6}'::jsonb,
   300,
-  6,
   '{"dia":6,"day":6,"activities":["Caminata guiada de 1.5 horas sobre el hielo con guías de montaña de alta cota ($250 - $350 USD con traslados)","Brindis final con whisky servido con hielo milenario recién picado del glaciar (Incluido en la excursión)","Almuerzo tipo picnic frente a la morrena glaciar"],"datos_curiosos":["El hielo más profundo del glaciar tiene miles de años y es tan denso que absorbe todas las longitudes de onda de la luz excepto el azul brillante"],"consejos":["Requiere calzado de trekking firme para ajustar los grampones","Edad permitida para el minitrekking: 8 a 65 años"],"location_info":{"address":"Sector Sur, Glaciar Perito Moreno","priceRange":"$$$$ - Excursión exclusiva","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -4500,7 +4393,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b19c6759-4464-ed8c-5364-a2172258c081',
   'bf13aff0-ff75-927e-6cfe-ba070026a565',
@@ -4518,7 +4411,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Glaciar Upsala es uno de los más extensos de Sudamérica con casi 60 kilómetros de longitud']::text[],
   '{"address":"Puerto Bandera, Lago Argentino","priceRange":"$$$ - Navegación lacustre","dia":7,"day":7}'::jsonb,
   360,
-  7,
   '{"dia":7,"day":7,"activities":["Navegación de día completo en catamarán moderno con cubierta panorámica ($120 - $160 USD)","Almuerzo en el refugio mirador frente al Glaciar Spegazzini ($25 USD)","Fotografiar los témpanos azules esculpidos por el viento y el agua"],"datos_curiosos":["El Glaciar Upsala es uno de los más extensos de Sudamérica con casi 60 kilómetros de longitud"],"consejos":["Las salidas se realizan desde Puerto Bandera, a 45 km de El Calafate"],"location_info":{"address":"Puerto Bandera, Lago Argentino","priceRange":"$$$ - Navegación lacustre","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -4536,7 +4428,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '60fce7e2-14e8-08bc-e720-1811ed2474e6',
   'bf13aff0-ff75-927e-6cfe-ba070026a565',
@@ -4554,7 +4446,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Rosedal alberga más de 18.000 rosales de 93 especies distintas en cuatro hectáreas diseñadas por el paisajista Carlos Thays']::text[],
   '{"address":"Plaza Serrano / Parque Tres de Febrero","priceRange":"$$ - Moderado","dia":8,"day":8}'::jsonb,
   180,
-  8,
   '{"dia":8,"day":8,"activities":["Paseo por el Rosedal de Palermo y sus puentes de estilo griego (Gratis)","Compras de diseño y cuero argentino en Plaza Serrano ($30 - $100 USD)","Cena en un bodegón porteño: milanesa napolitana con papas fritas ($15 - $25 USD)"],"datos_curiosos":["El Rosedal alberga más de 18.000 rosales de 93 especies distintas en cuatro hectáreas diseñadas por el paisajista Carlos Thays"],"consejos":["Palermo Soho es ideal para recorrer a pie sin prisa al final de la tarde"],"location_info":{"address":"Plaza Serrano / Parque Tres de Febrero","priceRange":"$$ - Moderado","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -4572,7 +4463,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0ee349c6-cc76-20b1-d9c8-f22ac839b76d',
   'bf13aff0-ff75-927e-6cfe-ba070026a565',
@@ -4590,7 +4481,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Su acústica es tan perfecta que cualquier susurro emitido desde el escenario se escucha con claridad en el último piso a 28 metros de altura']::text[],
   '{"address":"Cerrito 628, San Nicolás, Buenos Aires","priceRange":"$$ - Visita $25 USD","dia":9,"day":9}'::jsonb,
   150,
-  9,
   '{"dia":9,"day":9,"activities":["Visita guiada oficial por el Salón Dorado y la sala principal del Teatro Colón (Entrada: ~$25 USD)","Caminar por la calle de los teatros de Avenida Corrientes y el Obelisco (Gratis)","Comprar cajas de alfajores de dulce de leche (Havanna o Cachafaz) para llevar ($12 - $20 USD)"],"datos_curiosos":["Su acústica es tan perfecta que cualquier susurro emitido desde el escenario se escucha con claridad en el último piso a 28 metros de altura"],"consejos":["Reservar la visita al Teatro Colón con horario específico en su web oficial"],"location_info":{"address":"Cerrito 628, San Nicolás, Buenos Aires","priceRange":"$$ - Visita $25 USD","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -4609,7 +4499,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #16: La Gran Ruta Andina del Perú: Del Océano Pacífico al Lago Sagrado Titicaca (Lima, Perú)
+-- Tour: La Gran Ruta Andina del Perú: Del Océano Pacífico al Lago Sagrado Titicaca (Lima, Perú)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -4668,7 +4558,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '18c81ba4-d5b5-aa41-bba6-e694e2f8f34c',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -4686,7 +4576,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Lima es la única capital de Sudamérica ubicada directamente frente a la costa del océano']::text[],
   '{"address":"Malecón Balta / Barranco, Lima","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Caminata por el Parque del Amor con mosaicos poéticos (Gratis)","Cruzar el Puente de los Suspiros aguantando la respiración para pedir un deseo (Gratis)","Almuerzo ceviche clásico de corvina con camote glaseado y chicha morada (45 - 80 PEN)"],"datos_curiosos":["Lima es la única capital de Sudamérica ubicada directamente frente a la costa del océano"],"consejos":["Probar un pisco sour en las tabernas centenarias de Barranco como el Bar Juanito"],"location_info":{"address":"Malecón Balta / Barranco, Lima","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -4704,7 +4593,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2cc45344-c26a-2a1d-4fa6-27cf7372b9b4',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -4722,7 +4611,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las catacumbas sirvieron como el primer cementerio público de Lima colonial hasta principios del siglo XIX']::text[],
   '{"address":"Jirón Lampa, Centro Histórico de Lima","priceRange":"$ - Entrada 15 PEN","dia":2,"day":2}'::jsonb,
   150,
-  2,
   '{"dia":2,"day":2,"activities":["Recorrido guiado por las catacumbas subterráneas (Entrada: 15 PEN / ~$4 USD)","Ver el cambio de guardia en el Palacio de Gobierno a mediodía (Gratis)","Probar churros rellenos de manjar blanco en la calle Lampa (5 PEN)"],"datos_curiosos":["Las catacumbas sirvieron como el primer cementerio público de Lima colonial hasta principios del siglo XIX"],"consejos":["Las catacumbas tienen techos bajos en algunos tramos; caminar con atención"],"location_info":{"address":"Jirón Lampa, Centro Histórico de Lima","priceRange":"$ - Entrada 15 PEN","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -4740,7 +4628,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '69041287-a4bc-b4b5-1b76-b069ed43e2cd',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -4758,7 +4646,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las islas fueron la mayor fuente de riqueza del Perú en el siglo XIX por la explotación del guano de aves marinas']::text[],
   '{"address":"Paracas / Huacachina, Ica","priceRange":"$$ - Tours combinados","dia":3,"day":3}'::jsonb,
   240,
-  3,
   '{"dia":3,"day":3,"activities":["Tour en lancha rápida por los arcos de piedra de las Ballestas (50 PEN / ~$14 USD + tasa marina)","Ver el misterioso geoglifo de El Candelabro grabado en la colina costera (Gratis con tour)","Paseo en buggy arenero y sandboard por las dunas de Huacachina (40 - 60 PEN)"],"datos_curiosos":["Las islas fueron la mayor fuente de riqueza del Perú en el siglo XIX por la explotación del guano de aves marinas"],"consejos":["Llevar cortavientos para la lancha; el viento marino puede ser frío en la mañana"],"location_info":{"address":"Paracas / Huacachina, Ica","priceRange":"$$ - Tours combinados","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -4776,7 +4663,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '640a98e8-a160-4f67-4063-e06aada2401d',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -4794,7 +4681,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El convento de Santa Catalina funcionó como clausura absoluta durante cuatro siglos sin contacto con el mundo exterior']::text[],
   '{"address":"Santa Catalina 301, Arequipa","priceRange":"$$ - Entrada convento","dia":4,"day":4}'::jsonb,
   210,
-  4,
   '{"dia":4,"day":4,"activities":["Visita guiada al interior del Monasterio de Santa Catalina (Entrada: 45 PEN / ~$12 USD)","Mirador de la plaza con el volcán Misti de fondo coronado de nieve (Gratis)","Almorzar en una picantería tradicional: rocoto relleno con pastel de papa (35 - 55 PEN)"],"datos_curiosos":["El convento de Santa Catalina funcionó como clausura absoluta durante cuatro siglos sin contacto con el mundo exterior"],"consejos":["Arequipa es la parada intermedia perfecta para aclimatarse a la altura antes del Colca y Cusco"],"location_info":{"address":"Santa Catalina 301, Arequipa","priceRange":"$$ - Entrada convento","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -4812,7 +4698,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '42c95589-18c3-1d3f-e938-579258f0e130',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -4830,7 +4716,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El cóndor andino casi no aletea; aprovecha las corrientes ascendentes de aire caliente del cañón para planear durante horas enteras']::text[],
   '{"address":"Chivay / Cabanaconde, Arequipa","priceRange":"$$ - Boleto turístico","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Avistamiento de cóndores andinos con envergadura de más de 3 metros (Boleto Turístico del Colca: 70 PEN)","Baño en los termales medicinales de La Calera en Chivay (15 PEN)","Fotografiar manadas de vicuñas y alpacas en la Reserva de Salinas y Aguada Blanca"],"datos_curiosos":["El cóndor andino casi no aletea; aprovecha las corrientes ascendentes de aire caliente del cañón para planear durante horas enteras"],"consejos":["Los cóndores planean entre las 8:00 AM y las 10:00 AM; madrugar desde Chivay a las 6:00 AM","Llevar abrigo grueso; en el mirador la mañana es helada"],"location_info":{"address":"Chivay / Cabanaconde, Arequipa","priceRange":"$$ - Boleto turístico","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -4848,7 +4733,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0753f886-10d7-5fe1-8941-e512fc430d90',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -4866,7 +4751,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En las faldas del volcán Ampato fue hallada en 1995 la Dama de Ampato (la momia Juanita), doncella inca congelada intacta']::text[],
   '{"address":"Paso de Patapampa / Cusco","priceRange":"$ - Ruta escénica","dia":6,"day":6}'::jsonb,
   120,
-  6,
   '{"dia":6,"day":6,"activities":["Fotografía de los volcanes nevados desde el punto geodésico más alto (Gratis)","Hacer una apacheta (torre ritual de piedras) en ofrenda a la Pachamama (Gratis)","Llegada y cena reconfortante de sopa de quinua en Cusco (25 PEN)"],"datos_curiosos":["En las faldas del volcán Ampato fue hallada en 1995 la Dama de Ampato (la momia Juanita), doncella inca congelada intacta"],"consejos":["La parada en Patapampa dura solo 15 minutos debido a la extrema altitud para no marearse"],"location_info":{"address":"Paso de Patapampa / Cusco","priceRange":"$ - Ruta escénica","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -4884,7 +4768,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'eed92551-9908-1678-e54a-7d9e9db6cbf4',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -4902,7 +4786,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las piedras encajan con tal precisión milimétrica que no se puede pasar una hoja de papel entre ellas']::text[],
   '{"address":"Cusco Histórico","priceRange":"$$ - Boleto turístico","dia":7,"day":7}'::jsonb,
   200,
-  7,
   '{"dia":7,"day":7,"activities":["Muros de Sacsayhuamán (Boleto Turístico Integral: 130 PEN)","Qorikancha (15 PEN)","Piedra de los 12 Ángulos (Gratis)"],"datos_curiosos":["Las piedras encajan con tal precisión milimétrica que no se puede pasar una hoja de papel entre ellas"],"consejos":["Llevar calzado deportivo con buena suela para caminar en cuestas empedradas"],"location_info":{"address":"Cusco Histórico","priceRange":"$$ - Boleto turístico","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -4920,7 +4803,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd9b20bde-355b-e2c5-5a46-767a679bb879',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -4938,7 +4821,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En Moray la diferencia de temperatura entre la terraza superior y la más profunda del fondo llega a ser de hasta 15°C creando múltiples microclimas']::text[],
   '{"address":"Maras y Moray, Urubamba","priceRange":"$ - Entrada 20 PEN","dia":8,"day":8}'::jsonb,
   210,
-  8,
   '{"dia":8,"day":8,"activities":["Fotografiar el mosaico blanco y rosado de las Salineras de Maras (Entrada comunitaria: 20 PEN)","Caminar por los bordes de los cráteres agrícolas de Moray (Boleto Turístico)","Comprar sales gourmet con especias andinas (10 - 25 PEN)"],"datos_curiosos":["En Moray la diferencia de temperatura entre la terraza superior y la más profunda del fondo llega a ser de hasta 15°C creando múltiples microclimas"],"consejos":["Por razones de salubridad y conservación no se permite caminar dentro de las pozas activas de sal"],"location_info":{"address":"Maras y Moray, Urubamba","priceRange":"$ - Entrada 20 PEN","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -4956,7 +4838,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8e43cb83-3865-db6b-3d42-4cb3846852eb',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -4974,7 +4856,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las aguas termales de Aguas Calientes le dan el nombre al pueblo al pie del santuario']::text[],
   '{"address":"Ollantaytambo / Aguas Calientes","priceRange":"$$$ - Tren","dia":9,"day":9}'::jsonb,
   240,
-  9,
   '{"dia":9,"day":9,"activities":["Subir a los monolitos de Ollantaytambo (Boleto Turístico)","Tren hacia Aguas Calientes (~$75 USD)","Noche en Aguas Calientes"],"datos_curiosos":["Las aguas termales de Aguas Calientes le dan el nombre al pueblo al pie del santuario"],"consejos":["Dejar las maletas grandes en Cusco y viajar ligero"],"location_info":{"address":"Ollantaytambo / Aguas Calientes","priceRange":"$$$ - Tren","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -4992,7 +4873,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '70b04c44-3f8b-8746-0ef3-d524b2fc045d',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -5010,7 +4891,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Machu Picchu nunca fue descubierta por los conquistadores españoles, lo que permitió que sobreviviera intacta hasta el siglo XX']::text[],
   '{"address":"Machu Picchu, Cusco","priceRange":"$$$ - Entrada oficial","dia":10,"day":10}'::jsonb,
   300,
-  10,
   '{"dia":10,"day":10,"activities":["Circuito guiado oficial por la ciudadela sagrada (Entrada: 152 PEN / ~$41 USD)","Subida en bus ecológico Consettur ($24 USD ida y vuelta)","Retorno en tren por la tarde hacia Cusco"],"datos_curiosos":["Machu Picchu nunca fue descubierta por los conquistadores españoles, lo que permitió que sobreviviera intacta hasta el siglo XX"],"consejos":["Llevar pasaporte físico y agua en cantimplora no descartable"],"location_info":{"address":"Machu Picchu, Cusco","priceRange":"$$$ - Entrada oficial","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -5028,7 +4908,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '9b014168-2a35-b893-91e6-a00e63ae2bd1',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -5046,7 +4926,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La montaña permaneció oculta bajo capas de nieve perpetua hasta que el cambio climático derritió la cubierta helada hace apenas una década']::text[],
   '{"address":"Cusipata / Pitumarca, Canchis","priceRange":"$$ - Excursión ~$35 USD","dia":11,"day":11}'::jsonb,
   300,
-  11,
   '{"dia":11,"day":11,"activities":["Caminata de ascenso de 1.5 horas hasta el mirador a 5.036 metros (Entrada comunitaria: 25 PEN / ~$7 USD)","Alquiler de caballo con arriero local si se siente cansancio (60 - 80 PEN opcional)","Fotografía panorámica del nevado sagrado Ausangate (Gratis)"],"datos_curiosos":["La montaña permaneció oculta bajo capas de nieve perpetua hasta que el cambio climático derritió la cubierta helada hace apenas una década"],"consejos":["La salida desde Cusco es a las 4:00 AM; llevar ropa muy abrigada pues en la cima hay viento helado"],"location_info":{"address":"Cusipata / Pitumarca, Canchis","priceRange":"$$ - Excursión ~$35 USD","dia":11,"day":11}}'::jsonb,
   now()
 );
@@ -5064,7 +4943,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a4edea85-6942-343b-6dba-3c95e86b522c',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -5082,7 +4961,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Wiracocha era para los incas el dios creador supremo del universo, el sol y la luna']::text[],
   '{"address":"Ruta del Sol Cusco - Puno","priceRange":"$$ - Bus turístico con paradas","dia":12,"day":12}'::jsonb,
   360,
-  12,
   '{"dia":12,"day":12,"activities":["Visitar la Capilla Sixtina andina de Andahuaylillas (15 PEN)","Recorrer las columnas del Templo de Wiracocha en Raqch''i (15 PEN)","Foto en el hito de La Raya a 4.335 msnm divisando la cordillera (Gratis)"],"datos_curiosos":["Wiracocha era para los incas el dios creador supremo del universo, el sol y la luna"],"consejos":["Los buses turísticos de La Ruta del Sol incluyen almuerzo buffet andino en Sicuani"],"location_info":{"address":"Ruta del Sol Cusco - Puno","priceRange":"$$ - Bus turístico con paradas","dia":12,"day":12}}'::jsonb,
   now()
 );
@@ -5100,7 +4978,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7dcb5796-ee69-229a-31ba-d7f138e3ea0d',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -5118,7 +4996,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los Uros construyeron sus islas flotantes en el lago para escapar del avance militar y los tributos de los incas']::text[],
   '{"address":"Lago Titicaca, Bahía de Puno","priceRange":"$ - Tour comunitario","dia":13,"day":13}'::jsonb,
   180,
-  13,
   '{"dia":13,"day":13,"activities":["Caminar sobre el suelo elástico de totora y conocer la vivienda tradicional (Tour en lancha: 40 - 70 PEN)","Paseo en balsa tradicional de totora llamada \"Mercedes Benz del lago\" (15 PEN opcional)","Probar el tallo dulce comestible de la totora llamado *chullo* (Gratis)"],"datos_curiosos":["Los Uros construyeron sus islas flotantes en el lago para escapar del avance militar y los tributos de los incas"],"consejos":["La radiación solar en el Titicaca es sumamente intensa; usar sombrero y bloqueador potente"],"location_info":{"address":"Lago Titicaca, Bahía de Puno","priceRange":"$ - Tour comunitario","dia":13,"day":13}}'::jsonb,
   now()
 );
@@ -5136,7 +5013,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '39a0cf5c-8c27-e250-5699-8afda894bf95',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -5154,7 +5031,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En Taquile los varones aprenden a tejer desde niños y deben tejer un chullo tan fino que pueda retener agua sin filtrarse para demostrar su maestría']::text[],
   '{"address":"Isla Taquile, Lago Titicaca","priceRange":"$$ - Excursión lacustre","dia":14,"day":14}'::jsonb,
   240,
-  14,
   '{"dia":14,"day":14,"activities":["Subir los 530 escalones empedrados hasta la plaza principal con vistas al lago infinito (Gratis)","Apreciar el tejido manual en telar de cintura que realizan exclusivamente los varones","Almuerzo comunitario de trucha a la plancha con papas andinas y sopa de quinua (30 PEN)"],"datos_curiosos":["En Taquile los varones aprenden a tejer desde niños y deben tejer un chullo tan fino que pueda retener agua sin filtrarse para demostrar su maestría"],"consejos":["El color y forma del gorro (*chullo*) de los hombres indica si son solteros, casados o autoridades comunales"],"location_info":{"address":"Isla Taquile, Lago Titicaca","priceRange":"$$ - Excursión lacustre","dia":14,"day":14}}'::jsonb,
   now()
 );
@@ -5172,7 +5048,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '1cceae88-5a09-a69a-9b3a-5a304285a7b4',
   '95ccb650-a015-d6b1-d2d9-3c0175818705',
@@ -5190,7 +5066,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La entrada de cada torre funeraria apunta exactamente hacia el este, por donde nace el sol cada mañana, simbolizando el renacimiento del alma']::text[],
   '{"address":"Laguna Umayo, Atuncolla, Puno","priceRange":"$ - Entrada 15 PEN","dia":15,"day":15}'::jsonb,
   120,
-  15,
   '{"dia":15,"day":15,"activities":["Recorrido por las torres funerarias circulares (Entrada: 15 PEN / ~$4 USD)","Contemplar el silencio y las aves acuáticas de la Laguna Umayo (Gratis)","Traslado al aeropuerto de Juliaca para el vuelo de regreso a Lima y conexión internacional"],"datos_curiosos":["La entrada de cada torre funeraria apunta exactamente hacia el este, por donde nace el sol cada mañana, simbolizando el renacimiento del alma"],"consejos":["Sillustani queda de camino entre Puno y el aeropuerto de Juliaca, lo que optimiza los traslados"],"location_info":{"address":"Laguna Umayo, Atuncolla, Puno","priceRange":"$ - Entrada 15 PEN","dia":15,"day":15}}'::jsonb,
   now()
 );
@@ -5209,7 +5084,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #17: Ruta Romántica de Baviera: Castillos de Cuento y Pueblos Medievales (Múnich, Alemania)
+-- Tour: Ruta Romántica de Baviera: Castillos de Cuento y Pueblos Medievales (Múnich, Alemania)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -5268,7 +5143,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a8ba2a05-6453-b905-3632-6396fb28d7c4',
   'f8692232-7388-8a18-4925-1fa2d5ba871c',
@@ -5286,7 +5161,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Durante la construcción de la vecina catedral Frauenkirche el constructor engañó al diablo dejándolo mirar desde un punto donde no se veían ventanas ("la pisada del diablo")']::text[],
   '{"address":"Marienplatz 1, München","priceRange":"$$ - Moderado","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Ver el espectáculo mecánico del Glockenspiel a las 11:00 AM o 12:00 PM (Gratis)","Subir a la torre de la Iglesia de San Pedro (Alter Peter) para ver los Alpes (€5)","Almorzar salchichas blancas Weißwurst con pretzel y cerveza en Hofbräuhaus (€18 - €28)"],"datos_curiosos":["Durante la construcción de la vecina catedral Frauenkirche el constructor engañó al diablo dejándolo mirar desde un punto donde no se veían ventanas (\"la pisada del diablo\")"],"consejos":["Las salchichas Weißwurst se comen tradicionalmente antes de las 12:00 del mediodía"],"location_info":{"address":"Marienplatz 1, München","priceRange":"$$ - Moderado","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -5304,7 +5178,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a042c1bd-05eb-227f-0f84-a52ef0ab6a0c',
   'f8692232-7388-8a18-4925-1fa2d5ba871c',
@@ -5322,7 +5196,6 @@ INSERT INTO public.tour_stops (
   ARRAY['A pesar de su apariencia medieval, el castillo contaba en 1886 con calefacción central de aire caliente, inodoros con descarga automática y teléfono']::text[],
   '{"address":"Neuschwansteinstraße 20, Schwangau","priceRange":"$$ - Entrada oficial €17.50","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Visita guiada oficial al interior del castillo (Entrada: €17.50)","Cruzar el puente colgante Marienbrücke suspendido sobre la cascada Pöllat para la foto clásica (Gratis)","Subida escénica en carruaje de caballos o caminata de 30 minutos por el bosque (€8 carruaje)"],"datos_curiosos":["A pesar de su apariencia medieval, el castillo contaba en 1886 con calefacción central de aire caliente, inodoros con descarga automática y teléfono"],"consejos":["Llegar con 1 hora de anticipación a la hora impresa en el boleto; si se pasa el minuto exacto del turno de acceso, el boleto expira automáticamente"],"location_info":{"address":"Neuschwansteinstraße 20, Schwangau","priceRange":"$$ - Entrada oficial €17.50","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -5340,7 +5213,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd307f19d-9fa4-6118-f90c-565a8da805f1',
   'f8692232-7388-8a18-4925-1fa2d5ba871c',
@@ -5358,7 +5231,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Linderhof poseía una mesa comedor mecánica ("la mesa que se sirve sola") que bajaba por una trampilla a la cocina para que el rey no tuviera que ver a los sirvientes']::text[],
   '{"address":"Linderhof 12, Ettal","priceRange":"$ - Entrada €10","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Tour guiado por los salones de espejos del palacio (Entrada: €10)","Pasear por los jardines y ver el encendido del géiser de la fuente dorada (Gratis con entrada)","Comprar licor de hierbas artesanal elaborado por los monjes de la Abadía de Ettal (€14 - €25)"],"datos_curiosos":["Linderhof poseía una mesa comedor mecánica (\"la mesa que se sirve sola\") que bajaba por una trampilla a la cocina para que el rey no tuviera que ver a los sirvientes"],"consejos":["La Gruta de Venus puede estar en restauración; consultar disponibilidad al comprar el ticket"],"location_info":{"address":"Linderhof 12, Ettal","priceRange":"$ - Entrada €10","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -5376,7 +5248,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '79a4884c-8abd-3e79-21c3-c9ef0ff3265c',
   'f8692232-7388-8a18-4925-1fa2d5ba871c',
@@ -5394,7 +5266,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Durante la Segunda Guerra Mundial la ciudad se salvó de la destrucción total gracias a que el subsecretario de guerra estadounidense conocía la belleza histórica del pueblo y ordenó negociar la rendición']::text[],
   '{"address":"Plönlein, Rothenburg ob der Tauber","priceRange":"$ - Acceso libre","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Caminar sobre el adarve cubierto de las murallas medievales (Gratis)","Entrar a la tienda de Navidad Käthe Wohlfahrt y su museo del adorno navideño (€5 museo)","Probar el dulce tradicional Schneeball (bola de nieve de masa frita con azúcar y canela: €4)"],"datos_curiosos":["Durante la Segunda Guerra Mundial la ciudad se salvó de la destrucción total gracias a que el subsecretario de guerra estadounidense conocía la belleza histórica del pueblo y ordenó negociar la rendición"],"consejos":["Hacer el recorrido nocturno con el Sereno de la Ciudad (Night Watchman Tour) en inglés o alemán a las 8:00 PM (€9)"],"location_info":{"address":"Plönlein, Rothenburg ob der Tauber","priceRange":"$ - Acceso libre","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -5412,7 +5283,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '867df73e-843b-b611-9b8b-b8ba55a412d0',
   'f8692232-7388-8a18-4925-1fa2d5ba871c',
@@ -5430,7 +5301,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La bóveda de la escalera sobrevivió milagrosamente a los bombardeos de 1945 gracias a la genialidad estructural del arquitecto Balthasar Neumann']::text[],
   '{"address":"Residenzplatz 2, Würzburg","priceRange":"$ - Entrada €9","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Admirar el fresco monumental de los cuatro continentes de Tiepolo (Entrada: €9)","Tomar una copa de vino blanco de Franconia de pie sobre el Puente Viejo con vista a la fortaleza Marienberg (€6)","Pasear por los jardines cortesanos de la Residencia (Gratis)"],"datos_curiosos":["La bóveda de la escalera sobrevivió milagrosamente a los bombardeos de 1945 gracias a la genialidad estructural del arquitecto Balthasar Neumann"],"consejos":["La botella de vino típica de Franconia tiene una forma ovalada única llamada Bocksbeutel"],"location_info":{"address":"Residenzplatz 2, Würzburg","priceRange":"$ - Entrada €9","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -5448,7 +5318,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '1cb8aa2f-e5fc-9deb-93a8-ba78a8f6bda7',
   'f8692232-7388-8a18-4925-1fa2d5ba871c',
@@ -5466,7 +5336,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Por ley imperial de 1356 (Bula de Oro), cada nuevo emperador electo debía celebrar su primera Dieta oficial en Núremberg']::text[],
   '{"address":"Burg 17, Nürnberg","priceRange":"$ - Acceso libre al patio","dia":6,"day":6}'::jsonb,
   180,
-  6,
   '{"dia":6,"day":6,"activities":["Girar el anillo dorado de latón de la Schöner Brunnen para atraer la fortuna (Gratis)","Comer las famosas 6 o 12 Nürnberger Rostbratwürste asadas a la leña de haya con chucrut (€12 - €16)","Comprar el auténtico pan de especias Lebkuchen de Núremberg (€6 - €15)"],"datos_curiosos":["Por ley imperial de 1356 (Bula de Oro), cada nuevo emperador electo debía celebrar su primera Dieta oficial en Núremberg"],"consejos":["El tren ICE conecta Núremberg con Múnich en solo 1 hora y 5 minutos"],"location_info":{"address":"Burg 17, Nürnberg","priceRange":"$ - Acceso libre al patio","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -5485,7 +5354,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #18: París Bohemio y Castillos del Valle del Loira: Arte, Luz y Realeza (París, Francia)
+-- Tour: París Bohemio y Castillos del Valle del Loira: Arte, Luz y Realeza (París, Francia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -5544,7 +5413,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c53e170c-0133-3543-442a-ca3f8282717a',
   '60d4e125-e850-e889-8e0b-8575a7625a0c',
@@ -5562,7 +5431,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La piedra de Château-Landon con la que está construida la basílica secreta calcita al llover, lo que hace que se limpie sola y se mantenga blanca']::text[],
   '{"address":"35 Rue du Chevalier de la Barre, Paris","priceRange":"$ - Entrada libre","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Entrar a la basílica y apreciar el inmenso mosaico dorado del Cristo en majestad (Gratis)","Hacerse un retrato o caricatura al carboncillo en la Place du Tertre (€30 - €60)","Visitar el Muro de los Te Quiero (Le mur des je t’aime) en la plaza Jehan Rictus (Gratis)"],"datos_curiosos":["La piedra de Château-Landon con la que está construida la basílica secreta calcita al llover, lo que hace que se limpie sola y se mantenga blanca"],"consejos":["Subir en el funicular de Montmartre usando un billete sencillo de metro Ticket t+ (€2.15)","Cuidar carteras y mochilas de los carteristas en las escalinatas"],"location_info":{"address":"35 Rue du Chevalier de la Barre, Paris","priceRange":"$ - Entrada libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -5580,7 +5448,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5129db6f-f775-ef66-e342-69e4a5cbaae7',
   '60d4e125-e850-e889-8e0b-8575a7625a0c',
@@ -5598,7 +5466,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Si una persona dedicara solo 30 segundos a cada obra expuesta en el Louvre, tardaría 100 días ininterrumpidos en ver toda la colección']::text[],
   '{"address":"Rue de Rivoli, 75001 Paris","priceRange":"$$ - Entrada €22","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Ver de cerca la Mona Lisa y la Venus de Milo (Entrada: €22 con reserva horaria obligatoria)","Fotografía simétrica bajo la pirámide de cristal en el patio Napoleón (Gratis)","Paseo relajado por el Jardín de las Tullerías y tomar un chocolate caliente Angelina (€9)"],"datos_curiosos":["Si una persona dedicara solo 30 segundos a cada obra expuesta en el Louvre, tardaría 100 días ininterrumpidos en ver toda la colección"],"consejos":["Ingresar por el centro comercial subterráneo Carrousel du Louvre para evitar las colas de la pirámide exterior","Cierra los martes; planificar la visita de miércoles a lunes"],"location_info":{"address":"Rue de Rivoli, 75001 Paris","priceRange":"$$ - Entrada €22","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -5616,7 +5483,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'cb474833-65cd-ce2d-52fa-e2d1f29a8be1',
   '60d4e125-e850-e889-8e0b-8575a7625a0c',
@@ -5634,7 +5501,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Torre Eiffel se contrae y dilata con la temperatura: en verano puede crecer hasta 15 centímetros de altura debido a la dilatación térmica del hierro']::text[],
   '{"address":"Champ de Mars, 5 Av. Anatole France","priceRange":"$$ - Ascenso y crucero","dia":3,"day":3}'::jsonb,
   210,
-  3,
   '{"dia":3,"day":3,"activities":["Subir en ascensor al segundo piso o cima de la Torre Eiffel (€18.80 - €29.40 según nivel)","Crucero panorámico de 1 hora por el río Sena pasando bajo Notre-Dame y el Puente Alejandro III (€17)","Ver el destello de miles de luces doradas de la torre que titilan durante 5 minutos cada hora al anochecer"],"datos_curiosos":["La Torre Eiffel se contrae y dilata con la temperatura: en verano puede crecer hasta 15 centímetros de altura debido a la dilatación térmica del hierro"],"consejos":["La mejor panorámica fotográfica de la torre completa se obtiene desde la Plaza del Trocadero al atardecer"],"location_info":{"address":"Champ de Mars, 5 Av. Anatole France","priceRange":"$$ - Ascenso y crucero","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -5652,7 +5518,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '1092fe8c-935d-8247-64bd-ae0e43c9fe8e',
   '60d4e125-e850-e889-8e0b-8575a7625a0c',
@@ -5670,7 +5536,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Francisco I mandó construir este inmenso castillo solo como pabellón de caza y apenas habitó en él 72 días en toda su vida']::text[],
   '{"address":"Château, 41250 Chambord","priceRange":"$$ - Entrada €16","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Subir y bajar la escalera de doble hélice donde dos personas ascienden sin cruzarse jamás (Entrada: €16)","Pasear por la terraza del tejado entre un bosque de linternas de piedra y chimeneas (Gratis con entrada)","Alquilar un bote eléctrico para navegar por el foso del castillo (€18 por 30 minutos)"],"datos_curiosos":["Francisco I mandó construir este inmenso castillo solo como pabellón de caza y apenas habitó en él 72 días en toda su vida"],"consejos":["El tren regional TER desde París Austerlitz hasta Blois o Mer toma 1 hora y 20 minutos con conexión de lanzadera al castillo"],"location_info":{"address":"Château, 41250 Chambord","priceRange":"$$ - Entrada €16","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -5688,7 +5553,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '714db491-4047-2ddb-8785-3d58524e9235',
   '60d4e125-e850-e889-8e0b-8575a7625a0c',
@@ -5706,7 +5571,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Durante la Segunda Guerra Mundial la galería del castillo sirvió como vía clandestina de escape, pues un extremo estaba en la Francia ocupada y el otro en la zona libre']::text[],
   '{"address":"37150 Chenonceaux","priceRange":"$$ - Entrada €17","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Recorrer la gran galería de 60 metros que cruza sobre el agua (Entrada con folleto: €17)","Pasear por los jardines enfrentados de Diana de Poitiers y Catalina de Médici (Gratis con entrada)","Almorzar en el antiguo invernadero l''Orangerie con vinos AOC Touraine (€35 - €55)"],"datos_curiosos":["Durante la Segunda Guerra Mundial la galería del castillo sirvió como vía clandestina de escape, pues un extremo estaba en la Francia ocupada y el otro en la zona libre"],"consejos":["Visitar la gran cocina renacentista ubicada en los pilares del puente sobre el agua con sus ollas de cobre originales"],"location_info":{"address":"37150 Chenonceaux","priceRange":"$$ - Entrada €17","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -5724,7 +5588,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '3e51684a-1beb-175f-2813-1c481297cbaf',
   '60d4e125-e850-e889-8e0b-8575a7625a0c',
@@ -5742,7 +5606,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los jardines son cuidados íntegramente de manera orgánica sin pesticidas químicos por un equipo de 10 jardineros dedicados']::text[],
   '{"address":"3 Rue Principale, 37510 Villandry","priceRange":"$ - Entrada €13","dia":6,"day":6}'::jsonb,
   180,
-  6,
   '{"dia":6,"day":6,"activities":["Subir a la torre del homenaje para admirar el tapiz geométrico de los jardines desde arriba (Entrada: €13 castillo + jardines / €8 solo jardines)","Descifrar los cuatro cuadrados del Jardín del Amor (Tierno, Apasionado, Voluble y Trágico)","Cata de quesos de cabra Sainte-Maure de Touraine con vino blanco (€15)"],"datos_curiosos":["Los jardines son cuidados íntegramente de manera orgánica sin pesticidas químicos por un equipo de 10 jardineros dedicados"],"consejos":["La primavera y el verano muestran el esplendor máximo de las flores y verduras ornamentales"],"location_info":{"address":"3 Rue Principale, 37510 Villandry","priceRange":"$ - Entrada €13","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -5760,7 +5623,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '6fa72f8f-052d-0aab-dd5d-6561075de73a',
   '60d4e125-e850-e889-8e0b-8575a7625a0c',
@@ -5778,7 +5641,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En el atrio de Notre-Dame se encuentra el "Punto Cero" de Francia, desde el cual se miden todas las distancias en kilómetros de las carreteras del país']::text[],
   '{"address":"6 Rue de la Bûcherie, 75005 Paris","priceRange":"$ - Acceso libre","dia":7,"day":7}'::jsonb,
   150,
-  7,
   '{"dia":7,"day":7,"activities":["Fotografiar la fachada gótica restaurada y rosetones de Notre-Dame (Gratis)","Comprar un libro sellado en la librería histórica Shakespeare and Company (€10 - €25)","Último almuerzo parisino en una terraza: croissant con café au lait y quiche lorraine (€15)"],"datos_curiosos":["En el atrio de Notre-Dame se encuentra el \"Punto Cero\" de Francia, desde el cual se miden todas las distancias en kilómetros de las carreteras del país"],"consejos":["Tomar el tren RER B directo desde la estación Saint-Michel Notre-Dame hacia el aeropuerto Charles de Gaulle (40 minutos, €11.80)"],"location_info":{"address":"6 Rue de la Bûcherie, 75005 Paris","priceRange":"$ - Acceso libre","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -5797,7 +5659,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #19: Grecia Clásica e Islas del Egeo: Dioses, Templos y Santorini (Atenas, Grecia)
+-- Tour: Grecia Clásica e Islas del Egeo: Dioses, Templos y Santorini (Atenas, Grecia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -5856,7 +5718,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '6432fe96-a852-36f2-3f34-0d3889558cd6',
   '0537d9bb-683e-7bf2-7efc-77fc31bf2c3b',
@@ -5874,7 +5736,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Partenón no tiene una sola línea recta; todas sus columnas y arquitrabes tienen curvaturas e inclinaciones sutiles calculadas para corregir las ilusiones ópticas del ojo humano']::text[],
   '{"address":"Acrópolis, Atenas","priceRange":"$$ - Entrada €20","dia":1,"day":1}'::jsonb,
   200,
-  1,
   '{"dia":1,"day":1,"activities":["Subir los Propileos y contemplar el Partenón de mármol pentélico (Entrada: €20)","Fotografiar las Cariátides del Erecteion y el Olivo Sagrado de Atenea (Gratis con entrada)","Pasear por las callejuelas empedradas del pintoresco barrio de Plaka (€0)"],"datos_curiosos":["El Partenón no tiene una sola línea recta; todas sus columnas y arquitrabes tienen curvaturas e inclinaciones sutiles calculadas para corregir las ilusiones ópticas del ojo humano"],"consejos":["Entrar a las 8:00 AM para evitar las masas de cruceros y el calor reflejado en el mármol","Comprar el boleto combinado de 7 sitios arqueológicos (€30) si estará varios días en Atenas"],"location_info":{"address":"Acrópolis, Atenas","priceRange":"$$ - Entrada €20","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -5892,7 +5753,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '78a83416-56d6-2a3e-feb4-286928eb14ca',
   '0537d9bb-683e-7bf2-7efc-77fc31bf2c3b',
@@ -5910,7 +5771,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La sexta Cariátide que falta fue arrancada por Lord Elgin en 1801 y permanece en el Museo Británico de Londres']::text[],
   '{"address":"Dionysiou Areopagitou 15, Athina","priceRange":"$$ - Entrada museo","dia":2,"day":2}'::jsonb,
   210,
-  2,
   '{"dia":2,"day":2,"activities":["Admirar las Cariátides originales a centímetros de distancia en el museo (Entrada: €15)","Visitar el Templo de Hefesto en el Ágora Antigua, el más intacto de Grecia (€10)","Almorzar moussaka tradicional con ensalada griega con queso feta en Monastiraki (€15 - €22)"],"datos_curiosos":["La sexta Cariátide que falta fue arrancada por Lord Elgin en 1801 y permanece en el Museo Británico de Londres"],"consejos":["La terraza del restaurante del museo ofrece una de las vistas más limpias del Partenón"],"location_info":{"address":"Dionysiou Areopagitou 15, Athina","priceRange":"$$ - Entrada museo","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -5928,7 +5788,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c65968be-03f7-c7d8-c602-5b45f89a6fcb',
   '0537d9bb-683e-7bf2-7efc-77fc31bf2c3b',
@@ -5946,7 +5806,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El pueblo de Chora fue diseñado deliberadamente como un laberinto confuso para desorientar a los piratas invasores que desembarcaban en la isla']::text[],
   '{"address":"Mykonos Town (Chora)","priceRange":"$$ - Moderado a alto","dia":3,"day":3}'::jsonb,
   200,
-  3,
   '{"dia":3,"day":3,"activities":["Tomar un cóctel al atardecer en los bares con terraza sobre el agua en Little Venice (€18 - €25)","Fotografiar los cinco molinos de viento con la luz dorada del Egeo (Gratis)","Perderse en el laberinto blanco de callejuelas encaladas de Chora (Gratis)"],"datos_curiosos":["El pueblo de Chora fue diseñado deliberadamente como un laberinto confuso para desorientar a los piratas invasores que desembarcaban en la isla"],"consejos":["El ferry rápido desde el Pireo (Seajets) tarda 2 horas y media hacia Mykonos (~€85)"],"location_info":{"address":"Mykonos Town (Chora)","priceRange":"$$ - Moderado a alto","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -5964,7 +5823,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '29afc30d-9873-9e20-80c0-8afe2d6a14a6',
   '0537d9bb-683e-7bf2-7efc-77fc31bf2c3b',
@@ -5982,7 +5841,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En la antigüedad era un crimen sagrado nacer o morir en Delos; las mujeres embarazadas y enfermos terminales eran evacuados a islas vecinas']::text[],
   '{"address":"Isla de Delos, Cícladas","priceRange":"$$ - Excursión marítima","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Excursión en barco desde el puerto de Mykonos (Barco ida y vuelta: €22 + Entrada sitio: €8)","Recorrer la Terraza de los Leones arcaicos de Naxos (Gratis con entrada)","Subir al Monte Cintos para una panorámica de todas las islas Cícladas circundantes"],"datos_curiosos":["En la antigüedad era un crimen sagrado nacer o morir en Delos; las mujeres embarazadas y enfermos terminales eran evacuados a islas vecinas"],"consejos":["En Delos no hay sombra ni árboles; llevar sombrilla o gorra, gafas de sol y abundante agua"],"location_info":{"address":"Isla de Delos, Cícladas","priceRange":"$$ - Excursión marítima","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -6000,7 +5858,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '73a3fe9e-9bf4-bd62-e3d7-ee97f7811a98',
   '0537d9bb-683e-7bf2-7efc-77fc31bf2c3b',
@@ -6018,7 +5876,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La gigantesca erupción de Thera hace 3.600 años hundió el centro de la isla originando la leyenda de la Atlántida descrita por Platón']::text[],
   '{"address":"Fira, Santorini","priceRange":"$$ - Restaurantes panorámicos","dia":5,"day":5}'::jsonb,
   210,
-  5,
   '{"dia":5,"day":5,"activities":["Caminata panorámica por el sendero peatonal que une Fira con Firostefani e Imerovigli (Gratis)","Subir en el teleférico desde el Puerto Viejo hasta Fira (€6)","Cena con pescado fresco y vino blanco volcánico Assyrtiko (€35 - €60)"],"datos_curiosos":["La gigantesca erupción de Thera hace 3.600 años hundió el centro de la isla originando la leyenda de la Atlántida descrita por Platón"],"consejos":["No montar en los burros del puerto viejo por razones de bienestar animal; usar el teleférico o las escaleras a pie"],"location_info":{"address":"Fira, Santorini","priceRange":"$$ - Restaurantes panorámicos","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -6036,7 +5893,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '96ddbde5-fdba-7b41-e30a-99ea6dab25a1',
   '0537d9bb-683e-7bf2-7efc-77fc31bf2c3b',
@@ -6054,7 +5911,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las casas de Oia llamadas *yposkafa* están excavadas directamente en la ceniza volcánica compacta, lo que las mantiene frescas en verano y cálidas en invierno']::text[],
   '{"address":"Oia, Santorini","priceRange":"$$$ - Pueblo icónico","dia":6,"day":6}'::jsonb,
   240,
-  6,
   '{"dia":6,"day":6,"activities":["Fotografiar las Tres Cúpulas Azules desde el mirador clásico (Gratis)","Ubicarse en las ruinas del Castillo de Oia para contemplar la caída del sol en el Egeo (Gratis)","Bajar los 200 escalones hacia la caleta de Ammoudi para comer calamares frescos a orillas del agua (€30 - €50)"],"datos_curiosos":["Las casas de Oia llamadas *yposkafa* están excavadas directamente en la ceniza volcánica compacta, lo que las mantiene frescas en verano y cálidas en invierno"],"consejos":["Llegar al castillo al menos 1 hora y media antes del atardecer para asegurar sitio","Respetar los carteles de propiedad privada en los tejados de las casas"],"location_info":{"address":"Oia, Santorini","priceRange":"$$$ - Pueblo icónico","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -6072,7 +5928,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '779134f3-eff2-a1f7-cde7-4abbdb53f07a',
   '0537d9bb-683e-7bf2-7efc-77fc31bf2c3b',
@@ -6090,7 +5946,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En Akrotiri no se hallaron esqueletos humanos ni joyas de oro, lo que demuestra que los habitantes evacuaron ordenadamente con sus riquezas antes de la erupción catastrófica']::text[],
   '{"address":"Akrotiri, Santorini","priceRange":"$$ - Entrada €12","dia":7,"day":7}'::jsonb,
   200,
-  7,
   '{"dia":7,"day":7,"activities":["Caminar sobre las pasarelas techadas de la ciudad prehistórica excavada (Entrada: €12)","Mirador fotográfico sobre la imponente arena y roca roja de Red Beach (Gratis)","Cata de vinos en Bodega Santo Wines sobre el acantilado (€30 por vuelo de 6 vinos)"],"datos_curiosos":["En Akrotiri no se hallaron esqueletos humanos ni joyas de oro, lo que demuestra que los habitantes evacuaron ordenadamente con sus riquezas antes de la erupción catastrófica"],"consejos":["Akrotiri es un sitio completamente techado y protegido del sol"],"location_info":{"address":"Akrotiri, Santorini","priceRange":"$$ - Entrada €12","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -6108,7 +5963,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '14511aad-4071-ff72-3ea5-9304316b2bd6',
   '0537d9bb-683e-7bf2-7efc-77fc31bf2c3b',
@@ -6126,7 +5981,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Tiene capacidad para 50.000 espectadores sentados en graderías de mármol sin ningún elemento de hormigón']::text[],
   '{"address":"Leof. Vasileos Konstantinou, Athina","priceRange":"$ - Entrada €10","dia":8,"day":8}'::jsonb,
   120,
-  8,
   '{"dia":8,"day":8,"activities":["Correr sobre la pista de ceniza original y subir al podio de campeones (Entrada: €10)","Comprar aceite de oliva extra virgen de Kalamata y miel de tomillo para llevar (€10 - €20)","Traslado al aeropuerto internacional Eleftherios Venizelos en metro línea 3 (€9)"],"datos_curiosos":["Tiene capacidad para 50.000 espectadores sentados en graderías de mármol sin ningún elemento de hormigón"],"consejos":["El boleto del estadio incluye audioguía multilingüe que narra la historia del maratón olímpico"],"location_info":{"address":"Leof. Vasileos Konstantinou, Athina","priceRange":"$ - Entrada €10","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -6145,7 +5999,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #20: Tesoros del Danubio y Europa Central: Praga, Viena y Budapest (Praga, República Checa)
+-- Tour: Tesoros del Danubio y Europa Central: Praga, Viena y Budapest (Praga, República Checa)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -6204,7 +6058,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4bd5554e-1897-5c32-c379-38b6e7c5e3d6',
   '8eabb0b4-7908-3a31-8b55-31d46ab02c3d',
@@ -6222,7 +6076,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cuenta la leyenda que a los concejales de Praga les gustó tanto el reloj astronómico que cegaron a su maestro relojero Hanuš para que nunca pudiera construir otro igual']::text[],
   '{"address":"Staroměstské náměstí, Praha","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Ver el desfile mecánico de los doce apóstoles del Reloj Astronómico a cada hora en punto (Gratis)","Cruzar el Puente de Carlos y tocar el relieve de bronce de San Juan Nepomuceno para la suerte (Gratis)","Probar goulash checo servido en hogaza de pan con cerveza Pilsner Urquell (€12 - €18)"],"datos_curiosos":["Cuenta la leyenda que a los concejales de Praga les gustó tanto el reloj astronómico que cegaron a su maestro relojero Hanuš para que nunca pudiera construir otro igual"],"consejos":["Cruzar el Puente de Carlos al amanecer (6:30 AM) para disfrutarlo en soledad y silencio mágico"],"location_info":{"address":"Staroměstské náměstí, Praha","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -6240,7 +6093,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '88be06e8-a85c-3500-c376-bde42a8f6dfc',
   '8eabb0b4-7908-3a31-8b55-31d46ab02c3d',
@@ -6258,7 +6111,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El libro Guinness de los récords certifica al Castillo de Praga como el castillo antiguo coherente más grande del planeta con 70.000 m²']::text[],
   '{"address":"Hradčany, 119 08 Praha 1","priceRange":"$ - Entrada ~€10","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Visitar la nave gótica de la Catedral de San Vito y la tumba de San Venceslao (Entrada circuito castillo: ~250 CZK / €10)","Entrar a la casa número 22 del Callejón del Oro donde vivió y escribió Franz Kafka (Incluido en circuito)","Subir en el tranvía histórico 22 hasta la parada Pražský hrad (€1.50)"],"datos_curiosos":["El libro Guinness de los récords certifica al Castillo de Praga como el castillo antiguo coherente más grande del planeta con 70.000 m²"],"consejos":["El cambio de guardia solemne con fanfarria militar se realiza a las 12:00 del mediodía en el primer patio"],"location_info":{"address":"Hradčany, 119 08 Praha 1","priceRange":"$ - Entrada ~€10","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -6276,7 +6128,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '560924e4-302a-878b-2d9d-5b636ca7998d',
   '8eabb0b4-7908-3a31-8b55-31d46ab02c3d',
@@ -6294,7 +6146,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Según la leyenda de Praga, en el ático de la Sinagoga Vieja-Nueva reposan los restos de barro del Golem creado por el rabino Judah Loew en el siglo XVI']::text[],
   '{"address":"Široká, Josefov / Hlavní nádraží","priceRange":"$$ - Tren a Viena","dia":3,"day":3}'::jsonb,
   240,
-  3,
   '{"dia":3,"day":3,"activities":["Visitar la Sinagoga Vieja-Nueva, la más antigua activa de Europa (Entrada museo judío: ~350 CZK / €14)","Abordar el tren Railjet en la estación central Praha hlavní nádraží hacia Viena (€20 - €35 - 4 horas)","Llegada a Viena y primer paseo nocturno por la Ringstraße iluminada (Gratis)"],"datos_curiosos":["Según la leyenda de Praga, en el ático de la Sinagoga Vieja-Nueva reposan los restos de barro del Golem creado por el rabino Judah Loew en el siglo XVI"],"consejos":["El tren cuenta con wifi de alta velocidad, restaurante a bordo y vagones silenciosos"],"location_info":{"address":"Široká, Josefov / Hlavní nádraží","priceRange":"$$ - Tren a Viena","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -6312,7 +6163,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8c52e4e4-9a01-0b04-2f8e-1df29652973b',
   '8eabb0b4-7908-3a31-8b55-31d46ab02c3d',
@@ -6330,7 +6181,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En el Salón de los Espejos de Schönbrunn, un prodigioso niño de 6 años llamado Wolfgang Amadeus Mozart dio su primer concierto ante la emperatriz María Teresa en 1762']::text[],
   '{"address":"Schönbrunner Schloßstraße 47, Wien","priceRange":"$$ - Entrada €24","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Grand Tour de los 40 aposentos de Estado del Palacio de Schönbrunn (Entrada: €24)","Subir a la colina de la Glorieta en los jardines para la vista panorámica de Viena (Gratis los jardines)","Tomar un café Melange tradicional con tarta Sacher original en el Café Central o Café Sacher (€14)"],"datos_curiosos":["En el Salón de los Espejos de Schönbrunn, un prodigioso niño de 6 años llamado Wolfgang Amadeus Mozart dio su primer concierto ante la emperatriz María Teresa en 1762"],"consejos":["Tomar la línea U4 del metro directo desde el centro hasta la estación Schönbrunn (€2.40)"],"location_info":{"address":"Schönbrunner Schloßstraße 47, Wien","priceRange":"$$ - Entrada €24","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -6348,7 +6198,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'af630e56-c100-2db2-0931-a82caf4931f9',
   '8eabb0b4-7908-3a31-8b55-31d46ab02c3d',
@@ -6366,7 +6216,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Klimt utilizó auténticas hojas de oro batido mezcladas con pintura al óleo inspirándose en los mosaicos bizantinos que contempló en Rávena']::text[],
   '{"address":"Prinz-Eugen-Straße 27, Wien","priceRange":"$$ - Entrada museo","dia":5,"day":5}'::jsonb,
   200,
-  5,
   '{"dia":5,"day":5,"activities":["Admirar \"El Beso\" de Klimt en la sala principal del Belvedere Superior (Entrada: €17.50)","Pasear por los jardines barrocos de cascadas entre el Belvedere Superior y el Inferior (Gratis)","Probar el Wiener Schnitzel auténtico (escalope vienés de ternera gigante) en Figlmüller (€22 - €28)"],"datos_curiosos":["Klimt utilizó auténticas hojas de oro batido mezcladas con pintura al óleo inspirándose en los mosaicos bizantinos que contempló en Rávena"],"consejos":["Reservar mesa con semanas de antelación en Figlmüller Wollzeile","En la Ópera de Viena se pueden comprar entradas de pie por solo €10 a €15 dos horas antes de la función"],"location_info":{"address":"Prinz-Eugen-Straße 27, Wien","priceRange":"$$ - Entrada museo","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -6384,7 +6233,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '9c99a80b-e46f-3d8d-763e-eb58b0f9b07f',
   '8eabb0b4-7908-3a31-8b55-31d46ab02c3d',
@@ -6402,7 +6251,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Para decorar el interior del Parlamento húngaro se utilizaron más de 40 kilos de oro de 22 quilates']::text[],
   '{"address":"Kossuth Lajos tér 1-3, Budapest","priceRange":"$$ - Tren y crucero","dia":6,"day":6}'::jsonb,
   240,
-  6,
   '{"dia":6,"day":6,"activities":["Tren Railjet de Viena a Budapest (2 horas y media - €18)","Visita guiada al interior del Parlamento y la Santa Corona de Hungría (Entrada UE: ~€13 / no UE: ~€28)","Crucero nocturno en barco por el Danubio contemplando los puentes y el parlamento iluminado en oro (€16)"],"datos_curiosos":["Para decorar el interior del Parlamento húngaro se utilizaron más de 40 kilos de oro de 22 quilates"],"consejos":["La vista más espectacular del Parlamento iluminado se obtiene desde el otro lado del río (Bastión de los Pescadores o desde el barco)"],"location_info":{"address":"Kossuth Lajos tér 1-3, Budapest","priceRange":"$$ - Tren y crucero","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -6420,7 +6268,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5a2a3b5b-3910-8aa8-3299-9a73813113fb',
   '8eabb0b4-7908-3a31-8b55-31d46ab02c3d',
@@ -6438,7 +6286,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El nombre "Bastión de los Pescadores" se debe a que el gremio de pescadores de la ciudad era el encargado de defender este tramo de la muralla en la Edad Media']::text[],
   '{"address":"Szentháromság tér, Budapest","priceRange":"$ - Acceso casi libre","dia":7,"day":7}'::jsonb,
   210,
-  7,
   '{"dia":7,"day":7,"activities":["Pasear por las terrazas y arcos del Bastión de los Pescadores (Planta principal gratis / torrecillas superiores ~€3)","Entrar a la Iglesia de Matías donde fue coronado el emperador Francisco José (Entrada: ~€8)","Cruzar a pie el centenario Puente de las Cadenas sobre el Danubio (Gratis)"],"datos_curiosos":["El nombre \"Bastión de los Pescadores\" se debe a que el gremio de pescadores de la ciudad era el encargado de defender este tramo de la muralla en la Edad Media"],"consejos":["Subir a la colina de Buda en el histórico funicular de madera Budavári Sikló (€10)"],"location_info":{"address":"Szentháromság tér, Budapest","priceRange":"$ - Acceso casi libre","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -6456,7 +6303,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '87f6c048-9a93-c19d-bd30-11062c894894',
   '8eabb0b4-7908-3a31-8b55-31d46ab02c3d',
@@ -6474,7 +6321,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El agua brota a más de 75°C desde 1.250 metros de profundidad y es tan rica en sulfatos y calcio que también alimenta el lago de los hipopótamos del zoo vecino']::text[],
   '{"address":"Állatkerti krt. 9-11, Budapest","priceRange":"$$ - Entrada termas ~€27","dia":8,"day":8}'::jsonb,
   300,
-  8,
   '{"dia":8,"day":8,"activities":["Baño en las piscinas termales exteriores y ver a los ancianos locales jugar al ajedrez en el agua (Entrada día completo con taquilla: ~10.500 HUF / €27)","Pasear por la Plaza de los Héroes (Hősök tere) a la salida del parque (Gratis)","Noche de copas en Szimpla Kert, el \"ruin bar\" más famoso del mundo (€4 - €8 cerveza local)"],"datos_curiosos":["El agua brota a más de 75°C desde 1.250 metros de profundidad y es tan rica en sulfatos y calcio que también alimenta el lago de los hipopótamos del zoo vecino"],"consejos":["Llevar chanclas/sandalias obligatorias para caminar en el borde de las piscinas"],"location_info":{"address":"Állatkerti krt. 9-11, Budapest","priceRange":"$$ - Entrada termas ~€27","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -6492,7 +6338,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '95ea8ae6-0744-662e-6378-23bcfa399fd8',
   '8eabb0b4-7908-3a31-8b55-31d46ab02c3d',
@@ -6510,7 +6356,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Antiguamente el mercado contaba con un canal subterráneo por donde los barcos descargaban directamente los productos frescos desde el Danubio']::text[],
   '{"address":"Vámház krt. 1-3, Budapest","priceRange":"$ - Compras locales","dia":9,"day":9}'::jsonb,
   150,
-  9,
   '{"dia":9,"day":9,"activities":["Probar un Lángos caliente con crema agria y queso rallado en la planta alta (~1.500 HUF / €4)","Comprar latas de páprika dulce húngara en polvo y vino dulce Tokaji para regalo (€5 - €15)","Caminar por la calle peatonal comercial Váci Utca antes del traslado al aeropuerto"],"datos_curiosos":["Antiguamente el mercado contaba con un canal subterráneo por donde los barcos descargaban directamente los productos frescos desde el Danubio"],"consejos":["Los domingos el mercado está cerrado; los sábados abre hasta las 3:00 PM"],"location_info":{"address":"Vámház krt. 1-3, Budapest","priceRange":"$ - Compras locales","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -6529,7 +6374,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #21: La Gran Italia Monumental: Roma, Florencia, Toscana y Canales de Venecia (Roma, Italia)
+-- Tour: La Gran Italia Monumental: Roma, Florencia, Toscana y Canales de Venecia (Roma, Italia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -6588,7 +6433,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '84913fd1-582c-943b-489e-a52286300d19',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6606,7 +6451,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Durante la inauguración del Coliseo se celebraron 100 días ininterrumpidos de juegos en los que murieron más de 5.000 animales salvajes traídos de África']::text[],
   '{"address":"Piazza del Colosseo 1, Roma","priceRange":"$$ - Entrada €18","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Recorrido por la cávea y vista a la arena del Coliseo (Entrada combinada oficial: €18)","Caminar por la Vía Sacra del Foro Romano hasta el Templo de Julio César (Incluido en la entrada)","Subir a la colina del Palatino donde Rómulo fundó Roma y se construyeron los palacios imperiales"],"datos_curiosos":["Durante la inauguración del Coliseo se celebraron 100 días ininterrumpidos de juegos en los que murieron más de 5.000 animales salvajes traídos de África"],"consejos":["Comprar la entrada nominativa en la web de Parco Archeologico del Colosseo","Llevar botella de agua para rellenar en las fuentes del interior"],"location_info":{"address":"Piazza del Colosseo 1, Roma","priceRange":"$$ - Entrada €18","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -6624,7 +6468,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e2be63c5-1108-9433-20bd-2ab462aefd0a',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6642,7 +6486,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cada día se recogen más de €3.000 euros en monedas del fondo de la Fontana di Trevi, donados íntegramente a la organización benéfica Cáritas']::text[],
   '{"address":"Piazza di Trevi, Roma","priceRange":"$ - Entrada Panteón €5","dia":2,"day":2}'::jsonb,
   210,
-  2,
   '{"dia":2,"day":2,"activities":["Lanzar una moneda con la mano derecha sobre el hombro izquierdo a la Fontana di Trevi para asegurar el regreso a Roma (Gratis)","Entrar al Panteón y contemplar la tumba del pintor Rafael (Entrada: €5)","Cenar pasta Carbonara o Cacio e Pepe auténtica en una trattoria de Trastevere (€14 - €22)"],"datos_curiosos":["Cada día se recogen más de €3.000 euros en monedas del fondo de la Fontana di Trevi, donados íntegramente a la organización benéfica Cáritas"],"consejos":["La Fontana di Trevi está iluminada de manera mágica a las 11:00 PM con mucha menos gente que durante el día"],"location_info":{"address":"Piazza di Trevi, Roma","priceRange":"$ - Entrada Panteón €5","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -6660,7 +6503,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0b5e1d4f-8a72-12e4-c010-3a3103e6ada9',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6678,7 +6521,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Miguel Ángel pintó la bóveda de la Capilla Sixtina de pie sobre andamios de madera durante cuatro años de trabajo extenuante que casi le costó la vista']::text[],
   '{"address":"Viale Vaticano, Ciudad del Vaticano","priceRange":"$$ - Entrada €25","dia":3,"day":3}'::jsonb,
   300,
-  3,
   '{"dia":3,"day":3,"activities":["Contemplar la bóveda del Génesis y el Juicio Final en silencio en la Capilla Sixtina (Entrada oficial: €20 + €5 reserva)","Entrar a la Basílica de San Pedro y maravillarse con La Piedad esculpida en mármol blanco por Miguel Ángel a los 24 años (Entrada basílica gratis)","Subir a la cúpula de San Pedro para la vista circular de la Plaza de Bernini (€10 ascensor)"],"datos_curiosos":["Miguel Ángel pintó la bóveda de la Capilla Sixtina de pie sobre andamios de madera durante cuatro años de trabajo extenuante que casi le costó la vista"],"consejos":["Estrictamente obligatorio llevar hombros cubiertos y pantalones o faldas por debajo de la rodilla; no dejan pasar con tirantes ni bermudas cortas","Prohibido hablar y tomar fotos dentro de la Capilla Sixtina"],"location_info":{"address":"Viale Vaticano, Ciudad del Vaticano","priceRange":"$$ - Entrada €25","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -6696,7 +6538,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'eea382b1-18fd-faf0-521c-971bf717117d',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6714,7 +6556,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Brunelleschi inventó nuevas máquinas elevadoras e ideó una disposición de ladrillos en espina de pez que permitió construir la mayor cúpula de albañilería del mundo sin cimbras de madera']::text[],
   '{"address":"Piazza del Duomo, Firenze","priceRange":"$ - Acceso exterior libre","dia":4,"day":4}'::jsonb,
   200,
-  4,
   '{"dia":4,"day":4,"activities":["Tren Frecciarossa Roma Termini - Firenze Santa Maria Novella (1 hora y 35 minutos - €25 - €45)","Ver la fachada del Duomo y las Puertas del Paraíso en bronce dorado del Baptisterio (Gratis exterior)","Tomar un panini gourmet con embutidos toscanos en All''Antico Vinaio (€7 - €9)"],"datos_curiosos":["Brunelleschi inventó nuevas máquinas elevadoras e ideó una disposición de ladrillos en espina de pez que permitió construir la mayor cúpula de albañilería del mundo sin cimbras de madera"],"consejos":["Subir los 463 escalones de la Cúpula de Brunelleschi requiere comprar el Brunelleschi Pass con reserva anticipada (€30)"],"location_info":{"address":"Piazza del Duomo, Firenze","priceRange":"$ - Acceso exterior libre","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -6732,7 +6573,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4bcda182-e02f-d803-41b9-7263dbd51471',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6750,7 +6591,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El bloque de mármol del David había sido abandonado y declarado inservible por otros escultores durante 40 años hasta que Miguel Ángel lo asumió a sus 26 años']::text[],
   '{"address":"Piazzale degli Uffizi / Via Ricasoli 60, Firenze","priceRange":"$$$ - Entradas museos","dia":5,"day":5}'::jsonb,
   270,
-  5,
   '{"dia":5,"day":5,"activities":["Quedarse sin palabras ante el David original en la Galería de la Academia (Entrada: €16 + €4 reserva)","Recorrer las salas de Botticelli, Da Vinci y Caravaggio en Uffizi (Entrada: €25)","Caminar al atardecer sobre el Ponte Vecchio con sus joyerías de oro suspendidas sobre el río Arno (Gratis)"],"datos_curiosos":["El bloque de mármol del David había sido abandonado y declarado inservible por otros escultores durante 40 años hasta que Miguel Ángel lo asumió a sus 26 años"],"consejos":["Cruzar el río Arno y subir al Piazzale Michelangelo para la postal más bella del atardecer con el Duomo recortado en el cielo"],"location_info":{"address":"Piazzale degli Uffizi / Via Ricasoli 60, Firenze","priceRange":"$$$ - Entradas museos","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -6768,7 +6608,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '573cabc9-4ff6-0774-cfd1-50dfbb19013b',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6786,7 +6626,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las familias nobles de San Gimignano competían por construir la torre más alta como símbolo de poder y riqueza económica']::text[],
   '{"address":"Siena y San Gimignano, Toscana","priceRange":"$$ - Excursión toscana","dia":6,"day":6}'::jsonb,
   300,
-  6,
   '{"dia":6,"day":6,"activities":["Sentarse en el suelo de ladrillos de la Piazza del Campo en Siena (Gratis)","Entrar a la Catedral de Siena con sus suelos de mármol incrustado (€8)","Tomar el helado galardonado como mejor del mundo en la Gelateria Dondoli de San Gimignano (€3 - €6)"],"datos_curiosos":["Las familias nobles de San Gimignano competían por construir la torre más alta como símbolo de poder y riqueza económica"],"consejos":["Excursión en autobús de día completo desde Florencia (€55 - €80 con almuerzo y cata en bodega de Chianti)"],"location_info":{"address":"Siena y San Gimignano, Toscana","priceRange":"$$ - Excursión toscana","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -6804,7 +6643,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2053b26c-9750-2312-aa85-a52d27e99865',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6822,7 +6661,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Puente de los Suspiros no debe su nombre a los enamorados, sino a los suspiros de los prisioneros que veían por última vez el cielo y el mar antes de ser encerrados']::text[],
   '{"address":"Piazza San Marco, Venezia","priceRange":"$$ - Palacio y transporte","dia":7,"day":7}'::jsonb,
   240,
-  7,
   '{"dia":7,"day":7,"activities":["Vaporetto línea 1 recorriendo todo el Gran Canal hasta San Marcos (€9.50 billete sencillo)","Visita a la Basílica de San Marcos con sus 8.000 m² de mosaicos en pan de oro (Entrada: €3)","Cruzar el Puente de los Suspiros desde los calabozos del Palacio Ducal (Entrada palacio: €30)"],"datos_curiosos":["El Puente de los Suspiros no debe su nombre a los enamorados, sino a los suspiros de los prisioneros que veían por última vez el cielo y el mar antes de ser encerrados"],"consejos":["Comprar el pase de transporte ilimitado de Vaporetto ACTV de 48 o 72 horas para ahorrar (€35 - €45)"],"location_info":{"address":"Piazza San Marco, Venezia","priceRange":"$$ - Palacio y transporte","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -6840,7 +6678,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '6212a2c8-4a10-23ab-4146-263efe726fb8',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6858,7 +6696,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La góndola es asimétrica: su lado izquierdo es 24 centímetros más ancho que el derecho para compensar el peso del gondolero y el remo']::text[],
   '{"address":"Ponte di Rialto / Canales de San Polo","priceRange":"$$$ - Góndola oficial €90","dia":8,"day":8}'::jsonb,
   180,
-  8,
   '{"dia":8,"day":8,"activities":["Paseo clásico en góndola de 30 minutos por canales interiores y Gran Canal (Tarifa oficial municipal regulada: €90 de día / €110 de noche por góndola hasta 5 personas)","Fotografía del tráfico de góndolas y barcos desde la cima del Puente de Rialto (Gratis)","Tomar *cicchetti* (tapas venecianas de bacalao mantecato) con una copa de vino blanco *ombra* en una osteria tradicional (€12 - €18)"],"datos_curiosos":["La góndola es asimétrica: su lado izquierdo es 24 centímetros más ancho que el derecho para compensar el peso del gondolero y el remo"],"consejos":["Pagar la tarifa oficial fijada por la ciudad y exigir los 30 minutos completos de navegación"],"location_info":{"address":"Ponte di Rialto / Canales de San Polo","priceRange":"$$$ - Góndola oficial €90","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -6876,7 +6713,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'efdc5220-8763-1454-049e-d478c25285ab',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6894,7 +6731,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En la antigüedad la República de Venecia prohibía a los maestros vidrieros salir de la isla de Murano bajo pena de muerte para que ningún otro país descubriera el secreto del cristal transparente']::text[],
   '{"address":"Laguna de Venecia (Murano y Burano)","priceRange":"$$ - Transporte vaporetto","dia":9,"day":9}'::jsonb,
   270,
-  9,
   '{"dia":9,"day":9,"activities":["Demostración en vivo de maestro soplador de vidrio en fábrica de Murano (€5)","Paseo fotográfico entre las casas de colores arcoíris y canales de Burano (Gratis)","Probar las galletas tradicionales en forma de S llamadas *Bussolà de Burano* en una panadería artesanal (€5)"],"datos_curiosos":["En la antigüedad la República de Venecia prohibía a los maestros vidrieros salir de la isla de Murano bajo pena de muerte para que ningún otro país descubriera el secreto del cristal transparente"],"consejos":["Tomar el Vaporetto línea 12 desde Fondamente Nove hacia Murano y Burano (40 minutos)"],"location_info":{"address":"Laguna de Venecia (Murano y Burano)","priceRange":"$$ - Transporte vaporetto","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -6912,7 +6748,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '83a244d5-4e66-1851-e99b-2d7f50cff533',
   '3bf597d5-a65d-bceb-693e-0b7136517ed4',
@@ -6930,7 +6766,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Spritz nació en el siglo XIX cuando los soldados austriacos en Venecia encontraban el vino local demasiado fuerte y pedían que lo rociaran (*spritzen*) con un chorro de agua con gas']::text[],
   '{"address":"Calle del Fontego dei Tedeschi, Venezia","priceRange":"$ - Terraza gratuita","dia":10,"day":10}'::jsonb,
   150,
-  10,
   '{"dia":10,"day":10,"activities":["Subida a la terraza mirador panorámica de madera sobre el tejado (Acceso gratuito con reserva previa online obligatoria de turno de 15 minutos)","Brindis final de despedida con Aperol Spritz con aceituna en Campo Santa Margherita (€5)","Traslado en autobús acuático Alilaguna directo hacia el aeropuerto Marco Polo (€15)"],"datos_curiosos":["El Spritz nació en el siglo XIX cuando los soldados austriacos en Venecia encontraban el vino local demasiado fuerte y pedían que lo rociaran (*spritzen*) con un chorro de agua con gas"],"consejos":["Reservar el turno de la terraza en la web oficial de DFS Fondaco dei Tedeschi con al menos una semana de antelación"],"location_info":{"address":"Calle del Fontego dei Tedeschi, Venezia","priceRange":"$ - Terraza gratuita","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -6949,7 +6784,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #22: Reino Unido de Leyenda: De los Palacios de Londres a las Tierras Altas de Escocia (Londres, Reino Unido)
+-- Tour: Reino Unido de Leyenda: De los Palacios de Londres a las Tierras Altas de Escocia (Londres, Reino Unido)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -7008,7 +6843,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c4e45f9e-4031-2fc4-2a46-9268cfbff2cd',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7026,7 +6861,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Big Ben no es el nombre de la torre ni del reloj, sino el apodo de la campana mayor de 13.7 toneladas que marca las horas en su interior']::text[],
   '{"address":"Westminster, London SW1A","priceRange":"$ - Acceso exterior libre","dia":1,"day":1}'::jsonb,
   210,
-  1,
   '{"dia":1,"day":1,"activities":["Fotografiar el Big Ben desde el puente de Westminster (Gratis)","Presenciar el Cambio de Guardia en Buckingham a las 11:00 AM en días programados (Gratis)","Almorzar Fish & Chips tradicional con puré de guisantes en un pub histórico (£14 - £20)"],"datos_curiosos":["Big Ben no es el nombre de la torre ni del reloj, sino el apodo de la campana mayor de 13.7 toneladas que marca las horas en su interior"],"consejos":["Revisar el calendario oficial del Cambio de Guardia antes de ir; no se celebra todos los días en invierno"],"location_info":{"address":"Westminster, London SW1A","priceRange":"$ - Acceso exterior libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -7044,7 +6878,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2d205e5a-55bd-27f9-c8f1-c6df4f189277',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7062,7 +6896,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cuenta la leyenda que si los seis cuervos residentes abandonan la Torre de Londres, la fortaleza caerá y con ella la corona y el Imperio británico']::text[],
   '{"address":"Tower of London, London EC3N 4AB","priceRange":"$$ - Entrada £34.80","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Ver la corona imperial de Estado y el cetro con el diamante Cullinan I (Entrada: £34.80 adulto)","Hacer el tour guiado por los alabarderos ceremoniales vestidos de rojo conocidos como Yeoman Warders / Beefeaters (Incluido con entrada)","Cruzar la pasarela peatonal de cristal a 42 metros de altura sobre el Tower Bridge (£12.30)"],"datos_curiosos":["Cuenta la leyenda que si los seis cuervos residentes abandonan la Torre de Londres, la fortaleza caerá y con ella la corona y el Imperio británico"],"consejos":["Llegar a la apertura a las 9:00 AM e ir directamente a la sala de las Joyas de la Corona para no hacer fila"],"location_info":{"address":"Tower of London, London EC3N 4AB","priceRange":"$$ - Entrada £34.80","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -7080,7 +6913,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8c4ddc7f-7bed-a892-c0ae-64f8c565ad3e',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7098,7 +6931,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Gran Corte techada del museo diseñada por Norman Foster es la plaza pública cubierta más grande de Europa']::text[],
   '{"address":"Great Russell St, London WC1B","priceRange":"$ - Entrada gratuita","dia":3,"day":3}'::jsonb,
   210,
-  3,
   '{"dia":3,"day":3,"activities":["Ver la auténtica Piedra de Rosetta que descifró Champollion (Entrada: Gratuita para todos)","Asombrarse con las esculturas colosales de los toros alados asirios (Gratis)","Disfrutar de los espectáculos callejeros y mercadillos en la plaza techada de Covent Garden (Gratis)"],"datos_curiosos":["La Gran Corte techada del museo diseñada por Norman Foster es la plaza pública cubierta más grande de Europa"],"consejos":["Aunque la entrada es gratis, es recomendable reservar el ticket horario gratuito en la web oficial para asegurar entrada rápida"],"location_info":{"address":"Great Russell St, London WC1B","priceRange":"$ - Entrada gratuita","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -7116,7 +6948,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '28ea003a-b608-a7b7-6a3f-8cfbc83c16b8',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7134,7 +6966,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Edimburgo fue la primera ciudad del mundo en tener su propio cuerpo de bomberos municipal formal en 1824']::text[],
   '{"address":"Royal Mile, Old Town, Edinburgh","priceRange":"$$ - Tren LNER","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Foto en el Carrito de Harry Potter en King''s Cross antes de abordar el tren (Gratis)","Caminar por la Royal Mile escuchando a gaiteros escoceses vestidos con kilt tradicional (Gratis)","Cena de estofado tradicional escocés o haggis con puré de nabos y patatas (£15 - £24)"],"datos_curiosos":["Edimburgo fue la primera ciudad del mundo en tener su propio cuerpo de bomberos municipal formal en 1824"],"consejos":["Reservar asiento en el lado derecho del tren en sentido de marcha para contemplar los acantilados marinos de Northumberland"],"location_info":{"address":"Royal Mile, Old Town, Edinburgh","priceRange":"$$ - Tren LNER","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -7152,7 +6983,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b753eac9-6a0d-4dc3-c811-e03b0120c48b',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7170,7 +7001,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El castillo de Edimburgo ostenta el récord de haber sido el lugar más asediado militarmente de Gran Bretaña con 26 asedios documentados en su historia']::text[],
   '{"address":"Castlehill, Edinburgh EH1 2NG","priceRange":"$$ - Entrada £19.50","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Ver el disparo tradicional del cañón de la una en punto (One O''Clock Gun) que se realiza desde 1861 (Entrada: £19.50)","Ver la mítica Piedra de Scone sobre la que eran coronados los reyes escoceses (Gratis con entrada)","Subir a Calton Hill al atardecer para la postal panorámica clásica con el monumento a Dugald Stewart (Gratis)"],"datos_curiosos":["El castillo de Edimburgo ostenta el récord de haber sido el lugar más asediado militarmente de Gran Bretaña con 26 asedios documentados en su historia"],"consejos":["Reservar el boleto online del castillo con antelación porque suele agotarse en verano"],"location_info":{"address":"Castlehill, Edinburgh EH1 2NG","priceRange":"$$ - Entrada £19.50","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -7188,7 +7018,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '395f1969-1dc5-38c5-85cc-e61d89901b25',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7206,7 +7036,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Glen Coe fue escenario de la trágica Masacre de Glencoe de 1692, donde el clan Campbell traicionó y asesinó a sus anfitriones del clan MacDonald']::text[],
   '{"address":"Glen Coe, Ballachulish","priceRange":"$ - Acceso libre","dia":6,"day":6}'::jsonb,
   180,
-  6,
   '{"dia":6,"day":6,"activities":["Parada fotográfica en el mirador de las Three Sisters (Gratis)","Caminata corta por los senderos de turba y cascadas de montaña (Gratis)","Degustación de whisky escocés de malta en una destilería de montaña (£8 - £15)"],"datos_curiosos":["Glen Coe fue escenario de la trágica Masacre de Glencoe de 1692, donde el clan Campbell traicionó y asesinó a sus anfitriones del clan MacDonald"],"consejos":["Llevar calzado impermeable de trekking; el suelo de turba en las Highlands siempre está húmedo"],"location_info":{"address":"Glen Coe, Ballachulish","priceRange":"$ - Acceso libre","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -7224,7 +7053,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4a498209-03ac-5109-1a87-207e6c59de79',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7242,7 +7071,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La primera mención escrita sobre un monstruo en el lago data del año 565 d.C. en la biografía de San Columba']::text[],
   '{"address":"Drumnadrochit, Inverness","priceRange":"$$ - Castillo y barco","dia":7,"day":7}'::jsonb,
   240,
-  7,
   '{"dia":7,"day":7,"activities":["Paseo en barco con sonar de detección submarina por el lago (£16 - £25)","Explorar la torre de cinco pisos del Castillo de Urquhart (Entrada: £13)","Visita al Loch Ness Centre & Exhibition para conocer la leyenda del monstruo (£9)"],"datos_curiosos":["La primera mención escrita sobre un monstruo en el lago data del año 565 d.C. en la biografía de San Columba"],"consejos":["El agua del lago es negra como el café debido al alto contenido de turba en suspensión"],"location_info":{"address":"Drumnadrochit, Inverness","priceRange":"$$ - Castillo y barco","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -7260,7 +7088,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '641e4a23-d9e0-85c7-c545-ce2f2cbb6e77',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7278,7 +7106,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El viaducto fue uno de los primeros del mundo construidos enteramente con hormigón en masa sin refuerzo de varillas de acero']::text[],
   '{"address":"Glenfinnan, Highland PH37 4LT","priceRange":"$ - Mirador gratuito","dia":8,"day":8}'::jsonb,
   180,
-  8,
   '{"dia":8,"day":8,"activities":["Subir al sendero mirador de la colina para ver pasar el tren a vapor Jacobite soltando humo blanco (Gratis - pasa sobre las 10:45 AM y 3:15 PM)","Visitar el monumento a la rebelión jacobita de Bonnie Prince Charlie a orillas del Loch Shiel (Gratis)","Tomar té con scones en el antiguo vagón restaurante de la estación (£7)"],"datos_curiosos":["El viaducto fue uno de los primeros del mundo construidos enteramente con hormigón en masa sin refuerzo de varillas de acero"],"consejos":["Llegar al sendero mirador al menos 40 minutos antes del paso del tren para encontrar buen sitio"],"location_info":{"address":"Glenfinnan, Highland PH37 4LT","priceRange":"$ - Mirador gratuito","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -7296,7 +7123,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0ba9da8e-adec-20ed-b041-ec4873eac07a',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7314,7 +7141,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En la batalla del Puente de Stirling de 1297, William Wallace derrotó a un ejército inglés muy superior aprovechando el estrecho paso de madera del puente']::text[],
   '{"address":"Castle Wynd, Stirling FK8 1EJ","priceRange":"$$ - Entrada castillo","dia":9,"day":9}'::jsonb,
   200,
-  9,
   '{"dia":9,"day":9,"activities":["Recorrido por el Gran Salón Dorado y los aposentos reales renacentistas (Entrada: £16.50)","Ver la enorme espada de combate de 1.68 metros atribuida a William Wallace en su monumento (£10.50)","Almuerzo tradicional en una taberna histórica de Stirling (£15)"],"datos_curiosos":["En la batalla del Puente de Stirling de 1297, William Wallace derrotó a un ejército inglés muy superior aprovechando el estrecho paso de madera del puente"],"consejos":["Stirling queda a medio camino entre las Highlands y Edimburgo, siendo parada obligada"],"location_info":{"address":"Castle Wynd, Stirling FK8 1EJ","priceRange":"$$ - Entrada castillo","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -7332,7 +7158,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7a1fb5ac-13f2-de73-0ca7-fdae22a7a274',
   'cf3871be-e96e-0355-95ec-267ee24beb00',
@@ -7350,7 +7176,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Donde hoy están los tranquilos jardines de Princes Street existió antiguamente el Nor Loch, un lago pantanoso artificial usado como foso defensivo']::text[],
   '{"address":"Princes St, Edinburgh","priceRange":"$ - Compras locales","dia":10,"day":10}'::jsonb,
   120,
-  10,
   '{"dia":10,"day":10,"activities":["Comprar bufandas de lana pura de cordero o cachemira con tartán de clan (£20 - £45)","Tomar el té de la tarde inglés (Afternoon Tea) con sándwiches y pastas (£22 - £35)","Tranvía directo al aeropuerto de Edimburgo (£7.50 / 30 minutos)"],"datos_curiosos":["Donde hoy están los tranquilos jardines de Princes Street existió antiguamente el Nor Loch, un lago pantanoso artificial usado como foso defensivo"],"consejos":["Conservar los comprobantes de compra si aplica a devolución de impuestos"],"location_info":{"address":"Princes St, Edinburgh","priceRange":"$ - Compras locales","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -7369,7 +7194,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #23: La Gran España Monumental: De Madrid a Andalucía y el Genio de Gaudí (Madrid, España)
+-- Tour: La Gran España Monumental: De Madrid a Andalucía y el Genio de Gaudí (Madrid, España)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -7428,7 +7253,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'fbe2500a-0666-d4a9-7d25-e6e451d1edc4',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7446,7 +7271,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Palacio Real de Madrid duplica en superficie al Palacio de Versalles o al de Buckingham, siendo el mayor palacio real en funcionamiento de Europa']::text[],
   '{"address":"Calle de Bailén s/n, Madrid","priceRange":"$ - Entrada palacio €14","dia":1,"day":1}'::jsonb,
   210,
-  1,
   '{"dia":1,"day":1,"activities":["Foto en el Kilómetro Cero de las carreteras radiales de España en Puerta del Sol (Gratis)","Visita a los salones oficiales, Salón del Trono y Real Armería del Palacio Real (Entrada: €14)","Probar el castizo bocadillo de calamares con una caña bien tirada en la Plaza Mayor (€4.50)"],"datos_curiosos":["El Palacio Real de Madrid duplica en superficie al Palacio de Versalles o al de Buckingham, siendo el mayor palacio real en funcionamiento de Europa"],"consejos":["La chocolatería San Ginés de 1894 queda a 2 minutos de la plaza; abierta 24 horas para churros con chocolate caliente"],"location_info":{"address":"Calle de Bailén s/n, Madrid","priceRange":"$ - Entrada palacio €14","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -7464,7 +7288,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '293ca3e9-44de-d942-a88b-65c1f5a68369',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7482,7 +7306,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Durante la Guerra Civil española, las obras más valiosas del Prado fueron evacuadas en camiones protegidas con colchones hasta Ginebra para salvarlas de los bombardeos']::text[],
   '{"address":"Paseo del Prado s/n, Madrid","priceRange":"$$ - Entrada €15","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Admirar \"Las Meninas\" y \"El 3 de mayo en Madrid\" (Entrada general: €15 / gratis de lunes a sábado de 18:00 a 20:00)","Paseo en barca de remos por el estanque grande de El Retiro (€6 - €8)","Fotografiar el Palacio de Cristal rodeado de cipreses calvos en el agua (Gratis)"],"datos_curiosos":["Durante la Guerra Civil española, las obras más valiosas del Prado fueron evacuadas en camiones protegidas con colchones hasta Ginebra para salvarlas de los bombardeos"],"consejos":["El Prado es inmenso; solicitar en la entrada el plano gratuito de las \"50 obras maestras\" para optimizar el recorrido"],"location_info":{"address":"Paseo del Prado s/n, Madrid","priceRange":"$$ - Entrada €15","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -7500,7 +7323,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a65deead-9444-5a07-0de4-f542558feab8',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7518,7 +7341,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Toledo fue el taller de armas blancas más reputado de Europa; el acero toledano era templado en las aguas del río Tajo con una técnica secreta legendaria']::text[],
   '{"address":"Plaza del Consistorio 1, Toledo","priceRange":"$$ - Tren Avant y catedral","dia":3,"day":3}'::jsonb,
   240,
-  3,
   '{"dia":3,"day":3,"activities":["Tren Avant de alta velocidad desde Madrid Atocha a Toledo (33 minutos - €14 ida)","Visita a la Catedral Primada y su sacristía con cuadros originales de El Greco (Entrada: €10)","Vista panorámica inolvidable de la ciudad amurallada desde el Mirador del Valle (Gratis)"],"datos_curiosos":["Toledo fue el taller de armas blancas más reputado de Europa; el acero toledano era templado en las aguas del río Tajo con una técnica secreta legendaria"],"consejos":["Tomar un taxi o el autobús turístico hasta el Mirador del Valle para la foto de postal completa de la ciudad sobre el río"],"location_info":{"address":"Plaza del Consistorio 1, Toledo","priceRange":"$$ - Tren Avant y catedral","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -7536,7 +7358,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5d247f3c-45c6-b696-43eb-61122eb4cf76',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7554,7 +7376,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Real Alcázar es el palacio real en uso más antiguo de Europa y sirvió como los Jardines del Agua de Dorne en la serie *Juego de Tronos*']::text[],
   '{"address":"Patio de Banderas s/n, Sevilla","priceRange":"$$ - Entradas históricas","dia":4,"day":4}'::jsonb,
   270,
-  4,
   '{"dia":4,"day":4,"activities":["Subir las 35 rampas de la Giralda para contemplar Sevilla a vista de pájaro (Entrada catedral + Giralda: €12)","Visitar el Palacio de Don Pedro I y los Baños de Doña María de Padilla en el Real Alcázar (€14.50)","Tardeo de tapas por el laberíntico Barrio de Santa Cruz: salmorejo, jamón ibérico de bellota y espinacas con garbanzos (€15 - €25)"],"datos_curiosos":["El Real Alcázar es el palacio real en uso más antiguo de Europa y sirvió como los Jardines del Agua de Dorne en la serie *Juego de Tronos*"],"consejos":["La Giralda no tiene escalones sino rampas para que el sultán pudiera subir a caballo"],"location_info":{"address":"Patio de Banderas s/n, Sevilla","priceRange":"$$ - Entradas históricas","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -7572,7 +7393,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8db79ae8-3979-7336-0d55-3d679ffb5048',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7590,7 +7411,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los cuatro puentes que cruzan el canal representan los cuatro antiguos reinos que formaron la Corona de España: Castilla, León, Aragón y Navarra']::text[],
   '{"address":"Avenida de Isabel la Católica, Sevilla","priceRange":"$$ - Acceso plaza libre + tablao","dia":5,"day":5}'::jsonb,
   210,
-  5,
   '{"dia":5,"day":5,"activities":["Alquilar una barquita de remos en el canal de la Plaza de España (€6)","Fotografiar los bancos de azulejos de cerámica de su provincia favorita (Gratis)","Espectáculo de flamenco auténtico en vivo con cante jondo y baile en Triana (€25 - €40)"],"datos_curiosos":["Los cuatro puentes que cruzan el canal representan los cuatro antiguos reinos que formaron la Corona de España: Castilla, León, Aragón y Navarra"],"consejos":["La Plaza de España apareció en películas como *Star Wars: El Ataque de los Clones* como el palacio del planeta Naboo"],"location_info":{"address":"Avenida de Isabel la Católica, Sevilla","priceRange":"$$ - Acceso plaza libre + tablao","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -7608,7 +7428,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0f6c841c-f437-ea7a-7fed-85c5f4043cdf',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7626,7 +7446,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las inscripciones caligráficas en árabe grabadas en los muros de yeso repiten miles de veces la frase: *Wa-la galiba illa-Llah* ("No hay vencedor sino Alá")']::text[],
   '{"address":"Calle Real de la Alhambra s/n, Granada","priceRange":"$$ - Entrada oficial €19","dia":6,"day":6}'::jsonb,
   270,
-  6,
   '{"dia":6,"day":6,"activities":["Recorrido por los Palacios Nazaríes respetando la franja horaria impresa en el boleto (Entrada general: €19.09)","Pasear entre las fuentes y cipreses del Generalife (Gratis con entrada)","Subir a la Torre de la Vela en la Alcazaba militar para vista panorámica del Albaicín"],"datos_curiosos":["Las inscripciones caligráficas en árabe grabadas en los muros de yeso repiten miles de veces la frase: *Wa-la galiba illa-Llah* (\"No hay vencedor sino Alá\")"],"consejos":["Llevar el pasaporte o documento de identidad físico original; se escanea en varios puntos de acceso interno del recinto"],"location_info":{"address":"Calle Real de la Alhambra s/n, Granada","priceRange":"$$ - Entrada oficial €19","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -7644,7 +7463,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '1094e4a4-c38e-1d32-984e-3075f48f8159',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7662,7 +7481,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Granada es una de las pocas ciudades de España donde por ley tradicional cada caña o copa incluye obligatoriamente una tapa caliente gratis a elección']::text[],
   '{"address":"Plaza Mirador de San Nicolás, Granada","priceRange":"$ - Acceso libre","dia":7,"day":7}'::jsonb,
   210,
-  7,
   '{"dia":7,"day":7,"activities":["Ver ponerse el sol tiñendo de rojo las murallas de la Alhambra mientras tocan guitarra flamenca (Gratis)","Ruta de tapas por Calle Navas o Calle Elvira (en Granada la tapa es gratuita y generosa con cada bebida: €2.80 - €3.50)","Tomar un té moruno con hierbabuena y dulces árabes en las teterías de Calderería Nueva (€4 - €7)"],"datos_curiosos":["Granada es una de las pocas ciudades de España donde por ley tradicional cada caña o copa incluye obligatoriamente una tapa caliente gratis a elección"],"consejos":["Bill Clinton declaró en 1997 en San Nicolás que era \"la puesta de sol más hermosa del mundo\""],"location_info":{"address":"Plaza Mirador de San Nicolás, Granada","priceRange":"$ - Acceso libre","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -7680,7 +7498,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a63fe8a1-1cd4-8082-7510-8d0ebebe178f',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7698,7 +7516,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El emperador Carlos V, al ver la catedral construida dentro de la mezquita, exclamó: "Habéis destruido lo que era único en el mundo para construir lo que se puede ver en cualquier parte"']::text[],
   '{"address":"Calle del Cardenal Herrero 1, Córdoba","priceRange":"$$ - Entrada mezquita y AVE","dia":8,"day":8}'::jsonb,
   240,
-  8,
   '{"dia":8,"day":8,"activities":["Perderse en el bosque de columnas y admirar el Mihrab dorado califal (Entrada: €13)","Fotografiar la torre campanario enmarcada por geranios en la Calleja de las Flores (Gratis)","Tren AVE directo desde Córdoba a Barcelona Sants (4 horas y 40 minutos en alta velocidad cruzando media España - €45 - €85)"],"datos_curiosos":["El emperador Carlos V, al ver la catedral construida dentro de la mezquita, exclamó: \"Habéis destruido lo que era único en el mundo para construir lo que se puede ver en cualquier parte\""],"consejos":["Dejar el equipaje en las consignas de la estación de tren de Córdoba mientras se visita la mezquita (a 15 minutos a pie)"],"location_info":{"address":"Calle del Cardenal Herrero 1, Córdoba","priceRange":"$$ - Entrada mezquita y AVE","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -7716,7 +7533,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a6ccd06d-3a35-f513-b781-bbcf7f6a816d',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7734,7 +7551,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Gaudí sabía que no vería terminada la basílica en vida y solía decir: "Mi cliente (Dios) no tiene prisa"']::text[],
   '{"address":"Carrer de Mallorca 401, Barcelona","priceRange":"$$$ - Entrada €26","dia":9,"day":9}'::jsonb,
   270,
-  9,
   '{"dia":9,"day":9,"activities":["Visitar el interior de la Sagrada Familia y sus torres (Entrada con audioguía: €26 / con torres: €36)","Fotografiar las fachadas onduladas de Casa Batlló y La Pedrera en Paseo de Gracia (Gratis exterior)","Probar pan con tomate (pa amb tomàquet) y embutidos ibéricos en una bodega modernista (€15 - €25)"],"datos_curiosos":["Gaudí sabía que no vería terminada la basílica en vida y solía decir: \"Mi cliente (Dios) no tiene prisa\""],"consejos":["Comprar la entrada a la Sagrada Familia con semanas de anticipación en la app oficial; no hay taquillas de venta en el templo"],"location_info":{"address":"Carrer de Mallorca 401, Barcelona","priceRange":"$$$ - Entrada €26","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -7752,7 +7568,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8feb6a09-bcb6-38ac-6356-ee2a66e880a4',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7770,7 +7586,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Originalmente el proyecto estaba planeado como una urbanización privada residencial de lujo para la burguesía catalana, pero fracasó comercialmente y se convirtió en parque público']::text[],
   '{"address":"08024 Barcelona","priceRange":"$ - Entrada €10","dia":10,"day":10}'::jsonb,
   180,
-  10,
   '{"dia":10,"day":10,"activities":["Foto con la salamandra de mosaicos en la escalinata principal (Entrada zona monumental: €10)","Sentarse en el banco ergonómico ondulado de la Plaza de la Naturaleza (Gratis con entrada)","Pasear por el viaducto de columnas inclinadas de piedra natural (Gratis con entrada)"],"datos_curiosos":["Originalmente el proyecto estaba planeado como una urbanización privada residencial de lujo para la burguesía catalana, pero fracasó comercialmente y se convirtió en parque público"],"consejos":["Llegar en metro L3 (estación Lesseps o Vallcarca) y subir las escaleras mecánicas hacia el parque"],"location_info":{"address":"08024 Barcelona","priceRange":"$ - Entrada €10","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -7788,7 +7603,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e0bb250b-c11f-3973-cc62-0211f9bad237',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7806,7 +7621,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las 13 ocas del claustro de la catedral conmemoran los 13 años que tenía la patrona Santa Eulalia cuando fue martirizada']::text[],
   '{"address":"La Rambla 91 / Pla de la Seu, Barcelona","priceRange":"$$ - Moderado","dia":11,"day":11}'::jsonb,
   210,
-  11,
   '{"dia":11,"day":11,"activities":["Caminar por el Puente del Obispo en la calle del Bisbe y buscar la calavera esculpida (Gratis)","Visitar el claustro de la Catedral de Barcelona con sus 13 ocas blancas sagradas (€9)","Probar tapas de mariscos al momento en los bares de taburete de La Boquería (€18 - €30)"],"datos_curiosos":["Las 13 ocas del claustro de la catedral conmemoran los 13 años que tenía la patrona Santa Eulalia cuando fue martirizada"],"consejos":["Cuidar bolsos y móviles en Las Ramblas y zonas concurridas de La Boquería"],"location_info":{"address":"La Rambla 91 / Pla de la Seu, Barcelona","priceRange":"$$ - Moderado","dia":11,"day":11}}'::jsonb,
   now()
 );
@@ -7824,7 +7638,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b50eeb95-889c-24d1-7e22-01049e5857c9',
   '5c494fe7-38cd-d529-0804-66361a72c65d',
@@ -7842,7 +7656,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las playas de Barcelona no existían como tales hasta antes de los Juegos Olímpicos de 1992, cuando la ciudad derribó viejas naves industriales para abrirse completamente al mar']::text[],
   '{"address":"Passeig Marítim de la Barceloneta","priceRange":"$$ - Almuerzo paella","dia":12,"day":12}'::jsonb,
   150,
-  12,
   '{"dia":12,"day":12,"activities":["Paseo a pie o en bicicleta por el paseo marítimo hasta la torre en forma de vela del Hotel W (Gratis)","Almuerzo de despedida: paella marinera con gambas y mejillones (€22 - €35)","Tomar el tren Aeroport R2 Nord desde Passeig de Gràcia o Aerobús hacia la T1/T2 (€6.75)"],"datos_curiosos":["Las playas de Barcelona no existían como tales hasta antes de los Juegos Olímpicos de 1992, cuando la ciudad derribó viejas naves industriales para abrirse completamente al mar"],"consejos":["El Aerobús sale cada 5 minutos desde Plaza Cataluña y llega al aeropuerto El Prat en 35 minutos"],"location_info":{"address":"Passeig Marítim de la Barceloneta","priceRange":"$$ - Almuerzo paella","dia":12,"day":12}}'::jsonb,
   now()
 );
@@ -7861,7 +7674,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #24: Dubái & Abu Dhabi de Vanguardia: Rascacielos Iluminados y Desierto (Dubái, Emiratos Árabes Unidos)
+-- Tour: Dubái & Abu Dhabi de Vanguardia: Rascacielos Iluminados y Desierto (Dubái, Emiratos Árabes Unidos)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -7920,7 +7733,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0132caf9-108c-d9aa-b0de-cbf826c47e0e',
   '2b35778f-e532-240f-7e7f-9661353ee469',
@@ -7938,7 +7751,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los ascensores del Burj Khalifa suben a 10 metros por segundo (36 km/h), tardando solo 60 segundos en llegar al piso 124']::text[],
   '{"address":"1 Sheikh Mohammed bin Rashid Blvd, Downtown Dubai","priceRange":"$$$ - Mirador y cenas","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Subir en el ascensor ultrarrápido al mirador At the Top piso 124/125 (Entrada: ~179 AED / ~$48 USD)","Ver el show de fuentes sincronizadas que se celebra gratis cada 30 minutos a partir de las 6:00 PM (Gratis)","Cenar shawarma gourmet o mariscos en las terrazas de Souk Al Bahar frente al espectáculo (80 - 160 AED)"],"datos_curiosos":["Los ascensores del Burj Khalifa suben a 10 metros por segundo (36 km/h), tardando solo 60 segundos en llegar al piso 124"],"consejos":["Los mejores sitios gratuitos para ver las fuentes son el puente que cruza a Souk Al Bahar y la terraza de Apple Dubai Mall"],"location_info":{"address":"1 Sheikh Mohammed bin Rashid Blvd, Downtown Dubai","priceRange":"$$$ - Mirador y cenas","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -7956,7 +7768,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2a31a423-e287-fff6-c713-a29feb1ff9e9',
   '2b35778f-e532-240f-7e7f-9661353ee469',
@@ -7974,7 +7786,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Marina de Dubái fue excavada completamente en el desierto trayendo el agua de mar del Golfo Pérsico a través de un canal de 3 kilómetros']::text[],
   '{"address":"Dubai Marina Walk, Dubai","priceRange":"$$ - Moderado","dia":2,"day":2}'::jsonb,
   210,
-  2,
   '{"dia":2,"day":2,"activities":["Crucero nocturno en dhow tradicional de madera con cena buffet navegando por la Marina (120 - 180 AED)","Caminar por The Walk en Jumeirah Beach Residence junto a la playa (Gratis)","Tomar un cóctel sin alcohol o té helado en un rooftop lounge con vistas panorámicas (45 - 80 AED)"],"datos_curiosos":["La Marina de Dubái fue excavada completamente en el desierto trayendo el agua de mar del Golfo Pérsico a través de un canal de 3 kilómetros"],"consejos":["Tomar el tranvía de Dubái que conecta la Marina con el metro y la estación de monorraíl de la Palmera"],"location_info":{"address":"Dubai Marina Walk, Dubai","priceRange":"$$ - Moderado","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -7992,7 +7803,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '6ea2a67b-607d-f8d4-70ac-f570d23993b2',
   '2b35778f-e532-240f-7e7f-9661353ee469',
@@ -8010,7 +7821,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La arena del desierto de Al Lahbab es intensamente roja debido a una alta concentración de óxido de hierro natural en los granos de cuarzo']::text[],
   '{"address":"Al Lahbab Desert, Dubai","priceRange":"$$ - Safari todo incluido","dia":3,"day":3}'::jsonb,
   360,
-  3,
   '{"dia":3,"day":3,"activities":["Dune bashing en 4x4 y sandboarding por las dunas rojas (Tour completo con cena: 150 - 250 AED / ~$40 - $68 USD)","Paseo en camello al atardecer (Incluido en el safari)","Cena barbacoa árabe con espectáculo de danza Tanoura y fuego bajo las estrellas"],"datos_curiosos":["La arena del desierto de Al Lahbab es intensamente roja debido a una alta concentración de óxido de hierro natural en los granos de cuarzo"],"consejos":["No comer pesado antes del safari en 4x4 para evitar mareos con los movimientos bruscos en las dunas"],"location_info":{"address":"Al Lahbab Desert, Dubai","priceRange":"$$ - Safari todo incluido","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -8028,7 +7838,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '633d327b-c8f5-6611-5a8f-3afdfb472ddd',
   '2b35778f-e532-240f-7e7f-9661353ee469',
@@ -8046,7 +7856,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La alfombra de la sala principal de oración pesa 35 toneladas y fue tejida a mano por 1.200 artesanas iraníes durante dos años de trabajo']::text[],
   '{"address":"Al Rawdah, Abu Dhabi","priceRange":"$ - Mezquita gratis","dia":4,"day":4}'::jsonb,
   300,
-  4,
   '{"dia":4,"day":4,"activities":["Entrar a la Gran Mezquita y descalzarse sobre la mayor alfombra de nudo hecha a mano del mundo (Entrada gratuita con reserva previa online)","Admirar las lámparas de araña de cristal de Swarovski bañado en oro de 24 quilates (Gratis)","Visitar el Louvre Abu Dhabi diseñado por Jean Nouvel (Entrada: 63 AED / ~$17 USD)"],"datos_curiosos":["La alfombra de la sala principal de oración pesa 35 toneladas y fue tejida a mano por 1.200 artesanas iraníes durante dos años de trabajo"],"consejos":["Abu Dhabi queda a 1 hora y 15 minutos en autobús o taxi desde Dubái","La mezquita iluminada en tonos azules al anochecer según las fases de la luna es indescriptible"],"location_info":{"address":"Al Rawdah, Abu Dhabi","priceRange":"$ - Mezquita gratis","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -8064,7 +7873,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd601debb-4f5c-7ca1-5277-aa955ad8ac35',
   '2b35778f-e532-240f-7e7f-9661353ee469',
@@ -8082,7 +7891,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Todo el oro vendido en el Gold Souk está estrictamente controlado e inspeccionado por el gobierno de Dubái garantizando su autenticidad']::text[],
   '{"address":"Deira, Al Sabkha, Dubai","priceRange":"$ - Abra 1 AED","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Cruzar la ría en una barca de madera tradicional *abra* (Pasaje: 1 AED / ~$0.27 USD)","Ver el anillo de oro más pesado del mundo (*Najmat Taiba* de 64 kilos) en el Zoco del Oro (Gratis)","Comprar dátiles rellenos de almendra bañados en chocolate y té de azafrán (25 - 60 AED)"],"datos_curiosos":["Todo el oro vendido en el Gold Souk está estrictamente controlado e inspeccionado por el gobierno de Dubái garantizando su autenticidad"],"consejos":["En los zocos de especias y souvenirs es tradicional y esperado regatear amablemente los precios"],"location_info":{"address":"Deira, Al Sabkha, Dubai","priceRange":"$ - Abra 1 AED","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -8101,7 +7909,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #25: Japón Esencial: Del Neón Futurista de Tokio a los Santuarios Zen de Kioto (Tokio, Japón)
+-- Tour: Japón Esencial: Del Neón Futurista de Tokio a los Santuarios Zen de Kioto (Tokio, Japón)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -8160,7 +7968,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5a5cae0f-936c-5cfe-0938-b6515741a057',
   'c39621f2-73b4-1060-1481-02996f41b185',
@@ -8178,7 +7986,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Hachiko esperó diariamente en esta misma salida de la estación a su dueño, el profesor Ueno, durante casi 10 años después de que este falleciera repentinamente']::text[],
   '{"address":"Shibuya City, Tokyo 150-0043","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Cruzar el paso de cebra de Shibuya en diagonal sintiendo la marea humana (Gratis)","Foto con la estatua de bronce del perro Hachiko (Gratis)","Subir al mirador al aire libre Shibuya Sky en el piso 47 para la vista vertiginosa del cruce (Entrada: ~2.200 - 2.500 JPY / ~$15 USD)"],"datos_curiosos":["Hachiko esperó diariamente en esta misma salida de la estación a su dueño, el profesor Ueno, durante casi 10 años después de que este falleciera repentinamente"],"consejos":["Reservar Shibuya Sky en el horario de las 5:00 PM para ver el atardecer y el encendido de los neones nocturnos"],"location_info":{"address":"Shibuya City, Tokyo 150-0043","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -8196,7 +8003,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd59bcb90-83f4-b6ba-7a95-382693463a29',
   'c39621f2-73b4-1060-1481-02996f41b185',
@@ -8214,7 +8021,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El templo fue erigido después de que dos hermanos pescadores hallaran en el río Sumida una estatua de oro de la diosa Kannon que nunca volvió a sumergirse']::text[],
   '{"address":"2 Chome-3-1 Asakusa, Taito City","priceRange":"$ - Entrada templo gratis","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Purificarse con el humo de incienso medicinal frente a la pagoda de Sensō-ji (Gratis)","Probar dulces tradicionales de melón pan caliente y dango en la calle Nakamise (200 - 500 JPY)","Explorar las tiendas de electrónica y recreativas de Akihabara como Mandarake y Radio Kaikan (Gratis)"],"datos_curiosos":["El templo fue erigido después de que dos hermanos pescadores hallaran en el río Sumida una estatua de oro de la diosa Kannon que nunca volvió a sumergirse"],"consejos":["Sacar un papel de la fortuna *Omikuji* en el templo echando una moneda de 100 JPY; si sale mala fortuna se ata a un alambre para dejarla atrás"],"location_info":{"address":"2 Chome-3-1 Asakusa, Taito City","priceRange":"$ - Entrada templo gratis","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -8232,7 +8038,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '11e82c9c-e7b5-41d3-50eb-e37dcc86537f',
   'c39621f2-73b4-1060-1481-02996f41b185',
@@ -8250,7 +8056,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El bosque no existía de forma natural; fue plantado artificialmente en 1920 con más de 100.000 árboles donados por ciudadanos de todo Japón']::text[],
   '{"address":"1-1 Yoyogikamizonocho, Shibuya","priceRange":"$ - Acceso libre","dia":3,"day":3}'::jsonb,
   200,
-  3,
   '{"dia":3,"day":3,"activities":["Cruzar bajo el colosal torii de madera de ciprés japonés de 1.500 años (Gratis)","Fotografiar el muro ceremonial de barriles de sake decorados donados al emperador (Gratis)","Comer una crepe japonesa enrollada con fresas, nata y tarta de queso en Takeshita (600 - 900 JPY)"],"datos_curiosos":["El bosque no existía de forma natural; fue plantado artificialmente en 1920 con más de 100.000 árboles donados por ciudadanos de todo Japón"],"consejos":["Los fines de semana por la mañana es muy habitual presenciar procesiones solemnes de bodas sintoístas tradicionales con novios en kimono blanco y negro"],"location_info":{"address":"1-1 Yoyogikamizonocho, Shibuya","priceRange":"$ - Acceso libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -8268,7 +8073,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0372f4cc-fc6a-1edf-0fd5-4a8fd4bc9ee3',
   'c39621f2-73b4-1060-1481-02996f41b185',
@@ -8286,7 +8091,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cada una de las 10.000 puertas torii fue donada por una empresa o familia japonesa, y lleva grabado en negro el nombre del donante y la fecha']::text[],
   '{"address":"68 Fukakusa Yabunouchicho, Fushimi Ward, Kyoto","priceRange":"$$ - Tren bala ~14.000 JPY","dia":4,"day":4}'::jsonb,
   270,
-  4,
   '{"dia":4,"day":4,"activities":["Comprar un bento en la estación de Tokio para almorzar en el tren bala (~1.200 JPY)","Caminar bajo los túneles de toriis bermellones custodiados por estatuas del zorro Kitsune (Entrada gratuita)","Paseo al atardecer por las calles de casas de madera de Gion buscando geishas (Gratis)"],"datos_curiosos":["Cada una de las 10.000 puertas torii fue donada por una empresa o familia japonesa, y lleva grabado en negro el nombre del donante y la fecha"],"consejos":["Reservar asiento en el lado derecho (fila E) del tren bala desde Tokio para divisar el Monte Fuji a los 45 minutos de trayecto","El santuario nunca cierra; visitarlo al atardecer o noche con farolillos encendidos es una experiencia mágica"],"location_info":{"address":"68 Fukakusa Yabunouchicho, Fushimi Ward, Kyoto","priceRange":"$$ - Tren bala ~14.000 JPY","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -8304,7 +8108,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a2aebd3e-ecce-0b26-bc1a-b76775596d07',
   'c39621f2-73b4-1060-1481-02996f41b185',
@@ -8322,7 +8126,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El sonido del viento balanceando las cañas de bambú de Arashiyama fue incluido por el Ministerio de Medio Ambiente de Japón en la lista oficial de los "100 paisajes sonoros a preservar"']::text[],
   '{"address":"1 Kinkakujicho, Kita Ward, Kyoto","priceRange":"$ - Entrada 500 JPY","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Fotografiar el reflejo dorado del templo sobre las aguas del estanque (Entrada: 500 JPY / ~$3.5 USD)","Pasear en silencio por el sendero del bosque de bambú de Arashiyama (Gratis)","Probar helado artesanal de té verde matcha con galleta en el pueblo (450 JPY)"],"datos_curiosos":["El sonido del viento balanceando las cañas de bambú de Arashiyama fue incluido por el Ministerio de Medio Ambiente de Japón en la lista oficial de los \"100 paisajes sonoros a preservar\""],"consejos":["Llegar al bosque de bambú antes de las 8:30 AM para disfrutarlo sin muchedumbres y escuchar el crujido del viento entre las cañas"],"location_info":{"address":"1 Kinkakujicho, Kita Ward, Kyoto","priceRange":"$ - Entrada 500 JPY","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -8340,7 +8143,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ee7b1b19-19d4-11fe-76b0-101a2a985653',
   'c39621f2-73b4-1060-1481-02996f41b185',
@@ -8358,7 +8161,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los ciervos de Nara han aprendido a imitar el saludo tradicional japonés inclinando la cabeza antes de recibir su galleta']::text[],
   '{"address":"406-1 Zoshicho, Nara, 630-8211","priceRange":"$ - Entrada 600 JPY","dia":6,"day":6}'::jsonb,
   240,
-  6,
   '{"dia":6,"day":6,"activities":["Comprar galletas de arroz *shika-senbei* para alimentar a los ciervos que hacen reverencias (200 JPY)","Entrar a la nave colosal de Tōdai-ji y admirar la estatua de 500 toneladas del Gran Buda (Entrada: 600 JPY)","Pasar por el agujero del pilar de madera del templo que otorga iluminación espiritual (Gratis con entrada)"],"datos_curiosos":["Los ciervos de Nara han aprendido a imitar el saludo tradicional japonés inclinando la cabeza antes de recibir su galleta"],"consejos":["El tren Kintetsu desde Kioto llega a la estación Kintetsu-Nara en 35 minutos (760 JPY)"],"location_info":{"address":"406-1 Zoshicho, Nara, 630-8211","priceRange":"$ - Entrada 600 JPY","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -8376,7 +8178,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e15b4bc0-94b5-734d-d55f-af1bb588fd76',
   'c39621f2-73b4-1060-1481-02996f41b185',
@@ -8394,7 +8196,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El mercado prosperó en este lugar gracias al agua subterránea fría natural que permitía conservar los pescados frescos antes de la refrigeración eléctrica']::text[],
   '{"address":"Nakagyo Ward, Kyoto","priceRange":"$$ - Gastronomía callejera","dia":7,"day":7}'::jsonb,
   150,
-  7,
   '{"dia":7,"day":7,"activities":["Degustar brocheta de ternera wagyu tierna A5 flambeada al momento (800 - 1.500 JPY)","Comprar latas de té verde matcha ceremonial Uji de primera cosecha (1.000 - 2.500 JPY)","Traslado en tren Haruka directo al aeropuerto internacional de Kansai (KIX) o Shinkansen de retorno a Tokio"],"datos_curiosos":["El mercado prosperó en este lugar gracias al agua subterránea fría natural que permitía conservar los pescados frescos antes de la refrigeración eléctrica"],"consejos":["En el mercado está prohibido caminar mientras se come; consumir los alimentos delante del puesto donde se compraron"],"location_info":{"address":"Nakagyo Ward, Kyoto","priceRange":"$$ - Gastronomía callejera","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -8413,7 +8214,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #26: Tailandia de Sabores y Playas: De los Mercados de Bangkok a los Acantilados de Krabi (Bangkok, Tailandia)
+-- Tour: Tailandia de Sabores y Playas: De los Mercados de Bangkok a los Acantilados de Krabi (Bangkok, Tailandia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -8472,7 +8273,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a3de34a3-b55a-bcd6-5a4a-4d726acf6d55',
   '7a8e8bd7-813e-9182-ac0f-eef333e5af9c',
@@ -8490,7 +8291,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El rey de Tailandia en persona cambia tres veces al año las vestiduras de oro del Buda de Esmeralda para marcar el inicio del verano, el invierno y la temporada de lluvias']::text[],
   '{"address":"Na Phra Lan Rd, Phra Borom Maha Ratchawang, Bangkok","priceRange":"$$ - Entrada 500 THB","dia":1,"day":1}'::jsonb,
   210,
-  1,
   '{"dia":1,"day":1,"activities":["Visitar el recinto real y el Buda de Esmeralda con vestiduras de oro cambiadas por el rey (Entrada: 500 THB / ~$14 USD)","Probar el auténtico Pad Thai con gambas frescas y cacahuete molido en un puesto callejero (60 - 100 THB / ~$2 USD)","Paseo en barco público de bandera naranja por el río Chao Phraya (16 THB)"],"datos_curiosos":["El rey de Tailandia en persona cambia tres veces al año las vestiduras de oro del Buda de Esmeralda para marcar el inicio del verano, el invierno y la temporada de lluvias"],"consejos":["Estricto código de vestimenta: no se permite entrar con camisetas sin mangas, mallas ajustadas ni pantalones cortos"],"location_info":{"address":"Na Phra Lan Rd, Phra Borom Maha Ratchawang, Bangkok","priceRange":"$$ - Entrada 500 THB","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -8508,7 +8308,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'db646103-0519-b024-b5c0-225e72636ec4',
   '7a8e8bd7-813e-9182-ac0f-eef333e5af9c',
@@ -8526,7 +8326,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Wat Pho es la sede de la primera universidad pública de Tailandia y la cuna histórica donde se sistematizó el masaje tailandés tradicional reconocido por la UNESCO']::text[],
   '{"address":"Sanam Chai Rd, Wat Arun, Bangkok","priceRange":"$ - Entradas accesibles","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Admirar los pies de nácar del Buda y depositar monedas en los 108 cuencos de bronce (Entrada: 300 THB)","Disfrutar de un masaje tradicional tailandés de 1 hora en la escuela de masaje del templo (350 - 500 THB)","Cruzar en ferry local por 5 THB para subir las escalinatas de Wat Arun (Entrada: 100 THB)"],"datos_curiosos":["Wat Pho es la sede de la primera universidad pública de Tailandia y la cuna histórica donde se sistematizó el masaje tailandés tradicional reconocido por la UNESCO"],"consejos":["El atardecer contemplando la silueta de Wat Arun desde los bares ribereños del lado opuesto es inolvidable"],"location_info":{"address":"Sanam Chai Rd, Wat Arun, Bangkok","priceRange":"$ - Entradas accesibles","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -8544,7 +8343,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '3db73691-c25b-45c0-6857-26c98a556858',
   '7a8e8bd7-813e-9182-ac0f-eef333e5af9c',
@@ -8562,7 +8361,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los toldos y toldillos se repliegan tan sincronizadamente que el mercado es apodado popularmente *Talat Rom Hup* ("el mercado de los toldos que se cierran")']::text[],
   '{"address":"Samut Songkhram / Ratchaburi","priceRange":"$$ - Excursión compartida","dia":3,"day":3}'::jsonb,
   270,
-  3,
   '{"dia":3,"day":3,"activities":["Ver pasar el tren a centímetros de los canastos de fruta (Gratis)","Paseo en canoa de madera por los canales del mercado flotante comiendo fideos de bote (200 - 300 THB)","Probar el postre nacional Mango Sticky Rice con leche de coco tibia (60 - 100 THB)"],"datos_curiosos":["Los toldos y toldillos se repliegan tan sincronizadamente que el mercado es apodado popularmente *Talat Rom Hup* (\"el mercado de los toldos que se cierran\")"],"consejos":["El tren pasa a horarios exactos (aprox. 8:30, 11:10, 14:30); coordinar la excursión para coincidir"],"location_info":{"address":"Samut Songkhram / Ratchaburi","priceRange":"$$ - Excursión compartida","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -8580,7 +8378,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '9f6a30e2-32c3-cb72-9cf7-fa28c18c0612',
   '7a8e8bd7-813e-9182-ac0f-eef333e5af9c',
@@ -8598,7 +8396,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Buda de oro macizo de Wat Traimit estuvo recubierto de yeso durante dos siglos para ocultarlo de los invasores birmanos; su verdadero oro se descubrió accidentalmente en 1955 cuando cayó de una grúa']::text[],
   '{"address":"Yaowarat Rd, Samphanthawong, Bangkok","priceRange":"$ - Gastronomía callejera","dia":4,"day":4}'::jsonb,
   210,
-  4,
   '{"dia":4,"day":4,"activities":["Ver el Buda de Oro macizo de 5.5 toneladas en Wat Traimit (Entrada: 100 THB)","Safari gastronómico de puesto en puesto probando dumplings, mariscos salteados y fideos al wok (200 - 400 THB por banquete completo)","Paseo nocturno en tuk-tuk con luces de colores por las avenidas de la ciudad (150 - 250 THB)"],"datos_curiosos":["El Buda de oro macizo de Wat Traimit estuvo recubierto de yeso durante dos siglos para ocultarlo de los invasores birmanos; su verdadero oro se descubrió accidentalmente en 1955 cuando cayó de una grúa"],"consejos":["Acordar el precio del tuk-tuk antes de subirse para evitar malentendidos"],"location_info":{"address":"Yaowarat Rd, Samphanthawong, Bangkok","priceRange":"$ - Gastronomía callejera","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -8616,7 +8413,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd6786488-2b68-91de-32db-f606576512c3',
   '7a8e8bd7-813e-9182-ac0f-eef333e5af9c',
@@ -8634,7 +8431,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las montañas kársticas de Krabi son restos de un antiguo arrecife de coral prehistórico que emergió hace millones de años']::text[],
   '{"address":"Ao Nang, Mueang Krabi District","priceRange":"$$ - Restaurantes de playa","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Caminata por la playa de Ao Nang contemplando las lanchas tradicionales longtail amarradas (Gratis)","Cena marinera frente al mar: pescado entero al vapor con lima y chile o curry verde tailandés (250 - 450 THB)","Masaje de pies con aceites aromáticos junto a la playa (200 THB / ~$6 USD)"],"datos_curiosos":["Las montañas kársticas de Krabi son restos de un antiguo arrecife de coral prehistórico que emergió hace millones de años"],"consejos":["El taxi regulado desde el aeropuerto de Krabi hasta Ao Nang cuesta 600 THB (fijo)"],"location_info":{"address":"Ao Nang, Mueang Krabi District","priceRange":"$$ - Restaurantes de playa","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -8652,7 +8448,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f96b214c-c06c-2055-1d5d-7ba91a3a541a',
   '7a8e8bd7-813e-9182-ac0f-eef333e5af9c',
@@ -8670,7 +8466,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La cueva de Phra Nang alberga un santuario donde los pescadores locales dejan ofrendas de madera para pedir buena pesca y protección marina']::text[],
   '{"address":"Railay Beach, Krabi","priceRange":"$ - Barca 100 THB","dia":6,"day":6}'::jsonb,
   300,
-  6,
   '{"dia":6,"day":6,"activities":["Travesía de 10 minutos en longtail boat desde Ao Nang hasta Railay (100 THB por trayecto)","Nadar bajo los acantilados de Phra Nang Beach (Gratis)","Alquiler de kayak para rodear los islotes kársticos (200 THB por hora)"],"datos_curiosos":["La cueva de Phra Nang alberga un santuario donde los pescadores locales dejan ofrendas de madera para pedir buena pesca y protección marina"],"consejos":["Para subir a la barca longtail se camina unos pasos dentro del agua hasta las rodillas; llevar calzado de agua o descalzarse"],"location_info":{"address":"Railay Beach, Krabi","priceRange":"$ - Barca 100 THB","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -8688,7 +8483,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4cf3b933-e906-2531-61eb-cd7332773bfc',
   '7a8e8bd7-813e-9182-ac0f-eef333e5af9c',
@@ -8706,7 +8501,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Maya Bay estuvo cerrada al turismo durante más de tres años para permitir la regeneración total de sus arrecifes de coral dañados']::text[],
   '{"address":"Ko Phi Phi Leh, Parque Nacional Marino","priceRange":"$$$ - Tour en lancha","dia":7,"day":7}'::jsonb,
   360,
-  7,
   '{"dia":7,"day":7,"activities":["Excursión en lancha rápida de día completo desde Krabi con snorkel (1.400 - 2.000 THB + tasa Parque Nacional 400 THB)","Snorkel con peces ángel, peces payaso y tiburones punta negra de arrecife inofensivos (Incluido en el tour)","Saltar al agua transparente desde la barca en Pileh Lagoon"],"datos_curiosos":["Maya Bay estuvo cerrada al turismo durante más de tres años para permitir la regeneración total de sus arrecifes de coral dañados"],"consejos":["En Maya Bay está estrictamente prohibido bañarse más allá de los tobillos para proteger el ecosistema de tiburones bebé que regresaron tras años de cierre ecológico"],"location_info":{"address":"Ko Phi Phi Leh, Parque Nacional Marino","priceRange":"$$$ - Tour en lancha","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -8724,7 +8518,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a2960495-bade-e9b9-bbc7-d52898bc335e',
   '7a8e8bd7-813e-9182-ac0f-eef333e5af9c',
@@ -8742,7 +8536,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Chicken Island (Koh Kai) recibe su nombre por una caprichosa formación de roca caliza en su extremo que se asemeja con asombrosa precisión a la cabeza de un pollo gigante']::text[],
   '{"address":"Four Islands, Krabi","priceRange":"$$ - Excursión 4 Islas","dia":8,"day":8}'::jsonb,
   300,
-  8,
   '{"dia":8,"day":8,"activities":["Caminar sobre el banco de arena entre las islas durante la marea baja (*Talay Waek*) (Gratis)","Descanso bajo los pinos marítimos de la playa de Koh Poda","Almuerzo tipo picnic tailandés servido en la arena con curry Massaman y fruta fresca (Incluido en el tour: ~800 - 1.200 THB)"],"datos_curiosos":["Chicken Island (Koh Kai) recibe su nombre por una caprichosa formación de roca caliza en su extremo que se asemeja con asombrosa precisión a la cabeza de un pollo gigante"],"consejos":["Llevar calzado de agua para cruzar el banco de arena entre piedras y corales rotos"],"location_info":{"address":"Four Islands, Krabi","priceRange":"$$ - Excursión 4 Islas","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -8760,7 +8553,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ca117c6a-796e-757c-8e6f-ba51c0448bfd',
   '7a8e8bd7-813e-9182-ac0f-eef333e5af9c',
@@ -8778,7 +8571,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La cueva toma su nombre de una leyenda según la cual un monje que meditaba en el bosque vivía en armonía con un tigre que habitaba la cueva natural']::text[],
   '{"address":"Krabi Noi, Mueang Krabi District","priceRange":"$ - Entrada libre","dia":9,"day":9}'::jsonb,
   180,
-  9,
   '{"dia":9,"day":9,"activities":["Subida de superación personal por los 1.260 escalones hasta el santuario de la cima (Entrada gratuita)","Ver la huella de tigre en la roca dentro de la cueva sagrada (Gratis)","Comprar pasta de curry casera y aceite de coco virgen antes del traslado al aeropuerto"],"datos_curiosos":["La cueva toma su nombre de una leyenda según la cual un monje que meditaba en el bosque vivía en armonía con un tigre que habitaba la cueva natural"],"consejos":["Subir temprano a las 7:30 AM con abundante agua; la subida es muy empinada y exigente físicamente pero la vista lo recompensa con creces"],"location_info":{"address":"Krabi Noi, Mueang Krabi District","priceRange":"$ - Entrada libre","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -8797,7 +8589,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #27: Turquía de Oriente a Occidente: Estambul, Capadocia y Éfeso (Estambul, Turquía)
+-- Tour: Turquía de Oriente a Occidente: Estambul, Capadocia y Éfeso (Estambul, Turquía)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -8856,7 +8648,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '385ed3c4-acef-0178-498c-1d6cc90f3b3a',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -8874,7 +8666,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Santa Sofía fue la iglesia catedral más grande del mundo cristiano durante casi mil años hasta la construcción de la Catedral de Sevilla en 1520']::text[],
   '{"address":"Sultan Ahmet, Fatih, İstanbul","priceRange":"$$ - Entrada Santa Sofía €25","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Visitar la galería superior de Santa Sofía y admirar los mosaicos de Cristo Pantocrátor (Entrada: €25)","Entrar a la Mezquita Azul descalzándose sobre las alfombras rojas (Entrada gratuita)","Tomar té turco en vaso de tulipán con un kebab tradicional de cordero (€8 - €15)"],"datos_curiosos":["Santa Sofía fue la iglesia catedral más grande del mundo cristiano durante casi mil años hasta la construcción de la Catedral de Sevilla en 1520"],"consejos":["Las mujeres deben cubrir su cabello con velo para ingresar; si no llevan, en la entrada prestan o venden pañuelos"],"location_info":{"address":"Sultan Ahmet, Fatih, İstanbul","priceRange":"$$ - Entrada Santa Sofía €25","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -8892,7 +8683,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '99aa2064-c45e-6ac5-2e6f-62489b1253f9',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -8910,7 +8701,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Dos de las columnas de la Cisterna Basílica se apoyan sobre bloques de mármol tallados con el rostro de Medusa colocados deliberadamente boca abajo y de lado']::text[],
   '{"address":"Cankurtaran / Beyazıt, Fatih","priceRange":"$$$ - Entradas históricas","dia":2,"day":2}'::jsonb,
   300,
-  2,
   '{"dia":2,"day":2,"activities":["Visitar las salas de armas y el diamante Cucharero de 86 quilates en Topkapi (Entrada combinada: ~€45)","Caminar sobre las pasarelas de la Cisterna Basílica con su atmósfera mágica (Entrada: ~€20)","Perderse por las 60 calles del Gran Bazar regateando lámparas de mosaico y especias (Gratis)"],"datos_curiosos":["Dos de las columnas de la Cisterna Basílica se apoyan sobre bloques de mármol tallados con el rostro de Medusa colocados deliberadamente boca abajo y de lado"],"consejos":["En el Gran Bazar regatear con respeto: comenzar ofreciendo alrededor del 50-60% del precio inicial pedido"],"location_info":{"address":"Cankurtaran / Beyazıt, Fatih","priceRange":"$$$ - Entradas históricas","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -8928,7 +8718,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f461c85e-d1a8-7a99-70b2-ba43c9078489',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -8946,7 +8736,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Bósforo es la única vía fluvial navegable que conecta el Mar Negro con el Mar Mediterráneo']::text[],
   '{"address":"Eminönü / Karaköy, İstanbul","priceRange":"$$ - Ferry y vuelo","dia":3,"day":3}'::jsonb,
   240,
-  3,
   '{"dia":3,"day":3,"activities":["Crucero de 1.5 horas por el Bósforo en ferry público o barco panorámico (€5 - €15)","Subir a la Torre Gálata genovesa de 1348 para vista de 360 grados del Cuerno de Oro (€30)","Probar el sándwich de pescado a la plancha *balık ekmek* junto al puente de Gálata (€4)"],"datos_curiosos":["El Bósforo es la única vía fluvial navegable que conecta el Mar Negro con el Mar Mediterráneo"],"consejos":["Tomar el vuelo de última hora de la tarde a Capadocia para dormir ya en un hotel cueva en Göreme"],"location_info":{"address":"Eminönü / Karaköy, İstanbul","priceRange":"$$ - Ferry y vuelo","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -8964,7 +8753,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ea1014c0-c06e-5aaf-442b-e20e53262928',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -8982,7 +8771,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El paisaje de Capadocia se formó por las cenizas volcánicas de los volcanes Erciyes y Hasan hace millones de años, erosionadas por el viento y la lluvia en forma de chimeneas de hadas']::text[],
   '{"address":"Göreme, Nevşehir, Capadocia","priceRange":"$$$$ - Vuelo en globo","dia":4,"day":4}'::jsonb,
   300,
-  4,
   '{"dia":4,"day":4,"activities":["Vuelo en globo aerostático de 1 hora al amanecer con brindis con champán (€150 - €240 según temporada)","Visitar las iglesias rupestres de San Onofre y la Iglesia Oscura (Entrada: €20)","Cena tradicional en restaurante cueva: testi kebab (carne cocinada dentro de una vasija de barro sellada que se rompe con fuego ante el comensal: €15 - €25)"],"datos_curiosos":["El paisaje de Capadocia se formó por las cenizas volcánicas de los volcanes Erciyes y Hasan hace millones de años, erosionadas por el viento y la lluvia en forma de chimeneas de hadas"],"consejos":["Abrigarse bien para el despegue matutino del globo; en la cesta a 800 metros de altura hace frío antes de que salga el sol"],"location_info":{"address":"Göreme, Nevşehir, Capadocia","priceRange":"$$$$ - Vuelo en globo","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -9000,7 +8788,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c56b5fe3-1155-d895-8832-fd0e7dbd789b',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -9018,7 +8806,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Derinkuyu fue descubierta por casualidad en 1963 cuando un habitante local derribó una pared de su sótano y halló una misteriosa habitación que conducía al laberinto subterráneo']::text[],
   '{"address":"Derinkuyu, Nevşehir","priceRange":"$$ - Excursión tour verde","dia":5,"day":5}'::jsonb,
   270,
-  5,
   '{"dia":5,"day":5,"activities":["Descender por los túneles estrechos de Derinkuyu cerrados por muelas de molino gigantes de piedra (Entrada: €13)","Caminata de 4 km a orillas del río por el cañón de Ihlara con iglesias en los acantilados (€15)","Almorzar sobre plataformas de madera flotantes en el río Melendiz (€12)"],"datos_curiosos":["Derinkuyu fue descubierta por casualidad en 1963 cuando un habitante local derribó una pared de su sótano y halló una misteriosa habitación que conducía al laberinto subterráneo"],"consejos":["No recomendado para personas con claustrofobia severa debido a los pasadizos angostos"],"location_info":{"address":"Derinkuyu, Nevşehir","priceRange":"$$ - Excursión tour verde","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -9036,7 +8823,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '61e4c713-9beb-7120-cf40-acd41f194b7e',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -9054,7 +8841,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las chimeneas de hadas tienen una roca dura de basalto en la punta que protege como un sombrero la toba blanda inferior de la lluvia']::text[],
   '{"address":"Uçhisar, Nevşehir","priceRange":"$ - Entrada €4","dia":6,"day":6}'::jsonb,
   200,
-  6,
   '{"dia":6,"day":6,"activities":["Subir a pie a la cima del castillo para contemplar todo el valle de Göreme (€4)","Caminata escénica por el Valle del Amor entre chimeneas de hadas de 40 metros (Gratis)","Taller artesanal de cerámica en el pueblo alfarero de Avanos (€10)"],"datos_curiosos":["Las chimeneas de hadas tienen una roca dura de basalto en la punta que protege como un sombrero la toba blanda inferior de la lluvia"],"consejos":["La caminata por el Valle del Amor es plana y accesible; llevar agua y sombrero"],"location_info":{"address":"Uçhisar, Nevşehir","priceRange":"$ - Entrada €4","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -9072,7 +8858,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '11a2f8dc-a204-7bf9-db77-319c714004af',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -9090,7 +8876,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las aguas ricas en calcio de Pamukkale se han depositado a lo largo de 14.000 años creando más de 3 kilómetros de terrazas blancas']::text[],
   '{"address":"Pamukkale, Denizli","priceRange":"$$ - Entrada €30","dia":7,"day":7}'::jsonb,
   240,
-  7,
   '{"dia":7,"day":7,"activities":["Caminar descalzo sobre las terrazas de travertino blanco bañándose en el agua termal a 36°C (Entrada combinada: €30)","Nadar entre columnas romanas antiguas sumergidas en la Piscina Antigua de Cleopatra (€10 suplemento)","Visitar el teatro romano de Hierápolis con capacidad para 15.000 espectadores"],"datos_curiosos":["Las aguas ricas en calcio de Pamukkale se han depositado a lo largo de 14.000 años creando más de 3 kilómetros de terrazas blancas"],"consejos":["Es estrictamente obligatorio descalzarse antes de pisar las terrazas de travertino blanco para no manchar el mineral"],"location_info":{"address":"Pamukkale, Denizli","priceRange":"$$ - Entrada €30","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -9108,7 +8893,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a8721b2a-8f8b-5fd0-bddb-084fa6f68856',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -9126,7 +8911,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Éfeso albergaba antiguamente el Templo de Artemisa, una de las Siete Maravillas del Mundo Antiguo original, del que hoy solo sobrevive una solitaria columna']::text[],
   '{"address":"Selçuk, İzmir","priceRange":"$$ - Entrada €40","dia":8,"day":8}'::jsonb,
   240,
-  8,
   '{"dia":8,"day":8,"activities":["Fotografiar la fachada restaurada de la Biblioteca de Celso (Entrada Éfeso: €40)","Caminar por la Vía de los Curetes sobre losas de mármol originales (Gratis con entrada)","Visita a la humilde Casa de la Virgen María en la colina de Bülbüldağı (€10)"],"datos_curiosos":["Éfeso albergaba antiguamente el Templo de Artemisa, una de las Siete Maravillas del Mundo Antiguo original, del que hoy solo sobrevive una solitaria columna"],"consejos":["Visitar a primera hora de la mañana; no hay sombra en las calles de mármol blanco de Éfeso y el sol refleja fuertemente"],"location_info":{"address":"Selçuk, İzmir","priceRange":"$$ - Entrada €40","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -9144,7 +8928,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e3c47b6f-e988-0380-6777-18110edb4bda',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -9162,7 +8946,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Karaköy Güllüoğlu produce más de 2 toneladas de baklava artesanal al día con 40 capas de masa filo estirada a mano tan fina que se puede leer un periódico a través de ella']::text[],
   '{"address":"Kemankeş Karamustafa Paşa, Beyoğlu, İstanbul","priceRange":"$$ - Cafés y dulces","dia":9,"day":9}'::jsonb,
   180,
-  9,
   '{"dia":9,"day":9,"activities":["Degustar el auténtico baklava de pistacho de Gaziantep con té turco en Karaköy Güllüoğlu (€6 - €12)","Pasear por el complejo costero peatonal de Galataport frente a los barcos (Gratis)","Compras de delicias turcas (*lokum*) y cerámica artesanal en las boutiques de Karaköy (€15 - €30)"],"datos_curiosos":["Karaköy Güllüoğlu produce más de 2 toneladas de baklava artesanal al día con 40 capas de masa filo estirada a mano tan fina que se puede leer un periódico a través de ella"],"consejos":["En Karaköy Güllüoğlu pedir el \"Havuç Dilimi\" (triángulo gigante de baklava relleno de helado de leche de cabra)"],"location_info":{"address":"Kemankeş Karamustafa Paşa, Beyoğlu, İstanbul","priceRange":"$$ - Cafés y dulces","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -9180,7 +8963,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '1200db17-8338-c169-5ab8-b2d6779c7084',
   '0ebbdb5c-4e26-038c-6e92-9b4d3adf1fbe',
@@ -9198,7 +8981,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Se llamó Mercado Egipcio porque fue financiado con los ingresos y tributos procedentes del eyalato otomano de Egipto']::text[],
   '{"address":"Rüstem Paşa, Fatih, İstanbul","priceRange":"$ - Compras locales","dia":10,"day":10}'::jsonb,
   150,
-  10,
   '{"dia":10,"day":10,"activities":["Comprar té de granada y especias envasadas al vacío para llevar en el equipaje (€10 - €25)","Tomar el último café turco preparado sobre arena caliente con una porción de lokum de rosas (€3)","Traslado en metro M11 o autobús Havaist al nuevo Aeropuerto Internacional de Estambul (IST) (€6)"],"datos_curiosos":["Se llamó Mercado Egipcio porque fue financiado con los ingresos y tributos procedentes del eyalato otomano de Egipto"],"consejos":["Hacer que envasen al vacío los quesos y delicias turcas para que no desprendan aroma en el avión"],"location_info":{"address":"Rüstem Paşa, Fatih, İstanbul","priceRange":"$ - Compras locales","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -9217,7 +8999,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #28: La Gran Travesía Nipona: De Tokio al Monte Fuji, Alpes, Kioto e Hiroshima (Tokio, Japón)
+-- Tour: La Gran Travesía Nipona: De Tokio al Monte Fuji, Alpes, Kioto e Hiroshima (Tokio, Japón)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -9276,7 +9058,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b8b1dabf-b4bf-37b7-f7f6-8868e6f2dfc4',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9294,7 +9076,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Shibuya registra más de 2 millones de pasajeros diarios en su estación']::text[],
   '{"address":"Shibuya, Tokio","priceRange":"$$ - Mirador","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Cruzar el paso de cebra de Shibuya (Gratis)","Subir a Shibuya Sky (2.500 JPY)","Ramen tonkotsu en Ichiran (1.000 JPY)"],"datos_curiosos":["Shibuya registra más de 2 millones de pasajeros diarios en su estación"],"consejos":["Descansar para superar el desfase horario (jet lag)"],"location_info":{"address":"Shibuya, Tokio","priceRange":"$$ - Mirador","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -9312,7 +9093,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2c7f735d-675b-1010-7d44-461df696207b',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9330,7 +9111,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La moneda de 5 yenes tiene un agujero y simboliza la conexión de destino con las personas']::text[],
   '{"address":"Asakusa / Akihabara","priceRange":"$ - Entrada gratis","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Visitar Sensō-ji (Gratis)","Probar melón pan caliente (300 JPY)","Tiendas de figuras en Akihabara (Gratis)"],"datos_curiosos":["La moneda de 5 yenes tiene un agujero y simboliza la conexión de destino con las personas"],"consejos":["Tirar monedas de 5 yenes (go-en) para la buena suerte"],"location_info":{"address":"Asakusa / Akihabara","priceRange":"$ - Entrada gratis","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -9348,7 +9128,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'af40493b-760f-d388-c5e6-3c2ea3c002f9',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9366,7 +9146,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La cáscara del huevo se vuelve negra como el carbón por la reacción del hierro y azufre del agua volcánica']::text[],
   '{"address":"Hakone, Kanagawa","priceRange":"$$ - Hakone Pass","dia":3,"day":3}'::jsonb,
   270,
-  3,
   '{"dia":3,"day":3,"activities":["Crucero por el lago Ashi con el Hakone Freepass (~5.000 JPY pase completo)","Comer los famosos huevos negros (*Kuro-tamago*) cocidos en aguas termales (500 JPY)","Ver el torii rojo en el agua del Santuario de Hakone (Gratis)"],"datos_curiosos":["La cáscara del huevo se vuelve negra como el carbón por la reacción del hierro y azufre del agua volcánica"],"consejos":["La tradición dice que comer un huevo negro añade 7 años de vida"],"location_info":{"address":"Hakone, Kanagawa","priceRange":"$$ - Hakone Pass","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -9384,7 +9163,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ecbb7b1f-c4a2-5db1-10de-7e4f2701da56',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9402,7 +9181,6 @@ INSERT INTO public.tour_stops (
   ARRAY['A diferencia de muchos castillos japoneses que fueron reconstruidos en hormigón tras la guerra, Matsumoto conserva sus vigas de pino de 400 años intactas']::text[],
   '{"address":"4-1 Marunouchi, Matsumoto, Nagano","priceRange":"$ - Entrada 700 JPY","dia":4,"day":4}'::jsonb,
   180,
-  4,
   '{"dia":4,"day":4,"activities":["Subir las empinadas escaleras de madera del castillo original (Entrada: 700 JPY)","Pasear por el foso lleno de carpas koi con los Alpes Japoneses de fondo (Gratis)","Probar fideos de soba de trigo sarraceno artesanal (900 - 1.400 JPY)"],"datos_curiosos":["A diferencia de muchos castillos japoneses que fueron reconstruidos en hormigón tras la guerra, Matsumoto conserva sus vigas de pino de 400 años intactas"],"consejos":["Las escaleras interiores tienen una inclinación de hasta 61 grados; subir con cuidado"],"location_info":{"address":"4-1 Marunouchi, Matsumoto, Nagano","priceRange":"$ - Entrada 700 JPY","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -9420,7 +9198,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2c587088-a45d-d06f-588b-272908cad0e1',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9438,7 +9216,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Gassho-zukuri significa "construido como manos en oración", recordando la forma de las manos unidas rezando']::text[],
   '{"address":"Ogimachi, Shirakawa, Gifu","priceRange":"$ - Acceso aldea libre","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Subir al mirador Shiroyama para ver la panorámica de toda la aldea (Gratis)","Entrar a la histórica Casa Wada de tres pisos de madera (Entrada: 400 JPY)","Probar ternera Hida a la parrilla sobre hoja de magnolia con miso (1.500 - 2.500 JPY)"],"datos_curiosos":["Gassho-zukuri significa \"construido como manos en oración\", recordando la forma de las manos unidas rezando"],"consejos":["El autobús Nohi Bus conecta Takayama con Shirakawa-go en 50 minutos"],"location_info":{"address":"Ogimachi, Shirakawa, Gifu","priceRange":"$ - Acceso aldea libre","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -9456,7 +9233,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '38ef5556-f535-4136-0aa6-e350457ed2c5',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9474,7 +9251,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En invierno los pinos del jardín se sostienen con conos de cuerdas llamados *Yukitsuri* para que el peso de la nieve no quiebre sus ramas']::text[],
   '{"address":"1 Kenrokumachi, Kanazawa, Ishikawa","priceRange":"$ - Entrada jardín 320 JPY","dia":6,"day":6}'::jsonb,
   210,
-  6,
   '{"dia":6,"day":6,"activities":["Pasear por los estanques y puentes de piedra de Kenroku-en (Entrada: 320 JPY)","Comer un helado cubierto con una hoja entera de pan de oro auténtico (1.000 JPY)","Visitar una casa de geishas histórica Shima en Higashi Chaya (500 JPY)"],"datos_curiosos":["En invierno los pinos del jardín se sostienen con conos de cuerdas llamados *Yukitsuri* para que el peso de la nieve no quiebre sus ramas"],"consejos":["Kanazawa produce el 99% de todo el pan de oro artesanal de Japón"],"location_info":{"address":"1 Kenrokumachi, Kanazawa, Ishikawa","priceRange":"$ - Entrada jardín 320 JPY","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -9492,7 +9268,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '945bed59-eeb3-56da-ff67-c0befbd6e229',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9510,7 +9286,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Fushimi Inari cuenta con más de 30.000 santuarios filiales repartidos por todo Japón']::text[],
   '{"address":"Fushimi Inari, Kioto","priceRange":"$ - Entrada libre","dia":7,"day":7}'::jsonb,
   200,
-  7,
   '{"dia":7,"day":7,"activities":["Caminata bajo los toriis (Gratis)","Fotografías al atardecer","Cena en Gion"],"datos_curiosos":["Fushimi Inari cuenta con más de 30.000 santuarios filiales repartidos por todo Japón"],"consejos":["Llevar calzado deportivo para subir los tramos de escaleras"],"location_info":{"address":"Fushimi Inari, Kioto","priceRange":"$ - Entrada libre","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -9528,7 +9303,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '771a16a8-fb83-dddf-57c1-08f157c0acb4',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9546,7 +9321,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La expresión japonesa "saltar desde la terraza de Kiyomizu" equivale en español a "tomar una decisión valiente y definitiva"']::text[],
   '{"address":"1 Chome-294 Kiyomizu, Higashiyama Ward, Kyoto","priceRange":"$ - Entradas templos","dia":8,"day":8}'::jsonb,
   270,
-  8,
   '{"dia":8,"day":8,"activities":["Visitar Kinkaku-ji (500 JPY)","Beber de las aguas de la cascada Otowa en Kiyomizu-dera para salud, amor o éxito académico (Entrada: 400 JPY)","Pasear por las cuestas empedradas de Ninenzaka y Sannenzaka (Gratis)"],"datos_curiosos":["La expresión japonesa \"saltar desde la terraza de Kiyomizu\" equivale en español a \"tomar una decisión valiente y definitiva\""],"consejos":["En la cascada Otowa solo se debe beber de uno de los tres chorros; beber de los tres se considera avaricia"],"location_info":{"address":"1 Chome-294 Kiyomizu, Higashiyama Ward, Kyoto","priceRange":"$ - Entradas templos","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -9564,7 +9338,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'fc8a5181-c993-0447-7d8d-55bd02891688',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9582,7 +9356,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las grapas metálicas bajo las tablas rozan los clavos al pisarlas generando el sonido intencionado']::text[],
   '{"address":"541 Nijojocho, Nakagyo Ward, Kyoto","priceRange":"$ - Entrada 800 JPY","dia":9,"day":9}'::jsonb,
   240,
-  9,
   '{"dia":9,"day":9,"activities":["Caminar descalzo escuchando el canto del suelo de ruiseñor (Entrada: 800 JPY)","Paseo por el bosque de bambú de Arashiyama (Gratis)","Cruzar el puente histórico Togetsukyo sobre el río Oi"],"datos_curiosos":["Las grapas metálicas bajo las tablas rozan los clavos al pisarlas generando el sonido intencionado"],"consejos":["Apreciar las pinturas murales originales de tigres en pan de oro de la escuela Kano"],"location_info":{"address":"541 Nijojocho, Nakagyo Ward, Kyoto","priceRange":"$ - Entrada 800 JPY","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -9600,7 +9373,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '413263b4-018e-6cf0-0d7d-82b5d510b0e5',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9618,7 +9391,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En Osaka la gente saluda diciendo "¿Kari makka?" que significa literalmente "¿Cómo van los negocios?", reflejando su espíritu mercantil histórico']::text[],
   '{"address":"Dotonbori, Chuo Ward, Osaka","priceRange":"$$ - Comida callejera","dia":10,"day":10}'::jsonb,
   270,
-  10,
   '{"dia":10,"day":10,"activities":["Alimentar a los ciervos de Nara y ver el Gran Buda (600 JPY)","Foto clásica imitando la pose del atleta de Glico Man en el puente Ebisubashi (Gratis)","Comer bolitas calientes de pulpo *Takoyaki* y brochetas fritas *Kushikatsu* (600 - 1.200 JPY)"],"datos_curiosos":["En Osaka la gente saluda diciendo \"¿Kari makka?\" que significa literalmente \"¿Cómo van los negocios?\", reflejando su espíritu mercantil histórico"],"consejos":["Cuidado con los takoyaki recién hechos: el interior está hirviendo"],"location_info":{"address":"Dotonbori, Chuo Ward, Osaka","priceRange":"$$ - Comida callejera","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -9636,7 +9408,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '582626af-64d7-0a3e-e261-de4c166d7bc9',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9654,7 +9426,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La piedra más grande del muro del castillo (*Takoishi*) pesa 108 toneladas y fue transportada desde la isla de Shodoshima']::text[],
   '{"address":"1-1 Osakajo, Chuo Ward, Osaka","priceRange":"$ - Entrada 600 JPY","dia":11,"day":11}'::jsonb,
   210,
-  11,
   '{"dia":11,"day":11,"activities":["Subir al mirador del Castillo de Osaka con vista a los rascacielos (Entrada: 600 JPY)","Tocar las plantas de los pies del dios de la felicidad Billiken en Shinsekai para la buena suerte (Gratis)","Comer *Okonomiyaki* (pizza/tortilla japonesa a la plancha) preparado en la mesa (900 - 1.400 JPY)"],"datos_curiosos":["La piedra más grande del muro del castillo (*Takoishi*) pesa 108 toneladas y fue transportada desde la isla de Shodoshima"],"consejos":["Los fosos del castillo cuentan con árboles de cerezo espectaculares en primavera"],"location_info":{"address":"1-1 Osakajo, Chuo Ward, Osaka","priceRange":"$ - Entrada 600 JPY","dia":11,"day":11}}'::jsonb,
   now()
 );
@@ -9672,7 +9443,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '28723600-6218-7fce-fd06-4a4667c79d46',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9690,7 +9461,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Llama de la Paz arde ininterrumpidamente en el parque desde 1964 y solo se apagará cuando todas las armas nucleares del mundo hayan sido destruidas']::text[],
   '{"address":"1-2 Nakajimacho, Naka Ward, Hiroshima","priceRange":"$ - Entrada museo 200 JPY","dia":12,"day":12}'::jsonb,
   240,
-  12,
   '{"dia":12,"day":12,"activities":["Contemplar en silencio las ruinas de la Cúpula Genbaku (Patrimonio de la Humanidad UNESCO - Gratis)","Visitar el conmovedor Museo Conmemorativo de la Paz (Entrada: 200 JPY / ~$1.40 USD)","Hacer una grulla de papel origami en el monumento a la niña Sadako Sasaki (Gratis)"],"datos_curiosos":["La Llama de la Paz arde ininterrumpidamente en el parque desde 1964 y solo se apagará cuando todas las armas nucleares del mundo hayan sido destruidas"],"consejos":["El museo es de alto impacto emocional; dedicar tiempo para procesar la visita en los jardines del parque"],"location_info":{"address":"1-2 Nakajimacho, Naka Ward, Hiroshima","priceRange":"$ - Entrada museo 200 JPY","dia":12,"day":12}}'::jsonb,
   now()
 );
@@ -9708,7 +9478,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '727264d2-d404-288c-9fc5-5588df176bf4',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9726,7 +9496,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La isla entera era considerada tan sagrada que antiguamente no se permitían nacimientos ni entierros en su territorio para no mancillar la pureza']::text[],
   '{"address":"Miyajimacho, Hatsukaichi, Hiroshima","priceRange":"$ - Entrada 300 JPY","dia":13,"day":13}'::jsonb,
   270,
-  13,
   '{"dia":13,"day":13,"activities":["Ferry a la isla de Miyajima (Incluido con JR Pass o 200 JPY)","Visitar las pasarelas sobre el agua del santuario Itsukushima (Entrada: 300 JPY)","Probar ostras frescas a la parrilla y el pastelito *Momiji Manju* en forma de hoja de arce (300 - 600 JPY)"],"datos_curiosos":["La isla entera era considerada tan sagrada que antiguamente no se permitían nacimientos ni entierros en su territorio para no mancillar la pureza"],"consejos":["Durante la marea baja se puede caminar a pie hasta la base del torii; durante la marea alta parece flotar en el agua"],"location_info":{"address":"Miyajimacho, Hatsukaichi, Hiroshima","priceRange":"$ - Entrada 300 JPY","dia":13,"day":13}}'::jsonb,
   now()
 );
@@ -9744,7 +9513,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '64d0bcf4-d59b-7662-34a8-9b0421fca8ad',
   'f3aa2653-44ed-d3fe-7990-f38bfd8abded',
@@ -9762,7 +9531,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Ginza significa literalmente "Lugar de la plata", pues aquí se ubicaba la ceca donde se acuñaban las monedas de plata del shogunato en el siglo XVII']::text[],
   '{"address":"Ginza, Chuo City, Tokyo","priceRange":"$$ - Compras finales","dia":14,"day":14}'::jsonb,
   180,
-  14,
   '{"dia":14,"day":14,"activities":["Caminar por Ginza Six y admirar las instalaciones de arte de vanguardia (Gratis)","Comprar cuchillos de cocina de acero japonés forjados a mano en Tsukiji (8.000 - 20.000 JPY)","Último almuerzo de sushi tradicional nigiri servido por maestro itamae (2.500 - 5.000 JPY)"],"datos_curiosos":["Ginza significa literalmente \"Lugar de la plata\", pues aquí se ubicaba la ceca donde se acuñaban las monedas de plata del shogunato en el siglo XVII"],"consejos":["Tomar el tren Narita Express (N''EX) desde la estación de Tokio al aeropuerto de Narita (1 hora) o monorraíl a Haneda (25 minutos)"],"location_info":{"address":"Ginza, Chuo City, Tokyo","priceRange":"$$ - Compras finales","dia":14,"day":14}}'::jsonb,
   now()
 );
@@ -9781,7 +9549,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #29: Egipto Faraónico: Pirámides de Guiza, Valle de los Reyes y Crucero por el Nilo (El Cairo, Egipto)
+-- Tour: Egipto Faraónico: Pirámides de Guiza, Valle de los Reyes y Crucero por el Nilo (El Cairo, Egipto)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -9840,7 +9608,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5240ee10-ff06-43d3-1473-1944c96c468c',
   '59a0c0fb-690f-db85-206f-87b595fdd84b',
@@ -9858,7 +9626,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Gran Pirámide fue la estructura más alta construida por el ser humano durante más de 3.800 años hasta la construcción de la Catedral de Lincoln en 1311']::text[],
   '{"address":"Al Haram, Giza Governorate","priceRange":"$$ - Entrada recinto","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Caminar alrededor de la Gran Pirámide de Keops (Entrada recinto Guiza: ~540 EGP / ~$11 USD)","Entrar a la galería interior de la pirámide de Keops (~900 EGP / ~$19 USD opcional)","Fotografiar la Esfinge desde el Templo del Valle de Kefrén (Gratis con entrada)"],"datos_curiosos":["La Gran Pirámide fue la estructura más alta construida por el ser humano durante más de 3.800 años hasta la construcción de la Catedral de Lincoln en 1311"],"consejos":["Llegar a las 7:00 AM para entrar en cuanto abren las puertas y evitar los autobuses masivos y el calor ardiente"],"location_info":{"address":"Al Haram, Giza Governorate","priceRange":"$$ - Entrada recinto","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -9876,7 +9643,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7fe97675-3462-7096-0cd0-e5b8ac4b8224',
   '59a0c0fb-690f-db85-206f-87b595fdd84b',
@@ -9894,7 +9661,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La máscara funeraria de Tutankamón está hecha de 11 kilos de oro macizo de 23 quilates con incrustaciones de lapislázuli, cornalina y obsidiana']::text[],
   '{"address":"Giza / Coptic Cairo","priceRange":"$$ - Entrada GEM","dia":2,"day":2}'::jsonb,
   270,
-  2,
   '{"dia":2,"day":2,"activities":["Admirar la colosal estatua de Ramsés II de 3.200 años en el atrio del museo (Entrada GEM: ~1.200 EGP / ~$25 USD)","Visitar la cripta de la Iglesia de San Sergio donde se refugió la Sagrada Familia en Egipto (Gratis)","Probar el plato nacional Koshari (arroz, lentejas, garbanzos, pasta y salsa picante: ~$2 USD)"],"datos_curiosos":["La máscara funeraria de Tutankamón está hecha de 11 kilos de oro macizo de 23 quilates con incrustaciones de lapislázuli, cornalina y obsidiana"],"consejos":["Comprar las entradas al Gran Museo Egipcio en su portal web oficial"],"location_info":{"address":"Giza / Coptic Cairo","priceRange":"$$ - Entrada GEM","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -9912,7 +9678,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '86af27d2-49af-3181-e805-938246a94d9d',
   '59a0c0fb-690f-db85-206f-87b595fdd84b',
@@ -9930,7 +9696,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En la Sala Hipóstila de Karnak cabría holgadamente la Catedral de Notre-Dame de París completa']::text[],
   '{"address":"Karnak, Luxor","priceRange":"$$ - Entradas templos","dia":3,"day":3}'::jsonb,
   300,
-  3,
   '{"dia":3,"day":3,"activities":["Caminar entre las 134 columnas de la Sala Hipóstila de Karnak (Entrada: ~450 EGP / ~$9 USD)","Pasear por la recién restaurada Avenida de las Esfinges de 3 kilómetros que une Karnak con Luxor (Gratis con entrada)","Visitar el Templo de Luxor iluminado en la noche (~400 EGP)"],"datos_curiosos":["En la Sala Hipóstila de Karnak cabría holgadamente la Catedral de Notre-Dame de París completa"],"consejos":["Tocar el escarabajo sagrado de piedra de Karnak y darle 7 vueltas en sentido contrario al reloj para pedir un deseo"],"location_info":{"address":"Karnak, Luxor","priceRange":"$$ - Entradas templos","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -9948,7 +9713,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'fd186bca-9631-935d-3f90-6d2d87ea39ec',
   '59a0c0fb-690f-db85-206f-87b595fdd84b',
@@ -9966,7 +9731,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Howard Carter descubrió la tumba de Tutankamón en 1922 gracias a que la entrada había quedado sepultada bajo los escombros de la construcción de la tumba vecina de Ramsés VI']::text[],
   '{"address":"West Bank, Luxor","priceRange":"$$ - Entrada Valle de los Reyes","dia":4,"day":4}'::jsonb,
   300,
-  4,
   '{"dia":4,"day":4,"activities":["Descender a 3 tumbas reales incluidas en el boleto general (Entrada: ~600 EGP / ~$12 USD)","Entrada especial a la tumba de Tutankamón (KV62) con su momia real en urna de cristal (~500 EGP suplemento)","Fotografiar los dos Colosos de Memnón de 18 metros en la llanura (Gratis)"],"datos_curiosos":["Howard Carter descubrió la tumba de Tutankamón en 1922 gracias a que la entrada había quedado sepultada bajo los escombros de la construcción de la tumba vecina de Ramsés VI"],"consejos":["La tumba de Ramsés IV y Merenptah tienen corredores amplios y techos astronómicos azules espectaculares"],"location_info":{"address":"West Bank, Luxor","priceRange":"$$ - Entrada Valle de los Reyes","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -9984,7 +9748,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b6438fa5-6e82-b73e-12a0-226a68407c19',
   '59a0c0fb-690f-db85-206f-87b595fdd84b',
@@ -10002,7 +9766,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El templo permaneció enterrado bajo 12 metros de arena del desierto y lodo del Nilo durante siglos, lo que lo protegió de la erosión y el expolio']::text[],
   '{"address":"Edfu, Aswan Governorate","priceRange":"$$ - Incluido en crucero","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Llegada en carruaje tradicional de caballos desde el muelle del crucero al templo (Incluido en excursiones)","Ver la estatua en granito negro del dios halcón Horus con la doble corona del Alto y Bajo Egipto (Entrada: ~450 EGP)","Navegar sobre la cubierta del crucero viendo pasar palmerales y pescadores en falucas"],"datos_curiosos":["El templo permaneció enterrado bajo 12 metros de arena del desierto y lodo del Nilo durante siglos, lo que lo protegió de la erosión y el expolio"],"consejos":["Subir a la cubierta del barco por la tarde para presenciar el paso por la esclusa de Esna"],"location_info":{"address":"Edfu, Aswan Governorate","priceRange":"$$ - Incluido en crucero","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -10020,7 +9783,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'be2896e9-a6c2-ed22-3786-afd93b622650',
   '59a0c0fb-690f-db85-206f-87b595fdd84b',
@@ -10038,7 +9801,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los sacerdotes de Kom Ombo criaban cocodrilos en estanques sagrados que eran alimentados con carne y vino y adornados con joyas de oro']::text[],
   '{"address":"Kom Ombo, Aswan Governorate","priceRange":"$ - Entrada templo","dia":6,"day":6}'::jsonb,
   180,
-  6,
   '{"dia":6,"day":6,"activities":["Visita nocturna al templo iluminado a pocos pasos del muelle del crucero (Entrada: ~360 EGP)","Entrar al Museo de los Cocodrilos y ver más de 20 momias gigantes de cocodrilos reales del Nilo (Gratis con entrada)","Paseo en faluca tradicional de vela blanca por las islas de Asuán al atardecer ($10 - $15 USD)"],"datos_curiosos":["Los sacerdotes de Kom Ombo criaban cocodrilos en estanques sagrados que eran alimentados con carne y vino y adornados con joyas de oro"],"consejos":["Los relieves de la pared trasera del templo muestran los instrumentos quirúrgicos más antiguos documentados: bisturís, fórceps y tijeras"],"location_info":{"address":"Kom Ombo, Aswan Governorate","priceRange":"$ - Entrada templo","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -10056,7 +9818,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd8a8d8e8-7f0d-7cc8-aea4-470b949973b2',
   '59a0c0fb-690f-db85-206f-87b595fdd84b',
@@ -10074,7 +9836,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La UNESCO cortó los templos en más de 1.000 bloques gigantes de hasta 30 toneladas cada uno para reensamblarlos milimétricamente en una colina artificial de hormigón']::text[],
   '{"address":"Abu Simbel, Aswan Governorate","priceRange":"$$$ - Excursión desde Asuán","dia":7,"day":7}'::jsonb,
   240,
-  7,
   '{"dia":7,"day":7,"activities":["Asombrarse ante la colosal fachada de Ramsés II (Entrada Abu Simbel: ~600 EGP / ~$12 USD)","Entrar al santuario interior donde el sol ilumina las estatuas de los dioses solo dos veces al año (Gratis con entrada)","Pasear por la orilla del inmenso Lago Nasser"],"datos_curiosos":["La UNESCO cortó los templos en más de 1.000 bloques gigantes de hasta 30 toneladas cada uno para reensamblarlos milimétricamente en una colina artificial de hormigón"],"consejos":["La excursión sale en convoy desde Asuán a las 4:00 AM (3 horas por carretera en el desierto) o en vuelo corto de 40 minutos"],"location_info":{"address":"Abu Simbel, Aswan Governorate","priceRange":"$$$ - Excursión desde Asuán","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -10092,7 +9853,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a516f4a6-082f-0f66-ce22-79c97cea83e6',
   '59a0c0fb-690f-db85-206f-87b595fdd84b',
@@ -10110,7 +9871,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En muchas casas nubias los habitantes crían pequeños cocodrilos en estanques como símbolo de protección contra el mal de ojo']::text[],
   '{"address":"Gharb Soheil, Aswan","priceRange":"$ - Visita comunitaria","dia":8,"day":8}'::jsonb,
   180,
-  8,
   '{"dia":8,"day":8,"activities":["Paseo en lancha a motor cruzando los rápidos de la primera catarata hacia el poblado ($15 USD)","Tomar té de hibisco (*karkadeh*) en una casa tradicional nubia (€2)","Vuelo de retorno de Asuán a El Cairo para conexión internacional"],"datos_curiosos":["En muchas casas nubias los habitantes crían pequeños cocodrilos en estanques como símbolo de protección contra el mal de ojo"],"consejos":["Excelente lugar para comprar especias de alta calidad como comino negro, incienso y henna natural"],"location_info":{"address":"Gharb Soheil, Aswan","priceRange":"$ - Visita comunitaria","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -10129,7 +9889,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #30: Australia Extrema: De la Ópera de Sídney a la Gran Barrera de Coral y Selva Tropical (Sídney, Australia)
+-- Tour: Australia Extrema: De la Ópera de Sídney a la Gran Barrera de Coral y Selva Tropical (Sídney, Australia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -10188,7 +9948,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '87af9d49-ac76-91f2-341d-a398a8ca8730',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10206,7 +9966,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las conchas del tejado de la Ópera están cubiertas por más de 1.056.000 azulejos de cerámica sueca autolimpiables']::text[],
   '{"address":"Bennelong Point, Sydney NSW 2000","priceRange":"$$ - Tour ópera","dia":1,"day":1}'::jsonb,
   210,
-  1,
   '{"dia":1,"day":1,"activities":["Tour guiado por el interior de las salas de conciertos de la Ópera ($43 AUD)","Caminar sobre la pasarela peatonal del Harbour Bridge para vista panorámica gratuita de la bahía (Gratis)","Tomar una cerveza artesanal australiana en el Opera Bar junto al agua ($12 - $16 AUD)"],"datos_curiosos":["Las conchas del tejado de la Ópera están cubiertas por más de 1.056.000 azulejos de cerámica sueca autolimpiables"],"consejos":["La caminata peatonal por el puente del puerto es completamente gratuita y ofrece una de las mejores vistas del mundo"],"location_info":{"address":"Bennelong Point, Sydney NSW 2000","priceRange":"$$ - Tour ópera","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -10224,7 +9983,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'af348712-0c9c-ec5d-5170-2c41434b2ce7',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10242,7 +10001,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Bondi Beach es la cuna del primer club de salvamento marítimo del mundo (*Surf Life Saving Club*), fundado en 1907']::text[],
   '{"address":"Bondi Beach, NSW 2026","priceRange":"$ - Acceso libre","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Nadar en la piscina oceánica de Bondi Icebergs (Entrada: $10 AUD)","Caminata escénica de 2 horas por los acantilados de Bondi a Coogee (Gratis)","Clase de surf para principiantes en las olas de Bondi ($80 - $110 AUD)"],"datos_curiosos":["Bondi Beach es la cuna del primer club de salvamento marítimo del mundo (*Surf Life Saving Club*), fundado en 1907"],"consejos":["Nadar siempre estrictamente entre las banderas rojas y amarillas patrulladas por los salvavidas"],"location_info":{"address":"Bondi Beach, NSW 2026","priceRange":"$ - Acceso libre","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -10260,7 +10018,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a148ac56-c061-e3ca-877f-9c1faaae8106',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10278,7 +10036,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El color azul que da nombre a las montañas se debe a la evaporación del aceite de las hojas de millones de eucaliptos, que dispersa la luz azul en la atmósfera']::text[],
   '{"address":"Echo Point Rd, Katoomba NSW 2780","priceRange":"$$ - Tren y miradores","dia":3,"day":3}'::jsonb,
   300,
-  3,
   '{"dia":3,"day":3,"activities":["Mirador panorámico de Echo Point sobre las Tres Hermanas (Gratis)","Bajar al valle en Scenic Railway, el tren de pasajeros más empinado del mundo con 52 grados de pendiente ($55 AUD pase Scenic World)","Senderismo entre cascadas en Wentworth Falls (Gratis)"],"datos_curiosos":["El color azul que da nombre a las montañas se debe a la evaporación del aceite de las hojas de millones de eucaliptos, que dispersa la luz azul en la atmósfera"],"consejos":["El tren de cercanías de NSW TrainLink sale cada hora desde Sydney Central hasta Katoomba ($7 AUD con tarjeta Opal)"],"location_info":{"address":"Echo Point Rd, Katoomba NSW 2780","priceRange":"$$ - Tren y miradores","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -10296,7 +10053,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'aeb55780-1277-ec43-269e-7a11b583a532',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10314,7 +10071,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La laguna de Cairns cuenta con agua de mar filtrada y salvavidas permanentes abierta todo el año sin costo alguno']::text[],
   '{"address":"Esplanade, Cairns QLD 4870","priceRange":"$ - Acceso gratuito","dia":4,"day":4}'::jsonb,
   180,
-  4,
   '{"dia":4,"day":4,"activities":["Baño gratuito en la laguna pública de la Explanada de Cairns (Gratis)","Cena de pescado barramundi a la parrilla con ensalada tropical ($30 - $45 AUD)","Visitar el mercado nocturno Cairns Night Markets para artesanías aborígenes ($10 - $30 AUD)"],"datos_curiosos":["La laguna de Cairns cuenta con agua de mar filtrada y salvavidas permanentes abierta todo el año sin costo alguno"],"consejos":["En la costa de Cairns no se debe nadar en el mar abierto por presencia de cocodrilos marinos y medusas; usar siempre la laguna artificial protegida"],"location_info":{"address":"Esplanade, Cairns QLD 4870","priceRange":"$ - Acceso gratuito","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -10332,7 +10088,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b63b9f84-ba4b-bb90-909c-438401f03e1a',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10350,7 +10106,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Gran Barrera de Coral no es un solo arrecife, sino un laberinto colosal de casi 3.000 arrecifes individuales y 900 islas']::text[],
   '{"address":"Outer Great Barrier Reef, QLD","priceRange":"$$$$ - Tour arrecife","dia":5,"day":5}'::jsonb,
   360,
-  5,
   '{"dia":5,"day":5,"activities":["Snorkel guiado con biólogo marino en el arrecife exterior (Tour catamarán de día completo con almuerzo: ~$220 - $280 AUD)","Bautizo de buceo con botella para principiantes con instructor ($80 AUD opcional)","Paseo en semisumergible con fondo de cristal para ver los fondos sin mojarse (Incluido en el tour)"],"datos_curiosos":["La Gran Barrera de Coral no es un solo arrecife, sino un laberinto colosal de casi 3.000 arrecifes individuales y 900 islas"],"consejos":["Tomar una pastilla contra el mareo antes de zarpar en el catamarán; el trayecto por mar abierto puede tener oleaje"],"location_info":{"address":"Outer Great Barrier Reef, QLD","priceRange":"$$$$ - Tour arrecife","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -10368,7 +10123,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd1bed03c-cd01-384a-ab58-c2905d6feb08',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10386,7 +10141,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Es uno de los únicos 300 cayos de coral del mundo que ha desarrollado su propio bosque tropical completo']::text[],
   '{"address":"Green Island, Great Barrier Reef","priceRange":"$$ - Ferry a la isla","dia":6,"day":6}'::jsonb,
   270,
-  6,
   '{"dia":6,"day":6,"activities":["Ferry rápido de 45 minutos desde Cairns hasta Green Island ($110 AUD ida y vuelta)","Nadar directamente desde la playa entre tortugas marinas que pastan praderas de pastos marinos (Gratis con equipo de snorkel)","Caminata autoguiada por el paseo de madera bajo el dosel del bosque tropical (Gratis)"],"datos_curiosos":["Es uno de los únicos 300 cayos de coral del mundo que ha desarrollado su propio bosque tropical completo"],"consejos":["Ideal para familias o viajeros que prefieren hacer snorkel desde la comodidad de la playa"],"location_info":{"address":"Green Island, Great Barrier Reef","priceRange":"$$ - Ferry a la isla","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -10404,7 +10158,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'eae240ed-a146-4f77-4604-63ca1bae9bb5',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10422,7 +10176,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La selva tropical de Queensland tiene más de 135 millones de años, siendo significativamente más antigua que la selva del Amazonas']::text[],
   '{"address":"Kuranda, Queensland","priceRange":"$$ - Teleférico","dia":7,"day":7}'::jsonb,
   300,
-  7,
   '{"dia":7,"day":7,"activities":["Vuelo panorámico en teleférico Skyrail con cabina de suelo de cristal ($62 AUD)","Mirador de la garganta profunda de Barron Falls (Gratis con el teleférico)","Pasear por el mercado artesanal de Kuranda y ver koalas en Kuranda Koala Gardens ($22 AUD)"],"datos_curiosos":["La selva tropical de Queensland tiene más de 135 millones de años, siendo significativamente más antigua que la selva del Amazonas"],"consejos":["Hacer la subida en el teleférico Skyrail y el regreso en el histórico tren escénico Kuranda Scenic Railway de madera"],"location_info":{"address":"Kuranda, Queensland","priceRange":"$$ - Teleférico","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -10440,7 +10193,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '499f6236-d5b0-7a3c-7d38-d2ff0190a803',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10458,7 +10211,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El casuario (*Casuarius*) desciende directamente de los dinosaurios terópodos y posee una cresta ósea y garras afiladas de 12 centímetros']::text[],
   '{"address":"Cape Tribulation Rd, QLD 4873","priceRange":"$$ - Excursión selva","dia":8,"day":8}'::jsonb,
   360,
-  8,
   '{"dia":8,"day":8,"activities":["Crucero de avistamiento de cocodrilos de agua salada salvajes en el río Daintree ($35 AUD)","Caminar por las pasarelas de Dubuji entre manglares y helechos milenarios (Gratis)","Fotografía en el mirador de Cape Tribulation donde desembarcó el Capitán Cook en 1770 (Gratis)"],"datos_curiosos":["El casuario (*Casuarius*) desciende directamente de los dinosaurios terópodos y posee una cresta ósea y garras afiladas de 12 centímetros"],"consejos":["Cruzar el río Daintree a bordo del transbordador por cable Daintree River Ferry ($47 AUD por vehículo ida y vuelta)"],"location_info":{"address":"Cape Tribulation Rd, QLD 4873","priceRange":"$$ - Excursión selva","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -10476,7 +10228,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'af58b18c-b8a2-287a-9aa4-52340185696f',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10494,7 +10246,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Melbourne ha sido elegida siete veces consecutivas como la ciudad con mejor calidad de vida del planeta según el ranking de *The Economist*']::text[],
   '{"address":"Hosier Ln, Melbourne VIC 3000","priceRange":"$ - Acceso libre","dia":9,"day":9}'::jsonb,
   210,
-  9,
   '{"dia":9,"day":9,"activities":["Fotografiar los murales de arte urbano en constante renovación en Hosier Lane (Gratis)","Pedir un café Flat White auténtico en Brother Baba Budan o Patricia Coffee Brewers ($5 AUD)","Pasear en el tranvía histórico gratuito City Circle Tram número 35 (Gratis)"],"datos_curiosos":["Melbourne ha sido elegida siete veces consecutivas como la ciudad con mejor calidad de vida del planeta según el ranking de *The Economist*"],"consejos":["En el centro de Melbourne (CBD) todo el transporte en tranvía dentro de la \"Free Tram Zone\" es 100% gratuito"],"location_info":{"address":"Hosier Ln, Melbourne VIC 3000","priceRange":"$ - Acceso libre","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -10512,7 +10263,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '21f0fb66-5f8c-3ce8-99d9-26a322d91cac',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10530,7 +10281,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Great Ocean Road fue construida a pico y pala por soldados que regresaron de la Primera Guerra Mundial entre 1919 y 1932 como monumento conmemorativo a sus compañeros caídos']::text[],
   '{"address":"Great Ocean Rd, Princetown VIC 3269","priceRange":"$$ - Excursión costera","dia":10,"day":10}'::jsonb,
   360,
-  10,
   '{"dia":10,"day":10,"activities":["Caminar por las pasarelas del mirador de los Doce Apóstoles al atardecer (Gratis)","Bajar por los escalones Gibson Steps hasta la arena al pie de los acantilados (Gratis)","Avistar koalas salvajes durmiendo en las ramas de eucalipto en Kennett River"],"datos_curiosos":["La Great Ocean Road fue construida a pico y pala por soldados que regresaron de la Primera Guerra Mundial entre 1919 y 1932 como monumento conmemorativo a sus compañeros caídos"],"consejos":["Excursión de día completo desde Melbourne (aprox. 12 horas con paradas escénicas en tour o coche de alquiler: ~$130 - $180 AUD)"],"location_info":{"address":"Great Ocean Rd, Princetown VIC 3269","priceRange":"$$ - Excursión costera","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -10548,7 +10298,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd5a25dd2-5b01-6d8d-29ee-fe024b813178',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10566,7 +10316,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los pingüinos azules pesan apenas un kilo y pasan hasta semanas enteras nadando en el mar abierto pescando antes de regresar a tierra']::text[],
   '{"address":"1019 Ventnor Rd, Summerlands VIC 3922","priceRange":"$$ - Entrada $30 AUD","dia":11,"day":11}'::jsonb,
   240,
-  11,
   '{"dia":11,"day":11,"activities":["Ver el desfile de pingüinos desde las gradas de la playa al anochecer (Entrada general: $30 AUD)","Paseo por las pasarelas de Nobbies con vista a los lobos marinos (Gratis)","Cena con pescado fresco en el pueblo de Cowes ($25 AUD)"],"datos_curiosos":["Los pingüinos azules pesan apenas un kilo y pasan hasta semanas enteras nadando en el mar abierto pescando antes de regresar a tierra"],"consejos":["Está estrictamente prohibido tomar fotos o vídeos durante el desfile de pingüinos para proteger los ojos sensibles de las aves del flash"],"location_info":{"address":"1019 Ventnor Rd, Summerlands VIC 3922","priceRange":"$$ - Entrada $30 AUD","dia":11,"day":11}}'::jsonb,
   now()
 );
@@ -10584,7 +10333,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b455ea28-e381-0944-8d6d-0e4d1f90c6f5',
   '33de4528-0b6d-3c54-b961-a7db04250c1b',
@@ -10602,7 +10351,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los jardines fueron fundados en 1846 y conservan árboles plantados en la época victoriana por exploradores botánicos legendarios']::text[],
   '{"address":"Birdwood Ave, South Yarra VIC 3141","priceRange":"$ - Acceso libre","dia":12,"day":12}'::jsonb,
   150,
-  12,
   '{"dia":12,"day":12,"activities":["Paseo por el sendero patrimonial de los aborígenes en el jardín botánico (Gratis)","Comprar cremas de aceite de árbol de té y miel de eucalipto de Tasmania ($15 - $35 AUD)","Autobús SkyBus directo desde Southern Cross Station hacia el aeropuerto de Melbourne ($22 AUD)"],"datos_curiosos":["Los jardines fueron fundados en 1846 y conservan árboles plantados en la época victoriana por exploradores botánicos legendarios"],"consejos":["El acceso a los jardines botánicos es libre y gratuito todos los días"],"location_info":{"address":"Birdwood Ave, South Yarra VIC 3141","priceRange":"$ - Acceso libre","dia":12,"day":12}}'::jsonb,
   now()
 );
@@ -10621,7 +10369,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #31: Bogotá Inmersiva y Capitalina: Cerros, Museos y Vanguardia (Bogotá, Colombia)
+-- Tour: Bogotá Inmersiva y Capitalina: Cerros, Museos y Vanguardia (Bogotá, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -10680,7 +10428,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '70720a1e-f8a5-3e3d-ab38-509ec1d7ab42',
   '93d7c9c2-f0f5-ab6b-5ebe-bbef78dfabb2',
@@ -10698,7 +10446,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Puerta Falsa opera desde 1816 y es el restaurante más antiguo de Bogotá']::text[],
   '{"address":"Calle 11 # 4-41, La Candelaria","priceRange":"$ - Entrada libre","dia":1,"day":1}'::jsonb,
   150,
-  1,
   '{"dia":1,"day":1,"activities":["Visitar la colección permanente del Museo Botero (Entrada gratuita)","Almorzar ajiaco en La Puerta Falsa ($28.000 COP)"],"datos_curiosos":["La Puerta Falsa opera desde 1816 y es el restaurante más antiguo de Bogotá"],"consejos":["Cierra los martes; entrada 100% gratuita todos los días de apertura"],"location_info":{"address":"Calle 11 # 4-41, La Candelaria","priceRange":"$ - Entrada libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -10716,7 +10463,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '34bd3971-fb9a-d672-2e8e-872a53956390',
   '93d7c9c2-f0f5-ab6b-5ebe-bbef78dfabb2',
@@ -10734,7 +10481,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El sendero peatonal de Monserrate tiene 1.605 escalones de piedra']::text[],
   '{"address":"Cerro de Monserrate, Bogotá","priceRange":"$ - Funicular","dia":2,"day":2}'::jsonb,
   180,
-  2,
   '{"dia":2,"day":2,"activities":["Subida en teleférico ($27.000 COP ida y vuelta)","Cata de café especial en Chapinero ($12.000 COP)"],"datos_curiosos":["El sendero peatonal de Monserrate tiene 1.605 escalones de piedra"],"consejos":["Subir en la mañana para cielo despejado"],"location_info":{"address":"Cerro de Monserrate, Bogotá","priceRange":"$ - Funicular","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -10752,7 +10498,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a5e49a1f-820d-00ba-e552-9d70d04ad943',
   '93d7c9c2-f0f5-ab6b-5ebe-bbef78dfabb2',
@@ -10770,7 +10516,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Alberga más de 5.000 orquídeas nativas colombianas']::text[],
   '{"address":"Avenida Calle 63 # 68-95","priceRange":"$ - Entrada $14.000 COP","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Recorrer el Tropicario (Entrada jardín + Tropicario: $14.000 COP)","Picnic en el Parque Simón Bolívar (Gratis)"],"datos_curiosos":["Alberga más de 5.000 orquídeas nativas colombianas"],"consejos":["El domo de páramo tiene niebla y vegetación real de frailejones"],"location_info":{"address":"Avenida Calle 63 # 68-95","priceRange":"$ - Entrada $14.000 COP","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -10788,7 +10533,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4e2d82e3-626f-03d8-66b5-3755c9bc1222',
   '93d7c9c2-f0f5-ab6b-5ebe-bbef78dfabb2',
@@ -10806,7 +10551,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Usaquén fue un municipio independiente hasta que fue integrado a Bogotá en 1954']::text[],
   '{"address":"Carrera 6 con Calle 119, Usaquén","priceRange":"$ - Libre","dia":4,"day":4}'::jsonb,
   150,
-  4,
   '{"dia":4,"day":4,"activities":["Compras de diseño y artesanías finas ($20.000 - $80.000 COP)","Almuerzo campestre en casonas de Usaquén ($35.000 - $65.000 COP)"],"datos_curiosos":["Usaquén fue un municipio independiente hasta que fue integrado a Bogotá en 1954"],"consejos":["El mercado de pulgas funciona los domingos y festivos con gran animación"],"location_info":{"address":"Carrera 6 con Calle 119, Usaquén","priceRange":"$ - Libre","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -10825,7 +10569,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #32: Roma Eterna al Detalle: Catacumbas, Foros y Plazas Barrocas (Roma, Italia)
+-- Tour: Roma Eterna al Detalle: Catacumbas, Foros y Plazas Barrocas (Roma, Italia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -10884,7 +10628,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '911444db-016d-a00f-f879-1d5e0ebfb939',
   '1ccfe595-76c2-cc7d-27fc-b8274bed1716',
@@ -10902,7 +10646,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Tenía toldo retráctil accionado por marineros']::text[],
   '{"address":"Piazza del Colosseo","priceRange":"$$ - €18","dia":1,"day":1}'::jsonb,
   210,
-  1,
   '{"dia":1,"day":1,"activities":["Entrada combinada (€18)","Fotos en el Arco de Constantino"],"datos_curiosos":["Tenía toldo retráctil accionado por marineros"],"consejos":["Reservar online"],"location_info":{"address":"Piazza del Colosseo","priceRange":"$$ - €18","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -10920,7 +10663,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '33f672b1-f0ba-647e-de1a-1784edd81d28',
   '1ccfe595-76c2-cc7d-27fc-b8274bed1716',
@@ -10938,7 +10681,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El óculo del Panteón mide 9 metros de diámetro']::text[],
   '{"address":"Piazza della Rotonda","priceRange":"$ - €5","dia":2,"day":2}'::jsonb,
   180,
-  2,
   '{"dia":2,"day":2,"activities":["Lanzar moneda (Gratis)","Entrada al Panteón (€5)","Gelato artesanal (€4)"],"datos_curiosos":["El óculo del Panteón mide 9 metros de diámetro"],"consejos":["Probar helado en Giolitti"],"location_info":{"address":"Piazza della Rotonda","priceRange":"$ - €5","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -10956,7 +10698,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '45bf1f97-7228-7a31-f6f2-7e204c277973',
   '1ccfe595-76c2-cc7d-27fc-b8274bed1716',
@@ -10974,7 +10716,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Piedad es la única obra que Miguel Ángel firmó']::text[],
   '{"address":"Vaticano","priceRange":"$$ - €25","dia":3,"day":3}'::jsonb,
   270,
-  3,
   '{"dia":3,"day":3,"activities":["Capilla Sixtina (€25)","Subida a la cúpula (€10)"],"datos_curiosos":["La Piedad es la única obra que Miguel Ángel firmó"],"consejos":["Hombros y rodillas cubiertos"],"location_info":{"address":"Vaticano","priceRange":"$$ - €25","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -10992,7 +10733,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ba47c47b-2406-c072-c3c9-536b84c42532',
   '1ccfe595-76c2-cc7d-27fc-b8274bed1716',
@@ -11010,7 +10751,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Vía Apia fue la primera calzada pavimentada de Roma construida en el 312 a.C.']::text[],
   '{"address":"Via Appia Antica 110","priceRange":"$ - €10","dia":4,"day":4}'::jsonb,
   210,
-  4,
   '{"dia":4,"day":4,"activities":["Visita guiada subterránea (€10)","Paseo en bicicleta por los adoquines de la Vía Apia (€15)"],"datos_curiosos":["La Vía Apia fue la primera calzada pavimentada de Roma construida en el 312 a.C."],"consejos":["Llevar chaqueta; en las catacumbas hay 15°C constantes"],"location_info":{"address":"Via Appia Antica 110","priceRange":"$ - €10","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -11028,7 +10768,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '48625103-57a7-35ad-bec5-f2088846316b',
   '1ccfe595-76c2-cc7d-27fc-b8274bed1716',
@@ -11046,7 +10786,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Bernini esculpió las hojas de laurel de Dafne tan finas que la luz pasa a través del mármol']::text[],
   '{"address":"Piazzale Scipione Borghese 5","priceRange":"$$ - €15","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Esculturas de Bernini (€15)","Paseo en barca en el lago (€5)"],"datos_curiosos":["Bernini esculpió las hojas de laurel de Dafne tan finas que la luz pasa a través del mármol"],"consejos":["Reserva anticipada obligatoria en Galería Borghese"],"location_info":{"address":"Piazzale Scipione Borghese 5","priceRange":"$$ - €15","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -11065,7 +10804,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #33: Nueva York: De los Rascacielos de Manhattan al Alma de Brooklyn (Nueva York, Estados Unidos)
+-- Tour: Nueva York: De los Rascacielos de Manhattan al Alma de Brooklyn (Nueva York, Estados Unidos)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -11124,7 +10863,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '44de880f-2b9a-b034-4c0d-3894b6d00375',
   'bca85b4f-4a45-ec5c-183e-6911323737ef',
@@ -11142,7 +10881,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Central Park fue el primer parque público ajardinado de Estados Unidos en 1858']::text[],
   '{"address":"Broadway & 7th Ave","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   210,
-  1,
   '{"dia":1,"day":1,"activities":["Paseo por The Mall y Bethesda Terrace en Central Park (Gratis)","Porción de pizza clásica estilo NY de $3 USD"],"datos_curiosos":["Central Park fue el primer parque público ajardinado de Estados Unidos en 1858"],"consejos":["Times Square es más impactante de noche con los neones"],"location_info":{"address":"Broadway & 7th Ave","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -11160,7 +10898,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '3cd06169-ce54-5398-ec31-70bf388e90af',
   'bca85b4f-4a45-ec5c-183e-6911323737ef',
@@ -11178,7 +10916,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En las vías del High Line se preservan tramos originales donde crecieron flores silvestres']::text[],
   '{"address":"Chelsea, Manhattan","priceRange":"$$ - Moderado","dia":2,"day":2}'::jsonb,
   180,
-  2,
   '{"dia":2,"day":2,"activities":["Caminar los 2.3 km del High Line (Gratis)","Comer un Lobster Roll de langosta en Chelsea Market ($22 USD)"],"datos_curiosos":["En las vías del High Line se preservan tramos originales donde crecieron flores silvestres"],"consejos":["Terminar en Hudson Yards para ver la escultura The Vessel"],"location_info":{"address":"Chelsea, Manhattan","priceRange":"$$ - Moderado","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -11196,7 +10933,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '43c0b911-656a-c055-c8c1-3b8de445d813',
   'bca85b4f-4a45-ec5c-183e-6911323737ef',
@@ -11214,7 +10951,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El techo de Grand Central tiene las constelaciones pintadas al revés respecto al cielo real']::text[],
   '{"address":"45 E 42nd St","priceRange":"$$$ - Mirador $43+","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Entrada al mirador Summit ($43 - $52 USD)","Ver el techo celeste astronómico de Grand Central (Gratis)"],"datos_curiosos":["El techo de Grand Central tiene las constelaciones pintadas al revés respecto al cielo real"],"consejos":["Llevar gafas de sol para el mirador; el reflejo de la luz en los espejos es deslumbrante"],"location_info":{"address":"45 E 42nd St","priceRange":"$$$ - Mirador $43+","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -11232,7 +10968,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0effc326-a541-e5a3-4480-3a65ce143472',
   'bca85b4f-4a45-ec5c-183e-6911323737ef',
@@ -11250,7 +10986,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Para demostrar que el puente era seguro tras su inauguración, el circo P.T. Barnum desfiló con 21 elefantes sobre él']::text[],
   '{"address":"DUMBO, Brooklyn","priceRange":"$ - Acceso libre","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Cruce a pie del puente hacia Brooklyn (Gratis)","Pizza en Grimaldi''s o Juliana''s ($25 - $35 USD)"],"datos_curiosos":["Para demostrar que el puente era seguro tras su inauguración, el circo P.T. Barnum desfiló con 21 elefantes sobre él"],"consejos":["Cruzar de Brooklyn a Manhattan si se quiere ver el skyline de frente"],"location_info":{"address":"DUMBO, Brooklyn","priceRange":"$ - Acceso libre","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -11268,7 +11003,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '279e4849-88bb-fc0e-5c10-6dbdbab0b5e0',
   'bca85b4f-4a45-ec5c-183e-6911323737ef',
@@ -11286,7 +11021,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Egipto donó el Templo de Dendur a EE.UU. en agradecimiento por salvar monumentos de Nubia']::text[],
   '{"address":"1000 5th Ave","priceRange":"$$ - Entrada $30","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Entrada al MET ($30 USD)","Caminata por los edificios Cast-Iron de SoHo (Gratis)"],"datos_curiosos":["Egipto donó el Templo de Dendur a EE.UU. en agradecimiento por salvar monumentos de Nubia"],"consejos":["Subir a la terraza del tejado del MET en verano para vistas de Central Park"],"location_info":{"address":"1000 5th Ave","priceRange":"$$ - Entrada $30","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -11304,7 +11038,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c6dceb9a-94a1-9dfc-7bdd-b2992f59b405',
   'bca85b4f-4a45-ec5c-183e-6911323737ef',
@@ -11322,7 +11056,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Estatua de la Libertad fue un regalo del pueblo francés en 1886 por el centenario de la independencia']::text[],
   '{"address":"Whitehall Terminal, Manhattan","priceRange":"$ - Ferry gratis","dia":6,"day":6}'::jsonb,
   180,
-  6,
   '{"dia":6,"day":6,"activities":["Viaje de ida y vuelta en el ferry gratuito de Staten Island ($0)","Foto con el Charging Bull de Wall Street (Gratis)","Memorial del 11 de Septiembre (Gratis)"],"datos_curiosos":["La Estatua de la Libertad fue un regalo del pueblo francés en 1886 por el centenario de la independencia"],"consejos":["El ferry de Staten Island es 100% gratis las 24 horas del día; no pagar a revendedores en la calle"],"location_info":{"address":"Whitehall Terminal, Manhattan","priceRange":"$ - Ferry gratis","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -11341,7 +11074,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #34: Barcelona de Gaudí y el Mediterráneo: Modernismo y Playas (Barcelona, España)
+-- Tour: Barcelona de Gaudí y el Mediterráneo: Modernismo y Playas (Barcelona, España)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -11400,7 +11133,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c3b22af7-7a64-cf3c-54fc-d3aa1f8795cc',
   'b0db9f9c-5f65-11af-631f-df7e07d9aacd',
@@ -11418,7 +11151,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Gaudí está enterrado en la cripta de la basílica']::text[],
   '{"address":"Carrer de Mallorca 401","priceRange":"$$ - €26","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Visita a la Sagrada Familia (€26)","Fotos en Casa Batlló"],"datos_curiosos":["Gaudí está enterrado en la cripta de la basílica"],"consejos":["Entrada con audioguía incluida en la app"],"location_info":{"address":"Carrer de Mallorca 401","priceRange":"$$ - €26","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -11436,7 +11168,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '87d579ea-29e9-101c-312a-7f428a919fdc',
   'b0db9f9c-5f65-11af-631f-df7e07d9aacd',
@@ -11454,7 +11186,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El banco ondulado fue moldeado sentando a un operario desnudo en yeso fresco para copiar la curva de la columna']::text[],
   '{"address":"Park Güell","priceRange":"$ - €10","dia":2,"day":2}'::jsonb,
   200,
-  2,
   '{"dia":2,"day":2,"activities":["Entrada al Park Güell (€10)","Tapas y vermut en el barrio de Gracia (€15)"],"datos_curiosos":["El banco ondulado fue moldeado sentando a un operario desnudo en yeso fresco para copiar la curva de la columna"],"consejos":["Llegar en metro Lesseps"],"location_info":{"address":"Park Güell","priceRange":"$ - €10","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -11472,7 +11203,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '763e6084-baf7-d418-1efc-1241f5620499',
   'b0db9f9c-5f65-11af-631f-df7e07d9aacd',
@@ -11490,7 +11221,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Boquería era antiguamente un mercado de carne de cabra al aire libre extramuros']::text[],
   '{"address":"La Rambla 91","priceRange":"$$ - Tapas","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Caminata gótica (Gratis)","Tapas en La Boquería (€18)"],"datos_curiosos":["La Boquería era antiguamente un mercado de carne de cabra al aire libre extramuros"],"consejos":["Cuidar bolsillos en Las Ramblas"],"location_info":{"address":"La Rambla 91","priceRange":"$$ - Tapas","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -11508,7 +11238,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '09eb86c8-7ecd-d91c-b166-e9a9ee7f39e9',
   'b0db9f9c-5f65-11af-631f-df7e07d9aacd',
@@ -11526,7 +11256,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Desde el castillo se midió el meridiano que definió la longitud exacta de un metro en 1792']::text[],
   '{"address":"Carretera de Montjuïc 66","priceRange":"$ - €9","dia":4,"day":4}'::jsonb,
   200,
-  4,
   '{"dia":4,"day":4,"activities":["Teleférico de Montjuïc (€10)","Entrada al castillo (€9)"],"datos_curiosos":["Desde el castillo se midió el meridiano que definió la longitud exacta de un metro en 1792"],"consejos":["Subir en el funicular de Montjuïc integrado en el metro"],"location_info":{"address":"Carretera de Montjuïc 66","priceRange":"$ - €9","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -11544,7 +11273,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '9c41d667-620e-434a-f791-2a1bb362e07b',
   'b0db9f9c-5f65-11af-631f-df7e07d9aacd',
@@ -11562,7 +11291,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El barrio fue construido en el siglo XVIII para realojar a los habitantes de la Ribera cuyas casas fueron demolidas para la Ciudadela']::text[],
   '{"address":"Passeig Marítim","priceRange":"$$ - Paella","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Paseo en bicicleta por la costa (€12)","Paella marinera con sangría (€25 - €35)"],"datos_curiosos":["El barrio fue construido en el siglo XVIII para realojar a los habitantes de la Ribera cuyas casas fueron demolidas para la Ciudadela"],"consejos":["Tomar el Aerobús en Plaza Cataluña al terminar"],"location_info":{"address":"Passeig Marítim","priceRange":"$$ - Paella","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -11581,7 +11309,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #35: Minca y la Sierra Nevada: Aves, Cafetales y Cascadas (Minca, Colombia)
+-- Tour: Minca y la Sierra Nevada: Aves, Cafetales y Cascadas (Minca, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -11640,7 +11368,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '793922cc-c0c6-f3aa-bb52-c9e615e00dc1',
   'df07786e-ab88-4cee-16e0-9fc77703502f',
@@ -11658,7 +11386,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El agua proviene directamente de los picos nevados Colón y Bolívar']::text[],
   '{"address":"Minca, Magdalena","priceRange":"$ - Libre","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Baño en pozas frías (Gratis)","Almuerzo campestre ($22.000 COP)"],"datos_curiosos":["El agua proviene directamente de los picos nevados Colón y Bolívar"],"consejos":["Llegar antes de las 10:00 AM para evitar aglomeraciones"],"location_info":{"address":"Minca, Magdalena","priceRange":"$ - Libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -11676,7 +11403,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c03cd794-9c5c-a4de-02fe-3ed1a9737ed3',
   'df07786e-ab88-4cee-16e0-9fc77703502f',
@@ -11694,7 +11421,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Toda la maquinaria funciona sin electricidad de la red']::text[],
   '{"address":"El Campano, Minca","priceRange":"$ - Tour $25.000 COP","dia":2,"day":2}'::jsonb,
   210,
-  2,
   '{"dia":2,"day":2,"activities":["Tour del café orgánico ($25.000 COP)","Cerveza artesanal de café ($14.000 COP)"],"datos_curiosos":["Toda la maquinaria funciona sin electricidad de la red"],"consejos":["Subir en moto-taxi local ($20.000 COP)"],"location_info":{"address":"El Campano, Minca","priceRange":"$ - Tour $25.000 COP","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -11712,7 +11438,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '09b776a2-f493-0a55-f1b2-3a487aa3d0f6',
   'df07786e-ab88-4cee-16e0-9fc77703502f',
@@ -11730,7 +11456,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En este valle habitan más de 300 especies de aves registradas']::text[],
   '{"address":"Vereda Marinka, Minca","priceRange":"$ - Entrada $10.000 COP","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Baño en cascada (Entrada: $10.000 COP)","Foto en las hamacas gigantes ($5.000 COP)"],"datos_curiosos":["En este valle habitan más de 300 especies de aves registradas"],"consejos":["Llevar calzado de agua para piedras resbalosas"],"location_info":{"address":"Vereda Marinka, Minca","priceRange":"$ - Entrada $10.000 COP","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -11749,7 +11474,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #36: Parque Nacional Natural Los Nevados: Glaciares, Frailejones y Termales (Manizales, Colombia)
+-- Tour: Parque Nacional Natural Los Nevados: Glaciares, Frailejones y Termales (Manizales, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -11808,7 +11533,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'bb4b3ecc-3d2c-d872-cbd9-620399004df2',
   '13f30a75-a05e-2704-6dd6-832d19c62c67',
@@ -11826,7 +11551,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las aguas brotan a más de 60°C de fallas volcánicas profundas']::text[],
   '{"address":"Vía Manizales - Murillo Km 28","priceRange":"$$ - Termales","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Baño termal medicinal ($50.000 COP)","Avistamiento del colibrí de páramo (Gratis)"],"datos_curiosos":["Las aguas brotan a más de 60°C de fallas volcánicas profundas"],"consejos":["No beber alcohol para facilitar la aclimatación"],"location_info":{"address":"Vía Manizales - Murillo Km 28","priceRange":"$$ - Termales","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -11844,7 +11568,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'cfad21d6-0450-4fb2-e164-7d44a953a65f',
   '13f30a75-a05e-2704-6dd6-832d19c62c67',
@@ -11862,7 +11586,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Nevado del Ruiz es un estratovolcán activo conocido por los pueblos indígenas como Kumanday']::text[],
   '{"address":"Sector Brisas, PNN Los Nevados","priceRange":"$$ - Entrada y guía","dia":2,"day":2}'::jsonb,
   300,
-  2,
   '{"dia":2,"day":2,"activities":["Caminata guiada al borde de nieve (Entrada parque: ~$40.000 COP + guía)","Foto en el Valle de los Lunares"],"datos_curiosos":["El Nevado del Ruiz es un estratovolcán activo conocido por los pueblos indígenas como Kumanday"],"consejos":["Caminar muy despacio y con respiración controlada por la escasez de oxígeno"],"location_info":{"address":"Sector Brisas, PNN Los Nevados","priceRange":"$$ - Entrada y guía","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -11880,7 +11603,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '52b3455a-c3da-974f-f917-edadbc74ff47',
   '13f30a75-a05e-2704-6dd6-832d19c62c67',
@@ -11898,7 +11621,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los frailejones retienen hasta 40 veces su peso en agua actuando como esponjas que originan los ríos de Colombia']::text[],
   '{"address":"Carretera al Ruiz","priceRange":"$ - Libre","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Fotografía de frailejones gigantes (Gratis)","Agua de panela con queso caliente en parador andino ($8.000 COP)"],"datos_curiosos":["Los frailejones retienen hasta 40 veces su peso en agua actuando como esponjas que originan los ríos de Colombia"],"consejos":["Los frailejones crecen apenas 1 centímetro al año; no pisarlos ni tocarlos"],"location_info":{"address":"Carretera al Ruiz","priceRange":"$ - Libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -11916,7 +11638,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd9f09e9f-39b3-fba3-8a5f-03841b7b40c3',
   '13f30a75-a05e-2704-6dd6-832d19c62c67',
@@ -11934,7 +11656,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La combinación de choque térmico entre la cascada fría y la piscina caliente reactiva la circulación']::text[],
   '{"address":"Santa Rosa de Cabal, Risaralda","priceRange":"$$ - Entrada termales","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Baño hidrotermal de recuperación muscular ($55.000 COP)","Chorizo santarrosano tradicional ($18.000 COP)"],"datos_curiosos":["La combinación de choque térmico entre la cascada fría y la piscina caliente reactiva la circulación"],"consejos":["Llevar traje de baño y sandalias"],"location_info":{"address":"Santa Rosa de Cabal, Risaralda","priceRange":"$$ - Entrada termales","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -11953,7 +11674,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #37: Cañón del Río Claro: Mármol, Rafting y Cavernas Naturales (Doradal, Colombia)
+-- Tour: Cañón del Río Claro: Mármol, Rafting y Cavernas Naturales (Doradal, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -12012,7 +11733,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '26c08ef4-1c5f-f20b-701d-50b5d11b2d73',
   '3c266c2b-1b1b-dfda-e7cd-75558b98351b',
@@ -12030,7 +11751,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las paredes de mármol se formaron hace millones de años por sedimentación de antiguos arrecifes marinos fósiles']::text[],
   '{"address":"Autopista Medellín - Bogotá Km 152","priceRange":"$ - Entrada reserva","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Entrada a la reserva ($25.000 COP)","Baño en el río sobre losas de mármol sumergidas (Gratis)"],"datos_curiosos":["Las paredes de mármol se formaron hace millones de años por sedimentación de antiguos arrecifes marinos fósiles"],"consejos":["El agua es fresca y extremadamente transparente"],"location_info":{"address":"Autopista Medellín - Bogotá Km 152","priceRange":"$ - Entrada reserva","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -12048,7 +11768,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '6d89bb10-61b2-c2fb-e4e5-d234c4081bec',
   '3c266c2b-1b1b-dfda-e7cd-75558b98351b',
@@ -12066,7 +11786,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los guácharos emiten chasquidos sonoros audibles por el ser humano para mapear la cueva en la oscuridad absoluta']::text[],
   '{"address":"Reserva Natural Río Claro","priceRange":"$$ - Actividades de aventura","dia":2,"day":2}'::jsonb,
   300,
-  2,
   '{"dia":2,"day":2,"activities":["Espeleología con casco y linterna dentro de la caverna ($35.000 COP)","Rafting en río transparente entre cañones de mármol ($40.000 COP)"],"datos_curiosos":["Los guácharos emiten chasquidos sonoros audibles por el ser humano para mapear la cueva en la oscuridad absoluta"],"consejos":["La caverna requiere cruzar tramos donde el agua llega al pecho; llevar ropa que se pueda mojar"],"location_info":{"address":"Reserva Natural Río Claro","priceRange":"$$ - Actividades de aventura","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -12084,7 +11803,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd855ffb1-94ff-b40f-9568-1c88c7d8fdbb',
   '3c266c2b-1b1b-dfda-e7cd-75558b98351b',
@@ -12102,7 +11821,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Fue construida en los años 80 evocando los pueblos de las islas griegas del mar Egeo']::text[],
   '{"address":"Doradal, Puerto Triunfo, Antioquia","priceRange":"$ - Libre","dia":3,"day":3}'::jsonb,
   150,
-  3,
   '{"dia":3,"day":3,"activities":["Paseo fotográfico por las callejuelas blancas y miradores (Gratis)","Almuerzo campestre con pescado fresco del río Magdalena ($25.000 COP)"],"datos_curiosos":["Fue construida en los años 80 evocando los pueblos de las islas griegas del mar Egeo"],"consejos":["Llevar cámara con batería completa para fotos de arquitectura"],"location_info":{"address":"Doradal, Puerto Triunfo, Antioquia","priceRange":"$ - Libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -12121,7 +11839,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #38: Desierto de la Tatacoa: Laberinto Rojo, Gris y Cielos Estelares (Villavieja, Colombia)
+-- Tour: Desierto de la Tatacoa: Laberinto Rojo, Gris y Cielos Estelares (Villavieja, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -12180,7 +11898,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '99605161-c7b0-a081-5ace-85e886367dac',
   '5232c9c7-2fd2-ee8c-9160-289b4f173457',
@@ -12198,7 +11916,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Tatacoa no es técnicamente un desierto sino un bosque seco tropical que en épocas prehistóricas era un mar interior']::text[],
   '{"address":"Sector Cusco, Villavieja","priceRange":"$ - Observatorio $15.000 COP","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Caminata por el laberinto rojo del Cusco (Gratis)","Sesión guiada de observación de planetas y nebulosas con telescopio ($15.000 COP)","Cena de chivo asado o sancocho en posada del desierto ($22.000 - $35.000 COP)"],"datos_curiosos":["La Tatacoa no es técnicamente un desierto sino un bosque seco tropical que en épocas prehistóricas era un mar interior"],"consejos":["Hacer la caminata antes de las 9:00 AM o después de las 4:30 PM para evitar golpes de calor"],"location_info":{"address":"Sector Cusco, Villavieja","priceRange":"$ - Observatorio $15.000 COP","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -12216,7 +11933,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8de00f90-db09-ad3d-6f20-64fa50ebe681',
   '5232c9c7-2fd2-ee8c-9160-289b4f173457',
@@ -12234,7 +11951,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En Los Hoyos se han hallado fósiles de tortugas gigantes de más de dos metros y perezosos terrestres gigantes']::text[],
   '{"address":"Los Hoyos, Desierto de la Tatacoa","priceRange":"$ - Piscina $10.000 COP","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Sendero por las gargantas grises de Los Hoyos (Gratis)","Baño refrescante en la piscina mineral del oasis ($10.000 COP)","Probar dulce artesanal de leche de cabra y cactus ($8.000 COP)"],"datos_curiosos":["En Los Hoyos se han hallado fósiles de tortugas gigantes de más de dos metros y perezosos terrestres gigantes"],"consejos":["Llevar traje de baño puesto para la piscina"],"location_info":{"address":"Los Hoyos, Desierto de la Tatacoa","priceRange":"$ - Piscina $10.000 COP","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -12252,7 +11968,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ec7317ca-a55e-0d12-08a3-0dfbd9dedb28',
   '5232c9c7-2fd2-ee8c-9160-289b4f173457',
@@ -12270,7 +11986,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Tatacoa es el yacimiento de fósiles de mamíferos del Mioceno más rico de toda América del Sur']::text[],
   '{"address":"Parque Principal, Villavieja, Huila","priceRange":"$ - Entrada $6.000 COP","dia":3,"day":3}'::jsonb,
   150,
-  3,
   '{"dia":3,"day":3,"activities":["Visita guiada al museo con piezas fósiles originales (Entrada: $6.000 COP)","Paseo en canoa por el río Magdalena desde el puerto de Villavieja ($15.000 COP)","Probar el quesillo de hoja y la achira tradicional huilense ($8.000 COP)"],"datos_curiosos":["La Tatacoa es el yacimiento de fósiles de mamíferos del Mioceno más rico de toda América del Sur"],"consejos":["Villavieja queda a solo 45 minutos en carretera pavimentada desde Neiva"],"location_info":{"address":"Parque Principal, Villavieja, Huila","priceRange":"$ - Entrada $6.000 COP","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -12289,7 +12004,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #39: Golfo de Morrosquillo: Tolú, Coveñas e Islas de San Bernardo (Tolú, Colombia)
+-- Tour: Golfo de Morrosquillo: Tolú, Coveñas e Islas de San Bernardo (Tolú, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -12348,7 +12063,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a59d14a4-d23d-e320-abb8-97a3b3c82bc7',
   '37f88edb-f27c-af22-d2b4-3325cae05925',
@@ -12366,7 +12081,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Tolú fue una de las villas hispánicas más antiguas del Caribe colombiano, fundada en 1535']::text[],
   '{"address":"Coveñas, Sucre","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Baño de mar relajante (Gratis)","Almuerzo de pargo platinado con patacón y arroz de coco ($32.000 COP)","Paseo en bicitaxi decorado con música en el malecón de Tolú ($10.000 COP)"],"datos_curiosos":["Tolú fue una de las villas hispánicas más antiguas del Caribe colombiano, fundada en 1535"],"consejos":["El golfo de Morrosquillo se caracteriza por un mar plano tipo piscina"],"location_info":{"address":"Coveñas, Sucre","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -12384,7 +12098,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f38e37d1-578e-95e4-2843-986f67a14fb2',
   '37f88edb-f27c-af22-d2b4-3325cae05925',
@@ -12402,7 +12116,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Por la noche en las lagunas de manglar de la isla se aprecia el fenómeno de bioluminiscencia marina']::text[],
   '{"address":"Isla Múcura, Golfo de Morrosquillo","priceRange":"$$ - Pasadía en lancha","dia":2,"day":2}'::jsonb,
   360,
-  2,
   '{"dia":2,"day":2,"activities":["Lancha rápida desde Tolú (Pasadía: ~$90.000 - $140.000 COP ida y vuelta)","Snorkel en arrecife de coral ($35.000 COP)","Almuerzo de langosta o pescado fresco en la playa ($45.000 - $70.000 COP)"],"datos_curiosos":["Por la noche en las lagunas de manglar de la isla se aprecia el fenómeno de bioluminiscencia marina"],"consejos":["Pagar la tasa portuaria en el muelle de Tolú ($12.000 COP en efectivo)"],"location_info":{"address":"Isla Múcura, Golfo de Morrosquillo","priceRange":"$$ - Pasadía en lancha","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -12420,7 +12133,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '38c8b4c5-5be6-042a-d280-7a9a1ff55c9a',
   '37f88edb-f27c-af22-d2b4-3325cae05925',
@@ -12438,7 +12151,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En Santa Cruz del Islote no hay mosquitos porque no hay manglares ni agua dulce estancada']::text[],
   '{"address":"Santa Cruz del Islote / Tintipán","priceRange":"$ - Aporte local","dia":3,"day":3}'::jsonb,
   300,
-  3,
   '{"dia":3,"day":3,"activities":["Recorrido cultural guiado por los estrechos callejones del islote ($10.000 COP aporte)","Nadar con tiburones nodriza inofensivos en el acuario comunitario ($15.000 COP)","Descanso en las aguas turquesas de Tintipán (Gratis)"],"datos_curiosos":["En Santa Cruz del Islote no hay mosquitos porque no hay manglares ni agua dulce estancada"],"consejos":["Llevar caramelos o útiles escolares para los niños del islote"],"location_info":{"address":"Santa Cruz del Islote / Tintipán","priceRange":"$ - Aporte local","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -12456,7 +12168,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5016bbb0-ac38-6c97-14d4-4b780ec37c24',
   '37f88edb-f27c-af22-d2b4-3325cae05925',
@@ -12474,7 +12186,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En la ciénaga habitan caimanes aguja protegidos y cuatro tipos distintos de manglares']::text[],
   '{"address":"Coveñas, Sucre","priceRange":"$ - Paseo en canoa","dia":4,"day":4}'::jsonb,
   180,
-  4,
   '{"dia":4,"day":4,"activities":["Paseo ecológico en canoa a remo ($20.000 COP)","Probar ostras frescas extraídas del manglar con limón en la casa flotante ($15.000 COP docena)","Compras de artesanías de caña flecha antes de salir ($15.000 - $40.000 COP)"],"datos_curiosos":["En la ciénaga habitan caimanes aguja protegidos y cuatro tipos distintos de manglares"],"consejos":["Las canoas van sin motor para no alterar la fauna de aves acuáticas"],"location_info":{"address":"Coveñas, Sucre","priceRange":"$ - Paseo en canoa","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -12493,7 +12204,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #40: Archipiélago de San Andrés y Providencia: El Mar de los Siete Colores (San Andrés, Colombia)
+-- Tour: Archipiélago de San Andrés y Providencia: El Mar de los Siete Colores (San Andrés, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -12552,7 +12263,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2ec2ff2d-916b-2415-2f1a-6f240935d541',
   '1411b297-1294-7f32-caad-4807ffc0d565',
@@ -12570,7 +12281,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El mar exhibe hasta 7 tonalidades distintas de azul debido a las diferentes profundidades y arrecifes de coral']::text[],
   '{"address":"San Andrés Isla","priceRange":"$$ - Alquiler carrito","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Alquiler de carrito de golf por día ($180.000 - $250.000 COP)","Snorkel en La Piscinita rodeado de peces sargento ($10.000 COP)","Ver el chorro de agua del Hoyo Soplador (Gratis)"],"datos_curiosos":["El mar exhibe hasta 7 tonalidades distintas de azul debido a las diferentes profundidades y arrecifes de coral"],"consejos":["Respetar los límites de velocidad en el carrito de golf"],"location_info":{"address":"San Andrés Isla","priceRange":"$$ - Alquiler carrito","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -12588,7 +12298,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e912bb7a-94aa-0686-4e64-5af1c305648a',
   '1411b297-1294-7f32-caad-4807ffc0d565',
@@ -12606,7 +12316,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Johnny Cay está habitado por cientos de iguanas de gran tamaño que pasean entre los turistas']::text[],
   '{"address":"Cayos de San Andrés","priceRange":"$$ - Lancha y almuerzo","dia":2,"day":2}'::jsonb,
   300,
-  2,
   '{"dia":2,"day":2,"activities":["Lancha combinada Johnny Cay + Acuario ($45.000 - $65.000 COP)","Almuerzo de pargo rojo con coco en Johnny Cay ($38.000 - $55.000 COP)","Caminar sobre el banco de arena entre Rose Cay y Haynes Cay (Gratis)"],"datos_curiosos":["Johnny Cay está habitado por cientos de iguanas de gran tamaño que pasean entre los turistas"],"consejos":["Usar zapatos de agua obligatorios en el Acuario por piedras de coral"],"location_info":{"address":"Cayos de San Andrés","priceRange":"$$ - Lancha y almuerzo","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -12624,7 +12333,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '13a93795-f3ac-7e25-894f-9b5f2cf52687',
   '1411b297-1294-7f32-caad-4807ffc0d565',
@@ -12642,7 +12351,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Puente de los Enamorados es una pasarela flotante de madera de colores sobre un canal marino transparente']::text[],
   '{"address":"Santa Isabel, Providencia","priceRange":"$$$ - Vuelo interno","dia":3,"day":3}'::jsonb,
   240,
-  3,
   '{"dia":3,"day":3,"activities":["Cruzar a pie el Puente de los Enamorados que une Providencia con Santa Catalina (Gratis)","Caminar hasta la Cabeza de Morgan en Santa Catalina (Gratis)","Cena de muelas de cangrejo negro o rondón raizal ($40.000 - $65.000 COP)"],"datos_curiosos":["El Puente de los Enamorados es una pasarela flotante de madera de colores sobre un canal marino transparente"],"consejos":["Providencia cuenta con cupos limitados diarios; reservar vuelo con mucha anticipación"],"location_info":{"address":"Santa Isabel, Providencia","priceRange":"$$$ - Vuelo interno","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -12660,7 +12368,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'bd5d7d4c-a426-7f1c-6c53-16d02c962646',
   '1411b297-1294-7f32-caad-4807ffc0d565',
@@ -12678,7 +12386,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La barrera arrecifal de Providencia es la segunda más larga del hemisferio occidental después de la de Belice']::text[],
   '{"address":"PNN Old Providence McBean Lagoon","priceRange":"$$ - Excursión cayo","dia":4,"day":4}'::jsonb,
   300,
-  4,
   '{"dia":4,"day":4,"activities":["Lancha hacia Cayo Cangrejo ($40.000 COP ida y vuelta)","Entrada al Parque Nacional McBean Lagoon ($22.000 COP)","Snorkel con tortugas carey y peces loro (Gratis con equipo propio)"],"datos_curiosos":["La barrera arrecifal de Providencia es la segunda más larga del hemisferio occidental después de la de Belice"],"consejos":["Subir a la cima de la roca de Cayo Cangrejo para una de las mejores vistas panorámicas de todo el Caribe"],"location_info":{"address":"PNN Old Providence McBean Lagoon","priceRange":"$$ - Excursión cayo","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -12696,7 +12403,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '02f40e02-21b8-af1b-5dcc-643e82f838e0',
   '1411b297-1294-7f32-caad-4807ffc0d565',
@@ -12714,7 +12421,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los habitantes de Providencia hablan fluidamente inglés criollo caribeño (creole), español e inglés estándar']::text[],
   '{"address":"South West Bay, Providencia","priceRange":"$ - Libre","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Descanso en la playa de aguas calmas (Gratis)","Almuerzo en el restaurante de mariscos de Richard ($45.000 COP)","Ver carreras de caballos en la arena los sábados por la tarde (Gratis)"],"datos_curiosos":["Los habitantes de Providencia hablan fluidamente inglés criollo caribeño (creole), español e inglés estándar"],"consejos":["Alquilar una moto scooter para recorrer Providencia a su propio ritmo ($90.000 COP/día)"],"location_info":{"address":"South West Bay, Providencia","priceRange":"$ - Libre","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -12732,7 +12438,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2d03e683-0d4b-837b-f319-2b025976e59e',
   '1411b297-1294-7f32-caad-4807ffc0d565',
@@ -12750,7 +12456,6 @@ INSERT INTO public.tour_stops (
   ARRAY['San Andrés goza de régimen aduanero especial de puerto libre desde el año 1953']::text[],
   '{"address":"Avenida Providencia, San Andrés","priceRange":"$ - Compras duty free","dia":6,"day":6}'::jsonb,
   150,
-  6,
   '{"dia":6,"day":6,"activities":["Compras duty free en la Avenida Providencia ($30.000 - $120.000 COP)","Último baño en la playa de Spratt Bight frente al hotel (Gratis)","Traslado al aeropuerto Gustavo Rojas Pinilla (a solo 5 minutos en taxi: $18.000 COP)"],"datos_curiosos":["San Andrés goza de régimen aduanero especial de puerto libre desde el año 1953"],"consejos":["Revisar el cupo aduanero permitido para llevar licores y perfumes a Colombia continental"],"location_info":{"address":"Avenida Providencia, San Andrés","priceRange":"$ - Compras duty free","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -12769,7 +12474,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #41: Riviera Mexicana: Cancún, Arrecifes de Cozumel e Isla Mujeres (Cancún, México)
+-- Tour: Riviera Mexicana: Cancún, Arrecifes de Cozumel e Isla Mujeres (Cancún, México)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -12828,7 +12533,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '83fdc4c2-e3b9-16c2-2fc3-d4bf2d1d579b',
   '2303fb3f-6fa8-b31d-fe9e-c49cc8d01228',
@@ -12846,7 +12551,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La arena blanca de Cancún es de origen coralino y nunca se calienta con el sol']::text[],
   '{"address":"Zona Hotelera Km 19.5, Cancún","priceRange":"$ - Libre","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Foto en el letrero de Cancún (Gratis)","Baño en el mar (Gratis)","Tacos de pescado en la orilla ($150 MXN)"],"datos_curiosos":["La arena blanca de Cancún es de origen coralino y nunca se calienta con el sol"],"consejos":["Tomar el autobús de la zona hotelera R-1 o R-2 ($12 MXN)"],"location_info":{"address":"Zona Hotelera Km 19.5, Cancún","priceRange":"$ - Libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -12864,7 +12568,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a785c5de-52db-6909-5188-6d75733b6293',
   '2303fb3f-6fa8-b31d-fe9e-c49cc8d01228',
@@ -12882,7 +12586,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los conquistadores la llamaron Isla Mujeres por las figuras femeninas dedicadas a la diosa maya Ixchel']::text[],
   '{"address":"Isla Mujeres, Quintana Roo","priceRange":"$$ - Ferry y carrito","dia":2,"day":2}'::jsonb,
   300,
-  2,
   '{"dia":2,"day":2,"activities":["Ferry Ultramar ($540 MXN ida y vuelta)","Alquiler de carrito de golf por día ($1.000 MXN)","Nadar en Playa Norte (Gratis)"],"datos_curiosos":["Los conquistadores la llamaron Isla Mujeres por las figuras femeninas dedicadas a la diosa maya Ixchel"],"consejos":["Llegar a Punta Sur para ver los acantilados donde tocan los primeros rayos de sol en México"],"location_info":{"address":"Isla Mujeres, Quintana Roo","priceRange":"$$ - Ferry y carrito","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -12900,7 +12603,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2189af47-4d00-5646-3df7-be57f8860755',
   '2303fb3f-6fa8-b31d-fe9e-c49cc8d01228',
@@ -12918,7 +12621,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La visibilidad submarina en los arrecifes de Cozumel supera habitualmente los 30 metros']::text[],
   '{"address":"Cozumel, Quintana Roo","priceRange":"$$$ - Tour El Cielo","dia":3,"day":3}'::jsonb,
   360,
-  3,
   '{"dia":3,"day":3,"activities":["Ferry de Playa del Carmen a Cozumel ($560 MXN ida y vuelta)","Tour en catamarán con snorkel en Palancar y El Cielo ($1.200 - $1.600 MXN)"],"datos_curiosos":["La visibilidad submarina en los arrecifes de Cozumel supera habitualmente los 30 metros"],"consejos":["No tocar jamás las estrellas de mar; sacarlas del agua las asfixia en segundos"],"location_info":{"address":"Cozumel, Quintana Roo","priceRange":"$$$ - Tour El Cielo","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -12936,7 +12638,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'dabc0ece-f1c8-3734-13da-fcc9cc1804e5',
   '2303fb3f-6fa8-b31d-fe9e-c49cc8d01228',
@@ -12954,7 +12656,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las esculturas fueron creadas por el artista británico Jason deCaires Taylor']::text[],
   '{"address":"Cancún / Isla Mujeres","priceRange":"$$ - Tour MUSA","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Snorkel en el MUSA con lancha y guía ($950 MXN)","Cena marinera en la laguna Nichupté con vista al atardecer ($450 MXN)"],"datos_curiosos":["Las esculturas fueron creadas por el artista británico Jason deCaires Taylor"],"consejos":["Excelente para snorkel y buceo de iniciación a poca profundidad"],"location_info":{"address":"Cancún / Isla Mujeres","priceRange":"$$ - Tour MUSA","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -12972,7 +12673,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '547295fd-f180-d69f-fb0f-51898423401c',
   '2303fb3f-6fa8-b31d-fe9e-c49cc8d01228',
@@ -12990,7 +12691,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Cancún significa "nido de serpientes" en lengua maya prehispánica']::text[],
   '{"address":"Mercado 28, Cancún Centro","priceRange":"$ - Compras locales","dia":5,"day":5}'::jsonb,
   150,
-  5,
   '{"dia":5,"day":5,"activities":["Comprar recuerdos y artesanías ($100 - $300 MXN)","Almuerzo de ceviche mixto con michelada ($180 MXN)"],"datos_curiosos":["Cancún significa \"nido de serpientes\" en lengua maya prehispánica"],"consejos":["Regatear con cordialidad en los puestos de artesanías"],"location_info":{"address":"Mercado 28, Cancún Centro","priceRange":"$ - Compras locales","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -13009,7 +12709,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #42: Nápoles, Capri y la Costa Amalfitana: El Paraíso Tirreno (Nápoles, Italia)
+-- Tour: Nápoles, Capri y la Costa Amalfitana: El Paraíso Tirreno (Nápoles, Italia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -13068,7 +12768,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f49389cd-643b-7af4-faca-0b9cdd35231d',
   '4ffb7bc7-7ee8-5fdc-e17d-c7207e182260',
@@ -13086,7 +12786,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La pizza Margarita fue inventada en 1889 en honor a la reina Margarita de Saboya con los colores de la bandera italiana (tomate rojo, mozzarella blanca y albahaca verde)']::text[],
   '{"address":"Via Cesare Sersale 1, Napoli","priceRange":"$ - Pizza €5.50","dia":1,"day":1}'::jsonb,
   210,
-  1,
   '{"dia":1,"day":1,"activities":["Caminar por Spaccanapoli (Gratis)","Pizza Margarita auténtica en Da Michele (€5.50)","Ver el Cristo Velado en la Capilla Sansevero (€10)"],"datos_curiosos":["La pizza Margarita fue inventada en 1889 en honor a la reina Margarita de Saboya con los colores de la bandera italiana (tomate rojo, mozzarella blanca y albahaca verde)"],"consejos":["En Da Michele tomar número en la entrada y esperar turno pacientemente"],"location_info":{"address":"Via Cesare Sersale 1, Napoli","priceRange":"$ - Pizza €5.50","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -13104,7 +12803,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5fd7e938-ff14-7e0b-d2ba-e88bfdd6dd10',
   '4ffb7bc7-7ee8-5fdc-e17d-c7207e182260',
@@ -13122,7 +12821,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El emperador romano Tiberio gobernó todo el Imperio Romano desde su villa imperial en Capri durante sus últimos 10 años de vida']::text[],
   '{"address":"Marina Grande, Capri","priceRange":"$$$ - Excursión isla","dia":2,"day":2}'::jsonb,
   300,
-  2,
   '{"dia":2,"day":2,"activities":["Hidroala de Nápoles a Capri (€24 ida)","Tour en barca de remos entrando a la Gruta Azul (€18)","Vistas desde los Jardines de Augusto (€1.50)"],"datos_curiosos":["El emperador romano Tiberio gobernó todo el Imperio Romano desde su villa imperial en Capri durante sus últimos 10 años de vida"],"consejos":["La Gruta Azul cierra si hay marea alta o marejada fuerte"],"location_info":{"address":"Marina Grande, Capri","priceRange":"$$$ - Excursión isla","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -13140,7 +12838,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '909b9bf8-9622-21e1-aa58-120ebc3046cd',
   '4ffb7bc7-7ee8-5fdc-e17d-c7207e182260',
@@ -13158,7 +12856,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los limones de Sorrento cuentan con denominación IGP y su piel es tan rica en aceites que se usa para perfumería']::text[],
   '{"address":"Piazza Tasso, Sorrento","priceRange":"$ - Degustación libre","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Paseo por los huertos de limones y degustación gratuita de Limoncello","Almuerzo de gnocchi alla sorrentina (€14 - €20)"],"datos_curiosos":["Los limones de Sorrento cuentan con denominación IGP y su piel es tan rica en aceites que se usa para perfumería"],"consejos":["Sorrento es el punto neurálgico ideal para conectar Nápoles con la Costa Amalfitana"],"location_info":{"address":"Piazza Tasso, Sorrento","priceRange":"$ - Degustación libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -13176,7 +12873,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '95945828-527b-8af1-351d-f00ecbdf6769',
   '4ffb7bc7-7ee8-5fdc-e17d-c7207e182260',
@@ -13194,7 +12891,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El escritor John Steinbeck escribió en 1953: "Positano te cala hondo. Es un lugar de ensueño que no parece real mientras estás allí"']::text[],
   '{"address":"Positano, Salerno","priceRange":"$$ - Ferry y consumos","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Bajar por las callejuelas escalonadas hacia Spiaggia Grande (Gratis)","Tomar un sorbete de limón servido dentro de un limón congelado gigante (€8)","Fotografía de la cascada de casas desde el muelle"],"datos_curiosos":["El escritor John Steinbeck escribió en 1953: \"Positano te cala hondo. Es un lugar de ensueño que no parece real mientras estás allí\""],"consejos":["Llegar en ferry marítimo para tener la vista más imponente de Positano desde el agua"],"location_info":{"address":"Positano, Salerno","priceRange":"$$ - Ferry y consumos","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -13212,7 +12908,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ea19cdea-0841-0f43-b0fc-a04095530007',
   '4ffb7bc7-7ee8-5fdc-e17d-c7207e182260',
@@ -13230,7 +12926,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Amalfi inventó las *Tablas Amalfitanas*, el primer código de derecho marítimo del mundo medieval']::text[],
   '{"address":"Piazza Duomo, Amalfi","priceRange":"$ - Entradas accesibles","dia":5,"day":5}'::jsonb,
   270,
-  5,
   '{"dia":5,"day":5,"activities":["Subir la escalinata monumental del Duomo di Amalfi (Entrada claustro: €3)","Pasear por los jardines sobre el abismo de Villa Rufolo en Ravello (€7)","Probar el dulce tradicional *Delizia al Limone* en pastelería Pansa (€5)"],"datos_curiosos":["Amalfi inventó las *Tablas Amalfitanas*, el primer código de derecho marítimo del mundo medieval"],"consejos":["El autobús local conecta Amalfi con Ravello en 25 minutos (€1.50)"],"location_info":{"address":"Piazza Duomo, Amalfi","priceRange":"$ - Entradas accesibles","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -13248,7 +12943,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '6a1976c9-a9a0-3850-c8e0-da91b5c6d2b1',
   '4ffb7bc7-7ee8-5fdc-e17d-c7207e182260',
@@ -13266,7 +12961,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La leyenda cuenta que el poeta Virgilio escondió un huevo mágico en los cimientos del castillo; si se rompe, el castillo y Nápoles se hundirán']::text[],
   '{"address":"Via Eldorado 3, Napoli","priceRange":"$ - Acceso libre","dia":6,"day":6}'::jsonb,
   150,
-  6,
   '{"dia":6,"day":6,"activities":["Paseo por el puente de piedra hacia el castillo (Gratis)","Último café espresso napolitano con sfogliatella caliente (€3)","Tren Alibus directo desde Piazza Garibaldi hacia el aeropuerto Capodichino (€5)"],"datos_curiosos":["La leyenda cuenta que el poeta Virgilio escondió un huevo mágico en los cimientos del castillo; si se rompe, el castillo y Nápoles se hundirán"],"consejos":["La sfogliatella puede ser *riccia* (hojaldrada) o *frolla* (masa quebrada)"],"location_info":{"address":"Via Eldorado 3, Napoli","priceRange":"$ - Acceso libre","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -13285,7 +12979,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #43: Road Trip Caribeño: De Barranquilla a Santa Marta por la Vía Parque (Barranquilla, Colombia)
+-- Tour: Road Trip Caribeño: De Barranquilla a Santa Marta por la Vía Parque (Barranquilla, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -13344,7 +13038,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a773f339-8ff8-07b1-1566-88e3b43fd3a6',
   'efa7d07b-70de-b049-76ab-070f09c80b84',
@@ -13362,7 +13056,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La Ventana al Mundo fue construida con más de 2.000 m² de vidrio laminado de colores']::text[],
   '{"address":"Gran Malecón, Barranquilla","priceRange":"$ - Libre","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Caminar junto al río Magdalena (Gratis)","Cena de comida típica caribeña en Caimán del Río ($25.000 - $45.000 COP)"],"datos_curiosos":["La Ventana al Mundo fue construida con más de 2.000 m² de vidrio laminado de colores"],"consejos":["La brisa del río es más agradable a partir de las 5:00 PM"],"location_info":{"address":"Gran Malecón, Barranquilla","priceRange":"$ - Libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -13380,7 +13073,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '3c460de1-b27f-a5aa-6bb2-c6b324ac5ac8',
   'efa7d07b-70de-b049-76ab-070f09c80b84',
@@ -13398,7 +13091,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El puente Pumarejo tiene 45 metros de gálibo para permitir el paso de barcos de gran calado']::text[],
   '{"address":"Vía Barranquilla - Santa Marta","priceRange":"$ - Peaje ~$16.000 COP","dia":2,"day":2}'::jsonb,
   150,
-  2,
   '{"dia":2,"day":2,"activities":["Cruce del puente panorámico (Gratis)","Senderismo en pasarelas de madera en Isla de Salamanca ($15.000 COP)"],"datos_curiosos":["El puente Pumarejo tiene 45 metros de gálibo para permitir el paso de barcos de gran calado"],"consejos":["Parar a comprar cocadas y dulces tradicionales a la orilla de la carretera"],"location_info":{"address":"Vía Barranquilla - Santa Marta","priceRange":"$ - Peaje ~$16.000 COP","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -13416,7 +13108,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '3737ca1f-a7d6-308b-a140-b3a22dad1294',
   'efa7d07b-70de-b049-76ab-070f09c80b84',
@@ -13434,7 +13126,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El templete de la plaza fue diseñado imitando el estilo de los templos de la Roma clásica']::text[],
   '{"address":"Plaza del Centenario, Ciénaga","priceRange":"$ - Libre","dia":3,"day":3}'::jsonb,
   150,
-  3,
   '{"dia":3,"day":3,"activities":["Fotografiar las casonas de estilo masónico y republicano (Gratis)","Almorzar pescado lebranche con patacón frente al mar en Costa Verde ($25.000 COP)"],"datos_curiosos":["El templete de la plaza fue diseñado imitando el estilo de los templos de la Roma clásica"],"consejos":["Ciénaga es el epicentro histórico de *Cien años de soledad*"],"location_info":{"address":"Plaza del Centenario, Ciénaga","priceRange":"$ - Libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -13452,7 +13143,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '6f66abb4-08bc-d146-8513-66599493281b',
   'efa7d07b-70de-b049-76ab-070f09c80b84',
@@ -13470,7 +13161,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Santa Marta fue fundada por Rodrigo de Bastidas en 1525']::text[],
   '{"address":"Carrera 1, Santa Marta","priceRange":"$$ - Moderado","dia":4,"day":4}'::jsonb,
   180,
-  4,
   '{"dia":4,"day":4,"activities":["Atardecer en la Marina con jugo de corozo ($12.000 COP)","Cena en el Parque de los Novios ($35.000 COP)"],"datos_curiosos":["Santa Marta fue fundada por Rodrigo de Bastidas en 1525"],"consejos":["Excelente punto final para continuar hacia Tayrona"],"location_info":{"address":"Carrera 1, Santa Marta","priceRange":"$$ - Moderado","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -13489,7 +13179,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #44: Travesía Andina: De Medellín a Bogotá por la Ruta de los Pueblos (Medellín, Colombia)
+-- Tour: Travesía Andina: De Medellín a Bogotá por la Ruta de los Pueblos (Medellín, Colombia)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -13548,7 +13238,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '14b4964d-44ad-84e0-640c-d76507c36dcb',
   '090ef616-a222-ccf5-51d5-e1e4024c7a72',
@@ -13566,7 +13256,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La piedra tiene una hendidura natural por donde se encajó la escalera de hormigón']::text[],
   '{"address":"Guatapé, Antioquia","priceRange":"$$ - Moderado","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Subida a la piedra ($25.000 COP)","Almuerzo de trucha ($35.000 COP)"],"datos_curiosos":["La piedra tiene una hendidura natural por donde se encajó la escalera de hormigón"],"consejos":["Subir temprano antes del mediodía"],"location_info":{"address":"Guatapé, Antioquia","priceRange":"$$ - Moderado","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -13584,7 +13273,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4095148e-80c0-791c-8fb7-d2a3cb60e547',
   '090ef616-a222-ccf5-51d5-e1e4024c7a72',
@@ -13602,7 +13291,6 @@ INSERT INTO public.tour_stops (
   ARRAY['En el cañón habitan monos tití gris endémicos de Colombia']::text[],
   '{"address":"Autopista Km 152","priceRange":"$ - Entrada reserva","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Entrada a la reserva ($25.000 COP)","Baño en el río (Gratis)"],"datos_curiosos":["En el cañón habitan monos tití gris endémicos de Colombia"],"consejos":["Ideal para pernoctar en las cabañas ecológicas sobre el cañón"],"location_info":{"address":"Autopista Km 152","priceRange":"$ - Entrada reserva","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -13620,7 +13308,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ceca20b8-c561-c77f-3dbb-ff6696d88f40',
   '090ef616-a222-ccf5-51d5-e1e4024c7a72',
@@ -13638,7 +13326,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Puente Navarro es el puente metálico colgante más antiguo de toda América del Sur']::text[],
   '{"address":"Centro Histórico de Honda, Tolima","priceRange":"$ - Libre","dia":3,"day":3}'::jsonb,
   210,
-  3,
   '{"dia":3,"day":3,"activities":["Cruzar el Puente Navarro histórico sobre el río Magdalena ($2.000 COP)","Visitar el Museo del Río Magdalena ($6.000 COP)","Probar viudo de pescado bocachico ($25.000 COP)"],"datos_curiosos":["El Puente Navarro es el puente metálico colgante más antiguo de toda América del Sur"],"consejos":["Honda es calurosa (34°C); llevar ropa muy fresca e hidratación"],"location_info":{"address":"Centro Histórico de Honda, Tolima","priceRange":"$ - Libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -13656,7 +13343,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '72e89ddd-c67f-8ef0-d9ff-aca1d8d5b0c8',
   '090ef616-a222-ccf5-51d5-e1e4024c7a72',
@@ -13674,7 +13361,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Por este Camino Real pasó la Real Expedición Botánica de José Celestino Mutis en 1783']::text[],
   '{"address":"Plaza Principal, Guaduas, Cundinamarca","priceRange":"$ - Entrada museo","dia":4,"day":4}'::jsonb,
   180,
-  4,
   '{"dia":4,"day":4,"activities":["Visitar la casa natal de La Pola (Entrada: $5.000 COP)","Mirador de Piedra Capira sobre el valle del Magdalena (Gratis)","Probar pan de yuca recién horneado con chocolate caliente ($6.000 COP)"],"datos_curiosos":["Por este Camino Real pasó la Real Expedición Botánica de José Celestino Mutis en 1783"],"consejos":["El clima en Guaduas es templado y primaveral (24°C)"],"location_info":{"address":"Plaza Principal, Guaduas, Cundinamarca","priceRange":"$ - Entrada museo","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -13692,7 +13378,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ce0a358f-7227-dcd0-4b6e-e06dd305caa9',
   '090ef616-a222-ccf5-51d5-e1e4024c7a72',
@@ -13710,7 +13396,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La carretera asciende más de 2.000 metros de desnivel en tan solo 60 kilómetros']::text[],
   '{"address":"Bogotá D.C.","priceRange":"$$ - Cena final","dia":5,"day":5}'::jsonb,
   120,
-  5,
   '{"dia":5,"day":5,"activities":["Cena de celebración de fin de ruta en la Zona G de Bogotá ($50.000 - $90.000 COP)"],"datos_curiosos":["La carretera asciende más de 2.000 metros de desnivel en tan solo 60 kilómetros"],"consejos":["Entrar a Bogotá antes de las 4:00 PM para evitar congestiones de tráfico"],"location_info":{"address":"Bogotá D.C.","priceRange":"$$ - Cena final","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -13729,7 +13414,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #45: Pacific Coast Highway: De San Francisco a Los Ángeles por la Highway 1 (San Francisco, Estados Unidos)
+-- Tour: Pacific Coast Highway: De San Francisco a Los Ángeles por la Highway 1 (San Francisco, Estados Unidos)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -13788,7 +13473,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '45bdbbaf-9dca-7c2d-2bfb-fbd4384718f8',
   '17bf5612-6e9f-e5e5-f148-a256e6d1fe66',
@@ -13806,7 +13491,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Su color oficial es "International Orange", elegido porque resaltaba a través de la niebla']::text[],
   '{"address":"Golden Gate Bridge, San Francisco","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Cruzar el Golden Gate caminando o en bicicleta (Gratis peatonal / peaje coche hacia el sur: $9.75 USD)","Sopa Clam Chowder en pan de masa madre Boudin ($14 USD)"],"datos_curiosos":["Su color oficial es \"International Orange\", elegido porque resaltaba a través de la niebla"],"consejos":["Abrigarse; la niebla marina *Karl the Fog* suele bajar al atardecer"],"location_info":{"address":"Golden Gate Bridge, San Francisco","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -13824,7 +13508,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b90c930e-69f5-6a8d-ed9e-28d531bd7713',
   '17bf5612-6e9f-e5e5-f148-a256e6d1fe66',
@@ -13842,7 +13526,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El actor Clint Eastwood fue alcalde de Carmel-by-the-Sea en los años 80']::text[],
   '{"address":"Pebble Beach / Carmel, CA","priceRange":"$ - Peaje $11.75","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Paseo por 17-Mile Drive (Peaje coche: $11.75 USD)","Caminar por las casas de cuento de hadas de Carmel-by-the-Sea (Gratis)"],"datos_curiosos":["El actor Clint Eastwood fue alcalde de Carmel-by-the-Sea en los años 80"],"consejos":["Carmel no tiene parquímetros ni números de calle formales"],"location_info":{"address":"Pebble Beach / Carmel, CA","priceRange":"$ - Peaje $11.75","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -13860,7 +13543,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ad6845da-c626-1424-c48d-7b417b07db96',
   '17bf5612-6e9f-e5e5-f148-a256e6d1fe66',
@@ -13878,7 +13561,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El puente Bixby es uno de los puentes de arco de un solo tramo de hormigón más fotografiados del planeta']::text[],
   '{"address":"Highway 1, Big Sur, CA","priceRange":"$ - Mirador libre","dia":3,"day":3}'::jsonb,
   300,
-  3,
   '{"dia":3,"day":3,"activities":["Foto clásica del puente Bixby desde el mirador norte (Gratis)","Sendero hacia el mirador de la cascada McWay Falls en Julia Pfeiffer Burns State Park ($10 USD aparcamiento)"],"datos_curiosos":["El puente Bixby es uno de los puentes de arco de un solo tramo de hormigón más fotografiados del planeta"],"consejos":["En Big Sur no hay cobertura de telefonía móvil durante 50 km; descargar mapas offline previamente"],"location_info":{"address":"Highway 1, Big Sur, CA","priceRange":"$ - Mirador libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -13896,7 +13578,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0ff6d8cd-d3c4-95f5-4191-a923d18ad64d',
   '17bf5612-6e9f-e5e5-f148-a256e6d1fe66',
@@ -13914,7 +13596,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Hearst inspiró el personaje de Charles Foster Kane en la película *Ciudadano Kane* de Orson Welles']::text[],
   '{"address":"San Simeon, CA 93452","priceRange":"$$ - Tour castillo","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Avistamiento gratuito de elefantes marinos en San Simeon (Gratis)","Tour por el Castillo Hearst y su piscina romana de mosaicos de oro ($30 USD)"],"datos_curiosos":["Hearst inspiró el personaje de Charles Foster Kane en la película *Ciudadano Kane* de Orson Welles"],"consejos":["Llevar prismáticos para ver las crías y peleas de machos en la playa"],"location_info":{"address":"San Simeon, CA 93452","priceRange":"$$ - Tour castillo","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -13932,7 +13613,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'cdbd3d21-4d98-1dd9-6860-55c44987ff4e',
   '17bf5612-6e9f-e5e5-f148-a256e6d1fe66',
@@ -13950,7 +13631,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Tras el terremoto de 1925, la ciudad aprobó una ley que obligó a que toda nueva construcción tuviera estilo colonial español']::text[],
   '{"address":"Santa Barbara, CA","priceRange":"$$ - Moderado","dia":5,"day":5}'::jsonb,
   180,
-  5,
   '{"dia":5,"day":5,"activities":["Visitar la Misión de Santa Bárbara de 1786 ($15 USD)","Paseo por el muelle de madera Stearns Wharf comiendo mariscos frescos ($25 - $40 USD)"],"datos_curiosos":["Tras el terremoto de 1925, la ciudad aprobó una ley que obligó a que toda nueva construcción tuviera estilo colonial español"],"consejos":["Subir a la torre del Palacio de Justicia (Courthouse) para vista panorámica gratuita de los tejados rojos y el mar"],"location_info":{"address":"Santa Barbara, CA","priceRange":"$$ - Moderado","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -13968,7 +13648,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5312336b-b80a-e019-a7ce-b49b2a84e3ce',
   '17bf5612-6e9f-e5e5-f148-a256e6d1fe66',
@@ -13986,7 +13666,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La noria de Pacific Park es la única noria del mundo que funciona íntegramente con energía solar']::text[],
   '{"address":"200 Santa Monica Pier, Santa Monica","priceRange":"$ - Acceso muelle libre","dia":6,"day":6}'::jsonb,
   240,
-  6,
   '{"dia":6,"day":6,"activities":["Foto en el cartel \"End of the Trail\" de la Ruta 66 en el muelle (Gratis)","Pasear en bicicleta por el sendero costero hasta Venice Beach ($15 USD alquiler)","Subir a la noria solar de Pacific Park en el muelle ($12 USD)"],"datos_curiosos":["La noria de Pacific Park es la única noria del mundo que funciona íntegramente con energía solar"],"consejos":["El atardecer en el muelle de Santa Mónica con las luces de la noria es una postal californiana inolvidable"],"location_info":{"address":"200 Santa Monica Pier, Santa Monica","priceRange":"$ - Acceso muelle libre","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -14004,7 +13683,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8c4ed6d7-9355-032e-f294-86c4f240e78c',
   '17bf5612-6e9f-e5e5-f148-a256e6d1fe66',
@@ -14022,7 +13701,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Paseo de la Fama tiene más de 2.700 estrellas de bronce y terrazo rosa']::text[],
   '{"address":"Hollywood Blvd, Los Angeles, CA","priceRange":"$ - Libre","dia":7,"day":7}'::jsonb,
   180,
-  7,
   '{"dia":7,"day":7,"activities":["Buscar la estrella de sus artistas favoritos en el Paseo de la Fama (Gratis)","Ver las huellas de manos en cemento en el TCL Chinese Theatre (Gratis)","Hamburguesa clásica en In-N-Out Burger cerca del aeropuerto ($8 USD)"],"datos_curiosos":["El Paseo de la Fama tiene más de 2.700 estrellas de bronce y terrazo rosa"],"consejos":["Calcular al menos 1 hora y media para el trayecto hacia el aeropuerto LAX debido al tráfico de Los Ángeles"],"location_info":{"address":"Hollywood Blvd, Los Angeles, CA","priceRange":"$ - Libre","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -14041,7 +13719,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #46: Ruta de los Pueblos Blancos: De Sevilla a Ronda y el Mediterráneo de Málaga (Sevilla, España)
+-- Tour: Ruta de los Pueblos Blancos: De Sevilla a Ronda y el Mediterráneo de Málaga (Sevilla, España)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -14100,7 +13778,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ece03376-4a28-a0f4-e50e-663b7d626156',
   '248e225b-85b1-2532-96bb-ee4ee1d81b39',
@@ -14118,7 +13796,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las casas se encalan de blanco cada primavera para reflejar la radiación solar y mantener el interior fresco']::text[],
   '{"address":"Plaza del Cabildo, Arcos de la Frontera","priceRange":"$ - Libre","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Caminar por las callejuelas encaladas con cal viva (Gratis)","Asomarse al Balcón del Coño en la Plaza del Cabildo (Gratis)"],"datos_curiosos":["Las casas se encalan de blanco cada primavera para reflejar la radiación solar y mantener el interior fresco"],"consejos":["El mirador se llama popularmente así por la exclamación que sueltan todos los que miran al abismo"],"location_info":{"address":"Plaza del Cabildo, Arcos de la Frontera","priceRange":"$ - Libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -14136,7 +13813,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '73003dc1-ab34-8042-e597-e9e482acf10b',
   '248e225b-85b1-2532-96bb-ee4ee1d81b39',
@@ -14154,7 +13831,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Grazalema ostenta el índice pluviométrico más alto de toda la Península Ibérica']::text[],
   '{"address":"Zahara de la Sierra, Cádiz","priceRange":"$ - Entrada castillo","dia":2,"day":2}'::jsonb,
   210,
-  2,
   '{"dia":2,"day":2,"activities":["Subir a la Torre del Homenaje del castillo nazarí (€3.50)","Probar el queso Payoyo artesanal de cabra y oveja (€10 - €15)"],"datos_curiosos":["Grazalema ostenta el índice pluviométrico más alto de toda la Península Ibérica"],"consejos":["La carretera cruza el Puerto de las Palomas a 1.357 metros con vistas espectaculares"],"location_info":{"address":"Zahara de la Sierra, Cádiz","priceRange":"$ - Entrada castillo","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -14172,7 +13848,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '90543010-26ae-75f3-80f3-007e853051cc',
   '248e225b-85b1-2532-96bb-ee4ee1d81b39',
@@ -14190,7 +13866,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El nombre "Setenil" proviene del latín *septem nihil* ("siete veces nada"), en alusión a los siete asedios que resistió antes de ser tomada por los Reyes Católicos']::text[],
   '{"address":"Calle Cuevas del Sol, Setenil","priceRange":"$ - Tapas","dia":3,"day":3}'::jsonb,
   180,
-  3,
   '{"dia":3,"day":3,"activities":["Caminar por las calles Cuevas del Sol y Cuevas de la Sombra bajo miles de toneladas de roca (Gratis)","Tapear sopa cortijera o chacinas ibéricas en las terrazas bajo la roca (€12 - €18)"],"datos_curiosos":["El nombre \"Setenil\" proviene del latín *septem nihil* (\"siete veces nada\"), en alusión a los siete asedios que resistió antes de ser tomada por los Reyes Católicos"],"consejos":["En Cuevas del Sol da el sol todo el día; en Cuevas de la Sombra la roca cubre la calle como un túnel natural"],"location_info":{"address":"Calle Cuevas del Sol, Setenil","priceRange":"$ - Tapas","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -14208,7 +13883,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '888eaec4-e08e-ecaf-7d12-a5af3609498c',
   '248e225b-85b1-2532-96bb-ee4ee1d81b39',
@@ -14226,7 +13901,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Ernest Hemingway y Orson Welles se enamoraron de Ronda; las cenizas de Welles reposan en una finca de la localidad']::text[],
   '{"address":"Plaza de España, Ronda, Málaga","priceRange":"$ - Mirador libre","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Bajar por el sendero al fondo del Tajo para la foto clásica del puente desde abajo (Gratis)","Visitar la Plaza de Toros de la Real Maestranza de Ronda de 1785 (€9)","Cena con vistas al abismo en el Parador de Ronda (€35 - €50)"],"datos_curiosos":["Ernest Hemingway y Orson Welles se enamoraron de Ronda; las cenizas de Welles reposan en una finca de la localidad"],"consejos":["El mirador del puente al atardecer es una de las experiencias visuales más impactantes de España"],"location_info":{"address":"Plaza de España, Ronda, Málaga","priceRange":"$ - Mirador libre","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -14244,7 +13918,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'af09841b-a2c5-78cd-cb24-258c2c4a7980',
   '248e225b-85b1-2532-96bb-ee4ee1d81b39',
@@ -14262,7 +13936,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Pablo Picasso nació en Málaga en 1881 en la casona de la Plaza de la Merced']::text[],
   '{"address":"Calle Alcazabilla 2, Málaga","priceRange":"$ - Entrada €3.50","dia":5,"day":5}'::jsonb,
   210,
-  5,
   '{"dia":5,"day":5,"activities":["Visitar la Alcazaba y sus jardines de acequias (€3.50 / gratis domingos tarde)","Comer espetos de sardinas asadas a la leña en una barca en la playa de Pedregalejo (€6 - €10)","Paseo por el Muelle Uno antes del traslado al aeropuerto de Málaga (€3 cercanías C1)"],"datos_curiosos":["Pablo Picasso nació en Málaga en 1881 en la casona de la Plaza de la Merced"],"consejos":["Málaga cuenta con tren de cercanías directo que llega a la terminal del aeropuerto en 12 minutos"],"location_info":{"address":"Calle Alcazabilla 2, Málaga","priceRange":"$ - Entrada €3.50","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -14281,7 +13954,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #47: Dúo Ibérico: De los Palacios de Madrid y Toledo a los Tranvías de Lisboa y Oporto (Madrid, España y Portugal)
+-- Tour: Dúo Ibérico: De los Palacios de Madrid y Toledo a los Tranvías de Lisboa y Oporto (Madrid, España y Portugal)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -14340,7 +14013,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4954adb9-8f60-162d-c0b5-73651787e5c2',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14358,7 +14031,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Prado cumplió dos siglos en 2019']::text[],
   '{"address":"Madrid","priceRange":"$$ - €15","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Entrada al Prado (€15)","Tapas en la Plaza Mayor"],"datos_curiosos":["El Prado cumplió dos siglos en 2019"],"consejos":["Reservar horario online"],"location_info":{"address":"Madrid","priceRange":"$$ - €15","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -14376,7 +14048,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a612db40-664d-d7a5-4e07-78b99ce944a9',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14394,7 +14066,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Portugal y España comparten el huso horario ibérico con 1 hora de diferencia']::text[],
   '{"address":"Toledo / Lisboa","priceRange":"$$ - Tren y vuelo","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Visita catedral (€10)","Vuelo Madrid - Lisboa"],"datos_curiosos":["Portugal y España comparten el huso horario ibérico con 1 hora de diferencia"],"consejos":["El tren Avant tarda solo 33 minutos a Toledo"],"location_info":{"address":"Toledo / Lisboa","priceRange":"$$ - Tren y vuelo","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -14412,7 +14083,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '0f42468b-ac78-fb82-b842-ac1a1e95163e',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14430,7 +14101,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Alfama fue el único barrio de Lisboa que sobrevivió casi intacto al gran terremoto de 1755']::text[],
   '{"address":"Alfama, Lisboa","priceRange":"$ - Libre","dia":3,"day":3}'::jsonb,
   210,
-  3,
   '{"dia":3,"day":3,"activities":["Paseo en el histórico tranvía 28 amarillo (€3)","Mirador de Santa Luzia sobre el río Tajo (Gratis)","Cena con espectáculo de fado en vivo (€25 - €40)"],"datos_curiosos":["Alfama fue el único barrio de Lisboa que sobrevivió casi intacto al gran terremoto de 1755"],"consejos":["Subir al tranvía 28 a primera hora en Martim Moniz para conseguir asiento"],"location_info":{"address":"Alfama, Lisboa","priceRange":"$ - Libre","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -14448,7 +14118,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '91e97a34-bf20-defe-b029-6bee7b6d2689',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14466,7 +14136,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La receta secreta de los pasteles de Belém solo la conocen seis maestros pasteleros en todo el mundo']::text[],
   '{"address":"Praça do Império, Belém","priceRange":"$ - Entradas €10","dia":4,"day":4}'::jsonb,
   240,
-  4,
   '{"dia":4,"day":4,"activities":["Claustro de los Jerónimos (€10)","Pastel de nata caliente con canela en Pastéis de Belém (€1.40)","Torre de Belém sobre el río Tajo (€9)"],"datos_curiosos":["La receta secreta de los pasteles de Belém solo la conocen seis maestros pasteleros en todo el mundo"],"consejos":["Comprar la entrada combinada online"],"location_info":{"address":"Praça do Império, Belém","priceRange":"$ - Entradas €10","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -14484,7 +14153,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '63079026-6bba-53e5-df02-43ec29331a6c',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14502,7 +14171,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Lord Byron describió a Sintra como el "glorioso Edén" en sus poemas']::text[],
   '{"address":"Estrada da Pena, Sintra","priceRange":"$$ - Entradas palacios","dia":5,"day":5}'::jsonb,
   300,
-  5,
   '{"dia":5,"day":5,"activities":["Entrada al Palacio da Pena (€14)","Descenso por la escalera de caracol del Pozo Iniciático de Regaleira (€12)"],"datos_curiosos":["Lord Byron describió a Sintra como el \"glorioso Edén\" en sus poemas"],"consejos":["Tren de cercanías directo desde la estación Rossio de Lisboa a Sintra (40 minutos - €2.40)"],"location_info":{"address":"Estrada da Pena, Sintra","priceRange":"$$ - Entradas palacios","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -14520,7 +14188,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '93153f23-ceec-1fe8-7adb-0e86307a8841',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14538,7 +14206,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El pintor Jorge Colaço tardó 11 años en colocar los azulejos de São Bento']::text[],
   '{"address":"Praça de Almeida Garrett, Porto","priceRange":"$ - Entrada Lello €8","dia":6,"day":6}'::jsonb,
   240,
-  6,
   '{"dia":6,"day":6,"activities":["Admirar los 20.000 azulejos de la estación São Bento (Gratis)","Entrar a la Librería Lello (€8 deducible en compra de libros)","Comer una Francesinha tradicional con salsa picante (€12 - €16)"],"datos_curiosos":["El pintor Jorge Colaço tardó 11 años en colocar los azulejos de São Bento"],"consejos":["Reservar turno online para Livraria Lello"],"location_info":{"address":"Praça de Almeida Garrett, Porto","priceRange":"$ - Entrada Lello €8","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -14556,7 +14223,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '3b99b5d8-50ff-d920-51ed-43cb7c8cba0d',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14574,7 +14241,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El vino de Oporto se fortificaba con aguardiente vínico para que no se avinagrara en las bodegas de los barcos que navegaban hacia Inglaterra']::text[],
   '{"address":"Vila Nova de Gaia / Ribeira, Porto","priceRange":"$$ - Cata de vino","dia":7,"day":7}'::jsonb,
   270,
-  7,
   '{"dia":7,"day":7,"activities":["Cruzar a pie el piso superior del puente con vistas al río Duero (Gratis)","Cata guiada de 3 vinos de Oporto (Tawny, Ruby y Blanco) en bodega histórica (€15 - €25)","Paseo en barco tradicional rabelo por los 6 puentes del río Duero (€15)"],"datos_curiosos":["El vino de Oporto se fortificaba con aguardiente vínico para que no se avinagrara en las bodegas de los barcos que navegaban hacia Inglaterra"],"consejos":["El mirador del Monasterio de la Sierra del Pilar ofrece la mejor foto del puente al atardecer"],"location_info":{"address":"Vila Nova de Gaia / Ribeira, Porto","priceRange":"$$ - Cata de vino","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -14592,7 +14258,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '399df296-61fe-bc88-5abe-513325d84740',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14610,7 +14276,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Salón Árabe tardó 18 años en completarse con intrincadas yeserías moriscas']::text[],
   '{"address":"Rua de Ferreira Borges, Porto","priceRange":"$$ - Entrada palacio","dia":8,"day":8}'::jsonb,
   210,
-  8,
   '{"dia":8,"day":8,"activities":["Visita guiada al Salón Árabe del Palacio de la Bolsa (€12)","Entrada a la iglesia dorada de San Francisco (€8)","Cena de bacalao a la brasa con vino verde en la Ribeira (€20 - €32)"],"datos_curiosos":["El Salón Árabe tardó 18 años en completarse con intrincadas yeserías moriscas"],"consejos":["La visita al Palacio de la Bolsa es obligatoriamente guiada; reservar turno temprano"],"location_info":{"address":"Rua de Ferreira Borges, Porto","priceRange":"$$ - Entrada palacio","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -14628,7 +14293,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c7561b2f-424e-9671-a84e-d7cbe983766f',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14646,7 +14311,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El tranvía línea 1 funciona con vagones históricos de madera de 1920 con manivelas de bronce originales']::text[],
   '{"address":"Passeio Alegre, Foz do Douro","priceRange":"$ - Libre","dia":9,"day":9}'::jsonb,
   180,
-  9,
   '{"dia":9,"day":9,"activities":["Tomar el tranvía histórico de madera línea 1 junto al río hacia Foz (€3.50)","Caminar por el espigón del faro de Felgueiras (Gratis)","Tomar un café con vistas a las olas atlánticas (€3)"],"datos_curiosos":["El tranvía línea 1 funciona con vagones históricos de madera de 1920 con manivelas de bronce originales"],"consejos":["Si hay temporal marítimo no avanzar por el espigón por seguridad"],"location_info":{"address":"Passeio Alegre, Foz do Douro","priceRange":"$ - Libre","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -14664,7 +14328,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '23e5a658-7711-f833-4802-7b4ef37ac602',
   '321011d9-09d3-9b13-c96b-7bff9bb93d47',
@@ -14682,7 +14346,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El mercado abrió originalmente en 1839 sobre un terreno pantanoso donde brotaba agua (*bolhão*)']::text[],
   '{"address":"Rua Formosa 322, Porto","priceRange":"$ - Compras locales","dia":10,"day":10}'::jsonb,
   150,
-  10,
   '{"dia":10,"day":10,"activities":["Comprar quesos de Azeitão y latas de sardinas de diseño retro (€10 - €25)","Metro línea violeta E directo desde Trindade al aeropuerto Francisco Sá Carneiro (€2.60 / 25 minutos)"],"datos_curiosos":["El mercado abrió originalmente en 1839 sobre un terreno pantanoso donde brotaba agua (*bolhão*)"],"consejos":["Excelente para compras gastronómicas de última hora antes de volar"],"location_info":{"address":"Rua Formosa 322, Porto","priceRange":"$ - Compras locales","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -14701,7 +14364,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #48: Triángulo Nórdico: Copenhague, Estocolmo y Fiordos de Noruega (Copenhague, Dinamarca, Suecia y Noruega)
+-- Tour: Triángulo Nórdico: Copenhague, Estocolmo y Fiordos de Noruega (Copenhague, Dinamarca, Suecia y Noruega)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -14760,7 +14423,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e7c26cd9-863c-8ca9-cbe3-99adb486d821',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -14778,7 +14441,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Andersen escribió sus cuentos en los números 18, 20 y 67 de Nyhavn']::text[],
   '{"address":"Nyhavn, København","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   240,
-  1,
   '{"dia":1,"day":1,"activities":["Paseo en barco por los canales de Copenhague (€12)","Foto con La Sirenita (Gratis)","Comer un Smørrebrød tradicional de arenque o salmón (€15)"],"datos_curiosos":["Andersen escribió sus cuentos en los números 18, 20 y 67 de Nyhavn"],"consejos":["Alquilar una bicicleta; Copenhague es la capital mundial de la bici"],"location_info":{"address":"Nyhavn, København","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -14796,7 +14458,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'cedf32aa-43f1-c5b7-80a7-d45c30836e33',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -14814,7 +14476,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Tivoli cuenta con una de las montañas rusas de madera en funcionamiento más antiguas del mundo (1914)']::text[],
   '{"address":"Vesterbrogade 3, København","priceRange":"$$ - Entrada Tivoli","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Subir a la torre de Christiansborg para vista panorámica gratuita de la ciudad (Gratis)","Entrada a los Jardines Tivoli iluminados (€20)"],"datos_curiosos":["Tivoli cuenta con una de las montañas rusas de madera en funcionamiento más antiguas del mundo (1914)"],"consejos":["Tivoli tiene un encanto especial al anochecer"],"location_info":{"address":"Vesterbrogade 3, København","priceRange":"$$ - Entrada Tivoli","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -14832,7 +14493,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'ba2aa5b4-6297-9a8f-f8dc-1eeadd7d8c7b',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -14850,7 +14511,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El puente inspiró la célebre serie policiaca escandinava *Bron / The Bridge*']::text[],
   '{"address":"Øresund / Stockholm Central","priceRange":"$$ - Trenes nórdicos","dia":3,"day":3}'::jsonb,
   300,
-  3,
   '{"dia":3,"day":3,"activities":["Viaje en tren sobre el puente de Øresund (€15)","Tren SJ X2000 a Estocolmo Central (4 horas y media - €35 - €60)"],"datos_curiosos":["El puente inspiró la célebre serie policiaca escandinava *Bron / The Bridge*"],"consejos":["Tener el pasaporte a mano para el control fronterizo en Hyllie"],"location_info":{"address":"Øresund / Stockholm Central","priceRange":"$$ - Trenes nórdicos","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -14868,7 +14528,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e2b513da-7a16-e4ae-f5f6-5c97331b4fec',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -14886,7 +14546,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Vasa se hundió en su viaje inaugural en 1628 tras navegar apenas 1.300 metros por un exceso de peso en sus cañones']::text[],
   '{"address":"Galärvarvsvägen 14, Stockholm","priceRange":"$$ - Entrada museo","dia":4,"day":4}'::jsonb,
   270,
-  4,
   '{"dia":4,"day":4,"activities":["Asombrarse ante el colosal buque real de guerra Vasa de 69 metros (Entrada: ~190 SEK / €17)","Caminar por la plaza Stortorget en Gamla Stan (Gratis)","Probar albóndigas suecas tradicionales *Köttbullar* con puré y mermelada de arándanos (€18)"],"datos_curiosos":["El Vasa se hundió en su viaje inaugural en 1628 tras navegar apenas 1.300 metros por un exceso de peso en sus cañones"],"consejos":["El museo Vasa tiene temperatura controlada de 18°C; llevar una chaqueta"],"location_info":{"address":"Galärvarvsvägen 14, Stockholm","priceRange":"$$ - Entrada museo","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -14904,7 +14563,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '1584ccf8-fe64-7384-3b2d-ab727231ccf3',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -14922,7 +14581,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Salón Azul no es azul sino de ladrillo rojo; el arquitecto cambió de idea al ver la belleza del ladrillo desnudo']::text[],
   '{"address":"Hantverkargatan 1, Stockholm","priceRange":"$ - Entrada tour","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Tour guiado por el Salón de los Nobel del Ayuntamiento (€13)","Ruta en metro explorando las estaciones talladas en roca como T-Centralen y Solna Centrum (€4)","Tomar el café tradicional sueco con bollo de canela *Fika* (€7)"],"datos_curiosos":["El Salón Azul no es azul sino de ladrillo rojo; el arquitecto cambió de idea al ver la belleza del ladrillo desnudo"],"consejos":["La pausa del café *Fika* es una institución social sagrada en Suecia"],"location_info":{"address":"Hantverkargatan 1, Stockholm","priceRange":"$ - Entrada tour","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -14940,7 +14598,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c0720b7e-bc07-91be-f2ee-ed47cf483d8a',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -14958,7 +14616,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Gustav Vigeland dedicó más de 40 años de su vida a esculpir todas las figuras del parque']::text[],
   '{"address":"Nobels gate 32, Oslo","priceRange":"$ - Parque público libre","dia":6,"day":6}'::jsonb,
   240,
-  6,
   '{"dia":6,"day":6,"activities":["Pasear entre las esculturas del ciclo vital humano (Gratis)","Foto con la famosa escultura del \"Niño enojado\" (*Sinnataggen*) (Gratis)","Caminar por el tejado inclinado de mármol blanco de la Ópera de Oslo frente al fiordo (Gratis)"],"datos_curiosos":["Gustav Vigeland dedicó más de 40 años de su vida a esculpir todas las figuras del parque"],"consejos":["El tejado de la Ópera de Oslo está diseñado expresamente para que la gente camine sobre él hasta la orilla del agua"],"location_info":{"address":"Nobels gate 32, Oslo","priceRange":"$ - Parque público libre","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -14976,7 +14633,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4c404a3b-8ec5-9426-e6a4-9f8754cc6f24',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -14994,7 +14651,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Munch pintó cuatro versiones de "El Grito" para capturar la angustia cósmica de la naturaleza']::text[],
   '{"address":"Edvard Munchs Plass 1, Oslo","priceRange":"$$ - Entrada museo","dia":7,"day":7}'::jsonb,
   210,
-  7,
   '{"dia":7,"day":7,"activities":["Ver \"El Grito\" original de Munch (Entrada: ~160 NOK / €14)","Almorzar salmón noruego fresco a la plancha en Aker Brygge (€25 - €40)","Paseo en ferry eléctrico por las islas del fiordo de Oslo (€4)"],"datos_curiosos":["Munch pintó cuatro versiones de \"El Grito\" para capturar la angustia cósmica de la naturaleza"],"consejos":["El museo rota cada hora entre la versión de pintura, pastel y litografía de El Grito para protegerlas de la luz"],"location_info":{"address":"Edvard Munchs Plass 1, Oslo","priceRange":"$$ - Entrada museo","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -15012,7 +14668,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a7e66744-8b23-52cf-f70f-389cf3750db3',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -15030,7 +14686,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Nærøyfjord tiene tramos de solo 250 metros de ancho con montañas que caen en vertical a plomo sobre el agua']::text[],
   '{"address":"Flåm / Nærøyfjord, Noruega","priceRange":"$$$ - Pase escénico","dia":8,"day":8}'::jsonb,
   360,
-  8,
   '{"dia":8,"day":8,"activities":["Descenso de 20 km en el tren Flåmsbana con parada en la cascada Kjosfossen (Billete incluido en pase: ~$65 USD)","Crucero en barco eléctrico silencioso por las aguas verdes del Nærøyfjord entre paredes de 1.000 metros (Incluido)","Llegada en tren nocturno a Bergen"],"datos_curiosos":["El Nærøyfjord tiene tramos de solo 250 metros de ancho con montañas que caen en vertical a plomo sobre el agua"],"consejos":["Llevar abrigo; en el crucero por el fiordo el viento entre los cañones es frío incluso en verano"],"location_info":{"address":"Flåm / Nærøyfjord, Noruega","priceRange":"$$$ - Pase escénico","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -15048,7 +14703,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a35761a0-36ce-341d-489e-a6965ebccfcc',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -15066,7 +14721,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Bryggen se ha incendiado y reconstruido varias veces a lo largo de 800 años, manteniendo siempre sus planos de madera medievales originales']::text[],
   '{"address":"Bryggen, 5003 Bergen","priceRange":"$$ - Funicular y marisco","dia":9,"day":9}'::jsonb,
   240,
-  9,
   '{"dia":9,"day":9,"activities":["Caminar por los pasadizos oscuros de madera de Bryggen (Gratis)","Subir en el funicular Fløibanen al mirador del Monte Fløyen (€14 ida y vuelta)","Degustar cangrejo real rey del Ártico y salmón salvaje en el mercado de pescado (€25 - €45)"],"datos_curiosos":["Bryggen se ha incendiado y reconstruido varias veces a lo largo de 800 años, manteniendo siempre sus planos de madera medievales originales"],"consejos":["Bergen es célebre por su lluvia; llevar siempre impermeable"],"location_info":{"address":"Bryggen, 5003 Bergen","priceRange":"$$ - Funicular y marisco","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -15084,7 +14738,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '880f4dd7-c172-0ad5-3eee-8f2faea08df7',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -15102,7 +14756,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El queso marrón noruego *Brunost* es caramelizado y tiene un inconfundible sabor dulce a tofe salado']::text[],
   '{"address":"Fløyfjellet, Bergen","priceRange":"$ - Libre","dia":10,"day":10}'::jsonb,
   210,
-  10,
   '{"dia":10,"day":10,"activities":["Senderismo suave por el lago Skomakerdiket con canoas gratuitas en verano (Gratis)","Fotografiar las esculturas de trolls gigantes con nariz larga (Gratis)","Comer gofres noruegos en forma de corazón con queso marrón dulce *Brunost* (€6)"],"datos_curiosos":["El queso marrón noruego *Brunost* es caramelizado y tiene un inconfundible sabor dulce a tofe salado"],"consejos":["Bajar a pie desde la cumbre hasta Bergen en una caminata de 45 minutos entre bosques"],"location_info":{"address":"Fløyfjellet, Bergen","priceRange":"$ - Libre","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -15120,7 +14773,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'd43078b0-82cd-b85c-c61f-0127af65eace',
   '8e4f3df5-ad83-0bd5-0282-f7b5684c9b9e',
@@ -15138,7 +14791,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Bergen fue la capital del reino de Noruega en los siglos XII y XIII antes que Oslo']::text[],
   '{"address":"Bergen Sentrum","priceRange":"$ - Compras","dia":11,"day":11}'::jsonb,
   120,
-  11,
   '{"dia":11,"day":11,"activities":["Comprar jerséis de lana pura noruega con patrones de copos de nieve (€60 - €120)","Café caliente y despedida de Escandinavia"],"datos_curiosos":["Bergen fue la capital del reino de Noruega en los siglos XII y XIII antes que Oslo"],"consejos":["El Bybanen línea 1 sale cada 10 minutos desde el centro"],"location_info":{"address":"Bergen Sentrum","priceRange":"$ - Compras","dia":11,"day":11}}'::jsonb,
   now()
 );
@@ -15157,7 +14809,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #49: Sureste Asiático Conectado: De los Templos de Bangkok y Angkor Wat a la Bahía de Ha Long (Bangkok, Tailandia, Camboya y Vietnam)
+-- Tour: Sureste Asiático Conectado: De los Templos de Bangkok y Angkor Wat a la Bahía de Ha Long (Bangkok, Tailandia, Camboya y Vietnam)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -15216,7 +14868,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '4b504e86-fb1e-887e-3cea-4f8d081b8aa9',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15234,7 +14886,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El complejo mide más de 200.000 m²']::text[],
   '{"address":"Bangkok","priceRange":"$$ - Entrada","dia":1,"day":1}'::jsonb,
   180,
-  1,
   '{"dia":1,"day":1,"activities":["Entrada oficial (500 THB)","Paseo en barco por el río Chao Phraya"],"datos_curiosos":["El complejo mide más de 200.000 m²"],"consejos":["Llevar pantalones largos"],"location_info":{"address":"Bangkok","priceRange":"$$ - Entrada","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -15252,7 +14903,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '83a42198-6c5b-9e32-35aa-5c1f41847cb7',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15270,7 +14921,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los pies del Buda están decorados con 108 símbolos sagrados en madreperla']::text[],
   '{"address":"Bangkok / Siem Reap","priceRange":"$$ - Vuelo","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Buda reclinado (300 THB)","Vuelo internacional a Camboya"],"datos_curiosos":["Los pies del Buda están decorados con 108 símbolos sagrados en madreperla"],"consejos":["Llevar 30 USD en billete intacto para la tasa de visa on arrival si no tiene e-visa"],"location_info":{"address":"Bangkok / Siem Reap","priceRange":"$$ - Vuelo","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -15288,7 +14938,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '7dd8d51a-325f-8126-71bb-5f06e83274af',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15306,7 +14956,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Angkor Wat es el único templo jemer orientado hacia el oeste, punto cardinal asociado a la puesta de sol y la vida futura']::text[],
   '{"address":"Parque Arqueológico de Angkor, Siem Reap","priceRange":"$$$ - Pase $37 USD","dia":3,"day":3}'::jsonb,
   300,
-  3,
   '{"dia":3,"day":3,"activities":["Ver amanecer tras las torres de Angkor Wat (Pase Angkor 1 día: $37 USD / 3 días: $62 USD)","Alquiler de tuk-tuk con conductor todo el día ($18 - $25 USD)","Cruzar las galerías con bajorrelieves del batido del océano de leche"],"datos_curiosos":["Angkor Wat es el único templo jemer orientado hacia el oeste, punto cardinal asociado a la puesta de sol y la vida futura"],"consejos":["Llegar a la orilla del estanque izquierdo a las 5:15 AM para la foto clásica con reflejo en el agua"],"location_info":{"address":"Parque Arqueológico de Angkor, Siem Reap","priceRange":"$$$ - Pase $37 USD","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -15324,7 +14973,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'c475cb9c-c88c-1b43-f45d-ea1e4c0bce48',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15342,7 +14991,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las raíces de los árboles han crecido durante siglos fusionándose con la estructura; talar los árboles hoy causaría el derrumbe de los muros']::text[],
   '{"address":"Angkor Thom / Ta Prohm","priceRange":"$$ - Incluido en pase","dia":4,"day":4}'::jsonb,
   300,
-  4,
   '{"dia":4,"day":4,"activities":["Contemplar las enigmáticas sonrisas de piedra de Bayón (Incluido en pase)","Fotografiar las raíces colosales abrazando las puertas de piedra de Ta Prohm (Gratis con pase)","Cena de pescado Amok al vapor en hoja de plátano en Pub Street ($6 - $12 USD)"],"datos_curiosos":["Las raíces de los árboles han crecido durante siglos fusionándose con la estructura; talar los árboles hoy causaría el derrumbe de los muros"],"consejos":["El templo de Ta Prohm se hizo mundialmente famoso en la película de Lara Croft *Tomb Raider*"],"location_info":{"address":"Angkor Thom / Ta Prohm","priceRange":"$$ - Incluido en pase","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -15360,7 +15008,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '20ff2c0c-ca57-346f-9034-4ab9e8fa2ec1',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15378,7 +15026,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Tonlé Sap es una de las fuentes de pesca de agua dulce más productivas del planeta']::text[],
   '{"address":"Tonlé Sap / Hanói","priceRange":"$$ - Tour y vuelo","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Paseo en barca tradicional de madera por la aldea y bosque inundado de manglares ($20 USD)","Vuelo de Siem Reap a Hanói (~$120 USD)","Primer paseo nocturno alrededor del lago Hoan Kiem en Hanói (Gratis)"],"datos_curiosos":["Tonlé Sap es una de las fuentes de pesca de agua dulce más productivas del planeta"],"consejos":["En época de lluvias el lago Tonlé Sap quintuplica su tamaño habitual debido a que el río Mekong invierte su curso"],"location_info":{"address":"Tonlé Sap / Hanói","priceRange":"$$ - Tour y vuelo","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -15396,7 +15043,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e77cb903-1213-6e30-9aa6-a0019adb4a53',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15414,7 +15061,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El café de huevo fue inventado en Hanói en la década de 1940 cuando escaseaba la leche fresca y un camarero del hotel Metropole batió yemas de huevo con azúcar para emulsionarlo']::text[],
   '{"address":"Hoan Kiem District, Hanoi","priceRange":"$ - Gastronomía callejera barata","dia":6,"day":6}'::jsonb,
   240,
-  6,
   '{"dia":6,"day":6,"activities":["Tomar el famoso café con crema de yema de huevo (*Cà phê trứng*) en Cafe Giảng (~35.000 VND / ~$1.40 USD)","Comer una sopa Phở de ternera humeante en banquitos de plástico en la calle (~50.000 VND / ~$2 USD)","Pasear por el Templo de la Literatura de 1070 dedicado a Confucio (30.000 VND)"],"datos_curiosos":["El café de huevo fue inventado en Hanói en la década de 1940 cuando escaseaba la leche fresca y un camarero del hotel Metropole batió yemas de huevo con azúcar para emulsionarlo"],"consejos":["Para ver pasar el tren en Train Street es obligatorio sentarse en una de las cafeterías de la vía"],"location_info":{"address":"Hoan Kiem District, Hanoi","priceRange":"$ - Gastronomía callejera barata","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -15432,7 +15078,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '5169fb3d-bed1-94a7-0fdb-00034fd960d3',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15450,7 +15096,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Ha Long significa "donde el dragón desciende al mar"; la leyenda cuenta que los islotes fueron creados por un dragón celestial para frenar a los invasores navales']::text[],
   '{"address":"Ha Long Bay, Quang Ninh","priceRange":"$$$ - Crucero noche a bordo","dia":7,"day":7}'::jsonb,
   360,
-  7,
   '{"dia":7,"day":7,"activities":["Embarque en crucero tradicional con camarote privado y pensión completa (~$140 - $220 USD por 2 días / 1 noche)","Paseo en kayak doble navegando bajo túneles de roca naturales (Incluido en el crucero)","Pesca de calamares con caña en la popa del barco al anochecer"],"datos_curiosos":["Ha Long significa \"donde el dragón desciende al mar\"; la leyenda cuenta que los islotes fueron creados por un dragón celestial para frenar a los invasores navales"],"consejos":["Llevar bañador para nadar en calas de aguas calmas entre los islotes"],"location_info":{"address":"Ha Long Bay, Quang Ninh","priceRange":"$$$ - Crucero noche a bordo","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -15468,7 +15113,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'cc465a93-fd77-16aa-94de-a0e1799b89fc',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15486,7 +15131,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los franceses la bautizaron "Grotte des Surprises" por la asombrosa inmensidad de su cámara interior']::text[],
   '{"address":"Ha Long Bay / Hanói","priceRange":"$$ - Incluido en crucero","dia":8,"day":8}'::jsonb,
   240,
-  8,
   '{"dia":8,"day":8,"activities":["Recorrido a pie por las pasarelas dentro de la cueva iluminada (Incluido en el crucero)","Clase de Tai Chi matutina en la cubierta del barco al amanecer","Regreso en autobús hacia Hanói (2 horas y media por autopista moderna)"],"datos_curiosos":["Los franceses la bautizaron \"Grotte des Surprises\" por la asombrosa inmensidad de su cámara interior"],"consejos":["La subida a la cueva tiene unos 100 escalones de piedra; llevar calzado cómodo"],"location_info":{"address":"Ha Long Bay / Hanói","priceRange":"$$ - Incluido en crucero","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -15504,7 +15148,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2420ce29-6a16-3710-1ee8-92efe2d657f0',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15522,7 +15166,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los barqueros reman con los pies para descansar la espalda y los brazos durante los largos recorridos diarios']::text[],
   '{"address":"Ninh Binh, Vietnam","priceRange":"$ - Excursión accesible","dia":9,"day":9}'::jsonb,
   300,
-  9,
   '{"dia":9,"day":9,"activities":["Paseo en barca remada con los pies por Tam Coc (200.000 VND / ~$8 USD)","Subir los 500 escalones del dragón en Hang Mua para la panorámica del río y arrozales (100.000 VND)","Paseo en bicicleta entre campos de arroz y búfalos de agua (Gratis / alquiler $2 USD)"],"datos_curiosos":["Los barqueros reman con los pies para descansar la espalda y los brazos durante los largos recorridos diarios"],"consejos":["En mayo y junio los arrozales a ambos lados del río están dorados para la cosecha"],"location_info":{"address":"Ninh Binh, Vietnam","priceRange":"$ - Excursión accesible","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -15540,7 +15183,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '984720d5-19b5-dd36-2dd7-30d674fef4d4',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15558,7 +15201,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Puente Japonés tiene una pagoda en su interior y esculturas de perros y monos que marcan el inicio y fin de su construcción según el horóscopo chino']::text[],
   '{"address":"Old Town, Hoi An, Quang Nam","priceRange":"$ - Entrada patrimonio ~€5","dia":10,"day":10}'::jsonb,
   270,
-  10,
   '{"dia":10,"day":10,"activities":["Paseo nocturno en barca soltando una vela encendida de papel en el río Thu Bon (100.000 VND / ~$4 USD)","Comer fideos Cao Lau tradicionales con cerdo crujiente (40.000 VND)","Encargar ropa a medida en las sastrerías exprés de la ciudad ($30 - $70 USD en 24 horas)"],"datos_curiosos":["El Puente Japonés tiene una pagoda en su interior y esculturas de perros y monos que marcan el inicio y fin de su construcción según el horóscopo chino"],"consejos":["La noche de luna llena apagan todas las luces eléctricas del centro para iluminar solo con farolillos de seda"],"location_info":{"address":"Old Town, Hoi An, Quang Nam","priceRange":"$ - Entrada patrimonio ~€5","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -15576,7 +15218,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '595ad861-374f-4595-b9e3-af611c155c3f',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15594,7 +15236,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las manos parecen esculpidas en piedra milenaria, pero en realidad están hechas de una estructura de acero recubierta de fibra de vidrio y musgo artificial']::text[],
   '{"address":"Sun World Ba Na Hills, Da Nang","priceRange":"$$ - Entrada $36 USD","dia":11,"day":11}'::jsonb,
   240,
-  11,
   '{"dia":11,"day":11,"activities":["Subir en el teleférico de un solo cable más largo del mundo (Entrada parque + teleférico: ~900.000 VND / ~$36 USD)","Caminar sobre el puente dorado entre las manos gigantes (Gratis con entrada)","Vistas de la costa de Da Nang desde la cumbre"],"datos_curiosos":["Las manos parecen esculpidas en piedra milenaria, pero en realidad están hechas de una estructura de acero recubierta de fibra de vidrio y musgo artificial"],"consejos":["Subir en el primer teleférico de las 7:30 AM para cruzar el puente sin cientos de turistas"],"location_info":{"address":"Sun World Ba Na Hills, Da Nang","priceRange":"$$ - Entrada $36 USD","dia":11,"day":11}}'::jsonb,
   now()
 );
@@ -15612,7 +15253,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'a05039d0-9893-afd6-7f07-35bf1bd52d9d',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15630,7 +15271,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Los túneles contaban con tres niveles subterráneos capaces de resistir bombardeos de aviones B-52']::text[],
   '{"address":"Cu Chi, Ciudad Ho Chi Minh","priceRange":"$ - Entrada $5 USD","dia":12,"day":12}'::jsonb,
   270,
-  12,
   '{"dia":12,"day":12,"activities":["Gatear por un tramo ensanchado de 20 metros de túnel bajo tierra (Entrada: 125.000 VND / ~$5 USD)","Ver las trampas de bambú y trampillas secretas camufladas en la selva (Gratis con entrada)","Probar yuca cocida con azúcar y sal como comían los guerrilleros"],"datos_curiosos":["Los túneles contaban con tres niveles subterráneos capaces de resistir bombardeos de aviones B-52"],"consejos":["No entrar al túnel si sufre de claustrofobia; se puede recorrer todo el museo al aire libre"],"location_info":{"address":"Cu Chi, Ciudad Ho Chi Minh","priceRange":"$ - Entrada $5 USD","dia":12,"day":12}}'::jsonb,
   now()
 );
@@ -15648,7 +15288,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '72aa0063-a431-4644-93ab-30fce5f86064',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15666,7 +15306,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Mekong nace en la meseta tibetana y recorre seis países antes de desembocar en este delta en nueve brazos llamados "los nueve dragones"']::text[],
   '{"address":"My Tho, Ben Tre","priceRange":"$ - Excursión accesible","dia":13,"day":13}'::jsonb,
   300,
-  13,
   '{"dia":13,"day":13,"activities":["Paseo en canoa tradicional a remo bajo túneles de palmeras acuáticas (Tour día completo: ~$20 - $35 USD)","Degustación de frutas exóticas (pitahaya, rambután, ojo de dragón) con miel de abejas silvestre","Visitar taller artesanal donde elaboran caramelos blandos de leche de coco caliente"],"datos_curiosos":["El Mekong nace en la meseta tibetana y recorre seis países antes de desembocar en este delta en nueve brazos llamados \"los nueve dragones\""],"consejos":["Llevar sombrero cónico tradicional vietnamita (*nón lá*) para protegerse del sol"],"location_info":{"address":"My Tho, Ben Tre","priceRange":"$ - Excursión accesible","dia":13,"day":13}}'::jsonb,
   now()
 );
@@ -15684,7 +15323,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '02b77d62-6bce-fe3a-6c5d-e9de25d24ec6',
   '240d973e-0944-d7da-1712-7db300571e6d',
@@ -15702,7 +15341,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Vietnam es el segundo mayor exportador de café de todo el planeta, solo por detrás de Brasil']::text[],
   '{"address":"District 1, Ho Chi Minh City","priceRange":"$ - Compras locales","dia":14,"day":14}'::jsonb,
   180,
-  14,
   '{"dia":14,"day":14,"activities":["Enviar una postal desde la histórica oficina de correos de madera y hierro (€1.50)","Comprar café Robusta con filtro tradicional Phin y dulces de coco en Ben Thanh ($10 - $20 USD)","Último sándwich Bánh Mì crujiente con paté y cilantro antes del traslado al aeropuerto de Tan Son Nhat ($2 USD)"],"datos_curiosos":["Vietnam es el segundo mayor exportador de café de todo el planeta, solo por detrás de Brasil"],"consejos":["El aeropuerto internacional de Saigón (SGN) queda dentro de la ciudad a solo 30 minutos en taxi"],"location_info":{"address":"District 1, Ho Chi Minh City","priceRange":"$ - Compras locales","dia":14,"day":14}}'::jsonb,
   now()
 );
@@ -15721,7 +15359,7 @@ INSERT INTO public.tour_comments (
 );
 
 -- -------------------------------------------------------------
--- Tour #50: Gran Travesía Cono Sur: De los Viñedos de Chile al Tango de Buenos Aires y Cataratas del Iguazú (Santiago de Chile, Chile y Argentina)
+-- Tour: Gran Travesía Cono Sur: De los Viñedos de Chile al Tango de Buenos Aires y Cataratas del Iguazú (Santiago de Chile, Chile y Argentina)
 -- -------------------------------------------------------------
 INSERT INTO public.tours (
   id, owner_id, created_by, slug, title, country, city, type,
@@ -15780,7 +15418,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '2eb6c879-2ef6-4e4f-d100-c3ac1a5d5653',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -15798,7 +15436,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La cepa de uva Carménère se creía extinguida en el mundo hasta que fue redescubierta en Chile en 1994']::text[],
   '{"address":"Santiago Centro","priceRange":"$ - Acceso libre","dia":1,"day":1}'::jsonb,
   210,
-  1,
   '{"dia":1,"day":1,"activities":["Subir a la torre mirador del Castillo Hidalgo (Gratis)","Entrada a la casa museo de Neruda ($9.500 CLP / ~$10 USD)","Empanada chilena de pino con copa de vino Carménère ($8 USD)"],"datos_curiosos":["La cepa de uva Carménère se creía extinguida en el mundo hasta que fue redescubierta en Chile en 1994"],"consejos":["Subir al mirador Sky Costanera para ver el atardecer sobre la cordillera nevada"],"location_info":{"address":"Santiago Centro","priceRange":"$ - Acceso libre","dia":1,"day":1}}'::jsonb,
   now()
 );
@@ -15816,7 +15453,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'f649cf75-a6e1-9746-4a55-a890daba6f6c',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -15834,7 +15471,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Valparaíso llegó a tener más de 30 funiculares activos a vapor para conectar los cerros con el plan de la ciudad']::text[],
   '{"address":"Cerro Alegre, Valparaíso","priceRange":"$ - Funicular accesible","dia":2,"day":2}'::jsonb,
   240,
-  2,
   '{"dia":2,"day":2,"activities":["Subir en el centenario Ascensor Reina Victoria ($100 CLP / ~$0.15 USD)","Paseo por el Pasaje Gálvez admirando murales (Gratis)","Almorzar caldillo de congrio o mariscos en el puerto ($15 - $25 USD)"],"datos_curiosos":["Valparaíso llegó a tener más de 30 funiculares activos a vapor para conectar los cerros con el plan de la ciudad"],"consejos":["El autobús desde Santiago a Valparaíso tarda solo 1 hora y 30 minutos ($6 USD)"],"location_info":{"address":"Cerro Alegre, Valparaíso","priceRange":"$ - Funicular accesible","dia":2,"day":2}}'::jsonb,
   now()
 );
@@ -15852,7 +15488,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'af824ad6-6669-0bac-28bd-2d9fe1f48136',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -15870,7 +15506,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Aconcagua es el pico más alto de la Tierra fuera de la cordillera del Himalaya en Asia']::text[],
   '{"address":"Cordillera de los Andes / Mendoza","priceRange":"$$ - Traslado internacional","dia":3,"day":3}'::jsonb,
   360,
-  3,
   '{"dia":3,"day":3,"activities":["Viaje en bus panorámico o coche cruzando la cordillera ($35 - $50 USD)","Parada en el Puente del Inca con aguas termales ferruginosas amarillas (Gratis)","Llegada a Mendoza y cena con corte de carne asada y vino Malbec ($25 USD)"],"datos_curiosos":["El Aconcagua es el pico más alto de la Tierra fuera de la cordillera del Himalaya en Asia"],"consejos":["El paso puede cerrar temporalmente en invierno por nevadas; en verano la ruta está despejada"],"location_info":{"address":"Cordillera de los Andes / Mendoza","priceRange":"$$ - Traslado internacional","dia":3,"day":3}}'::jsonb,
   now()
 );
@@ -15888,7 +15523,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'e03503e0-ec49-d0f9-861a-073a19a2c27e',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -15906,7 +15541,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Mendoza es una de las 11 Grandes Capitales Mundiales del Vino (*Great Wine Capitals*)']::text[],
   '{"address":"Luján de Cuyo, Mendoza","priceRange":"$$$ - Bodegas y catas","dia":4,"day":4}'::jsonb,
   300,
-  4,
   '{"dia":4,"day":4,"activities":["Visita y cata de 4 vinos de alta gama en bodega tradicional ($25 - $45 USD)","Almuerzo maridaje de 5 pasos en viñedo con vista a la cordillera ($60 - $110 USD)"],"datos_curiosos":["Mendoza es una de las 11 Grandes Capitales Mundiales del Vino (*Great Wine Capitals*)"],"consejos":["Contratar conductor o tour guiado para disfrutar de las catas con total tranquilidad"],"location_info":{"address":"Luján de Cuyo, Mendoza","priceRange":"$$$ - Bodegas y catas","dia":4,"day":4}}'::jsonb,
   now()
 );
@@ -15924,7 +15558,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '8f818215-6db6-b91a-bd22-db315a0ca6bf',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -15942,7 +15576,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El tango fue declarado Patrimonio Cultural Inmaterial de la Humanidad en 2009']::text[],
   '{"address":"San Telmo, Buenos Aires","priceRange":"$$$ - Show de tango","dia":5,"day":5}'::jsonb,
   240,
-  5,
   '{"dia":5,"day":5,"activities":["Caminar por las calles empedradas de San Telmo (Gratis)","Cena show de tango con orquesta en vivo ($65 - $100 USD)"],"datos_curiosos":["El tango fue declarado Patrimonio Cultural Inmaterial de la Humanidad en 2009"],"consejos":["Probar el bife de chorizo con chimichurri"],"location_info":{"address":"San Telmo, Buenos Aires","priceRange":"$$$ - Show de tango","dia":5,"day":5}}'::jsonb,
   now()
 );
@@ -15960,7 +15593,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'dfb14b3e-61ff-072f-5221-da4729cfa9eb',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -15978,7 +15611,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Buenos Aires es la ciudad con mayor número de librerías por habitante del mundo']::text[],
   '{"address":"Recoleta, Buenos Aires","priceRange":"$$ - Moderado","dia":6,"day":6}'::jsonb,
   210,
-  6,
   '{"dia":6,"day":6,"activities":["Mausoleo de Evita en Recoleta ($15 USD)","Café sobre el escenario de El Ateneo ($6 USD)"],"datos_curiosos":["Buenos Aires es la ciudad con mayor número de librerías por habitante del mundo"],"consejos":["Apreciar la cúpula pintada al óleo de El Ateneo"],"location_info":{"address":"Recoleta, Buenos Aires","priceRange":"$$ - Moderado","dia":6,"day":6}}'::jsonb,
   now()
 );
@@ -15996,7 +15628,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'b089e9ec-d942-52ba-a1df-0d10bcabd041',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -16014,7 +15646,6 @@ INSERT INTO public.tour_stops (
   ARRAY['El Puente de la Mujer de Santiago Calatrava representa a una pareja bailando tango']::text[],
   '{"address":"La Boca / Puerto Madero","priceRange":"$ - Libre","dia":7,"day":7}'::jsonb,
   210,
-  7,
   '{"dia":7,"day":7,"activities":["Fotos en Caminito (Gratis)","Paseo por el Puente de la Mujer (Gratis)","Helado artesanal dulce de leche en Rapanui ($5 USD)"],"datos_curiosos":["El Puente de la Mujer de Santiago Calatrava representa a una pareja bailando tango"],"consejos":["No salir del perímetro vigilado de Caminito hacia las calles laterales"],"location_info":{"address":"La Boca / Puerto Madero","priceRange":"$ - Libre","dia":7,"day":7}}'::jsonb,
   now()
 );
@@ -16032,7 +15663,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'cd7e21da-dfd1-d909-78ca-a78a59881eaf',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -16050,7 +15681,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Las cataratas se extienden a lo largo de 2.7 kilómetros con 275 saltos de agua individuales']::text[],
   '{"address":"Puerto Iguazú, Misiones","priceRange":"$$ - Entrada parque","dia":8,"day":8}'::jsonb,
   360,
-  8,
   '{"dia":8,"day":8,"activities":["Recorrer las pasarelas del Circuito Superior e Inferior (Entrada parque: ~$20.000 ARS / ~$20 USD)","Paseo en lancha \"Gran Aventura\" que se mete literalmente bajo las cascadas ($60 USD opcional)"],"datos_curiosos":["Las cataratas se extienden a lo largo de 2.7 kilómetros con 275 saltos de agua individuales"],"consejos":["Guardar la comida; los coatíes son muy hábiles abriendo mochilas en los descansos"],"location_info":{"address":"Puerto Iguazú, Misiones","priceRange":"$$ - Entrada parque","dia":8,"day":8}}'::jsonb,
   now()
 );
@@ -16068,7 +15698,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '9313b51e-8c82-67e2-0287-f2e377e9cdb2',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -16086,7 +15716,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Por la Garganta del Diablo caen más de 1.500 metros cúbicos de agua por segundo']::text[],
   '{"address":"Garganta del Diablo, Iguazú","priceRange":"$ - Incluido en parque","dia":9,"day":9}'::jsonb,
   240,
-  9,
   '{"dia":9,"day":9,"activities":["Caminar por la pasarela flotante de 1.100 metros sobre el río Iguazú superior (Incluido en entrada)","Sentir el rugido ensordecedor y la bruma de la Garganta del Diablo","Fotografiar decenas de mariposas tropicales de colores posándose en las manos"],"datos_curiosos":["Por la Garganta del Diablo caen más de 1.500 metros cúbicos de agua por segundo"],"consejos":["Llevar funda impermeable para el móvil; el rocío del salto empapa por completo en el mirador"],"location_info":{"address":"Garganta del Diablo, Iguazú","priceRange":"$ - Incluido en parque","dia":9,"day":9}}'::jsonb,
   now()
 );
@@ -16104,7 +15733,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   'dc08aded-52a0-e0df-19d1-6a126ad39b6a',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -16122,7 +15751,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Eleanor Roosevelt al ver las Cataratas del Iguazú exclamó: "¡Pobre Niágara!"']::text[],
   '{"address":"Foz do Iguaçu, Brasil","priceRange":"$$ - Entrada lado brasileño","dia":10,"day":10}'::jsonb,
   240,
-  10,
   '{"dia":10,"day":10,"activities":["Pasarela panorámica de Brasil que avanza sobre la base de los saltos (Entrada: ~$18 USD)","Subida en ascensor panorámico de cristal con vista al cañón","Almuerzo buffet en restaurante Porto Canoas sobre el río ($25 USD)"],"datos_curiosos":["Eleanor Roosevelt al ver las Cataratas del Iguazú exclamó: \"¡Pobre Niágara!\""],"consejos":["Tener a mano el pasaporte para el paso fronterizo entre Argentina y Brasil"],"location_info":{"address":"Foz do Iguaçu, Brasil","priceRange":"$$ - Entrada lado brasileño","dia":10,"day":10}}'::jsonb,
   now()
 );
@@ -16140,7 +15768,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '1bfe72ab-7b7c-7e88-f6fc-27abb3750747',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -16158,7 +15786,6 @@ INSERT INTO public.tour_stops (
   ARRAY['Más del 50% de las aves del parque fueron rescatadas del tráfico ilegal de fauna silvestre']::text[],
   '{"address":"Foz do Iguaçu / Buenos Aires","priceRange":"$$ - Entrada y vuelo","dia":11,"day":11}'::jsonb,
   180,
-  11,
   '{"dia":11,"day":11,"activities":["Entrar a los aviarios de inmersión con tucanes de pico amarillo ($15 USD)","Vuelo de retorno a Buenos Aires (~$70 - $110 USD)","Paseo nocturno por el barrio de Palermo Soho"],"datos_curiosos":["Más del 50% de las aves del parque fueron rescatadas del tráfico ilegal de fauna silvestre"],"consejos":["Las aves no están enjauladas; el visitante entra a su propio hábitat de selva"],"location_info":{"address":"Foz do Iguaçu / Buenos Aires","priceRange":"$$ - Entrada y vuelo","dia":11,"day":11}}'::jsonb,
   now()
 );
@@ -16176,7 +15803,7 @@ INSERT INTO public.tour_days (
 INSERT INTO public.tour_stops (
   id, tour_id, day_id, stop_order, position, name, latitude, longitude,
   image_url, images, description, activities, tips, curious_facts,
-  location_info, suggested_minutes, day, image_metadata, created_at
+  location_info, suggested_minutes, image_metadata, created_at
 ) VALUES (
   '9734ddc9-3ec2-b4a6-354e-51c7f71c0b8e',
   'bc00338e-7ba8-209c-585f-afe1defb00c3',
@@ -16194,7 +15821,6 @@ INSERT INTO public.tour_stops (
   ARRAY['La cúpula de Galerías Pacífico es considerada la Capilla Sixtina del muralismo argentino']::text[],
   '{"address":"Florida 753, Buenos Aires","priceRange":"$ - Compras","dia":12,"day":12}'::jsonb,
   150,
-  12,
   '{"dia":12,"day":12,"activities":["Comprar alfajores artesanales Havanna o Cachafaz y dulce de leche ($15 - $30 USD)","Último almuerzo de milanesa con papas fritas ($12 USD)","Traslado al aeropuerto internacional Ministro Pistarini (Ezeiza)"],"datos_curiosos":["La cúpula de Galerías Pacífico es considerada la Capilla Sixtina del muralismo argentino"],"consejos":["El taxi o transfer a Ezeiza toma aproximadamente 45 minutos por autopista"],"location_info":{"address":"Florida 753, Buenos Aires","priceRange":"$ - Compras","dia":12,"day":12}}'::jsonb,
   now()
 );
@@ -16215,5 +15841,5 @@ INSERT INTO public.tour_comments (
 COMMIT;
 
 -- ===================================================================
--- End of Seed Data: 50 Tours, 354 Days, 368 Stops inserted.
+-- End of Seed Data: 50 Tours, 354 Days, 368 Stops.
 -- ===================================================================
