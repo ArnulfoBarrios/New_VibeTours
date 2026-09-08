@@ -120,8 +120,22 @@ export function selectBestPoiResult(results, originalQuery = '') {
   const isExplicitTransitQuery = /\b(estaci[oó]n|bus|metro|subway|parada|transit|train|railway|stop)\b/i.test(lowerQuery)
   const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja)\b/i.test(lowerQuery)
   const isViewpointQuery = /\b(mirador|viewpoint|lookout|belvedere|observatorio)\b/i.test(lowerQuery)
+  const isExplicitFuelQuery = /\b(gasolinera|estaci[oó]n de servicio|combustible|terpel|texaco|esso|mobil|biomax|primax|petrol|fuel)\b/i.test(lowerQuery)
 
   let candidates = [...results]
+
+  if (!isExplicitFuelQuery && candidates.length > 1) {
+    const nonFuelMatch = candidates.filter(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || r.class || '').toLowerCase()
+      const name = String(r.name || '').toLowerCase()
+      const isFuel = type === 'fuel' || key === 'fuel' || /\beds\b|estaci[oó]n de servicio/i.test(name)
+      return !isFuel
+    })
+    if (nonFuelMatch.length > 0) {
+      candidates = nonFuelMatch
+    }
+  }
 
   if (isFoodQuery) {
     candidates = candidates.filter(r => {
@@ -248,22 +262,27 @@ export async function geocodePlace(query, lat = null, lon = null) {
   }
 
   // 3. Fallback to Nominatim if Photon fails or returns no results
+  const isExplicitFuelQuery = /\b(gasolinera|estaci[oó]n de servicio|combustible|terpel|texaco|esso|mobil|biomax|primax|petrol|fuel)\b/i.test(normalizedQuery)
   const nominatimQueries = [normalizedQuery]
   const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
   if (commaParts.length > 1) {
-    const simplifiedFeature = normalizedQuery.replace(/\b(bah[íi]a de|playa de|cabo|isla|archipi[ée]lago de)\s+/gi, '').trim()
+    const simplifiedFeature = normalizedQuery.replace(/\b(bah[íi]a de|playa de|cabo|isla|archipi[ée]lago de|monumento al?|monumento de|monumento|barrio)\s+/gi, '').trim()
     if (simplifiedFeature && simplifiedFeature !== normalizedQuery && simplifiedFeature.length > 3) {
       nominatimQueries.push(simplifiedFeature)
     }
     if (commaParts[0].length > 2) {
       nominatimQueries.push(commaParts[0])
+      const firstWithoutPrefix = commaParts[0].replace(/\b(bah[íi]a de|playa de|cabo|isla|archipi[ée]lago de|monumento al?|monumento de|monumento|barrio)\s+/gi, '').trim()
+      if (firstWithoutPrefix && firstWithoutPrefix !== commaParts[0] && firstWithoutPrefix.length > 2) {
+        nominatimQueries.push(firstWithoutPrefix)
+      }
     }
   }
 
   for (const nq of nominatimQueries) {
     const url = new URL('https://nominatim.openstreetmap.org/search')
     url.searchParams.set('format', 'jsonv2')
-    url.searchParams.set('limit', '3')
+    url.searchParams.set('limit', '5')
     url.searchParams.set('addressdetails', '1')
     url.searchParams.set('q', nq)
     try {
@@ -273,20 +292,29 @@ export async function geocodePlace(query, lat = null, lon = null) {
       })
       if (response.ok) {
         const results = await response.json()
-        const [result] = Array.isArray(results) ? results : []
-        if (result) {
-          const rLat = Number(result.lat)
-          const rLon = Number(result.lon)
+        const validResult = (Array.isArray(results) ? results : []).find(r => {
+          const type = String(r.type || '').toLowerCase()
+          const category = String(r.category || '').toLowerCase()
+          const name = String(r.display_name || '').toLowerCase()
+          const isFuel = type === 'fuel' || category === 'fuel' || /\beds\b|estaci[oó]n de servicio/i.test(name)
+          if (isFuel && !isExplicitFuelQuery) return false
+          const isUtility = ['waste_disposal', 'vending_machine', 'atm', 'car_wash', 'toilet', 'bench'].includes(type)
+          if (isUtility) return false
+          return true
+        })
+        if (validResult) {
+          const rLat = Number(validResult.lat)
+          const rLon = Number(validResult.lon)
           let isWithinBounds = !lat || !lon || haversineMeters(lat, lon, rLat, rLon) <= 75000
           if (nq !== normalizedQuery && (!lat || !lon) && commaParts.length > 1) {
             const contextCity = commaParts[1].toLowerCase()
-            const resultText = `${result.display_name} ${JSON.stringify(result.address || {})}`.toLowerCase()
+            const resultText = `${validResult.display_name} ${JSON.stringify(validResult.address || {})}`.toLowerCase()
             if (!resultText.includes(contextCity)) {
               isWithinBounds = false
             }
           }
           if (isWithinBounds) {
-            const address = result.address || {}
+            const address = validResult.address || {}
             const county = cleanAdministrativeCityName(address.county || '')
             const matchedContextCity = commaParts.length > 1 ? cleanAdministrativeCityName(commaParts[1]) : ''
             let rawCity = address.city || address.town || ''
@@ -299,7 +327,7 @@ export async function geocodePlace(query, lat = null, lon = null) {
             const city = cleanAdministrativeCityName(rawCity)
             const country = address.country || ''
             const res = {
-              name: result.display_name,
+              name: validResult.display_name,
               latitude: rLat,
               longitude: rLon,
               city,

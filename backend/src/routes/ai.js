@@ -4029,16 +4029,7 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
     country: input.country
   } : null)
 
-  // 1. Validar si las coordenadas de origen ya son válidas y están dentro del área metropolitana
-  if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
-    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude, name }
-    const isNearby = !canonicalDest || validateCandidateLocation(candidateCoord, canonicalDest, 50)
-    if (isNearby && (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace))) {
-      return candidateCoord
-    }
-  }
-
-  // 2. Geocodificar nombre de parada anclado al destino
+  // 1. Geocodificar nombre de parada anclado al destino con proveedores cartográficos reales (OSM/Photon/Nominatim)
   const cleanCity = cleanAdministrativeCityName(input.city || input.destination || '')
   const searchQuery = `${name}, ${cleanCity}, ${input.country || ''}`.trim().replace(/,\s*$/, '')
   const geocoded = await geocodePlace(searchQuery, input.latitude, input.longitude).catch(() => null)
@@ -4051,6 +4042,15 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
         longitude: geocoded.longitude,
         place_id: geocoded.place_id || ''
       }
+    }
+  }
+
+  // 2. Si source ya tiene coordenadas utilizables dentro del área metropolitana
+  if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
+    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude, name }
+    const isNearby = !canonicalDest || validateCandidateLocation(candidateCoord, canonicalDest, 50)
+    if (isNearby && (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace))) {
+      return candidateCoord
     }
   }
 
@@ -4068,8 +4068,19 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
   }
 
   // 4. Centro oficial verificado de la ciudad destino
-  const cityCenterLat = canonicalDest?.latitude || input.latitude || (cleanCity.toLowerCase() === 'santa marta' ? 11.2408 : 10.4230)
-  const cityCenterLon = canonicalDest?.longitude || input.longitude || (cleanCity.toLowerCase() === 'santa marta' ? -74.2122 : -75.5500)
+  let cityCenterLat = canonicalDest?.latitude || input.latitude
+  let cityCenterLon = canonicalDest?.longitude || input.longitude
+  if (!hasUsableCoordinates(cityCenterLat, cityCenterLon) && cleanCity) {
+    const cGeo = await geocodePlace(cleanCity).catch(() => null)
+    if (cGeo && hasUsableCoordinates(cGeo.latitude, cGeo.longitude)) {
+      cityCenterLat = cGeo.latitude
+      cityCenterLon = cGeo.longitude
+    }
+  }
+  if (!hasUsableCoordinates(cityCenterLat, cityCenterLon)) {
+    cityCenterLat = cleanCity.toLowerCase() === 'santa marta' ? 11.2408 : 10.9685
+    cityCenterLon = cleanCity.toLowerCase() === 'santa marta' ? -74.2122 : -74.7813
+  }
 
   return {
     latitude: cityCenterLat,
@@ -4828,28 +4839,7 @@ export async function collectTourCandidates(input, location) {
         const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
         const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
 
-        // Step A: Si OpenAI pre-geocodificó este lugar por lote, verificarlo con máxima prioridad
-        const aiCoord = preGeocodedAi[placeName] ||
-          Object.entries(preGeocodedAi).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
-            arePlacesSimilar(k, placeName) ||
-            normalizePlaceKey(k) === normalizePlaceKey(placeName) ||
-            placeName.toLowerCase().includes(k.toLowerCase()) ||
-            k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
-
-        if (aiCoord && Number.isFinite(aiCoord.latitude) && Number.isFinite(aiCoord.longitude)) {
-          const candidate = {
-            name: placeName,
-            latitude: Number(aiCoord.latitude),
-            longitude: Number(aiCoord.longitude),
-            city,
-            country
-          }
-          if (validateCandidateLocation(candidate, canonicalDest, 70)) {
-            geo = candidate
-          }
-        }
-
-        // Tier 0: Consulta directa con contexto de ciudad y país con sesgo de proximidad al destino
+        // Tier 0: Consulta directa en OSM con contexto de ciudad y país con sesgo de proximidad al destino
         if (!geo && /pueblito|chairama/i.test(placeName)) {
           geo = await geocodePlace('Pueblito Tayrona', destLat, destLon).catch(() => null)
           if (!geo) geo = await geocodePlace('El Pueblito Chairama', destLat, destLon).catch(() => null)
@@ -4973,6 +4963,29 @@ export async function collectTourCandidates(input, location) {
                   }
                 }
               }
+            }
+          }
+        }
+
+        // Tier 3: Fallback de último recurso con OpenAI si OSM no resolvió el lugar
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+          const aiCoord = preGeocodedAi[placeName] ||
+            Object.entries(preGeocodedAi).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
+              arePlacesSimilar(k, placeName) ||
+              normalizePlaceKey(k) === normalizePlaceKey(placeName) ||
+              placeName.toLowerCase().includes(k.toLowerCase()) ||
+              k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
+
+          if (aiCoord && Number.isFinite(aiCoord.latitude) && Number.isFinite(aiCoord.longitude)) {
+            const candidate = {
+              name: placeName,
+              latitude: Number(aiCoord.latitude),
+              longitude: Number(aiCoord.longitude),
+              city,
+              country
+            }
+            if (validateCandidateLocation(candidate, canonicalDest, 70)) {
+              geo = candidate
             }
           }
         }
