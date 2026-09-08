@@ -2,7 +2,7 @@ import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
-import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment } from './osm.js'
+import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters } from './osm.js'
 
 const planCache = new GeoCache(6 * 60 * 60 * 1000, 200)
 const destinationCatalogCache = new GeoCache(12 * 60 * 60 * 1000, 200)
@@ -92,87 +92,82 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   let realRests = preset?.restaurants ? [...preset.restaurants] : []
   let realPlaces = preset?.places ? [...preset.places] : []
 
-  if (lat && lon && realPlaces.length < 8) {
+  // 1. Prioritize authentic iconic landmarks from OpenAI global travel knowledge (ranked by popularity)
+  try {
+    const dynamicLandmarks = await fetchCityIconicLandmarks(clean, targetCountry).catch(() => [])
+    for (const dl of dynamicLandmarks) {
+      const dlName = typeof dl === 'string' ? dl : (dl?.name || '')
+      if (dlName && !isGenericFacilityName(dlName) && !isNonTouristFacility({ name: dlName }) && !isFoodOrDrinkEstablishment(dlName)) {
+        if (!realPlaces.some(rp => arePlacesSimilar(rp, dlName))) {
+          realPlaces.push(dlName)
+        }
+      }
+    }
+  } catch (_) {}
+
+  // 2. Fetch live hotels and restaurants from OpenStreetMap
+  if (lat && lon) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500))
-    const [osmHotels, osmRests, osmAttractions] = await Promise.all([
+    const [osmHotels, osmRests] = await Promise.all([
       Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise]),
-      Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise]),
-      Promise.race([overpassAttractions(lat, lon, 50000).catch(() => []), timeoutPromise])
+      Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise])
     ])
 
     const fetchedHotels = (osmHotels || []).filter(h => h && h.name && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
     const fetchedRests = (osmRests || []).filter(r => r && r.name && !isNonTouristFacility(r.tags) && !isNonTouristFacility({ name: r.name }) && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 14)
-    const fetchedPlaces = (osmAttractions || []).filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name) && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 20)
 
     if (realHotels.length === 0) realHotels = fetchedHotels
     for (const fr of fetchedRests) {
-      if (!realRests.some(r => r.name.toLowerCase() === fr.name.toLowerCase())) {
+      if (!realRests.some(r => r.name.toLowerCase() === fr.name.toLowerCase() || arePlacesSimilar(r.name, fr.name))) {
         realRests.push(fr)
       }
     }
-    for (const fp of fetchedPlaces) {
-      if (!realPlaces.some(rp => (typeof rp === 'string' ? rp : rp.name).toLowerCase() === fp.name.toLowerCase())) {
-        realPlaces.push(fp.name)
+
+    // 3. Supplement attractions only if needed (less than 14 attractions)
+    if (realPlaces.length < 14) {
+      const osmAttractions = await Promise.race([overpassAttractions(lat, lon, 35000).catch(() => []), timeoutPromise])
+      const fetchedPlaces = (osmAttractions || []).filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name) && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 10)
+      for (const fp of fetchedPlaces) {
+        if (!realPlaces.some(rp => arePlacesSimilar(rp, fp.name))) {
+          realPlaces.push(fp.name)
+        }
       }
     }
 
-    if (realPlaces.length < 8) {
-      const [generalPlaces, museums, plazas, coastal, viewpoints] = await Promise.all([
-        photonSearch(`turismo ${clean}`, 8, lat, lon).catch(() => []),
-        photonSearch(`museo ${clean}`, 8, lat, lon).catch(() => []),
-        photonSearch(`plaza ${clean}`, 8, lat, lon).catch(() => []),
-        photonSearch(`playa ${clean}`, 4, lat, lon).catch(() => []),
-        photonSearch(`mirador ${clean}`, 4, lat, lon).catch(() => [])
+    if (realPlaces.length < 14) {
+      const [generalPlaces, museums, plazas] = await Promise.all([
+        photonSearch(`turismo ${clean}`, 6, lat, lon).catch(() => []),
+        photonSearch(`museo ${clean}`, 6, lat, lon).catch(() => []),
+        photonSearch(`plaza ${clean}`, 6, lat, lon).catch(() => [])
       ])
       const additional = [
         ...generalPlaces,
         ...museums,
-        ...plazas,
-        ...coastal,
-        ...viewpoints
-      ].filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !p.name.toLowerCase().includes('perímetro urbano'))
-
-      const existingNames = new Set(realPlaces.map(p => (typeof p === 'string' ? p : p.name).toLowerCase().trim()))
-      let beachCount = realPlaces.filter(p => /playa|beach/i.test(typeof p === 'string' ? p : p.name)).length
-      for (const p of additional) {
-        if (isFoodOrDrinkEstablishment(p.name)) {
-          if (!realRests.some(r => r.name.toLowerCase() === p.name.toLowerCase())) {
-            realRests.push(p)
-          }
-          continue
+        ...plazas
+      ].filter(p => {
+        if (!p || !p.name || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name)) return false
+        if (p.name.toLowerCase().includes('perímetro urbano')) return false
+        // Geographic bound check: ensure POI is within 35km of destination center
+        if (p.latitude != null && p.longitude != null && lat != null && lon != null) {
+          const dist = haversineMeters(lat, lon, p.latitude, p.longitude)
+          if (dist > 35000) return false
         }
-        const isBeach = /playa|beach/i.test(p.name)
-        if (isBeach && beachCount >= 3) continue
-        const k = p.name.toLowerCase().trim()
-        if (!existingNames.has(k)) {
-          existingNames.add(k)
+        return true
+      })
+
+      for (const p of additional) {
+        if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
           realPlaces.push(p.name)
-          if (isBeach) beachCount++
         }
       }
     }
-  }
-
-  // Enrich with dynamic iconic landmarks from OpenAI global travel knowledge if available
-  if (realPlaces.length < 18) {
-    try {
-      const dynamicLandmarks = await fetchCityIconicLandmarks(clean, targetCountry).catch(() => [])
-      for (const dl of dynamicLandmarks) {
-        const dlName = typeof dl === 'string' ? dl : (dl?.name || '')
-        if (dlName && !isGenericFacilityName(dlName) && !isNonTouristFacility({ name: dlName }) && !isFoodOrDrinkEstablishment(dlName)) {
-          if (!realPlaces.some(rp => (typeof rp === 'string' ? rp : rp.name).toLowerCase() === dlName.toLowerCase())) {
-            realPlaces.push(dlName)
-          }
-        }
-      }
-    } catch (_) {}
   }
 
   if (realRests.length < 10 && lat && lon) {
     const extraFood = await photonSearch(`gastronomia restaurante ${clean}`, 12, lat, lon).catch(() => [])
     for (const ef of extraFood) {
       if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name })) {
-        if (!realRests.some(r => r.name.toLowerCase() === ef.name.toLowerCase())) {
+        if (!realRests.some(r => r.name.toLowerCase() === ef.name.toLowerCase() || arePlacesSimilar(r.name, ef.name))) {
           realRests.push(ef)
         }
       }
@@ -908,6 +903,9 @@ REGLAS PARA "specificPlaces":
       .replace(/([^\n])\s*(¿(?:Qué te parece|Deseas hacer))/gi, '$1\n\n$2')
       .trim()
 
+    // Detección explícita de comando de generación enviado por el usuario
+    const isUserExplicitlyOrderingBuild = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+generar|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+
     // Detección de petición de agregar paradas
     const isUserAskingForMoreStops = /\b(agr(egar?|ega|egues?|eguen?)|a[ñn](adir?|ade|ades?|adan?)|inclu(ir?|ye|yes?|yan?)|m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|aumentar\s+(las\s+)?paradas|sumar\s+(m[aá]s\s+)?paradas|paradas\s+adicionales)\b/i.test(lastUserMsg)
     const hasDayHeaders = /(?:^|\n)\s*(?:#{1,4}\s*)?d[íi]a\s*1\b/i.test(responseMessage) ||
@@ -921,8 +919,10 @@ REGLAS PARA "specificPlaces":
       (finalHasTransport || finalHasBudget)
     )
 
-    const shouldReconstructItinerary = (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || userRequestedItinerary || isUserAskingForMoreStops || hasLodgingJustProvided)) ||
+    const shouldReconstructItinerary = !isUserExplicitlyOrderingBuild && (
+      (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || userRequestedItinerary || isUserAskingForMoreStops || hasLodgingJustProvided)) ||
       (isUserAskingForMoreStops && !hasDayHeaders)
+    )
 
     if (shouldReconstructItinerary) {
       let placesList = (parsedExtracted.specificPlaces || known.specificPlaces || [])
@@ -950,31 +950,25 @@ REGLAS PARA "specificPlaces":
         const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry).catch(() => [])
         for (const di of dynamicIconics) {
           const diName = typeof di === 'string' ? di : (di?.name || '')
-          if (diName && !isGenericFacilityName(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !catPlaces.some(cp => cp.toLowerCase() === diName.toLowerCase())) {
+          if (diName && !isGenericFacilityName(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !catPlaces.some(cp => arePlacesSimilar(cp, diName))) {
             catPlaces.push(diName)
           }
         }
       }
 
-      const cleanExplicitPool = allPlacesPool.filter(p => p && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
+      const cleanExplicitPool = placeNames.filter(p => p && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
       const rawAttractions = [...cleanExplicitPool, ...catPlaces]
       const uniqueAttractions = []
-      const seenAttr = new Set()
       for (const p of rawAttractions) {
-        const k = p.toLowerCase().trim()
-        if (!seenAttr.has(k)) {
-          seenAttr.add(k)
+        if (!uniqueAttractions.some(existing => arePlacesSimilar(existing, p))) {
           uniqueAttractions.push(p)
         }
       }
 
       const validRests = (cat?.restaurants || []).filter(r => r && r.name && !isGenericFacilityName(r.name) && !isNonTouristFacility({ name: r.name }))
       const uniqueRests = []
-      const seenRest = new Set()
       for (const r of validRests) {
-        const k = r.name.toLowerCase().trim()
-        if (!seenRest.has(k)) {
-          seenRest.add(k)
+        if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, r.name))) {
           uniqueRests.push(r)
         }
       }
@@ -1004,19 +998,19 @@ REGLAS PARA "specificPlaces":
           let chosenPlace = null
           while (attrCursor < uniqueAttractions.length) {
             const candidate = uniqueAttractions[attrCursor++]
-            const k = candidate.toLowerCase().trim()
-            if (!globalUsedNames.has(k) && !dayUsed.has(k)) {
+            const usedToday = Array.from(dayUsed).some(u => arePlacesSimilar(u, candidate))
+            const usedGlobally = Array.from(globalUsedNames).some(u => arePlacesSimilar(u, candidate))
+            if (!usedGlobally && !usedToday) {
               chosenPlace = candidate
               break
             }
           }
           if (!chosenPlace) {
-            chosenPlace = uniqueAttractions.find(p => !dayUsed.has(p.toLowerCase().trim())) ||
+            chosenPlace = uniqueAttractions.find(p => !Array.from(dayUsed).some(u => arePlacesSimilar(u, p))) ||
               `Paseo cultural por ${dName} (Sector ${d})`
           }
-          const kChosen = chosenPlace.toLowerCase().trim()
-          globalUsedNames.add(kChosen)
-          dayUsed.add(kChosen)
+          globalUsedNames.add(chosenPlace)
+          dayUsed.add(chosenPlace)
           reconstructed += ` • ${chosenPlace}\n`
           parsedExtracted.specificPlaces.push({ name: chosenPlace, dia: d, type: 'cultural' })
         }
@@ -1024,19 +1018,19 @@ REGLAS PARA "specificPlaces":
         let chosenRest = null
         while (restCursor < uniqueRests.length) {
           const candidate = uniqueRests[restCursor++]
-          const k = candidate.name.toLowerCase().trim()
-          if (!globalUsedNames.has(k) && !dayUsed.has(k)) {
+          const usedToday = Array.from(dayUsed).some(u => arePlacesSimilar(u, candidate.name))
+          const usedGlobally = Array.from(globalUsedNames).some(u => arePlacesSimilar(u, candidate.name))
+          if (!usedGlobally && !usedToday) {
             chosenRest = candidate.name
             break
           }
         }
         if (!chosenRest) {
-          chosenRest = uniqueRests.find(r => !dayUsed.has(r.name.toLowerCase().trim()))?.name ||
+          chosenRest = uniqueRests.find(r => !Array.from(dayUsed).some(u => arePlacesSimilar(u, r.name)))?.name ||
             `Gastronomía tradicional de ${dName} (Día ${d})`
         }
-        const kRest = chosenRest.toLowerCase().trim()
-        globalUsedNames.add(kRest)
-        dayUsed.add(kRest)
+        globalUsedNames.add(chosenRest)
+        dayUsed.add(chosenRest)
         reconstructed += ` • ${chosenRest}\n\n`
         parsedExtracted.specificPlaces.push({ name: chosenRest, dia: d, type: 'food' })
       }
@@ -1053,9 +1047,6 @@ REGLAS PARA "specificPlaces":
         actionChips.push('➕ Agregar más paradas')
       }
     }
-
-    // Detección explícita de comando de generación enviado por el usuario
-    const isUserExplicitlyOrderingBuild = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+generar|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
 
     // Detección de si la IA está en modo consulta/propuesta esperando opinión del usuario
     const isBotAskingOrProposing = /\b(qu[ée]\s+te\s+parece|deseas\s+hacer\s+alg[uú]n\s+cambio|te\s+gustar[íi]a\s+incluir|qu[ée]\s+opinas|deseas\s+modificar|alguna\s+otra\s+preferencia|est[áa]\s+todo\s+listo\s+para\s+generar|qu[ée]\s+actividades|qu[ée]\s+lugares|cu[aá]l\s+de\s+estos)\b/i.test(responseMessage) ||
@@ -1104,7 +1095,9 @@ REGLAS PARA "specificPlaces":
       responseMessage,
       actionChips,
       extractedPreferences: parsedExtracted,
-      specificPlaces: known.specificPlaces || [],
+      specificPlaces: (Array.isArray(parsedExtracted.specificPlaces) && parsedExtracted.specificPlaces.length > 0)
+        ? parsedExtracted.specificPlaces
+        : (known.specificPlaces || []),
       destinationSuggestions,
       readyToBuild: Boolean(effectiveReadyToBuild)
     }
@@ -1575,7 +1568,10 @@ export async function fetchCityIconicLandmarks(cityInput, countryInput = '') {
             {
               role: 'system',
               content: `Eres un guía turístico profesional de VibeTours con conocimiento exhaustivo de geografía mundial. Tu misión es devolver un listado de los 16 a 22 lugares turísticos, plazas, monumentos históricos, museos, malecones, miradores, parques emblemáticos y experiencias patrimoniales más icónicos, reconocidos y visitados de la ciudad indicada.
+ORDENA la lista estrictamente por popularidad e importancia turística (los atractivos imprescindibles, más visitados y famosos a nivel mundial o nacional en los primeros puestos).
 PROHIBIDO incluir restaurantes, bares, cafeterías, puestos de comida o negocios gastronómicos en esta lista (deben ser exclusivamente atractivos turísticos, culturales, patrimoniales o naturales).
+PROHIBIDO incluir urbanizaciones, barrios residenciales, conjuntos residenciales, edificios de viviendas o rotondas viales.
+Asegúrate de que TODOS los lugares pertenezcan estrictamente a la ciudad indicada o a su área metropolitana inmediata (no incluyas lugares de otras ciudades).
 Devuelve ÚNICAMENTE un JSON válido con este formato:
 {
   "places": [
@@ -1585,7 +1581,7 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
             },
             {
               role: 'user',
-              content: `Ciudad: "${clean}", País: "${country || ''}". Lista los principales atractivos turísticos y monumentos imprescindibles.`
+              content: `Ciudad: "${clean}", País: "${country || ''}". Lista los principales atractivos turísticos y monumentos imprescindibles ordenados por popularidad turística.`
             }
           ],
           response_format: { type: 'json_object' },
@@ -1601,9 +1597,15 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
         if (content) {
           const parsed = JSON.parse(content)
           const rawPlaces = Array.isArray(parsed.places) ? parsed.places : []
-          const list = rawPlaces
-            .map(p => typeof p === 'string' ? { name: p, category: 'historic' } : p)
-            .filter(p => p && p.name && !isGenericFacilityName(p.name) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name))
+          const list = []
+          for (const p of rawPlaces) {
+            const entry = typeof p === 'string' ? { name: p, category: 'historic' } : p
+            if (entry && entry.name && !isGenericFacilityName(entry.name) && !isNonTouristFacility({ name: entry.name }) && !isFoodOrDrinkEstablishment(entry.name)) {
+              if (!list.some(existing => arePlacesSimilar(existing.name, entry.name))) {
+                list.push(entry)
+              }
+            }
+          }
           if (list.length >= 3) {
             cityLandmarksCache.set(cacheKey, list)
             return list

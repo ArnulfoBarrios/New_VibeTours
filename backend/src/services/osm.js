@@ -584,6 +584,9 @@ export function isNonTouristFacility(tags = {}) {
   if (tags.office || tags.industrial || tags.shop || tags.craft) return true
   if (tags.man_made === 'pipeline' || tags.pipeline || tags.man_made === 'storage_tank' || tags.man_made === 'works') return true
 
+  if (tags.place === 'neighbourhood' || tags.place === 'suburb' || tags.place === 'quarter' || tags.place === 'isolated_dwelling') return true
+  if (tags.junction === 'roundabout' || tags.highway === 'roundabout') return true
+
   const name = String(tags.name ?? '').toLowerCase()
   if (isGenericFacilityName(name)) return true
   if (
@@ -591,6 +594,9 @@ export function isNonTouristFacility(tags = {}) {
     /\b(supermercado|tienda|droguer[íi]a|farmacia|ferreter[íi]a|almac[ée]n|panader[íi]a|carnicer[íi]a|minimarket|estanco|miscel[aá]nea|bodega|dep[oó]sito)\b/i.test(name) ||
     /\b(parque industrial|zona franca|parque empresarial|pol[íi]gono industrial|complejo log[íi]stico|centro log[íi]stico|bodegas|parque log[íi]stico)\b/i.test(name) ||
     /\b(rotario|club rotario|club de leones|club social|asociaci[oó]n|fundaci[oó]n|cooperativa|corporaci[oó]n|sindicato|gremio|oficina)\b/i.test(name) ||
+    /\b(urbanizaci[oó]n|condominio|conjunto\s+residencial|complejo\s+residencial|torre\s+residencial|viviendas|barrio\s+residencial|rotonda|glorieta|retorno\s+vial|intercambiador\s+vial|redoma)\b/i.test(name) ||
+    /\b(etapa\s+\d+|manzana\s+[a-z\d]+|bloque\s+\d+|apto\b|apartamentos|torre\s+\d+)\b/i.test(name) ||
+    /\b(mirador\s+del\s+mar\s+[ivx\d]+)\b/i.test(name) ||
     name.includes('aguas de') ||
     name.includes('acueducto') ||
     name.includes('alcantarillado') ||
@@ -841,4 +847,25 @@ export function haversineMeters(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   return R * c
 }
+
+export function arePlacesSimilar(a, b) {
+  if (!a || !b) return false
+  const strA = typeof a === 'string' ? a : (a?.name || '')
+  const strB = typeof b === 'string' ? b : (b?.name || '')
+  if (!strA || !strB) return false
+
+  const normA = strA.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const normB = strB.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  if (normA === normB) return true
+
+  // Strip generic prefixes (plaza rotonda, rotonda, glorieta, urbanización)
+  const stripPrefix = (str) => str.replace(/^(plaza\s+rotonda|rotonda|glorieta|urbanizaci[oó]n|parque\s+rotonda)\s+(?:de\s+|del?\s+)?/i, '').trim()
+  const pA = stripPrefix(normA)
+  const pB = stripPrefix(normB)
+  if (pA === pB) return true
+  if (pA.length >= 6 && pB.length >= 6 && (pA.includes(pB) || pB.includes(pA))) return true
+
+  return false
+}
+
 

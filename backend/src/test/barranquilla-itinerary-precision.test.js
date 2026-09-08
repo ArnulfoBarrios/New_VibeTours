@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { isValidSpecificPlace, buildTourPlanner, deduplicatePlacesByName } from '../routes/ai.js'
 import { selectBestPoiResult, geocodePlace } from '../services/osm.js'
-import { getRealDestinationCatalog } from '../services/openai.js'
+import { getRealDestinationCatalog, generateChatResponse } from '../services/openai.js'
 
 test('isValidSpecificPlace must reject all non-physical activities and descriptive phrases', () => {
   // Descriptive activities and check-ins
@@ -152,4 +152,37 @@ test('getRealDestinationCatalog resolves dynamic catalog for Barranquilla withou
   assert.ok(Array.isArray(bq.places))
   assert.ok(Array.isArray(bq.restaurants))
   assert.ok(Array.isArray(bq.hotels))
+  // Must NOT contain residential subdivisions or traffic roundabouts
+  assert.ok(!bq.places.some(p => /urbanizaci[oó]n|condominio|mirador del mar/i.test(p)))
 })
+
+test('generateChatResponse responds to explicit build order "adelante crea el tour" with readyToBuild true and no crash', async () => {
+  const state = {
+    history: [
+      { role: 'assistant', content: 'Día 1: Barranquilla\n • Gran Malecón del Río\n • Ventana al Mundo\n • Restaurante Narcobollo\n\n¿Te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?' },
+      { role: 'user', content: 'adelante crea el tour' }
+    ]
+  }
+  const known = {
+    city: 'Barranquilla',
+    destination: 'Barranquilla',
+    datesSeason: 'febrero en carnaval',
+    durationDays: 7,
+    selectedHotel: 'Hotel Barranquilla Plaza',
+    transport: 'a pie y taxi',
+    budget: 'moderado',
+    companions: 'en pareja',
+    specificPlaces: [
+      { name: 'Gran Malecón del Río', dia: 1, day: 1 },
+      { name: 'Ventana al Mundo', dia: 1, day: 1 },
+      { name: 'Restaurante Narcobollo', dia: 1, day: 1 }
+    ]
+  }
+  const res = await generateChatResponse(state, '', '', known)
+  assert.ok(res)
+  assert.equal(res.readyToBuild, true)
+  assert.ok(!res.responseMessage.includes('¿Qué te gustaría planear a continuación?'))
+  assert.ok(res.responseMessage.includes('Procedo a generar') || res.responseMessage.includes('generar tu tour'))
+  assert.ok(Array.isArray(res.specificPlaces) && res.specificPlaces.length > 0)
+})
+
