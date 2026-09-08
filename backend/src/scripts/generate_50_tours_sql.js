@@ -117,6 +117,10 @@ function generateSql() {
   sqlLines.push(`-- 2. Remove any previous versions of these 50 tours (cascades to days and stops)`);
   sqlLines.push(`DELETE FROM public.tours WHERE slug IN (\n  ${slugsList}\n);\n`);
 
+  sqlLines.push(`-- Ensure required columns exist on tour_stops for metadata & days`);
+  sqlLines.push(`ALTER TABLE public.tour_stops ADD COLUMN IF NOT EXISTS image_metadata jsonb DEFAULT '{}'::jsonb;`);
+  sqlLines.push(`ALTER TABLE public.tour_stops ADD COLUMN IF NOT EXISTS day integer DEFAULT 1;\n`);
+
   // 3. Process Tours, Days, and Stops
   sqlLines.push(`-- 3. Insert 50 Tours, their Tour Days, and georeferenced Tour Stops\n`);
 
@@ -210,10 +214,29 @@ function generateSql() {
               `vibetour-stop:${tour.slug}:${tourStopIndex}`
             );
 
+            const imageMetadata = {
+              dia: day.day_number,
+              day: day.day_number,
+              activities: stop.activities || [],
+              datos_curiosos: stop.curious_facts || [],
+              consejos: stop.tips || [],
+              location_info: {
+                ...(stop.location_info || {}),
+                dia: day.day_number,
+                day: day.day_number
+              }
+            };
+
+            const enrichedLocationInfo = {
+              ...(stop.location_info || {}),
+              dia: day.day_number,
+              day: day.day_number
+            };
+
             sqlLines.push(`INSERT INTO public.tour_stops (`);
             sqlLines.push(`  id, tour_id, day_id, stop_order, position, name, latitude, longitude,`);
             sqlLines.push(`  image_url, images, description, activities, tips, curious_facts,`);
-            sqlLines.push(`  location_info, suggested_minutes, created_at`);
+            sqlLines.push(`  location_info, suggested_minutes, day, image_metadata, created_at`);
             sqlLines.push(`) VALUES (`);
             sqlLines.push(`  '${stopId}',`);
             sqlLines.push(`  '${tourId}',`);
@@ -229,8 +252,10 @@ function generateSql() {
             sqlLines.push(`  ${escapeSqlArray(stop.activities || [])},`);
             sqlLines.push(`  ${escapeSqlArray(stop.tips || [])},`);
             sqlLines.push(`  ${escapeSqlArray(stop.curious_facts || [])},`);
-            sqlLines.push(`  ${escapeSqlJsonb(stop.location_info || {})},`);
+            sqlLines.push(`  ${escapeSqlJsonb(enrichedLocationInfo)},`);
             sqlLines.push(`  ${stop.suggested_minutes || 45},`);
+            sqlLines.push(`  ${day.day_number},`);
+            sqlLines.push(`  ${escapeSqlJsonb(imageMetadata)},`);
             sqlLines.push(`  now()`);
             sqlLines.push(`);`);
           }
@@ -238,6 +263,20 @@ function generateSql() {
         sqlLines.push('');
       }
     }
+
+    const commentId = deterministicUuid(`vibetour-comment:${tour.slug}`);
+    sqlLines.push(`INSERT INTO public.tour_comments (`);
+    sqlLines.push(`  id, tour_id, user_id, rating, body, photos, created_at, updated_at`);
+    sqlLines.push(`) VALUES (`);
+    sqlLines.push(`  '${commentId}',`);
+    sqlLines.push(`  '${tourId}',`);
+    sqlLines.push(`  '${CREATOR_USER_ID}',`);
+    sqlLines.push(`  5,`);
+    sqlLines.push(`  ${escapeSqlString(`Ruta oficial curada y verificada por ${CREATOR_NAME}. ¡Una experiencia inolvidable!`)},`);
+    sqlLines.push(`  '{}'::text[],`);
+    sqlLines.push(`  now(),`);
+    sqlLines.push(`  now()`);
+    sqlLines.push(`);\n`);
   }
 
   sqlLines.push(`COMMIT;\n`);
