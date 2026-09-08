@@ -965,7 +965,13 @@ REGLAS PARA "specificPlaces":
         }
       }
 
-      const validRests = (cat?.restaurants || []).filter(r => r && r.name && !isGenericFacilityName(r.name) && !isNonTouristFacility({ name: r.name }))
+      const validRests = (cat?.restaurants || []).filter(r =>
+        r && r.name &&
+        !isGenericFacilityName(r.name) &&
+        !isNonTouristFacility({ name: r.name }) &&
+        !/\b(zool[óo]gico|zoo|acuario|museo|catedral|iglesia|parque|carnaval|estadio)\b/i.test(r.name) &&
+        (isFoodOrDrinkEstablishment(r.name) || r.tags?.amenity === 'restaurant' || r.tags?.amenity === 'cafe' || r.tags?.amenity === 'fast_food')
+      )
       const uniqueRests = []
       for (const r of validRests) {
         if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, r.name))) {
@@ -1706,7 +1712,18 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
       }
 
       for (const name of placeNames) {
-        const item = merged[name]
+        let item = merged[name]
+        if (!item) {
+          const matchEntry = Object.entries(merged).find(([k]) =>
+            arePlacesSimilar(k, name) ||
+            k.toLowerCase().trim() === name.toLowerCase().trim() ||
+            (k.length >= 6 && name.length >= 6 && (k.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(k.toLowerCase())))
+          )
+          if (matchEntry) {
+            item = matchEntry[1]
+            merged[name] = item
+          }
+        }
         if (!item) {
           merged[name] = {
             descripcion: buildRichFallbackDescription(name, destination || city),
@@ -1955,40 +1972,63 @@ export async function geocodePlacesWithOpenAI({ city = '', country = '', places 
 Dada una ciudad y una lista de lugares o paradas turísticas, devuelve UN ÚNICO objeto JSON donde cada clave es el nombre exacto del lugar y el valor es un objeto con:
 - "latitude": número flotante con la latitud real del lugar en esa ciudad
 - "longitude": número flotante con la longitud real del lugar en esa ciudad
-- "address": dirección o zona dentro de la ciudad
-Si el lugar es un restaurante, parque, monumento o museo emblemático de la ciudad, proporciona sus coordenadas geográficas exactas. Si no conoces el lugar exacto pero pertenece a la ciudad, sitúalo en el área turística o centro de la ciudad indicada.`
+- "address": dirección o zona dentro del casco urbano de la ciudad
 
-    const userPrompt = `Ciudad: ${city}, ${country || ''}
-${centerLat && centerLon ? `Coordenadas aproximadas de la ciudad: ${centerLat}, ${centerLon}` : ''}
-Lugares a geocodificar con precisión:
-${placeNames.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
+REGLAS DE ANCLAJE URBANO Y PRECISIÓN ESTRICTAS:
+1. Todas las coordenadas DEBEN estar ubicadas dentro del área urbana o distrito turístico central de la ciudad. NUNCA ubiques lugares en carreteras rurales remotas, trochas o municipios ajenos.
+2. Para paseos ribereños o marítimos (como Gran Malecón del Río o malecones costeros), ubica la coordenada exactamente sobre el paseo peatonal a la orilla del agua, no tierra adentro.
+3. Para monumentos, rotondas y plazas (como Ventana al Mundo, Plaza de San Nicolás, Catedral), ubica la coordenada exactamente en la estructura, rotonda o plazoleta del monumento.
+4. Para restaurantes o locales gastronómicos, ubica la coordenada en su dirección comercial o zona gastronómica real en la ciudad. Si no conoces la dirección exacta de un restaurante, ubícalo en el corredor gastronómico principal de la ciudad, jamás en una vía rural.`
 
-    const payload = buildOpenAiPayload({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
-      reasoning_effort: 'none'
-    })
+    const chunkSize = 7
+    const chunks = []
+    for (let i = 0; i < placeNames.length; i += chunkSize) {
+      chunks.push(placeNames.slice(i, i + chunkSize))
+    }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15000)
-    })
+    const chunkResults = await Promise.allSettled(
+      chunks.map(async (chunk) => {
+        const userPrompt = `Ciudad: ${city}, ${country || ''}
+${centerLat && centerLon ? `Coordenadas centrales de la ciudad: ${centerLat}, ${centerLon}` : ''}
+Lugares a geocodificar con máxima precisión urbana:
+${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
 
-    if (!response.ok) return {}
-    const json = await response.json()
-    const content = json.choices?.[0]?.message?.content
-    if (!content) return {}
-    const parsed = JSON.parse(content)
-    return parsed && typeof parsed === 'object' ? parsed : {}
+        const payload = buildOpenAiPayload({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1,
+          reasoning_effort: 'none'
+        })
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(35000)
+        })
+
+        if (!response.ok) return {}
+        const json = await response.json()
+        const content = json.choices?.[0]?.message?.content
+        if (!content) return {}
+        const parsed = JSON.parse(content)
+        return parsed && typeof parsed === 'object' ? parsed : {}
+      })
+    )
+
+    const merged = {}
+    for (const res of chunkResults) {
+      if (res.status === 'fulfilled' && res.value && typeof res.value === 'object') {
+        Object.assign(merged, res.value)
+      }
+    }
+    return merged
   } catch (err) {
     console.warn('[openai] geocodePlacesWithOpenAI failed:', err.message)
     return {}

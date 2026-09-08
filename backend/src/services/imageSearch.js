@@ -17,7 +17,7 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   const contextualQuery = [placeName, city, country].filter(Boolean).join(', ')
   const assignedUrls = options?.assignedUrls instanceof Set ? options.assignedUrls : null
 
-  const isLandmarkOrCultural = /\b(catedral|iglesia|bas[íi]lica|templo|museo|monumento|parque|malec[óo]n|playa|plaza|castillo|fortaleza|mirador|puente|teatro|jard[íi]n|cerro|colina)\b/i.test(placeName)
+  const isLandmarkOrCultural = /\b(catedral|iglesia|bas[íi]lica|templo|museo|monumento|parque|malec[óo]n|playa|plaza|castillo|fortaleza|mirador|puente|teatro|jard[íi]n|cerro|colina|zool[oó]gico|zoo|acuario|carnaval|estadio|ecoparque|biblioteca|ci[ée]naga|laguna|reserva|bot[aá]nico)\b/i.test(placeName)
   const isFoodOrDrink = !isLandmarkOrCultural && (
     normalizedCategory === 'restaurant' || normalizedCategory === 'food' || normalizedCategory === 'cafe' ||
     /\b(restaurante|restaurantes|comida|asador|asadores|bistro|bistr[oó]|gourmet|caf[ée]|cafes|caf[ée]s|bar|bares|pub|pubs|pizzer[íi]a|pizzerias|chifa|gastronom[íi]a|taquer[íi]a)\b/i.test(placeName)

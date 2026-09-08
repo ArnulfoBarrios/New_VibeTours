@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, geocodePlacesWithOpenAI, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
@@ -1635,8 +1635,11 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     }
     
     const publicStops = normalizedStops.map(s => s.publicStop)
-    const routeStops = normalizedStops.map(s => s.routeStop)
-    const coverUrl = await imageForPlace(input.city || input.destination, input.country || "").catch(() => fallbackCover(input.destination))
+    const targetCity = input.city || input.destination || ''
+    const targetCountry = input.country || 'Colombia'
+    const coverUrl = (planner?.selectedPlaces?.[0]?.imageUrl && !planner.selectedPlaces[0].imageUrl.includes('fallback'))
+      ? planner.selectedPlaces[0].imageUrl
+      : (await imageForPlace(targetCity, targetCity, targetCountry).catch(() => null) || fallbackCover(input.destination || targetCity))
     
     let hotelPuntoEncuentro = null
     const chosenHotel = input.selectedHotel || plannerContext?.selectedHotel
@@ -1902,8 +1905,11 @@ async function processTourGeneration(jobId, input) {
       }
       
       const stops = normalizedStops.map((stop) => stop.publicStop)
-      const routeStops = normalizedStops.map((stop) => stop.routeStop)
-      const coverUrl = await imageForPlace(input.city || input.destination, input.country || "").catch(() => fallbackCover(input.destination))
+      const targetCity = input.city || input.destination || ''
+      const targetCountry = input.country || 'Colombia'
+      const coverUrl = (planner?.selectedPlaces?.[0]?.imageUrl && !planner.selectedPlaces[0].imageUrl.includes('fallback'))
+        ? planner.selectedPlaces[0].imageUrl
+        : (await imageForPlace(targetCity, targetCity, targetCountry).catch(() => null) || fallbackCover(input.destination || targetCity))
       tour = {
         id: `ai-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
         nombre_tour: sourceTour.nombre_tour ?? sourceTour.title ?? `${input.city || input.destination} VibeTour AI`,
@@ -2291,6 +2297,28 @@ export function buildTourPlanner(input, location = null, places = []) {
         const idxB = refList.findIndex(item => isPlaceMatching(b.name, getName(item)))
         return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
       })
+
+      // Para cada día con múltiples paradas (>= 3), optimizar la ruta intra-día por proximidad
+      // manteniendo fija la primera parada del día (el hito ancla del chat) para evitar zigzags
+      const daysMap = new Map()
+      for (const p of selectedPlaces) {
+        const dayKey = Number(p.dia || p.day || 1)
+        if (!daysMap.has(dayKey)) daysMap.set(dayKey, [])
+        daysMap.get(dayKey).push(p)
+      }
+
+      const reorderedByDay = []
+      for (const dayPlaces of daysMap.values()) {
+        if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
+          const firstPlace = dayPlaces[0]
+          const remaining = dayPlaces.slice(1)
+          const sortedRemaining = sortPlacesByProximity(remaining, firstPlace)
+          reorderedByDay.push(firstPlace, ...sortedRemaining)
+        } else {
+          reorderedByDay.push(...dayPlaces)
+        }
+      }
+      selectedPlaces = reorderedByDay
     } else {
       scored.sort((a, b) => b.score - a.score)
       selectedPlaces = selectPlaces(scored, stopTarget, input)
@@ -2618,17 +2646,24 @@ function normalizeCategory(place) {
   const category = String(place.category ?? place.type ?? '').toLowerCase()
   const name = String(place.name ?? '').toLowerCase()
   const tags = normalizeTags(place.tags)
+  const isExplicitDiningName = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|pizzer[íi]a|asador|parrilla|taquer[íi]a|panader[íi]a|helader[íi]a)\b/i.test(name)
+  const isCulturalPOI = /\b(zool[óo]gico|zoologico|zoo|acuario|museo|museum|galer[íi]a|catedral|cathedral|iglesia|church|templo|temple|bas[íi]lica|parque|park|plaza|monumento|monument|malec[óo]n|malecon|teatro|theatre|carnaval|estadio|stadium|sendero|playa|mirador)\b/i.test(name)
+
   const merged = (category + ' ' + name + ' ' + tags.join(' ')).toLowerCase()
   if (/(stadium|sports_centre|sport|pitch|arena|track|fitness|cancha|estadio|deporte|running|ciclismo)/.test(merged)) return 'sports'
   if (/(museum|gallery|arts? centre|art|museo|galeria)/.test(merged)) return 'museum'
-  if (/(marketplace|market|mercado|plaza de mercado)/.test(merged)) return 'market'
-  if (/(restaurant|restaurante|food|comida|ceviche|arepa|cocina|bistro|bakery|panaderia)/.test(merged)) return 'restaurant'
-  if (/(cafe|coffee|cafeteria)/.test(merged)) return 'cafe'
-  if (/(bar|pub|nightclub|discoteca|terraza|rooftop)/.test(merged)) return 'nightlife'
-  if (/(park|garden|reserve|nature|trail|forest|beach|viewpoint|parque|jardin|sendero|playa|mirador|malecon|river|rio)/.test(merged)) return merged.includes('viewpoint') || merged.includes('mirador') ? 'viewpoint' : merged.includes('trail') || merged.includes('sendero') ? 'trail' : 'nature'
   if (/(zoo|aquarium|playground|family|children|ninos|infantil)/.test(merged)) return 'family'
   if (/(church|cathedral|mosque|temple|catedral|iglesia)/.test(merged)) return 'religious'
   if (/(historic|monument|memorial|ruins|castle|archaeological|heritage|monumento|histori|patrimonio|plaza)/.test(merged)) return 'historic'
+  if (/(park|garden|reserve|nature|trail|forest|beach|viewpoint|parque|jardin|sendero|playa|mirador|malecon|river|rio)/.test(merged)) {
+    return merged.includes('viewpoint') || merged.includes('mirador') ? 'viewpoint' : merged.includes('trail') || merged.includes('sendero') ? 'trail' : 'nature'
+  }
+  if (!isCulturalPOI || isExplicitDiningName) {
+    if (/(marketplace|market|mercado|plaza de mercado)/.test(merged)) return 'market'
+    if (/(restaurant|restaurante|food|comida|ceviche|arepa|cocina|bistro|bakery|panaderia)/.test(merged)) return 'restaurant'
+    if (/(cafe|coffee|cafeteria)/.test(merged)) return 'cafe'
+    if (/(bar|pub|nightclub|discoteca|terraza|rooftop)/.test(merged)) return 'nightlife'
+  }
   return category || 'place'
 }
 
@@ -3554,7 +3589,14 @@ function generateDynamicTips(name, category, city) {
       `Probar las guarniciones tradicionales como arepas asadas o papas criollas al vapor.`
     ]
   }
-  if (/restaurante|comida|parador|kiosko|gourmet|gastronom/i.test(cleanName) || /food|restaurant/i.test(category)) {
+  if (/zool[óo]gico|zoologico|zoo|acuario|bioparque|fauna|bot[aá]nico/i.test(cleanName)) {
+    return [
+      `Recorrer los senderos de hábitats y aprender sobre los programas de conservación y bienestar animal en ${cleanName}.`,
+      `Llevar calzado cómodo, hidratación y respetar las indicaciones de no alimentar a las especies.`
+    ]
+  }
+  const isCulturalPOI = /\b(zool[óo]gico|zoologico|zoo|acuario|museo|catedral|iglesia|parque|carnaval|monumento|estatua|estadio|plaza|mirador|malec[óo]n|teatro|playa|sendero|biblioteca)\b/i.test(cleanName)
+  if (!isCulturalPOI && (/restaurante|comida|parador|kiosko|gourmet|gastronom/i.test(cleanName) || /food|restaurant/i.test(category))) {
     const foodVariants = [
       [
         `Preguntar al anfitrión por el plato más representativo o la receta estrella de ${cleanName}.`,
@@ -4332,7 +4374,8 @@ export function isWithinCorridor(place, startPlace, endPlace, relaxed = false) {
 }
 
 export function sortPlacesByProximity(places, origin = null) {
-  if (!Array.isArray(places) || places.length <= 2) return places
+  if (!Array.isArray(places) || places.length <= 1) return places
+  if (places.length <= 2 && (!origin || !origin.latitude || !origin.longitude)) return places
   const unvisited = [...places]
   const ordered = []
 
@@ -4788,6 +4831,8 @@ export async function collectTourCandidates(input, location) {
         // Step A: Si OpenAI pre-geocodificó este lugar por lote, verificarlo con máxima prioridad
         const aiCoord = preGeocodedAi[placeName] ||
           Object.entries(preGeocodedAi).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
+            arePlacesSimilar(k, placeName) ||
+            normalizePlaceKey(k) === normalizePlaceKey(placeName) ||
             placeName.toLowerCase().includes(k.toLowerCase()) ||
             k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
 
@@ -5569,14 +5614,15 @@ function typeFallbackLabels(type, baseName) {
   }
 }
 
-function fallbackCover(seed) {
+function fallbackCover(seed = 'travel') {
+  const safeSeed = String(seed || 'travel')
   const images = [
-    'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=1200&q=80',
     'https://images.unsplash.com/photo-1498307833015-e7b400441eb8?auto=format&fit=crop&w=1200&q=80',
     'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=80',
+    'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=1200&q=80',
   ]
-  const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  const hash = [...safeSeed].reduce((sum, char) => sum + char.charCodeAt(0), 0)
   return images[Math.abs(hash) % images.length]
 }
 

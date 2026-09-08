@@ -213,7 +213,7 @@ export async function geocodePlace(query, lat = null, lon = null) {
             name: photonProx.name,
             latitude: Number(photonProx.latitude),
             longitude: Number(photonProx.longitude),
-            city: photonProx.city || '',
+            city: cleanAdministrativeCityName(photonProx.city || photonProx.tags?.city || '') || '',
             country: photonProx.country || ''
           }
           geocodeCache.set(key, res)
@@ -236,7 +236,7 @@ export async function geocodePlace(query, lat = null, lon = null) {
           name: photonGlobal.name,
           latitude: Number(photonGlobal.latitude),
           longitude: Number(photonGlobal.longitude),
-          city: photonGlobal.city || '',
+          city: cleanAdministrativeCityName(photonGlobal.city || photonGlobal.tags?.city || '') || '',
           country: photonGlobal.country || ''
         }
         geocodeCache.set(key, res)
@@ -248,41 +248,71 @@ export async function geocodePlace(query, lat = null, lon = null) {
   }
 
   // 3. Fallback to Nominatim if Photon fails or returns no results
-  const url = new URL('https://nominatim.openstreetmap.org/search')
-  url.searchParams.set('format', 'jsonv2')
-  url.searchParams.set('limit', '3')
-  url.searchParams.set('addressdetails', '1')
-  url.searchParams.set('q', normalizedQuery)
-  try {
-    const response = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT },
-      signal: AbortSignal.timeout(1500)
-    })
-    if (response.ok) {
-      const results = await response.json()
-      const [result] = Array.isArray(results) ? results : []
-      if (result) {
-        const rLat = Number(result.lat)
-        const rLon = Number(result.lon)
-        const isWithinBounds = !lat || !lon || haversineMeters(lat, lon, rLat, rLon) <= 75000
-        if (isWithinBounds) {
-          const address = result.address || {}
-          const city = address.city || address.town || address.village || address.municipality || address.county || ''
-          const country = address.country || ''
-          const res = {
-            name: result.display_name,
-            latitude: rLat,
-            longitude: rLon,
-            city,
-            country
+  const nominatimQueries = [normalizedQuery]
+  const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
+  if (commaParts.length > 1) {
+    const simplifiedFeature = normalizedQuery.replace(/\b(bah[íi]a de|playa de|cabo|isla|archipi[ée]lago de)\s+/gi, '').trim()
+    if (simplifiedFeature && simplifiedFeature !== normalizedQuery && simplifiedFeature.length > 3) {
+      nominatimQueries.push(simplifiedFeature)
+    }
+    if (commaParts[0].length > 2) {
+      nominatimQueries.push(commaParts[0])
+    }
+  }
+
+  for (const nq of nominatimQueries) {
+    const url = new URL('https://nominatim.openstreetmap.org/search')
+    url.searchParams.set('format', 'jsonv2')
+    url.searchParams.set('limit', '3')
+    url.searchParams.set('addressdetails', '1')
+    url.searchParams.set('q', nq)
+    try {
+      const response = await fetch(url, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(3500)
+      })
+      if (response.ok) {
+        const results = await response.json()
+        const [result] = Array.isArray(results) ? results : []
+        if (result) {
+          const rLat = Number(result.lat)
+          const rLon = Number(result.lon)
+          let isWithinBounds = !lat || !lon || haversineMeters(lat, lon, rLat, rLon) <= 75000
+          if (nq !== normalizedQuery && (!lat || !lon) && commaParts.length > 1) {
+            const contextCity = commaParts[1].toLowerCase()
+            const resultText = `${result.display_name} ${JSON.stringify(result.address || {})}`.toLowerCase()
+            if (!resultText.includes(contextCity)) {
+              isWithinBounds = false
+            }
           }
-          geocodeCache.set(key, res)
-          return res
+          if (isWithinBounds) {
+            const address = result.address || {}
+            const county = cleanAdministrativeCityName(address.county || '')
+            const matchedContextCity = commaParts.length > 1 ? cleanAdministrativeCityName(commaParts[1]) : ''
+            let rawCity = address.city || address.town || ''
+            if (!rawCity && county && matchedContextCity && county.toLowerCase() === matchedContextCity.toLowerCase()) {
+              rawCity = county
+            }
+            if (!rawCity) {
+              rawCity = address.village || address.municipality || address.county || matchedContextCity || ''
+            }
+            const city = cleanAdministrativeCityName(rawCity)
+            const country = address.country || ''
+            const res = {
+              name: result.display_name,
+              latitude: rLat,
+              longitude: rLon,
+              city,
+              country
+            }
+            geocodeCache.set(key, res)
+            return res
+          }
         }
       }
+    } catch (err) {
+      console.warn('[geocodePlace] Nominatim search failed:', err.message)
     }
-  } catch (err) {
-    console.warn('[geocodePlace] Nominatim search failed:', err.message)
   }
 
   // 4. Dynamic OpenAI geocode fallback if OSM providers fail
@@ -337,9 +367,9 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     url.searchParams.set('lon', String(lon))
   }
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(1500) })
+    const response = await fetch(url, { signal: AbortSignal.timeout(3500) })
     if (!response.ok) {
-      if (response.status === 429 || response.status >= 500) {
+      if (response.status === 429) {
         tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 15000)
       }
       return []
@@ -347,7 +377,7 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     const json = await response.json()
     const results = (json.features ?? []).map((feature) => ({
       name: feature.properties.name ?? feature.properties.city ?? query,
-      city: feature.properties.city,
+      city: cleanAdministrativeCityName(feature.properties.city || feature.properties.state || ''),
       country: feature.properties.country,
       latitude: feature.geometry.coordinates[1],
       longitude: feature.geometry.coordinates[0],
@@ -359,7 +389,6 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     }
     return results
   } catch (err) {
-    tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 15000)
     return []
   }
 }
@@ -589,6 +618,10 @@ export function isNonTouristFacility(tags = {}) {
 
   const name = String(tags.name ?? '').toLowerCase()
   if (isGenericFacilityName(name)) return true
+  if (/\b(carnaval|festival|fiesta|feria|desfile|reinado)\b/i.test(name)) {
+    const isPhysicalVenue = /\b(museo|casa|centro|parque|plaza|sala|galer[íi]a|teatro|estadio|concha|complejo)\b/i.test(name)
+    if (!isPhysicalVenue) return true
+  }
   if (
     /\b(oleoducto|gasoducto|poliducto|refiner[íi]a|tuber[íi]a|estaci[oó]n de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(name) ||
     /\b(supermercado|tienda|droguer[íi]a|farmacia|ferreter[íi]a|almac[ée]n|panader[íi]a|carnicer[íi]a|minimarket|estanco|miscel[aá]nea|bodega|dep[oó]sito)\b/i.test(name) ||
@@ -854,16 +887,49 @@ export function arePlacesSimilar(a, b) {
   const strB = typeof b === 'string' ? b : (b?.name || '')
   if (!strA || !strB) return false
 
-  const normA = strA.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-  const normB = strB.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const clean = (str) =>
+    str.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+  const normA = clean(strA)
+  const normB = clean(strB)
+  if (!normA || !normB) return false
   if (normA === normB) return true
 
-  // Strip generic prefixes (plaza rotonda, rotonda, glorieta, urbanización)
-  const stripPrefix = (str) => str.replace(/^(plaza\s+rotonda|rotonda|glorieta|urbanizaci[oó]n|parque\s+rotonda)\s+(?:de\s+|del?\s+)?/i, '').trim()
+  // Direct containment for sufficiently long strings
+  if (normA.length >= 8 && normB.length >= 8 && (normA.includes(normB) || normB.includes(normA))) {
+    return true
+  }
+
+  // Strip cross-typology prefixes to extract geographic/landmark core
+  const stripPrefix = (str) =>
+    str.replace(
+      /^(?:gran\s+|nuevo\s+|nueva\s+|antiguo\s+|antigua\s+)?(?:ecoparque|parque\s+ecologico|parque\s+cultural|centro\s+cultural|parque\s+rotonda|plaza\s+rotonda|casa\s+museo|iglesia|catedral|basilica|templo|parroquia|santuario|plaza|parque|museo|monumento|estatua|busto|obelisco|malecon|mirador|playa|teatro|jardin|puerto|rotonda|glorieta|urbanizacion|paseo|boulevard|reserva\s+natural|reserva)\s+(?:de\s+|del?\s+|y\s+|la\s+|las\s+|el\s+|los\s+|a\s+la\s+|al\s+)?/gi,
+      ''
+    ).trim()
+
   const pA = stripPrefix(normA)
   const pB = stripPrefix(normB)
-  if (pA === pB) return true
-  if (pA.length >= 6 && pB.length >= 6 && (pA.includes(pB) || pB.includes(pA))) return true
+
+  if (pA && pB) {
+    if (pA === pB && pA.length >= 4) return true
+    if (pA.length >= 5 && pB.length >= 5 && (pA.includes(pB) || pB.includes(pA))) return true
+  }
+
+  // Check token overlap for distinctive words (length >= 4)
+  const stopWords = new Set(['para', 'sobre', 'hacia', 'entre', 'donde', 'desde', 'hasta', 'norte', 'sur', 'este', 'oeste', 'centro', 'sector', 'ciudad'])
+  const tokensA = normA.split(' ').filter(t => t.length >= 4 && !stopWords.has(t))
+  const tokensB = normB.split(' ').filter(t => t.length >= 4 && !stopWords.has(t))
+  if (tokensA.length >= 2 && tokensB.length >= 2) {
+    const common = tokensA.filter(t => tokensB.includes(t))
+    if (common.length >= 2 && (common.length / Math.min(tokensA.length, tokensB.length) >= 0.75)) {
+      return true
+    }
+  }
 
   return false
 }

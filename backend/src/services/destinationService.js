@@ -92,6 +92,8 @@ export function cleanAdministrativeCityName(rawName = '') {
   if (!rawName || typeof rawName !== 'string') return ''
   let cleaned = rawName.trim()
 
+  if (/perla del caribe/i.test(cleaned)) return 'Santa Marta'
+  cleaned = cleaned.replace(/^localidad\s+\d+.*?(?:de\s+|-|\s+)/i, '')
   cleaned = cleaned.replace(/^(per[íi]metro\s+urbano\s+(de\s+)?)/i, '')
   cleaned = cleaned.replace(/^(distrito\s+tur[íi]stico(?:[,\s]+cultural\s+e\s+hist[óo]rico)?\s+de\s+)/i, '')
   cleaned = cleaned.replace(/^(distrito\s+especial[,\s]+industrial\s+y\s+portuario\s+de\s+)/i, '')
