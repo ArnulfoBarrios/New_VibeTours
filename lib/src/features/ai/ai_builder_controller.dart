@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/models.dart';
+import '../../data/discovery_repository.dart';
 import 'package:http/http.dart' as http;
 import '../../core/config/app_config.dart';
 import '../../state/app_state.dart';
@@ -881,24 +882,35 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = 'user_lodging_${city.trim().toLowerCase()}';
-      final name = hotel['name'] ?? hotel['nombre'] ?? hotel['nombre_lugar'] ?? 'Mi hotel';
-      final lat = hotel['latitude'] ?? hotel['lat'] ?? hotel['latitud'];
-      final lon = hotel['longitude'] ?? hotel['lon'] ?? hotel['lng'] ?? hotel['longitud'];
-      if (lat != null && lon != null) {
-        final doubleLat = (lat as num).toDouble();
-        final doubleLon = (lon as num).toDouble();
-        if (doubleLat != 0.0 || doubleLon != 0.0) {
-          await prefs.setString(
-            key,
-            jsonEncode({
-              'name': name.toString(),
-              'latitude': doubleLat,
-              'longitude': doubleLon,
-              'type': hotel['type']?.toString() ?? 'hotel',
-            }),
-          );
-        }
+      final name = (hotel['name'] ?? hotel['nombre'] ?? hotel['nombre_lugar'] ?? 'Mi hotel').toString();
+      double? doubleLat;
+      double? doubleLon;
+      final rawLat = hotel['latitude'] ?? hotel['lat'] ?? hotel['latitud'];
+      final rawLon = hotel['longitude'] ?? hotel['lon'] ?? hotel['lng'] ?? hotel['longitud'];
+      if (rawLat is num && rawLon is num) {
+        doubleLat = rawLat.toDouble();
+        doubleLon = rawLon.toDouble();
       }
+
+      if ((doubleLat == null || doubleLon == null || (doubleLat == 0.0 && doubleLon == 0.0)) && name.isNotEmpty) {
+        try {
+          final results = await DiscoveryRepository().searchPlaces('$name, $city');
+          if (results.isNotEmpty) {
+            doubleLat = results.first.location.latitude;
+            doubleLon = results.first.location.longitude;
+          }
+        } catch (_) {}
+      }
+
+      await prefs.setString(
+        key,
+        jsonEncode({
+          'name': name,
+          'latitude': doubleLat ?? 0.0,
+          'longitude': doubleLon ?? 0.0,
+          'type': hotel['type']?.toString() ?? 'hotel',
+        }),
+      );
     } catch (_) {}
   }
 

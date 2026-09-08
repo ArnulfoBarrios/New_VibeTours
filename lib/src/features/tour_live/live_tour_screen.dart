@@ -427,10 +427,30 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     if (rawLodging != null) {
       try {
         final decoded = jsonDecode(rawLodging) as Map<String, dynamic>;
+        var place = _NearbyFoodPlace.fromJson(decoded);
         if (mounted) {
           setState(() {
-            _userLodgingPlace = _NearbyFoodPlace.fromJson(decoded);
+            _userLodgingPlace = place;
           });
+        }
+        if ((place.latitude == 0.0 && place.longitude == 0.0) && place.name.isNotEmpty) {
+          try {
+            final results = await DiscoveryRepository().searchPlaces('${place.name}, ${tour.city}');
+            if (results.isNotEmpty) {
+              place = _NearbyFoodPlace(
+                name: place.name,
+                latitude: results.first.location.latitude,
+                longitude: results.first.location.longitude,
+                type: place.type,
+              );
+              await _saveUserLodging(tour.city, place);
+              if (mounted) {
+                setState(() {
+                  _userLodgingPlace = place;
+                });
+              }
+            }
+          } catch (_) {}
         }
       } catch (_) {}
     }
@@ -2466,12 +2486,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       context: context,
       isDismissible: true,
       backgroundColor: Colors.transparent,
+      useSafeArea: true,
       builder: (modalContext) {
         final bottomInset = MediaQuery.of(modalContext).padding.bottom;
         return SafeArea(
           top: false,
           child: Container(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset),
+            padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + (bottomInset > 0 ? bottomInset : 16)),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),

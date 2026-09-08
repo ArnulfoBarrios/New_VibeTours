@@ -559,12 +559,28 @@ function isAccommodation(type) {
   ].includes(type)
 }
 
+export function isGenericFacilityName(rawName = '') {
+  if (!rawName || typeof rawName !== 'string') return true
+  const clean = rawName.trim().toLowerCase()
+  if (clean.length < 3) return true
+  const genericList = [
+    'restaurante', 'restaurant', 'bar', 'café', 'cafe', 'cafetería', 'cafeteria',
+    'comidas rápidas', 'comidas rapidas', 'fast food', 'hotel', 'hostal', 'hostel',
+    'posada', 'alojamiento', 'atractivo', 'monumento', 'parque', 'plaza', 'mirador',
+    'tienda', 'panadería', 'panaderia', 'kiosko', 'kiosco', 'puesto', 'estadero'
+  ]
+  if (genericList.includes(clean)) return true
+  if (/^(restaurante|restaurant|bar|café|cafe|hotel|hostal|atractivo)\s*#?\d*$/i.test(clean)) return true
+  return false
+}
+
 export function isNonTouristFacility(tags = {}) {
   if (!tags) return false
   if (tags.office || tags.industrial || tags.shop || tags.craft) return true
   if (tags.man_made === 'pipeline' || tags.pipeline || tags.man_made === 'storage_tank' || tags.man_made === 'works') return true
 
   const name = String(tags.name ?? '').toLowerCase()
+  if (isGenericFacilityName(name)) return true
   if (
     /\b(oleoducto|gasoducto|poliducto|refiner[íi]a|tuber[íi]a|estaci[oó]n de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(name) ||
     /\b(supermercado|tienda|droguer[íi]a|farmacia|ferreter[íi]a|almac[ée]n|panader[íi]a|carnicer[íi]a|minimarket|estanco|miscel[aá]nea|bodega|dep[oó]sito)\b/i.test(name) ||
