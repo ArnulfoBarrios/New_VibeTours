@@ -1139,26 +1139,17 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     }
     const planner = buildTourPlanner(input, location, candidatePack.places)
     
-    // Batch-generate 100% unique custom reasons & rich descriptions for all selected places using OpenAI
+    // Batch-generate 100% unique custom reasons for all selected places using fast AI
     const placeNames = planner.selectedPlaces.map(p => p.name)
-    const [customReasonsMap, richDescriptionsMap] = await Promise.all([
-      generateCustomPlaceReasons({
-        destination: input.destination,
-        city: input.city,
-        prompt: input.prompt,
-        places: placeNames
-      }).catch(() => ({})),
-      generateRichPlaceDescriptionsBatch({
-        destination: input.destination,
-        city: input.city,
-        country: input.country,
-        places: placeNames,
-        prompt: input.prompt
-      }).catch(() => ({}))
-    ])
+    const customReasonsMap = await generateCustomPlaceReasons({
+      destination: input.destination,
+      city: input.city,
+      prompt: input.prompt,
+      places: placeNames
+    }).catch(() => ({}))
 
     const assignedUrls = new Set()
-    // We send back the selected places as recommendations with real unique images & rich descriptions
+    // We send back the selected places as recommendations with real unique images & custom reasons
     const recommendations = await Promise.all(
       planner.selectedPlaces.map(async (place, index) => {
         let imageUrl = place.imageUrl || place.images?.[0] || ''
@@ -1179,8 +1170,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         assignedUrls.add(imageUrl)
 
         const aiReason = customReasonsMap[place.name] || null
-        const richItem = richDescriptionsMap[place.name]
-        const richDesc = typeof richItem === 'object' ? (richItem?.descripcion || '') : (richItem || place.description || place.history || '')
+        const placeDesc = place.description || place.history || ''
 
         return {
           id: place.placeId || place.id || `rec-${index}`,
@@ -1189,7 +1179,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
           longitude: place.longitude,
           category: place.category || 'turismo',
           imageUrl,
-          description: richDesc,
+          description: placeDesc,
           reason: buildRecommendationReason(place, input, aiReason),
           durationMinutes: place.minutes || 25,
           dia: Number(place.dia || place.day || 1),
@@ -1241,7 +1231,23 @@ aiRouter.post('/tours/build', async (req, res, next) => {
     const { request: input, places, plannerContext } = buildSchema.parse(req.body)
     
     const destQuery = input.city || input.destination || ''
-    if ((!input.latitude || !input.longitude || !input.city || !input.country) && destQuery) {
+    const firstPlaceWithCoords = Array.isArray(places) ? places.find(p => Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude))) : null
+    if (firstPlaceWithCoords) {
+      input.latitude = input.latitude || Number(firstPlaceWithCoords.latitude)
+      input.longitude = input.longitude || Number(firstPlaceWithCoords.longitude)
+      input.city = input.city || firstPlaceWithCoords.city || firstPlaceWithCoords.locationInfo?.ciudad || destQuery
+      input.country = input.country || firstPlaceWithCoords.country || firstPlaceWithCoords.locationInfo?.pais || 'Colombia'
+      if (!input.canonicalDestination) {
+        input.canonicalDestination = {
+          displayName: input.city,
+          city: input.city,
+          country: input.country,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          placeId: String(firstPlaceWithCoords.placeId || firstPlaceWithCoords.id || '')
+        }
+      }
+    } else if ((!input.latitude || !input.longitude || !input.city || !input.country) && destQuery) {
       const canonical = await resolveCanonicalDestination(destQuery).catch(() => null)
       if (canonical) {
         input.canonicalDestination = canonical
@@ -1563,7 +1569,23 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
   }
 
   const destQuery = input.city || input.destination || ''
-  if ((!input.latitude || !input.longitude || !input.canonicalDestination) && destQuery) {
+  const firstConfirmedWithCoords = Array.isArray(confirmedPlaces) ? confirmedPlaces.find(p => Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude))) : null
+  if (firstConfirmedWithCoords) {
+    input.latitude = input.latitude || Number(firstConfirmedWithCoords.latitude)
+    input.longitude = input.longitude || Number(firstConfirmedWithCoords.longitude)
+    input.city = input.city || firstConfirmedWithCoords.city || firstConfirmedWithCoords.locationInfo?.ciudad || destQuery
+    input.country = input.country || firstConfirmedWithCoords.country || firstConfirmedWithCoords.locationInfo?.pais || 'Colombia'
+    if (!input.canonicalDestination) {
+      input.canonicalDestination = {
+        displayName: input.city,
+        city: input.city,
+        country: input.country,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        placeId: String(firstConfirmedWithCoords.placeId || firstConfirmedWithCoords.id || '')
+      }
+    }
+  } else if ((!input.latitude || !input.longitude || !input.canonicalDestination) && destQuery) {
     const canonical = await resolveCanonicalDestination(destQuery).catch(() => null)
     if (canonical) {
       input.canonicalDestination = canonical
@@ -3879,22 +3901,6 @@ async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lo
     }
   }
 
-  // 3. Geocodificación inversa dinámica si hay coordenadas
-  if (lat && lon) {
-    try {
-      const geo = await reverseGeocode(lat, lon)
-      if (geo && geo.city) {
-        const placeCityNorm = String(geo.city).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        if (normCity.length >= 3 && placeCityNorm.length >= 3 && !placeCityNorm.includes(normCity) && !normCity.includes(placeCityNorm)) {
-          if (targetCityCoords?.latitude) {
-            const distKm = haversineMeters(targetCityCoords.latitude, targetCityCoords.longitude, lat, lon) / 1000
-            if (distKm > 45) return false
-          }
-        }
-      }
-    } catch (_) {}
-  }
-
   return true
 }
 
@@ -4013,20 +4019,25 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     tags: source.etiquetas || source.tags || []
   })
   
-  const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index, {
-    latitude: coordinates.latitude,
-    longitude: coordinates.longitude,
-    country: input.country,
-    assignedUrls: options?.assignedUrls
-  }).catch(() => ({ url: "", isFallback: true }))
-  
-  // Priorizar siempre la foto REAL obtenida de Wikipedia/Wikimedia/Openverse/Pexels si no es fallback genérico
-  let image = imageStatus.url
-  if (imageStatus.isFallback && (images[0] || source.imageUrl)) {
-    image = images[0] || source.imageUrl
-  }
-  if (!image) {
-    image = imageStatus.url
+  const existingImageUrl = source.imageUrl || images[0] || fallbackPlace?.imageUrl || ''
+  let image = ''
+  let isFallbackImg = false
+
+  // Si ya tenemos una URL válida de imagen de la fase previa, reutilizarla directamente sin consultar APIs externas
+  if (existingImageUrl && !existingImageUrl.includes('photo-1469854523086-cc02fe5d8800') && (!options?.assignedUrls || !options.assignedUrls.has(existingImageUrl))) {
+    image = existingImageUrl
+    isFallbackImg = Boolean(source.isFallbackImage)
+    options?.assignedUrls?.add(image)
+  } else {
+    const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index, {
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      country: input.country,
+      assignedUrls: options?.assignedUrls
+    }).catch(() => ({ url: "", isFallback: true }))
+    image = imageStatus.url || existingImageUrl
+    isFallbackImg = imageStatus.isFallback
+    if (image) options?.assignedUrls?.add(image)
   }
 
   // Normalizar lista de actividades priorizando las generadas específicamente para este lugar por la IA
@@ -4065,7 +4076,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     parada: index + 1,
     dia: stopDay,
     nombre: resolvedName,
-    isFallbackImage: imageStatus.isFallback && !images[0] && !source.imageUrl,
+    isFallbackImage: isFallbackImg,
     descripcion: description,
     duracion_estimada: durationText,
     actividades: rawActivities,
@@ -4124,6 +4135,15 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
   const destLat = canonicalDest?.latitude ?? input.latitude ?? null
   const destLon = canonicalDest?.longitude ?? input.longitude ?? null
 
+  // 0. Si source ya tiene coordenadas utilizables y validadas (ej: paradas ya seleccionadas y verificadas en planner)
+  if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
+    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude, name, place_id: source.place_id || source.id || '' }
+    const isNearby = !canonicalDest || validateCandidateLocation(candidateCoord, canonicalDest, 75)
+    if (isNearby && (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace))) {
+      return candidateCoord
+    }
+  }
+
   // 1. Geocodificar nombre de parada anclado al destino con proveedores cartográficos reales (OSM/Photon/Nominatim)
   const searchQuery = `${name}, ${cleanCity}, ${input.country || ''}`.trim().replace(/,\s*$/, '')
   let geocoded = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
@@ -4135,7 +4155,7 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
   }
 
   if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
-    const isNearby = !canonicalDest || validateCandidateLocation(geocoded, canonicalDest, 50)
+    const isNearby = !canonicalDest || validateCandidateLocation(geocoded, canonicalDest, 75)
     if (isNearby && (!isCorridor || isWithinCorridor(geocoded, startPlace, endPlace))) {
       return {
         latitude: geocoded.latitude,
@@ -4947,129 +4967,14 @@ export async function collectTourCandidates(input, location) {
         }
         if (!geo) {
           const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
-          geo = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
+          geo = await geocodePlace(searchQuery, destLat, destLon, { skipNominatim: true }).catch(() => null)
         }
-        if (!geo && destLat && destLon) {
-          geo = await geocodePlace(placeName, destLat, destLon).catch(() => null)
-        }
-
-        // Tier 1: Consulta directa con contexto de ciudad y país con sesgo de proximidad al destino
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
-          const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
-          geo = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
+        if (geo && !validateCandidateLocation(geo, canonicalDest, 70)) {
+          geo = null
         }
 
-        // Tier 2: Búsqueda con clasificador canónico universal según el tipo de entidad
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
-          const cleanedPlace = placeName.replace(/^(?:el|la|los|las)\s+/i, '').trim()
-          
-          if (/pueblito|chairama/i.test(cleanedPlace)) {
-            geo = await geocodePlace('Pueblito Tayrona', destLat, destLon).catch(() => null)
-          } else if (entityType === 'shopping') {
-            geo = await geocodePlace(`Centro Comercial ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`${cleanedPlace} Mall, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-          } else if (entityType === 'food') {
-            geo = await geocodePlace(`Restaurante ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Bar ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Café ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Discoteca ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Gastrobar ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-          } else if (entityType === 'beach_coastal') {
-            geo = await geocodePlace(`Playa ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Playas de ${cleanedPlace}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Bahía ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Cabo ${cleanedPlace}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Malecón ${cleanedPlace}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${country}`, destLat, destLon).catch(() => null)
-          } else if (entityType === 'cultural') {
-            geo = await geocodePlace(`Museo ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Acuario ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Teatro ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-          } else if (entityType === 'religious') {
-            geo = await geocodePlace(`Catedral ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Iglesia ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-          } else if (entityType === 'urban_promenade' || entityType === 'park_nature') {
-            geo = await geocodePlace(`Parque ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Paseo ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Plaza ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Gran Malecón ${cleanedPlace}, ${city}`, destLat, destLon).catch(() => null)
-          } else if (entityType === 'entertainment_sports') {
-            geo = await geocodePlace(`Acuario ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Estadio ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-            if (!geo) geo = await geocodePlace(`Zoológico ${cleanedPlace}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-          }
-
-          if (!geo) geo = await geocodePlace(`${cleanedPlace}, ${city}`, destLat, destLon).catch(() => null)
-          if (!geo) geo = await geocodePlace(`${cleanedPlace}, Centro, ${city}`, destLat, destLon).catch(() => null)
-        }
-
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
-          // If direct geocode failed, attempt category-based search for real verified POIs in the municipality
-          if (destLat && destLon) {
-            if (entityType === 'food') {
-              const nearbyFood = await overpassNearbyFood(destLat, destLon, 15000).catch(() => [])
-              const validFood = nearbyFood.find(f => validateCandidateLocation(f, canonicalDest, 45))
-              if (validFood) {
-                geo = {
-                  name: validFood.name,
-                  latitude: validFood.latitude,
-                  longitude: validFood.longitude,
-                  city,
-                  country
-                }
-              }
-            } else if (entityType === 'beach_coastal' || entityType === 'nature') {
-              const nearbyBeaches = await photonSearch(`${city} playa`, 5, destLat, destLon).catch(() => [])
-              const validBeach = nearbyBeaches.find(b => validateCandidateLocation(b, canonicalDest, 45))
-              if (validBeach) {
-                geo = {
-                  name: validBeach.name,
-                  latitude: validBeach.latitude,
-                  longitude: validBeach.longitude,
-                  city,
-                  country
-                }
-              }
-            } else if (/discoteca|bar|club|nightclub|pub|rumba|fiesta|vida nocturna/i.test(placeName)) {
-              const nearbyClubs = await photonSearch(`${city} discoteca`, 6, destLat, destLon).catch(() => [])
-              const validClub = nearbyClubs.find(b => validateCandidateLocation(b, canonicalDest, 45))
-              if (validClub) {
-                geo = {
-                  name: validClub.name,
-                  latitude: validClub.latitude,
-                  longitude: validClub.longitude,
-                  city,
-                  country
-                }
-              } else {
-                // Dynamically fetch a real verified venue in this city via AI without hardcoding
-                const aiVenue = await suggestFallbackPlacesWithOpenAI({
-                  destination: `${placeName} en ${city}`,
-                  city,
-                  country,
-                  type: 'nightlife'
-                }).then(list => list?.[0]).catch(() => null)
-                if (aiVenue) {
-                  const geoAi = await geocodePlace(`${aiVenue.name}, ${city}, ${country}`, destLat, destLon).catch(() => null)
-                  if (geoAi && validateCandidateLocation(geoAi, canonicalDest, 50)) {
-                    geo = {
-                      name: aiVenue.name,
-                      latitude: geoAi.latitude,
-                      longitude: geoAi.longitude,
-                      city,
-                      country
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // Tier 3: Fallback de último recurso con OpenAI si OSM no resolvió el lugar
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+        // Tier 1: Fallback inmediato con coordenadas de IA previamente obtenidas en paralelo
+        if (!geo) {
           const aiCoord = preGeocodedAi[placeName] ||
             Object.entries(preGeocodedAi).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
               arePlacesSimilar(k, placeName) ||
@@ -5091,6 +4996,33 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
+        // Tier 2: Búsqueda rápida de proximidad con Photon (1 sola llamada ligera)
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+          const photonHits = await photonSearch(`${placeName} ${city}`, 2, destLat, destLon).catch(() => [])
+          const validHit = photonHits.find(h => validateCandidateLocation(h, canonicalDest, 70))
+          if (validHit) {
+            geo = {
+              name: validHit.name,
+              latitude: validHit.latitude,
+              longitude: validHit.longitude,
+              city,
+              country
+            }
+          }
+        }
+
+        // Tier 3: Descomposición de consultas compuestas si aplica (ej: "Museo del Oro - Casa de la Aduana")
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+          const decomposed = decomposeCompoundPlaceQuery(placeName)
+          for (const dQuery of decomposed) {
+            const dGeo = await geocodePlace(`${dQuery}, ${city}`, destLat, destLon, { skipNominatim: true }).catch(() => null)
+            if (dGeo && validateCandidateLocation(dGeo, canonicalDest, 70)) {
+              geo = dGeo
+              break
+            }
+          }
+        }
+
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
           console.warn(`[tour-ai] Discarding unverified or out-of-bounds place "${placeName}" in ${city}. No synthetic coordinates generated.`)
           return null
@@ -5104,8 +5036,8 @@ export async function collectTourCandidates(input, location) {
           const originLon = location?.longitude || canonicalDest?.longitude
           if (originLat && originLon) {
             const distKm = haversineMeters(finalLat, finalLon, originLat, originLon) / 1000
-            const isCoastalOrMarine = isRegionalOrNature || /cove[ñn]as|tol[uú]|cartagena|santa marta|san andr[eé]s|canc[uú]n/i.test(city) || /isla|playa|bah[íi]a|caimanera|archipi[eé]lago/i.test(placeName)
-            const maxBound = (isMicroDest || canonicalDest?.isMicroDestination) ? 18 : (isCoastalOrMarine ? 65 : 45)
+            const isCoastalOrMarine = isRegionalOrNature || /cove[ñn]as|tol[uú]|cartagena|santa marta|san andr[eé]s|canc[uú]n|barranquilla|atl[aá]ntico/i.test(city) || /isla|playa|bah[íi]a|caimanera|archipi[eé]lago/i.test(placeName)
+            const maxBound = (isMicroDest || canonicalDest?.isMicroDestination) ? 18 : (isCoastalOrMarine ? 75 : 55)
             if (distKm > maxBound) {
               console.warn(`[tour-ai] Discarding specific place "${placeName}" (${distKm.toFixed(1)}km from ${city}) because it exceeds boundary (${maxBound}km).`)
               return null

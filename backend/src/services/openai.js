@@ -14,6 +14,14 @@ export function getOpenAiModelConfig() {
   return { model, isReasoning, reasoningEffort }
 }
 
+export function getFastOpenAiModelConfig() {
+  const model = process.env.OPENAI_FAST_MODEL || 'gpt-4o-mini'
+  const isReasoning = model.includes('luna') || model.includes('o1') || model.includes('o3') || model.includes('sol') || model.includes('terra')
+  const reasoningEffort = 'low'
+  return { model, isReasoning, reasoningEffort }
+}
+
+
 export function buildOpenAiPayload({
   modelConfig = getOpenAiModelConfig(),
   messages,
@@ -1678,6 +1686,7 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
               'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify(buildOpenAiPayload({
+              modelConfig: getFastOpenAiModelConfig(),
               messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `Destino: ${destination || city || 'Colombia'}\nLugares obligatorios a describir con riqueza de detalles:\n${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}` }
@@ -1687,7 +1696,7 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
               reasoning_effort: 'low',
               extra: { max_tokens: 2200 }
             })),
-            signal: AbortSignal.timeout(25000)
+            signal: AbortSignal.timeout(18000)
           })
 
           if (response.ok) {
@@ -1858,11 +1867,20 @@ export async function generateCustomPlaceReasons(arg1 = [], arg2 = '', arg3 = ''
   const destStr = destination || city || 'la ciudad'
 
   try {
-    const payload = buildOpenAiPayload({
-      messages: [
-        {
-          role: 'system',
-          content: `Eres un guía turístico local experto en ${destStr}.
+    const chunkSize = 8
+    const chunks = []
+    for (let i = 0; i < cleanPlaces.length; i += chunkSize) {
+      chunks.push(cleanPlaces.slice(i, i + chunkSize))
+    }
+
+    const chunkResults = await Promise.allSettled(
+      chunks.map(async (chunk) => {
+        const payload = buildOpenAiPayload({
+          modelConfig: getFastOpenAiModelConfig(),
+          messages: [
+            {
+              role: 'system',
+              content: `Eres un guía turístico local experto en ${destStr}.
 Tu tarea es redactar para CADA uno de los lugares turísticos listados una justificación breve y cautivadora (de MÁXIMO 1 a 2 oraciones, entre 15 y 30 palabras) explicando POR QUÉ ese lugar fue seleccionado para este tour y qué valor cultural, histórico, paisajístico o gastronómico único ofrece al viajero.
 PROHIBIDO USAR PLANTILLAS REPETITIVAS O CLICHÉS como:
 - "fue seleccionado por su gran relevancia local..."
@@ -1874,36 +1892,50 @@ Devuelve ÚNICAMENTE un objeto JSON donde cada clave es el nombre exacto del lug
 {
   "Nombre del lugar": "Justificación única y natural..."
 }`
-        },
-        {
-          role: 'user',
-          content: `Genera las justificaciones de selección para estos lugares de ${destStr}:\n${cleanPlaces.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.4,
-      reasoning_effort: 'low'
-    })
+            },
+            {
+              role: 'user',
+              content: `Genera las justificaciones de selección para estos lugares de ${destStr}:\n${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
+            }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.4,
+          reasoning_effort: 'low',
+          extra: { max_tokens: 1500 }
+        })
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(25000)
-    })
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(12000)
+        })
 
-    if (response.ok) {
-      const data = await response.json()
-      const content = data.choices?.[0]?.message?.content
-      if (content) {
-        const parsed = JSON.parse(content)
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          return parsed
+        if (response.ok) {
+          const data = await response.json()
+          const content = data.choices?.[0]?.message?.content
+          if (content) {
+            const parsed = JSON.parse(content)
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              return parsed
+            }
+          }
         }
+        return {}
+      })
+    )
+
+    const merged = {}
+    for (const res of chunkResults) {
+      if (res.status === 'fulfilled' && res.value && typeof res.value === 'object') {
+        Object.assign(merged, res.value)
       }
+    }
+    if (Object.keys(merged).length > 0) {
+      return merged
     }
   } catch (err) {
     console.warn('[generateCustomPlaceReasons] Error:', err.message)
@@ -2007,6 +2039,7 @@ Lugares a geocodificar con máxima precisión urbana:
 ${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
 
         const payload = buildOpenAiPayload({
+          modelConfig: getFastOpenAiModelConfig(),
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
@@ -2023,7 +2056,7 @@ ${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
             'Authorization': `Bearer ${apiKey}`
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(35000)
+          signal: AbortSignal.timeout(15000)
         })
 
         if (!response.ok) return {}

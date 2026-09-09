@@ -250,7 +250,7 @@ export async function resolveCanonicalDestination(query, options = {}) {
     const photonUrl = new URL('https://photon.komoot.io/api/')
     photonUrl.searchParams.set('q', normalizedQuery)
     photonUrl.searchParams.set('limit', '5')
-    const photonRes = await fetch(photonUrl, { signal: AbortSignal.timeout(4000) })
+    const photonRes = await fetch(photonUrl, { signal: AbortSignal.timeout(1500) })
     if (photonRes.ok) {
       const pJson = await photonRes.json()
       const feat = pJson.features?.[0]

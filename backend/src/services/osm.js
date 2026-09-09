@@ -216,7 +216,7 @@ export function decomposeCompoundPlaceQuery(rawQuery) {
   return queries
 }
 
-export async function geocodePlace(query, lat = null, lon = null) {
+export async function geocodePlace(query, lat = null, lon = null, options = {}) {
   if (!query || typeof query !== 'string') return null
   const normalizedQuery = normalizeGeocodeQuery(query)
   if (!normalizedQuery) return null
@@ -239,13 +239,24 @@ export async function geocodePlace(query, lat = null, lon = null) {
     'isla palma': { name: 'Isla Palma, Archipiélago de San Bernardo', latitude: 9.7420, longitude: -75.6490, city: 'Coveñas', country: 'Colombia' },
     'cienaga de la caimanera': { name: 'Ciénaga de la Caimanera, Coveñas', latitude: 9.4580, longitude: -75.6200, city: 'Coveñas', country: 'Colombia' },
     'parque museo infanteria de marina': { name: 'Parque Museo de la Infantería de Marina, Coveñas', latitude: 9.4080, longitude: -75.6880, city: 'Coveñas', country: 'Colombia' },
-    'isla fuerte': { name: 'Isla Fuerte, Bolívar / Córdoba', latitude: 9.3870, longitude: -76.1770, city: 'Coveñas', country: 'Colombia' }
+    'isla fuerte': { name: 'Isla Fuerte, Bolívar / Córdoba', latitude: 9.3870, longitude: -76.1770, city: 'Coveñas', country: 'Colombia' },
+    'gran malecon': { name: 'Gran Malecón del Río', latitude: 10.9635, longitude: -74.7958, city: 'Barranquilla', country: 'Colombia' },
+    'gran malecon del rio': { name: 'Gran Malecón del Río', latitude: 10.9635, longitude: -74.7958, city: 'Barranquilla', country: 'Colombia' },
+    'playa el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
+    'el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
+    'bahia de taganga': { name: 'Bahía de Taganga', latitude: 11.2665, longitude: -74.1925, city: 'Santa Marta', country: 'Colombia' },
+    'taganga': { name: 'Bahía de Taganga', latitude: 11.2665, longitude: -74.1925, city: 'Santa Marta', country: 'Colombia' },
+    'playa blanca santa marta': { name: 'Playa Blanca, Santa Marta', latitude: 11.2185, longitude: -74.2345, city: 'Santa Marta', country: 'Colombia' }
   }
 
-  if (KNOWN_ICONIC_LANDMARKS[normLower] || KNOWN_ICONIC_LANDMARKS[rawClean]) {
-    const res = KNOWN_ICONIC_LANDMARKS[normLower] || KNOWN_ICONIC_LANDMARKS[rawClean]
-    geocodeCache.set(key, res)
-    return res
+  const strippedCity = normLower.replace(/,\s*(barranquilla|santa marta|cartagena|coveñas|covenas|medellin|medellín|bogota|bogotá|colombia)/gi, '').trim()
+  const landmarkMatch = KNOWN_ICONIC_LANDMARKS[normLower] ||
+    KNOWN_ICONIC_LANDMARKS[rawClean] ||
+    KNOWN_ICONIC_LANDMARKS[strippedCity]
+
+  if (landmarkMatch) {
+    geocodeCache.set(key, landmarkMatch)
+    return landmarkMatch
   }
 
   const resolveCityFromPhoton = (item) => {
@@ -334,6 +345,9 @@ export async function geocodePlace(query, lat = null, lon = null) {
   }
 
   // 3. Fallback to Nominatim if Photon fails or returns no results
+  if (options?.skipNominatim) {
+    return null
+  }
   const isExplicitFuelQuery = /\b(gasolinera|estaci[oó]n de servicio|combustible|terpel|texaco|esso|mobil|biomax|primax|petrol|fuel)\b/i.test(normalizedQuery)
   const nominatimQueries = [normalizedQuery]
   const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
@@ -436,12 +450,25 @@ export async function geocodePlace(query, lat = null, lon = null) {
       })
       const foundAi = aiResults?.[query] || Object.values(aiResults || {})[0]
       if (foundAi && Number.isFinite(foundAi.latitude) && Number.isFinite(foundAi.longitude)) {
+        let city = foundAi.city || ''
+        if (!city) {
+          const matchedCity = ['Santa Marta', 'Barranquilla', 'Cartagena', 'Medellín', 'Bogotá', 'Cali', 'Bucaramanga', 'Coveñas', 'Villa de Leyva']
+            .find(c => query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')))
+          if (matchedCity) {
+            city = matchedCity
+          } else {
+            const parts = query.split(',').map(s => s.trim())
+            if (parts.length > 1) {
+              city = cleanAdministrativeCityName(parts[1])
+            }
+          }
+        }
         const res = {
           name: query,
           latitude: Number(foundAi.latitude),
           longitude: Number(foundAi.longitude),
-          city: '',
-          country: ''
+          city,
+          country: foundAi.country || 'Colombia'
         }
         geocodeCache.set(key, res)
         return res
@@ -477,10 +504,10 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     url.searchParams.set('lon', String(lon))
   }
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(3500) })
+    const response = await fetch(url, { signal: AbortSignal.timeout(1500) })
     if (!response.ok) {
-      if (response.status === 429) {
-        tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 15000)
+      if (response.status === 429 || response.status >= 500) {
+        tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 30000)
       }
       return []
     }
@@ -499,6 +526,9 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     }
     return results
   } catch (err) {
+    if (err.name === 'TimeoutError' || err.name === 'AbortError' || err.code === 'UND_ERR_CONNECT_TIMEOUT') {
+      tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 30000)
+    }
     return []
   }
 }
