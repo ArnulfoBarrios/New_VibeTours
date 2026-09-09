@@ -124,17 +124,14 @@ export function selectBestPoiResult(results, originalQuery = '') {
 
   let candidates = [...results]
 
-  if (!isExplicitFuelQuery && candidates.length > 1) {
-    const nonFuelMatch = candidates.filter(r => {
+  if (!isExplicitFuelQuery) {
+    candidates = candidates.filter(r => {
       const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
       const key = String(r.tags?.osm_key || r.class || '').toLowerCase()
       const name = String(r.name || '').toLowerCase()
-      const isFuel = type === 'fuel' || key === 'fuel' || /\beds\b|estaci[oó]n de servicio/i.test(name)
+      const isFuel = type === 'fuel' || key === 'fuel' || /\beds\b|estaci[oó]n de servicio|gasolinera/i.test(name)
       return !isFuel
     })
-    if (nonFuelMatch.length > 0) {
-      candidates = nonFuelMatch
-    }
   }
 
   if (isFoodQuery) {
@@ -253,7 +250,17 @@ export async function geocodePlace(query, lat = null, lon = null) {
     const globalResults = await photonSearch(normalizedQuery, 5, null, null)
     const photonGlobal = selectBestPoiResult(globalResults, query)
     if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
-      const isWithinBounds = !lat || !lon || haversineMeters(lat, lon, photonGlobal.latitude, photonGlobal.longitude) <= 75000
+      let isWithinBounds = !lat || !lon || haversineMeters(lat, lon, photonGlobal.latitude, photonGlobal.longitude) <= 75000
+      const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
+      if (isWithinBounds && (!lat || !lon) && commaParts.length > 1) {
+        const contextCity = commaParts[1].toLowerCase()
+        const resolvedCity = resolveCityFromPhoton(photonGlobal).toLowerCase()
+        const tagState = (photonGlobal.tags?.state || '').toLowerCase()
+        const tagCounty = (photonGlobal.tags?.county || '').toLowerCase()
+        if (resolvedCity && !resolvedCity.includes(contextCity) && !contextCity.includes(resolvedCity) && !tagState.includes(contextCity) && !tagCounty.includes(contextCity)) {
+          isWithinBounds = false
+        }
+      }
       if (isWithinBounds) {
         const res = {
           name: photonGlobal.name,
@@ -297,7 +304,7 @@ export async function geocodePlace(query, lat = null, lon = null) {
     try {
       const response = await fetch(url, {
         headers: { 'User-Agent': USER_AGENT },
-        signal: AbortSignal.timeout(3500)
+        signal: AbortSignal.timeout(6000)
       })
       if (response.ok) {
         const results = await response.json()

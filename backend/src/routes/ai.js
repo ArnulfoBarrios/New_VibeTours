@@ -1240,11 +1240,23 @@ aiRouter.post('/tours/build', async (req, res, next) => {
     })
     const { request: input, places, plannerContext } = buildSchema.parse(req.body)
     
-    if ((!input.city || !input.country) && input.destination) {
-      const location = await geocodePlace(input.destination)
-      if (location) {
-        input.city = location.city || ''
-        input.country = location.country || ''
+    const destQuery = input.city || input.destination || ''
+    if ((!input.latitude || !input.longitude || !input.city || !input.country) && destQuery) {
+      const canonical = await resolveCanonicalDestination(destQuery).catch(() => null)
+      if (canonical) {
+        input.canonicalDestination = canonical
+        input.latitude = input.latitude || canonical.latitude
+        input.longitude = input.longitude || canonical.longitude
+        input.city = input.city || canonical.city
+        input.country = input.country || canonical.country
+      } else {
+        const location = await geocodePlace(destQuery).catch(() => null)
+        if (location) {
+          input.city = input.city || location.city || ''
+          input.country = input.country || location.country || ''
+          input.latitude = input.latitude || location.latitude
+          input.longitude = input.longitude || location.longitude
+        }
       }
     }
 
@@ -1548,6 +1560,18 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     if (isSync) return
     const job = tourJobs.get(jobId)
     if (job) Object.assign(job, updates)
+  }
+
+  const destQuery = input.city || input.destination || ''
+  if ((!input.latitude || !input.longitude || !input.canonicalDestination) && destQuery) {
+    const canonical = await resolveCanonicalDestination(destQuery).catch(() => null)
+    if (canonical) {
+      input.canonicalDestination = canonical
+      input.latitude = input.latitude || canonical.latitude
+      input.longitude = input.longitude || canonical.longitude
+      input.city = input.city || canonical.city
+      input.country = input.country || canonical.country
+    }
   }
 
   try {
@@ -3885,9 +3909,13 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     name: sourceName,
     fallbackPlace,
     startPlace,
-    })
+    endPlace,
+  })
   let resolvedName = cleanPlacePhysicalName(sourceName || fallbackPlace?.name || candidateFallback?.name || `${input.destination}`)
-  const isValidCityPlace = await isPlaceBelongingToCity(resolvedName, input.city || input.destination, coordinates.latitude, coordinates.longitude, candidatePlaces[0])
+  const cityCenterCoords = (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude)
+    ? input.canonicalDestination
+    : (input.latitude && input.longitude ? { latitude: input.latitude, longitude: input.longitude } : candidatePlaces[0])
+  const isValidCityPlace = await isPlaceBelongingToCity(resolvedName, input.city || input.destination, coordinates.latitude, coordinates.longitude, cityCenterCoords)
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
     resolvedName = cleanPlacePhysicalName(candidateFallback?.name || fallbackPlace?.name || `${input.destination}`)
   }
@@ -4036,19 +4064,38 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
   const sourceLatitude = numberValue(source.latitude ?? source.ubicacion?.latitud, NaN)
   const sourceLongitude = numberValue(source.longitude ?? source.ubicacion?.longitud, NaN)
 
-  const isCorridor = Boolean(startPlace && endPlace)
-  const canonicalDest = input.canonicalDestination || (hasUsableCoordinates(input.latitude, input.longitude) ? {
-    latitude: input.latitude,
-    longitude: input.longitude,
-    displayName: input.city || input.destination,
-    city: input.city,
-    country: input.country
-  } : null)
+  const isCorridor = Boolean(input.originPlace && input.destinationPlace && startPlace && endPlace)
+  let canonicalDest = input.canonicalDestination
+  if (!canonicalDest && hasUsableCoordinates(input.latitude, input.longitude)) {
+    canonicalDest = {
+      latitude: input.latitude,
+      longitude: input.longitude,
+      displayName: input.city || input.destination,
+      city: input.city,
+      country: input.country
+    }
+  }
+  const cleanCity = cleanAdministrativeCityName(input.city || input.destination || '')
+  if (!canonicalDest && cleanCity) {
+    canonicalDest = await resolveCanonicalDestination(cleanCity).catch(() => null)
+    if (canonicalDest) {
+      input.canonicalDestination = canonicalDest
+      if (!input.latitude) input.latitude = canonicalDest.latitude
+      if (!input.longitude) input.longitude = canonicalDest.longitude
+    }
+  }
+  const destLat = canonicalDest?.latitude ?? input.latitude ?? null
+  const destLon = canonicalDest?.longitude ?? input.longitude ?? null
 
   // 1. Geocodificar nombre de parada anclado al destino con proveedores cartográficos reales (OSM/Photon/Nominatim)
-  const cleanCity = cleanAdministrativeCityName(input.city || input.destination || '')
   const searchQuery = `${name}, ${cleanCity}, ${input.country || ''}`.trim().replace(/,\s*$/, '')
-  const geocoded = await geocodePlace(searchQuery, input.latitude, input.longitude).catch(() => null)
+  let geocoded = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
+  if (!geocoded && cleanCity && !name.toLowerCase().includes(cleanCity.toLowerCase())) {
+    geocoded = await geocodePlace(`${name}, ${cleanCity}`, destLat, destLon).catch(() => null)
+  }
+  if (!geocoded && destLat && destLon) {
+    geocoded = await geocodePlace(name, destLat, destLon).catch(() => null)
+  }
 
   if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
     const isNearby = !canonicalDest || validateCandidateLocation(geocoded, canonicalDest, 50)
@@ -5111,18 +5158,6 @@ export async function collectTourCandidates(input, location) {
             description: '',
             tags: { requested_place: 'true', ai_geocoded: 'true' }
           })
-        }
-      }
-    }
-
-    // Day Anchor Alignment: Si una parada usó fallback de cuadrante y su compañera de día tiene coordenadas precisas,
-    // ajustar el pin hacia la zona de su compañera
-    for (const p of geocodedSpecifics) {
-      if (p.address.startsWith(`${p.name}, ${city}`) && p.dia) {
-        const anchorMate = geocodedSpecifics.find(other => other !== p && other.dia === p.dia && !other.address.startsWith(`${other.name}, ${city}`))
-        if (anchorMate) {
-          p.latitude = anchorMate.latitude + 0.0015
-          p.longitude = anchorMate.longitude + 0.0015
         }
       }
     }
