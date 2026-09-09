@@ -179,6 +179,42 @@ export function selectBestPoiResult(results, originalQuery = '') {
   return candidates[0]
 }
 
+export function decomposeCompoundPlaceQuery(rawQuery) {
+  if (!rawQuery || typeof rawQuery !== 'string') return []
+  const rawCommaParts = rawQuery.split(',').map(s => s.trim()).filter(Boolean)
+  const rawPlacePart = rawCommaParts[0] || ''
+  const rawContext = rawCommaParts.slice(1).join(', ')
+
+  const compoundSeparators = /[-—–:\/|]/
+  const hasParen = /\(([^)]+)\)/
+  if (!compoundSeparators.test(rawPlacePart) && !hasParen.test(rawPlacePart)) {
+    return []
+  }
+
+  const segments = []
+  const directSplit = rawPlacePart.split(/\s*[-—–:\/|]\s*/).map(s => s.replace(/[()]/g, '').trim()).filter(Boolean)
+  segments.push(...directSplit)
+
+  const parenMatch = rawPlacePart.match(/\(([^)]+)\)/)
+  if (parenMatch && parenMatch[1]) {
+    segments.push(parenMatch[1].trim())
+  }
+
+  for (const s of directSplit) {
+    const cult = s.match(/\b(museo\s+del\s+oro|quinta\s+de\s+san\s+pedro\s+alejandrino|casa\s+de\s+la\s+aduana|catedral\s+bas[íi]lica|castillo\s+san\s+felipe)\b/i)
+    if (cult && cult[0] && cult[0].toLowerCase() !== s.toLowerCase()) {
+      segments.push(cult[0].trim())
+    }
+  }
+
+  const queries = []
+  const uniqueSegs = [...new Set(segments.filter(s => s.length >= 3))]
+  for (const seg of uniqueSegs) {
+    if (rawContext) queries.push(`${seg}, ${rawContext}`)
+    queries.push(seg)
+  }
+  return queries
+}
 
 export async function geocodePlace(query, lat = null, lon = null) {
   if (!query || typeof query !== 'string') return null
@@ -225,7 +261,17 @@ export async function geocodePlace(query, lat = null, lon = null) {
   if (lat && lon) {
     try {
       const proxResults = await photonSearch(normalizedQuery, 8, lat, lon)
-      const photonProx = selectBestPoiResult(proxResults, query)
+      let photonProx = selectBestPoiResult(proxResults, query)
+      if (!photonProx) {
+        const decomposed = decomposeCompoundPlaceQuery(query)
+        for (const dq of decomposed) {
+          const subResults = await photonSearch(normalizeGeocodeQuery(dq), 5, lat, lon)
+          photonProx = selectBestPoiResult(subResults, dq)
+          if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
+            break
+          }
+        }
+      }
       if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
         const dMeters = haversineMeters(lat, lon, photonProx.latitude, photonProx.longitude)
         if (dMeters <= 75000) {
@@ -248,7 +294,17 @@ export async function geocodePlace(query, lat = null, lon = null) {
   // 2. Global Photon search
   try {
     const globalResults = await photonSearch(normalizedQuery, 5, null, null)
-    const photonGlobal = selectBestPoiResult(globalResults, query)
+    let photonGlobal = selectBestPoiResult(globalResults, query)
+    if (!photonGlobal) {
+      const decomposed = decomposeCompoundPlaceQuery(query)
+      for (const dq of decomposed) {
+        const subResults = await photonSearch(normalizeGeocodeQuery(dq), 5, null, null)
+        photonGlobal = selectBestPoiResult(subResults, dq)
+        if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
+          break
+        }
+      }
+    }
     if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
       let isWithinBounds = !lat || !lon || haversineMeters(lat, lon, photonGlobal.latitude, photonGlobal.longitude) <= 75000
       const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
@@ -281,6 +337,16 @@ export async function geocodePlace(query, lat = null, lon = null) {
   const isExplicitFuelQuery = /\b(gasolinera|estaci[oó]n de servicio|combustible|terpel|texaco|esso|mobil|biomax|primax|petrol|fuel)\b/i.test(normalizedQuery)
   const nominatimQueries = [normalizedQuery]
   const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
+  const decomposed = decomposeCompoundPlaceQuery(query)
+  for (const dq of decomposed) {
+    if (dq && !nominatimQueries.includes(dq)) {
+      nominatimQueries.push(dq)
+    }
+    const normDq = normalizeGeocodeQuery(dq)
+    if (normDq && !nominatimQueries.includes(normDq)) {
+      nominatimQueries.push(normDq)
+    }
+  }
   if (commaParts.length > 1) {
     const simplifiedFeature = normalizedQuery.replace(/\b(bah[íi]a de|playa de|cabo|isla|archipi[ée]lago de|monumento al?|monumento de|monumento|barrio)\s+/gi, '').trim()
     if (simplifiedFeature && simplifiedFeature !== normalizedQuery && simplifiedFeature.length > 3) {

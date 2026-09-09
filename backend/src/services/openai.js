@@ -1,5 +1,5 @@
 import { GeoCache } from './geoCache.js'
-import { imageForPlaceWithStatus } from './imageSearch.js'
+import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters } from './osm.js'
@@ -1724,30 +1724,36 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
             merged[name] = item
           }
         }
-        if (!item) {
-          merged[name] = {
-            descripcion: buildRichFallbackDescription(name, destination || city),
-            actividades: [`Explorar las áreas principales y miradores de ${name}`, `Conocer el contexto cultural de ${name}`, `Apreciar la gastronomía y tradiciones locales`],
-            datos_curiosos: [`${name} destaca por su valor patrimonial y natural dentro de ${destination || city}.`],
-            consejos: [`Llevar calzado cómodo y protección solar para recorrer ${name}.`]
-          }
-        } else if (typeof item === 'string') {
-          merged[name] = {
-            descripcion: item,
-            actividades: [`Explorar los alrededores de ${name}`, `Disfrutar de las vistas y ambiente de ${name}`, `Conocer la identidad local de ${name}`],
-            datos_curiosos: [`${name} forma parte destacada del recorrido en ${destination || city}.`],
-            consejos: [`Visitar ${name} en horas de la mañana para una mejor experiencia.`]
-          }
-        } else if (typeof item === 'object') {
-          if (!item.descripcion || item.descripcion.length < 20) {
-            item.descripcion = buildRichFallbackDescription(name, destination || city)
-          }
-          if (!Array.isArray(item.actividades) || item.actividades.length === 0) {
-            item.actividades = [`Explorar ${name}`, `Conocer las tradiciones de ${name}`, `Disfrutar de la experiencia local`]
-          }
-          if (!Array.isArray(item.datos_curiosos) || item.datos_curiosos.length === 0) {
-            item.datos_curiosos = [`${name} es uno de los atractivos que definen la esencia de ${destination || city}.`]
-          }
+
+        let desc = typeof item === 'string' ? item : item?.descripcion
+        const isDescGeneric = !desc || desc.length < 25 ||
+          desc.includes('conectar a los viajeros con la historia viva') ||
+          desc.includes('Espacio emblemático de enriquecimiento cultural') ||
+          desc.includes('Punto de interés emblemático') ||
+          desc.includes('Destacado atractivo en')
+
+        if (isDescGeneric) {
+          const wikiText = await wikipediaSummaryText(name, destination || city, 'Colombia').catch(() => null)
+          desc = (wikiText && wikiText.length > 30) ? wikiText : buildRichFallbackDescription(name, destination || city)
+        }
+
+        const activities = (Array.isArray(item?.actividades) && item.actividades.length > 0)
+          ? item.actividades
+          : [`Recorrer y descubrir ${name}`, `Conocer la historia y puntos clave de ${name}`, `Disfrutar de las vistas y ambiente de ${name}`]
+
+        const curiosities = (Array.isArray(item?.datos_curiosos) && item.datos_curiosos.length > 0)
+          ? item.datos_curiosos
+          : [`${name} es uno de los puntos más representativos de ${destination || city}.`]
+
+        const tips = (Array.isArray(item?.consejos) && item.consejos.length > 0)
+          ? item.consejos
+          : [`Planificar la visita con anticipación para disfrutar al máximo de ${name}.`]
+
+        merged[name] = {
+          descripcion: desc,
+          actividades: activities,
+          datos_curiosos: curiosities,
+          consejos: tips
         }
       }
       return merged
@@ -1757,13 +1763,25 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
   }
 
   // Fallback rico e individualizado por categoría en caso de desconexión
+  const fallbackResults = await Promise.allSettled(
+    placeNames.map(async (name) => {
+      const wikiText = await wikipediaSummaryText(name, destination || city, 'Colombia').catch(() => null)
+      const desc = (wikiText && wikiText.length > 30) ? wikiText : buildRichFallbackDescription(name, destination || city)
+      return {
+        name,
+        data: {
+          descripcion: desc,
+          actividades: [`Recorrer y descubrir ${name}`, `Conocer los puntos clave de ${name}`, `Disfrutar de la cultura y vistas locales`],
+          datos_curiosos: [`${name} preserva historia y valor paisajístico en ${destination || city}.`],
+          consejos: [`Planificar la visita con anticipación para disfrutar al máximo de ${name}.`]
+        }
+      }
+    })
+  )
   const fallback = {}
-  for (const name of placeNames) {
-    fallback[name] = {
-      descripcion: buildRichFallbackDescription(name, destination || city),
-      actividades: [`Recorrer y descubrir ${name}`, `Conocer los puntos clave de ${name}`, `Disfrutar de la gastronomía y vistas locales`],
-      datos_curiosos: [`${name} preserva historia y valor paisajístico en ${destination || city}.`],
-      consejos: [`Planificar la visita con anticipación para disfrutar al máximo de ${name}.`]
+  for (const r of fallbackResults) {
+    if (r.status === 'fulfilled' && r.value) {
+      fallback[r.value.name] = r.value.data
     }
   }
   return fallback
@@ -1771,54 +1789,49 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
 
 function buildRichFallbackDescription(name, city = '') {
   const clean = String(name || '').trim()
+  const loc = city ? `en ${city}` : 'en la región'
 
   const isChurch = /\b(catedral|iglesia|bas[íi]lica|templo|santuario|parroquia)\b/i.test(clean)
   if (isChurch) {
-    return `Majestuoso recinto de gran valor arquitectónico y espiritual en ${city || 'la ciudad'}, distinguido por su sobrio diseño, valor patrimonial y un ambiente de recogimiento que atesora momentos clave en la historia local.`
+    return `Importante templo religioso y patrimonio arquitectónico ${loc}, destacado por sus líneas coloniales, altares históricos y la serenidad de su espacio interior.`
   }
 
   const isCarnaval = /carnaval|comparsa|folclor/i.test(clean)
   if (isCarnaval) {
-    return `Vibrante templo de la tradición y la alegría en ${city || 'la ciudad'}, donde las máscaras de marimonda, los disfraces de congo y los ritmos de cumbia y tambora transmiten la pasión de una fiesta declarada patrimonio inmaterial de la humanidad.`
+    return `Epicentro de la tradición cultural y festiva ${loc}, donde expresiones de folclor, música tradicional y atuendos típicos transmiten la identidad de sus gentes.`
   }
 
   const isMuseum = /\b(museo|casa museo|galer[íi]a|centro cultural)\b/i.test(clean)
   if (isMuseum) {
-    return `Espacio emblemático de enriquecimiento cultural en ${city || 'la región'}, concebido para divulgar la memoria viva, colecciones históricas y expresiones creativas que ilustran la evolución identitaria de sus comunidades.`
+    return `Recinto cultural ${loc} que conserva exposiciones históricas, vestigios arqueológicos y muestras artísticas que documentan el legado de la comunidad.`
   }
 
   const isWaterOrPark = /\b(malec[óo]n|parque|plaza|mirador|paseo|boulevard|jard[íi]n|cerro)\b/i.test(clean)
   if (isWaterOrPark) {
-    return `Punto neurálgico al aire libre en ${city || 'la ciudad'}, predilecto por locales y foráneos para caminar junto a la brisa, contemplar el horizonte urbano y disfrutar de la calidez cotidiana que caracteriza a sus paseantes.`
+    return `Espacio emblemático al aire libre ${loc}, ideal para pasear, contemplar el paisaje y disfrutar del encuentro social y la naturaleza circundante.`
   }
 
   const isMonument = /\b(monumento|estatua|busto|obelisco|escultura|hito|memorial)\b/i.test(clean)
   if (isMonument) {
-    return `Emblemático hito escultórico en ${city || 'la ciudad'}, erigido como tributo a hechos y personajes trascendentales que forjaron la identidad histórica, artística y cultural de la comunidad.`
+    return `Hito conmemorativo ${loc} erigido en honor a personajes y acontecimientos determinantes en la construcción histórica y cultural del territorio.`
   }
 
   const isSeafood = /mariscos|pescado|ceviche|costeñ|mar|playa|puerto/i.test(clean)
   if (isSeafood) {
-    return `Destino gastronómico de referencia donde brillan los frutos del mar, arroces aromatizados y sazón costera, ofreciendo una experiencia culinaria fresca y profundamente ligada a las aguas de la región.`
+    return `Destacado referente culinario costero donde los pescados frescos, preparaciones típicas y sabores de mar ofrecen una auténtica muestra gastronómica.`
   }
 
   const isCafe = /caf[ée]|bistro|bakery|panader[íi]a|dulce/i.test(clean)
   if (isCafe) {
-    return `Acogedor rincón de tertulia y descanso en ${city || 'la ciudad'}, donde los aromas de café selecto, bocados artesanales y un servicio atento crean la atmósfera idónea para pausar el recorrido.`
+    return `Rincón tradicional de café y tertulia ${loc}, ideal para degustar café de origen y repostería artesanal en un ambiente relajado.`
   }
 
   const isFood = /\b(restaurante|comida|asador|bistro|bar|gastronom[íi]a|taquer[íi]a|pizzer[íi]a|parador)\b/i.test(clean)
   if (isFood) {
-    return `Reconocido establecimiento culinario en ${city || 'la región'}, famoso por rescatar recetas emblemáticas mediante técnicas cuidadas, ingredientes de proximidad y una propuesta pensada para compartir momentos memorables alrededor del plato.`
+    return `Reconocido espacio gastronómico ${loc} que rinde homenaje a la cocina local mediante platos tradicionales e ingredientes frescos de la tierra.`
   }
 
-  const seed = clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  const variants = [
-    `Destacado atractivo en ${city || 'la región'}, apreciado por su atmósfera auténtica, valor testimonial y la singular perspectiva que brinda a quienes lo visitan.`,
-    `Punto de interés emblemático en ${city || 'la ciudad'}, reconocido por conectar a los viajeros con la historia viva y el pulso cotidiano del entorno local.`,
-    `Espacio representativo de ${city || 'la localidad'}, ideal para admirar contrastes urbanos, capturar fotografías memorables y disfrutar de la calidez del destino.`
-  ]
-  return variants[Math.abs(seed) % variants.length]
+  return `${clean} es uno de los puntos más representativos ${loc}, reconocido por su valor testimonial y la experiencia que brinda a quienes lo visitan.`
 }
 
 export async function generateCustomPlaceReasons(arg1 = [], arg2 = '', arg3 = '') {

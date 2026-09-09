@@ -266,11 +266,7 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
                                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                                       },
                                       placeholder: (context, url) => const SkeletonBox(),
-                                      errorWidget: (context, url, error) => CachedNetworkImage(
-                                        imageUrl: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=1200&q=80',
-                                        fit: BoxFit.cover,
-                                        errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
-                                      ),
+                                      errorWidget: (context, url, error) => TravelImageFallback(title: tour.title),
                                     ),
                             ),
                           ),
@@ -1989,7 +1985,7 @@ String _getRandomTravelImage(String seed) {
   final images = [
     'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=300&q=80',
     'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=300&q=80',
-    'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=300&q=80',
+    'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=300&q=80',
     'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=300&q=80',
     'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=300&q=80',
     'https://images.unsplash.com/photo-1530789253388-582c481c54b0?auto=format&fit=crop&w=300&q=80',

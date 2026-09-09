@@ -1641,13 +1641,27 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       : (Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length ? sourceTour.itinerario : (sourceTour.stops ?? planner.selectedPlaces))
     const stopsTarget = plannedStops.length > 0 ? plannedStops.length : planner.selectedPlaces.length
     const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
+    
+    const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
+    const richDescriptionsMap = await generateRichPlaceDescriptionsBatch({
+      destination: input.destination,
+      city: input.city,
+      country: input.country,
+      places: plannedPlaceNames,
+      prompt: input.prompt
+    }).catch(() => ({}))
+
+    const assignedUrls = new Set()
     const settledStops = await Promise.allSettled(
       Array.from({ length: stopsTarget }, (_, index) => {
         const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
         const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
         const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (sourceStop?.day ? Number(sourceStop.day) : (anchorPlace?.dia ? Number(anchorPlace.dia) : (anchorPlace?.day ? Number(anchorPlace.day) : null)))
         const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopsTarget) + 1)
-        return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay)
+        return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
+          descriptionsMap: richDescriptionsMap,
+          assignedUrls
+        })
       })
     )
     const rawStops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
@@ -1676,9 +1690,17 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     const routeStops = normalizedStops.map(s => s.routeStop)
     const targetCity = input.city || input.destination || ''
     const targetCountry = input.country || 'Colombia'
-    const coverUrl = (planner?.selectedPlaces?.[0]?.imageUrl && !planner.selectedPlaces[0].imageUrl.includes('fallback'))
-      ? planner.selectedPlaces[0].imageUrl
-      : (await imageForPlace(targetCity, targetCity, targetCountry).catch(() => null) || fallbackCover(input.destination || targetCity))
+    let coverUrl = await imageForPlace(targetCity, targetCity, targetCountry).catch(() => null)
+    if (!coverUrl || coverUrl.includes('fallback')) {
+      const cityFallback = fallbackCover(targetCity || input.destination)
+      if (cityFallback) {
+        coverUrl = cityFallback
+      } else if (planner?.selectedPlaces?.[0]?.imageUrl && !planner.selectedPlaces[0].imageUrl.includes('fallback')) {
+        coverUrl = planner.selectedPlaces[0].imageUrl
+      } else {
+        coverUrl = fallbackCover(input.destination || targetCity)
+      }
+    }
     
     let hotelPuntoEncuentro = null
     const chosenHotel = input.selectedHotel || plannerContext?.selectedHotel
@@ -3102,8 +3124,14 @@ function buildTourDescription(input, planner) {
     sports: 'escenarios deportivos, parques activos, zonas para caminar y lugares ligados al orgullo deportivo local',
     urban: 'calles representativas, plazas, edificios publicos, malecones y contrastes cotidianos',
     romantic: 'miradores, cafes, plazas tranquilas y rincones pensados para caminar sin prisa',
-  }[input.type] ?? 'paradas autenticas, bien conectadas y culturalmente relevantes'
-  return 'Este recorrido por ' + city + country + ' esta disenado para sentirse como un tour completo y no como una lista suelta de puntos en el mapa. Durante ' + input.durationHours + ' horas, la ruta combina ' + mode + ', manteniendo un orden logico para reducir traslados innecesarios y aprovechar mejor cada parada. El itinerario toma como base lugares reales cercanos al destino seleccionado y prioriza puntos reconocibles de la ciudad antes de sumar experiencias complementarias. Entre las paradas destacadas aparecen ' + (places || input.destination) + ', articuladas para que el viajero entienda que puede ver, hacer, probar o fotografiar en cada lugar. La experiencia busca parecerse a un tour guiado profesional: empieza con un punto de referencia claro, desarrolla una narrativa segun el tipo de tour y cierra con recomendaciones practicas para disfrutar el recorrido con seguridad y buen ritmo.'
+  }[input.type] ?? 'paradas auténticas, bien conectadas y culturalmente relevantes'
+
+  const durationDays = input.durationDays || (input.durationHours >= 24 ? Math.ceil(input.durationHours / 24) : 0)
+  const durationLabel = durationDays >= 2
+    ? `A lo largo de ${durationDays} días de recorrido`
+    : (input.durationHours ? `Durante una jornada completa de ${input.durationHours} horas` : 'A lo largo del recorrido')
+
+  return `Este itinerario por ${city}${country} ha sido diseñado para ofrecer una experiencia integral y enriquecedora en el destino. ${durationLabel}, la ruta articula ${mode}, organizando el itinerario con coherencia geográfica para minimizar desplazamientos y maximizar el tiempo en cada parada. Entre los puntos más destacados de la ruta figuran ${places || input.destination}, seleccionados para brindar una perspectiva auténtica que combina historia, naturaleza, cultura y la vibrante vida local.`
 }
 
 function buildFeaturedExperience(input, planner) {
@@ -3224,14 +3252,16 @@ const CATEGORY_IMAGE_POOLS = {
     'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&auto=format&fit=crop',
   ],
   viewpoint: [
-    'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1476514525535-ce74f458149e?w=800&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=800&auto=format&fit=crop',
   ],
   general: [
     'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1503220317375-aaad61436b1b?w=800&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1596436889106-be35e843f974?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?w=800&auto=format&fit=crop',
   ]
 }
 
@@ -3943,7 +3973,14 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
                          (description.toLowerCase() === resolvedName.toLowerCase()) ||
                          description.includes('un punto de gran interés recomendado') ||
                          description.includes('gran valor patrimonial de') ||
-                         description.includes('identidad auténtica');
+                         description.includes('identidad auténtica') ||
+                         description.includes('conectar a los viajeros con la historia viva') ||
+                         description.includes('Espacio emblemático de enriquecimiento cultural') ||
+                         description.includes('Punto de interés emblemático') ||
+                         description.includes('Destacado atractivo en') ||
+                         description.includes('Reconocido establecimiento culinario') ||
+                         description.includes('es un lugar emblemático de gran interés') ||
+                         description.includes('es un destacado establecimiento gastronómico');
 
   if (isGenericDesc) {
     const wikiText = await wikipediaSummaryText(resolvedName, input.city || input.destination, input.country).catch(() => null)
@@ -5681,7 +5718,22 @@ function typeFallbackLabels(type, baseName) {
 }
 
 function fallbackCover(seed = 'travel') {
-  const safeSeed = String(seed || 'travel')
+  const safeSeed = String(seed || 'travel').toLowerCase()
+  if (safeSeed.includes('santa marta')) {
+    return 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=1200&q=80' // Santa Marta Tayrona coast
+  }
+  if (safeSeed.includes('cartagena')) {
+    return 'https://images.unsplash.com/photo-1583531352515-888413146611?auto=format&fit=crop&w=1200&q=80' // Cartagena colonial
+  }
+  if (safeSeed.includes('barranquilla')) {
+    return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80' // Gran Malecón / Caribe
+  }
+  if (safeSeed.includes('medellin') || safeSeed.includes('medellín')) {
+    return 'https://images.unsplash.com/photo-1599388301549-3714578b820a?auto=format&fit=crop&w=1200&q=80'
+  }
+  if (safeSeed.includes('bogota') || safeSeed.includes('bogotá')) {
+    return 'https://images.unsplash.com/photo-1584305574647-0cc949a2da9f?auto=format&fit=crop&w=1200&q=80'
+  }
   const images = [
     'https://images.unsplash.com/photo-1583531172005-814191b8b6c0?auto=format&fit=crop&w=1200&q=80',
     'https://images.unsplash.com/photo-1498307833015-e7b400441eb8?auto=format&fit=crop&w=1200&q=80',

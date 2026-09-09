@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isValidSpecificPlace, buildTourPlanner, deduplicatePlacesByName } from '../routes/ai.js'
+import { isValidSpecificPlace, buildTourPlanner, deduplicatePlacesByName, getReliableCategoryFallbackImage } from '../routes/ai.js'
 import { geocodePlace } from '../services/osm.js'
-import { getRealDestinationCatalog } from '../services/openai.js'
+import { getRealDestinationCatalog, generateRichPlaceDescriptionsBatch } from '../services/openai.js'
 
 test('isValidSpecificPlace must reject Santa Marta activity fragments and non-places', () => {
   // Activity phrases and prepositional fragments from the chat
@@ -61,6 +61,12 @@ test('geocodePlace returns verified high-precision coordinates for Santa Marta P
   const buenavista = await geocodePlace('Centro Comercial Buenavista, Santa Marta')
   assert.ok(buenavista)
   assert.equal(buenavista.city, 'Santa Marta')
+
+  const museoOro = await geocodePlace('Museo del Oro Tairona - Casa de la Aduana, Santa Marta', 11.2408, -74.2099)
+  assert.ok(museoOro)
+  assert.equal(museoOro.city, 'Santa Marta')
+  assert.ok(museoOro.latitude > 11.242 && museoOro.latitude < 11.248)
+  assert.ok(museoOro.longitude > -74.216 && museoOro.longitude < -74.210)
 })
 
 test('buildTourPlanner preserves Santa Marta day assignments without shifting Taganga to Day 1', () => {
@@ -133,5 +139,36 @@ test('Playa Blanca Santa Marta geocodes to Santa Marta and not Cartagena/Baru', 
   assert.equal(geo.city, 'Santa Marta')
   assert.ok(geo.latitude > 11.15 && geo.latitude < 11.28)
   assert.ok(geo.longitude < -74.15 && geo.longitude > -74.30)
+})
+
+test('CATEGORY_IMAGE_POOLS viewpoint and general do not contain camper van in Utah desert', () => {
+  const vpImg = getReliableCategoryFallbackImage('Mirador Santa Marta', 'viewpoint')
+  assert.ok(!vpImg.includes('photo-1469854523086-cc02fe5d8800'))
+
+  const genImg = getReliableCategoryFallbackImage('Paseo Santa Marta', 'general')
+  assert.ok(!genImg.includes('photo-1469854523086-cc02fe5d8800'))
+})
+
+test('generateRichPlaceDescriptionsBatch produces rich descriptions without formulaic clichés', async () => {
+  const descriptions = await generateRichPlaceDescriptionsBatch({
+    destination: 'Santa Marta',
+    city: 'Santa Marta',
+    country: 'Colombia',
+    places: ['Quinta de San Pedro Alejandrino', 'Museo del Oro Tairona - Casa de la Aduana']
+  })
+
+  assert.ok(descriptions)
+  const quinta = descriptions['Quinta de San Pedro Alejandrino']
+  assert.ok(quinta)
+  const qDesc = typeof quinta === 'object' ? quinta.descripcion : quinta
+  assert.ok(qDesc.length > 50)
+  assert.ok(!qDesc.includes('conectar a los viajeros con la historia viva'))
+  assert.ok(!qDesc.includes('Espacio emblemático de enriquecimiento cultural'))
+
+  const museo = descriptions['Museo del Oro Tairona - Casa de la Aduana']
+  assert.ok(museo)
+  const mDesc = typeof museo === 'object' ? museo.descripcion : museo
+  assert.ok(mDesc.length > 50)
+  assert.ok(!mDesc.includes('conectar a los viajeros con la historia viva'))
 })
 
