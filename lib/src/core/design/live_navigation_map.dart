@@ -966,7 +966,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         if (_userIsExploringMap)
           Positioned(
             right: 16,
-            bottom: 236 + MediaQuery.of(context).padding.bottom,
+            bottom: 275 + MediaQuery.of(context).padding.bottom,
             child: FloatingActionButton.extended(
               heroTag: 'live_map_recenter_fab',
               elevation: 4,

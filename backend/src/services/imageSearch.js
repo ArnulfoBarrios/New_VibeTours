@@ -202,13 +202,29 @@ export async function wikipediaSummaryText(placeName, city = '', country = '') {
     const sRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
     if (sRes.ok) {
       const sJson = await sRes.json()
-      const topHit = sJson?.query?.search?.[0]
+      const searchHits = sJson?.query?.search || []
+      let topHit = searchHits[0]
       if (topHit && topHit.title) {
-        const topTitleLower = topHit.title.toLowerCase()
         const cleanLower = cleaned.toLowerCase()
+        const cleanCityLower = cleanCity.toLowerCase()
+        
+        // Disambiguation for specific attraction types: if place has a distinct category word,
+        // prefer hits that contain that word over general city/department pages
+        const isDistinctPoiType = /\b(zool[oó]gico|zoo|museo|catedral|estadio|castillo|teatro|acuario|jard[ií]n bot[aá]nico|aeropuerto|terminal)\b/i.test(cleanLower)
+        if (isDistinctPoiType) {
+          const matchedPoiHit = searchHits.slice(0, 5).find(h =>
+            /\b(zool[oó]gico|zoo|museo|catedral|estadio|castillo|teatro|acuario|jard[ií]n bot[aá]nico|aeropuerto|terminal)\b/i.test(h.title.toLowerCase())
+          )
+          if (matchedPoiHit) {
+            topHit = matchedPoiHit
+          }
+        }
+
+        const topTitleLower = topHit.title.toLowerCase()
         const placeWords = cleanLower.split(/\s+/).filter(w => w.length >= 3 && !/^(parque|playa|sendero|cabo|bahia|bahía|hotel|isla|restaurante|el|la|los|las|de|del|en)$/i.test(w))
-        const isBroadMismatch = (topTitleLower.includes('parque nacional') && !cleanLower.includes('parque nacional')) ||
-                                (cleanCity && topTitleLower === cleanCity.toLowerCase())
+        let isBroadMismatch = (topTitleLower.includes('parque nacional') && !cleanLower.includes('parque nacional')) ||
+                              (cleanCityLower && topTitleLower === cleanCityLower) ||
+                              (isDistinctPoiType && !/\b(zool[oó]gico|zoo|museo|catedral|estadio|castillo|teatro|acuario|jard[ií]n bot[aá]nico|aeropuerto|terminal)\b/i.test(topTitleLower))
         const hasSpecificWordMatch = placeWords.length === 0 || placeWords.some(w => topTitleLower.includes(w))
 
         if (!isBroadMismatch && hasSpecificWordMatch) {

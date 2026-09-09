@@ -1262,7 +1262,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               if (!_isTrackingMode)
                 Positioned(
                   right: 16,
-                  bottom: 140 + MediaQuery.of(context).padding.bottom,
+                  bottom: 215 + MediaQuery.of(context).padding.bottom,
                   child: FloatingActionButton.extended(
                     heroTag: 'live_tour_follow_fab',
                     backgroundColor: Theme.of(context).colorScheme.primaryContainer,

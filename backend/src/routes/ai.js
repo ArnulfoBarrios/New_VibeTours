@@ -615,9 +615,9 @@ aiRouter.post('/chat', async (req, res, next) => {
     const isFoodQuery = /\b(restaurante|restaurantes|comida|comer|almorzar|cenar|gastronom[íi]a|platos|donde comer|d[oó]nde comer)\b/i.test(message)
     const targetLat = updatedPreferences.latitude || updatedPreferences.canonicalDestination?.latitude
     const targetLon = updatedPreferences.longitude || updatedPreferences.canonicalDestination?.longitude
-    if (targetLat && targetLon && (isFoodQuery || updatedPreferences.destination)) {
+    if (targetLat && targetLon && isFoodQuery) {
       try {
-        nearbyFoodPlaces = await overpassNearbyFood(targetLat, targetLon, 8000).catch(() => [])
+        nearbyFoodPlaces = await overpassNearbyFood(targetLat, targetLon, 4000).catch(() => [])
         if (!nearbyFoodPlaces || nearbyFoodPlaces.length === 0) {
           nearbyFoodPlaces = await photonFoodFallback(targetLat, targetLon).catch(() => [])
         }
@@ -1699,9 +1699,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
         continue
       }
-      const itemDay = item.publicStop.dia || 1
-      const itemType = getPlaceEntityType(name)
-      const nameKey = `${normalizeKey(name)}__${itemType}__d${itemDay}`
+      const nameKey = normalizePlaceKey(name) || normalizeKey(name)
       if (!seenKeys.has(nameKey)) {
         seenKeys.add(nameKey)
         normalizedStops.push(item)
@@ -2991,8 +2989,27 @@ function typeMismatchPenalty(type, category, name, promptText = '') {
 }
 
 function importantPlaceScore(place, input) {
-  const city = normalizeKey(input.city || input.destination)
-  const text = normalizeKey(place.name)
+  const city = normalizeKey(input.city || input.destination || '')
+  const text = normalizeKey(place?.name || '')
+  let score = 0
+
+  // 1. Worldwide encyclopedic prominence (Wikidata / Wikipedia tags from OpenStreetMap)
+  const tags = place?.rawTags || place?.tags
+  if (tags && (tags.wikidata || tags.wikipedia)) {
+    score += 6
+  }
+
+  // 2. Dynamic iconic landmarks for this destination (any city in the world)
+  const dynamicLandmarks = input?.plannerContext?.dynamicLandmarks || input?.dynamicLandmarks || []
+  if (Array.isArray(dynamicLandmarks) && dynamicLandmarks.length > 0) {
+    const isLandmark = dynamicLandmarks.some(l => {
+      const lName = normalizeKey(typeof l === 'string' ? l : (l?.name || ''))
+      return lName && (text.includes(lName) || lName.includes(text))
+    })
+    if (isLandmark) score += 6
+  }
+
+  // 3. Fallback compatibility seeds
   const catalog = {
     cartagena: ['torre-del-reloj', 'san-felipe', 'murallas', 'getsemani', 'santo-domingo', 'museo-del-oro', 'catedral', 'plaza-de-los-coches', 'blas-de-lezo', 'india-catalina'],
     barranquilla: ['plaza-de-la-paz', 'catedral', 'paseo-bolivar', 'antigua-aduana', 'museo-del-caribe', 'barrio-abajo', 'casa-del-carnaval', 'gran-malecon', 'ventana-al-mundo', 'cumbia', 'edgar-renteria'],
@@ -3003,7 +3020,9 @@ function importantPlaceScore(place, input) {
   }
   const keys = Object.keys(catalog).filter((key) => city.includes(key) || key.includes(city))
   const matches = keys.flatMap((key) => catalog[key]).filter((term) => text.includes(term))
-  return clamp(matches.length * 4, 0, 10)
+  if (matches.length > 0) score += matches.length * 4
+
+  return clamp(score, 0, 10)
 }
 
 function profileScoreFor(input, place) {
@@ -3625,11 +3644,17 @@ function generateDynamicDescription(name, category, city) {
   if (/museo|museum|galeria|gallery|exhibición/i.test(cleanName) || /museo|arte/i.test(category)) {
     return `${cleanName} resguarda valiosas colecciones históricas, artesanales y artísticas ${loc}, ofreciendo recorridos educativos que conectan a los visitantes con la historia y herencia cultural del lugar.`
   }
-  if (/parque|park|garden|jardin|reserva/i.test(cleanName) || /naturaleza/i.test(category)) {
-    return `${cleanName} es un verdadero pulmón verde y santuario natural ${loc}, ideal para caminatas, contemplación del paisaje y actividades al aire libre rodeado de flora y fauna local.`
+  if (/boca|bocas|ceniza|ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna|pantano/i.test(cleanName)) {
+    return `${cleanName} es un imponente enclave natural ${loc}, donde confluyen corrientes fluviales y marinas ofreciendo vistas panorámicas excepcionales y una rica biodiversidad.`
+  }
+  if (/zool[óo]gico|zoo|acuario|bioparque|aviario/i.test(cleanName)) {
+    return `${cleanName} es un espacio dedicado a la conservación biológica y educación ambiental ${loc}, que alberga fauna representativa y flora tropical en senderos ecológicos acondicionados.`
+  }
+  if (/monumento|estatua|escultura|hito|memorial|aleta/i.test(cleanName)) {
+    return `${cleanName} es un hito conmemorativo y visual icónico ${loc}, creado para homenajear la identidad, cultura y legado de la región.`
   }
 
-  return `${cleanName} es un lugar emblemático de gran interés ${loc}, destacado por su valor histórico, cultural y las experiencias únicas que ofrece a los viajeros.`
+  return `${cleanName} ofrece un atractivo recorrido ${loc}, permitiendo a los visitantes apreciar de cerca la identidad, arquitectura e historia viva de la zona.`
 }
 
 function generateDynamicTips(name, category, city) {
@@ -5109,21 +5134,32 @@ export async function collectTourCandidates(input, location) {
                                                               placeName.toLowerCase().includes(k.toLowerCase()) ||
                                                               k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
 
-        if (coords && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)) {
+        let finalLat = (coords && Number.isFinite(coords.latitude)) ? Number(coords.latitude) : null
+        let finalLon = (coords && Number.isFinite(coords.longitude)) ? Number(coords.longitude) : null
+
+        if (finalLat == null && (cityCenterLat != null || canonicalDest?.latitude != null)) {
+          const baseLat = cityCenterLat ?? canonicalDest?.latitude
+          const baseLon = cityCenterLon ?? canonicalDest?.longitude
+          const hash = placeName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+          finalLat = baseLat + ((hash % 20) - 10) * 0.002
+          finalLon = baseLon + (((hash * 7) % 20) - 10) * 0.002
+        }
+
+        if (finalLat != null && finalLon != null) {
           const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
           const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
           const isRestaurant = isExplicitDining && !isCulturalVenue
           geocodedSpecifics.push({
             name: placeName,
-            latitude: Number(coords.latitude),
-            longitude: Number(coords.longitude),
+            latitude: finalLat,
+            longitude: finalLon,
             type: isRestaurant ? 'restaurant' : 'tourism',
             category: isRestaurant ? 'restaurant' : 'requested',
             dia: placeDay,
             day: placeDay,
             city,
             country,
-            address: coords.address || `${placeName}, ${city}`,
+            address: coords?.address || `${placeName}, ${city}`,
             description: '',
             tags: { requested_place: 'true', ai_geocoded: 'true' }
           })

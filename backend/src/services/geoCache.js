@@ -15,6 +15,10 @@ export class GeoCache {
     return entry.data
   }
 
+  has(key) {
+    return this.get(key) !== null
+  }
+
   set(key, data) {
     if (this.cache.size >= this.maxEntries) {
       const firstKey = this.cache.keys().next().value

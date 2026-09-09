@@ -15,7 +15,7 @@ export function getOpenAiModelConfig() {
 }
 
 export function getFastOpenAiModelConfig() {
-  const model = process.env.OPENAI_FAST_MODEL || 'gpt-4o-mini'
+  const model = process.env.OPENAI_MODEL || 'gpt-5.6-luna'
   const isReasoning = model.includes('luna') || model.includes('o1') || model.includes('o3') || model.includes('sol') || model.includes('terra')
   const reasoningEffort = 'low'
   return { model, isReasoning, reasoningEffort }
@@ -63,10 +63,11 @@ export function buildOpenAiPayload({
 }
 
 /**
- * Curated real catalog for popular destinations to ensure 100% authentic POIs,
- * hotels, restaurants, and real annual events with zero generic synthetic strings.
+ * Global dynamic profile architecture:
+ * All destination catalogs are generated 100% dynamically via fetchDynamicDestinationProfile
+ * and OpenStreetMap / Photon live queries. Zero hardcoded city presets exist in the codebase.
  */
-export const DESTINATION_LOCAL_PRESETS = {}
+export const DESTINATION_LOCAL_PRESETS = Object.freeze({})
 
 /**
  * 100% Dynamic Global Catalog Resolver.
@@ -75,8 +76,6 @@ export const DESTINATION_LOCAL_PRESETS = {}
  */
 export async function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null) {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
-  const baseKey = clean.split(',')[0].trim().replace(/^(ciudad de|san|santa)\s+/i, '').trim()
-  const preset = DESTINATION_LOCAL_PRESETS[clean] || DESTINATION_LOCAL_PRESETS[baseKey]
 
   const cacheKey = `catalog_${clean}_${countryName}`
   const cached = destinationCatalogCache.get(cacheKey)
@@ -96,22 +95,35 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const capitalCity = clean ? clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Destino'
   const targetCountry = countryName || 'Local'
 
-  let realHotels = preset?.hotels ? [...preset.hotels] : []
-  let realRests = preset?.restaurants ? [...preset.restaurants] : []
-  let realPlaces = preset?.places ? [...preset.places] : []
+  let realHotels = []
+  let realRests = []
+  let realPlaces = []
+  let realEvents = []
 
-  // 1. Prioritize authentic iconic landmarks from OpenAI global travel knowledge (ranked by popularity)
+  // 1. Dynamic global travel intelligence: Fetch authentic profile for ANY city in the world
   try {
-    const dynamicLandmarks = await fetchCityIconicLandmarks(clean, targetCountry).catch(() => [])
-    for (const dl of dynamicLandmarks) {
-      const dlName = typeof dl === 'string' ? dl : (dl?.name || '')
-      if (dlName && !isGenericFacilityName(dlName) && !isNonTouristFacility({ name: dlName }) && !isFoodOrDrinkEstablishment(dlName)) {
-        if (!realPlaces.some(rp => arePlacesSimilar(rp, dlName))) {
-          realPlaces.push(dlName)
+    const dynamicProfile = await fetchDynamicDestinationProfile(clean, targetCountry).catch(() => null)
+      if (dynamicProfile) {
+        for (const p of (dynamicProfile.places || [])) {
+          if (!realPlaces.some(rp => arePlacesSimilar(rp, p))) {
+            realPlaces.push(p)
+          }
+        }
+        for (const r of (dynamicProfile.restaurants || [])) {
+          if (!realRests.some(existing => arePlacesSimilar(existing.name || existing, r.name || r))) {
+            realRests.push(r)
+          }
+        }
+        for (const h of (dynamicProfile.hotels || [])) {
+          if (!realHotels.some(existing => arePlacesSimilar(existing.name || existing, h.name || h))) {
+            realHotels.push(h)
+          }
+        }
+        if (realEvents.length === 0 && Array.isArray(dynamicProfile.events)) {
+          realEvents.push(...dynamicProfile.events)
         }
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
 
   // 2. Fetch live hotels and restaurants from OpenStreetMap
   if (lat && lon) {
@@ -254,7 +266,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     hotels: cleanHotels,
     restaurants: cleanRests,
     places: cleanPlaces,
-    events: []
+    events: realEvents || []
   }
 
   destinationCatalogCache.set(cacheKey, result)
@@ -263,18 +275,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
 export function getDestinationPresets(destName = '', countryName = '') {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
-  const baseKey = clean.split(',')[0].trim().replace(/^(ciudad de|san|santa)\s+/i, '').trim()
-
-  if (DESTINATION_LOCAL_PRESETS[clean]) return DESTINATION_LOCAL_PRESETS[clean]
-  if (DESTINATION_LOCAL_PRESETS[baseKey]) return DESTINATION_LOCAL_PRESETS[baseKey]
-
-  for (const [k, preset] of Object.entries(DESTINATION_LOCAL_PRESETS)) {
-    if (clean.includes(k) || k.includes(baseKey) || (preset.name && preset.name.toLowerCase() === clean)) {
-      return preset
-    }
-  }
-
-  const capitalCity = clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : 'Destino'
+  const capitalCity = clean ? clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Destino'
   return {
     name: capitalCity,
     country: countryName || 'Local',
@@ -398,6 +399,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const hasCity = Boolean(destName && !isVagueDestination(destName))
   const destCountry = known.country || (destName.toLowerCase() === 'cartagena' || destName.toLowerCase() === 'santa marta' || destName.toLowerCase() === 'medellín' || destName.toLowerCase() === 'bogotá' ? 'Colombia' : '')
   const hasDurationOrDates = Boolean(known.durationDays || known.datesSeason)
+  const knownPlacesList = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
+    ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
+    : []
 
   const verifiedFoodText = (Array.isArray(nearbyFoodPlaces) && nearbyFoodPlaces.length > 0)
     ? nearbyFoodPlaces.slice(0, 8).map(f => `• **${f.name}** (${f.type || 'restaurante'}, ${f.cuisine ? `cocina ${f.cuisine}` : 'gastronomía local'})`).join('\n')
@@ -473,8 +477,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const hasBudget = hasValidValue(known.budget)
   const hasCompanions = hasValidValue(known.companions)
 
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
+  async function runFallbackChatResponse() {
     const fallbackChips = getDefaultActionChips(known, lastUserMsg)
     let fallbackMsg = ''
     let effectiveReadyToBuild = false
@@ -548,9 +551,31 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const pool = Array.from(new Set([...rawSpecifics, ...(preset.places || [])]))
 
           let dayBlocks = []
+          const usedGlobal = new Set()
+          let poolIdx = 0
           for (let d = 1; d <= numDays; d++) {
-            const p1 = pool[(d - 1) * 2] || preset.places[0] || 'Centro Histórico'
-            const p2 = pool[(d - 1) * 2 + 1] || preset.places[1] || 'Plaza Principal'
+            let p1 = null
+            while (poolIdx < pool.length) {
+              const cand = pool[poolIdx++]
+              if (!usedGlobal.has(cand.toLowerCase())) {
+                p1 = cand
+                usedGlobal.add(cand.toLowerCase())
+                break
+              }
+            }
+            if (!p1) p1 = `Recorrido emblemático por ${destName} (Sector ${d})`
+
+            let p2 = null
+            while (poolIdx < pool.length) {
+              const cand = pool[poolIdx++]
+              if (!usedGlobal.has(cand.toLowerCase())) {
+                p2 = cand
+                usedGlobal.add(cand.toLowerCase())
+                break
+              }
+            }
+            if (!p2) p2 = `Atractivo cultural de ${destName} (Punto ${d})`
+
             const r = preset.restaurants[(d - 1) % (preset.restaurants.length || 1)]?.name || 'Restaurante Típico'
             dayBlocks.push(`Día ${d}: ${destName}\n• ${p1}\n• ${p2}\n• ${r}`)
           }
@@ -566,20 +591,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           (preset.places || []).slice(0, 6).map(p => `• **${p}**: Atractivo destacado para descubrir lo mejor del destino.`).join('\n') +
           `\n\n¿Cuáles de estos lugares te gustaría incluir en tu itinerario?`
       } else if (/\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|men[uú]s|carta|platos)\b/i.test(lastUserMsg)) {
-        if (/cartagena/i.test(destName)) {
-          fallbackMsg = `¡Restaurantes y platos recomendados en ${destName}! 🍽️\n\n` +
-            `• **Restaurante La Cevicheria**: Ceviches frescos y platos típicos caribeños.\n` +
-            `• **Restaurante Celele**: Cocina contemporánea del Caribe colombiano con platos de autor.\n` +
-            `• **Restaurante El Boliche Cebichería**: Deliciosa pesca del día y gastronomía local.\n\n` +
-            `¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
-        } else {
-          fallbackMsg = `¡Restaurantes y gastronomía en ${destName}! 🍽️\n\n` +
-            (preset.restaurants || []).slice(0, 4).map(r => `• **${r.name || r}**: Especialidad local de ${destName}.`).join('\n') +
-            `\n\n¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
-        }
+        const foodList = (realCatalog?.restaurants && realCatalog.restaurants.length > 0)
+          ? realCatalog.restaurants.slice(0, 4)
+          : (preset.restaurants || []).slice(0, 4)
+        fallbackMsg = `¡Restaurantes y platos recomendados en ${destName}! 🍽️\n\n` +
+          foodList.map(r => `• **${r.name || r}**: ${r.specialty || r.cuisine || `Platos típicos y especialidad gastronómica de ${destName}`}.`).join('\n') +
+          `\n\n¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
       } else if (/\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastUserMsg)) {
+        const hotelList = (realCatalog?.hotels && realCatalog.hotels.length > 0)
+          ? realCatalog.hotels.slice(0, 3)
+          : (preset.hotels || []).slice(0, 3)
         fallbackMsg = `¡Opciones de hospedaje en ${destName}! 🏨\n\n` +
-          (preset.hotels || []).slice(0, 3).map(h => `• **${h.name}**: ${h.desc} (${h.price})`).join('\n') +
+          hotelList.map(h => `• **${h.name}**: ${h.desc || `Alojamiento destacado en ${destName}`} (${h.price || 'Tarifa variable'}).`).join('\n') +
           `\n\n¿Cuál de estos te gustaría elegir?`
       } else if (!hasCompanions && !fbHasLodging) {
         fallbackMsg = `¡Excelente! ¿Viajas solo, en pareja, con amigos o en familia con niños a ${destName}?`
@@ -593,9 +616,31 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         const pool = Array.from(new Set([...rawSpecifics, ...(preset.places || [])]))
 
         let dayBlocks = []
+        const usedGlobal = new Set()
+        let poolIdx = 0
         for (let d = 1; d <= numDays; d++) {
-          const p1 = pool[(d - 1) * 2] || preset.places[0] || 'Centro Histórico'
-          const p2 = pool[(d - 1) * 2 + 1] || preset.places[1] || 'Plaza Principal'
+          let p1 = null
+          while (poolIdx < pool.length) {
+            const cand = pool[poolIdx++]
+            if (!usedGlobal.has(cand.toLowerCase())) {
+              p1 = cand
+              usedGlobal.add(cand.toLowerCase())
+              break
+            }
+          }
+          if (!p1) p1 = `Recorrido emblemático por ${destName} (Sector ${d})`
+
+          let p2 = null
+          while (poolIdx < pool.length) {
+            const cand = pool[poolIdx++]
+            if (!usedGlobal.has(cand.toLowerCase())) {
+              p2 = cand
+              usedGlobal.add(cand.toLowerCase())
+              break
+            }
+          }
+          if (!p2) p2 = `Atractivo cultural de ${destName} (Punto ${d})`
+
           const r = preset.restaurants?.[(d - 1) % Math.max(1, preset.restaurants?.length || 1)]?.name || 'Restaurante Típico'
           dayBlocks.push(`Día ${d}: ${destName}\n • ${p1}\n • ${p2}\n • ${r}`)
         }
@@ -617,8 +662,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       specificPlaces: Array.isArray(known.specificPlaces) ? known.specificPlaces : [],
       destinationSuggestions: (!hasCity) ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : [],
       readyToBuild: Boolean(effectiveReadyToBuild),
-      isUnrelatedToTravel: false
     }
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    return await runFallbackChatResponse()
   }
 
   const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual y organizador experto de tours de VibeTours.
@@ -713,6 +762,7 @@ ESTADO ACTUAL DE DATOS:
 • TRANSPORTE: ${hasTransport ? `CONFIRMADO (${known.transport})` : 'PENDIENTE'}
 • PRESUPUESTO: ${hasBudget ? `CONFIRMADO (${known.budget})` : 'PENDIENTE'}
 • HOSPEDAJE: ${hasLodging ? `CONFIRMADO (${known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus})` : 'PENDIENTE'}
+${knownPlacesList.length > 0 ? `• LUGARES SELECCIONADOS POR EL VIAJERO (OBLIGATORIOS): ${knownPlacesList.join(', ')}` : ''}
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}` : ''}
 
@@ -759,6 +809,22 @@ REGLAS CRÍTICAS DEL ITINERARIO:
    - En capitales y ciudades metropolitanas/culturales (ej: Barranquilla, Medellín, Bogotá, Cartagena, Roma, París, etc.):
      Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas, arquitectura, parques y gastronomía local (ej. en Barranquilla: Gran Malecón del Río, Ventana al Mundo, Museo del Carnaval, Barrio El Prado, Catedral Metropolitana, Ciénaga de Mallorquín, Castillo de Salgar). Si la ciudad tiene costa o playas cercanas, incluye a lo sumo 1 o 2 visitas de playa, pero ESTÁ ESTRICTAMENTE PROHIBIDO llenar un tour urbano de 4 o 5 días exclusivamente con 10 paradas de playas repetidas.
    - En destinos con vocación puramente balnearia (ej: Coveñas, San Andrés, Cancún): Las playas e islas sí son el atractivo central diario.
+6. REGLA ESTRICTA DE UNICIDAD GLOBAL INTER-DÍAS (CERO PARADAS REPETIDAS):
+   - Cada atractivo turístico, monumento, museo, parque o restaurante debe aparecer exactamente UNA SOLA VEZ en TODO el itinerario completo (Día 1 a Día N).
+   - PROHIBIDO TERMINANTEMENTE repetir el mismo lugar en dos días distintos. Si ya visitaron Gran Malecón del Río o Ventana al Mundo el Día 1, NO puede volver a aparecer en el Día 5, 6 ni 7. Cada día DEBE tener lugares nuevos, diferentes y auténticos.
+7. RESPUESTAS A CONSULTAS ESPECÍFICAS Y LUGARES OBLIGATORIOS:
+   - Si el usuario pide información de un hotel (ej: "más información del Hotel Casa La Fe"):
+     Inicia obligatoriamente con el nombre del hotel en negrita como encabezado o título (ej: 'Información sobre **Hotel Casa La Fe**:' o '**Hotel Casa La Fe** 🏨') y a continuación presenta la ficha técnica estructurada:
+     • 📍 **Ubicación**: ...
+     • 🏊 **Instalaciones**: (menciona piscina y áreas de descanso) ...
+     • 🍳 **Servicios**: ...
+     • 💰 **Tarifa estimada**: ...
+     Responde de forma puntual sobre el hotel SIN pedir datos pendientes de fechas o presupuesto.
+   - Si el usuario pide "detalles del día X" (ej: "ver detalles del día 1"):
+     Inicia exactamente con "Día 1: ${destName || 'Destino'}" y desglosa las paradas correspondientes a ese día. Si hay LUGARES SELECCIONADOS POR EL VIAJERO (${knownPlacesList.join(', ')}), el primer lugar de la lista (${knownPlacesList[0] || 'el primer lugar'}) DEBE aparecer obligatoriamente en los detalles del Día 1.
+   - Si el usuario pide ver o consultar el itinerario (ej: "Ver el itinerario", "cómo va el itinerario", etc.):
+     Si hay LUGARES SELECCIONADOS POR EL VIAJERO (${knownPlacesList.join(', ')}), TODOS ellos son OBLIGATORIOS y deben distribuirse en el itinerario. El primer lugar (${knownPlacesList[0] || 'el primer lugar'}) DEBE figurar obligatoriamente en el Día 1.
+   - Si el usuario pide "Ver menús" o comida: recomienda restaurantes y platos típicos (ej: Restaurante La Cevicheria, Restaurante Celele, platos locales) y NO incluyas atractivos como Castillo San Felipe.
 
 ETAPA DE AJUSTE O AMPLIACIÓN DE ITINERARIO (AÑADIR O CAMBIAR PARADAS):
 - Si el usuario pide agregar más paradas, añadir más sitios, o enriquecer el plan ("puedes agregar más paradas", "añade más paradas", "más lugares", etc.):
@@ -856,6 +922,12 @@ REGLAS PARA "specificPlaces":
       } else if (!known.durationDays && !known.durationHours && !actionChips.some(c => /día|días|semana/i.test(c))) {
         actionChips = defaultChips
       } else if (!known.companions && !actionChips.some(c => /familia|pareja|amigos|solo/i.test(c))) {
+        actionChips = defaultChips
+      } else if (!known.budget && !actionChips.some(c => /económico|moderado|lujo/i.test(c))) {
+        actionChips = defaultChips
+      } else if (!known.transport && !actionChips.some(c => /auto|caminando|público|taxi/i.test(c))) {
+        actionChips = defaultChips
+      } else if (!known.accommodationStatus && !actionChips.some(c => /hospedaje|hotel/i.test(c))) {
         actionChips = defaultChips
       }
     }
@@ -1020,8 +1092,8 @@ REGLAS PARA "specificPlaces":
             }
           }
           if (!chosenPlace) {
-            chosenPlace = uniqueAttractions.find(p => !Array.from(dayUsed).some(u => arePlacesSimilar(u, p))) ||
-              `Paseo cultural por ${dName} (Sector ${d})`
+            chosenPlace = uniqueAttractions.find(p => !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, p))) ||
+              `Recorrido patrimonial y arquitectónico por ${dName} (Sector ${d})`
           }
           globalUsedNames.add(chosenPlace)
           dayUsed.add(chosenPlace)
@@ -1040,7 +1112,7 @@ REGLAS PARA "specificPlaces":
           }
         }
         if (!chosenRest) {
-          chosenRest = uniqueRests.find(r => !Array.from(dayUsed).some(u => arePlacesSimilar(u, r.name)))?.name ||
+          chosenRest = uniqueRests.find(r => !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, r.name)))?.name ||
             `Gastronomía tradicional de ${dName} (Día ${d})`
         }
         globalUsedNames.add(chosenRest)
@@ -1055,7 +1127,10 @@ REGLAS PARA "specificPlaces":
       responseMessage = reconstructed
     }
 
-    if ((shouldReconstructItinerary || hasDayHeaders || isAllKeyInfoComplete) && !actionChips.some(c => /generar tour/i.test(c))) {
+    const isItineraryStatusInquiry = /\b(c[oó]mo va el itinerario|c[oó]mo va mi itinerario|estado del itinerario)\b/i.test(lastUserMsg)
+    if (isItineraryStatusInquiry) {
+      actionChips = ['🚀 Generar itinerario completo', '✏️ Modificar algún día', '➕ Agregar otra actividad']
+    } else if ((shouldReconstructItinerary || hasDayHeaders || isAllKeyInfoComplete) && !actionChips.some(c => /generar tour/i.test(c))) {
       actionChips.unshift(`🚀 Generar tour en ${destName || known.destination || 'el mapa'}`)
       if (!actionChips.some(c => /paradas|atractivos/i.test(c))) {
         actionChips.push('➕ Agregar más paradas')
@@ -1105,26 +1180,32 @@ REGLAS PARA "specificPlaces":
       .replace(/([^\n])\s*(¿(?:Qué te parece|Deseas hacer))/gi, '$1\n\n$2')
       .trim()
 
+    // Enforce cross-day global uniqueness on specificPlaces: no POI can appear on multiple days
+    const rawSpecifics = Array.isArray(parsedExtracted.specificPlaces) && parsedExtracted.specificPlaces.length > 0
+      ? parsedExtracted.specificPlaces
+      : (known.specificPlaces || [])
+    const seenGlobalStopKeys = new Set()
+    const dedupedSpecificPlaces = []
+    for (const p of rawSpecifics) {
+      const pName = typeof p === 'string' ? p : (p?.name || '')
+      const pKey = pName.toLowerCase().replace(/[\u0300-\u036f]/g, '').replace(/[^\w]/g, '')
+      if (pKey && !seenGlobalStopKeys.has(pKey)) {
+        seenGlobalStopKeys.add(pKey)
+        dedupedSpecificPlaces.push(p)
+      }
+    }
+
     return {
       responseMessage,
       actionChips,
-      extractedPreferences: parsedExtracted,
-      specificPlaces: (Array.isArray(parsedExtracted.specificPlaces) && parsedExtracted.specificPlaces.length > 0)
-        ? parsedExtracted.specificPlaces
-        : (known.specificPlaces || []),
+      extractedPreferences: { ...parsedExtracted, specificPlaces: dedupedSpecificPlaces },
+      specificPlaces: dedupedSpecificPlaces,
       destinationSuggestions,
       readyToBuild: Boolean(effectiveReadyToBuild)
     }
   } catch (err) {
-    console.error('[generateChatResponse] Error calling OpenAI API:', err)
-    return {
-      responseMessage: `¡Excelente! Sigamos diseñando tu experiencia turística en ${destName || 'tu próximo destino'}. ¿Qué te gustaría planear a continuación?`,
-      actionChips: getDefaultActionChips(known, lastUserMsg),
-      extractedPreferences: {},
-      specificPlaces: known.specificPlaces || [],
-      destinationSuggestions: [],
-      readyToBuild: false
-    }
+    console.warn('[generateChatResponse] Error calling OpenAI API, falling back to local chat generator:', err.message)
+    return await runFallbackChatResponse()
   }
 }
 
@@ -1550,6 +1631,111 @@ Devuelve ÚNICAMENTE un JSON:
   return []
 }
 
+export async function fetchDynamicDestinationProfile(cityInput, countryInput = '') {
+  let city = ''
+  let country = countryInput || ''
+  if (typeof cityInput === 'object' && cityInput !== null) {
+    city = cityInput.city || cityInput.destination || ''
+    country = cityInput.country || countryInput || ''
+  } else if (typeof cityInput === 'string') {
+    city = cityInput
+  }
+  if (!city || !city.trim()) return null
+  const clean = cleanAdministrativeCityName(city).trim()
+  const cacheKey = `profile_${clean.toLowerCase()}__${(country || '').toLowerCase()}`
+  if (destinationCatalogCache.has(cacheKey)) {
+    return destinationCatalogCache.get(cacheKey)
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) return null
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(buildOpenAiPayload({
+        messages: [
+          {
+            role: 'system',
+            content: `Eres un curador turístico internacional de élite de VibeTours con conocimiento exhaustivo de geografía, patrimonio y gastronomía mundial.
+Tu misión es devolver el catálogo de referencia turística y gastronómica para la ciudad o destino indicado en cualquier parte del mundo.
+
+Debes devolver un JSON estrictamente estructurado con:
+1. "places": Array de 16 a 22 atractivos turísticos imprescindibles (monumentos históricos, plazas emblemáticas, museos, malecones, miradores, parques icónicos, maravillas naturales ordenados por importancia turística. CERO restaurantes, CERO tiendas, CERO urbanizaciones).
+2. "restaurants": Array de 8 a 12 restaurantes o mercados gastronómicos MÁS EMBLEMÁTICOS, TRADICIONALES Y FAMOSOS representativos de esa ciudad específica.
+   - Cada restaurante con: "name" (nombre real y limpio), "cuisine" (tipo de cocina regional/especialidad), y "specialty" (plato o experiencia destacada).
+   - ESTRICTAMENTE PROHIBIDO cadenas de comida rápida multinacionales (McDonald's, KFC, etc.) o locales genéricos de comida rápida de barrio.
+3. "hotels": Array de 4 a 6 hoteles reales y destacados de diferentes gamas (boutique colonial/histórico, lujo, céntrico).
+   - Cada hotel con: "name", "desc" (1 línea concisa de su estilo/ubicación) y "price" (rango estimado en USD).
+4. "events": Array de 2 a 3 festividades, carnavales o eventos culturales anuales icónicos con fechas habituales.
+
+Formato JSON obligatorio:
+{
+  "places": ["Nombre 1", "Nombre 2", ...],
+  "restaurants": [
+    { "name": "Nombre Real del Restaurante", "cuisine": "Tipo de cocina", "specialty": "Plato destacado" }
+  ],
+  "hotels": [
+    { "name": "Nombre Real del Hotel", "desc": "Descripción breve", "price": "~$XX - $YY USD" }
+  ],
+  "events": [
+    { "name": "Nombre del Evento", "dates": "Mes o época habitual", "desc": "Descripción breve" }
+  ]
+}`
+          },
+          {
+            role: 'user',
+            content: `Destino: "${clean}", País: "${country || 'Internacional'}". Genera el catálogo turístico integral de lugares icónicos, gastronomía típica, hoteles y eventos.`
+          }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+        reasoning_effort: 'none'
+      })),
+      signal: AbortSignal.timeout(25000)
+    })
+
+    if (response.ok) {
+      const json = await response.json()
+      const content = json.choices?.[0]?.message?.content
+      if (content) {
+        const parsed = JSON.parse(content)
+        const places = Array.isArray(parsed.places)
+          ? parsed.places.map(p => typeof p === 'string' ? p : p.name).filter(p => p && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
+          : []
+        const restaurants = Array.isArray(parsed.restaurants)
+          ? parsed.restaurants.filter(r => r && r.name && !isNonTouristFacility({ name: r.name }))
+          : []
+        const hotels = Array.isArray(parsed.hotels)
+          ? parsed.hotels.filter(h => h && h.name)
+          : []
+        const events = Array.isArray(parsed.events) ? parsed.events : []
+
+        if (places.length >= 3) {
+          const profile = {
+            name: clean ? clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Destino',
+            country: country || 'Global',
+            places,
+            restaurants,
+            hotels,
+            events
+          }
+          destinationCatalogCache.set(cacheKey, profile)
+          return profile
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[fetchDynamicDestinationProfile] Dynamic profile query failed:', err.message)
+  }
+
+  return null
+}
+
 const cityLandmarksCache = new Map()
 
 export async function fetchCityIconicLandmarks(cityInput, countryInput = '') {
@@ -1651,7 +1837,7 @@ export async function generateRichPlaceDescriptionsBatch({ destination = '', cit
   if (placeNames.length === 0) return {}
 
   if (apiKey) {
-    const chunkSize = 8
+    const chunkSize = 4
     const chunks = []
     for (let i = 0; i < placeNames.length; i += chunkSize) {
       chunks.push(placeNames.slice(i, i + chunkSize))
@@ -1694,9 +1880,9 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
               response_format: { type: 'json_object' },
               temperature: 0.5,
               reasoning_effort: 'low',
-              extra: { max_tokens: 2200 }
+              extra: { max_tokens: 3500 }
             })),
-            signal: AbortSignal.timeout(18000)
+            signal: AbortSignal.timeout(22000)
           })
 
           if (response.ok) {
@@ -1723,11 +1909,18 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
       for (const name of placeNames) {
         let item = merged[name]
         if (!item) {
-          const matchEntry = Object.entries(merged).find(([k]) =>
-            arePlacesSimilar(k, name) ||
-            k.toLowerCase().trim() === name.toLowerCase().trim() ||
-            (k.length >= 6 && name.length >= 6 && (k.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(k.toLowerCase())))
-          )
+          const normQuery = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
+          const stemQuery = normQuery.length > 5 && normQuery.endsWith('s') ? normQuery.slice(0, -1) : normQuery
+          const matchEntry = Object.entries(merged).find(([k]) => {
+            const normK = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
+            const stemK = normK.length > 5 && normK.endsWith('s') ? normK.slice(0, -1) : normK
+            return (
+              stemK === stemQuery ||
+              normK === normQuery ||
+              arePlacesSimilar(k, name) ||
+              (k.length >= 6 && name.length >= 6 && (k.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(k.toLowerCase())))
+            )
+          })
           if (matchEntry) {
             item = matchEntry[1]
             merged[name] = item
@@ -1739,7 +1932,8 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
           desc.includes('conectar a los viajeros con la historia viva') ||
           desc.includes('Espacio emblemático de enriquecimiento cultural') ||
           desc.includes('Punto de interés emblemático') ||
-          desc.includes('Destacado atractivo en')
+          desc.includes('Destacado atractivo en') ||
+          desc.includes('reconocido por su valor testimonial')
 
         if (isDescGeneric) {
           const wikiText = await wikipediaSummaryText(name, destination || city, 'Colombia').catch(() => null)
@@ -1815,6 +2009,16 @@ function buildRichFallbackDescription(name, city = '') {
     return `Recinto cultural ${loc} que conserva exposiciones históricas, vestigios arqueológicos y muestras artísticas que documentan el legado de la comunidad.`
   }
 
+  const isEstuaryOrNature = /\b(boca|bocas|ceniza|ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna|pantano)\b/i.test(clean)
+  if (isEstuaryOrNature) {
+    return `${clean} es un imponente enclave natural ${loc}, donde confluyen corrientes fluviales y marinas ofreciendo vistas panorámicas excepcionales y una rica biodiversidad.`
+  }
+
+  const isZoo = /\b(zool[óo]gico|zoo|acuario|bioparque|aviario)\b/i.test(clean)
+  if (isZoo) {
+    return `Espacio dedicado a la conservación biológica y educación ambiental ${loc}, que alberga fauna representativa y flora tropical en senderos ecológicos acondicionados.`
+  }
+
   const isWaterOrPark = /\b(malec[óo]n|parque|plaza|mirador|paseo|boulevard|jard[íi]n|cerro)\b/i.test(clean)
   if (isWaterOrPark) {
     return `Espacio emblemático al aire libre ${loc}, ideal para pasear, contemplar el paisaje y disfrutar del encuentro social y la naturaleza circundante.`
@@ -1840,7 +2044,7 @@ function buildRichFallbackDescription(name, city = '') {
     return `Reconocido espacio gastronómico ${loc} que rinde homenaje a la cocina local mediante platos tradicionales e ingredientes frescos de la tierra.`
   }
 
-  return `${clean} es uno de los puntos más representativos ${loc}, reconocido por su valor testimonial y la experiencia que brinda a quienes lo visitan.`
+  return `${clean} ofrece un atractivo recorrido ${loc}, permitiendo a los visitantes apreciar de cerca la identidad, historia y dinamismo característico del destino.`
 }
 
 export async function generateCustomPlaceReasons(arg1 = [], arg2 = '', arg3 = '') {

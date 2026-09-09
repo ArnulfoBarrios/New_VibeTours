@@ -922,6 +922,13 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
           }
         })
         .filter(Boolean)
+        .filter(r => {
+          const n = r.name.toLowerCase()
+          if (/\b(chino|chifa|hong\s*kung|asia|oriental|confucio)\b/i.test(n)) return false
+          if (/\b(comida r[áa]pida|frituras|panader[íi]a|asadero de pollo|pollo broaster|arepas|hamburguesas el|salchipapas|perros calientes)\b/i.test(n)) return false
+          if (isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name })) return false
+          return true
+        })
         .slice(0, 10)
       if (results.length > 0) return results
     }
@@ -953,11 +960,20 @@ export async function photonFoodFallback(latitude, longitude) {
           latitude: lat,
           longitude: lon,
           type: 'restaurant',
-          cuisine: feature.properties.cuisine || null,
+          cuisine: feature.properties.cuisine ?? null,
+          address: feature.properties.street ?? null,
           tags: feature.properties
         }
       })
       .filter(Boolean)
+      .filter(r => {
+        const n = r.name.toLowerCase()
+        if (/\b(chino|chifa|hong\s*kung|asia|oriental|confucio)\b/i.test(n)) return false
+        if (/\b(comida r[áa]pida|frituras|panader[íi]a|asadero de pollo|pollo broaster|arepas|hamburguesas el|salchipapas|perros calientes)\b/i.test(n)) return false
+        if (isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name })) return false
+        return true
+      })
+      .slice(0, 10)
   } catch (err) {
     console.warn('[osm] photonFoodFallback error:', err.message)
     return []
