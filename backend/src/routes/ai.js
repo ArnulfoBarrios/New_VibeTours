@@ -5035,7 +5035,10 @@ export async function collectTourCandidates(input, location) {
         }
         if (!geo) {
           const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
-          geo = await geocodePlace(searchQuery, destLat, destLon, { skipNominatim: true }).catch(() => null)
+          geo = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
+        }
+        if (!geo) {
+          geo = await geocodePlace(`${placeName}, ${city}`.trim(), destLat, destLon).catch(() => null)
         }
         if (geo) {
           const pLower = placeName.toLowerCase()
@@ -5047,25 +5050,14 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        // Tier 1: Fallback inmediato con coordenadas de IA previamente obtenidas en paralelo
-        if (!geo) {
-          const aiCoord = preGeocodedAi[placeName] ||
-            Object.entries(preGeocodedAi).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
-              arePlacesSimilar(k, placeName) ||
-              normalizePlaceKey(k) === normalizePlaceKey(placeName) ||
-              placeName.toLowerCase().includes(k.toLowerCase()) ||
-              k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
-
-          if (aiCoord && Number.isFinite(aiCoord.latitude) && Number.isFinite(aiCoord.longitude)) {
-            const candidate = {
-              name: placeName,
-              latitude: Number(aiCoord.latitude),
-              longitude: Number(aiCoord.longitude),
-              city,
-              country
-            }
-            if (validateCandidateLocation(candidate, canonicalDest, 70)) {
-              geo = candidate
+        // Tier 1: Descomposición de consultas compuestas si aplica (ej: "Museo del Oro - Casa de la Aduana")
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+          const decomposed = decomposeCompoundPlaceQuery(placeName)
+          for (const dQuery of decomposed) {
+            const dGeo = await geocodePlace(`${dQuery}, ${city}`, destLat, destLon).catch(() => null)
+            if (dGeo && validateCandidateLocation(dGeo, canonicalDest, 70)) {
+              geo = dGeo
+              break
             }
           }
         }
@@ -5085,14 +5077,25 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        // Tier 3: Descomposición de consultas compuestas si aplica (ej: "Museo del Oro - Casa de la Aduana")
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
-          const decomposed = decomposeCompoundPlaceQuery(placeName)
-          for (const dQuery of decomposed) {
-            const dGeo = await geocodePlace(`${dQuery}, ${city}`, destLat, destLon, { skipNominatim: true }).catch(() => null)
-            if (dGeo && validateCandidateLocation(dGeo, canonicalDest, 70)) {
-              geo = dGeo
-              break
+        // Tier 3: Fallback con coordenadas de IA previamente obtenidas en paralelo únicamente si OSM no lo tiene
+        if (!geo) {
+          const aiCoord = preGeocodedAi[placeName] ||
+            Object.entries(preGeocodedAi).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
+              arePlacesSimilar(k, placeName) ||
+              normalizePlaceKey(k) === normalizePlaceKey(placeName) ||
+              placeName.toLowerCase().includes(k.toLowerCase()) ||
+              k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
+
+          if (aiCoord && Number.isFinite(aiCoord.latitude) && Number.isFinite(aiCoord.longitude)) {
+            const candidate = {
+              name: placeName,
+              latitude: Number(aiCoord.latitude),
+              longitude: Number(aiCoord.longitude),
+              city,
+              country
+            }
+            if (validateCandidateLocation(candidate, canonicalDest, 70)) {
+              geo = candidate
             }
           }
         }
@@ -5185,21 +5188,29 @@ export async function collectTourCandidates(input, location) {
                                                               placeName.toLowerCase().includes(k.toLowerCase()) ||
                                                               k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
 
-        let finalLat = (coords && Number.isFinite(coords.latitude)) ? Number(coords.latitude) : null
-        let finalLon = (coords && Number.isFinite(coords.longitude)) ? Number(coords.longitude) : null
+        let finalLat = null
+        let finalLon = null
 
-        if (finalLat == null) {
-          const directGeo = await geocodePlace(`${placeName}, ${city}`.trim()).catch(() => null)
-          if (directGeo && Number.isFinite(directGeo.latitude) && Number.isFinite(directGeo.longitude)) {
-            finalLat = directGeo.latitude
-            finalLon = directGeo.longitude
-          } else if (canonicalDest?.latitude != null || cityCenterLat != null) {
-            const baseLat = canonicalDest?.latitude ?? cityCenterLat
-            const baseLon = canonicalDest?.longitude ?? cityCenterLon
-            const hash = placeName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
-            finalLat = baseLat + ((hash % 10) - 5) * 0.0004
-            finalLon = baseLon + (((hash * 3) % 10) - 5) * 0.0004
-          }
+        // Priority 1: Consulta directa en OpenStreetMap / Nominatim / Photon
+        const directGeo = await geocodePlace(`${placeName}, ${city}`.trim()).catch(() => null)
+        if (directGeo && Number.isFinite(directGeo.latitude) && Number.isFinite(directGeo.longitude)) {
+          finalLat = directGeo.latitude
+          finalLon = directGeo.longitude
+        }
+
+        // Priority 2: Coordenadas de IA como fallback únicamente si OSM no lo encuentra
+        if (finalLat == null && coords && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)) {
+          finalLat = Number(coords.latitude)
+          finalLon = Number(coords.longitude)
+        }
+
+        // Priority 3: Anclaje al centro del destino con micro-offset determinista
+        if (finalLat == null && (canonicalDest?.latitude != null || cityCenterLat != null)) {
+          const baseLat = canonicalDest?.latitude ?? cityCenterLat
+          const baseLon = canonicalDest?.longitude ?? cityCenterLon
+          const hash = placeName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+          finalLat = baseLat + ((hash % 10) - 5) * 0.0004
+          finalLon = baseLon + (((hash * 3) % 10) - 5) * 0.0004
         }
 
         if (finalLat != null && finalLon != null) {

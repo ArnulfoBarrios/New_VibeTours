@@ -254,11 +254,14 @@ export function decomposeCompoundPlaceQuery(rawQuery) {
 }
 
 export const KNOWN_ICONIC_LANDMARKS = {
+  // Cartagena
   'islas del rosario': { name: 'Islas del Rosario, Cartagena', latitude: 10.1772, longitude: -75.7428, city: 'Cartagena', country: 'Colombia' },
   'castillo san felipe de barajas': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
   'castillo san felipe': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
   'paseo en chiva': { name: 'Paseo en Chiva - Torre del Reloj, Centro Histórico', latitude: 10.4225, longitude: -75.5478, city: 'Cartagena', country: 'Colombia' },
   'cafe del mar': { name: 'Café del Mar, Baluarte de Santo Domingo', latitude: 10.4215, longitude: -75.5539, city: 'Cartagena', country: 'Colombia' },
+
+  // Coveñas & Golfo de Morrosquillo
   'isla mucura': { name: 'Isla Múcura, Archipiélago de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
   'isla tintipan': { name: 'Isla Tintipán, Archipiélago de San Bernardo', latitude: 9.7950, longitude: -75.8450, city: 'Coveñas', country: 'Colombia' },
   'santa cruz del islote': { name: 'Santa Cruz del Islote, Archipiélago de San Bernardo', latitude: 9.7853, longitude: -75.8572, city: 'Coveñas', country: 'Colombia' },
@@ -266,8 +269,13 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'cienaga de la caimanera': { name: 'Ciénaga de la Caimanera, Coveñas', latitude: 9.4580, longitude: -75.6200, city: 'Coveñas', country: 'Colombia' },
   'parque museo infanteria de marina': { name: 'Parque Museo de la Infantería de Marina, Coveñas', latitude: 9.4080, longitude: -75.6880, city: 'Coveñas', country: 'Colombia' },
   'isla fuerte': { name: 'Isla Fuerte, Bolívar / Córdoba', latitude: 9.3870, longitude: -76.1770, city: 'Coveñas', country: 'Colombia' },
+
+  // Barranquilla
   'gran malecon': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
   'gran malecon del rio': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
+  'malecon del rio': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
+  'el caiman del rio': { name: 'El Caimán del Río - Mercado Gastronómico', latitude: 11.0200, longitude: -74.7920, city: 'Barranquilla', country: 'Colombia' },
+  'caiman del rio': { name: 'El Caimán del Río - Mercado Gastronómico', latitude: 11.0200, longitude: -74.7920, city: 'Barranquilla', country: 'Colombia' },
   'ventana al mundo': { name: 'Monumento Ventana al Mundo', latitude: 11.03316, longitude: -74.83143, city: 'Barranquilla', country: 'Colombia' },
   'monumento ventana al mundo': { name: 'Monumento Ventana al Mundo', latitude: 11.03316, longitude: -74.83143, city: 'Barranquilla', country: 'Colombia' },
   'aleta del tiburon': { name: 'Monumento La Aleta del Tiburón', latitude: 11.0028, longitude: -74.7735, city: 'Barranquilla', country: 'Colombia' },
@@ -278,11 +286,27 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'parque cultural del caribe': { name: 'Parque Cultural del Caribe', latitude: 10.9863, longitude: -74.7784, city: 'Barranquilla', country: 'Colombia' },
   'zoologico de barranquilla': { name: 'Zoológico de Barranquilla', latitude: 11.0048, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
   'catedral metropolitana maria reina': { name: 'Catedral Metropolitana María Reina', latitude: 10.9892, longitude: -74.7937, city: 'Barranquilla', country: 'Colombia' },
+  'catedral metropolitana': { name: 'Catedral Metropolitana María Reina', latitude: 10.9892, longitude: -74.7937, city: 'Barranquilla', country: 'Colombia' },
   'plaza de la paz': { name: 'Plaza de la Paz', latitude: 10.9885, longitude: -74.7942, city: 'Barranquilla', country: 'Colombia' },
   'casa del carnaval': { name: 'Casa del Carnaval', latitude: 10.9935, longitude: -74.7818, city: 'Barranquilla', country: 'Colombia' },
   'museo del carnaval': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
   'museo del carnaval de barranquilla': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
   'castillo de salgar': { name: 'Castillo de Salgar', latitude: 11.0253, longitude: -74.9189, city: 'Puerto Colombia', country: 'Colombia' },
+  'cienaga de mallorquin': { name: 'Ecoparque Ciénaga de Mallorquín', latitude: 11.0505, longitude: -74.8560, city: 'Barranquilla', country: 'Colombia' },
+  'bocas de ceniza': { name: 'Bocas de Ceniza - Tajamar Occidental', latitude: 11.0967, longitude: -74.8545, city: 'Barranquilla', country: 'Colombia' },
+  'barrio el prado': { name: 'Barrio El Prado, Barranquilla', latitude: 10.9985, longitude: -74.7960, city: 'Barranquilla', country: 'Colombia' },
+  'teatro amira de la rosa': { name: 'Teatro Amira de la Rosa', latitude: 10.9920, longitude: -74.7890, city: 'Barranquilla', country: 'Colombia' },
+  'plaza de san nicolas': { name: 'Plaza de San Nicolás', latitude: 10.9820, longitude: -74.7770, city: 'Barranquilla', country: 'Colombia' },
+  'parque tomas suri salcedo': { name: 'Parque Tomás Suri Salcedo', latitude: 10.9880, longitude: -74.8020, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante cucayo': { name: 'Restaurante Cucayo', latitude: 11.0028, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia' },
+  'cucayo': { name: 'Restaurante Cucayo', latitude: 11.0028, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante narcobollo': { name: 'Restaurante Narcobollo', latitude: 11.0012, longitude: -74.8185, city: 'Barranquilla', country: 'Colombia' },
+  'narcobollo': { name: 'Restaurante Narcobollo', latitude: 11.0012, longitude: -74.8185, city: 'Barranquilla', country: 'Colombia' },
+  'la cueva': { name: 'Restaurante Bar La Cueva', latitude: 10.9888, longitude: -74.7965, city: 'Barranquilla', country: 'Colombia' },
+  'manuel restaurante': { name: 'Manuel Restaurante', latitude: 11.0050, longitude: -74.8160, city: 'Barranquilla', country: 'Colombia' },
+  'nena lela': { name: 'Nena Lela Trattoria', latitude: 11.0223, longitude: -74.8625, city: 'Barranquilla', country: 'Colombia' },
+
+  // Santa Marta
   'playa el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
   'el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
   'bahia de taganga': { name: 'Bahía de Taganga', latitude: 11.2665, longitude: -74.1925, city: 'Santa Marta', country: 'Colombia' },
@@ -306,11 +330,25 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
 
   const normLower = normalizedQuery.toLowerCase().trim()
   const rawClean = String(query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-
   const strippedCity = normLower.replace(/,\s*(barranquilla|santa marta|cartagena|coveñas|covenas|medellin|medellín|bogota|bogotá|colombia)/gi, '').trim()
+  const unaccentedStripped = strippedCity.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const unaccentedQuery = normLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const pureQuery = unaccentedStripped.split(',')[0].trim()
+
   const landmarkMatch = KNOWN_ICONIC_LANDMARKS[normLower] ||
+    KNOWN_ICONIC_LANDMARKS[unaccentedQuery] ||
     KNOWN_ICONIC_LANDMARKS[rawClean] ||
-    KNOWN_ICONIC_LANDMARKS[strippedCity]
+    KNOWN_ICONIC_LANDMARKS[strippedCity] ||
+    KNOWN_ICONIC_LANDMARKS[unaccentedStripped] ||
+    KNOWN_ICONIC_LANDMARKS[pureQuery] ||
+    Object.entries(KNOWN_ICONIC_LANDMARKS).find(([k]) => {
+      const kClean = k.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      return pureQuery === kClean ||
+             unaccentedStripped === kClean ||
+             unaccentedQuery === kClean ||
+             pureQuery.startsWith(kClean) ||
+             kClean.startsWith(pureQuery)
+    })?.[1]
 
   if (landmarkMatch) {
     geocodeCache.set(key, landmarkMatch)
