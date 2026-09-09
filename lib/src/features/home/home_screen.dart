@@ -178,9 +178,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               SliverToBoxAdapter(
-                child: KeyedSubtree(
-                  key: _toursForYouKey,
-                  child: _ToursForYouSection(tours: restTours),
+                child: _ToursForYouSection(
+                  tours: restTours,
+                  tourKey: _toursForYouKey,
                 ),
               ),
               SliverToBoxAdapter(
@@ -600,58 +600,65 @@ class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
 
 class _ToursForYouSection extends StatelessWidget {
   final List<Tour> tours;
-  const _ToursForYouSection({required this.tours});
+  final GlobalKey? tourKey;
+  const _ToursForYouSection({required this.tours, this.tourKey});
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     if (tours.isEmpty) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                l10n.toursForYou,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface),
-              ),
-              TextButton(
-                onPressed: () => context.go('/tours'),
-                child: Text(l10n.viewAll, style: const TextStyle(fontWeight: FontWeight.w700)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (tours.isNotEmpty) _buildStaggeredGrid(context),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStaggeredGrid(BuildContext context) {
     final t1 = tours.isNotEmpty ? tours[0] : null;
     final t2 = tours.length > 1 ? tours[1] : null;
     final t3 = tours.length > 2 ? tours[2] : null;
     final t4 = tours.length > 3 ? tours[3] : null;
 
-    return Column(
+    final headerAndFeatured = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (t1 != null) _StaggeredTourCard(tour: t1, height: 220, isLarge: true),
-        const SizedBox(height: 12),
-        if (t2 != null) _StaggeredTourCard(tour: t2, height: 100, isLarge: false),
-        const SizedBox(height: 12),
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            if (t3 != null) Expanded(child: _StaggeredTourCard(tour: t3, height: 120, isLarge: false, alignBottom: true)),
-            if (t3 != null && t4 != null) const SizedBox(width: 12),
-            if (t4 != null) Expanded(child: _StaggeredTourCard(tour: t4, height: 120, isLarge: false, alignBottom: true)),
+            Text(
+              l10n.toursForYou,
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface),
+            ),
+            TextButton(
+              onPressed: () => context.go('/tours'),
+              child: Text(l10n.viewAll, style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
           ],
         ),
+        const SizedBox(height: 16),
+        if (t1 != null) _StaggeredTourCard(tour: t1, height: 210, isLarge: true),
       ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (tourKey != null)
+            KeyedSubtree(key: tourKey!, child: headerAndFeatured)
+          else
+            headerAndFeatured,
+          if (t2 != null) ...[
+            const SizedBox(height: 12),
+            _StaggeredTourCard(tour: t2, height: 130, isLarge: false),
+          ],
+          if (t3 != null || t4 != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                if (t3 != null) Expanded(child: _StaggeredTourCard(tour: t3, height: 145, isLarge: false, alignBottom: true)),
+                if (t3 != null && t4 != null) const SizedBox(width: 12),
+                if (t4 != null) Expanded(child: _StaggeredTourCard(tour: t4, height: 145, isLarge: false, alignBottom: true)),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -681,61 +688,73 @@ class _StaggeredTourCard extends ConsumerWidget {
         height: height,
         width: double.infinity,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(22),
           image: DecorationImage(
             image: CachedNetworkImageProvider(optimizeImageUrl(tour.coverUrl), maxWidth: 600),
             fit: BoxFit.cover,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
+            borderRadius: BorderRadius.circular(22),
+            gradient: const LinearGradient(
+              begin: Alignment(0.0, 0.15),
               end: Alignment.bottomCenter,
               colors: [
                 Colors.transparent,
-                Colors.black.withValues(alpha: isLarge ? 0.7 : 0.6),
+                Colors.black87,
               ],
             ),
           ),
-          padding: const EdgeInsets.all(16),
-          alignment: alignBottom ? Alignment.bottomCenter : Alignment.bottomLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          alignment: Alignment.bottomLeft,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: alignBottom ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (isLarge) ...[
                 Text(
                   tourTypeLabel(tour.type).toUpperCase(),
-                  style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
               ],
               Text(
                 tour.title,
-                textAlign: alignBottom ? TextAlign.center : TextAlign.left,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: isLarge ? 22 : 16,
+                  fontSize: isLarge ? 18 : (alignBottom ? 13 : 15),
                   fontWeight: FontWeight.w800,
-                  height: 1.1,
+                  height: 1.18,
                 ),
               ),
-              if (!alignBottom) ...[
-                const SizedBox(height: 4),
-                Text(
-                  '${formatDuration(tour.durationHours)} • ${90 + (tour.title.length % 10)}% ${l10n.matchAffinity}',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
+              const SizedBox(height: 3),
+              Text(
+                alignBottom
+                    ? formatDuration(tour.durationHours)
+                    : '${formatDuration(tour.durationHours)} • ${90 + (tour.title.length % 10)}% ${l10n.matchAffinity}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -751,6 +770,7 @@ class _NearbyPlacesSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+
     return placesAsync.when(
       data: (places) {
         if (places.isEmpty) {
@@ -843,21 +863,13 @@ class _NearbyPlacesSection extends ConsumerWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      l10n.nearbyPlaces,
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface),
-                    ),
-                    Row(
-                      children: [
-                        Icon(Icons.near_me_outlined, size: 14, color: Colors.grey.shade500),
-                        const SizedBox(width: 4),
-                        Text(l10n.within5km, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-                      ],
-                    ),
-                  ],
+                child: Text(
+                  l10n.nearbyPlaces,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),

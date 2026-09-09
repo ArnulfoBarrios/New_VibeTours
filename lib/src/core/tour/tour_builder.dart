@@ -11,6 +11,7 @@ class TourStepItem {
     this.shape = ShapeLightFocus.RRect,
     this.radius = 16.0,
     this.align = ContentAlign.bottom,
+    this.scrollAlignment,
   });
 
   final GlobalKey key;
@@ -20,9 +21,15 @@ class TourStepItem {
   final ShapeLightFocus shape;
   final double radius;
   final ContentAlign align;
+  final double? scrollAlignment;
 }
 
 class TourBuilder {
+  static double resolveScrollAlignment(TourStepItem step) {
+    if (step.scrollAlignment != null) return step.scrollAlignment!;
+    return step.align == ContentAlign.top ? 0.78 : 0.12;
+  }
+
   static TutorialCoachMark createVibeTour({
     required BuildContext context,
     required List<TourStepItem> steps,
@@ -44,49 +51,62 @@ class TourBuilder {
           contents: [
             TargetContent(
               align: step.align,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               builder: (ctx, controller) {
-                return TourTooltipCard(
-                  currentStep: i + 1,
-                  totalSteps: steps.length,
-                  title: step.title,
-                  description: step.description,
-                  icon: step.icon,
-                  isLast: isLast,
-                  onNext: () {
-                    if (isLast) {
-                      controller.skip();
-                      onFinish();
-                    } else {
-                      final nextKey = steps[i + 1].key;
-                      if (nextKey.currentContext != null) {
-                        Scrollable.ensureVisible(
-                          nextKey.currentContext!,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          alignment: 0.3,
-                        );
-                      }
-                      controller.next();
-                    }
-                  },
-                  onPrevious: i > 0
-                      ? () {
-                          final prevKey = steps[i - 1].key;
-                          if (prevKey.currentContext != null) {
-                            Scrollable.ensureVisible(
-                              prevKey.currentContext!,
-                              duration: const Duration(milliseconds: 300),
+                return Center(
+                  child: TourTooltipCard(
+                    currentStep: i + 1,
+                    totalSteps: steps.length,
+                    title: step.title,
+                    description: step.description,
+                    icon: step.icon,
+                    isLast: isLast,
+                    onNext: () async {
+                      if (isLast) {
+                        controller.skip();
+                        onFinish();
+                      } else {
+                        final nextStep = steps[i + 1];
+                        final nextKey = nextStep.key;
+                        if (nextKey.currentContext != null) {
+                          try {
+                            final targetAlign = resolveScrollAlignment(nextStep);
+                            await Scrollable.ensureVisible(
+                              nextKey.currentContext!,
+                              duration: const Duration(milliseconds: 320),
                               curve: Curves.easeInOut,
-                              alignment: 0.3,
+                              alignment: targetAlign,
                             );
-                          }
-                          controller.previous();
+                            await Future<void>.delayed(const Duration(milliseconds: 80));
+                          } catch (_) {}
                         }
-                      : null,
-                  onSkip: () {
-                    controller.skip();
-                    onSkip();
-                  },
+                        controller.next();
+                      }
+                    },
+                    onPrevious: i > 0
+                        ? () async {
+                            final prevStep = steps[i - 1];
+                            final prevKey = prevStep.key;
+                            if (prevKey.currentContext != null) {
+                              try {
+                                final targetAlign = resolveScrollAlignment(prevStep);
+                                await Scrollable.ensureVisible(
+                                  prevKey.currentContext!,
+                                  duration: const Duration(milliseconds: 320),
+                                  curve: Curves.easeInOut,
+                                  alignment: targetAlign,
+                                );
+                                await Future<void>.delayed(const Duration(milliseconds: 80));
+                              } catch (_) {}
+                            }
+                            controller.previous();
+                          }
+                        : null,
+                    onSkip: () {
+                      controller.skip();
+                      onSkip();
+                    },
+                  ),
                 );
               },
             ),

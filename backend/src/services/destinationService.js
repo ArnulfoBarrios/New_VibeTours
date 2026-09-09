@@ -43,6 +43,32 @@ const COUNTRY_CODE_MAP = {
   'ca': 'CA'
 }
 
+const FALLBACK_DESTINATION_CENTROIDS = {
+  'cartagena': { displayName: 'Cartagena, Colombia', city: 'Cartagena', entityName: 'Cartagena', isMicroDestination: false, region: 'Bolívar', country: 'Colombia', countryCode: 'CO', latitude: 10.3997, longitude: -75.5144 },
+  'barranquilla': { displayName: 'Barranquilla, Colombia', city: 'Barranquilla', entityName: 'Barranquilla', isMicroDestination: false, region: 'Atlántico', country: 'Colombia', countryCode: 'CO', latitude: 10.9685, longitude: -74.7813 },
+  'santa marta': { displayName: 'Santa Marta, Colombia', city: 'Santa Marta', entityName: 'Santa Marta', isMicroDestination: false, region: 'Magdalena', country: 'Colombia', countryCode: 'CO', latitude: 11.2408, longitude: -74.1990 },
+  'medellin': { displayName: 'Medellín, Colombia', city: 'Medellín', entityName: 'Medellín', isMicroDestination: false, region: 'Antioquia', country: 'Colombia', countryCode: 'CO', latitude: 6.2442, longitude: -75.5812 },
+  'medellín': { displayName: 'Medellín, Colombia', city: 'Medellín', entityName: 'Medellín', isMicroDestination: false, region: 'Antioquia', country: 'Colombia', countryCode: 'CO', latitude: 6.2442, longitude: -75.5812 },
+  'bogota': { displayName: 'Bogotá, Colombia', city: 'Bogotá', entityName: 'Bogotá', isMicroDestination: false, region: 'Cundinamarca', country: 'Colombia', countryCode: 'CO', latitude: 4.7110, longitude: -74.0721 },
+  'bogotá': { displayName: 'Bogotá, Colombia', city: 'Bogotá', entityName: 'Bogotá', isMicroDestination: false, region: 'Cundinamarca', country: 'Colombia', countryCode: 'CO', latitude: 4.7110, longitude: -74.0721 },
+  'cali': { displayName: 'Cali, Colombia', city: 'Cali', entityName: 'Cali', isMicroDestination: false, region: 'Valle del Cauca', country: 'Colombia', countryCode: 'CO', latitude: 3.4516, longitude: -76.5320 },
+  'coveñas': { displayName: 'Coveñas, Sucre, Colombia', city: 'Coveñas', entityName: 'Coveñas', isMicroDestination: false, region: 'Sucre', country: 'Colombia', countryCode: 'CO', latitude: 9.4080, longitude: -75.6850 },
+  'covenas': { displayName: 'Coveñas, Sucre, Colombia', city: 'Coveñas', entityName: 'Coveñas', isMicroDestination: false, region: 'Sucre', country: 'Colombia', countryCode: 'CO', latitude: 9.4080, longitude: -75.6850 },
+  'tolu': { displayName: 'Santiago de Tolú, Sucre, Colombia', city: 'Tolú', entityName: 'Tolú', isMicroDestination: false, region: 'Sucre', country: 'Colombia', countryCode: 'CO', latitude: 9.5264, longitude: -75.5817 },
+  'tolú': { displayName: 'Santiago de Tolú, Sucre, Colombia', city: 'Tolú', entityName: 'Tolú', isMicroDestination: false, region: 'Sucre', country: 'Colombia', countryCode: 'CO', latitude: 9.5264, longitude: -75.5817 },
+  'san andres': { displayName: 'San Andrés, Colombia', city: 'San Andrés', entityName: 'San Andrés', isMicroDestination: false, region: 'San Andrés y Providencia', country: 'Colombia', countryCode: 'CO', latitude: 12.5847, longitude: -81.7006 },
+  'san andrés': { displayName: 'San Andrés, Colombia', city: 'San Andrés', entityName: 'San Andrés', isMicroDestination: false, region: 'San Andrés y Providencia', country: 'Colombia', countryCode: 'CO', latitude: 12.5847, longitude: -81.7006 },
+  'cancun': { displayName: 'Cancún, Quintana Roo, México', city: 'Cancún', entityName: 'Cancún', isMicroDestination: false, region: 'Quintana Roo', country: 'México', countryCode: 'MX', latitude: 21.1619, longitude: -86.8515 },
+  'cancún': { displayName: 'Cancún, Quintana Roo, México', city: 'Cancún', entityName: 'Cancún', isMicroDestination: false, region: 'Quintana Roo', country: 'México', countryCode: 'MX', latitude: 21.1619, longitude: -86.8515 },
+  'parque tayrona': { displayName: 'Parque Nacional Natural Tayrona, Magdalena, Colombia', city: 'Santa Marta', entityName: 'Parque Tayrona', isMicroDestination: true, region: 'Magdalena', country: 'Colombia', countryCode: 'CO', latitude: 11.3142, longitude: -74.0305 },
+  'tayrona': { displayName: 'Parque Nacional Natural Tayrona, Magdalena, Colombia', city: 'Santa Marta', entityName: 'Parque Tayrona', isMicroDestination: true, region: 'Magdalena', country: 'Colombia', countryCode: 'CO', latitude: 11.3142, longitude: -74.0305 },
+  'minca': { displayName: 'Minca, Santa Marta, Magdalena, Colombia', city: 'Santa Marta', entityName: 'Minca', isMicroDestination: true, region: 'Magdalena', country: 'Colombia', countryCode: 'CO', latitude: 11.1444, longitude: -74.1167 },
+  'guatape': { displayName: 'Guatapé, Antioquia, Colombia', city: 'Guatapé', entityName: 'Guatapé', isMicroDestination: true, region: 'Antioquia', country: 'Colombia', countryCode: 'CO', latitude: 6.2333, longitude: -75.1583 },
+  'guatapé': { displayName: 'Guatapé, Antioquia, Colombia', city: 'Guatapé', entityName: 'Guatapé', isMicroDestination: true, region: 'Antioquia', country: 'Colombia', countryCode: 'CO', latitude: 6.2333, longitude: -75.1583 },
+  'malibu': { displayName: 'Malibu, California, United States', city: 'Malibu', entityName: 'Malibu', isMicroDestination: false, region: 'California', country: 'Estados Unidos', countryCode: 'US', latitude: 34.0259, longitude: -118.7798 },
+  'malibu, california': { displayName: 'Malibu, California, United States', city: 'Malibu', entityName: 'Malibu', isMicroDestination: false, region: 'California', country: 'Estados Unidos', countryCode: 'US', latitude: 34.0259, longitude: -118.7798 }
+}
+
 export function formatCountryName(countryRaw, countryCodeRaw = '') {
   if (!countryRaw && !countryCodeRaw) return ''
   const code = (countryCodeRaw || '').trim().toUpperCase()
@@ -250,7 +276,7 @@ export async function resolveCanonicalDestination(query, options = {}) {
     const photonUrl = new URL('https://photon.komoot.io/api/')
     photonUrl.searchParams.set('q', normalizedQuery)
     photonUrl.searchParams.set('limit', '5')
-    const photonRes = await fetch(photonUrl, { signal: AbortSignal.timeout(1500) })
+    const photonRes = await fetch(photonUrl, { signal: AbortSignal.timeout(3500) })
     if (photonRes.ok) {
       const pJson = await photonRes.json()
       const feat = pJson.features?.[0]
@@ -333,17 +359,38 @@ export async function resolveCanonicalDestination(query, options = {}) {
     } catch (_) {}
   }
 
+  // Fallback to precomputed destination centroids if all network providers fail
+  const normKey = cleaned.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const fallback = FALLBACK_DESTINATION_CENTROIDS[normKey] ||
+    FALLBACK_DESTINATION_CENTROIDS[cleaned.toLowerCase().trim()] ||
+    Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([k]) => normKey.includes(k) || k.includes(normKey))?.[1]
+
+  if (fallback) {
+    const result = {
+      ...fallback,
+      placeId: `fallback_${normKey}`,
+      isAmbiguous: false,
+      candidates: []
+    }
+    canonicalCache.set(cacheKey, result)
+    return result
+  }
+
   return null
 }
 
 export function validateCandidateLocation(place, canonicalDest, maxDistanceKm = 35) {
-  if (!place || !canonicalDest) return false
+  if (!place) return false
 
   const lat = Number(place.latitude ?? place.lat)
   const lon = Number(place.longitude ?? place.lon)
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) {
     return false
+  }
+
+  if (!canonicalDest || !Number.isFinite(canonicalDest.latitude) || !Number.isFinite(canonicalDest.longitude)) {
+    return true
   }
 
   // 1. If destination is a micro-destination (e.g. Parque Tayrona, Minca, Guatapé), use a strict radius (18 km) around the park/entity center

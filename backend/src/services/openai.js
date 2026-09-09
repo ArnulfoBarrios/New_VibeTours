@@ -243,7 +243,20 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  if (cleanPlaces.length < 2) {
+  if (cleanPlaces.length < 4) {
+    try {
+      const { KNOWN_ICONIC_LANDMARKS } = await import('./osm.js')
+      for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
+        if (landmark.city && landmark.city.toLowerCase() === clean.toLowerCase()) {
+          if (!cleanPlaces.some(cp => arePlacesSimilar(cp, landmark.name))) {
+            cleanPlaces.push(landmark.name)
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (cleanPlaces.length < 4) {
     const fallbackPresets = getDestinationPresets(clean, targetCountry)
     for (const fp of (fallbackPresets.places || [])) {
       if (!cleanPlaces.includes(fp)) cleanPlaces.push(fp)
@@ -255,9 +268,13 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     cleanHotels.push(...(fallbackPresets.hotels || []))
   }
 
-  if (cleanRests.length === 0) {
+  if (cleanRests.length < 2) {
     const fallbackPresets = getDestinationPresets(clean, targetCountry)
-    cleanRests.push(...(fallbackPresets.restaurants || []))
+    for (const fr of (fallbackPresets.restaurants || [])) {
+      if (!cleanRests.some(r => arePlacesSimilar(r.name, fr.name))) {
+        cleanRests.push(fr)
+      }
+    }
   }
 
   const result = {
@@ -280,15 +297,18 @@ export function getDestinationPresets(destName = '', countryName = '') {
     name: capitalCity,
     country: countryName || 'Local',
     hotels: [
-      { name: `Hotel Central de ${capitalCity}`, desc: `Alojamiento céntrico en ${capitalCity}.`, price: '~$70 - $120 USD/noche' }
+      { name: `Hotel Central de ${capitalCity}`, desc: `Alojamiento céntrico en ${capitalCity}.`, price: '~$70 - $120 USD/noche' },
+      { name: `Boutique Hotel ${capitalCity}`, desc: `Alojamiento boutique con encanto en ${capitalCity}.`, price: '~$90 - $150 USD/noche' }
     ],
     restaurants: [
-      { name: `Restaurante Típico de ${capitalCity}`, specialty: `Especialidades culinarias tradicionales de ${capitalCity}` }
+      { name: `Restaurante Típico de ${capitalCity}`, specialty: `Especialidades culinarias tradicionales de ${capitalCity}` },
+      { name: `Mercado Gastronómico de ${capitalCity}`, specialty: `Platos locales y comida representativa de ${capitalCity}` }
     ],
     places: [
       `Centro Histórico de ${capitalCity}`,
       `Plaza Mayor de ${capitalCity}`,
-      `Mirador de ${capitalCity}`
+      `Mirador de ${capitalCity}`,
+      `Parque Principal de ${capitalCity}`
     ],
     events: []
   }
@@ -394,7 +414,19 @@ export function isNonTouristicInput(text = '') {
 
 export async function generateChatResponse(state, backendInstruction = '', webSearchSummary = '', currentPreferences = {}, nearbyFoodPlaces = []) {
   const known = { ...(currentPreferences || {}) }
-  const rawDestName = known.city || known.destination || ''
+  const history = state.history || []
+  const lastUserMsg = state.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
+
+  let rawDestName = known.city || known.destination || ''
+  if (!rawDestName && lastUserMsg) {
+    const fallbackExtracted = extractChatInformationFallback(lastUserMsg)
+    if (fallbackExtracted.city) {
+      rawDestName = fallbackExtracted.city
+      known.city = fallbackExtracted.city
+      known.destination = fallbackExtracted.destination || fallbackExtracted.city
+    }
+  }
+
   const destName = cleanAdministrativeCityName(rawDestName)
   const hasCity = Boolean(destName && !isVagueDestination(destName))
   const destCountry = known.country || (destName.toLowerCase() === 'cartagena' || destName.toLowerCase() === 'santa marta' || destName.toLowerCase() === 'medellín' || destName.toLowerCase() === 'bogotá' ? 'Colombia' : '')
@@ -406,9 +438,6 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const verifiedFoodText = (Array.isArray(nearbyFoodPlaces) && nearbyFoodPlaces.length > 0)
     ? nearbyFoodPlaces.slice(0, 8).map(f => `• **${f.name}** (${f.type || 'restaurante'}, ${f.cuisine ? `cocina ${f.cuisine}` : 'gastronomía local'})`).join('\n')
     : ''
-
-  const history = state.history || []
-  const lastUserMsg = state.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
 
   if (isNonTouristicInput(lastUserMsg)) {
     return {
@@ -422,10 +451,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
   }
 
-  // Grounding Data
+  // Grounding Data: Instant cache retrieval or non-blocking background pre-warming
   let realCatalog = null
   if (hasCity) {
-    realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude)
+    const cacheKey = `catalog_${destName.toLowerCase()}__${(destCountry || '').toLowerCase()}`
+    const cached = destinationCatalogCache.get(cacheKey)
+    if (cached) {
+      realCatalog = cached
+    } else {
+      // Warm up catalog in background so it is instantly available for tour generation without blocking chat
+      getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude)
+        .catch(err => console.warn('[generateChatResponse] Background catalog pre-warm error:', err.message))
+    }
     if (!webSearchSummary && /\b(evento|festivales|feria|carnaval|cu[aá]ndo ir|fechas?|agenda)\b/i.test(lastUserMsg)) {
       const ws = await searchWebForTravel({
         query: `festivales eventos culturales agenda ${destName} ${known.datesSeason || ''}`.trim(),
@@ -1382,6 +1419,25 @@ export function extractChatInformationFallback(prompt) {
   } else if (/\b(semanita|una semana|7 d[íi]as)\b/i.test(text)) {
     res.durationDays = 7
     res.durationHours = 168
+  } else {
+    const daysMatch = text.match(/\b(\d+)\s+d[íi]as?\b/i)
+    if (daysMatch) {
+      const d = parseInt(daysMatch[1], 10)
+      if (d > 0 && d <= 30) {
+        res.durationDays = d
+        res.durationHours = d * 24
+      }
+    }
+  }
+
+  if (/\b(pr[oó]ximo mes|este mes|el otro mes)\b/i.test(text)) {
+    res.datesSeason = 'Próximo mes'
+  } else if (/\b(este fin de semana|el fin de semana)\b/i.test(text)) {
+    res.datesSeason = 'Este fin de semana'
+  } else if (/\b(vacaciones de mitad de a[ñn]o|mitad de a[ñn]o)\b/i.test(text)) {
+    res.datesSeason = 'Vacaciones de mitad de año'
+  } else if (/\b(fin de a[ñn]o|diciembre)\b/i.test(text)) {
+    res.datesSeason = 'Fin de año'
   }
 
   if (/\b(pareja|con mi novia|con mi novio|con mi esposa|con mi esposo)\b/i.test(text)) {
@@ -1417,6 +1473,69 @@ export function extractChatInformationFallback(prompt) {
     res.transport = 'Transporte público'
   } else if (/\b(taxi|uber|cabify|inDrive)\b/i.test(text)) {
     res.transport = 'Taxi / Uber'
+  }
+
+  if (/\b(recomi[eé]ndame hoteles|hoteles|opciones de hotel|buscar hotel|sin hotel|no tengo hotel)\b/i.test(text)) {
+    res.accommodationStatus = 'Recomiéndame hoteles'
+  } else if (/\b(casa propia|mi casa|casa familiar|tengo hospedaje|tengo hotel|ya tengo hotel|tengo donde quedarme)\b/i.test(text)) {
+    res.accommodationStatus = 'Casa propia / familiar'
+  }
+
+  const isPreferenceInput = Boolean(
+    res.datesSeason ||
+    res.durationDays ||
+    res.companions ||
+    res.budget ||
+    res.transport ||
+    res.accommodationStatus ||
+    /\b(pr[oó]ximo mes|fin de semana|d[íi]as?|pareja|familia|amigos|solo|econ[oó]mico|moderado|lujo|caminando|auto|taxi|hotel|hospedaje)\b/i.test(text)
+  )
+
+  const isCommandOrControl = /\b(gener(ar|es|a|e|en|al)?|cre(ar|es|a|e|en)?|inicia(r)?|finaliza(r)?|constru(ye|ir)|dise[ñn](ar|a|es|e)?|est[aá]\s+perfecto|listo|procede|adelante|vamos|armar?|hazlo|de acuerdo|dale|genial|ok|comenzar|ver|mostrar|detalles|men[uú]|platos|comida|restaurantes?|hoteles?|atracciones|actividades|itinerario|itinerarios)\b/i.test(text)
+
+  const NON_DEST = /^(pareja|en pareja|familia|en familia|amigos|con amigos|solo|sola|grupo|en grupo|econ[oó]mico|moderado|lujo|barato|mochilero|caminando|a pie|auto|carro|coche|taxi|uber|bicicleta|bici|transporte p[úu]blico|hotel|hoteles|hostal|resort|hospedaje|alojamiento|un d[íi]a|\d+\s+d[íi]as?|fin de semana|puente|mes|semana|a[ñn]o|vacaciones|turismo|planes?|actividades|sitios|lugares|atracciones|nada|s[íi]|si|no|ok|hola|buenas?|gracias|adelante|generar?|crear?|empezar?)$/i
+
+  if (!res.destination && !isPreferenceInput) {
+    const destActionPattern = /\b(?:tour|viaje|itinerario|plan|vacaciones|escapada)\s+(?:a|hacia|en|por|para)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s]{2,30}?)(?:$|\s+(?:donde|que|para|con|en|el|la|los|las|del|durante|por|desde|sin|de\s+\d)\b)/i
+    const destVerbPattern = /\b(?:viajar|conocer|visitar|ir|llegar)\s+(?:a|hacia|en|hasta)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s]{2,30}?)(?:$|\s+(?:donde|que|para|con|en|el|la|los|las|del|durante|por|desde|sin)\b)/i
+
+    const mAction = (prompt || '').trim().match(destActionPattern) || (prompt || '').trim().match(destVerbPattern)
+    if (mAction) {
+      const candidate = mAction[1].trim()
+      const candidateLower = candidate.toLowerCase()
+      if (!isVagueDestination(candidateLower) && !isNonTouristicInput(candidateLower) && !NON_DEST.test(candidateLower)) {
+        const cleanCity = cleanAdministrativeCityName(candidate)
+        if (cleanCity && cleanCity.length >= 3) {
+          res.destination = cleanCity
+          res.city = cleanCity
+        }
+      }
+    } else if (!isCommandOrControl) {
+      const barePatterns = [
+        /^(?:a|hacia)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s]{2,30})$/i,
+        /^([A-ZÁÉÍÓÚa-záéíóúñ\s]{2,30})$/i
+      ]
+      for (const pat of barePatterns) {
+        const m = (prompt || '').trim().match(pat)
+        if (m) {
+          const candidate = m[1].trim()
+          const candidateLower = candidate.toLowerCase()
+          if (
+            candidate.split(/\s+/).length <= 3 &&
+            !isVagueDestination(candidateLower) &&
+            !isNonTouristicInput(candidateLower) &&
+            !NON_DEST.test(candidateLower)
+          ) {
+            const cleanCity = cleanAdministrativeCityName(candidate)
+            if (cleanCity && cleanCity.length >= 3) {
+              res.destination = cleanCity
+              res.city = cleanCity
+              break
+            }
+          }
+        }
+      }
+    }
   }
 
   return res
@@ -1658,6 +1777,7 @@ export async function fetchDynamicDestinationProfile(cityInput, countryInput = '
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify(buildOpenAiPayload({
+        modelConfig: getFastOpenAiModelConfig(),
         messages: [
           {
             role: 'system',
@@ -1694,9 +1814,9 @@ Formato JSON obligatorio:
         ],
         response_format: { type: 'json_object' },
         temperature: 0.2,
-        reasoning_effort: 'none'
+        reasoning_effort: 'low'
       })),
-      signal: AbortSignal.timeout(25000)
+      signal: AbortSignal.timeout(15000)
     })
 
     if (response.ok) {

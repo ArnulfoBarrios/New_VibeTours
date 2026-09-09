@@ -124,8 +124,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   bool _isOffRoute = false;
   bool _locationStreamRequested = false;
   bool _noLandRouteAvailable = false;
-  // Live navigation opens in close vehicle tracking mode (zoom 16.5-17.0) by default for immediate navigation.
-  bool _isTrackingMode = true;
+  // Live navigation opens in route overview mode by default, transitioning to close tracking once movement begins.
+  bool _isTrackingMode = false;
   GeoPoint? _initialOverviewPoint;
   bool _hasUserManuallyToggledTracking = false;
   bool _hasInitialAccurateRoute = false;
@@ -909,6 +909,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                           : tour.stops.where((s) => s.day == _selectedDay).map((s) => s.location).toList()),
                   trackingMode: _isTrackingMode,
                   trackingHeading: _currentHeading,
+                  showRecenterFab: false,
                   onPointSelected: (point) {
                     _NearbyFoodPlace? tappedPlace;
                     for (final p in _voiceFoodPlaces) {
@@ -1259,43 +1260,49 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   ),
                 ),
 
-              if (!_isTrackingMode)
-                Positioned(
-                  right: 16,
-                  bottom: 215 + MediaQuery.of(context).padding.bottom,
-                  child: FloatingActionButton.extended(
-                    heroTag: 'live_tour_follow_fab',
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    onPressed: () {
-                      setState(() {
-                        _isTrackingMode = true;
-                        _hasUserManuallyToggledTracking = true;
-                      });
-                    },
-                    icon: const Icon(Icons.my_location_rounded, color: AppTheme.primary),
-                    label: const Text(
-                      'Seguir ubicación',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                  ),
-                ),
               Positioned(
                 left: 16,
                 right: 16,
                 bottom: 18 + MediaQuery.of(context).padding.bottom,
-                child: GlassPanel(
-                  padding: const EdgeInsets.all(12),
-                  radius: 24,
-                  child: _selectedVoicePlace != null
-                      ? _buildRestaurantNavigationPanel(context, tour)
-                      : _navigatingToHotel
-                          ? _buildHotelNavigationPanel(context, tour)
-                          : _isAtStopMode
-                              ? _buildAtStopModePanel(context, tour, stop, l10n)
-                              : _buildStandardNavigationPanel(context, tour, stop, progress, liveRoute, l10n),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (!_isTrackingMode) ...[
+                      FloatingActionButton.extended(
+                        heroTag: 'live_tour_follow_fab',
+                        elevation: 4,
+                        backgroundColor: Theme.of(context).colorScheme.surface,
+                        foregroundColor: AppTheme.primary,
+                        onPressed: () {
+                          setState(() {
+                            _isTrackingMode = true;
+                            _hasUserManuallyToggledTracking = true;
+                          });
+                        },
+                        icon: const Icon(Icons.my_location_rounded, color: AppTheme.primary),
+                        label: const Text(
+                          'Seguir ubicación',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    GlassPanel(
+                      padding: const EdgeInsets.all(12),
+                      radius: 24,
+                      child: _selectedVoicePlace != null
+                          ? _buildRestaurantNavigationPanel(context, tour)
+                          : _navigatingToHotel
+                              ? _buildHotelNavigationPanel(context, tour)
+                              : _isAtStopMode
+                                  ? _buildAtStopModePanel(context, tour, stop, l10n)
+                                  : _buildStandardNavigationPanel(context, tour, stop, progress, liveRoute, l10n),
+                    ),
+                  ],
                 ),
               ),
               if (_isPocketModeEnabled)
@@ -1459,7 +1466,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     if (initialPosition != null) {
       setState(() {
         _currentPoint = _pointFromPosition(initialPosition);
-        if (initialPosition.heading >= 0) {
+        if (initialPosition.speed >= 1.0 && initialPosition.heading >= 0) {
           _currentHeading = initialPosition.heading;
         }
       });
@@ -1482,8 +1489,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     if (!mounted) return;
 
     _currentPoint = point;
-    if (position.heading >= 0) {
-      _currentHeading = position.heading;
+    if (position.speed >= 1.0 && position.heading >= 0) {
+      if (_currentHeading == null ||
+          ((position.heading - _currentHeading!).abs() > 5.0 &&
+           (360.0 - (position.heading - _currentHeading!).abs()) > 5.0)) {
+        _currentHeading = position.heading;
+      }
     }
 
     // Auto-transition from overview to tracking mode when user starts moving
@@ -1495,7 +1506,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         point.latitude,
         point.longitude,
       );
-      if (position.speed > 0.8 || movedDist > 12.0) {
+      if (position.speed >= 1.2 || movedDist >= 15.0) {
         _isTrackingMode = true;
       }
     }

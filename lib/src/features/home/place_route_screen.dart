@@ -27,7 +27,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
   double? _currentHeading;
   RoadRouteResult? _liveRoute;
   bool _isRouting = false;
-  bool _isTrackingMode = true;
+  bool _isTrackingMode = false;
   GeoPoint? _initialOverviewPoint;
   bool _hasUserManuallyToggledTracking = false;
   DateTime? _lastRerouteAt;
@@ -37,6 +37,11 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
   @override
   void initState() {
     super.initState();
+    final cached = ref.read(currentPositionProvider).valueOrNull;
+    if (cached != null) {
+      _currentPoint = GeoPoint(latitude: cached.latitude, longitude: cached.longitude);
+      unawaited(_recalculateRoute(force: true));
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startLiveNavigation();
     });
@@ -67,7 +72,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
           latitude: initialPosition.latitude,
           longitude: initialPosition.longitude,
         );
-        if (initialPosition.heading >= 0) {
+        if (initialPosition.speed >= 1.0 && initialPosition.heading >= 0) {
           _currentHeading = initialPosition.heading;
         }
       });
@@ -83,8 +88,12 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
     if (!mounted) return;
 
     _currentPoint = point;
-    if (position.heading >= 0) {
-      _currentHeading = position.heading;
+    if (position.speed >= 1.0 && position.heading >= 0) {
+      if (_currentHeading == null ||
+          ((position.heading - _currentHeading!).abs() > 5.0 &&
+           (360.0 - (position.heading - _currentHeading!).abs()) > 5.0)) {
+        _currentHeading = position.heading;
+      }
     }
 
     // Auto-transition to tracking mode when movement is detected
@@ -96,7 +105,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
         point.latitude,
         point.longitude,
       );
-      if (position.speed > 0.8 || movedDist > 12.0) {
+      if (position.speed >= 1.2 || movedDist >= 18.0) {
         _isTrackingMode = true;
       }
     }
@@ -265,11 +274,12 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
               destination: place.location,
               destinationName: place.name,
               styleUrl: styleUrl,
-              fitPadding: const EdgeInsets.fromLTRB(32, 110, 32, 300),
+              fitPadding: const EdgeInsets.fromLTRB(32, 110, 32, 280),
               route: _liveRoute,
               currentLocation: _currentPoint,
               trackingMode: _isTrackingMode,
               trackingHeading: _currentHeading,
+              showRecenterFab: false,
             ),
           ),
           Positioned(
@@ -281,40 +291,43 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
               icon: const Icon(Icons.arrow_back_rounded),
             ),
           ),
-          // Tracking mode toggle / Recenter FAB
-          Positioned(
-            right: 16,
-            bottom: 236 + MediaQuery.of(context).padding.bottom,
-            child: FloatingActionButton.extended(
-              heroTag: 'nearby_tracking_mode_fab',
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              onPressed: () {
-                setState(() {
-                  _isTrackingMode = !_isTrackingMode;
-                  _hasUserManuallyToggledTracking = true;
-                });
-              },
-              icon: Icon(
-                _isTrackingMode ? Icons.explore_rounded : Icons.my_location_rounded,
-                color: AppTheme.primary,
-              ),
-              label: Text(
-                _isTrackingMode ? 'Vista general' : 'Seguir ubicación',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primary,
-                ),
-              ),
-            ),
-          ),
+          // Unified responsive layout: FAB sits securely directly above GlassPanel
           Positioned(
             left: 16,
             right: 16,
             bottom: 18 + MediaQuery.of(context).padding.bottom,
-            child: GlassPanel(
-              padding: const EdgeInsets.all(18),
-              radius: 28,
-              child: Column(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'nearby_tracking_mode_fab',
+                  elevation: 4,
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  foregroundColor: AppTheme.primary,
+                  onPressed: () {
+                    setState(() {
+                      _isTrackingMode = !_isTrackingMode;
+                      _hasUserManuallyToggledTracking = true;
+                    });
+                  },
+                  icon: Icon(
+                    _isTrackingMode ? Icons.explore_rounded : Icons.my_location_rounded,
+                    color: AppTheme.primary,
+                  ),
+                  label: Text(
+                    _isTrackingMode ? 'Vista general' : 'Seguir ubicación',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GlassPanel(
+                  padding: const EdgeInsets.all(18),
+                  radius: 28,
+                  child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -429,9 +442,11 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
+    ],
+  ),
+);
   }
 }

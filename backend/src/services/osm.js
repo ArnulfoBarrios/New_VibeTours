@@ -121,6 +121,9 @@ export function selectBestPoiResult(results, originalQuery = '') {
   const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja)\b/i.test(lowerQuery)
   const isViewpointQuery = /\b(mirador|viewpoint|lookout|belvedere|observatorio)\b/i.test(lowerQuery)
   const isExplicitFuelQuery = /\b(gasolinera|estaci[oó]n de servicio|combustible|terpel|texaco|esso|mobil|biomax|primax|petrol|fuel)\b/i.test(lowerQuery)
+  const isMuseumQuery = /\b(museo|museum|galer[íi]a|museos)\b/i.test(lowerQuery)
+  const isParkOrWaterfrontQuery = /\b(malec[oó]n|malecon|parque|plaza|parque natural|reserva)\b/i.test(lowerQuery)
+  const isMonumentQuery = /\b(monumento|monument|escultura|estatua|ventana al mundo|aleta del tibur[oó]n|totem|obelisco)\b/i.test(lowerQuery)
 
   let candidates = [...results]
 
@@ -131,6 +134,40 @@ export function selectBestPoiResult(results, originalQuery = '') {
       const name = String(r.name || '').toLowerCase()
       const isFuel = type === 'fuel' || key === 'fuel' || /\beds\b|estaci[oó]n de servicio|gasolinera/i.test(name)
       return !isFuel
+    })
+  }
+
+  if (isMuseumQuery) {
+    candidates = candidates.filter(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || r.class || '').toLowerCase()
+      const name = String(r.name || '').toLowerCase()
+      const isUnrelatedFacility = ['cinema', 'school', 'college', 'kindergarten', 'university', 'hospital', 'parking'].includes(type) ||
+        ['school', 'college', 'university', 'cinema'].includes(key) ||
+        /\b(sala de proyecciones|bebedero|laboratorio|facultad|campus|aula|auditorio de|cine colombia|cinemark|royal films)\b/i.test(name)
+      if (isUnrelatedFacility) return false
+
+      const hasMuseumSemantic = name.includes('museo') || name.includes('museum') || name.includes('galería') || name.includes('galeria') || type === 'museum' || key === 'tourism'
+      return hasMuseumSemantic
+    })
+  }
+
+  if (isMonumentQuery) {
+    candidates = candidates.filter(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || r.class || '').toLowerCase()
+      const name = String(r.name || '').toLowerCase()
+      const isFuelOrTransit = type === 'fuel' || key === 'fuel' || type === 'bus_stop' || /\beds\b|gasolinera|estaci[oó]n de servicio/i.test(name)
+      return !isFuelOrTransit
+    })
+  }
+
+  if (isParkOrWaterfrontQuery) {
+    candidates = candidates.filter(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || '').toLowerCase()
+      const isTransit = type === 'bus_stop' || key === 'highway'
+      return !isTransit
     })
   }
 
@@ -216,6 +253,48 @@ export function decomposeCompoundPlaceQuery(rawQuery) {
   return queries
 }
 
+export const KNOWN_ICONIC_LANDMARKS = {
+  'islas del rosario': { name: 'Islas del Rosario, Cartagena', latitude: 10.1772, longitude: -75.7428, city: 'Cartagena', country: 'Colombia' },
+  'castillo san felipe de barajas': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
+  'castillo san felipe': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
+  'paseo en chiva': { name: 'Paseo en Chiva - Torre del Reloj, Centro Histórico', latitude: 10.4225, longitude: -75.5478, city: 'Cartagena', country: 'Colombia' },
+  'cafe del mar': { name: 'Café del Mar, Baluarte de Santo Domingo', latitude: 10.4215, longitude: -75.5539, city: 'Cartagena', country: 'Colombia' },
+  'isla mucura': { name: 'Isla Múcura, Archipiélago de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
+  'isla tintipan': { name: 'Isla Tintipán, Archipiélago de San Bernardo', latitude: 9.7950, longitude: -75.8450, city: 'Coveñas', country: 'Colombia' },
+  'santa cruz del islote': { name: 'Santa Cruz del Islote, Archipiélago de San Bernardo', latitude: 9.7853, longitude: -75.8572, city: 'Coveñas', country: 'Colombia' },
+  'isla palma': { name: 'Isla Palma, Archipiélago de San Bernardo', latitude: 9.7420, longitude: -75.6490, city: 'Coveñas', country: 'Colombia' },
+  'cienaga de la caimanera': { name: 'Ciénaga de la Caimanera, Coveñas', latitude: 9.4580, longitude: -75.6200, city: 'Coveñas', country: 'Colombia' },
+  'parque museo infanteria de marina': { name: 'Parque Museo de la Infantería de Marina, Coveñas', latitude: 9.4080, longitude: -75.6880, city: 'Coveñas', country: 'Colombia' },
+  'isla fuerte': { name: 'Isla Fuerte, Bolívar / Córdoba', latitude: 9.3870, longitude: -76.1770, city: 'Coveñas', country: 'Colombia' },
+  'gran malecon': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
+  'gran malecon del rio': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
+  'ventana al mundo': { name: 'Monumento Ventana al Mundo', latitude: 11.03316, longitude: -74.83143, city: 'Barranquilla', country: 'Colombia' },
+  'monumento ventana al mundo': { name: 'Monumento Ventana al Mundo', latitude: 11.03316, longitude: -74.83143, city: 'Barranquilla', country: 'Colombia' },
+  'aleta del tiburon': { name: 'Monumento La Aleta del Tiburón', latitude: 11.0028, longitude: -74.7735, city: 'Barranquilla', country: 'Colombia' },
+  'la aleta del tiburon': { name: 'Monumento La Aleta del Tiburón', latitude: 11.0028, longitude: -74.7735, city: 'Barranquilla', country: 'Colombia' },
+  'monumento la aleta del tiburon': { name: 'Monumento La Aleta del Tiburón', latitude: 11.0028, longitude: -74.7735, city: 'Barranquilla', country: 'Colombia' },
+  'museo del caribe': { name: 'Museo Cultural del Caribe', latitude: 10.9863, longitude: -74.7784, city: 'Barranquilla', country: 'Colombia' },
+  'museo del caribe gabriel garcia marquez': { name: 'Museo Cultural del Caribe', latitude: 10.9863, longitude: -74.7784, city: 'Barranquilla', country: 'Colombia' },
+  'parque cultural del caribe': { name: 'Parque Cultural del Caribe', latitude: 10.9863, longitude: -74.7784, city: 'Barranquilla', country: 'Colombia' },
+  'zoologico de barranquilla': { name: 'Zoológico de Barranquilla', latitude: 11.0048, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
+  'catedral metropolitana maria reina': { name: 'Catedral Metropolitana María Reina', latitude: 10.9892, longitude: -74.7937, city: 'Barranquilla', country: 'Colombia' },
+  'plaza de la paz': { name: 'Plaza de la Paz', latitude: 10.9885, longitude: -74.7942, city: 'Barranquilla', country: 'Colombia' },
+  'casa del carnaval': { name: 'Casa del Carnaval', latitude: 10.9935, longitude: -74.7818, city: 'Barranquilla', country: 'Colombia' },
+  'museo del carnaval': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
+  'museo del carnaval de barranquilla': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
+  'castillo de salgar': { name: 'Castillo de Salgar', latitude: 11.0253, longitude: -74.9189, city: 'Puerto Colombia', country: 'Colombia' },
+  'playa el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
+  'el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
+  'bahia de taganga': { name: 'Bahía de Taganga', latitude: 11.2665, longitude: -74.1925, city: 'Santa Marta', country: 'Colombia' },
+  'taganga': { name: 'Bahía de Taganga', latitude: 11.2665, longitude: -74.1925, city: 'Santa Marta', country: 'Colombia' },
+  'playa blanca santa marta': { name: 'Playa Blanca, Santa Marta', latitude: 11.2185, longitude: -74.2345, city: 'Santa Marta', country: 'Colombia' },
+  'quinta de san pedro alejandrino': { name: 'Quinta de San Pedro Alejandrino', latitude: 11.2290, longitude: -74.1843, city: 'Santa Marta', country: 'Colombia' },
+  'parque de los novios': { name: 'Parque de Los Novios', latitude: 11.2427, longitude: -74.2120, city: 'Santa Marta', country: 'Colombia' },
+  'catedral de santa marta': { name: 'Catedral Basílica de Santa Marta', latitude: 11.2435, longitude: -74.2099, city: 'Santa Marta', country: 'Colombia' },
+  'museo del oro tairona': { name: 'Museo del Oro Tairona - Casa de la Aduana', latitude: 11.2450, longitude: -74.2128, city: 'Santa Marta', country: 'Colombia' },
+  'casa de la aduana': { name: 'Museo del Oro Tairona - Casa de la Aduana', latitude: 11.2450, longitude: -74.2128, city: 'Santa Marta', country: 'Colombia' }
+}
+
 export async function geocodePlace(query, lat = null, lon = null, options = {}) {
   if (!query || typeof query !== 'string') return null
   const normalizedQuery = normalizeGeocodeQuery(query)
@@ -227,27 +306,6 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
 
   const normLower = normalizedQuery.toLowerCase().trim()
   const rawClean = String(query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-  const KNOWN_ICONIC_LANDMARKS = {
-    'islas del rosario': { name: 'Islas del Rosario, Cartagena', latitude: 10.1772, longitude: -75.7428, city: 'Cartagena', country: 'Colombia' },
-    'castillo san felipe de barajas': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
-    'castillo san felipe': { name: 'Castillo San Felipe de Barajas', latitude: 10.4237, longitude: -75.5398, city: 'Cartagena', country: 'Colombia' },
-    'paseo en chiva': { name: 'Paseo en Chiva - Torre del Reloj, Centro Histórico', latitude: 10.4225, longitude: -75.5478, city: 'Cartagena', country: 'Colombia' },
-    'cafe del mar': { name: 'Café del Mar, Baluarte de Santo Domingo', latitude: 10.4215, longitude: -75.5539, city: 'Cartagena', country: 'Colombia' },
-    'isla mucura': { name: 'Isla Múcura, Archipiélago de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
-    'isla tintipan': { name: 'Isla Tintipán, Archipiélago de San Bernardo', latitude: 9.7950, longitude: -75.8450, city: 'Coveñas', country: 'Colombia' },
-    'santa cruz del islote': { name: 'Santa Cruz del Islote, Archipiélago de San Bernardo', latitude: 9.7853, longitude: -75.8572, city: 'Coveñas', country: 'Colombia' },
-    'isla palma': { name: 'Isla Palma, Archipiélago de San Bernardo', latitude: 9.7420, longitude: -75.6490, city: 'Coveñas', country: 'Colombia' },
-    'cienaga de la caimanera': { name: 'Ciénaga de la Caimanera, Coveñas', latitude: 9.4580, longitude: -75.6200, city: 'Coveñas', country: 'Colombia' },
-    'parque museo infanteria de marina': { name: 'Parque Museo de la Infantería de Marina, Coveñas', latitude: 9.4080, longitude: -75.6880, city: 'Coveñas', country: 'Colombia' },
-    'isla fuerte': { name: 'Isla Fuerte, Bolívar / Córdoba', latitude: 9.3870, longitude: -76.1770, city: 'Coveñas', country: 'Colombia' },
-    'gran malecon': { name: 'Gran Malecón del Río', latitude: 10.9635, longitude: -74.7958, city: 'Barranquilla', country: 'Colombia' },
-    'gran malecon del rio': { name: 'Gran Malecón del Río', latitude: 10.9635, longitude: -74.7958, city: 'Barranquilla', country: 'Colombia' },
-    'playa el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
-    'el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
-    'bahia de taganga': { name: 'Bahía de Taganga', latitude: 11.2665, longitude: -74.1925, city: 'Santa Marta', country: 'Colombia' },
-    'taganga': { name: 'Bahía de Taganga', latitude: 11.2665, longitude: -74.1925, city: 'Santa Marta', country: 'Colombia' },
-    'playa blanca santa marta': { name: 'Playa Blanca, Santa Marta', latitude: 11.2185, longitude: -74.2345, city: 'Santa Marta', country: 'Colombia' }
-  }
 
   const strippedCity = normLower.replace(/,\s*(barranquilla|santa marta|cartagena|coveñas|covenas|medellin|medellín|bogota|bogotá|colombia)/gi, '').trim()
   const landmarkMatch = KNOWN_ICONIC_LANDMARKS[normLower] ||

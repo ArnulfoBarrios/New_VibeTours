@@ -116,9 +116,11 @@ class _ToursScreenState extends ConsumerState<ToursScreen> {
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverAppBar(
-                pinned: true,
-                floating: true,
+                pinned: false,
+                floating: false,
                 centerTitle: false,
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                surfaceTintColor: Colors.transparent,
                 title: Text(l10n.trips, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 32)),
               ),
               SliverToBoxAdapter(

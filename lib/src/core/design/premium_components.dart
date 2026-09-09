@@ -524,8 +524,7 @@ class TourCard extends StatelessWidget {
               top: 14,
               left: 14,
               child: _CardChip(
-                icon: Icons.auto_awesome_rounded,
-                label: tour.isAiGenerated ? 'AI' : tourTypeL10n(context, tour.type),
+                label: tourTypeL10n(context, tour.type),
               ),
             ),
             if (tour.reviewCount > 0)
@@ -592,9 +591,9 @@ class TourCard extends StatelessWidget {
 }
 
 class _CardChip extends StatelessWidget {
-  const _CardChip({required this.icon, required this.label});
+  const _CardChip({this.icon, required this.label});
 
-  final IconData icon;
+  final IconData? icon;
   final String label;
 
   @override
@@ -614,8 +613,10 @@ class _CardChip extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 14, color: Colors.white),
-                const SizedBox(width: 5),
+                if (icon != null) ...[
+                  Icon(icon, size: 14, color: Colors.white),
+                  const SizedBox(width: 5),
+                ],
                 Text(
                   label,
                   style: Theme.of(

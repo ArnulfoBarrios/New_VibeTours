@@ -84,12 +84,31 @@ class TourController extends StateNotifier<TourControllerState> {
     );
   }
 
-  void _launchTour({
+  Future<void> _launchTour({
     required BuildContext context,
     required TourPhase phase,
     required List<TourStepItem> steps,
-  }) {
+  }) async {
     state = state.copyWith(isTourActive: true);
+
+    if (steps.isNotEmpty && steps.first.key.currentContext != null) {
+      try {
+        final firstStep = steps.first;
+        final targetAlign = TourBuilder.resolveScrollAlignment(firstStep);
+        await Scrollable.ensureVisible(
+          firstStep.key.currentContext!,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          alignment: targetAlign,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+      } catch (_) {}
+    }
+
+    if (!context.mounted) {
+      state = state.copyWith(isTourActive: false);
+      return;
+    }
 
     void onComplete() {
       _storageService.markTourCompleted(phase);

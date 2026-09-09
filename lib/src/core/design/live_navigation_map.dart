@@ -19,6 +19,7 @@ class LiveNavigationMap extends ConsumerStatefulWidget {
     this.additionalWaypoints,
     this.trackingMode = true,
     this.trackingHeading,
+    this.showRecenterFab = true,
     this.fitPadding = const EdgeInsets.fromLTRB(36, 108, 36, 440),
     this.onMapCreated,
     this.onPointSelected,
@@ -32,6 +33,7 @@ class LiveNavigationMap extends ConsumerStatefulWidget {
   final List<GeoPoint>? additionalWaypoints;
   final bool trackingMode;
   final double? trackingHeading;
+  final bool showRecenterFab;
   final EdgeInsets fitPadding;
   final void Function(MapLibreMapController)? onMapCreated;
   final void Function(GeoPoint)? onPointSelected;
@@ -726,8 +728,15 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     if (trackingChanged) {
       _userIsExploringMap = false;
       _updateCameraPosition(force: true);
-    } else if (routeChanged || (widget.trackingMode && headingChanged && !locationChanged)) {
+    } else if (routeChanged) {
       _updateCameraPosition();
+    } else if (widget.trackingMode && headingChanged && !locationChanged) {
+      final oldHeading = oldWidget.trackingHeading ?? 0.0;
+      final newHeading = widget.trackingHeading ?? 0.0;
+      final diff = (oldHeading - newHeading).abs();
+      if (diff >= 6.0 && diff <= 354.0) {
+        _updateCameraPosition();
+      }
     }
   }
 
@@ -763,10 +772,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       _updateCameraPosition();
     }
 
-    try {
-      await controller.clearLines();
-    } catch (_) {}
-    _routeLine = null;
 
     final destinationChanged = _renderedDestination == null ||
         _metricDistanceMeters(_renderedDestination!, destPos) > 2;
@@ -832,7 +837,19 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
             ),
           );
         } else {
-          await controller.updateLine(_routeLine!, LineOptions(geometry: lineGeometry));
+          try {
+            await controller.updateLine(_routeLine!, LineOptions(geometry: lineGeometry));
+          } catch (_) {
+            _routeLine = await controller.addLine(
+              LineOptions(
+                geometry: lineGeometry,
+                lineColor: '#007AFF',
+                lineWidth: 7,
+                lineOpacity: 0.96,
+                lineJoin: 'round',
+              ),
+            );
+          }
         }
       } catch (_) {}
     } else if (_routeLine != null) {
@@ -963,7 +980,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
             ),
           ),
         ),
-        if (_userIsExploringMap)
+        if (_userIsExploringMap && widget.showRecenterFab)
           Positioned(
             right: 16,
             bottom: 275 + MediaQuery.of(context).padding.bottom,

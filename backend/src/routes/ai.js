@@ -588,15 +588,17 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences.destination = 'Cartagena, Bolívar, Colombia'
     }
 
-    // 2. Realizar búsqueda en vivo en la web (Tavily/DDG) si hay destino O si la consulta incluye preguntas sobre fechas, festivos, clima o eventos
+    // 2. Realizar búsqueda en vivo en la web (Tavily/DDG) SOLO si el usuario pregunta explícitamente por fechas, clima, festivos o eventos
     let webSearchResult = null
     const dest = updatedPreferences.canonicalDestination?.displayName || updatedPreferences.city || updatedPreferences.destination
-    const isDateOrEventQuery = /\b(festivo|festivos|puente|puentes|clima|evento|eventos|calendario|septiembre|octubre|noviembre|diciembre|enero|febrero|marzo|abril|mayo|junio|julio|agosto)\b/i.test(message)
+    const isDateOrEventQuery = /\b(festivo|festivos|puente|puentes|clima|evento|eventos|calendario|septiembre|octubre|noviembre|diciembre|enero|febrero|marzo|abril|mayo|junio|julio|agosto|feria|carnaval)\b/i.test(message)
+    const hasTavily = Boolean(process.env.TAVILY_API_KEY)
+    const shouldSearchWeb = isDateOrEventQuery || (hasTavily && !currentPreferences.webSearchDone && Boolean(dest))
 
-    if (dest || isDateOrEventQuery) {
+    if (shouldSearchWeb) {
       const searchQuery = isDateOrEventQuery 
-        ? `${message} en el municipio de ${dest || 'Colombia'}`
-        : `eventos turismo clima atracciones imperdibles en el municipio de ${dest} ${updatedPreferences.datesSeason || ''}`.trim()
+        ? `${message} en ${dest || 'Colombia'}`
+        : `eventos turismo atracciones imperdibles en ${dest} ${updatedPreferences.datesSeason || ''}`.trim()
 
       webSearchResult = await searchWebForTravel({
         query: searchQuery,
@@ -608,6 +610,9 @@ aiRouter.post('/chat', async (req, res, next) => {
         console.warn('[ai/chat] web search failed:', err.message)
         return null
       })
+      if (webSearchResult) {
+        updatedPreferences.webSearchDone = true
+      }
     }
 
     // Fetch verified real food / restaurant places if inquiring about dining or if within planning stages
@@ -1090,8 +1095,34 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     
     let location = null
 
-    // 1. If explicit valid coordinates were provided in request, use them directly
-    if (input.latitude && input.longitude && Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude))) {
+    // 1. If explicit destination city exists, resolve canonical city center first to anchor tour correctly
+    if (input.canonicalDestination && Number.isFinite(input.canonicalDestination.latitude) && Number.isFinite(input.canonicalDestination.longitude)) {
+      location = {
+        name: input.canonicalDestination.displayName,
+        latitude: input.canonicalDestination.latitude,
+        longitude: input.canonicalDestination.longitude,
+        city: input.canonicalDestination.city,
+        country: input.canonicalDestination.country || '',
+        placeId: input.canonicalDestination.placeId
+      }
+    } else if (input.destination || input.city) {
+      const cityQuery = input.city || input.destination
+      const canonical = await resolveCanonicalDestination(cityQuery).catch(() => null)
+      if (canonical && Number.isFinite(canonical.latitude) && Number.isFinite(canonical.longitude)) {
+        location = {
+          name: canonical.displayName,
+          latitude: canonical.latitude,
+          longitude: canonical.longitude,
+          city: canonical.city,
+          country: canonical.country || '',
+          placeId: canonical.placeId
+        }
+        input.canonicalDestination = canonical
+      }
+    }
+
+    // 2. If no destination city center resolved yet, use explicit request GPS coordinates
+    if (!location && input.latitude && input.longitude && Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude))) {
       location = {
         name: input.canonicalDestination?.displayName || input.destination || input.city,
         latitude: Number(input.latitude),
@@ -4879,14 +4910,33 @@ export async function collectTourCandidates(input, location) {
   )
 
   const city = isMicroDest
-    ? (input.canonicalDestination?.entityName || input.destination || location?.city || '')
-    : (location?.city || input.city || '')
+    ? (input.canonicalDestination?.entityName || input.destination || location?.city || input.city || '')
+    : (location?.city || input.city || input.destination || '')
   const country = location?.country || input.country || ''
 
+  let canonicalDest = input.canonicalDestination
+  if (!canonicalDest && (city || input.destination)) {
+    canonicalDest = await resolveCanonicalDestination(city || input.destination, { countryHint: country }).catch(() => null)
+  }
+
   // Obtenemos primero las coordenadas del centro del destino para validar el radio
-  const cityGeo = (location?.latitude && location?.longitude) ? location : await geocodePlace(`${city} ${country}`.trim()).catch(() => null)
-  const cityCenterLat = cityGeo?.latitude
-  const cityCenterLon = cityGeo?.longitude
+  const cityGeo = (location?.latitude && location?.longitude)
+    ? location
+    : (canonicalDest?.latitude && canonicalDest?.longitude)
+      ? canonicalDest
+      : await geocodePlace(`${city} ${country}`.trim()).catch(() => null)
+  let cityCenterLat = cityGeo?.latitude ?? canonicalDest?.latitude ?? null
+  let cityCenterLon = cityGeo?.longitude ?? canonicalDest?.longitude ?? null
+
+  if (!canonicalDest && cityCenterLat != null && cityCenterLon != null) {
+    canonicalDest = {
+      latitude: cityCenterLat,
+      longitude: cityCenterLon,
+      displayName: city,
+      city,
+      country
+    }
+  }
 
   // Check if it is a regional or nature-oriented tour
   const isRegionalOrNature = 
@@ -4924,13 +4974,6 @@ export async function collectTourCandidates(input, location) {
 
   let geocodedSpecifics = []
   if (mergedSpecifics.length > 0) {
-    const canonicalDest = input.canonicalDestination || (cityCenterLat ? {
-      latitude: cityCenterLat,
-      longitude: cityCenterLon,
-      displayName: city,
-      city,
-      country
-    } : null)
 
     let preGeocodedAi = {}
     if (mergedSpecifics.length >= 3 && process.env.OPENAI_API_KEY) {
@@ -4994,8 +5037,14 @@ export async function collectTourCandidates(input, location) {
           const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
           geo = await geocodePlace(searchQuery, destLat, destLon, { skipNominatim: true }).catch(() => null)
         }
-        if (geo && !validateCandidateLocation(geo, canonicalDest, 70)) {
-          geo = null
+        if (geo) {
+          const pLower = placeName.toLowerCase()
+          const gLower = (geo.name || '').toLowerCase()
+          if (/\bmuseo\b/i.test(pLower) && !/\bmuseo|museum|galer[íi]a|parque cultural\b/i.test(gLower)) {
+            geo = null
+          } else if (!validateCandidateLocation(geo, canonicalDest, 70)) {
+            geo = null
+          }
         }
 
         // Tier 1: Fallback inmediato con coordenadas de IA previamente obtenidas en paralelo
@@ -5131,18 +5180,26 @@ export async function collectTourCandidates(input, location) {
 
         const coords = aiCoords[placeName] ||
                        Object.entries(aiCoords).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
+                                                              arePlacesSimilar(k, placeName) ||
+                                                              normalizePlaceKey(k) === normalizePlaceKey(placeName) ||
                                                               placeName.toLowerCase().includes(k.toLowerCase()) ||
                                                               k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
 
         let finalLat = (coords && Number.isFinite(coords.latitude)) ? Number(coords.latitude) : null
         let finalLon = (coords && Number.isFinite(coords.longitude)) ? Number(coords.longitude) : null
 
-        if (finalLat == null && (cityCenterLat != null || canonicalDest?.latitude != null)) {
-          const baseLat = cityCenterLat ?? canonicalDest?.latitude
-          const baseLon = cityCenterLon ?? canonicalDest?.longitude
-          const hash = placeName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
-          finalLat = baseLat + ((hash % 20) - 10) * 0.002
-          finalLon = baseLon + (((hash * 7) % 20) - 10) * 0.002
+        if (finalLat == null) {
+          const directGeo = await geocodePlace(`${placeName}, ${city}`.trim()).catch(() => null)
+          if (directGeo && Number.isFinite(directGeo.latitude) && Number.isFinite(directGeo.longitude)) {
+            finalLat = directGeo.latitude
+            finalLon = directGeo.longitude
+          } else if (canonicalDest?.latitude != null || cityCenterLat != null) {
+            const baseLat = canonicalDest?.latitude ?? cityCenterLat
+            const baseLon = canonicalDest?.longitude ?? cityCenterLon
+            const hash = placeName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+            finalLat = baseLat + ((hash % 10) - 5) * 0.0004
+            finalLon = baseLon + (((hash * 3) % 10) - 5) * 0.0004
+          }
         }
 
         if (finalLat != null && finalLon != null) {
