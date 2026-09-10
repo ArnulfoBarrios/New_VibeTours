@@ -2410,10 +2410,22 @@ export function buildTourPlanner(input, location = null, places = []) {
       const reorderedByDay = []
       for (const dayPlaces of daysMap.values()) {
         if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
-          const firstPlace = dayPlaces[0]
-          const remaining = dayPlaces.slice(1)
-          const sortedRemaining = sortPlacesByProximity(remaining, firstPlace)
-          reorderedByDay.push(firstPlace, ...sortedRemaining)
+          // Si un restaurante/gastronomía fue colocado en medio de atracciones no-gastronómicas, moverlo al cierre del día
+          const lastPlace = dayPlaces[dayPlaces.length - 1]
+          const isLastFood = getPlaceEntityType(lastPlace.name) === 'food'
+
+          if (!isLastFood) {
+            const foodIdx = dayPlaces.findIndex((p, idx) => idx > 0 && getPlaceEntityType(p.name) === 'food')
+            if (foodIdx !== -1) {
+              const reordered = [...dayPlaces]
+              const [foodItem] = reordered.splice(foodIdx, 1)
+              reordered.push(foodItem)
+              reorderedByDay.push(...reordered)
+              continue
+            }
+          }
+
+          reorderedByDay.push(...dayPlaces)
         } else {
           reorderedByDay.push(...dayPlaces)
         }

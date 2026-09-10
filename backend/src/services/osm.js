@@ -514,7 +514,18 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'parque nacional natural tayrona': { name: 'Parque Nacional Natural Tayrona', latitude: 11.3060, longitude: -73.9380, city: 'Santa Marta', country: 'Colombia' },
   'parque tayrona': { name: 'Parque Nacional Natural Tayrona', latitude: 11.3060, longitude: -73.9380, city: 'Santa Marta', country: 'Colombia' },
   'tayrona': { name: 'Parque Nacional Natural Tayrona', latitude: 11.3060, longitude: -73.9380, city: 'Santa Marta', country: 'Colombia' },
-  'minca': { name: 'Minca, Sierra Nevada', latitude: 11.1440, longitude: -74.1180, city: 'Santa Marta', country: 'Colombia' }
+  'minca': { name: 'Minca, Sierra Nevada', latitude: 11.1440, longitude: -74.1180, city: 'Santa Marta', country: 'Colombia' },
+  'restaurante ouzo': { name: 'Restaurante Ouzo', latitude: 11.2428, longitude: -74.2121, city: 'Santa Marta', country: 'Colombia' },
+  'ouzo': { name: 'Restaurante Ouzo', latitude: 11.2428, longitude: -74.2121, city: 'Santa Marta', country: 'Colombia' },
+  'centro comercial buenavista': { name: 'Centro Comercial Buenavista', latitude: 11.2285, longitude: -74.1812, city: 'Santa Marta', country: 'Colombia' },
+
+  // International Iconic Landmarks
+  'museo del prado': { name: 'Museo Nacional del Prado', latitude: 40.4138, longitude: -3.6921, city: 'Madrid', country: 'España' },
+  'museo nacional del prado': { name: 'Museo Nacional del Prado', latitude: 40.4138, longitude: -3.6921, city: 'Madrid', country: 'España' },
+  'coliseo romano': { name: 'Coliseo Romano', latitude: 41.8902, longitude: 12.4922, city: 'Roma', country: 'Italia' },
+  'colosseo': { name: 'Coliseo Romano', latitude: 41.8902, longitude: 12.4922, city: 'Roma', country: 'Italia' },
+  'torre eiffel': { name: 'Torre Eiffel', latitude: 48.8584, longitude: 2.2945, city: 'París', country: 'Francia' },
+  'sagrada familia': { name: 'Basílica de la Sagrada Família', latitude: 41.4036, longitude: 2.1744, city: 'Barcelona', country: 'España' }
 }
 
 export function matchIconicLandmark(query, normalizedQuery, centerLat = null, centerLon = null, maxDistanceMeters = 75000) {

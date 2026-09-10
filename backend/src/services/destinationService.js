@@ -66,7 +66,15 @@ export const FALLBACK_DESTINATION_CENTROIDS = {
   'guatape': { displayName: 'Guatapé, Antioquia, Colombia', city: 'Guatapé', entityName: 'Guatapé', isMicroDestination: true, region: 'Antioquia', country: 'Colombia', countryCode: 'CO', latitude: 6.2333, longitude: -75.1583 },
   'guatapé': { displayName: 'Guatapé, Antioquia, Colombia', city: 'Guatapé', entityName: 'Guatapé', isMicroDestination: true, region: 'Antioquia', country: 'Colombia', countryCode: 'CO', latitude: 6.2333, longitude: -75.1583 },
   'malibu': { displayName: 'Malibu, California, United States', city: 'Malibu', entityName: 'Malibu', isMicroDestination: false, region: 'California', country: 'Estados Unidos', countryCode: 'US', latitude: 34.0259, longitude: -118.7798 },
-  'malibu, california': { displayName: 'Malibu, California, United States', city: 'Malibu', entityName: 'Malibu', isMicroDestination: false, region: 'California', country: 'Estados Unidos', countryCode: 'US', latitude: 34.0259, longitude: -118.7798 }
+  'malibu, california': { displayName: 'Malibu, California, United States', city: 'Malibu', entityName: 'Malibu', isMicroDestination: false, region: 'California', country: 'Estados Unidos', countryCode: 'US', latitude: 34.0259, longitude: -118.7798 },
+  'roma': { displayName: 'Roma, Lazio, Italia', city: 'Roma', entityName: 'Roma', isMicroDestination: false, region: 'Lazio', country: 'Italia', countryCode: 'IT', latitude: 41.9028, longitude: 12.4964 },
+  'rome': { displayName: 'Roma, Lazio, Italia', city: 'Roma', entityName: 'Roma', isMicroDestination: false, region: 'Lazio', country: 'Italia', countryCode: 'IT', latitude: 41.9028, longitude: 12.4964 },
+  'tokio': { displayName: 'Tokio, Japón', city: 'Tokio', entityName: 'Tokio', isMicroDestination: false, region: 'Kantō', country: 'Japón', countryCode: 'JP', latitude: 35.6762, longitude: 139.6503 },
+  'tokyo': { displayName: 'Tokio, Japón', city: 'Tokio', entityName: 'Tokio', isMicroDestination: false, region: 'Kantō', country: 'Japón', countryCode: 'JP', latitude: 35.6762, longitude: 139.6503 },
+  'madrid': { displayName: 'Madrid, España', city: 'Madrid', entityName: 'Madrid', isMicroDestination: false, region: 'Comunidad de Madrid', country: 'España', countryCode: 'ES', latitude: 40.4168, longitude: -3.7038 },
+  'barcelona': { displayName: 'Barcelona, Cataluña, España', city: 'Barcelona', entityName: 'Barcelona', isMicroDestination: false, region: 'Cataluña', country: 'España', countryCode: 'ES', latitude: 41.3851, longitude: 2.1734 },
+  'paris': { displayName: 'París, Francia', city: 'París', entityName: 'París', isMicroDestination: false, region: 'Île-de-France', country: 'Francia', countryCode: 'FR', latitude: 48.8566, longitude: 2.3522 },
+  'parís': { displayName: 'París, Francia', city: 'París', entityName: 'París', isMicroDestination: false, region: 'Île-de-France', country: 'Francia', countryCode: 'FR', latitude: 48.8566, longitude: 2.3522 }
 }
 
 export function formatCountryName(countryRaw, countryCodeRaw = '') {
@@ -165,7 +173,7 @@ export async function resolveCanonicalDestination(query, options = {}) {
   url.searchParams.set('q', normalizedQuery)
 
   try {
-    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } })
+    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(4000) })
     if (response.ok) {
       const rawResults = await response.json()
       if (Array.isArray(rawResults) && rawResults.length > 0) {
@@ -276,7 +284,7 @@ export async function resolveCanonicalDestination(query, options = {}) {
     const photonUrl = new URL('https://photon.komoot.io/api/')
     photonUrl.searchParams.set('q', normalizedQuery)
     photonUrl.searchParams.set('limit', '5')
-    const photonRes = await fetch(photonUrl, { signal: AbortSignal.timeout(3500) })
+    const photonRes = await fetch(photonUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(4000) })
     if (photonRes.ok) {
       const pJson = await photonRes.json()
       const feat = pJson.features?.[0]
