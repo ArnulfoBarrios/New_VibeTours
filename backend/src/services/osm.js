@@ -498,6 +498,43 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'minca': { name: 'Minca, Sierra Nevada', latitude: 11.1440, longitude: -74.1180, city: 'Santa Marta', country: 'Colombia' }
 }
 
+export function matchIconicLandmark(query, normalizedQuery, centerLat = null, centerLon = null, maxDistanceMeters = 75000) {
+  if (!query && !normalizedQuery) return null
+  const normLower = String(normalizedQuery || query || '').toLowerCase().trim()
+  const rawClean = String(query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const strippedCity = normLower.replace(/,\s*(barranquilla|santa marta|cartagena|coveñas|covenas|medellin|medellín|bogota|bogotá|colombia)/gi, '').trim()
+  const unaccentedStripped = strippedCity.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const unaccentedQuery = normLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const pureQuery = unaccentedStripped.split(',')[0].trim()
+
+  const landmarkMatch = KNOWN_ICONIC_LANDMARKS[normLower] ||
+    KNOWN_ICONIC_LANDMARKS[unaccentedQuery] ||
+    KNOWN_ICONIC_LANDMARKS[rawClean] ||
+    KNOWN_ICONIC_LANDMARKS[strippedCity] ||
+    KNOWN_ICONIC_LANDMARKS[unaccentedStripped] ||
+    KNOWN_ICONIC_LANDMARKS[pureQuery] ||
+    Object.entries(KNOWN_ICONIC_LANDMARKS).find(([k]) => {
+      const kClean = k.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      return pureQuery === kClean ||
+             unaccentedStripped === kClean ||
+             unaccentedQuery === kClean ||
+             (kClean.length >= 5 && pureQuery.includes(kClean)) ||
+             (pureQuery.length >= 5 && kClean.includes(pureQuery))
+    })?.[1]
+
+  if (landmarkMatch) {
+    let isValidInRegion = true
+    if (centerLat != null && centerLon != null) {
+      const dist = haversineMeters(centerLat, centerLon, landmarkMatch.latitude, landmarkMatch.longitude)
+      isValidInRegion = dist <= maxDistanceMeters
+    }
+    if (isValidInRegion) {
+      return landmarkMatch
+    }
+  }
+  return null
+}
+
 export function getRegionalBoundingBox(lat, lon, options = {}) {
   if (lat == null || lon == null) return null
   const numLat = Number(lat)
@@ -595,6 +632,13 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
 
   const regionalBbox = (centerLat != null && centerLon != null) ? getRegionalBoundingBox(centerLat, centerLon, options) : null
   const maxDistanceMeters = regionalBbox ? (regionalBbox.delta * 111000 * 1.45) : 75000
+
+  // Early check: High-confidence curated landmarks (Zero-latency exact coordinates)
+  const earlyLandmark = matchIconicLandmark(query, normalizedQuery, centerLat, centerLon, maxDistanceMeters)
+  if (earlyLandmark) {
+    geocodeCache.set(key, earlyLandmark)
+    return earlyLandmark
+  }
 
   // 2. Candidate query variations
   const queryCandidates = [normalizedQuery]
