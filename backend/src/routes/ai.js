@@ -226,6 +226,7 @@ export function isValidSpecificPlace(placeName) {
   const clean = placeName.replace(/[*_#•\[\]\(\)]/g, '').trim()
   if (clean.length < 3) return false
   const cleanLower = clean.toLowerCase()
+  const cleanAscii = cleanLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
   // Descartar opciones o nombres de hotel sugeridos extraídos accidentalmente (ej: "Real", "Las Palmas", "Hotel...")
   if (/^(?:real|las palmas|hotel|hostal|resort|posada|cabaña|cabañas)$/i.test(cleanLower)) {
@@ -275,7 +276,8 @@ export function isValidSpecificPlace(placeName) {
   }
 
   // 2.5 Descartar tiendas, supermercados, droguerías, ferreterías y almacenes cotidianos
-  if (/\b(supermercado|droguer[íi]a|farmacia|ferreter[íi]a|almac[ée]n de cadena|minimarket|estanco|miscel[aá]nea|bodega de|dep[oó]sito de)\b/i.test(cleanLower)) {
+  if (/\b(supermercado|drogueria|farmacia|ferreteria|almacen|almacen de cadena|minimarket|estanco|miscelanea|bodega de|deposito de|alkosto|exito|carulla|olimpica|jumbo|makro|pricesmart|tiendas d1|d1|tiendas ara|ara|homecenter|falabella|sodimac|panamericana)\b/i.test(cleanAscii) ||
+      /\b(supermercado|droguer[íi]a|farmacia|ferreter[íi]a|almac[ée]n|minimarket|estanco|miscel[aá]nea|alkosto|carulla|jumbo|makro|pricesmart|tiendas d1|d1|tiendas ara|homecenter|falabella)\b/i.test(cleanLower)) {
     return false
   }
 
@@ -812,10 +814,9 @@ aiRouter.post('/chat', async (req, res, next) => {
         return isValidSpecificPlace(pName) && !isNonTouristFacility({ name: pName })
       })
 
-      const existingCount = Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces.length : 0
-      const combinedSpecifics = (isConfirmedItineraryMsg && extractedFromMsg.length >= Math.max(2, existingCount))
+      const combinedSpecifics = (isConfirmedItineraryMsg && extractedFromMsg.length >= 2)
         ? deduplicatePlacesByName(extractedFromMsg.filter(p => {
-            const pName = typeof p === 'object' ? p.name : p
+            const pName = typeof p === 'object' ? (p.name || '') : String(p)
             return isValidSpecificPlace(pName) && !isNonTouristFacility({ name: pName })
           }))
         : deduplicatePlacesByName(rawCombined)
@@ -1392,7 +1393,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       if (n === city.toLowerCase() || n === `${city.toLowerCase()}, ${country.toLowerCase()}` || n.includes(`${city.toLowerCase()} ${city.toLowerCase()}`)) {
         return false
       }
-      if (/\b(aeropuerto|airport|terminal de transporte|terminal de buses|estaci[oó]n de servicio|gasolinera|hospital|cl[íi]nica|parqueadero|parking|alcald[íi]a|gobernaci[oó]n|cementerio|carulla|éxito|olímpica|d1|ara|banco|cajero)\b/i.test(n)) {
+      if (/\b(aeropuerto|airport|terminal de transporte|terminal de buses|estaci[oó]n de servicio|gasolinera|hospital|cl[íi]nica|parqueadero|parking|alcald[íi]a|gobernaci[oó]n|cementerio|carulla|éxito|exito|olímpica|olimpica|d1|ara|alkosto|jumbo|makro|pricesmart|homecenter|falabella|sodimac|panamericana|banco|cajero)\b/i.test(n)) {
         return false
       }
       if (/^(v[íi]a\s+|carretera\s+|autopista\s+|calle\s+|carrera\s+|diagonal\s+|transversal\s+)/i.test(n) || /\s+-\s+/.test(n)) {
@@ -2293,7 +2294,9 @@ export function buildTourPlanner(input, location = null, places = []) {
     (Array.isArray(input.selectedPlaces) && input.selectedPlaces.some(sp => normalizeKey(sp) === normalizeKey(p.name) || normalizeKey(p.name).includes(normalizeKey(sp))))
   ).length
   const baseStopTarget = stopCountForDuration(input.durationHours)
-  const stopTarget = Math.max(baseStopTarget, requestedCount + (input.durationHours >= 48 ? 3 : 1))
+  const stopTarget = requestedCount >= 2
+    ? requestedCount
+    : Math.max(baseStopTarget, requestedCount)
 
   if (isCorridorRoute) {
     const startPlaceCandidate = normalized.find(p => p.rawTags?.start_point === 'true' || p.type === 'start_point' || (input.originPlace && normalizeKey(p.name) === normalizeKey(input.originPlace)))
@@ -2741,12 +2744,17 @@ function estimateRouteDistance(selectedPlaces, origin) {
 }
 
 function estimateStopMinutes(place, durationHours, totalStops, index) {
+  const isDining = place?.category === 'restaurant' || isFoodOrDrinkEstablishment(place?.name || '')
+  if (isDining) {
+    if (durationHours <= 3.5) return 45
+    return 65
+  }
   const totalMinutes = durationHours * 60
   const transitMinutes = Math.max(12, (totalStops - 1) * (durationHours <= 3.5 ? 8 : 12))
   const available = Math.max(35, totalMinutes - transitMinutes)
   const base = available / totalStops
   const emphasis = index === 0 ? 1.15 : index < 2 && durationHours > 4 ? 1.08 : 0.95
-  const categoryBoost = ['museum', 'historic', 'attraction', 'market', 'restaurant', 'park', 'nightclub', 'bar'].includes(place.category)
+  const categoryBoost = ['museum', 'historic', 'attraction', 'market', 'park', 'nightclub', 'bar'].includes(place?.category)
     ? 1.08
     : 1
   const minutes = Math.round(base * emphasis * categoryBoost)

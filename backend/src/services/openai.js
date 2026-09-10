@@ -854,8 +854,10 @@ REGLA UNIVERSAL DE AGRUPAMIENTO GEOGRÁFICO Y DISTRIBUCIÓN POR DÍAS:
 REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
 1. SELECCIÓN DE ATRACTIVOS ICÓNICOS Y REALES (NIVEL TURISMO INTERNACIONAL, CERO HARDCODEO):
    - Para CUALQUIER ciudad o destino del mundo solicitado (${destName || 'el destino seleccionado'}), selecciona ÚNICAMENTE los atractivos turísticos, culturales, históricos, arquitectónicos y paisajísticos MÁS POPULARES, EMBLEMÁTICOS E ICÓNICOS que existan FÍSICAMENTE en ese destino específico.
-   - PROHIBIDO TERMINANTEMENTE asignar atractivos de una ciudad a otra (por ejemplo, nunca pongas lugares de una ciudad en otra distinta ni mezcles destinos ajenos).
-   - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o supermercados como paradas turísticas.
+   - AISLAMIENTO METROPOLITANO ESTRICTO (PROHIBIDO FUGAS INTER-CIUDAD):
+     * Todos los atractivos y restaurantes recomendados DEBEN estar ubicados DENTRO del municipio o área metropolitana inmediata de "${destName || 'el destino'}".
+     * ESTRICTAMENTE PROHIBIDO sugerir lugares que pertenezcan a OTRA ciudad vecina o distante (por ejemplo, para Barranquilla NUNCA sugieras lugares de Cartagena como "Restaurante La Mulata", "Castillo San Felipe", etc.; ni para Santa Marta lugares de Barranquilla o viceversa). Cada ciudad tiene sus propios restaurantes y atractivos emblemáticos.
+   - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o cadenas de hipermercados/supermercados cotidianos (como Alkosto, Éxito, Olímpica, Carulla, Jumbo, Makro, Ara, D1, Homecenter, etc.) como paradas turísticas.
    - REGLA CRÍTICA DE CARTOGRAFÍA EN OPENSTREETMAP / OPENFREEMAP:
      * El tour y tus recomendaciones deben estar anclados al 100% en lugares reales existentes en OpenFreeMap / OpenStreetMap.
      * ESTRICTAMENTE PROHIBIDO sugerir lugares que estén cerrados permanentemente (por ejemplo, en Barranquilla el Museo Romántico cerró permanentemente en 2018 y no existe en OpenFreeMap) o establecimientos que no cuenten con registro / nodo en OpenStreetMap.
@@ -1882,12 +1884,15 @@ Debes devolver un JSON estrictamente estructurado con:
 2. "restaurants": Array de 8 a 12 restaurantes o mercados gastronómicos MÁS EMBLEMÁTICOS, TRADICIONALES Y FAMOSOS representativos de esa ciudad específica.
    - Cada restaurante con: "name" (nombre real y limpio), "cuisine" (tipo de cocina regional/especialidad), y "specialty" (plato o experiencia destacada).
    - ESTRICTAMENTE PROHIBIDO cadenas de comida rápida multinacionales (McDonald's, KFC, etc.) o locales genéricos de comida rápida de barrio.
+   - ESTRICTAMENTE PROHIBIDO incluir restaurantes de OTRAS ciudades lejanas (ej: si el destino es Barranquilla, NUNCA incluyas restaurantes de Cartagena como "Restaurante La Mulata").
 3. "hotels": Array de 4 a 6 hoteles reales y destacados de diferentes gamas (boutique colonial/histórico, lujo, céntrico).
    - Cada hotel con: "name", "desc" (1 línea concisa de su estilo/ubicación) y "price" (rango estimado en USD).
 4. "events": Array de 2 a 3 festividades, carnavales o eventos culturales anuales icónicos con fechas habituales.
 
-REGLA CRÍTICA DE CARTOGRAFÍA EN OPENSTREETMAP / OPENFREEMAP:
+REGLA CRÍTICA DE CARTOGRAFÍA Y PRECISIÓN TERRITORIAL:
+- Todos los lugares, hoteles y restaurantes DEBEN pertenecer físicamente al municipio o área metropolitana de "${clean}". PROHIBIDO sugerir lugares de otras ciudades.
 - Incluye ÚNICAMENTE lugares y atractivos reales que existan físicamente, estén actualmente en funcionamiento y cuenten con registro en OpenStreetMap / OpenFreeMap.
+- ESTRICTAMENTE PROHIBIDO incluir cadenas de hipermercados o supermercados (Alkosto, Éxito, Olímpica, Carulla, Jumbo, Makro, Ara, D1, etc.).
 - ESTRICTAMENTE PROHIBIDO incluir lugares cerrados permanentemente (por ejemplo, el Museo Romántico de Barranquilla cerró en 2018 y no existe en OpenFreeMap) o comercios informales sin nodo cartografiado en OpenStreetMap.
 
 Formato JSON obligatorio:

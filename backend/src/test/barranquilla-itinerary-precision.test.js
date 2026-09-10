@@ -274,4 +274,101 @@ test('validateTourQuality removes duplicate places across the itinerary regardle
   assert.equal(validated.itinerario[1].nombre, 'Museo del Carnaval')
 })
 
+test('isNonTouristFacility and isValidSpecificPlace reject retail hypermarkets and supermarkets', () => {
+  const retailChains = [
+    'Alkosto Barranquilla',
+    'Éxito 51B',
+    'Supertiendas Olímpica',
+    'Carulla Country',
+    'Jumbo Prado',
+    'Makro Villa Santos',
+    'PriceSmart Barranquilla',
+    'Tiendas D1',
+    'Tiendas Ara',
+    'Homecenter Barranquilla',
+    'Falabella Buenavista'
+  ]
+
+  for (const store of retailChains) {
+    assert.equal(isNonTouristFacility({ name: store }), true, `${store} should be recognized as non-tourist facility`)
+    assert.equal(isValidSpecificPlace(store), false, `${store} should be rejected by isValidSpecificPlace`)
+  }
+})
+
+test('buildTourPlanner locks stop count to exactly 21 for a 7-day chat-requested itinerary with 3 stops/day', () => {
+  const chatPlaces = [
+    // Día 1
+    { name: 'Gran Malecón del Río', dia: 1, day: 1, latitude: 11.01, longitude: -74.78 },
+    { name: 'Barrio El Prado', dia: 1, day: 1, latitude: 10.99, longitude: -74.80 },
+    { name: 'Restaurante La Cueva', dia: 1, day: 1, latitude: 10.98, longitude: -74.79 },
+    // Día 2
+    { name: 'Museo del Caribe', dia: 2, day: 2, latitude: 10.98, longitude: -74.78 },
+    { name: 'Parque Cultural del Caribe', dia: 2, day: 2, latitude: 10.98, longitude: -74.78 },
+    { name: 'Restaurante Narcobollo', dia: 2, day: 2, latitude: 11.00, longitude: -74.81 },
+    // Día 3
+    { name: 'Castillo de Salgar', dia: 3, day: 3, latitude: 11.02, longitude: -74.92 },
+    { name: 'Puerto Velero', dia: 3, day: 3, latitude: 10.96, longitude: -75.05 },
+    { name: 'Restaurante El Celler', dia: 3, day: 3, latitude: 11.01, longitude: -74.82 },
+    // Día 4
+    { name: 'Catedral Metropolitana', dia: 4, day: 4, latitude: 10.98, longitude: -74.79 },
+    { name: 'Plaza de la Paz', dia: 4, day: 4, latitude: 10.98, longitude: -74.79 },
+    { name: 'Restaurante Varadero', dia: 4, day: 4, latitude: 11.00, longitude: -74.81 },
+    // Día 5
+    { name: 'Teatro Amira de la Rosa', dia: 5, day: 5, latitude: 10.99, longitude: -74.80 },
+    { name: 'Parque de los Fundadores', dia: 5, day: 5, latitude: 10.99, longitude: -74.80 },
+    { name: 'Restaurante Manuel', dia: 5, day: 5, latitude: 11.00, longitude: -74.82 },
+    // Día 6
+    { name: 'Zoológico de Barranquilla', dia: 6, day: 6, latitude: 11.00, longitude: -74.80 },
+    { name: 'Malecón de Puerto Colombia', dia: 6, day: 6, latitude: 10.98, longitude: -74.95 },
+    { name: 'Restaurante Palo de Mango', dia: 6, day: 6, latitude: 11.01, longitude: -74.82 },
+    // Día 7
+    { name: 'Ecoparque Ciénaga de Mallorquín', dia: 7, day: 7, latitude: 11.05, longitude: -74.85 },
+    { name: 'Ventana al Mundo', dia: 7, day: 7, latitude: 11.03, longitude: -74.83 },
+    { name: 'Restaurante Gran Maíz', dia: 7, day: 7, latitude: 11.01, longitude: -74.81 },
+  ]
+
+  const input = {
+    city: 'Barranquilla',
+    destination: 'Barranquilla',
+    durationDays: 7,
+    durationHours: 168,
+    specificPlaces: chatPlaces,
+    selectedPlaces: chatPlaces
+  }
+
+  // Include extra candidates in the pool to verify none leak into the final tour
+  const candidatesWithExtra = [
+    ...chatPlaces,
+    { name: 'Casa del Carnaval', latitude: 10.99, longitude: -74.78 },
+    { name: 'Estadio Metropolitano', latitude: 10.93, longitude: -74.80 },
+    { name: 'Parque Venezuela', latitude: 11.00, longitude: -74.81 },
+    { name: 'Alkosto Barranquilla', latitude: 11.01, longitude: -74.82 }
+  ]
+
+  const planner = buildTourPlanner(input, { latitude: 10.99, longitude: -74.80, city: 'Barranquilla' }, candidatesWithExtra)
+
+  // Must have strictly 21 stops (not 28!)
+  assert.equal(planner.selectedPlaces.length, 21)
+
+  // Exactly 3 stops per day for all 7 days
+  for (let d = 1; d <= 7; d++) {
+    const dayStops = planner.selectedPlaces.filter(p => Number(p.dia || p.day) === d)
+    assert.equal(dayStops.length, 3, `Day ${d} must have exactly 3 stops`)
+  }
+
+  // Verify none of the extra unrequested places are in the tour
+  const selectedNames = planner.selectedPlaces.map(p => p.name)
+  assert.ok(!selectedNames.includes('Alkosto Barranquilla'))
+  assert.ok(!selectedNames.includes('Estadio Metropolitano'))
+  assert.ok(!selectedNames.includes('Parque Venezuela'))
+
+  // Verify dining places have >= 60 minutes estimated duration
+  const diningStops = planner.selectedPlaces.filter(p => p.name.startsWith('Restaurante'))
+  assert.ok(diningStops.length >= 5)
+  for (const dining of diningStops) {
+    assert.ok(dining.minutes >= 60, `${dining.name} duration (${dining.minutes}m) should be >= 60 minutes`)
+  }
+})
+
+
 

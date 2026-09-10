@@ -1183,21 +1183,23 @@ export function isNonTouristFacility(tags = {}) {
   if (tags.place === 'neighbourhood' || tags.place === 'suburb' || tags.place === 'quarter' || tags.place === 'isolated_dwelling') return true
   if (tags.junction === 'roundabout' || tags.highway === 'roundabout') return true
 
-  const name = String(tags.name ?? '').toLowerCase()
-  if (isGenericFacilityName(name)) return true
+  const rawName = String(tags.name ?? '').toLowerCase()
+  const name = rawName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (isGenericFacilityName(rawName) || isGenericFacilityName(name)) return true
   if (/\b(carnaval|festival|fiesta|feria|desfile|reinado)\b/i.test(name)) {
-    const isPhysicalVenue = /\b(museo|casa|centro|parque|plaza|sala|galer[íi]a|teatro|estadio|concha|complejo)\b/i.test(name)
+    const isPhysicalVenue = /\b(museo|casa|centro|parque|plaza|sala|galeria|teatro|estadio|concha|complejo)\b/i.test(name)
     if (!isPhysicalVenue) return true
   }
   if (
-    /\b(oleoducto|gasoducto|poliducto|refiner[íi]a|tuber[íi]a|estaci[oó]n de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(name) ||
-    /\b(supermercado|tienda|droguer[íi]a|farmacia|ferreter[íi]a|almac[ée]n|panader[íi]a|carnicer[íi]a|minimarket|estanco|miscel[aá]nea|bodega|dep[oó]sito)\b/i.test(name) ||
-    /\b(parque industrial|zona franca|parque empresarial|pol[íi]gono industrial|complejo log[íi]stico|centro log[íi]stico|bodegas|parque log[íi]stico)\b/i.test(name) ||
-    /\b(rotario|club rotario|club de leones|club social|asociaci[oó]n|fundaci[oó]n|cooperativa|corporaci[oó]n|sindicato|gremio|oficina)\b/i.test(name) ||
-    /\b(urbanizaci[oó]n|condominio|conjunto\s+residencial|complejo\s+residencial|torre\s+residencial|viviendas|barrio\s+residencial|rotonda|glorieta|retorno\s+vial|intercambiador\s+vial|redoma)\b/i.test(name) ||
+    /\b(oleoducto|gasoducto|poliducto|refineria|tuberia|estacion de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(name) ||
+    /\b(supermercado|tienda|drogueria|farmacia|ferreteria|almacen|panaderia|carniceria|minimarket|estanco|miscelanea|bodega|deposito)\b/i.test(name) ||
+    /\b(alkosto|exito|carulla|olimpica|jumbo|makro|pricesmart|tiendas d1|d1|tiendas ara|ara|homecenter|falabella|sodimac|panamericana)\b/i.test(name) ||
+    /\b(parque industrial|zona franca|parque empresarial|poligono industrial|complejo logistico|centro logistico|bodegas|parque logistico)\b/i.test(name) ||
+    /\b(rotario|club rotario|club de leones|club social|asociacion|fundacion|cooperativa|corporacion|sindicato|gremio|oficina)\b/i.test(name) ||
+    /\b(urbanizacion|condominio|conjunto\s+residencial|complejo\s+residencial|torre\s+residencial|viviendas|barrio\s+residencial|rotonda|glorieta|retorno\s+vial|intercambiador\s+vial|redoma)\b/i.test(name) ||
     /\b(etapa\s+\d+|manzana\s+[a-z\d]+|bloque\s+\d+|apto\b|apartamentos|torre\s+\d+)\b/i.test(name) ||
     /\b(mirador\s+del\s+mar\s+[ivx\d]+)\b/i.test(name) ||
-    /\b(universidad\s+sim[oó]n\s+bol[íi]var|sede\s+\d+|facultad\s+de|instituto\s+t[ée]cnico|sena\s+-\s+hoteler[íi]a)\b/i.test(name) ||
+    /\b(universidad\s+simon\s+bolivar|sede\s+\d+|facultad\s+de|instituto\s+tecnico|sena\s+-\s+hoteleria)\b/i.test(name) ||
     name.includes('aguas de') ||
     name.includes('acueducto') ||
     name.includes('alcantarillado') ||
@@ -1206,7 +1208,7 @@ export function isNonTouristFacility(tags = {}) {
     name.includes('secretaria de') ||
     name.includes('notaria') ||
     name.includes('camara de comercio') ||
-    name.includes('tránsito') ||
+    name.includes('transito') ||
     name.includes('subestacion') ||
     name.includes('gas natural') ||
     name.includes('cementerio') ||
@@ -1214,7 +1216,6 @@ export function isNonTouristFacility(tags = {}) {
     name.includes('jardines de paz') ||
     name.includes('funeraria') ||
     name.includes('canal santa marta') ||
-    name.includes('ciénaga grande') ||
     name.includes('cienaga grande') ||
     name.includes('drenaje') ||
     name.includes('acequia')
