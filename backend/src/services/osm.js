@@ -114,6 +114,52 @@ export function normalizeGeocodeQuery(query) {
   return uniqueTokens.join(' ')
 }
 
+export function getDistinctSemanticTokens(str) {
+  if (!str || typeof str !== 'string') return []
+  const clean = str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+
+  const COMMON_STOP_WORDS = new Set([
+    'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
+    'de', 'del', 'al', 'a', 'en', 'para', 'por', 'con', 'sin', 'sobre', 'entre',
+    'restaurante', 'restaurant', 'bistro', 'cafe', 'bar', 'gastrobar',
+    'museo', 'museum', 'parque', 'plaza', 'iglesia', 'parroquia', 'catedral',
+    'monumento', 'monument', 'teatro', 'barrio', 'hotel', 'hostal', 'playa', 'isla',
+    'colombia', 'barranquilla', 'cartagena', 'santa', 'marta', 'bogota', 'medellin',
+    'cali', 'covenas', 'puerto'
+  ])
+
+  return clean
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 3 && !COMMON_STOP_WORDS.has(t))
+}
+
+export function isDistinctNameMatch(query, candidateName) {
+  if (!query || !candidateName) return false
+  const queryTokens = getDistinctSemanticTokens(query)
+  const candClean = candidateName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+  if (queryTokens.length === 0) {
+    const qClean = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    return candClean.includes(qClean) || qClean.includes(candClean)
+  }
+
+  const candTokens = getDistinctSemanticTokens(candidateName)
+
+  // Check if any distinct query token matches or is contained in a candidate token, or in the candidate string
+  const hasTokenMatch = queryTokens.some(qt => {
+    if (candTokens.some(ct => ct === qt || ct.includes(qt) || qt.includes(ct))) return true
+    if (candClean.includes(qt)) return true
+    return false
+  })
+
+  return hasTokenMatch
+}
+
 export function selectBestPoiResult(results, originalQuery = '') {
   if (!Array.isArray(results) || results.length === 0) return null
   const lowerQuery = String(originalQuery || '').toLowerCase()
@@ -135,6 +181,23 @@ export function selectBestPoiResult(results, originalQuery = '') {
       const isFuel = type === 'fuel' || key === 'fuel' || /\beds\b|estaci[oó]n de servicio|gasolinera/i.test(name)
       return !isFuel
     })
+  }
+
+  // 1. Strict Distinct Name Matching Guard:
+  // If originalQuery contains specific semantic tokens (e.g. "Romántico", "Cucayo", "Narcobollo"),
+  // we MUST NOT accept a candidate that completely lacks that token (e.g. "Museo del Carnaval").
+  if (originalQuery && candidates.length > 0) {
+    const qTokens = getDistinctSemanticTokens(originalQuery)
+    if (qTokens.length > 0) {
+      const matched = candidates.filter(r => isDistinctNameMatch(originalQuery, r.name))
+      if (matched.length > 0) {
+        candidates = matched
+      } else {
+        // None of the candidates match the distinct name tokens.
+        // Return null to avoid falsely pinning an unrelated landmark.
+        return null
+      }
+    }
   }
 
   if (isMuseumQuery) {
@@ -270,7 +333,7 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'parque museo infanteria de marina': { name: 'Parque Museo de la Infantería de Marina, Coveñas', latitude: 9.4080, longitude: -75.6880, city: 'Coveñas', country: 'Colombia' },
   'isla fuerte': { name: 'Isla Fuerte, Bolívar / Córdoba', latitude: 9.3870, longitude: -76.1770, city: 'Coveñas', country: 'Colombia' },
 
-  // Barranquilla
+  // Barranquilla & Área Metropolitana
   'gran malecon': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
   'gran malecon del rio': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
   'malecon del rio': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
@@ -284,30 +347,39 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'museo del caribe': { name: 'Museo Cultural del Caribe', latitude: 10.9863, longitude: -74.7784, city: 'Barranquilla', country: 'Colombia' },
   'museo del caribe gabriel garcia marquez': { name: 'Museo Cultural del Caribe', latitude: 10.9863, longitude: -74.7784, city: 'Barranquilla', country: 'Colombia' },
   'parque cultural del caribe': { name: 'Parque Cultural del Caribe', latitude: 10.9863, longitude: -74.7784, city: 'Barranquilla', country: 'Colombia' },
-  'zoologico de barranquilla': { name: 'Zoológico de Barranquilla', latitude: 11.0048, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
+  'zoologico de barranquilla': { name: 'Zoológico de Barranquilla', latitude: 11.0097, longitude: -74.7963, city: 'Barranquilla', country: 'Colombia' },
   'catedral metropolitana maria reina': { name: 'Catedral Metropolitana María Reina', latitude: 10.9885, longitude: -74.7906, city: 'Barranquilla', country: 'Colombia' },
   'catedral metropolitana': { name: 'Catedral Metropolitana María Reina', latitude: 10.9885, longitude: -74.7906, city: 'Barranquilla', country: 'Colombia' },
   'plaza de la paz': { name: 'Plaza de la Paz', latitude: 10.9885, longitude: -74.7942, city: 'Barranquilla', country: 'Colombia' },
   'casa del carnaval': { name: 'Casa del Carnaval', latitude: 10.9935, longitude: -74.7818, city: 'Barranquilla', country: 'Colombia' },
   'museo del carnaval': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
   'museo del carnaval de barranquilla': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
-  'castillo de salgar': { name: 'Castillo de Salgar', latitude: 11.0253, longitude: -74.9189, city: 'Puerto Colombia', country: 'Colombia' },
+  'castillo de salgar': { name: 'Castillo de Salgar', latitude: 11.0225, longitude: -74.9317, city: 'Puerto Colombia', country: 'Colombia' },
   'cienaga de mallorquin': { name: 'Ecoparque Ciénaga de Mallorquín', latitude: 11.0505, longitude: -74.8560, city: 'Barranquilla', country: 'Colombia' },
   'bocas de ceniza': { name: 'Bocas de Ceniza - Tajamar Occidental', latitude: 11.0967, longitude: -74.8545, city: 'Barranquilla', country: 'Colombia' },
   'barrio el prado': { name: 'Barrio El Prado, Barranquilla', latitude: 10.9985, longitude: -74.7960, city: 'Barranquilla', country: 'Colombia' },
   'teatro amira de la rosa': { name: 'Teatro Amira de la Rosa', latitude: 10.9920, longitude: -74.7890, city: 'Barranquilla', country: 'Colombia' },
-  'plaza de san nicolas': { name: 'Plaza de San Nicolás', latitude: 10.9820, longitude: -74.7770, city: 'Barranquilla', country: 'Colombia' },
+  'plaza de san nicolas': { name: 'Plaza de San Nicolás', latitude: 10.9793, longitude: -74.7744, city: 'Barranquilla', country: 'Colombia' },
   'parque tomas suri salcedo': { name: 'Parque Tomás Suri Salcedo', latitude: 10.9880, longitude: -74.8020, city: 'Barranquilla', country: 'Colombia' },
-  'restaurante cucayo': { name: 'Restaurante Cucayo', latitude: 11.0000, longitude: -74.8101, city: 'Barranquilla', country: 'Colombia' },
-  'cucayo': { name: 'Restaurante Cucayo', latitude: 11.0000, longitude: -74.8101, city: 'Barranquilla', country: 'Colombia' },
-  'restaurante narcobollo': { name: 'Restaurante Narcobollo', latitude: 10.9980, longitude: -74.8198, city: 'Barranquilla', country: 'Colombia' },
-  'narcobollo': { name: 'Restaurante Narcobollo', latitude: 10.9980, longitude: -74.8198, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante cucayo': { name: 'Restaurante Cucayo', latitude: 10.9972, longitude: -74.8095, city: 'Barranquilla', country: 'Colombia' },
+  'cucayo': { name: 'Restaurante Cucayo', latitude: 10.9972, longitude: -74.8095, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante narcobollo': { name: 'Restaurante Narcobollo', latitude: 11.0053, longitude: -74.8213, city: 'Barranquilla', country: 'Colombia' },
+  'narcobollo': { name: 'Restaurante Narcobollo', latitude: 11.0053, longitude: -74.8213, city: 'Barranquilla', country: 'Colombia' },
   'la cueva': { name: 'Restaurante Bar La Cueva', latitude: 10.9856, longitude: -74.7965, city: 'Barranquilla', country: 'Colombia' },
   'restaurante la cueva': { name: 'Restaurante Bar La Cueva', latitude: 10.9856, longitude: -74.7965, city: 'Barranquilla', country: 'Colombia' },
   'manuel restaurante': { name: 'Manuel Restaurante', latitude: 11.0050, longitude: -74.8115, city: 'Barranquilla', country: 'Colombia' },
   'restaurante manuel': { name: 'Manuel Restaurante', latitude: 11.0050, longitude: -74.8115, city: 'Barranquilla', country: 'Colombia' },
-  'varadero': { name: 'Restaurante Varadero', latitude: 11.0045, longitude: -74.8125, city: 'Barranquilla', country: 'Colombia' },
-  'restaurante varadero': { name: 'Restaurante Varadero', latitude: 11.0045, longitude: -74.8125, city: 'Barranquilla', country: 'Colombia' },
+  'varadero': { name: 'Restaurante Varadero', latitude: 11.0028, longitude: -74.8166, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante varadero': { name: 'Restaurante Varadero', latitude: 11.0028, longitude: -74.8166, city: 'Barranquilla', country: 'Colombia' },
+  'museo romantico': { name: 'Museo Romántico', latitude: 10.9950, longitude: -74.7940, city: 'Barranquilla', country: 'Colombia' },
+  'museo romantico de barranquilla': { name: 'Museo Romántico', latitude: 10.9950, longitude: -74.7940, city: 'Barranquilla', country: 'Colombia' },
+  'iglesia de la inmaculada concepcion': { name: 'Iglesia de la Inmaculada Concepción', latitude: 11.0039, longitude: -74.8033, city: 'Barranquilla', country: 'Colombia' },
+  'parroquia inmaculada concepcion': { name: 'Iglesia de la Inmaculada Concepción', latitude: 11.0039, longitude: -74.8033, city: 'Barranquilla', country: 'Colombia' },
+  'salgarito': { name: 'Salgarito Beach Club', latitude: 11.0205, longitude: -74.9325, city: 'Puerto Colombia', country: 'Colombia' },
+  'salgarito beach club': { name: 'Salgarito Beach Club', latitude: 11.0205, longitude: -74.9325, city: 'Puerto Colombia', country: 'Colombia' },
+  'restaurante la casa de doris': { name: 'Restaurante La Casa de Doris', latitude: 10.9852, longitude: -74.7795, city: 'Barranquilla', country: 'Colombia' },
+  'la casa de doris': { name: 'Restaurante La Casa de Doris', latitude: 10.9852, longitude: -74.7795, city: 'Barranquilla', country: 'Colombia' },
+  'casa de doris': { name: 'Restaurante La Casa de Doris', latitude: 10.9852, longitude: -74.7795, city: 'Barranquilla', country: 'Colombia' },
   'nena lela': { name: 'Nena Lela Trattoria', latitude: 11.0223, longitude: -74.8625, city: 'Barranquilla', country: 'Colombia' },
 
   // Santa Marta
@@ -496,6 +568,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
           if (isFuel && !isExplicitFuelQuery) return false
           const isUtility = ['waste_disposal', 'vending_machine', 'atm', 'car_wash', 'toilet', 'bench'].includes(type)
           if (isUtility) return false
+          if (query && !isDistinctNameMatch(query, r.display_name || r.name || '')) return false
           return true
         })
         if (validResult) {

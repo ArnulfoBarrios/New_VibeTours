@@ -3,8 +3,8 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, geocodePlacesWithOpenAI, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload } from '../services/openai.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch } from '../services/osm.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, geocodePlacesWithOpenAI, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -1430,20 +1430,24 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       .slice(0, 8)
 
     // 3. Resolve exact coordinates and map to rich alternative objects
-    const alternatives = await Promise.all(
+    let alternatives = (await Promise.all(
       validAiItems.map(async (item, i) => {
-        // Check verified iconic landmark first
-        const landmark = await geocodePlace(`${item.name} ${city}`, centerLat, centerLon, { skipNominatim: true }).catch(() => null)
+        // Check verified iconic landmark first, then dynamic geocode
+        const landmark = await geocodePlace(`${item.name}, ${city}`, centerLat, centerLon).catch(() => null)
         const realLat = (landmark && hasUsableCoordinates(landmark.latitude, landmark.longitude))
           ? landmark.latitude
           : ((item.latitude && hasUsableCoordinates(item.latitude, item.longitude))
               ? Number(item.latitude)
-              : (centerLat + (i + 1) * 0.004 * (i % 2 === 0 ? 1 : -1)))
+              : null)
         const realLon = (landmark && hasUsableCoordinates(landmark.latitude, landmark.longitude))
           ? landmark.longitude
           : ((item.longitude && hasUsableCoordinates(item.latitude, item.longitude))
               ? Number(item.longitude)
-              : (centerLon + (i + 1) * 0.004 * (i % 2 === 0 ? -1 : 1)))
+              : null)
+
+        if (!realLat || !realLon || !hasUsableCoordinates(realLat, realLon)) {
+          return null
+        }
 
         const category = item.category || item.type || input.type || 'attraction'
         let imageUrl = item.imageUrl || ''
@@ -1459,7 +1463,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
           imageUrl = getReliableCategoryFallbackImage(item.name, category)
         }
 
-        const richDesc = item.description || `Visita obligatoria en ${city} para sumergirse en la historia, gastronomía y cultura local.`
+        const richDesc = item.description || `Visita recomendada en ${city} para sumergirse en la historia, gastronomía y cultura local.`
         return {
           id: item.placeId || item.id || `rec-${Date.now()}-${i}`,
           name: item.name,
@@ -1481,7 +1485,48 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
           }
         }
       })
-    )
+    )).filter(Boolean)
+
+    // 4. If fewer than 4 verified alternatives, supplement directly with verified destination catalog POIs
+    if (alternatives.length < 4) {
+      try {
+        const catalog = await getRealDestinationCatalog(destination || city, country, centerLat, centerLon).catch(() => null)
+        const pool = [...(catalog?.places || []), ...(catalog?.restaurants || [])]
+        for (const catPlace of pool) {
+          if (alternatives.length >= 8) break
+          if (!catPlace || !catPlace.name) continue
+          if (isDuplicatePlace(catPlace.name, catPlace.placeId || catPlace.id)) continue
+          if (!hasUsableCoordinates(catPlace.latitude, catPlace.longitude)) continue
+          if (!isQualityTouristPlace(catPlace)) continue
+
+          const catImg = catPlace.imageUrl || catPlace.images?.[0] || getReliableCategoryFallbackImage(catPlace.name, catPlace.category || 'turismo')
+          const catDesc = catPlace.description || `Lugar emblemático en ${city}.`
+
+          alternatives.push({
+            id: catPlace.placeId || catPlace.id || `rec-cat-${Date.now()}-${alternatives.length}`,
+            name: catPlace.name,
+            latitude: Number(catPlace.latitude),
+            longitude: Number(catPlace.longitude),
+            category: catPlace.category || 'turismo',
+            imageUrl: catImg,
+            description: catDesc,
+            reason: catDesc,
+            durationMinutes: catPlace.minutes || 35,
+            locationInfo: {
+              nombre_lugar: catPlace.name,
+              direccion: catPlace.address || `${city}, ${country}`,
+              ciudad: city,
+              region: city,
+              pais: country,
+              place_id: catPlace.placeId || '',
+              url_mapa: mapUrlFor(catPlace.latitude, catPlace.longitude)
+            }
+          })
+        }
+      } catch (err) {
+        console.warn('[alternatives] Catalog fallback failed:', err.message)
+      }
+    }
 
     res.json({ alternatives })
   } catch (error) {
@@ -4981,7 +5026,9 @@ export async function collectTourCandidates(input, location) {
         if (geo) {
           const pLower = placeName.toLowerCase()
           const gLower = (geo.name || '').toLowerCase()
-          if (/\bmuseo\b/i.test(pLower) && !/\bmuseo|museum|galer[íi]a|parque cultural\b/i.test(gLower)) {
+          if (!isDistinctNameMatch(placeName, geo.name)) {
+            geo = null
+          } else if (/\bmuseo\b/i.test(pLower) && !/\bmuseo|museum|galer[íi]a|parque cultural\b/i.test(gLower)) {
             geo = null
           } else if (!validateCandidateLocation(geo, canonicalDest, 70)) {
             geo = null
@@ -4993,7 +5040,7 @@ export async function collectTourCandidates(input, location) {
           const decomposed = decomposeCompoundPlaceQuery(placeName)
           for (const dQuery of decomposed) {
             const dGeo = await geocodePlace(`${dQuery}, ${city}`, destLat, destLon).catch(() => null)
-            if (dGeo && validateCandidateLocation(dGeo, canonicalDest, 70)) {
+            if (dGeo && isDistinctNameMatch(placeName, dGeo.name) && validateCandidateLocation(dGeo, canonicalDest, 70)) {
               geo = dGeo
               break
             }
@@ -5002,8 +5049,8 @@ export async function collectTourCandidates(input, location) {
 
         // Tier 2: Búsqueda rápida de proximidad con Photon (1 sola llamada ligera)
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
-          const photonHits = await photonSearch(`${placeName} ${city}`, 2, destLat, destLon).catch(() => [])
-          const validHit = photonHits.find(h => validateCandidateLocation(h, canonicalDest, 70))
+          const photonHits = await photonSearch(`${placeName} ${city}`, 4, destLat, destLon).catch(() => [])
+          const validHit = photonHits.find(h => isDistinctNameMatch(placeName, h.name) && validateCandidateLocation(h, canonicalDest, 70))
           if (validHit) {
             geo = {
               name: validHit.name,
