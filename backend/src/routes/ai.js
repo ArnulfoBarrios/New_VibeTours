@@ -1669,11 +1669,30 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     
     updateJob({ status: 'validating', message: 'Validando estructura y calidad del recorrido...' })
     
-    const hasSpecificChatPlaces = Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length > 0 &&
-      (planner.selectedPlaces.some(p => p.category === 'requested' || p.tags?.requested_place === 'true') || planner.selectedPlaces.length >= (sourceTour.itinerario?.length || 0))
+    const hasConfirmedPlaces = Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length > 0
 
-    const plannedStops = hasSpecificChatPlaces
-      ? planner.selectedPlaces
+    const plannedStops = hasConfirmedPlaces
+      ? planner.selectedPlaces.map((p) => {
+          if (Array.isArray(sourceTour?.itinerario)) {
+            const matchedAiStop = sourceTour.itinerario.find((aiS) => {
+              const aiName = aiS.nombre || aiS.name || ''
+              return arePlacesSimilar(aiName, p.name) ||
+                     normalizePlaceKey(aiName) === normalizePlaceKey(p.name) ||
+                     aiName.toLowerCase().includes(p.name.toLowerCase()) ||
+                     p.name.toLowerCase().includes(aiName.toLowerCase())
+            })
+            if (matchedAiStop) {
+              return {
+                ...p,
+                descripcion: (matchedAiStop.descripcion && matchedAiStop.descripcion.length > 30) ? matchedAiStop.descripcion : p.description,
+                actividades: (Array.isArray(matchedAiStop.actividades) && matchedAiStop.actividades.length > 0) ? matchedAiStop.actividades : p.activities,
+                datos_curiosos: (Array.isArray(matchedAiStop.datos_curiosos) && matchedAiStop.datos_curiosos.length > 0) ? matchedAiStop.datos_curiosos : p.curiousFacts,
+                consejos: (Array.isArray(matchedAiStop.consejos) && matchedAiStop.consejos.length > 0) ? matchedAiStop.consejos : p.tips,
+              }
+            }
+          }
+          return p
+        })
       : (Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length ? sourceTour.itinerario : (sourceTour.stops ?? planner.selectedPlaces))
     const stopsTarget = plannedStops.length > 0 ? plannedStops.length : planner.selectedPlaces.length
     const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
@@ -2394,27 +2413,30 @@ export function buildTourPlanner(input, location = null, places = []) {
         return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
       })
 
-      // Para cada día con múltiples paradas (>= 3), optimizar la ruta intra-día por proximidad
-      // manteniendo fija la primera parada del día (el hito ancla del chat) para evitar zigzags
-      const daysMap = new Map()
-      for (const p of selectedPlaces) {
-        const dayKey = Number(p.dia || p.day || 1)
-        if (!daysMap.has(dayKey)) daysMap.set(dayKey, [])
-        daysMap.get(dayKey).push(p)
-      }
-
-      const reorderedByDay = []
-      for (const dayPlaces of daysMap.values()) {
-        if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
-          const firstPlace = dayPlaces[0]
-          const remaining = dayPlaces.slice(1)
-          const sortedRemaining = sortPlacesByProximity(remaining, firstPlace)
-          reorderedByDay.push(firstPlace, ...sortedRemaining)
-        } else {
-          reorderedByDay.push(...dayPlaces)
+      // Si los lugares NO provienen de un orden estructurado del chat (refList.length === 0),
+      // optimizar la ruta intra-día por proximidad manteniendo fija la primera parada del día.
+      // Si provienen del chat, PRESERVAR 100% EL ORDEN SECUENCIAL PACTADO (mañana, almuerzo, tarde/noche).
+      if (refList.length === 0) {
+        const daysMap = new Map()
+        for (const p of selectedPlaces) {
+          const dayKey = Number(p.dia || p.day || 1)
+          if (!daysMap.has(dayKey)) daysMap.set(dayKey, [])
+          daysMap.get(dayKey).push(p)
         }
+
+        const reorderedByDay = []
+        for (const dayPlaces of daysMap.values()) {
+          if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
+            const firstPlace = dayPlaces[0]
+            const remaining = dayPlaces.slice(1)
+            const sortedRemaining = sortPlacesByProximity(remaining, firstPlace)
+            reorderedByDay.push(firstPlace, ...sortedRemaining)
+          } else {
+            reorderedByDay.push(...dayPlaces)
+          }
+        }
+        selectedPlaces = reorderedByDay
       }
-      selectedPlaces = reorderedByDay
     } else {
       scored.sort((a, b) => b.score - a.score)
       selectedPlaces = selectPlaces(scored, stopTarget, input)
