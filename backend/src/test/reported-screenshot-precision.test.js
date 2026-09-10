@@ -1,4 +1,4 @@
-﻿import test from 'node:test'
+import test from 'node:test'
 import assert from 'node:assert/strict'
 import { geocodePlace, haversineMeters } from '../services/osm.js'
 import { FALLBACK_DESTINATION_CENTROIDS } from '../services/destinationService.js'
@@ -25,14 +25,14 @@ test('5 reported screenshot places resolve with meter-level precision', async ()
   // 2. Restaurante Narcobollo (Cra 43 # 84-188)
   const narcobollo = await geocodePlace('Restaurante Narcobollo', bqLat, bqLon, regionalOpts)
   assert.ok(narcobollo, 'Narcobollo must resolve')
-  const distNarcobollo = haversineMeters(narcobollo.latitude, narcobollo.longitude, 11.0053, -74.8213)
-  assert.ok(distNarcobollo < 150, `Narcobollo is ${distNarcobollo}m from Cra 43 # 84-188 (must be < 150m)`)
+  const distNarcobollo = haversineMeters(narcobollo.latitude, narcobollo.longitude, 10.99820, -74.82020)
+  assert.ok(distNarcobollo < 100, `Narcobollo is ${distNarcobollo}m from Cra 43 # 84-188 (must be < 100m)`)
 
-  // 3. Restaurante Cucayo (Cra 49C # 76-08)
+  // 3. Restaurante Cucayo (Cra 49C # 76-80)
   const cucayo = await geocodePlace('Restaurante Cucayo', bqLat, bqLon, regionalOpts)
   assert.ok(cucayo, 'Cucayo must resolve')
-  const distCucayo = haversineMeters(cucayo.latitude, cucayo.longitude, 10.9972, -74.8095)
-  assert.ok(distCucayo < 150, `Cucayo is ${distCucayo}m from Cra 49C # 76-08 (must be < 150m)`)
+  const distCucayo = haversineMeters(cucayo.latitude, cucayo.longitude, 10.99986, -74.80920)
+  assert.ok(distCucayo < 100, `Cucayo is ${distCucayo}m from Cra 49C # 76-80 (must be < 100m)`)
 
   // 4. Muelle de Puerto Colombia (Historic Pier)
   const muelle = await geocodePlace('Muelle de Puerto Colombia', bqLat, bqLon, regionalOpts)

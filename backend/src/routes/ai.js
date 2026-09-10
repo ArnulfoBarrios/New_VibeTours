@@ -1341,20 +1341,28 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
     }
 
     // Clean destination and city (avoid taking attraction name as city)
-    let rawCity = input.city || input.destination || revLocation?.city || firstPlace?.locationInfo?.ciudad || 'Barranquilla'
+    let rawCity = input.city || input.destination || revLocation?.city || firstPlace?.city || firstPlace?.locationInfo?.ciudad || ''
     if (rawCity.length > 30 || /\b(catedral|hotel|restaurante|parada|museo|parque|recorrido|tour)\b/i.test(rawCity)) {
-      rawCity = revLocation?.city || firstPlace?.locationInfo?.ciudad || 'Barranquilla'
+      rawCity = revLocation?.city || firstPlace?.city || firstPlace?.locationInfo?.ciudad || ''
     }
-    const city = cleanAdministrativeCityName(rawCity).trim() || 'Barranquilla'
-    const country = input.country || revLocation?.country || firstPlace?.locationInfo?.pais || 'Colombia'
+    const city = cleanAdministrativeCityName(rawCity).trim()
+    const country = input.country || revLocation?.country || firstPlace?.country || firstPlace?.locationInfo?.pais || ''
     const destination = (input.destination && input.destination.length < 30 && input.destination !== 'Destino' && !/\b(catedral|hotel|restaurante|museo)\b/i.test(input.destination))
       ? input.destination
       : city
 
     console.info('[alternatives] Identified destination city:', { city, country, destination, lat, lon })
 
-    const centerLat = lat || revLocation?.latitude || 10.9878
-    const centerLon = lon || revLocation?.longitude || -74.7889
+    let centerLat = (lat != null && Number.isFinite(Number(lat))) ? Number(lat) : (revLocation?.latitude || null)
+    let centerLon = (lon != null && Number.isFinite(Number(lon))) ? Number(lon) : (revLocation?.longitude || null)
+
+    if ((centerLat == null || centerLon == null) && (city || destination)) {
+      const canonical = await resolveCanonicalDestination(city || destination).catch(() => null)
+      if (canonical?.latitude && canonical?.longitude) {
+        centerLat = canonical.latitude
+        centerLon = canonical.longitude
+      }
+    }
 
     const currentKeys = new Set(
       currentPlaces.map(p => normalizeKey(p.name || '')).filter(Boolean)
@@ -5230,10 +5238,14 @@ export async function collectTourCandidates(input, location) {
         }
         if (!placeName || !isValidSpecificPlace(placeName) || isNonTouristFacility({ name: placeName })) continue
 
+        const cleanPName = cleanPlacePhysicalName(placeName) || placeName
         // Strictly query OpenStreetMap / Photon / Nominatim / Seed Landmarks with center coords & regional bounds
-        let directGeo = await geocodePlace(`${placeName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
+        let directGeo = await geocodePlace(`${cleanPName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
         if (!directGeo) {
-          directGeo = await geocodePlace(placeName, destLat, destLon, regionalOpts).catch(() => null)
+          directGeo = await geocodePlace(cleanPName, destLat, destLon, regionalOpts).catch(() => null)
+        }
+        if (!directGeo && cleanPName !== placeName) {
+          directGeo = await geocodePlace(`${placeName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
         }
 
         let finalLat = null
@@ -6027,8 +6039,16 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
     let nearbyPlaces = []
     let targetDestination = null
 
-    const centerLat = latitude ?? (tourContext?.hotelLat || 11.0041)
-    const centerLon = longitude ?? (tourContext?.hotelLon || -74.8070)
+    let centerLat = latitude ?? tourContext?.hotelLat ?? tourContext?.latitude ?? null
+    let centerLon = longitude ?? tourContext?.hotelLon ?? tourContext?.longitude ?? null
+
+    if ((centerLat == null || centerLon == null) && (tourContext?.city || tourContext?.destination)) {
+      const canonical = await resolveCanonicalDestination(tourContext.city || tourContext.destination).catch(() => null)
+      if (canonical?.latitude && canonical?.longitude) {
+        centerLat = canonical.latitude
+        centerLon = canonical.longitude
+      }
+    }
 
     // 1. Manejo de SEARCH_RESTAURANTS
     if (aiResult.isRelatedToTravel && aiResult.actionType === 'SEARCH_RESTAURANTS') {

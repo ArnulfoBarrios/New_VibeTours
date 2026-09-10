@@ -50,7 +50,7 @@ test('normalizeStop overrides OpenAI hallucinated coordinates with authentic lan
   }
   const normNarcobollo = await normalizeStop(stopNarcobollo, 4, input, null, [])
   assert.ok(normNarcobollo?.publicStop?.ubicacion, 'Narcobollo stop must be normalized')
-  const distNarcobollo = haversineMeters(normNarcobollo.publicStop.ubicacion.latitud, normNarcobollo.publicStop.ubicacion.longitud, 11.0053, -74.8213)
+  const distNarcobollo = haversineMeters(normNarcobollo.publicStop.ubicacion.latitud, normNarcobollo.publicStop.ubicacion.longitud, 10.99820, -74.82020)
   assert.ok(distNarcobollo < 100, `Narcobollo resolved at ${distNarcobollo}m from Cra 43 # 84-188 (must be < 100m)`)
 
   // 3. Restaurante Cucayo with hallucinated Cra 47 coordinates
@@ -66,8 +66,8 @@ test('normalizeStop overrides OpenAI hallucinated coordinates with authentic lan
   }
   const normCucayo = await normalizeStop(stopCucayo, 5, input, null, [])
   assert.ok(normCucayo?.publicStop?.ubicacion, 'Cucayo stop must be normalized')
-  const distCucayo = haversineMeters(normCucayo.publicStop.ubicacion.latitud, normCucayo.publicStop.ubicacion.longitud, 10.9972, -74.8095)
-  assert.ok(distCucayo < 100, `Cucayo resolved at ${distCucayo}m from Cra 49C # 76-08 (must be < 100m)`)
+  const distCucayo = haversineMeters(normCucayo.publicStop.ubicacion.latitud, normCucayo.publicStop.ubicacion.longitud, 10.99986, -74.80920)
+  assert.ok(distCucayo < 100, `Cucayo resolved at ${distCucayo}m from Cra 49C # 76-80 (must be < 100m)`)
 
   // 4. Muelle de Puerto Colombia with hallucinated open-sea coordinates
   const stopMuelle = {

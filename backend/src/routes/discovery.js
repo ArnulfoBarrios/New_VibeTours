@@ -72,7 +72,13 @@ discoveryRouter.get('/nearby', async (req, res, next) => {
       places = await overpassAttractions(query.lat, query.lng, 9000)
     }
     if (!places.length) {
-      places = fallbackPlaces(query.lat, query.lng)
+      const photonResults = await photonSearch('turismo', 8, query.lat, query.lng).catch(() => [])
+      places = (photonResults || []).map(p => ({
+        name: p.name,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        type: p.type || 'attraction'
+      }))
     }
     res.json({
       places: places
@@ -121,8 +127,17 @@ discoveryRouter.get('/events', async (req, res, next) => {
       dates: `${query.startDate} ${query.endDate || ''}`
     }).catch(() => null) : null
 
-    const places = await overpassAttractions(query.lat, query.lng, query.radius)
-    const events = (places.length ? places : fallbackPlaces(query.lat, query.lng)).map((placeItem, index) => {
+    let places = await overpassAttractions(query.lat, query.lng, query.radius)
+    if (!places.length) {
+      const photonResults = await photonSearch('turismo cultural', 6, query.lat, query.lng).catch(() => [])
+      places = (photonResults || []).map(p => ({
+        name: p.name,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        type: p.type || 'attraction'
+      }))
+    }
+    const events = places.map((placeItem, index) => {
       const pName = placeItem.name || 'Lugar cultural'
       const eventTitle = [
         `Noche cultural cerca de ${pName}`,
@@ -171,14 +186,6 @@ async function currentWeather(latitude, longitude) {
     code: Number(current.weather_code ?? 0),
     isDay: Number(current.is_day ?? 1) === 1
   }
-}
-
-function fallbackPlaces(latitude, longitude) {
-  return [
-    { name: 'Plaza central', latitude: latitude + 0.004, longitude: longitude - 0.002, type: 'plaza' },
-    { name: 'Centro cultural cercano', latitude: latitude - 0.003, longitude: longitude + 0.003, type: 'arts_centre' },
-    { name: 'Parque local', latitude: latitude + 0.002, longitude: longitude + 0.004, type: 'park' }
-  ]
 }
 
 function weatherLabel(code, isDay) {
