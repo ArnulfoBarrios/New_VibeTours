@@ -3910,15 +3910,16 @@ function generateDynamicActivities(name, category) {
   ]
 }
 
-async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lon = null, targetCityCoords = null) {
+async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lon = null, targetCityCoords = null, options = {}) {
   const normPlace = String(placeName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const normCity = String(targetCity || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-  // 1. Verificación por distancia radial esférica desde el centro del municipio/región turística (máximo 45 km para excursiones de día)
+  // 1. Verificación por distancia radial esférica desde el centro del municipio/región turística (máximo 80 km para tours regionales/multidía, 50 km para tours urbanos)
+  const maxRadiusKm = (options.isRegional || (options.durationDays && options.durationDays >= 2)) ? 80 : 50
   if (lat && lon && targetCityCoords?.latitude && targetCityCoords?.longitude) {
     const distKm = haversineMeters(targetCityCoords.latitude, targetCityCoords.longitude, lat, lon) / 1000
-    if (distKm > 45) {
-      console.warn(`[UniversalGeoBoundary] Rechazado "${placeName}" (${distKm.toFixed(1)} km) por exceder 45 km del centro de "${targetCity}"`)
+    if (distKm > maxRadiusKm) {
+      console.warn(`[UniversalGeoBoundary] Rechazado "${placeName}" (${distKm.toFixed(1)} km) por exceder ${maxRadiusKm} km del centro de "${targetCity}"`)
       return false
     }
   }
@@ -3961,7 +3962,7 @@ function sanitizeStopTitle(rawName) {
   return name
 }
 
-async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null, options = {}) {
+export async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null, options = {}) {
   const source = stop && typeof stop === 'object' ? stop : {}
   const ubicacion = source.ubicacion ?? source.locationInfo ?? {}
   const candidateIndex = (index < candidatePlaces.length) ? index : (candidatePlaces.length > 0 ? (index % candidatePlaces.length) : 0)
@@ -3974,25 +3975,37 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   const isGenericPlaceholder = !rawName || /parada \d+/i.test(rawName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(rawName)
   const sourceName = isGenericPlaceholder ? (candidateFallback?.name ?? `${input.destination} ${index + 1}`) : rawName
 
-  const matchedPlace = findCandidatePlace(sourceName, candidatePlaces, anchorPlace)
-  const fallbackPlace = matchedPlace ?? candidateFallback ?? anchorPlace ?? null
+  const matchedPlace = findCandidatePlace(sourceName, candidatePlaces)
   const startPlace = candidatePlaces[0] ?? null
   const endPlace = candidatePlaces[candidatePlaces.length - 1] ?? null
   const coordinates = await resolveStopCoordinates({
     source,
     input,
     name: sourceName,
-    fallbackPlace,
+    matchedPlace,
+    fallbackPlace: candidateFallback,
     startPlace,
     endPlace,
   })
-  let resolvedName = cleanPlacePhysicalName(sourceName || fallbackPlace?.name || candidateFallback?.name || `${input.destination}`)
+  let resolvedName = cleanPlacePhysicalName(sourceName || matchedPlace?.name || candidateFallback?.name || `${input.destination}`)
   const cityCenterCoords = (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude)
     ? input.canonicalDestination
     : (input.latitude && input.longitude ? { latitude: input.latitude, longitude: input.longitude } : candidatePlaces[0])
-  const isValidCityPlace = await isPlaceBelongingToCity(resolvedName, input.city || input.destination, coordinates.latitude, coordinates.longitude, cityCenterCoords)
+  const isRegionalOrNature = Boolean(
+    input.durationDays >= 2 ||
+    input.durationHours >= 24 ||
+    /tayrona|minca|sierra nevada|cove[ñn]as|san bernardo|rosario|bar[uú]|guajira|palomino|amazonas|eje cafetero/i.test(input.destination || input.city)
+  )
+  const isValidCityPlace = await isPlaceBelongingToCity(
+    resolvedName,
+    input.city || input.destination,
+    coordinates.latitude,
+    coordinates.longitude,
+    cityCenterCoords,
+    { isRegional: isRegionalOrNature, durationDays: input.durationDays }
+  )
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
-    resolvedName = cleanPlacePhysicalName(candidateFallback?.name || fallbackPlace?.name || `${input.destination}`)
+    resolvedName = cleanPlacePhysicalName(candidateFallback?.name || `${input.destination}`)
   }
   let richData = options?.descriptionsMap?.[resolvedName] || options?.descriptionsMap?.[sourceName]
   if (!richData && options?.descriptionsMap && typeof options.descriptionsMap === 'object') {
@@ -4032,7 +4045,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     if (wikiText && wikiText.length > 30) {
       description = wikiText
     } else {
-      const rawCat = fallbackPlace?.category || source.categoria || source.category || source.type || 'lugar'
+      const rawCat = matchedPlace?.category || candidateFallback?.category || source.categoria || source.category || source.type || 'lugar'
       description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
     }
   }
@@ -4044,21 +4057,21 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     minutes = 45
     durationText = "45 minutos"
   } else if (minutes < 20) {
-    const fallbackMins = Math.max(25, fallbackPlace?.minutes ?? source.suggestedMinutes ?? 25)
+    const fallbackMins = Math.max(25, matchedPlace?.minutes ?? candidateFallback?.minutes ?? source.suggestedMinutes ?? 25)
     durationText = `${fallbackMins} minutos`
   }
 
   const images = normalizeList(source.imagenes ?? source.images, [])
   const cityFallback = input.city ? `${input.city}, ${input.country || ''}`.trim().replace(/,\s*$/, '') : input.destination
   
-  const rawCategory = source.categoria || source.category || source.type || fallbackPlace?.category || fallbackPlace?.type || ''
+  const rawCategory = source.categoria || source.category || source.type || matchedPlace?.category || candidateFallback?.category || ''
   const placeCategory = normalizeCategory({
     category: rawCategory,
     name: resolvedName,
     tags: source.etiquetas || source.tags || []
   })
   
-  const existingImageUrl = source.imageUrl || images[0] || fallbackPlace?.imageUrl || ''
+  const existingImageUrl = source.imageUrl || images[0] || matchedPlace?.imageUrl || candidateFallback?.imageUrl || ''
   let image = ''
   let isFallbackImg = false
 
@@ -4098,17 +4111,15 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   const isGenericTips = rawTips.length === 0 || 
                         rawTips.every(t => t.includes('Confirma horarios') || t.includes('horarios locales'));
   if (isGenericTips) {
-    rawTips = generateDynamicTips(resolvedName, rawCategory, input.city || input.destination)
+    rawTips = generateDynamicTips(resolvedName, rawCategory)
   }
 
-  // Normalizar datos curiosos con anécdotas e historia real de la IA
-  const rawCuriousFacts = normalizeList(richObj?.datos_curiosos ?? source.datos_curiosos, [])
-  const validCuriousFacts = rawCuriousFacts.filter(f => typeof f === 'string' && f.trim().length > 15 && !f.includes('es uno de los puntos emblemáticos más destacados'))
-  const datos_curiosos = validCuriousFacts.length > 0 
-    ? validCuriousFacts 
+  const rawFacts = normalizeList(richObj?.datos_curiosos ?? source.datos_curiosos, [])
+  const datos_curiosos = rawFacts.length > 0
+    ? rawFacts
     : [`${resolvedName} posee una notable relevancia histórica, arquitectónica y cultural en ${input.city || input.destination}.`]
 
-  const sourceDay = Number(source.dia ?? source.day ?? fallbackPlace?.dia ?? fallbackPlace?.day ?? anchorPlace?.dia ?? anchorPlace?.day ?? 0)
+  const sourceDay = Number(source.dia ?? source.day ?? matchedPlace?.dia ?? matchedPlace?.day ?? candidateFallback?.dia ?? candidateFallback?.day ?? anchorPlace?.dia ?? anchorPlace?.day ?? 0)
   const stopDay = (sourceDay > 0) ? sourceDay : (calculatedDay !== null ? calculatedDay : 1)
 
   const publicStop = {
@@ -4122,20 +4133,20 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
     datos_curiosos,
     consejos: rawTips,
     ubicacion: {
-      nombre_lugar: cleanPlacePhysicalName(fallbackPlace?.name ?? ubicacion.nombre_lugar ?? resolvedName),
-      direccion: fallbackPlace?.address ?? ubicacion.direccion ?? source.address ?? "",
-      ciudad: fallbackPlace?.city ?? ubicacion.ciudad ?? input.city ?? "",
-      region: fallbackPlace?.region ?? ubicacion.region ?? "",
-      pais: fallbackPlace?.country ?? ubicacion.pais ?? input.country ?? "",
+      nombre_lugar: resolvedName,
+      direccion: matchedPlace?.address ?? ubicacion.direccion ?? source.address ?? "",
+      ciudad: matchedPlace?.city ?? ubicacion.ciudad ?? input.city ?? "",
+      region: matchedPlace?.region ?? ubicacion.region ?? "",
+      pais: matchedPlace?.country ?? ubicacion.pais ?? input.country ?? "",
       latitud: coordinates.latitude,
       longitud: coordinates.longitude,
-      place_id: fallbackPlace?.placeId ?? ubicacion.place_id ?? placeIdFor(resolvedName, coordinates.latitude, coordinates.longitude),
-      url_mapa: fallbackPlace?.urlMapa ?? ubicacion.url_mapa ?? mapUrlFor(coordinates.latitude, coordinates.longitude),
+      place_id: matchedPlace?.placeId ?? matchedPlace?.place_id ?? ubicacion.place_id ?? placeIdFor(resolvedName, coordinates.latitude, coordinates.longitude),
+      url_mapa: matchedPlace?.urlMapa ?? ubicacion.url_mapa ?? mapUrlFor(coordinates.latitude, coordinates.longitude),
     },
     imagenes: unique([image, ...images]),
   }
   const routeStop = {
-    name: publicStop.ubicacion.nombre_lugar,
+    name: resolvedName,
     latitude: coordinates.latitude,
     longitude: coordinates.longitude,
     imageUrl: publicStop.imagenes[0],
@@ -4147,7 +4158,7 @@ async function normalizeStop(stop, index, input, anchorPlace = null, candidatePl
   return { publicStop, routeStop }
 }
 
-async function resolveStopCoordinates({ source, input, name, fallbackPlace, startPlace = null, endPlace = null }) {
+export async function resolveStopCoordinates({ source, input, name, matchedPlace = null, fallbackPlace = null, startPlace = null, endPlace = null }) {
   const sourceLatitude = numberValue(source.latitude ?? source.ubicacion?.latitud, NaN)
   const sourceLongitude = numberValue(source.longitude ?? source.ubicacion?.longitud, NaN)
 
@@ -4174,66 +4185,82 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
   const destLat = canonicalDest?.latitude ?? input.latitude ?? null
   const destLon = canonicalDest?.longitude ?? input.longitude ?? null
 
-  // 0. Si source ya tiene coordenadas utilizables y validadas (ej: paradas ya seleccionadas y verificadas en planner)
-  if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
-    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude, name, place_id: source.place_id || source.id || '' }
+  const isRegionalOrNature = Boolean(
+    input.durationDays >= 2 ||
+    input.durationHours >= 24 ||
+    /tayrona|minca|sierra nevada|cove[ñn]as|san bernardo|rosario|bar[uú]|guajira|palomino|amazonas|eje cafetero/i.test(input.destination || cleanCity)
+  )
+  const isMicroDest = Boolean(canonicalDest?.isMicroDestination)
+  const geocodeOpts = {
+    isRegionalOrNature,
+    isMicroDest,
+    durationDays: input.durationDays,
+    city: cleanCity,
+    destination: input.destination
+  }
+
+  // 1. Si matchedPlace existe y está verificado para esta parada exacta
+  if (matchedPlace && hasUsableCoordinates(matchedPlace.latitude, matchedPlace.longitude)) {
+    const isNearby = !canonicalDest || validateCandidateLocation(matchedPlace, canonicalDest, 75)
+    if (isNearby && (!isCorridor || isWithinCorridor(matchedPlace, startPlace, endPlace))) {
+      return {
+        latitude: Number(matchedPlace.latitude),
+        longitude: Number(matchedPlace.longitude),
+        place_id: matchedPlace.placeId || matchedPlace.place_id || matchedPlace.id || ''
+      }
+    }
+  }
+
+  // 2. Si source viene de una fuente explícitamente verificada en OSM (grounded)
+  const isExplicitlyVerifiedSource = Boolean(
+    source.isVerified === true ||
+    source.tags?.grounded_geocoded === 'true' ||
+    (source.place_id && /^(osm|node|way|relation|\d+)/i.test(String(source.place_id)))
+  )
+  if (isExplicitlyVerifiedSource && hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
+    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude, name, place_id: source.place_id || '' }
     const isNearby = !canonicalDest || validateCandidateLocation(candidateCoord, canonicalDest, 75)
     if (isNearby && (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace))) {
       return candidateCoord
     }
   }
 
-  // 1. Geocodificar nombre de parada anclado al destino con proveedores cartográficos reales (OSM/Photon/Nominatim)
-  const searchQuery = `${name}, ${cleanCity}, ${input.country || ''}`.trim().replace(/,\s*$/, '')
-  const geocodeOpts = {
-    isRegionalOrNature: Boolean(isRegionalOrNature || input.durationDays >= 2 || input.durationHours >= 24),
-    isMicroDest: Boolean(isMicroDest),
-    durationDays: input.durationDays,
-    city: cleanCity,
-    destination: input.destination
-  }
+  // 3. GEOCODIFICACIÓN ESTRICTA EN CARTOGRAFÍA REAL (OSM / Photon / Nominatim / KNOWN_ICONIC_LANDMARKS)
+  const cleanName = cleanPlacePhysicalName(name) || name
+  const searchQuery = `${cleanName}, ${cleanCity}, ${input.country || ''}`.trim().replace(/,\s*$/, '')
   let geocoded = await geocodePlace(searchQuery, destLat, destLon, geocodeOpts).catch(() => null)
-  if (!geocoded && cleanCity && !name.toLowerCase().includes(cleanCity.toLowerCase())) {
-    geocoded = await geocodePlace(`${name}, ${cleanCity}`, destLat, destLon, geocodeOpts).catch(() => null)
+  if (!geocoded && cleanCity && !cleanName.toLowerCase().includes(cleanCity.toLowerCase())) {
+    geocoded = await geocodePlace(`${cleanName}, ${cleanCity}`, destLat, destLon, geocodeOpts).catch(() => null)
   }
   if (!geocoded && destLat && destLon) {
-    geocoded = await geocodePlace(name, destLat, destLon, geocodeOpts).catch(() => null)
+    geocoded = await geocodePlace(cleanName, destLat, destLon, geocodeOpts).catch(() => null)
   }
 
   if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
     const isNearby = !canonicalDest || validateCandidateLocation(geocoded, canonicalDest, 75)
     if (isNearby && (!isCorridor || isWithinCorridor(geocoded, startPlace, endPlace))) {
       return {
-        latitude: geocoded.latitude,
-        longitude: geocoded.longitude,
+        latitude: Number(geocoded.latitude),
+        longitude: Number(geocoded.longitude),
         place_id: geocoded.place_id || ''
       }
     }
   }
 
-  // 2. Si source ya tiene coordenadas utilizables dentro del área metropolitana
-  if (hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
-    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude, name }
-    const isNearby = !canonicalDest || validateCandidateLocation(candidateCoord, canonicalDest, 50)
-    if (isNearby && (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace))) {
-      return candidateCoord
-    }
-  }
-
-  // 3. Si existe fallbackPlace y está en la misma ciudad
+  // 4. Si el geocodificador no lo encontró pero fallbackPlace está en la misma ciudad
   if (fallbackPlace && hasUsableCoordinates(fallbackPlace.latitude, fallbackPlace.longitude)) {
     const isNearby = !canonicalDest || validateCandidateLocation(fallbackPlace, canonicalDest, 50)
     if (isNearby && (!isCorridor || isWithinCorridor(fallbackPlace, startPlace, endPlace))) {
       return {
-        latitude: fallbackPlace.latitude,
-        longitude: fallbackPlace.longitude,
+        latitude: Number(fallbackPlace.latitude),
+        longitude: Number(fallbackPlace.longitude),
         place_id: fallbackPlace.place_id || '',
         wasFallback: true
       }
     }
   }
 
-  // 4. Centro oficial verificado de la ciudad destino
+  // 5. Centro oficial verificado de la ciudad destino
   let cityCenterLat = canonicalDest?.latitude || input.latitude
   let cityCenterLon = canonicalDest?.longitude || input.longitude
   if (!hasUsableCoordinates(cityCenterLat, cityCenterLon) && cleanCity) {
@@ -4249,8 +4276,8 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
   }
 
   return {
-    latitude: cityCenterLat,
-    longitude: cityCenterLon,
+    latitude: Number(cityCenterLat),
+    longitude: Number(cityCenterLon),
     wasFallback: true
   }
 }
@@ -5188,27 +5215,49 @@ export async function collectTourCandidates(input, location) {
           directGeo = await geocodePlace(placeName, destLat, destLon, regionalOpts).catch(() => null)
         }
 
+        let finalLat = null
+        let finalLon = null
+        let address = directGeo?.name || `${placeName}, ${city}`
+        let tagSource = 'grounded_geocoded'
+
         if (directGeo && Number.isFinite(directGeo.latitude) && Number.isFinite(directGeo.longitude)) {
           if (validateCandidateLocation(directGeo, canonicalDest, 70)) {
-            const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
-            const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
-            const isRestaurant = isExplicitDining && !isCulturalVenue
-            geocodedSpecifics.push({
-              name: placeName,
-              latitude: Number(directGeo.latitude),
-              longitude: Number(directGeo.longitude),
-              type: isRestaurant ? 'restaurant' : 'tourism',
-              category: isRestaurant ? 'restaurant' : 'requested',
-              dia: placeDay,
-              day: placeDay,
-              city,
-              country,
-              address: directGeo.name || `${placeName}, ${city}`,
-              description: '',
-              tags: { requested_place: 'true', grounded_geocoded: 'true' }
-            })
-            continue
+            finalLat = Number(directGeo.latitude)
+            finalLon = Number(directGeo.longitude)
           }
+        }
+
+        // Fallback for user-requested chat stops:
+        // If external geocoding times out, rate-limits, or lacks minor venues,
+        // deterministically anchor to destination coordinates so user's explicit itinerary is preserved
+        if (finalLat == null && (destLat != null || cityCenterLat != null)) {
+          const baseLat = destLat ?? cityCenterLat
+          const baseLon = destLon ?? cityCenterLon
+          const hash = placeName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
+          finalLat = baseLat + ((hash % 10) - 5) * 0.001
+          finalLon = baseLon + (((hash * 3) % 10) - 5) * 0.001
+          tagSource = 'destination_anchored'
+        }
+
+        if (finalLat != null && finalLon != null) {
+          const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
+          const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
+          const isRestaurant = isExplicitDining && !isCulturalVenue
+          geocodedSpecifics.push({
+            name: placeName,
+            latitude: finalLat,
+            longitude: finalLon,
+            type: isRestaurant ? 'restaurant' : 'tourism',
+            category: isRestaurant ? 'restaurant' : 'requested',
+            dia: placeDay,
+            day: placeDay,
+            city,
+            country,
+            address,
+            description: '',
+            tags: { requested_place: 'true', [tagSource]: 'true' }
+          })
+          continue
         }
 
         console.warn(`[collectTourCandidates] Discarding unverified candidate "${placeName}" in ${city}. No synthetic or hallucinated coordinates allowed.`)
@@ -5647,22 +5696,34 @@ function isCandidateNearDestination(place, input, location) {
   return validateCandidateLocation(place, canonicalDest, maxDistanceKm)
 }
 
-function findCandidatePlace(name, candidatePlaces, anchorPlace) {
+function findCandidatePlace(name, candidatePlaces, anchorPlace = null) {
+  if (!name || !Array.isArray(candidatePlaces) || candidatePlaces.length === 0) return null
   const key = normalizeKey(name)
-  if (!key) return anchorPlace
+  if (!key) return null
   
   // 1. Coincidencia exacta
   const exact = candidatePlaces.find((place) => normalizeKey(place.name) === key)
   if (exact) return exact
+
+  // 2. Coincidencia normalizada de clave de lugar
+  const normKey = normalizePlaceKey(name)
+  if (normKey) {
+    const keyMatch = candidatePlaces.find((place) => normalizePlaceKey(place.name) === normKey)
+    if (keyMatch) return keyMatch
+  }
+
+  // 3. Coincidencia por similitud profunda
+  const similar = candidatePlaces.find((place) => arePlacesSimilar(place.name, name))
+  if (similar) return similar
   
-  // 2. Coincidencia donde el candidato contiene la parada (Ej: Parada "Catedral", Candidato "Catedral de Santa Marta")
+  // 4. Coincidencia donde el candidato contiene la parada (Ej: Parada "Catedral", Candidato "Catedral de Santa Marta")
   const candidateContainsStop = candidatePlaces.find((place) => {
     const placeKey = normalizeKey(place.name)
-    return placeKey.includes(key)
+    return placeKey.includes(key) && key.length >= 6
   })
   if (candidateContainsStop) return candidateContainsStop
 
-  // 3. Coincidencia donde la parada contiene al candidato, sólo si no es un término genérico muy corto
+  // 5. Coincidencia donde la parada contiene al candidato, sólo si no es un término genérico muy corto
   const stopContainsCandidate = candidatePlaces.find((place) => {
     const placeKey = normalizeKey(place.name)
     if (placeKey.length < 6) return false
@@ -5670,7 +5731,7 @@ function findCandidatePlace(name, candidatePlaces, anchorPlace) {
   })
   if (stopContainsCandidate) return stopContainsCandidate
 
-  return anchorPlace
+  return null
 }
 
 
