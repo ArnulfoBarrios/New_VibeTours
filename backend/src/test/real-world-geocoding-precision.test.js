@@ -32,6 +32,8 @@ test('isDistinctNameMatch strictly rejects mismatched POIs sharing only generic 
   assert.equal(isDistinctNameMatch('Restaurante Cucayo', 'Restaurante Pepe Anca'), false)
   assert.equal(isDistinctNameMatch('Restaurante Narcobollo', 'Tiendas D1'), false)
   assert.equal(isDistinctNameMatch('Salgarito Beach Club', 'Restaurante Bar El Cisne'), false)
+  assert.equal(isDistinctNameMatch('Restaurante El Prado', 'Restaurante y Refresquería Las 5 Mentiritas, 49C-60, Calle 80, Alto Prado, Norte-Centro Histórico, Barranquilla, Atlántico, 080020, Colombia'), false)
+  assert.equal(isDistinctNameMatch('Restaurante El Prado', 'Hotel El Prado, Carrera 54, El Prado, Barranquilla'), true)
 
   // Valid matches
   assert.equal(isDistinctNameMatch('Museo Romántico', 'Museo Romántico de Barranquilla'), true)
@@ -110,4 +112,15 @@ test('geocodePlace resolves verified real GPS coordinates for the 10 reported pl
   // 11. Restaurante La Casa de Doris (Calle 35 # 45-37)
   const doris = await geocodePlace('Restaurante La Casa de Doris', bqLat, bqLon)
   isNearby(doris, 10.9852, -74.7795, 500)
+
+  // 12. Restaurante El Prado (Cra 54 # 70-10, El Prado, NOT Las 5 Mentiritas)
+  const elPrado = await geocodePlace('Restaurante El Prado', bqLat, bqLon)
+  isNearby(elPrado, 10.9995, -74.7955, 300)
+
+  // 13. Las 5 Mentiritas (Calle 80 # 49C-60, Alto Prado)
+  const mentiritas = await geocodePlace('Las 5 Mentiritas', bqLat, bqLon)
+  isNearby(mentiritas, 11.0014, -74.8128, 300)
+
+  assert.notEqual(elPrado.latitude, mentiritas.latitude)
+  assert.notEqual(elPrado.longitude, mentiritas.longitude)
 })

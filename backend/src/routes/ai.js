@@ -1956,11 +1956,30 @@ async function processTourGeneration(jobId, input) {
     
     let tour = null
     try {
-      const hasSpecificChatPlaces = Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length > 0 &&
-        (planner.selectedPlaces.some(p => p.category === 'requested' || p.tags?.requested_place === 'true') || planner.selectedPlaces.length >= (sourceTour.itinerario?.length || 0))
+      const hasConfirmedPlaces = Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length > 0
 
-      const plannedStops = hasSpecificChatPlaces
-        ? planner.selectedPlaces
+      const plannedStops = hasConfirmedPlaces
+        ? planner.selectedPlaces.map((p) => {
+            if (Array.isArray(sourceTour?.itinerario)) {
+              const matchedAiStop = sourceTour.itinerario.find((aiS) => {
+                const aiName = aiS.nombre || aiS.name || ''
+                return arePlacesSimilar(aiName, p.name) ||
+                       normalizePlaceKey(aiName) === normalizePlaceKey(p.name) ||
+                       aiName.toLowerCase().includes(p.name.toLowerCase()) ||
+                       p.name.toLowerCase().includes(aiName.toLowerCase())
+              })
+              if (matchedAiStop) {
+                return {
+                  ...p,
+                  descripcion: (matchedAiStop.descripcion && matchedAiStop.descripcion.length > 30) ? matchedAiStop.descripcion : p.description,
+                  actividades: (Array.isArray(matchedAiStop.actividades) && matchedAiStop.actividades.length > 0) ? matchedAiStop.actividades : p.activities,
+                  datos_curiosos: (Array.isArray(matchedAiStop.datos_curiosos) && matchedAiStop.datos_curiosos.length > 0) ? matchedAiStop.datos_curiosos : p.curiousFacts,
+                  consejos: (Array.isArray(matchedAiStop.consejos) && matchedAiStop.consejos.length > 0) ? matchedAiStop.consejos : p.tips,
+                }
+              }
+            }
+            return p
+          })
         : (Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length ? sourceTour.itinerario : (sourceTour.stops ?? planner.selectedPlaces))
       const stopTarget = plannedStops.length > 0 ? plannedStops.length : Math.min(30, Math.max(3, planner.selectedPlaces.length))
       const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
@@ -1979,7 +1998,7 @@ async function processTourGeneration(jobId, input) {
       for (let index = 0; index < stopTarget; index++) {
         const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
         const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (anchorPlace?.dia ? Number(anchorPlace.dia) : null)
+        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (sourceStop?.day ? Number(sourceStop.day) : (anchorPlace?.dia ? Number(anchorPlace.dia) : (anchorPlace?.day ? Number(anchorPlace.day) : null)))
         const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopTarget) + 1)
         try {
           const normalized = await normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
@@ -2004,9 +2023,7 @@ async function processTourGeneration(jobId, input) {
         if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
           continue
         }
-        const itemDay = item.publicStop.dia || 1
-        const itemType = getPlaceEntityType(name)
-        const nameKey = `${normalizeKey(name)}__${itemType}__d${itemDay}`
+        const nameKey = normalizePlaceKey(name) || normalizeKey(name)
         if (!seenKeys.has(nameKey)) {
           seenKeys.add(nameKey)
           normalizedStops.push(item)
@@ -3639,7 +3656,7 @@ export function validateTourQuality(tour, planner, input) {
   tour.itinerario = tour.itinerario.filter((stop) => {
     const name = stop.nombre || stop.name || ''
     if (!isValidSpecificPlace(name)) return false
-    let key = normalizeKey(name)
+    let key = normalizePlaceKey(name) || normalizeKey(name)
     key = key.replace(/\b(septiembre|september|9\s*11|11\s*s)\b/g, '911memorial')
     if (!key || seenKeys.has(key)) return false
     seenKeys.add(key)

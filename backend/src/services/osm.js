@@ -145,18 +145,21 @@ export function getDistinctSemanticTokens(str) {
 
 export function isDistinctNameMatch(query, candidateName) {
   if (!query || !candidateName) return false
-  const queryTokens = getDistinctSemanticTokens(query)
-  const candClean = candidateName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const primaryQuery = query.split(',')[0].trim()
+  const primaryCandidate = candidateName.split(',')[0].trim()
+
+  const queryTokens = getDistinctSemanticTokens(primaryQuery || query)
+  const candClean = primaryCandidate.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
   if (queryTokens.length === 0) {
-    const qClean = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    const qClean = (primaryQuery || query).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
     return candClean.includes(qClean) || qClean.includes(candClean)
   }
 
-  const candTokens = getDistinctSemanticTokens(candidateName)
+  const candTokens = getDistinctSemanticTokens(primaryCandidate)
   const stem = (w) => (w.length > 4 ? w.replace(/(os|as|es|[oae])$/i, '') : w)
 
-  // Check if any distinct query token matches or is contained in a candidate token, or in the candidate string
+  // Check if any distinct query token matches or is contained in a candidate token, or in the candidate primary name
   const hasTokenMatch = queryTokens.some(qt => {
     const sQt = stem(qt)
     if (candTokens.some(ct => {
@@ -526,6 +529,9 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'morgan': { name: 'Restaurante morgan', latitude: 10.9689, longitude: -74.8038, city: 'Barranquilla', country: 'Colombia' },
   'gran maiz': { name: 'Restaurante gran maiz', latitude: 10.9623, longitude: -74.7919, city: 'Barranquilla', country: 'Colombia' },
   'restaurante gran maiz': { name: 'Restaurante gran maiz', latitude: 10.9623, longitude: -74.7919, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante el prado': { name: 'Restaurante El Prado', latitude: 10.9995, longitude: -74.7955, city: 'Barranquilla', country: 'Colombia' },
+  'hotel el prado': { name: 'Hotel El Prado', latitude: 10.9995, longitude: -74.7955, city: 'Barranquilla', country: 'Colombia' },
+  'la troja': { name: 'La Troja', latitude: 10.9942, longitude: -74.8080, city: 'Barranquilla', country: 'Colombia' },
 
   // Santa Marta
   'playa el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },

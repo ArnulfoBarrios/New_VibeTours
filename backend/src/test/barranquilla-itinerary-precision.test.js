@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isValidSpecificPlace, buildTourPlanner, deduplicatePlacesByName } from '../routes/ai.js'
+import { isValidSpecificPlace, buildTourPlanner, deduplicatePlacesByName, validateTourQuality } from '../routes/ai.js'
 import { selectBestPoiResult, geocodePlace, arePlacesSimilar, isNonTouristFacility } from '../services/osm.js'
 import { getRealDestinationCatalog, generateChatResponse } from '../services/openai.js'
 import { imageForPlaceWithStatus } from '../services/imageSearch.js'
@@ -256,6 +256,22 @@ test('buildTourPlanner orders stops within each day by proximity from first anch
   assert.equal(planner.selectedPlaces[1].name, 'Plaza de la Paz')
   // Third place is the far restaurant
   assert.equal(planner.selectedPlaces[2].name, 'Restaurante Bocas de Cenizas')
+})
+
+test('validateTourQuality removes duplicate places across the itinerary regardless of day', () => {
+  const mockTour = {
+    itinerario: [
+      { nombre: 'Restaurante El Prado', dia: 1, descripcion: 'Un restaurante legendario con más de veinte palabras para superar cualquier filtro de calidad en la validación del itinerario turístico.' },
+      { nombre: 'Museo del Carnaval', dia: 2, descripcion: 'Un museo cultural emblemático con más de veinte palabras para superar cualquier filtro de calidad en la validación del itinerario turístico.' },
+      { nombre: 'Restaurante El Prado', dia: 4, descripcion: 'Un restaurante legendario repetido por error con más de veinte palabras para superar cualquier filtro de calidad en el itinerario turístico.' },
+    ]
+  }
+  const planner = { selectedPlaces: [{ name: 'Restaurante El Prado' }, { name: 'Museo del Carnaval' }] }
+  const input = { city: 'Barranquilla' }
+  const validated = validateTourQuality(mockTour, planner, input)
+  assert.equal(validated.itinerario.length, 2)
+  assert.equal(validated.itinerario[0].nombre, 'Restaurante El Prado')
+  assert.equal(validated.itinerario[1].nombre, 'Museo del Carnaval')
 })
 
 
