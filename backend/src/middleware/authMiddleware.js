@@ -4,10 +4,10 @@ export async function requireAdminRole(req, res, next) {
   try {
     const authHeader = req.headers.authorization
     const adminSecretHeader = req.headers['x-admin-secret']
-    const expectedSecret = process.env.ADMIN_SECRET_KEY ?? 'vibetours-admin-dev-secret'
+    const expectedSecret = process.env.ADMIN_SECRET_KEY || (process.env.NODE_ENV !== 'production' ? 'vibetours-admin-dev-secret' : null)
 
     // 1. Check development/demo secret header first
-    if (adminSecretHeader && adminSecretHeader === expectedSecret) {
+    if (adminSecretHeader && expectedSecret && adminSecretHeader === expectedSecret) {
       req.isAdmin = true
       return next()
     }

@@ -926,37 +926,36 @@ const OVERPASS_SERVERS = [
   'https://overpass.private.coffee/api/interpreter'
 ]
 
-const attractionsCache = new Map()
-const CACHE_TTL_MS = 30 * 60 * 1000
+const attractionsCache = new GeoCache(30 * 60 * 1000, 300)
 
-async function fetchOverpassWithMirrors(query, timeoutMs = 1200) {
-  const fetchPromises = OVERPASS_SERVERS.map(async (serverUrl) => {
-    const response = await fetch(serverUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': USER_AGENT
-      },
-      body: new URLSearchParams({ data: query }),
-      signal: AbortSignal.timeout(timeoutMs)
-    })
-    if (!response.ok) throw new Error(`HTTP ${response.status} from ${serverUrl}`)
-    return await response.json()
-  })
-
-  try {
-    return await Promise.any(fetchPromises)
-  } catch {
-    return null
+async function fetchOverpassWithMirrors(query, timeoutMs = 4000) {
+  for (const serverUrl of OVERPASS_SERVERS) {
+    try {
+      const response = await fetch(serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': USER_AGENT
+        },
+        body: new URLSearchParams({ data: query }),
+        signal: AbortSignal.timeout(timeoutMs)
+      })
+      if (response.ok) {
+        return await response.json()
+      }
+    } catch {
+      // Continue to next mirror sequentially
+    }
   }
+  return null
 }
 
 export async function overpassAttractions(latitude, longitude, radius = 8000) {
   const effectiveRadius = Math.min(Math.max(radius, 8000), 52000)
   const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${effectiveRadius}`
   const cached = attractionsCache.get(cacheKey)
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data
+  if (cached) {
+    return cached
   }
 
   const query = `
@@ -1038,7 +1037,7 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
     }
 
     if (results.length > 0) {
-      attractionsCache.set(cacheKey, { data: results, expiresAt: Date.now() + CACHE_TTL_MS })
+      attractionsCache.set(cacheKey, results)
     }
 
     return results

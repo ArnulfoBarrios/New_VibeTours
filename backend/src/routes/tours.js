@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { Router } from 'express'
 import { z } from 'zod'
 
@@ -12,15 +13,20 @@ toursRouter.get('/', async (req, res, next) => {
       res.json({ tours: [] })
       return
     }
-    const { data, error } = await supabase
+    let dbQuery = supabase
       .from('tours')
       .select('*, tour_stops(*)')
+      .or('is_published.eq.true,status.eq.approved')
       .order('rating', { ascending: false })
       .limit(100)
+
+    if (req.query.city) dbQuery = dbQuery.ilike('city', `%${req.query.city}%`)
+    if (req.query.country) dbQuery = dbQuery.ilike('country', `%${req.query.country}%`)
+    if (req.query.type) dbQuery = dbQuery.eq('type', req.query.type)
+
+    const { data, error } = await dbQuery
     if (error) throw error
-    const tours = data
-      .filter((tour) => tour.is_published === true || tour.status === 'approved')
-      .filter((tour) => matchesTourFilter(tour, req.query))
+    const tours = (data || []).filter((tour) => matchesTourFilter(tour, req.query))
     res.json({ tours })
   } catch (error) {
     next(error)
@@ -88,23 +94,42 @@ toursRouter.post('/', async (req, res, next) => {
         longitude: z.number()
       })).min(1)
     })
-    const tour = schema.parse(req.body)
+    const { stops, ...tourData } = schema.parse(req.body)
     if (!supabase) {
-      res.status(202).json({ tour: { ...tour, id: crypto.randomUUID(), demo: true } })
+      res.status(202).json({ tour: { ...tourData, stops, id: crypto.randomUUID(), demo: true } })
       return
     }
-    const { data, error } = await supabase
+    const { data: newTour, error: tourError } = await supabase
       .from('tours')
       .insert({
-        ...tour,
-        created_by: tour.created_by ?? tour.owner_id ?? null,
+        ...tourData,
+        created_by: req.user?.id ?? null,
         is_published: false,
         moderation_status: 'pending'
       })
       .select()
       .single()
-    if (error) throw error
-    res.status(201).json({ tour: data })
+    if (tourError) throw tourError
+
+    if (Array.isArray(stops) && stops.length > 0) {
+      const stopsPayload = stops.map((stop, index) => ({
+        tour_id: newTour.id,
+        name: stop.name,
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        order: index
+      }))
+      const { data: createdStops, error: stopsError } = await supabase
+        .from('tour_stops')
+        .insert(stopsPayload)
+        .select()
+      if (stopsError) {
+        console.warn('[tours] Error inserting tour_stops:', stopsError.message)
+      }
+      newTour.tour_stops = createdStops || []
+    }
+
+    res.status(201).json({ tour: newTour })
   } catch (error) {
     next(error)
   }

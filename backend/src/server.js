@@ -8,6 +8,7 @@ import morgan from 'morgan'
 import path from 'path'
 
 import { aiRouter } from './routes/ai.js'
+import { chatRouter } from './routes/chat.js'
 import { discoveryRouter } from './routes/discovery.js'
 import { toursRouter } from './routes/tours.js'
 
@@ -22,7 +23,7 @@ app.use(
         "script-src": ["'self'", "'unsafe-inline'"],
         "style-src": ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
         "font-src": ["'self'", "fonts.gstatic.com"],
-        "img-src": ["'self'", "data:", "blob:"],
+        "img-src": ["'self'", "data:", "blob:", "https:"],
       },
     },
   })
@@ -45,6 +46,7 @@ app.get(['/health', '/api/health'], (req, res) => {
 
 app.use('/api/tours', toursRouter)
 app.use('/api/ai', aiRouter)
+app.use('/api/chat', chatRouter)
 app.use('/api/discovery', discoveryRouter)
 
 app.use((req, res) => {
@@ -60,7 +62,7 @@ app.use((error, req, res, next) => {
   })
 })
 
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'test') {
   app.listen(port, () => {
     console.log(`VIBETOURS API listening on http://localhost:${port}`)
   })

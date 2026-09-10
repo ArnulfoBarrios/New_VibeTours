@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import { overpassAttractions, photonSearch, reverseGeocodeLocation } from '../services/osm.js'
+import { searchWebForTravel } from '../services/webSearch.js'
 
 export const discoveryRouter = Router()
 
@@ -109,12 +110,16 @@ discoveryRouter.get('/events', async (req, res, next) => {
       })
     }
 
-    const cityName = query.city || 'Barcelona'
-    const liveSearch = await searchWebForTravel({
+    let cityName = query.city
+    if (!cityName) {
+      const rev = await reverseGeocodeLocation(query.lat, query.lng).catch(() => null)
+      cityName = rev?.city || rev?.country || ''
+    }
+    const liveSearch = cityName ? await searchWebForTravel({
       query: `eventos culturales agenda festivales conciertos en ${cityName} ${query.startDate} ${query.endDate || ''}`,
       city: cityName,
       dates: `${query.startDate} ${query.endDate || ''}`
-    }).catch(() => null)
+    }).catch(() => null) : null
 
     const places = await overpassAttractions(query.lat, query.lng, query.radius)
     const events = (places.length ? places : fallbackPlaces(query.lat, query.lng)).map((placeItem, index) => {
@@ -198,14 +203,4 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
   return 2 * radius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-function curatedImage(seed) {
-  const images = [
-    'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=900&q=80',
-    'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=900&q=80',
-    'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=900&q=80',
-    'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=900&q=80',
-    'https://images.unsplash.com/photo-1528605105345-5344ea20e269?auto=format&fit=crop&w=900&q=80'
-  ]
-  const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  return images[Math.abs(hash) % images.length]
-}
+

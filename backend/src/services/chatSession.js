@@ -1,10 +1,29 @@
 import { supabase } from './supabase.js'
 
-// Fallback in memory in case DB is not yet created or disconnected during dev
-const memorySessions = new Map()
+import { GeoCache } from './geoCache.js'
+
+// Fallback in memory with TTL and max entries
+const memorySessions = new GeoCache(24 * 60 * 60 * 1000, 500)
+
+function formatSession(raw) {
+  if (!raw) return null
+  const collected = raw.collected_data || raw.collectedData || {}
+  return {
+    sessionId: raw.session_id || raw.sessionId,
+    currentState: raw.current_state || raw.currentState || 'WELCOME',
+    current_state: raw.current_state || raw.currentState || 'WELCOME',
+    collectedData: collected,
+    collected_data: collected,
+    history: raw.history || [],
+    places: raw.places || collected.places || [],
+    finalTour: raw.finalTour || collected.finalTour || null
+  }
+}
 
 export async function getSession(sessionId) {
-  if (!supabase) return memorySessions.get(sessionId) || null
+  if (!supabase) {
+    return formatSession(memorySessions.get(sessionId))
+  }
 
   try {
     const { data, error } = await supabase
@@ -16,28 +35,34 @@ export async function getSession(sessionId) {
     if (error) {
       if (error.code === 'PGRST116') return null // No rows found
       console.warn('[chatSession] Failed to fetch from DB, falling back to memory:', error.message)
-      return memorySessions.get(sessionId) || null
+      return formatSession(memorySessions.get(sessionId))
     }
 
-    return data
+    return formatSession(data)
   } catch (err) {
     console.error('[chatSession] DB connection error:', err.message)
-    return memorySessions.get(sessionId) || null
+    return formatSession(memorySessions.get(sessionId))
   }
 }
 
 export async function saveSession(sessionId, stateData) {
+  const collected = {
+    ...(stateData.collectedData || stateData.collected_data || {}),
+    places: stateData.places || [],
+    finalTour: stateData.finalTour || null
+  }
   const payload = {
     session_id: sessionId,
-    current_state: stateData.currentState,
-    collected_data: stateData.collectedData,
-    history: stateData.history,
+    current_state: stateData.currentState || stateData.current_state || 'WELCOME',
+    collected_data: collected,
+    history: stateData.history || [],
     updated_at: new Date().toISOString()
   }
 
+  memorySessions.set(sessionId, payload)
+
   if (!supabase) {
-    memorySessions.set(sessionId, payload)
-    return payload
+    return formatSession(payload)
   }
 
   try {
@@ -48,16 +73,14 @@ export async function saveSession(sessionId, stateData) {
       .single()
 
     if (error) {
-      console.warn('[chatSession] Failed to save to DB, falling back to memory:', error.message)
-      memorySessions.set(sessionId, payload)
-      return payload
+      console.warn('[chatSession] Failed to save to DB, using memory:', error.message)
+      return formatSession(payload)
     }
     
-    return data
+    return formatSession(data)
   } catch (err) {
     console.error('[chatSession] DB save error:', err.message)
-    memorySessions.set(sessionId, payload)
-    return payload
+    return formatSession(payload)
   }
 }
 

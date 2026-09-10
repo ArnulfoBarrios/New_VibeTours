@@ -3,6 +3,47 @@ import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters } from './osm.js'
+import { generateSpeechAudio } from './ttsService.js'
+
+export { generateSpeechAudio }
+
+export function cleanAndParseJson(rawContent, fallback = null) {
+  if (!rawContent || typeof rawContent !== 'string') return fallback
+  let cleaned = rawContent.trim()
+  
+  // Strip markdown code fences ```json ... ``` or ``` ... ```
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+  }
+  
+  // Extract outermost JSON block if text precedes or succeeds it
+  const firstBrace = cleaned.indexOf('{')
+  const firstBracket = cleaned.indexOf('[')
+  let startIndex = -1
+  if (firstBrace !== -1 && firstBracket !== -1) {
+    startIndex = Math.min(firstBrace, firstBracket)
+  } else if (firstBrace !== -1) {
+    startIndex = firstBrace
+  } else if (firstBracket !== -1) {
+    startIndex = firstBracket
+  }
+
+  if (startIndex !== -1) {
+    const lastBrace = cleaned.lastIndexOf('}')
+    const lastBracket = cleaned.lastIndexOf(']')
+    const endIndex = Math.max(lastBrace, lastBracket)
+    if (endIndex > startIndex) {
+      cleaned = cleaned.slice(startIndex, endIndex + 1)
+    }
+  }
+
+  try {
+    return JSON.parse(cleaned)
+  } catch (err) {
+    console.warn('[openai] cleanAndParseJson failed to parse JSON:', err.message)
+    return fallback
+  }
+}
 
 const planCache = new GeoCache(6 * 60 * 60 * 1000, 200)
 const destinationCatalogCache = new GeoCache(12 * 60 * 60 * 1000, 200)
@@ -1695,7 +1736,7 @@ Lugares obligatorios: ${JSON.stringify(selectedPlaces)}`
 
     if (response.ok) {
       const data = await response.json()
-      return JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
+      return cleanAndParseJson(data.choices?.[0]?.message?.content, null)
     }
   } catch (err) {
     console.error('[planWithOpenAI] Error:', err)
@@ -2333,11 +2374,20 @@ export async function buildVisualDestinationSuggestions(chips = []) {
 
 export async function geocodePlacesWithOpenAI({ city = '', country = '', places = [], centerLat = null, centerLon = null }) {
   if (!places || places.length === 0) return {}
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return {}
-
   const placeNames = places.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
   if (placeNames.length === 0) return {}
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    const fallbackResults = {}
+    for (const p of placeNames) {
+      const geo = await geocodePlace(`${p}, ${city}`, centerLat, centerLon).catch(() => null)
+      if (geo && Number.isFinite(geo.latitude) && Number.isFinite(geo.longitude)) {
+        fallbackResults[p] = { latitude: geo.latitude, longitude: geo.longitude, address: geo.city || city }
+      }
+    }
+    return fallbackResults
+  }
 
   try {
     const systemPrompt = `Eres un geocodificador ultra-preciso de VibeTours.
@@ -2390,7 +2440,7 @@ ${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
         const json = await response.json()
         const content = json.choices?.[0]?.message?.content
         if (!content) return {}
-        const parsed = JSON.parse(content)
+        const parsed = cleanAndParseJson(content, {})
         return parsed && typeof parsed === 'object' ? parsed : {}
       })
     )
@@ -2407,8 +2457,5 @@ ${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
     return {}
   }
 }
-
-import { generateSpeechAudio } from './ttsService.js'
-export { generateSpeechAudio }
 
 

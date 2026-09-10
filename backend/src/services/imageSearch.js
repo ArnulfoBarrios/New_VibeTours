@@ -127,14 +127,14 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
   try {
     const searchQuery = `${cleaned} ${cleanCity} ${cleanCountry}`.trim()
     const searchUrl = `https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQuery)}&utf8=&format=json&origin=*`
-    const sRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+    const sRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
     if (sRes.ok) {
       const sJson = await sRes.json()
       const topHit = sJson?.query?.search?.[0]
       if (topHit && topHit.title) {
         const slug = encodeURIComponent(topHit.title.replace(/\s+/g, '_'))
         const sumUrl = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
-        const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+        const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
         if (sumRes.ok) {
           const sumJson = await sumRes.json()
           const imageUrl = sumJson.originalimage?.source || sumJson.thumbnail?.source
@@ -164,7 +164,7 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
     try {
       const slug = encodeURIComponent(varName.trim().replace(/\s+/g, '_'))
       const url = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
-      const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+      const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
       if (!response.ok) continue
       const json = await response.json()
       if (json.type === 'standard' || json.type === 'normal') {
@@ -199,7 +199,7 @@ export async function wikipediaSummaryText(placeName, city = '', country = '') {
   try {
     const searchQuery = `${cleaned} ${cleanCity} ${cleanCountry}`.trim()
     const searchUrl = `https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQuery)}&utf8=&format=json&origin=*`
-    const sRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+    const sRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
     if (sRes.ok) {
       const sJson = await sRes.json()
       const searchHits = sJson?.query?.search || []
@@ -230,7 +230,7 @@ export async function wikipediaSummaryText(placeName, city = '', country = '') {
         if (!isBroadMismatch && hasSpecificWordMatch) {
           const slug = encodeURIComponent(topHit.title.replace(/\s+/g, '_'))
           const sumUrl = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
-          const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+          const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
           if (sumRes.ok) {
             const sumJson = await sumRes.json()
             if (sumJson.extract && sumJson.extract.length > 40 && !sumJson.extract.includes('puede referirse a')) {
@@ -258,7 +258,7 @@ export async function wikipediaSummaryText(placeName, city = '', country = '') {
     try {
       const slug = encodeURIComponent(varName.trim().replace(/\s+/g, '_'))
       const url = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
-      const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+      const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
       if (!response.ok) continue
       const json = await response.json()
       if (json.type === 'standard' || json.type === 'normal') {
@@ -290,7 +290,7 @@ async function wikimediaGeoImage(lat, lon, radiusMeters = 1000, indexSeed = 0) {
     url.searchParams.set('format', 'json')
     url.searchParams.set('origin', '*')
 
-    const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' } })
+    const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
     if (!response.ok) return null
     const json = await response.json()
     const pages = Object.values(json.query?.pages ?? {})
@@ -354,7 +354,7 @@ async function wikimediaImage(query, requiredGroups = null, indexSeed = 0) {
     url.searchParams.set('iiprop', 'url')
     url.searchParams.set('format', 'json')
     url.searchParams.set('origin', '*')
-    const response = await fetch(url)
+    const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
     if (!response.ok) return null
     const json = await response.json()
     const pages = Object.values(json.query?.pages ?? {})
@@ -378,11 +378,11 @@ async function wikimediaImage(query, requiredGroups = null, indexSeed = 0) {
 
 async function openverseImage(query, requiredGroups = null, indexSeed = 0) {
   try {
-    const url = new URL('https://api.openverse.engineering/v1/images/')
+    const url = new URL('https://api.openverse.org/v1/images/')
     url.searchParams.set('q', query)
     url.searchParams.set('page_size', '8')
     url.searchParams.set('license_type', 'commercial,modification')
-    const response = await fetch(url)
+    const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
     if (!response.ok) return null
     const json = await response.json()
     

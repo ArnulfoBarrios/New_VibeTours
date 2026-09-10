@@ -1,16 +1,16 @@
 export async function optimizeRoute(places) {
   const apiKey = process.env.TOMTOM_API_KEY
-  if (!apiKey || places.length < 2) return places
+  if (!apiKey || !Array.isArray(places) || places.length < 3) return places
+
+  // Filter places that have valid finite coordinates
+  const validPlaces = places.filter(p => Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude)))
+  if (validPlaces.length < 3) return places
 
   try {
-    // TomTom Waypoint Optimization API expects locations in a specific format
-    // For a generic routing, we can use the Calculate Route API with waypoints
-    const coordinates = places.map(p => `${p.latitude},${p.longitude}`).join(':')
-    
-    // Using Routing API with computeBestOrder=true
+    const coordinates = validPlaces.map(p => `${p.latitude},${p.longitude}`).join(':')
     const url = `https://api.tomtom.com/routing/1/calculateRoute/${coordinates}/json?key=${apiKey}&computeBestOrder=true&routeType=fastest`
     
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(6000) })
     if (!response.ok) {
       console.warn('[tomtom] Routing failed, returning original order', response.status)
       return places
@@ -18,19 +18,16 @@ export async function optimizeRoute(places) {
     
     const data = await response.json()
     if (data.optimizedWaypoints && data.optimizedWaypoints.length > 0) {
-      // The first and last points are fixed in TomTom computeBestOrder (origin and destination)
-      // The optimizedWaypoints array only contains the intermediate points.
-      // So order will be: Origin -> optimizedWaypoints -> Destination
+      // Sort waypoints by their optimized order (optimizedIndex)
+      const sortedWaypoints = [...data.optimizedWaypoints].sort((a, b) => (a.optimizedIndex ?? 0) - (b.optimizedIndex ?? 0))
       
-      const optimizedPlaces = [places[0]] // Origin
-      
-      for (const wp of data.optimizedWaypoints) {
-        // wp.providedIndex represents the index from the original intermediate points (0-based)
-        // Since original list has Origin at 0, intermediate points start at 1.
-        optimizedPlaces.push(places[wp.providedIndex + 1])
+      const optimizedPlaces = [validPlaces[0]] // Origin
+      for (const wp of sortedWaypoints) {
+        if (wp.providedIndex != null && validPlaces[wp.providedIndex + 1]) {
+          optimizedPlaces.push(validPlaces[wp.providedIndex + 1])
+        }
       }
-      
-      optimizedPlaces.push(places[places.length - 1]) // Destination
+      optimizedPlaces.push(validPlaces[validPlaces.length - 1]) // Destination
       
       return optimizedPlaces
     }

@@ -11,8 +11,7 @@ import { resolveCanonicalDestination, validateCandidateLocation, haversineDistan
 
 export const aiRouter = Router()
 
-// Endpoint de síntesis de voz humana mediante ElevenLabs / OpenAI TTS
-aiRouter.post('/speech', async (req, res, next) => {
+const handleSpeech = async (req, res, next) => {
   try {
     const speechSchema = z.object({
       text: z.string().min(1),
@@ -32,30 +31,10 @@ aiRouter.post('/speech', async (req, res, next) => {
   } catch (error) {
     next(error)
   }
-})
+}
 
-// Alias /tts para retrocompatibilidad
-aiRouter.post('/tts', async (req, res, next) => {
-  try {
-    const speechSchema = z.object({
-      text: z.string().min(1),
-      voice: z.string().optional().default('nova'),
-      speed: z.number().min(0.25).max(4.0).optional().default(1.0),
-      model: z.string().optional().default('tts-1'),
-      provider: z.enum(['auto', 'elevenlabs', 'openai']).optional().default('auto')
-    })
-    const { text, voice, speed, model, provider } = speechSchema.parse(req.body)
-    const audioBuffer = await generateSpeechAudio({ text, voice, speed, model, provider })
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Content-Length': audioBuffer.length,
-      'Cache-Control': 'public, max-age=86400, immutable'
-    })
-    res.send(audioBuffer)
-  } catch (error) {
-    next(error)
-  }
-})
+aiRouter.post('/speech', handleSpeech)
+aiRouter.post('/tts', handleSpeech)
 
 // Almacenamiento en memoria para trabajos de generación asíncrona
 const tourJobs = new Map()
@@ -581,8 +560,8 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     }
 
-    // Desambiguación estricta para Cartagena -> Colombia
-    if (updatedPreferences.city && /^cartagena$/i.test(updatedPreferences.city.trim()) && (!updatedPreferences.country || /españa|spain/i.test(updatedPreferences.country))) {
+    // Desambiguación para Cartagena si no se especificó país
+    if (updatedPreferences.city && /^cartagena$/i.test(updatedPreferences.city.trim()) && !updatedPreferences.country) {
       updatedPreferences.city = 'Cartagena'
       updatedPreferences.country = 'Colombia'
       updatedPreferences.destination = 'Cartagena, Bolívar, Colombia'
@@ -650,7 +629,6 @@ aiRouter.post('/chat', async (req, res, next) => {
     // Extraer lugares SOLO si ya se eligió la ciudad destino y provienen de elecciones explícitas o de un itinerario estructurado confirmado
     const hasConfirmedCity = Boolean(updatedPreferences.city || updatedPreferences.destination)
     const isAskingCityRecomms = !hasConfirmedCity && /\b(recomien|recomiend|qué me recomiendas|dónde ir|opciones|destinos)\b/i.test(message)
-    const extractedFromMsg = []
 
     if (hasConfirmedCity && !isAskingCityRecomms) {
       function extractPoisFromText(text) {
@@ -1707,18 +1685,22 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     }).catch(() => ({}))
 
     const assignedUrls = new Set()
-    const settledStops = await Promise.allSettled(
-      Array.from({ length: stopsTarget }, (_, index) => {
-        const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
-        const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (sourceStop?.day ? Number(sourceStop.day) : (anchorPlace?.dia ? Number(anchorPlace.dia) : (anchorPlace?.day ? Number(anchorPlace.day) : null)))
-        const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopsTarget) + 1)
-        return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
+    const settledStops = []
+    for (let index = 0; index < stopsTarget; index++) {
+      const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
+      const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
+      const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (sourceStop?.day ? Number(sourceStop.day) : (anchorPlace?.dia ? Number(anchorPlace.dia) : (anchorPlace?.day ? Number(anchorPlace.day) : null)))
+      const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopsTarget) + 1)
+      try {
+        const normalized = await normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
           descriptionsMap: richDescriptionsMap,
           assignedUrls
         })
-      })
-    )
+        settledStops.push({ status: 'fulfilled', value: normalized })
+      } catch (err) {
+        settledStops.push({ status: 'rejected', reason: err })
+      }
+    }
     const rawStops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
     
     // Preservar estrictamente el orden secuencial cronológico por días
@@ -1984,18 +1966,22 @@ async function processTourGeneration(jobId, input) {
       }).catch(() => ({}))
 
       const assignedUrls = new Set()
-      const settledStops = await Promise.allSettled(
-        Array.from({ length: stopTarget }, (_, index) => {
-          const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
-          const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-          const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (anchorPlace?.dia ? Number(anchorPlace.dia) : null)
-          const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopTarget) + 1)
-          return normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
+      const settledStops = []
+      for (let index = 0; index < stopTarget; index++) {
+        const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
+        const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
+        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (anchorPlace?.dia ? Number(anchorPlace.dia) : null)
+        const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopTarget) + 1)
+        try {
+          const normalized = await normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
             descriptionsMap: richDescriptionsMap,
             assignedUrls
           })
-        }),
-      )
+          settledStops.push({ status: 'fulfilled', value: normalized })
+        } catch (err) {
+          settledStops.push({ status: 'rejected', reason: err })
+        }
+      }
       const rawNormalized = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
       
       // Preservar estrictamente el orden secuencial cronológico por días
@@ -2413,30 +2399,26 @@ export function buildTourPlanner(input, location = null, places = []) {
         return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
       })
 
-      // Si los lugares NO provienen de un orden estructurado del chat (refList.length === 0),
-      // optimizar la ruta intra-día por proximidad manteniendo fija la primera parada del día.
-      // Si provienen del chat, PRESERVAR 100% EL ORDEN SECUENCIAL PACTADO (mañana, almuerzo, tarde/noche).
-      if (refList.length === 0) {
-        const daysMap = new Map()
-        for (const p of selectedPlaces) {
-          const dayKey = Number(p.dia || p.day || 1)
-          if (!daysMap.has(dayKey)) daysMap.set(dayKey, [])
-          daysMap.get(dayKey).push(p)
-        }
-
-        const reorderedByDay = []
-        for (const dayPlaces of daysMap.values()) {
-          if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
-            const firstPlace = dayPlaces[0]
-            const remaining = dayPlaces.slice(1)
-            const sortedRemaining = sortPlacesByProximity(remaining, firstPlace)
-            reorderedByDay.push(firstPlace, ...sortedRemaining)
-          } else {
-            reorderedByDay.push(...dayPlaces)
-          }
-        }
-        selectedPlaces = reorderedByDay
+      // Optimizar la ruta intra-día por proximidad manteniendo fija la primera parada del día como ancla
+      const daysMap = new Map()
+      for (const p of selectedPlaces) {
+        const dayKey = Number(p.dia || p.day || 1)
+        if (!daysMap.has(dayKey)) daysMap.set(dayKey, [])
+        daysMap.get(dayKey).push(p)
       }
+
+      const reorderedByDay = []
+      for (const dayPlaces of daysMap.values()) {
+        if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
+          const firstPlace = dayPlaces[0]
+          const remaining = dayPlaces.slice(1)
+          const sortedRemaining = sortPlacesByProximity(remaining, firstPlace)
+          reorderedByDay.push(firstPlace, ...sortedRemaining)
+        } else {
+          reorderedByDay.push(...dayPlaces)
+        }
+      }
+      selectedPlaces = reorderedByDay
     } else {
       scored.sort((a, b) => b.score - a.score)
       selectedPlaces = selectPlaces(scored, stopTarget, input)
@@ -4269,15 +4251,19 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
     }
   }
 
-  // 4. Si el geocodificador no lo encontró pero fallbackPlace está en la misma ciudad
+  // 4. Si el geocodificador no lo encontró pero fallbackPlace coincide con el nombre de la parada
   if (fallbackPlace && hasUsableCoordinates(fallbackPlace.latitude, fallbackPlace.longitude)) {
-    const isNearby = !canonicalDest || validateCandidateLocation(fallbackPlace, canonicalDest, 50)
-    if (isNearby && (!isCorridor || isWithinCorridor(fallbackPlace, startPlace, endPlace))) {
-      return {
-        latitude: Number(fallbackPlace.latitude),
-        longitude: Number(fallbackPlace.longitude),
-        place_id: fallbackPlace.place_id || '',
-        wasFallback: true
+    const isNameMatch = arePlacesSimilar(fallbackPlace.name, name) ||
+      normalizePlaceKey(fallbackPlace.name) === normalizePlaceKey(name)
+    if (isNameMatch) {
+      const isNearby = !canonicalDest || validateCandidateLocation(fallbackPlace, canonicalDest, 75)
+      if (isNearby && (!isCorridor || isWithinCorridor(fallbackPlace, startPlace, endPlace))) {
+        return {
+          latitude: Number(fallbackPlace.latitude),
+          longitude: Number(fallbackPlace.longitude),
+          place_id: fallbackPlace.place_id || '',
+          wasFallback: false
+        }
       }
     }
   }
@@ -4293,8 +4279,8 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
     }
   }
   if (!hasUsableCoordinates(cityCenterLat, cityCenterLon)) {
-    cityCenterLat = cleanCity.toLowerCase() === 'santa marta' ? 11.2408 : 10.9685
-    cityCenterLon = cleanCity.toLowerCase() === 'santa marta' ? -74.2122 : -74.7813
+    cityCenterLat = 0
+    cityCenterLon = 0
   }
 
   return {
@@ -5762,59 +5748,7 @@ function hasUsableCoordinates(latitude, longitude) {
   return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
 }
 
-function buildSyntheticFallbackPlaces(input, location) {
-  const centerLat = location?.latitude ?? 0
-  const centerLon = location?.longitude ?? 0
-  const baseName = input.city || input.destination || 'Destino'
-  const labels = typeFallbackLabels(input.type, baseName)
-  return labels.map((label, index) => ({
-    name: label.name,
-    latitude: centerLat + label.latOffset,
-    longitude: centerLon + label.lonOffset,
-    type: label.type,
-    category: label.category,
-    city: input.city,
-    country: input.country,
-    address: `${baseName} ${index + 1}`,
-    tags: { fallback: 'true' },
-  }))
-}
 
-function typeFallbackLabels(type, baseName) {
-  const city = baseName || 'Destino'
-  switch (type) {
-    case 'gastronomic':
-      return [
-        { name: `Mercado central de ${city}`, type: 'market', category: 'market', latOffset: 0.0012, lonOffset: 0 },
-        { name: `Cafetería emblemática de ${city}`, type: 'cafe', category: 'cafe', latOffset: -0.001, lonOffset: 0.0014 },
-        { name: `Ruta de sabores de ${city}`, type: 'restaurant', category: 'restaurant', latOffset: 0.0015, lonOffset: -0.001 },
-      ]
-    case 'ecological':
-      return [
-        { name: `Parque natural de ${city}`, type: 'nature', category: 'nature', latOffset: 0.002, lonOffset: 0 },
-        { name: `Mirador de ${city}`, type: 'viewpoint', category: 'viewpoint', latOffset: -0.0015, lonOffset: 0.0015 },
-        { name: `Sendero de ${city}`, type: 'trail', category: 'trail', latOffset: 0.001, lonOffset: -0.0015 },
-      ]
-    case 'night':
-      return [
-        { name: `Centro nocturno de ${city}`, type: 'nightlife', category: 'nightlife', latOffset: 0.0008, lonOffset: 0 },
-        { name: `Bar o terraza de ${city}`, type: 'bar', category: 'nightlife', latOffset: -0.001, lonOffset: 0.0012 },
-        { name: `Punto panorámico de ${city}`, type: 'viewpoint', category: 'viewpoint', latOffset: 0.0012, lonOffset: -0.0008 },
-      ]
-    case 'family':
-      return [
-        { name: `Parque familiar de ${city}`, type: 'family', category: 'family', latOffset: 0.001, lonOffset: 0 },
-        { name: `Museo interactivo de ${city}`, type: 'museum', category: 'museum', latOffset: -0.001, lonOffset: 0.001 },
-        { name: `Plaza principal de ${city}`, type: 'historic', category: 'historic', latOffset: 0.0015, lonOffset: -0.001 },
-      ]
-    default:
-      return [
-        { name: `Centro histórico de ${city}`, type: 'historic', category: 'historic', latOffset: 0.001, lonOffset: 0 },
-        { name: `Museo o monumento de ${city}`, type: 'museum', category: 'museum', latOffset: -0.001, lonOffset: 0.001 },
-        { name: `Mirador o plaza de ${city}`, type: 'viewpoint', category: 'viewpoint', latOffset: 0.0015, lonOffset: -0.001 },
-      ]
-  }
-}
 
 function fallbackCover(seed = 'travel') {
   const safeSeed = String(seed || 'travel').toLowerCase()
