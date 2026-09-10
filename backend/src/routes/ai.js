@@ -5152,15 +5152,16 @@ export async function collectTourCandidates(input, location) {
     })
 
     if (missingSpecifics.length > 0) {
-      console.info(`[collectTourCandidates] ${missingSpecifics.length} specific places missing coordinates after OSM lookup. Resolving dynamically via OpenAI geocoding fallback...`)
-      const missingNames = missingSpecifics.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
-      const aiCoords = await geocodePlacesWithOpenAI({
+      console.info(`[collectTourCandidates] ${missingSpecifics.length} specific places missing coordinates after first pass. Resolving via strict grounded geocoding...`)
+      const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
+      const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
+      const regionalOpts = {
+        isRegionalOrNature: Boolean(isRegionalOrNature || input.durationDays >= 2 || input.durationHours >= 24),
+        isMicroDest: Boolean(isMicroDest || canonicalDest?.isMicroDestination),
+        durationDays: input.durationDays,
         city,
-        country,
-        places: missingNames,
-        centerLat: canonicalDest?.latitude ?? cityCenterLat,
-        centerLon: canonicalDest?.longitude ?? cityCenterLon
-      }).catch(() => ({}))
+        country
+      }
 
       for (const raw of missingSpecifics) {
         let placeName = ''
@@ -5181,57 +5182,36 @@ export async function collectTourCandidates(input, location) {
         }
         if (!placeName || !isValidSpecificPlace(placeName) || isNonTouristFacility({ name: placeName })) continue
 
-        const coords = aiCoords[placeName] ||
-                       Object.entries(aiCoords).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
-                                                              arePlacesSimilar(k, placeName) ||
-                                                              normalizePlaceKey(k) === normalizePlaceKey(placeName) ||
-                                                              placeName.toLowerCase().includes(k.toLowerCase()) ||
-                                                              k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
+        // Strictly query OpenStreetMap / Photon / Nominatim / Seed Landmarks with center coords & regional bounds
+        let directGeo = await geocodePlace(`${placeName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
+        if (!directGeo) {
+          directGeo = await geocodePlace(placeName, destLat, destLon, regionalOpts).catch(() => null)
+        }
 
-        let finalLat = null
-        let finalLon = null
-
-        // Priority 1: Consulta directa en OpenStreetMap / Nominatim / Photon
-        const directGeo = await geocodePlace(`${placeName}, ${city}`.trim()).catch(() => null)
         if (directGeo && Number.isFinite(directGeo.latitude) && Number.isFinite(directGeo.longitude)) {
-          finalLat = directGeo.latitude
-          finalLon = directGeo.longitude
+          if (validateCandidateLocation(directGeo, canonicalDest, 70)) {
+            const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
+            const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
+            const isRestaurant = isExplicitDining && !isCulturalVenue
+            geocodedSpecifics.push({
+              name: placeName,
+              latitude: Number(directGeo.latitude),
+              longitude: Number(directGeo.longitude),
+              type: isRestaurant ? 'restaurant' : 'tourism',
+              category: isRestaurant ? 'restaurant' : 'requested',
+              dia: placeDay,
+              day: placeDay,
+              city,
+              country,
+              address: directGeo.name || `${placeName}, ${city}`,
+              description: '',
+              tags: { requested_place: 'true', grounded_geocoded: 'true' }
+            })
+            continue
+          }
         }
 
-        // Priority 2: Coordenadas de IA como fallback únicamente si OSM no lo encuentra
-        if (finalLat == null && coords && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)) {
-          finalLat = Number(coords.latitude)
-          finalLon = Number(coords.longitude)
-        }
-
-        // Priority 3: Anclaje al centro del destino con micro-offset determinista
-        if (finalLat == null && (canonicalDest?.latitude != null || cityCenterLat != null)) {
-          const baseLat = canonicalDest?.latitude ?? cityCenterLat
-          const baseLon = canonicalDest?.longitude ?? cityCenterLon
-          const hash = placeName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
-          finalLat = baseLat + ((hash % 10) - 5) * 0.0004
-          finalLon = baseLon + (((hash * 3) % 10) - 5) * 0.0004
-        }
-
-        if (finalLat != null && finalLon != null) {
-          const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
-          const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
-          const isRestaurant = isExplicitDining && !isCulturalVenue
-          geocodedSpecifics.push({
-            name: placeName,
-            latitude: finalLat,
-            longitude: finalLon,
-            type: isRestaurant ? 'restaurant' : 'tourism',
-            category: isRestaurant ? 'restaurant' : 'requested',
-            dia: placeDay,
-            day: placeDay,
-            city,
-            country,
-            address: coords?.address || `${placeName}, ${city}`,
-            description: '',
-            tags: { requested_place: 'true', ai_geocoded: 'true' }
-          })
-        }
+        console.warn(`[collectTourCandidates] Discarding unverified candidate "${placeName}" in ${city}. No synthetic or hallucinated coordinates allowed.`)
       }
     }
 
@@ -5258,7 +5238,7 @@ export async function collectTourCandidates(input, location) {
     const geocodedSettled = await Promise.allSettled(
       iconicLandmarks.map(async (item) => {
         const searchQuery = `${item.name} ${city} ${country}`.trim()
-        const geo = await geocodePlace(searchQuery)
+        const geo = await geocodePlace(searchQuery, cityCenterLat, cityCenterLon, { city, country, isRegionalOrNature: Boolean(isRegionalOrNature || isMultiDay) })
         if (geo && (geo.latitude || geo.longitude) && isWithinCityBounds(geo.latitude, geo.longitude)) {
           return {
             name: item.name,

@@ -133,7 +133,8 @@ export function getDistinctSemanticTokens(str) {
     'playa', 'playas', 'isla', 'islas', 'archipielago', 'cayo', 'cayos',
     'villa', 'villas', 'avenida', 'calle', 'carrera',
     'colombia', 'barranquilla', 'cartagena', 'santa', 'marta', 'bogota', 'medellin',
-    'cali', 'covenas', 'puerto'
+    'cali', 'covenas', 'puerto',
+    'san', 'santo', 'santos', 'saint', 'nuestra', 'senora', 'senor', 'sagrado', 'sagrada', 'sagrados', 'ie'
   ])
 
   return clean
@@ -258,6 +259,21 @@ export function selectBestPoiResult(results, originalQuery = '') {
     })
   }
 
+  const isReligiousQuery = /\b(iglesia|catedral|bas[íi]lica|parroquia|santuario|templo|convento|ermita)\b/i.test(lowerQuery)
+  const isExplicitSchoolQuery = /\b(colegio|escuela|universidad|instituto|ie\b|facultad|campus)\b/i.test(lowerQuery)
+
+  if (isReligiousQuery) {
+    candidates = candidates.filter(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || r.class || '').toLowerCase()
+      const name = String(r.name || '').toLowerCase()
+      const isEduOrMed = ['school', 'college', 'kindergarten', 'university', 'hospital', 'clinic', 'pharmacy', 'parking', 'fuel'].includes(type) ||
+        ['school', 'college', 'kindergarten', 'university', 'hospital', 'clinic'].includes(key) ||
+        /\b(colegio|escuela|instituto|ie\b|sede|lic[eé]o|universidad|hospital|cl[íi]nica)\b/i.test(name)
+      return !isEduOrMed
+    })
+  }
+
   if (isFoodQuery) {
     candidates = candidates.filter(r => {
       const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
@@ -306,6 +322,26 @@ export function selectBestPoiResult(results, originalQuery = '') {
     if (directFoodMatch) return directFoodMatch
   }
 
+  if (isReligiousQuery && candidates.length > 1) {
+    const directWorshipMatch = candidates.find(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const name = String(r.name || '').toLowerCase()
+      return ['place_of_worship', 'church', 'cathedral', 'chapel'].includes(type) ||
+        /\b(iglesia|catedral|bas[íi]lica|parroquia|santuario|templo|convento|ermita)\b/i.test(name)
+    })
+    if (directWorshipMatch) return directWorshipMatch
+  }
+
+  const isPierQuery = /\b(muelle|pier|embarcadero)\b/i.test(lowerQuery)
+  if (isPierQuery && candidates.length > 1) {
+    const directPierMatch = candidates.find(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const manMade = String(r.tags?.man_made || '').toLowerCase()
+      return type === 'pier' || manMade === 'pier'
+    })
+    if (directPierMatch) return directPierMatch
+  }
+
   return candidates[0]
 }
 
@@ -317,24 +353,43 @@ export function decomposeCompoundPlaceQuery(rawQuery) {
 
   const compoundSeparators = /[-—–:\/|]/
   const hasParen = /\(([^)]+)\)/
-  if (!compoundSeparators.test(rawPlacePart) && !hasParen.test(rawPlacePart)) {
+  const hasSaintSuffix = /\b(?:de\s+)?san(?:ta)?\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)\s+de\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ]+)\b/i
+  const isPierQuery = /^muelle\s+de\s+([^,]+)/i
+
+  if (!compoundSeparators.test(rawPlacePart) && !hasParen.test(rawPlacePart) && !hasSaintSuffix.test(rawPlacePart) && !isPierQuery.test(rawPlacePart)) {
     return []
   }
 
   const segments = []
-  const directSplit = rawPlacePart.split(/\s*[-—–:\/|]\s*/).map(s => s.replace(/[()]/g, '').trim()).filter(Boolean)
-  segments.push(...directSplit)
+  if (compoundSeparators.test(rawPlacePart)) {
+    const directSplit = rawPlacePart.split(/\s*[-—–:\/|]\s*/).map(s => s.replace(/[()]/g, '').trim()).filter(Boolean)
+    segments.push(...directSplit)
+
+    for (const s of directSplit) {
+      const cult = s.match(/\b(museo\s+del\s+oro|quinta\s+de\s+san\s+pedro\s+alejandrino|casa\s+de\s+la\s+aduana|catedral\s+bas[íi]lica|castillo\s+san\s+felipe)\b/i)
+      if (cult && cult[0] && cult[0].toLowerCase() !== s.toLowerCase()) {
+        segments.push(cult[0].trim())
+      }
+    }
+  }
 
   const parenMatch = rawPlacePart.match(/\(([^)]+)\)/)
   if (parenMatch && parenMatch[1]) {
     segments.push(parenMatch[1].trim())
   }
 
-  for (const s of directSplit) {
-    const cult = s.match(/\b(museo\s+del\s+oro|quinta\s+de\s+san\s+pedro\s+alejandrino|casa\s+de\s+la\s+aduana|catedral\s+bas[íi]lica|castillo\s+san\s+felipe)\b/i)
-    if (cult && cult[0] && cult[0].toLowerCase() !== s.toLowerCase()) {
-      segments.push(cult[0].trim())
-    }
+  const saintMatch = rawPlacePart.match(hasSaintSuffix)
+  if (saintMatch) {
+    const prefixMatch = rawPlacePart.match(/^(?:iglesia|parroquia|catedral|bas[íi]lica|santuario|templo|convento)\s+(?:de\s+)?/i)
+    const prefix = prefixMatch ? prefixMatch[0] : ''
+    segments.push(`${prefix}San ${saintMatch[1]}`.trim())
+    segments.push(`San ${saintMatch[1]}`.trim())
+  }
+
+  const pierMatch = rawPlacePart.match(isPierQuery)
+  if (pierMatch && pierMatch[1]) {
+    segments.push(`Muelle ${pierMatch[1].trim()}`)
+    segments.push(`Muelle turístico`)
   }
 
   const queries = []
@@ -411,6 +466,20 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'la casa de doris': { name: 'Restaurante La Casa de Doris', latitude: 10.9852, longitude: -74.7795, city: 'Barranquilla', country: 'Colombia' },
   'casa de doris': { name: 'Restaurante La Casa de Doris', latitude: 10.9852, longitude: -74.7795, city: 'Barranquilla', country: 'Colombia' },
   'nena lela': { name: 'Nena Lela Trattoria', latitude: 11.0223, longitude: -74.8625, city: 'Barranquilla', country: 'Colombia' },
+  'muelle de puerto colombia': { name: 'Muelle de Puerto Colombia', latitude: 10.9893, longitude: -74.9612, city: 'Puerto Colombia', country: 'Colombia' },
+  'muelle puerto colombia': { name: 'Muelle de Puerto Colombia', latitude: 10.9893, longitude: -74.9612, city: 'Puerto Colombia', country: 'Colombia' },
+  'muelle turistico de puerto colombia': { name: 'Muelle de Puerto Colombia', latitude: 10.9893, longitude: -74.9612, city: 'Puerto Colombia', country: 'Colombia' },
+  'muelle turistico': { name: 'Muelle de Puerto Colombia', latitude: 10.9893, longitude: -74.9612, city: 'Puerto Colombia', country: 'Colombia' },
+  'plaza francisco javier cisneros': { name: 'Plaza Cisneros, Puerto Colombia', latitude: 10.9887, longitude: -74.9597, city: 'Puerto Colombia', country: 'Colombia' },
+  'plaza cisneros': { name: 'Plaza Cisneros, Puerto Colombia', latitude: 10.9887, longitude: -74.9597, city: 'Puerto Colombia', country: 'Colombia' },
+  'iglesia de san nicolas de tolentino': { name: 'Iglesia de San Nicolás de Tolentino', latitude: 10.9801, longitude: -74.7780, city: 'Barranquilla', country: 'Colombia' },
+  'iglesia san nicolas de tolentino': { name: 'Iglesia de San Nicolás de Tolentino', latitude: 10.9801, longitude: -74.7780, city: 'Barranquilla', country: 'Colombia' },
+  'iglesia de san nicolas': { name: 'Iglesia de San Nicolás de Tolentino', latitude: 10.9801, longitude: -74.7780, city: 'Barranquilla', country: 'Colombia' },
+  'iglesia san nicolas': { name: 'Iglesia de San Nicolás de Tolentino', latitude: 10.9801, longitude: -74.7780, city: 'Barranquilla', country: 'Colombia' },
+  'san nicolas de tolentino': { name: 'Iglesia de San Nicolás de Tolentino', latitude: 10.9801, longitude: -74.7780, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante el celler': { name: 'Restaurante El Celler', latitude: 11.0022, longitude: -74.8075, city: 'Barranquilla', country: 'Colombia' },
+  'el celler': { name: 'Restaurante El Celler', latitude: 11.0022, longitude: -74.8075, city: 'Barranquilla', country: 'Colombia' },
+  'celler': { name: 'Restaurante El Celler', latitude: 11.0022, longitude: -74.8075, city: 'Barranquilla', country: 'Colombia' },
 
   // Santa Marta
   'playa el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
@@ -422,7 +491,11 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'parque de los novios': { name: 'Parque de Los Novios', latitude: 11.2427, longitude: -74.2120, city: 'Santa Marta', country: 'Colombia' },
   'catedral de santa marta': { name: 'Catedral Basílica de Santa Marta', latitude: 11.2435, longitude: -74.2099, city: 'Santa Marta', country: 'Colombia' },
   'museo del oro tairona': { name: 'Museo del Oro Tairona - Casa de la Aduana', latitude: 11.2450, longitude: -74.2128, city: 'Santa Marta', country: 'Colombia' },
-  'casa de la aduana': { name: 'Museo del Oro Tairona - Casa de la Aduana', latitude: 11.2450, longitude: -74.2128, city: 'Santa Marta', country: 'Colombia' }
+  'casa de la aduana': { name: 'Museo del Oro Tairona - Casa de la Aduana', latitude: 11.2450, longitude: -74.2128, city: 'Santa Marta', country: 'Colombia' },
+  'parque nacional natural tayrona': { name: 'Parque Nacional Natural Tayrona', latitude: 11.3060, longitude: -73.9380, city: 'Santa Marta', country: 'Colombia' },
+  'parque tayrona': { name: 'Parque Nacional Natural Tayrona', latitude: 11.3060, longitude: -73.9380, city: 'Santa Marta', country: 'Colombia' },
+  'tayrona': { name: 'Parque Nacional Natural Tayrona', latitude: 11.3060, longitude: -73.9380, city: 'Santa Marta', country: 'Colombia' },
+  'minca': { name: 'Minca, Sierra Nevada', latitude: 11.1440, longitude: -74.1180, city: 'Santa Marta', country: 'Colombia' }
 }
 
 export function getRegionalBoundingBox(lat, lon, options = {}) {
