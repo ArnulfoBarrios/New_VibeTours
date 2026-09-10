@@ -536,12 +536,27 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
 
   Future<List<AiRecommendation>> getAlternatives() async {
     final firstRec = state.recommendations.isNotEmpty ? state.recommendations.first : null;
-    final city = (firstRec?.locationInfo.ciudad.isNotEmpty == true)
-        ? firstRec!.locationInfo.ciudad
-        : ((firstRec?.name.isNotEmpty == true) ? firstRec!.name : 'Barranquilla');
-    final country = firstRec?.locationInfo.pais.isNotEmpty == true ? firstRec!.locationInfo.pais : 'Colombia';
-    final baseLat = firstRec?.latitude ?? 10.9878;
-    final baseLon = firstRec?.longitude ?? -74.7889;
+    final reqCity = state.request?.city;
+    final reqDest = state.request?.destination;
+    final firstCity = firstRec?.locationInfo.ciudad;
+    final city = (reqCity != null && reqCity.trim().isNotEmpty)
+        ? reqCity.trim()
+        : ((reqDest != null && reqDest.trim().isNotEmpty && reqDest != 'Destino')
+            ? reqDest.trim()
+            : ((firstCity != null && firstCity.trim().isNotEmpty)
+                ? firstCity.trim()
+                : 'Barranquilla'));
+
+    final reqCountry = state.request?.country;
+    final firstCountry = firstRec?.locationInfo.pais;
+    final country = (reqCountry != null && reqCountry.trim().isNotEmpty)
+        ? reqCountry.trim()
+        : ((firstCountry != null && firstCountry.trim().isNotEmpty)
+            ? firstCountry.trim()
+            : 'Colombia');
+
+    final baseLat = state.request?.latitude ?? firstRec?.latitude ?? 10.9878;
+    final baseLon = state.request?.longitude ?? firstRec?.longitude ?? -74.7889;
 
     final request = state.request ?? AiTourRequest(
       destination: city,
@@ -608,7 +623,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         'request': request.toJson(),
         'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
         'excludeIds': excludeIds,
-      }).timeout(const Duration(seconds: 45));
+      }).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -719,6 +734,19 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       }).toList();
       state = state.copyWith(
         recommendations: recs,
+        request: state.request ?? AiTourRequest(
+          destination: tour.city,
+          country: tour.country.isNotEmpty ? tour.country : 'Colombia',
+          city: tour.city,
+          type: tour.type,
+          language: tour.language.isNotEmpty ? tour.language : 'es',
+          prompt: 'Editar ${tour.title}',
+          touristProfileSummary: '',
+          touristInterests: const [],
+          touristPace: 'balanced',
+          latitude: tour.stops.first.location.latitude,
+          longitude: tour.stops.first.location.longitude,
+        ),
         builtTour: null,
         isBuilding: false,
       );

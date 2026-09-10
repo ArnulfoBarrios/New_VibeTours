@@ -53,6 +53,11 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
         elevation: 0,
         leading: const BackButton(),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add_location_alt_rounded),
+            tooltip: 'Añadir parada',
+            onPressed: () => _showAddStopSheet(context),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: LiquidButton(
@@ -76,7 +81,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                 points: points,
                 labels: labels,
                 styleUrl: mapStyle,
-                activeIndex: _activeIndex,
+                activeIndex: _activeIndex > 0 ? _activeIndex - 1 : -1,
                 height: double.infinity,
                 borderRadius: 0,
                 showNumbers: true,
@@ -118,7 +123,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                 setState(() => _activeIndex = index);
               },
               itemBuilder: (context, index) {
-                if (index == state.recommendations.length) {
+                if (index == 0) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: InkWell(
@@ -169,7 +174,8 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                   );
                 }
 
-                final rec = state.recommendations[index];
+                final recIndex = index - 1;
+                final rec = state.recommendations[recIndex];
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: GlassPanel(
@@ -274,14 +280,14 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                           children: [
                             TextButton.icon(
                               onPressed: () {
-                                _showChangeStopSheet(context, index);
+                                _showChangeStopSheet(context, recIndex);
                               },
                               icon: const Icon(Icons.swap_horiz_rounded, size: 18),
                               label: const Text('Cambiar'),
                             ),
                             TextButton.icon(
                               onPressed: () {
-                                _showMoveDayDialog(context, index, rec.day);
+                                _showMoveDayDialog(context, recIndex, rec.day);
                               },
                               icon: const Icon(Icons.calendar_month_rounded, size: 18, color: Colors.blue),
                               label: Text('Día ${rec.day > 0 ? rec.day : 1}', style: const TextStyle(color: Colors.blue)),
@@ -289,7 +295,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                             if (state.recommendations.length > 2)
                               TextButton.icon(
                                 onPressed: () {
-                                  ref.read(aiBuilderProvider.notifier).removeStop(index);
+                                  ref.read(aiBuilderProvider.notifier).removeStop(recIndex);
                                 },
                                 icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
                                 label: const Text('Quitar', style: TextStyle(color: Colors.red)),

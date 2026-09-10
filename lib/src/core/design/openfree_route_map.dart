@@ -869,7 +869,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       for (final port in route.ports)
         LatLng(port.location.latitude, port.location.longitude),
     ];
-    final activeIndex = widget.activeIndex.clamp(0, points.length - 1).toInt();
+    final activeIndex = widget.activeIndex < 0 ? -1 : widget.activeIndex.clamp(0, points.length - 1).toInt();
 
     try {
       await controller.clearLines();
@@ -1318,6 +1318,22 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
   Future<void> _animateToActiveStop(int activeIndex) async {
     final controller = _controller;
     if (controller == null || !mounted || widget.points.isEmpty) return;
+    if (activeIndex < 0) {
+      try {
+        final boundsPoints = widget.points.map((p) => LatLng(p.latitude, p.longitude)).toList();
+        await controller.animateCamera(
+          CameraUpdate.newLatLngBounds(
+            _boundsFor(boundsPoints),
+            left: widget.fitPadding.left,
+            top: widget.fitPadding.top,
+            right: widget.fitPadding.right,
+            bottom: widget.fitPadding.bottom,
+          ),
+          duration: const Duration(milliseconds: 400),
+        );
+      } catch (_) {}
+      return;
+    }
     final clampedIndex = activeIndex.clamp(0, widget.points.length - 1);
     final target = LatLng(
       widget.points[clampedIndex].latitude,
@@ -1336,7 +1352,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     if (controller == null || !mounted || animId != _currentAnimationId) return;
 
     final isSinglePoint = widget.points.length == 1;
-    final isActive = index == activeIndex || isSinglePoint;
+    final isActive = (activeIndex >= 0 && index == activeIndex) || isSinglePoint;
     final finalRadius = isSinglePoint ? 14.0 : (isActive ? 11.0 : 8.0);
     final finalStrokeWidth = isSinglePoint ? 4.0 : (isActive ? 4.0 : 2.5);
     final circleColor = isSinglePoint ? '#FF3B30' : (isActive ? '#007AFF' : '#FFFFFF');

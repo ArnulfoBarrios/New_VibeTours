@@ -1361,25 +1361,21 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       revLocation = await reverseGeocodeLocation(lat, lon).catch(() => null)
     }
 
-    const city = input.city || revLocation?.city || firstPlace?.locationInfo?.ciudad || 'Santa Marta'
+    // Clean destination and city (avoid taking attraction name as city)
+    let rawCity = input.city || input.destination || revLocation?.city || firstPlace?.locationInfo?.ciudad || 'Barranquilla'
+    if (rawCity.length > 30 || /\b(catedral|hotel|restaurante|parada|museo|parque|recorrido|tour)\b/i.test(rawCity)) {
+      rawCity = revLocation?.city || firstPlace?.locationInfo?.ciudad || 'Barranquilla'
+    }
+    const city = cleanAdministrativeCityName(rawCity).trim() || 'Barranquilla'
     const country = input.country || revLocation?.country || firstPlace?.locationInfo?.pais || 'Colombia'
-    const destination = (input.destination && input.destination.length < 30 && input.destination !== 'Destino')
+    const destination = (input.destination && input.destination.length < 30 && input.destination !== 'Destino' && !/\b(catedral|hotel|restaurante|museo)\b/i.test(input.destination))
       ? input.destination
       : city
 
     console.info('[alternatives] Identified destination city:', { city, country, destination, lat, lon })
 
-    // 2. Geocode exact city location
-    let location = await geocodePlace(`${city} ${country}`, lat, lon).catch(() => null)
-    if (!location && lat && lon) {
-      location = {
-        name: city,
-        latitude: lat,
-        longitude: lon,
-        city,
-        country
-      }
-    }
+    const centerLat = lat || revLocation?.latitude || 10.9878
+    const centerLon = lon || revLocation?.longitude || -74.7889
 
     const currentKeys = new Set(
       currentPlaces.map(p => normalizeKey(p.name || '')).filter(Boolean)
@@ -1390,26 +1386,6 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
         ...excludeIds.map(id => (id || '').toLowerCase().trim())
       ].filter(Boolean)
     )
-
-    // 3. Fast Parallel Search: Photon POIs + Real AI alternatives in parallel
-    const excludeNameList = Array.from(currentKeys).filter(n => n.length > 2)
-    const [photonPlaces, aiSuggestions] = await Promise.all([
-      (async () => {
-        if (!location?.latitude) return []
-        try {
-          return await photonSearch(`${city} ${country}`, 15, location.latitude, location.longitude)
-        } catch (_) {
-          return []
-        }
-      })(),
-      suggestFallbackPlacesWithOpenAI({
-        destination,
-        city,
-        country,
-        type: input.type || 'cultural',
-        excludeNames: excludeNameList
-      }).catch(() => [])
-    ])
 
     const isDuplicatePlace = (name, pId) => {
       if (!name && !pId) return true
@@ -1438,107 +1414,69 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       return isValidSpecificPlace(p.name)
     }
 
-    let available = (photonPlaces || []).filter(place => {
-      return isQualityTouristPlace(place) && !isDuplicatePlace(place.name, place.placeId || place.id)
-    })
+    const excludeNameList = Array.from(currentKeys).filter(n => n.length > 2)
 
-    const rawAiList = Array.isArray(aiSuggestions)
-      ? aiSuggestions
-      : (Array.isArray(aiSuggestions?.places) ? aiSuggestions.places : [])
+    // 2. Fetch high-quality suggestions directly with single-pass AI or catalog
+    const rawAiList = await suggestFallbackPlacesWithOpenAI({
+      destination,
+      city,
+      country,
+      type: input.type || 'cultural',
+      excludeNames: excludeNameList
+    }).catch(() => [])
 
-    if (rawAiList.length > 0) {
-      const centerLat = location?.latitude ?? lat ?? 11.2408
-      const centerLon = location?.longitude ?? lon ?? -74.2110
+    const validAiItems = (Array.isArray(rawAiList) ? rawAiList : [])
+      .filter(item => item?.name && !isDuplicatePlace(item.name, item.id) && isQualityTouristPlace(item))
+      .slice(0, 8)
 
-      const validAiItems = rawAiList
-        .filter(item => item?.name && !isDuplicatePlace(item.name, null) && isQualityTouristPlace(item))
-        .slice(0, 6)
-
-      const geocodedAiItems = await Promise.all(
-        validAiItems.map(async (item, i) => {
-          const geo = await geocodePlace(`${item.name} ${city} ${country}`, centerLat, centerLon).catch(() => null)
-          const realLat = (geo && hasUsableCoordinates(geo.latitude, geo.longitude))
-            ? geo.latitude
-            : (centerLat + (i + 1) * 0.003 * (i % 2 === 0 ? 1 : -1))
-          const realLon = (geo && hasUsableCoordinates(geo.latitude, geo.longitude))
-            ? geo.longitude
-            : (centerLon + (i + 1) * 0.003 * (i % 2 === 0 ? -1 : 1))
-
-          return {
-            placeId: `ai-real-${Date.now()}-${i}`,
-            name: item.name,
-            latitude: realLat,
-            longitude: realLon,
-            address: geo?.name || `${city}, ${country}`,
-            city: geo?.city || city,
-            country: geo?.country || country,
-            category: item.category || item.type || input.type || 'tourism',
-            description: item.description || `Bienvenido a ${item.name}, uno de los puntos imperdibles de ${city}.`,
-            reason: item.description || `Atractivo imperdible recomendado para visitar en ${city}.`,
-            minutes: 35
-          }
-        })
-      )
-
-      available.push(...geocodedAiItems)
-    }
-
-    // 5. Build rich alternative DTOs with REAL geocoded coordinates, unique AI reasons & images for each place
-    const candidatePlaces = available.slice(0, 8)
-    const placeNames = candidatePlaces.map(p => p.name)
-    const [customReasonsMap, richDescriptionsMap] = await Promise.all([
-      generateCustomPlaceReasons({
-        destination: destination || city,
-        city,
-        prompt: input.prompt,
-        places: placeNames
-      }).catch(() => ({})),
-      generateRichPlaceDescriptionsBatch({
-        destination: destination || city,
-        city,
-        country,
-        places: placeNames
-      }).catch(() => ({}))
-    ])
-
+    // 3. Resolve exact coordinates and map to rich alternative objects
     const alternatives = await Promise.all(
-      candidatePlaces.map(async (place) => {
-        const realLat = place.latitude
-        const realLon = place.longitude
+      validAiItems.map(async (item, i) => {
+        // Check verified iconic landmark first
+        const landmark = await geocodePlace(`${item.name} ${city}`, centerLat, centerLon, { skipNominatim: true }).catch(() => null)
+        const realLat = (landmark && hasUsableCoordinates(landmark.latitude, landmark.longitude))
+          ? landmark.latitude
+          : ((item.latitude && hasUsableCoordinates(item.latitude, item.longitude))
+              ? Number(item.latitude)
+              : (centerLat + (i + 1) * 0.004 * (i % 2 === 0 ? 1 : -1)))
+        const realLon = (landmark && hasUsableCoordinates(landmark.latitude, landmark.longitude))
+          ? landmark.longitude
+          : ((item.longitude && hasUsableCoordinates(item.latitude, item.longitude))
+              ? Number(item.longitude)
+              : (centerLon + (i + 1) * 0.004 * (i % 2 === 0 ? -1 : 1)))
 
-        let imageUrl = place.imageUrl || place.images?.[0] || ''
+        const category = item.category || item.type || input.type || 'attraction'
+        let imageUrl = item.imageUrl || ''
         if (!imageUrl) {
           try {
-            imageUrl = await imageForPlace(place.name, city).catch(() => '')
-          } catch (e) {
-            console.warn('[alternatives] Image fetch error for place:', place.name)
-          }
+            imageUrl = await Promise.race([
+              imageForPlace(item.name, city),
+              new Promise(res => setTimeout(() => res(''), 1200))
+            ]).catch(() => '')
+          } catch (_) {}
         }
         if (!imageUrl) {
-          imageUrl = getReliableCategoryFallbackImage(place.name, place.category)
+          imageUrl = getReliableCategoryFallbackImage(item.name, category)
         }
 
-        const aiReason = customReasonsMap[place.name] || place.reason || null
-        const descObj = richDescriptionsMap[place.name]
-        const rawDesc = (descObj && typeof descObj === 'object' ? descObj.descripcion : descObj) || place.description || `Explora ${place.name}, una parada imprescindible en ${city} llena de cultura e historia local.`
-        const richDesc = typeof rawDesc === 'object' ? (rawDesc.descripcion || '') : String(rawDesc || '')
+        const richDesc = item.description || `Visita obligatoria en ${city} para sumergirse en la historia, gastronomía y cultura local.`
         return {
-          id: place.placeId || place.id || place.name,
-          name: place.name,
+          id: item.placeId || item.id || `rec-${Date.now()}-${i}`,
+          name: item.name,
           latitude: realLat,
           longitude: realLon,
-          category: place.category || 'turismo',
+          category,
           imageUrl,
           description: richDesc,
-          reason: buildRecommendationReason(place, { city, country, destination }, aiReason),
-          durationMinutes: place.minutes || 30,
+          reason: richDesc,
+          durationMinutes: item.minutes || 35,
           locationInfo: {
-            nombre_lugar: place.name,
-            direccion: place.address || `${city}, ${country}`,
+            nombre_lugar: item.name,
+            direccion: item.address || landmark?.address || `${city}, ${country}`,
             ciudad: city,
             region: city,
             pais: country,
-            place_id: place.placeId || place.id || '',
+            place_id: item.placeId || item.id || '',
             url_mapa: mapUrlFor(realLat, realLon)
           }
         }

@@ -1717,24 +1717,27 @@ export async function suggestFallbackPlacesWithOpenAI({ destination, city, count
         messages: [
           {
             role: 'system',
-            content: `Eres un experto turístico local. Sugiere de 6 a 8 atractivos turísticos y restaurantes emblemáticos REALES físicamente existentes en "${targetLocation}".
+            content: `Eres un experto turístico local internacional. Sugiere de 6 a 8 atractivos turísticos y restaurantes emblemáticos REALES físicamente existentes en "${targetLocation}".
 Devuelve ÚNICAMENTE un JSON:
 {
   "places": [
     {
       "name": "Nombre real del lugar",
-      "type": "cultural|park|beach|food|viewpoint",
-      "category": "attraction|restaurant",
-      "description": "Breve descripción atractiva del lugar"
+      "type": "cultural, park, beach, food, viewpoint, o historic",
+      "category": "attraction o restaurant",
+      "description": "Breve descripción atractiva del lugar (1 a 2 oraciones)",
+      "latitude": 10.9999,
+      "longitude": -74.8000,
+      "address": "Dirección o barrio aproximado"
     }
   ]
 }`
           },
           { role: 'user', content: `Lugares alternativos para ${targetLocation}.${excludeStr}` }
         ],
-        temperature: 0.5,
+        temperature: 0.3,
         response_format: { type: 'json_object' },
-        reasoning_effort: 'none'
+        reasoning_effort: 'low'
       })),
       signal: AbortSignal.timeout(25000)
     })
@@ -1816,7 +1819,7 @@ Formato JSON obligatorio:
         temperature: 0.2,
         reasoning_effort: 'low'
       })),
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(40000)
     })
 
     if (response.ok) {
