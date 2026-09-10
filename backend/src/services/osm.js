@@ -1,5 +1,5 @@
 import { GeoCache } from './geoCache.js'
-import { cleanAdministrativeCityName, formatCountryName } from './destinationService.js'
+import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS } from './destinationService.js'
 
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
 
@@ -126,8 +126,12 @@ export function getDistinctSemanticTokens(str) {
     'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
     'de', 'del', 'al', 'a', 'en', 'para', 'por', 'con', 'sin', 'sobre', 'entre',
     'restaurante', 'restaurant', 'bistro', 'cafe', 'bar', 'gastrobar',
-    'museo', 'museum', 'parque', 'plaza', 'iglesia', 'parroquia', 'catedral',
-    'monumento', 'monument', 'teatro', 'barrio', 'hotel', 'hostal', 'playa', 'isla',
+    'cebicheria', 'cevicheria', 'pizzeria', 'taqueria', 'panaderia', 'heladeria', 'marisqueria',
+    'museo', 'museos', 'museum', 'parque', 'parques', 'plaza', 'plazas',
+    'iglesia', 'iglesias', 'parroquia', 'parroquias', 'catedral', 'catedrales',
+    'monumento', 'monumentos', 'monument', 'teatro', 'teatros', 'barrio', 'hotel', 'hoteles', 'hostal', 'hostales',
+    'playa', 'playas', 'isla', 'islas', 'archipielago', 'cayo', 'cayos',
+    'villa', 'villas', 'avenida', 'calle', 'carrera',
     'colombia', 'barranquilla', 'cartagena', 'santa', 'marta', 'bogota', 'medellin',
     'cali', 'covenas', 'puerto'
   ])
@@ -149,11 +153,17 @@ export function isDistinctNameMatch(query, candidateName) {
   }
 
   const candTokens = getDistinctSemanticTokens(candidateName)
+  const stem = (w) => (w.length > 4 ? w.replace(/(os|as|es|[oae])$/i, '') : w)
 
   // Check if any distinct query token matches or is contained in a candidate token, or in the candidate string
   const hasTokenMatch = queryTokens.some(qt => {
-    if (candTokens.some(ct => ct === qt || ct.includes(qt) || qt.includes(ct))) return true
-    if (candClean.includes(qt)) return true
+    const sQt = stem(qt)
+    if (candTokens.some(ct => {
+      if (ct === qt || ct.includes(qt) || qt.includes(ct)) return true
+      const sCt = stem(ct)
+      return sCt === sQt || sCt.includes(sQt) || sQt.includes(sCt)
+    })) return true
+    if (candClean.includes(qt) || candClean.includes(sQt)) return true
     return false
   })
 
@@ -164,7 +174,8 @@ export function selectBestPoiResult(results, originalQuery = '') {
   if (!Array.isArray(results) || results.length === 0) return null
   const lowerQuery = String(originalQuery || '').toLowerCase()
   const isExplicitTransitQuery = /\b(estaci[oó]n|bus|metro|subway|parada|transit|train|railway|stop)\b/i.test(lowerQuery)
-  const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja)\b/i.test(lowerQuery)
+  const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(lowerQuery)
+  const isIslandQuery = /\b(isla|islas|archipi[ée]lago|cayo|cayos)\b/i.test(lowerQuery)
   const isViewpointQuery = /\b(mirador|viewpoint|lookout|belvedere|observatorio)\b/i.test(lowerQuery)
   const isExplicitFuelQuery = /\b(gasolinera|estaci[oó]n de servicio|combustible|terpel|texaco|esso|mobil|biomax|primax|petrol|fuel)\b/i.test(lowerQuery)
   const isMuseumQuery = /\b(museo|museum|galer[íi]a|museos)\b/i.test(lowerQuery)
@@ -198,6 +209,19 @@ export function selectBestPoiResult(results, originalQuery = '') {
         return null
       }
     }
+  }
+
+  if (isIslandQuery) {
+    candidates = candidates.filter(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || r.class || '').toLowerCase()
+      const name = String(r.name || '').toLowerCase()
+      const isNonIsland = ['boundary', 'highway', 'amenity'].includes(key) ||
+        ['administrative', 'neighbourhood', 'suburb', 'residential', 'road', 'street', 'city', 'town', 'school', 'place_of_worship'].includes(type)
+      const hasIslandWord = /\b(isla|islas|archipi[ée]lago|cayo|cayos)\b/i.test(name) || type === 'island' || type === 'islet' || (key === 'place' && (type === 'island' || type === 'islet'))
+      if (isNonIsland && !hasIslandWord) return false
+      return hasIslandWord || type === 'island' || type === 'islet'
+    })
   }
 
   if (isMuseumQuery) {
@@ -242,7 +266,13 @@ export function selectBestPoiResult(results, originalQuery = '') {
       const isInstitutionalOrSchool = ['school', 'college', 'kindergarten', 'university', 'hospital', 'clinic', 'pharmacy', 'cemetery', 'grave_yard', 'bus_stop', 'station', 'subway', 'railway', 'platform', 'highway', 'parking'].includes(type) ||
         ['school', 'college', 'kindergarten', 'university', 'hospital', 'clinic', 'cemetery'].includes(key) ||
         /\b(colegio|escuela|instituto|liceo|universidad|hospital|cl[íi]nica|cementerio|parroquia|parada de bus)\b/i.test(name)
-      return !isInstitutionalOrSchool
+      if (isInstitutionalOrSchool) return false
+
+      const isNonFoodGeo = ['boundary', 'place', 'highway'].includes(key) ||
+        ['administrative', 'neighbourhood', 'suburb', 'pedestrian', 'residential', 'road'].includes(type)
+      if (isNonFoodGeo) return false
+
+      return true
     })
   } else if (!isExplicitTransitQuery && candidates.length > 1) {
     const nonTransitMatch = candidates.filter(r => {
@@ -395,6 +425,47 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'casa de la aduana': { name: 'Museo del Oro Tairona - Casa de la Aduana', latitude: 11.2450, longitude: -74.2128, city: 'Santa Marta', country: 'Colombia' }
 }
 
+export function getRegionalBoundingBox(lat, lon, options = {}) {
+  if (lat == null || lon == null) return null
+  const numLat = Number(lat)
+  const numLon = Number(lon)
+  if (!Number.isFinite(numLat) || !Number.isFinite(numLon)) return null
+
+  // Adaptive regional bounding box:
+  // - Micro-destination: delta ~0.15 (~16 km)
+  // - Regional / Nature / Multiday / Sports / Ecological: delta ~0.55 (~60 km)
+  // - Standard urban / metropolitan coastal: delta ~0.35 (~38 km)
+  let delta = 0.35
+  if (options.isMicroDestination || options.isMicroDest) {
+    delta = 0.15
+  } else if (
+    options.isRegionalOrNature ||
+    options.durationDays >= 2 ||
+    options.durationHours >= 24 ||
+    options.type === 'ecological' ||
+    options.type === 'sports' ||
+    options.type === 'adventure' ||
+    options.type === 'regional'
+  ) {
+    delta = 0.55
+  }
+
+  const minLon = Number((numLon - delta).toFixed(4))
+  const maxLon = Number((numLon + delta).toFixed(4))
+  const minLat = Number((numLat - delta).toFixed(4))
+  const maxLat = Number((numLat + delta).toFixed(4))
+
+  return {
+    delta,
+    minLon,
+    maxLon,
+    minLat,
+    maxLat,
+    photonBbox: `${minLon},${minLat},${maxLon},${maxLat}`,
+    nominatimViewbox: `${minLon},${maxLat},${maxLon},${minLat}`
+  }
+}
+
 export async function geocodePlace(query, lat = null, lon = null, options = {}) {
   if (!query || typeof query !== 'string') return null
   const normalizedQuery = normalizeGeocodeQuery(query)
@@ -404,6 +475,220 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   const cached = geocodeCache.get(key)
   if (cached) return cached
 
+  const resolveCityFromPhoton = (item) => {
+    const rawCounty = cleanAdministrativeCityName(item?.tags?.county || '')
+    const rawCity = cleanAdministrativeCityName(item?.city || item?.tags?.city || '')
+    if (rawCounty && normalizedQuery.toLowerCase().includes(rawCounty.toLowerCase())) {
+      return rawCounty
+    }
+    return rawCity || rawCounty || ''
+  }
+
+  // 1. Resolve search center coordinates
+  let centerLat = (lat != null && Number.isFinite(Number(lat))) ? Number(lat) : null
+  let centerLon = (lon != null && Number.isFinite(Number(lon))) ? Number(lon) : null
+
+  if (centerLat == null || centerLon == null) {
+    let detectedCity = options?.city || options?.destination || ''
+    if (!detectedCity) {
+      const commaParts = query.split(',').map(s => s.trim())
+      if (commaParts.length > 1) {
+        detectedCity = commaParts[1]
+      }
+    }
+    if (!detectedCity) {
+      const knownCities = [
+        'santa marta', 'barranquilla', 'cartagena', 'coveñas', 'covenas',
+        'medellin', 'medellín', 'bogota', 'bogotá', 'cali', 'cancun', 'cancún',
+        'san andres', 'san andrés', 'tolu', 'tolú'
+      ]
+      const qLower = query.toLowerCase()
+      for (const kc of knownCities) {
+        if (qLower.includes(kc)) {
+          detectedCity = kc
+          break
+        }
+      }
+    }
+    if (detectedCity) {
+      const cleanCityKey = detectedCity.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      const fallbackCentroid = FALLBACK_DESTINATION_CENTROIDS[cleanCityKey] || FALLBACK_DESTINATION_CENTROIDS[detectedCity.toLowerCase()]
+      if (fallbackCentroid) {
+        centerLat = fallbackCentroid.latitude
+        centerLon = fallbackCentroid.longitude
+      }
+    }
+  }
+
+  const regionalBbox = (centerLat != null && centerLon != null) ? getRegionalBoundingBox(centerLat, centerLon, options) : null
+  const maxDistanceMeters = regionalBbox ? (regionalBbox.delta * 111000 * 1.45) : 75000
+
+  // 2. Candidate query variations
+  const queryCandidates = [normalizedQuery]
+  const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
+  if (commaParts.length > 1 && commaParts[0].length >= 3 && !queryCandidates.includes(commaParts[0])) {
+    queryCandidates.push(commaParts[0])
+  }
+  const decomposed = decomposeCompoundPlaceQuery(query)
+  for (const dq of decomposed) {
+    const normDq = normalizeGeocodeQuery(dq)
+    if (normDq && !queryCandidates.includes(normDq)) {
+      queryCandidates.push(normDq)
+    }
+  }
+
+  // 3. Photon Search with Bounding Box & Proximity Bias
+  for (const qc of queryCandidates) {
+    try {
+      const proxResults = await photonSearch(
+        qc,
+        8,
+        centerLat,
+        centerLon,
+        regionalBbox ? regionalBbox.photonBbox : null
+      )
+      const photonProx = selectBestPoiResult(proxResults, query)
+      if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
+        const dMeters = (centerLat != null && centerLon != null)
+          ? haversineMeters(centerLat, centerLon, photonProx.latitude, photonProx.longitude)
+          : 0
+        if (centerLat == null || dMeters <= maxDistanceMeters) {
+          const res = {
+            name: photonProx.name,
+            latitude: Number(photonProx.latitude),
+            longitude: Number(photonProx.longitude),
+            city: resolveCityFromPhoton(photonProx),
+            country: photonProx.country || ''
+          }
+          geocodeCache.set(key, res)
+          return res
+        }
+      }
+    } catch (err) {
+      console.warn('[geocodePlace] Photon proximity search error:', err.message)
+    }
+  }
+
+  // 4. Global Photon Search (only when no bounding box / destination center exists)
+  if (!regionalBbox) {
+    try {
+      for (const qc of queryCandidates) {
+        const globalResults = await photonSearch(qc, 5, null, null, null)
+        const photonGlobal = selectBestPoiResult(globalResults, query)
+        if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
+          const res = {
+            name: photonGlobal.name,
+            latitude: Number(photonGlobal.latitude),
+            longitude: Number(photonGlobal.longitude),
+            city: resolveCityFromPhoton(photonGlobal),
+            country: photonGlobal.country || ''
+          }
+          geocodeCache.set(key, res)
+          return res
+        }
+      }
+    } catch (err) {
+      console.warn('[geocodePlace] Global Photon search error:', err.message)
+    }
+  }
+
+  // 5. Nominatim Fallback with bounded viewbox
+  if (!options?.skipNominatim) {
+    const isExplicitFuelQuery = /\b(gasolinera|estaci[oó]n de servicio|combustible|terpel|texaco|esso|mobil|biomax|primax|petrol|fuel)\b/i.test(normalizedQuery)
+    const nominatimQueries = [...queryCandidates]
+    if (commaParts.length > 1) {
+      const simplifiedFeature = normalizedQuery.replace(/\b(bah[íi]a de|playa de|cabo|isla|archipi[ée]lago de|monumento al?|monumento de|monumento|barrio)\s+/gi, '').trim()
+      if (simplifiedFeature && simplifiedFeature !== normalizedQuery && simplifiedFeature.length > 3 && !nominatimQueries.includes(simplifiedFeature)) {
+        nominatimQueries.push(simplifiedFeature)
+      }
+    }
+
+    for (const nq of nominatimQueries) {
+      const url = new URL('https://nominatim.openstreetmap.org/search')
+      url.searchParams.set('format', 'jsonv2')
+      url.searchParams.set('limit', '5')
+      url.searchParams.set('addressdetails', '1')
+      url.searchParams.set('q', nq)
+      if (regionalBbox) {
+        url.searchParams.set('viewbox', regionalBbox.nominatimViewbox)
+        url.searchParams.set('bounded', '1')
+      }
+
+      try {
+        const response = await fetch(url, {
+          headers: { 'User-Agent': USER_AGENT },
+          signal: AbortSignal.timeout(5000)
+        })
+        if (response.ok) {
+          const results = await response.json()
+          const validResult = (Array.isArray(results) ? results : []).find(r => {
+            const type = String(r.type || '').toLowerCase()
+            const category = String(r.category || '').toLowerCase()
+            const name = String(r.display_name || '').toLowerCase()
+            const isFuel = type === 'fuel' || category === 'fuel' || /\beds\b|estaci[oó]n de servicio/i.test(name)
+            if (isFuel && !isExplicitFuelQuery) return false
+            const isUtility = ['waste_disposal', 'vending_machine', 'atm', 'car_wash', 'toilet', 'bench'].includes(type)
+            if (isUtility) return false
+
+            const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(query)
+            if (isFoodQuery) {
+              const isNonFoodGeo = ['boundary', 'place', 'highway'].includes(category) ||
+                ['administrative', 'neighbourhood', 'suburb', 'pedestrian', 'residential', 'road'].includes(type)
+              if (isNonFoodGeo) return false
+            }
+
+            const isIslandQuery = /\b(isla|islas|archipi[ée]lago|cayo|cayos)\b/i.test(query)
+            if (isIslandQuery) {
+              const isNonIsland = ['boundary', 'highway', 'amenity'].includes(category) ||
+                ['administrative', 'neighbourhood', 'suburb', 'residential', 'road', 'street', 'city', 'town', 'school', 'place_of_worship'].includes(type)
+              const hasIslandWord = /\b(isla|islas|archipi[ée]lago|cayo|cayos)\b/i.test(name) || type === 'island' || type === 'islet'
+              if (isNonIsland && !hasIslandWord) return false
+              if (!hasIslandWord && type !== 'island' && type !== 'islet') return false
+            }
+
+            if (query && !isDistinctNameMatch(query, r.display_name || r.name || '')) return false
+            return true
+          })
+
+          if (validResult) {
+            const rLat = Number(validResult.lat)
+            const rLon = Number(validResult.lon)
+            const dMeters = (centerLat != null && centerLon != null)
+              ? haversineMeters(centerLat, centerLon, rLat, rLon)
+              : 0
+            if (centerLat == null || dMeters <= maxDistanceMeters) {
+              const address = validResult.address || {}
+              const county = cleanAdministrativeCityName(address.county || '')
+              const matchedContextCity = commaParts.length > 1 ? cleanAdministrativeCityName(commaParts[1]) : ''
+              let rawCity = address.city || ''
+              if (county && matchedContextCity && county.toLowerCase() === matchedContextCity.toLowerCase()) {
+                rawCity = county
+              }
+              if (!rawCity) {
+                rawCity = address.town || address.village || address.municipality || address.county || matchedContextCity || ''
+              }
+              const city = cleanAdministrativeCityName(rawCity)
+              const country = address.country || ''
+              const res = {
+                name: validResult.display_name,
+                latitude: rLat,
+                longitude: rLon,
+                city,
+                country
+              }
+              geocodeCache.set(key, res)
+              return res
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[geocodePlace] Nominatim search error:', err.message)
+      }
+    }
+  }
+
+  // 6. High-confidence Seed Landmark Fallback (Only for local venues unmapped in OSM)
+  // Strictly validated against regional bounds so out-of-city landmarks NEVER match
   const normLower = normalizedQuery.toLowerCase().trim()
   const rawClean = String(query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const strippedCity = normLower.replace(/,\s*(barranquilla|santa marta|cartagena|coveñas|covenas|medellin|medellín|bogota|bogotá|colombia)/gi, '').trim()
@@ -427,226 +712,15 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
     })?.[1]
 
   if (landmarkMatch) {
-    geocodeCache.set(key, landmarkMatch)
-    return landmarkMatch
-  }
-
-  const resolveCityFromPhoton = (item) => {
-    const rawCounty = cleanAdministrativeCityName(item?.tags?.county || '')
-    const rawCity = cleanAdministrativeCityName(item?.city || item?.tags?.city || '')
-    if (rawCounty && normalizedQuery.toLowerCase().includes(rawCounty.toLowerCase())) {
-      return rawCounty
+    let isValidInRegion = true
+    if (centerLat != null && centerLon != null) {
+      const dist = haversineMeters(centerLat, centerLon, landmarkMatch.latitude, landmarkMatch.longitude)
+      isValidInRegion = dist <= maxDistanceMeters
     }
-    return rawCity || rawCounty || ''
-  }
-
-  // 1. If lat and lon are provided, perform proximity search FIRST to bind results directly to the destination area
-  if (lat && lon) {
-    try {
-      const proxResults = await photonSearch(normalizedQuery, 8, lat, lon)
-      let photonProx = selectBestPoiResult(proxResults, query)
-      if (!photonProx) {
-        const decomposed = decomposeCompoundPlaceQuery(query)
-        for (const dq of decomposed) {
-          const subResults = await photonSearch(normalizeGeocodeQuery(dq), 5, lat, lon)
-          photonProx = selectBestPoiResult(subResults, dq)
-          if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
-            break
-          }
-        }
-      }
-      if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
-        const dMeters = haversineMeters(lat, lon, photonProx.latitude, photonProx.longitude)
-        if (dMeters <= 75000) {
-          const res = {
-            name: photonProx.name,
-            latitude: Number(photonProx.latitude),
-            longitude: Number(photonProx.longitude),
-            city: resolveCityFromPhoton(photonProx),
-            country: photonProx.country || ''
-          }
-          geocodeCache.set(key, res)
-          return res
-        }
-      }
-    } catch (err) {
-      console.warn('[geocodePlace] Proximity Photon search failed:', err.message)
+    if (isValidInRegion) {
+      geocodeCache.set(key, landmarkMatch)
+      return landmarkMatch
     }
-  }
-
-  // 2. Global Photon search
-  try {
-    const globalResults = await photonSearch(normalizedQuery, 5, null, null)
-    let photonGlobal = selectBestPoiResult(globalResults, query)
-    if (!photonGlobal) {
-      const decomposed = decomposeCompoundPlaceQuery(query)
-      for (const dq of decomposed) {
-        const subResults = await photonSearch(normalizeGeocodeQuery(dq), 5, null, null)
-        photonGlobal = selectBestPoiResult(subResults, dq)
-        if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
-          break
-        }
-      }
-    }
-    if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
-      let isWithinBounds = !lat || !lon || haversineMeters(lat, lon, photonGlobal.latitude, photonGlobal.longitude) <= 75000
-      const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
-      if (isWithinBounds && (!lat || !lon) && commaParts.length > 1) {
-        const contextCity = commaParts[1].toLowerCase()
-        const resolvedCity = resolveCityFromPhoton(photonGlobal).toLowerCase()
-        const tagState = (photonGlobal.tags?.state || '').toLowerCase()
-        const tagCounty = (photonGlobal.tags?.county || '').toLowerCase()
-        if (resolvedCity && !resolvedCity.includes(contextCity) && !contextCity.includes(resolvedCity) && !tagState.includes(contextCity) && !tagCounty.includes(contextCity)) {
-          isWithinBounds = false
-        }
-      }
-      if (isWithinBounds) {
-        const res = {
-          name: photonGlobal.name,
-          latitude: Number(photonGlobal.latitude),
-          longitude: Number(photonGlobal.longitude),
-          city: resolveCityFromPhoton(photonGlobal),
-          country: photonGlobal.country || ''
-        }
-        geocodeCache.set(key, res)
-        return res
-      }
-    }
-  } catch (err) {
-    console.warn('[geocodePlace] Global Photon search failed:', err.message)
-  }
-
-  // 3. Fallback to Nominatim if Photon fails or returns no results
-  if (options?.skipNominatim) {
-    return null
-  }
-  const isExplicitFuelQuery = /\b(gasolinera|estaci[oó]n de servicio|combustible|terpel|texaco|esso|mobil|biomax|primax|petrol|fuel)\b/i.test(normalizedQuery)
-  const nominatimQueries = [normalizedQuery]
-  const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
-  const decomposed = decomposeCompoundPlaceQuery(query)
-  for (const dq of decomposed) {
-    if (dq && !nominatimQueries.includes(dq)) {
-      nominatimQueries.push(dq)
-    }
-    const normDq = normalizeGeocodeQuery(dq)
-    if (normDq && !nominatimQueries.includes(normDq)) {
-      nominatimQueries.push(normDq)
-    }
-  }
-  if (commaParts.length > 1) {
-    const simplifiedFeature = normalizedQuery.replace(/\b(bah[íi]a de|playa de|cabo|isla|archipi[ée]lago de|monumento al?|monumento de|monumento|barrio)\s+/gi, '').trim()
-    if (simplifiedFeature && simplifiedFeature !== normalizedQuery && simplifiedFeature.length > 3) {
-      nominatimQueries.push(simplifiedFeature)
-    }
-    if (commaParts[0].length > 2) {
-      nominatimQueries.push(commaParts[0])
-      const firstWithoutPrefix = commaParts[0].replace(/\b(bah[íi]a de|playa de|cabo|isla|archipi[ée]lago de|monumento al?|monumento de|monumento|barrio)\s+/gi, '').trim()
-      if (firstWithoutPrefix && firstWithoutPrefix !== commaParts[0] && firstWithoutPrefix.length > 2) {
-        nominatimQueries.push(firstWithoutPrefix)
-      }
-    }
-  }
-
-  for (const nq of nominatimQueries) {
-    const url = new URL('https://nominatim.openstreetmap.org/search')
-    url.searchParams.set('format', 'jsonv2')
-    url.searchParams.set('limit', '5')
-    url.searchParams.set('addressdetails', '1')
-    url.searchParams.set('q', nq)
-    try {
-      const response = await fetch(url, {
-        headers: { 'User-Agent': USER_AGENT },
-        signal: AbortSignal.timeout(6000)
-      })
-      if (response.ok) {
-        const results = await response.json()
-        const validResult = (Array.isArray(results) ? results : []).find(r => {
-          const type = String(r.type || '').toLowerCase()
-          const category = String(r.category || '').toLowerCase()
-          const name = String(r.display_name || '').toLowerCase()
-          const isFuel = type === 'fuel' || category === 'fuel' || /\beds\b|estaci[oó]n de servicio/i.test(name)
-          if (isFuel && !isExplicitFuelQuery) return false
-          const isUtility = ['waste_disposal', 'vending_machine', 'atm', 'car_wash', 'toilet', 'bench'].includes(type)
-          if (isUtility) return false
-          if (query && !isDistinctNameMatch(query, r.display_name || r.name || '')) return false
-          return true
-        })
-        if (validResult) {
-          const rLat = Number(validResult.lat)
-          const rLon = Number(validResult.lon)
-          let isWithinBounds = !lat || !lon || haversineMeters(lat, lon, rLat, rLon) <= 75000
-          if (nq !== normalizedQuery && (!lat || !lon) && commaParts.length > 1) {
-            const contextCity = commaParts[1].toLowerCase()
-            const resultText = `${validResult.display_name} ${JSON.stringify(validResult.address || {})}`.toLowerCase()
-            if (!resultText.includes(contextCity)) {
-              isWithinBounds = false
-            }
-          }
-          if (isWithinBounds) {
-            const address = validResult.address || {}
-            const county = cleanAdministrativeCityName(address.county || '')
-            const matchedContextCity = commaParts.length > 1 ? cleanAdministrativeCityName(commaParts[1]) : ''
-            let rawCity = address.city || ''
-            if (county && matchedContextCity && county.toLowerCase() === matchedContextCity.toLowerCase()) {
-              rawCity = county
-            }
-            if (!rawCity) {
-              rawCity = address.town || address.village || address.municipality || address.county || matchedContextCity || ''
-            }
-            const city = cleanAdministrativeCityName(rawCity)
-            const country = address.country || ''
-            const res = {
-              name: validResult.display_name,
-              latitude: rLat,
-              longitude: rLon,
-              city,
-              country
-            }
-            geocodeCache.set(key, res)
-            return res
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('[geocodePlace] Nominatim search failed:', err.message)
-    }
-  }
-
-  // 4. Dynamic OpenAI geocode fallback if OSM providers fail
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      const { geocodePlacesWithOpenAI } = await import('./openai.js')
-      const aiResults = await geocodePlacesWithOpenAI({
-        places: [query],
-        centerLat: lat,
-        centerLon: lon
-      })
-      const foundAi = aiResults?.[query] || Object.values(aiResults || {})[0]
-      if (foundAi && Number.isFinite(foundAi.latitude) && Number.isFinite(foundAi.longitude)) {
-        let city = foundAi.city || ''
-        if (!city) {
-          const matchedCity = ['Santa Marta', 'Barranquilla', 'Cartagena', 'Medellín', 'Bogotá', 'Cali', 'Bucaramanga', 'Coveñas', 'Villa de Leyva']
-            .find(c => query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')))
-          if (matchedCity) {
-            city = matchedCity
-          } else {
-            const parts = query.split(',').map(s => s.trim())
-            if (parts.length > 1) {
-              city = cleanAdministrativeCityName(parts[1])
-            }
-          }
-        }
-        const res = {
-          name: query,
-          latitude: Number(foundAi.latitude),
-          longitude: Number(foundAi.longitude),
-          city,
-          country: foundAi.country || 'Colombia'
-        }
-        geocodeCache.set(key, res)
-        return res
-      }
-    } catch (_) {}
   }
 
   return null
@@ -658,29 +732,33 @@ export function isPhotonCircuitOpen() {
   return Date.now() < photonCircuitOpenUntil
 }
 
-export function tripPhotonCircuit(durationMs = (process.env.NODE_ENV === 'test' ? 2000 : 15000)) {
+export function tripPhotonCircuit(durationMs = (process.env.NODE_ENV === 'test' ? 2000 : 10000)) {
   photonCircuitOpenUntil = Date.now() + durationMs
   console.warn(`[osm] Photon circuit breaker tripped for ${durationMs / 1000}s`)
 }
 
-export async function photonSearch(query, limit = 8, lat = null, lon = null) {
+export async function photonSearch(query, limit = 8, lat = null, lon = null, bbox = null) {
   if (!query || isPhotonCircuitOpen()) return []
-  const key = `photon_${query.toLowerCase().trim()}_${limit}_${lat ?? ''}_${lon ?? ''}`
+  const key = `photon_${query.toLowerCase().trim()}_${limit}_${lat ?? ''}_${lon ?? ''}_${bbox ?? ''}`
   const cached = photonCache.get(key)
   if (cached) return cached
 
   const url = new URL('https://photon.komoot.io/api/')
   url.searchParams.set('q', query)
   url.searchParams.set('limit', String(limit))
+  if (bbox) {
+    url.searchParams.set('bbox', bbox)
+  }
   if (lat && lon) {
     url.searchParams.set('lat', String(lat))
     url.searchParams.set('lon', String(lon))
   }
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(1500) })
+    const timeoutMs = process.env.NODE_ENV === 'test' ? 4000 : 3500
+    const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
     if (!response.ok) {
       if (response.status === 429 || response.status >= 500) {
-        tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 30000)
+        tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 15000)
       }
       return []
     }
@@ -700,7 +778,7 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null) {
     return results
   } catch (err) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError' || err.code === 'UND_ERR_CONNECT_TIMEOUT') {
-      tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 30000)
+      tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 10000)
     }
     return []
   }

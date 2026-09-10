@@ -4185,12 +4185,19 @@ async function resolveStopCoordinates({ source, input, name, fallbackPlace, star
 
   // 1. Geocodificar nombre de parada anclado al destino con proveedores cartográficos reales (OSM/Photon/Nominatim)
   const searchQuery = `${name}, ${cleanCity}, ${input.country || ''}`.trim().replace(/,\s*$/, '')
-  let geocoded = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
+  const geocodeOpts = {
+    isRegionalOrNature: Boolean(isRegionalOrNature || input.durationDays >= 2 || input.durationHours >= 24),
+    isMicroDest: Boolean(isMicroDest),
+    durationDays: input.durationDays,
+    city: cleanCity,
+    destination: input.destination
+  }
+  let geocoded = await geocodePlace(searchQuery, destLat, destLon, geocodeOpts).catch(() => null)
   if (!geocoded && cleanCity && !name.toLowerCase().includes(cleanCity.toLowerCase())) {
-    geocoded = await geocodePlace(`${name}, ${cleanCity}`, destLat, destLon).catch(() => null)
+    geocoded = await geocodePlace(`${name}, ${cleanCity}`, destLat, destLon, geocodeOpts).catch(() => null)
   }
   if (!geocoded && destLat && destLon) {
-    geocoded = await geocodePlace(name, destLat, destLon).catch(() => null)
+    geocoded = await geocodePlace(name, destLat, destLon, geocodeOpts).catch(() => null)
   }
 
   if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
@@ -5011,17 +5018,25 @@ export async function collectTourCandidates(input, location) {
         const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
         const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
 
+        const regionalOpts = {
+          isRegionalOrNature: Boolean(isRegionalOrNature || input.durationDays >= 2 || input.durationHours >= 24),
+          isMicroDest: Boolean(isMicroDest || canonicalDest?.isMicroDestination),
+          durationDays: input.durationDays,
+          city,
+          country
+        }
+
         // Tier 0: Consulta directa en OSM con contexto de ciudad y país con sesgo de proximidad al destino
         if (!geo && /pueblito|chairama/i.test(placeName)) {
-          geo = await geocodePlace('Pueblito Tayrona', destLat, destLon).catch(() => null)
-          if (!geo) geo = await geocodePlace('El Pueblito Chairama', destLat, destLon).catch(() => null)
+          geo = await geocodePlace('Pueblito Tayrona', destLat, destLon, regionalOpts).catch(() => null)
+          if (!geo) geo = await geocodePlace('El Pueblito Chairama', destLat, destLon, regionalOpts).catch(() => null)
         }
         if (!geo) {
           const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
-          geo = await geocodePlace(searchQuery, destLat, destLon).catch(() => null)
+          geo = await geocodePlace(searchQuery, destLat, destLon, regionalOpts).catch(() => null)
         }
         if (!geo) {
-          geo = await geocodePlace(`${placeName}, ${city}`.trim(), destLat, destLon).catch(() => null)
+          geo = await geocodePlace(`${placeName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
         }
         if (geo) {
           const pLower = placeName.toLowerCase()
@@ -5039,7 +5054,7 @@ export async function collectTourCandidates(input, location) {
         if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
           const decomposed = decomposeCompoundPlaceQuery(placeName)
           for (const dQuery of decomposed) {
-            const dGeo = await geocodePlace(`${dQuery}, ${city}`, destLat, destLon).catch(() => null)
+            const dGeo = await geocodePlace(`${dQuery}, ${city}`, destLat, destLon, regionalOpts).catch(() => null)
             if (dGeo && isDistinctNameMatch(placeName, dGeo.name) && validateCandidateLocation(dGeo, canonicalDest, 70)) {
               geo = dGeo
               break
