@@ -629,6 +629,7 @@ aiRouter.post('/chat', async (req, res, next) => {
     // Extraer lugares SOLO si ya se eligió la ciudad destino y provienen de elecciones explícitas o de un itinerario estructurado confirmado
     const hasConfirmedCity = Boolean(updatedPreferences.city || updatedPreferences.destination)
     const isAskingCityRecomms = !hasConfirmedCity && /\b(recomien|recomiend|qué me recomiendas|dónde ir|opciones|destinos)\b/i.test(message)
+    const extractedFromMsg = []
 
     if (hasConfirmedCity && !isAskingCityRecomms) {
       function extractPoisFromText(text) {

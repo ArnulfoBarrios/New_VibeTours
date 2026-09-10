@@ -99,3 +99,33 @@ test('Intra-day stop order from chat is strictly preserved without TSP reorderin
   assert.equal(day2Stops[3].name, 'Restaurante El Corral')
 })
 
+test('POST /api/ai/chat responds successfully with 200 without throwing 500 error', async () => {
+  const express = (await import('express')).default
+  const { aiRouter } = await import('../routes/ai.js')
+  const app = express()
+  app.use(express.json())
+  app.use('/api/ai', aiRouter)
+
+  const server = app.listen(0)
+  const port = server.address().port
+
+  try {
+    const res = await fetch(`http://localhost:${port}/api/ai/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: 'Crea un tour a Barranquilla donde pueda ver los lugares más importantes de la ciudad',
+        history: [],
+        currentPreferences: {}
+      })
+    })
+
+    assert.equal(res.status, 200, 'Status must be 200 OK')
+    const data = await res.json()
+    assert.ok(data.responseMessage, 'Response must contain responseMessage')
+    assert.equal(data.preferences?.city, 'Barranquilla')
+  } finally {
+    server.close()
+  }
+})
+
