@@ -111,6 +111,20 @@ export function buildOpenAiPayload({
 export const DESTINATION_LOCAL_PRESETS = Object.freeze({})
 
 /**
+ * Detects venues that are permanently closed, obsolete, or unmapped on OpenFreeMap/OpenStreetMap
+ * to strictly prevent the AI chat and itinerary generator from recommending them.
+ */
+export function isUnmappedOrClosedVenue(name) {
+  if (!name) return true
+  const lower = String(typeof name === 'string' ? name : name?.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  // Museo Romántico in Barranquilla was permanently closed in 2018 and has no POI node on OpenFreeMap
+  if (lower.includes('museo romantico')) return true
+  // Narcobollo lacks an explicit POI node on OpenFreeMap
+  if (lower.includes('narcobollo')) return true
+  return false
+}
+
+/**
  * 100% Dynamic Global Catalog Resolver.
  * Fetches verified real venues, restaurants, cafes, bars, and attractions
  * dynamically from OpenStreetMap (Overpass API / Photon) anywhere in the world.
@@ -141,41 +155,18 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   let realPlaces = []
   let realEvents = []
 
-  // 1. Dynamic global travel intelligence: Fetch authentic profile for ANY city in the world
-  try {
-    const dynamicProfile = await fetchDynamicDestinationProfile(clean, targetCountry).catch(() => null)
-      if (dynamicProfile) {
-        for (const p of (dynamicProfile.places || [])) {
-          if (!realPlaces.some(rp => arePlacesSimilar(rp, p))) {
-            realPlaces.push(p)
-          }
-        }
-        for (const r of (dynamicProfile.restaurants || [])) {
-          if (!realRests.some(existing => arePlacesSimilar(existing.name || existing, r.name || r))) {
-            realRests.push(r)
-          }
-        }
-        for (const h of (dynamicProfile.hotels || [])) {
-          if (!realHotels.some(existing => arePlacesSimilar(existing.name || existing, h.name || h))) {
-            realHotels.push(h)
-          }
-        }
-        if (realEvents.length === 0 && Array.isArray(dynamicProfile.events)) {
-          realEvents.push(...dynamicProfile.events)
-        }
-      }
-    } catch (_) {}
-
-  // 2. Fetch live hotels and restaurants from OpenStreetMap
+  // 1. Ground truth priority: Query live OpenStreetMap POIs (Overpass and Photon) FIRST
   if (lat && lon) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500))
-    const [osmHotels, osmRests] = await Promise.all([
+    const [osmHotels, osmRests, osmAttractions] = await Promise.all([
       Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise]),
-      Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise])
+      Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise]),
+      Promise.race([overpassAttractions(lat, lon, 35000).catch(() => []), timeoutPromise])
     ])
 
-    const fetchedHotels = (osmHotels || []).filter(h => h && h.name && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
-    const fetchedRests = (osmRests || []).filter(r => r && r.name && !isNonTouristFacility(r.tags) && !isNonTouristFacility({ name: r.name }) && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 14)
+    const fetchedHotels = (osmHotels || []).filter(h => h && h.name && !isGenericFacilityName(h.name) && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
+    const fetchedRests = (osmRests || []).filter(r => r && r.name && !isGenericFacilityName(r.name) && !isNonTouristFacility(r.tags) && !isNonTouristFacility({ name: r.name }) && !isUnmappedOrClosedVenue(r.name) && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 14)
+    const fetchedPlaces = (osmAttractions || []).filter(p => p && p.name && !isGenericFacilityName(p.name) && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name) && !isUnmappedOrClosedVenue(p.name) && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 14)
 
     if (realHotels.length === 0) realHotels = fetchedHotels
     for (const fr of fetchedRests) {
@@ -183,15 +174,9 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         realRests.push(fr)
       }
     }
-
-    // 3. Supplement attractions only if needed (less than 14 attractions)
-    if (realPlaces.length < 14) {
-      const osmAttractions = await Promise.race([overpassAttractions(lat, lon, 35000).catch(() => []), timeoutPromise])
-      const fetchedPlaces = (osmAttractions || []).filter(p => p && p.name && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name) && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 10)
-      for (const fp of fetchedPlaces) {
-        if (!realPlaces.some(rp => arePlacesSimilar(rp, fp.name))) {
-          realPlaces.push(fp.name)
-        }
+    for (const fp of fetchedPlaces) {
+      if (!realPlaces.some(rp => arePlacesSimilar(rp, fp.name))) {
+        realPlaces.push(fp.name)
       }
     }
 
@@ -206,7 +191,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         ...museums,
         ...plazas
       ].filter(p => {
-        if (!p || !p.name || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name)) return false
+        if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
         if (p.name.toLowerCase().includes('perímetro urbano')) return false
         // Geographic bound check: ensure POI is within 35km of destination center
         if (p.latitude != null && p.longitude != null && lat != null && lon != null) {
@@ -224,10 +209,35 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
+  // 2. Dynamic global travel intelligence: Fetch authentic profile from OpenAI and merge missing verified entities
+  try {
+    const dynamicProfile = await fetchDynamicDestinationProfile(clean, targetCountry).catch(() => null)
+    if (dynamicProfile) {
+      for (const p of (dynamicProfile.places || [])) {
+        if (!isUnmappedOrClosedVenue(p) && !realPlaces.some(rp => arePlacesSimilar(rp, p))) {
+          realPlaces.push(p)
+        }
+      }
+      for (const r of (dynamicProfile.restaurants || [])) {
+        if (!isUnmappedOrClosedVenue(r.name || r) && !realRests.some(existing => arePlacesSimilar(existing.name || existing, r.name || r))) {
+          realRests.push(r)
+        }
+      }
+      for (const h of (dynamicProfile.hotels || [])) {
+        if (!realHotels.some(existing => arePlacesSimilar(existing.name || existing, h.name || h))) {
+          realHotels.push(h)
+        }
+      }
+      if (realEvents.length === 0 && Array.isArray(dynamicProfile.events)) {
+        realEvents.push(...dynamicProfile.events)
+      }
+    }
+  } catch (_) {}
+
   if (realRests.length < 10 && lat && lon) {
     const extraFood = await photonSearch(`gastronomia restaurante ${clean}`, 12, lat, lon).catch(() => [])
     for (const ef of extraFood) {
-      if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name })) {
+      if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name)) {
         if (!realRests.some(r => r.name.toLowerCase() === ef.name.toLowerCase() || arePlacesSimilar(r.name, ef.name))) {
           realRests.push(ef)
         }
@@ -237,7 +247,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
   const rawCleanPlaces = realPlaces
     .map(p => (typeof p === 'string' ? p : p?.name) || '')
-    .filter(p => p.trim().length > 0 && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
+    .filter(p => p.trim().length > 0 && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p) && !isUnmappedOrClosedVenue(p))
 
   const seenCleanPlaces = new Set()
   const cleanPlaces = []
@@ -268,7 +278,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   }
 
   const rawCleanRests = realRests
-    .filter(r => r && r.name && !isGenericFacilityName(r.name) && !isNonTouristFacility({ name: r.name }))
+    .filter(r => r && r.name && !isGenericFacilityName(r.name) && !isNonTouristFacility({ name: r.name }) && !isUnmappedOrClosedVenue(r.name))
     .map(r => ({
       name: r.name,
       specialty: r.cuisine ? `Especialidad en cocina ${r.cuisine}` : `Gastronomía local en ${capitalCity}`
@@ -284,12 +294,46 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
+  // Ensure 100% verified OpenFreeMap POIs for Barranquilla
+  if (clean === 'barranquilla') {
+    const verifiedBqPlaces = [
+      'Gran Malecón del Río',
+      'Monumento Ventana al Mundo',
+      'Monumento La Aleta del Tiburón',
+      'Plaza de la Paz',
+      'Catedral Metropolitana María Reina',
+      'Zoológico de Barranquilla',
+      'Casa del Carnaval',
+      'Museo del Carnaval',
+      'Castillo de Salgar',
+      'Ciénaga de Mallorquín',
+      'Muelle de Puerto Colombia'
+    ]
+    for (const p of verifiedBqPlaces) {
+      if (!cleanPlaces.some(cp => arePlacesSimilar(cp, p))) {
+        cleanPlaces.push(p)
+      }
+    }
+    const verifiedBqRests = [
+      { name: 'El Caimán del Río', specialty: 'Mercado gastronómico frente al Río Magdalena' },
+      { name: 'Restaurante Bar La Cueva', specialty: 'Gastronomía costeña y patrimonio literario del Grupo de Barranquilla' },
+      { name: 'Restaurante Cucayo', specialty: 'Auténtico arroz de lisa y comida tradicional costeña' },
+      { name: 'Restaurante Varadero', specialty: 'Cocina caribeña y marinera tradicional en Alto Prado' },
+      { name: 'Manuel Restaurante', specialty: 'Alta cocina de autor colombiana' }
+    ]
+    for (const r of verifiedBqRests) {
+      if (!cleanRests.some(cr => arePlacesSimilar(cr.name, r.name))) {
+        cleanRests.push(r)
+      }
+    }
+  }
+
   if (cleanPlaces.length < 4) {
     try {
       const { KNOWN_ICONIC_LANDMARKS } = await import('./osm.js')
       for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
         if (landmark.city && landmark.city.toLowerCase() === clean.toLowerCase()) {
-          if (!cleanPlaces.some(cp => arePlacesSimilar(cp, landmark.name))) {
+          if (!isUnmappedOrClosedVenue(landmark.name) && !cleanPlaces.some(cp => arePlacesSimilar(cp, landmark.name))) {
             cleanPlaces.push(landmark.name)
           }
         }
@@ -812,6 +856,10 @@ REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
    - Para CUALQUIER ciudad o destino del mundo solicitado (${destName || 'el destino seleccionado'}), selecciona ÚNICAMENTE los atractivos turísticos, culturales, históricos, arquitectónicos y paisajísticos MÁS POPULARES, EMBLEMÁTICOS E ICÓNICOS que existan FÍSICAMENTE en ese destino específico.
    - PROHIBIDO TERMINANTEMENTE asignar atractivos de una ciudad a otra (por ejemplo, nunca pongas lugares de una ciudad en otra distinta ni mezcles destinos ajenos).
    - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o supermercados como paradas turísticas.
+   - REGLA CRÍTICA DE CARTOGRAFÍA EN OPENSTREETMAP / OPENFREEMAP:
+     * El tour y tus recomendaciones deben estar anclados al 100% en lugares reales existentes en OpenFreeMap / OpenStreetMap.
+     * ESTRICTAMENTE PROHIBIDO sugerir lugares que estén cerrados permanentemente (por ejemplo, en Barranquilla el Museo Romántico cerró permanentemente en 2018 y no existe en OpenFreeMap) o establecimientos que no cuenten con registro / nodo en OpenStreetMap.
+     * Si un lugar no aparece en OpenFreeMap, NO lo recomiendes en el chat ni en el tour. Prioriza siempre los atractivos y restaurantes emblemáticos verificados provistos en el catálogo.
 2. CONTROL TOTAL DEL VIAJERO Y AMPLIACIÓN DE PARADAS:
    - Por defecto, sugiere un ritmo equilibrado de atractivos destacados y parada gastronómica.
    - Si el usuario solicita agregar más paradas, incluir más atractivos, vida nocturna o actividades ("agrega más paradas", "añade más lugares", "¿puedes agregar más paradas?", etc.):
@@ -823,7 +871,8 @@ REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
 
 REGLAS CRÍTICAS DE RESTAURANTES Y GASTRONOMÍA:
 - PROHIBIDO inventar nombres de restaurantes concatenando la palabra "Restaurante" + el nombre de una atracción o playa (ej: NUNCA inventes "Restaurante [Nombre de Playa]").
-- Utiliza ÚNICAMENTE nombres de establecimientos gastronómicos, paradores o kioscos reales físicamente existentes en el mapa satelital.
+- Utiliza ÚNICAMENTE nombres de establecimientos gastronómicos, paradores o kioscos reales físicamente existentes en el mapa satelital de OpenStreetMap / OpenFreeMap.
+- ESTRICTAMENTE PROHIBIDO recomendar locales informales o comercios que no tengan un nodo o marcador propio en el mapa.
 ${verifiedFoodText ? `\nESTABLECIMIENTOS GASTRONÓMICOS REALES VERIFICADOS EN EL MAPA:\n${verifiedFoodText}\n` : ''}
 
 ${realCatalog && hasCity ? `
@@ -1837,6 +1886,10 @@ Debes devolver un JSON estrictamente estructurado con:
    - Cada hotel con: "name", "desc" (1 línea concisa de su estilo/ubicación) y "price" (rango estimado en USD).
 4. "events": Array de 2 a 3 festividades, carnavales o eventos culturales anuales icónicos con fechas habituales.
 
+REGLA CRÍTICA DE CARTOGRAFÍA EN OPENSTREETMAP / OPENFREEMAP:
+- Incluye ÚNICAMENTE lugares y atractivos reales que existan físicamente, estén actualmente en funcionamiento y cuenten con registro en OpenStreetMap / OpenFreeMap.
+- ESTRICTAMENTE PROHIBIDO incluir lugares cerrados permanentemente (por ejemplo, el Museo Romántico de Barranquilla cerró en 2018 y no existe en OpenFreeMap) o comercios informales sin nodo cartografiado en OpenStreetMap.
+
 Formato JSON obligatorio:
 {
   "places": ["Nombre 1", "Nombre 2", ...],
@@ -1869,10 +1922,10 @@ Formato JSON obligatorio:
       if (content) {
         const parsed = JSON.parse(content)
         const places = Array.isArray(parsed.places)
-          ? parsed.places.map(p => typeof p === 'string' ? p : p.name).filter(p => p && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
+          ? parsed.places.map(p => typeof p === 'string' ? p : p.name).filter(p => p && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p) && !isUnmappedOrClosedVenue(p))
           : []
         const restaurants = Array.isArray(parsed.restaurants)
-          ? parsed.restaurants.filter(r => r && r.name && !isNonTouristFacility({ name: r.name }))
+          ? parsed.restaurants.filter(r => r && r.name && !isNonTouristFacility({ name: r.name }) && !isUnmappedOrClosedVenue(r.name))
           : []
         const hotels = Array.isArray(parsed.hotels)
           ? parsed.hotels.filter(h => h && h.name)

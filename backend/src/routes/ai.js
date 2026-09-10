@@ -5260,17 +5260,8 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        // Fallback for user-requested chat stops:
-        // If external geocoding times out, rate-limits, or lacks minor venues,
-        // deterministically anchor to destination coordinates so user's explicit itinerary is preserved
-        if (finalLat == null && (destLat != null || cityCenterLat != null)) {
-          const baseLat = destLat ?? cityCenterLat
-          const baseLon = destLon ?? cityCenterLon
-          const hash = placeName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)
-          finalLat = baseLat + ((hash % 10) - 5) * 0.001
-          finalLon = baseLon + (((hash * 3) % 10) - 5) * 0.001
-          tagSource = 'destination_anchored'
-        }
+        // Strict grounding: Never invent synthetic coordinates.
+        // If a venue cannot be resolved to verified OpenStreetMap coordinates, drop the ungrounded candidate cleanly.
 
         if (finalLat != null && finalLon != null) {
           const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)

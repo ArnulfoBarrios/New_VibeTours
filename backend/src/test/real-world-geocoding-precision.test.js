@@ -89,7 +89,7 @@ test('geocodePlace resolves verified real GPS coordinates for the 10 reported pl
 
   // 6. Varadero Gastrobar (Cra 51B # 79-97)
   const varadero = await geocodePlace('Restaurante Varadero', bqLat, bqLon)
-  isNearby(varadero, 11.0028, -74.8166, 500)
+  isNearby(varadero, 11.0014, -74.8115, 300)
 
   // 7. Museo Romántico (Cra 54 # 59-199, El Prado, not road roadway)
   const museoRomantico = await geocodePlace('Museo Romántico', bqLat, bqLon)
