@@ -263,6 +263,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (text.contains('GOOGLE_WEB_CLIENT_ID')) {
       return l10n.authErrorGoogle;
     }
+    if (text.contains('GoogleSignInExceptionCode.canceled') || text.toLowerCase().contains('canceled')) {
+      return 'Inicio de sesión con Google cancelado.';
+    }
     return text.replaceFirst('Exception: ', '');
   }
 

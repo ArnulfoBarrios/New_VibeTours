@@ -47,34 +47,49 @@ class AuthService {
     if (_client == null) {
       throw StateError('Supabase no esta configurado.');
     }
-    if (AppConfig.googleWebClientId.isEmpty) {
-      throw StateError(
-        'Falta GOOGLE_WEB_CLIENT_ID para continuar con Google sin salir de la app.',
-      );
+    // 1. Intento nativo con GoogleSignIn
+    if (AppConfig.googleWebClientId.isNotEmpty) {
+      try {
+        final googleSignIn = GoogleSignIn.instance;
+        await googleSignIn.initialize(
+          clientId: AppConfig.googleIosClientId.isEmpty
+              ? null
+              : AppConfig.googleIosClientId,
+          serverClientId: AppConfig.googleWebClientId,
+        );
+        final account = await googleSignIn.authenticate(scopeHint: _googleScopes);
+        final idToken = account.authentication.idToken;
+        if (idToken != null) {
+          final authorization =
+              await account.authorizationClient.authorizationForScopes(
+                _googleScopes,
+              ) ??
+              await account.authorizationClient.authorizeScopes(_googleScopes);
+          await _client.auth.signInWithIdToken(
+            provider: OAuthProvider.google,
+            idToken: idToken,
+            accessToken: authorization.accessToken,
+          );
+          return;
+        }
+      } catch (error) {
+        final errText = error.toString().toLowerCase();
+        // Si el usuario canceló explícitamente y no es un fallo de configuración/reauth
+        if (errText.contains('canceled') &&
+            !errText.contains('16') &&
+            !errText.contains('reauth') &&
+            !errText.contains('failed')) {
+          rethrow;
+        }
+        // Si falló por configuración técnica (ej. SHA-1 no registrado en Google Cloud),
+        // procedemos al fallback vía navegador/Custom Tabs de Supabase.
+      }
     }
-    final googleSignIn = GoogleSignIn.instance;
-    await googleSignIn.initialize(
-      clientId: AppConfig.googleIosClientId.isEmpty
-          ? null
-          : AppConfig.googleIosClientId,
-      serverClientId: AppConfig.googleWebClientId.isEmpty
-          ? null
-          : AppConfig.googleWebClientId,
-    );
-    final account = await googleSignIn.authenticate(scopeHint: _googleScopes);
-    final idToken = account.authentication.idToken;
-    if (idToken == null) {
-      throw StateError('Google no entrego id_token.');
-    }
-    final authorization =
-        await account.authorizationClient.authorizationForScopes(
-          _googleScopes,
-        ) ??
-        await account.authorizationClient.authorizeScopes(_googleScopes);
-    await _client.auth.signInWithIdToken(
-      provider: OAuthProvider.google,
-      idToken: idToken,
-      accessToken: authorization.accessToken,
+
+    // 2. Fallback: Flujo web OAuth de Supabase (vía Custom Tabs / navegador)
+    await _client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: 'com.vibetours.app://login-callback',
     );
   }
 

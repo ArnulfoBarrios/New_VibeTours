@@ -530,7 +530,11 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'gran maiz': { name: 'Restaurante gran maiz', latitude: 10.9623, longitude: -74.7919, city: 'Barranquilla', country: 'Colombia' },
   'restaurante gran maiz': { name: 'Restaurante gran maiz', latitude: 10.9623, longitude: -74.7919, city: 'Barranquilla', country: 'Colombia' },
   'restaurante el prado': { name: 'Restaurante El Prado', latitude: 10.9995, longitude: -74.7955, city: 'Barranquilla', country: 'Colombia' },
+  'el prado restaurante': { name: 'Restaurante El Prado', latitude: 10.9995, longitude: -74.7955, city: 'Barranquilla', country: 'Colombia' },
   'hotel el prado': { name: 'Hotel El Prado', latitude: 10.9995, longitude: -74.7955, city: 'Barranquilla', country: 'Colombia' },
+  'la casa del marisco': { name: 'Restaurante La Casa del Marisco', latitude: 10.9975, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante la casa del marisco': { name: 'Restaurante La Casa del Marisco', latitude: 10.9975, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
+  'casa del marisco': { name: 'Restaurante La Casa del Marisco', latitude: 10.9975, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
   'la troja': { name: 'La Troja', latitude: 10.9942, longitude: -74.8080, city: 'Barranquilla', country: 'Colombia' },
 
   // Santa Marta
@@ -571,17 +575,26 @@ export function matchIconicLandmark(query, normalizedQuery, centerLat = null, ce
   const unaccentedQuery = normLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const pureQuery = unaccentedStripped.split(',')[0].trim()
 
+  let invertedQuery = null
+  if (pureQuery.endsWith(' restaurante')) {
+    invertedQuery = 'restaurante ' + pureQuery.replace(/\s+restaurante$/, '').trim()
+  } else if (pureQuery.startsWith('restaurante ')) {
+    invertedQuery = pureQuery.replace(/^restaurante\s+/, '').trim() + ' restaurante'
+  }
+
   const landmarkMatch = KNOWN_ICONIC_LANDMARKS[normLower] ||
     KNOWN_ICONIC_LANDMARKS[unaccentedQuery] ||
     KNOWN_ICONIC_LANDMARKS[rawClean] ||
     KNOWN_ICONIC_LANDMARKS[strippedCity] ||
     KNOWN_ICONIC_LANDMARKS[unaccentedStripped] ||
     KNOWN_ICONIC_LANDMARKS[pureQuery] ||
+    (invertedQuery && (KNOWN_ICONIC_LANDMARKS[invertedQuery] || KNOWN_ICONIC_LANDMARKS[invertedQuery.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()])) ||
     Object.entries(KNOWN_ICONIC_LANDMARKS).find(([k]) => {
       const kClean = k.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
       return pureQuery === kClean ||
              unaccentedStripped === kClean ||
              unaccentedQuery === kClean ||
+             (invertedQuery && invertedQuery === kClean) ||
              (kClean.length >= 5 && pureQuery.includes(kClean)) ||
              (pureQuery.length >= 5 && kClean.includes(pureQuery))
     })?.[1]
