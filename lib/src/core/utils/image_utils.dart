@@ -13,5 +13,17 @@ String optimizeImageUrl(String url, {int width = 600, int quality = 75}) {
       return url;
     }
   }
+  if (url.contains('images.pexels.com')) {
+    try {
+      final uri = Uri.parse(url);
+      final params = Map<String, String>.from(uri.queryParameters);
+      params['auto'] = 'compress';
+      params['cs'] = 'tinysrgb';
+      params['w'] = width.toString();
+      return uri.replace(queryParameters: params).toString();
+    } catch (_) {
+      return url;
+    }
+  }
   return url;
 }

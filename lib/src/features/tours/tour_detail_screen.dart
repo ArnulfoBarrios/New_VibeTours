@@ -1062,8 +1062,8 @@ class _Metric extends StatelessWidget {
   }
 }
 
-void _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? tour}) {
-  showModalBottomSheet(
+Future<void> _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? tour}) {
+  return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -1071,9 +1071,10 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? tour}) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (context) {
+      final coverUrl = stop.displayImageUrl;
       final allImages = stop.images.isNotEmpty
           ? stop.images
-          : [if (stop.imageUrl.isNotEmpty) stop.imageUrl];
+          : [if (coverUrl.isNotEmpty) coverUrl];
 
       final recommendations = stop.tips.isNotEmpty
           ? stop.tips
@@ -1109,7 +1110,7 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? tour}) {
                   const SizedBox(height: 16),
 
                   // Stop Cover Photo with Tap to Zoom
-                  if (stop.imageUrl.isNotEmpty)
+                  if (coverUrl.isNotEmpty)
                     GestureDetector(
                       onTap: () => ImageViewerDialog.show(
                         context,
@@ -1121,10 +1122,16 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? tour}) {
                         child: Stack(
                           children: [
                             CachedNetworkImage(
-                              imageUrl: stop.imageUrl,
+                              imageUrl: coverUrl,
                               height: 180,
                               width: double.infinity,
                               fit: BoxFit.cover,
+                              memCacheWidth: 800,
+                              memCacheHeight: 600,
+                              placeholder: (c, u) => const SkeletonBox(
+                                height: 180,
+                                width: double.infinity,
+                              ),
                               errorWidget: (c, u, e) => Container(
                                 height: 180,
                                 color: AppTheme.primary.withValues(alpha: 0.1),
@@ -1359,6 +1366,8 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? tour}) {
                               imageUrl: allImages[i],
                               width: 100,
                               fit: BoxFit.cover,
+                              memCacheWidth: 200,
+                              memCacheHeight: 160,
                             ),
                           ),
                         ),
@@ -1394,16 +1403,41 @@ void _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? tour}) {
   );
 }
 
-class _StopTile extends StatelessWidget {
+class _StopTile extends StatefulWidget {
   const _StopTile({required this.stop, this.tour});
 
   final TourStop stop;
   final Tour? tour;
 
   @override
+  State<_StopTile> createState() => _StopTileState();
+}
+
+class _StopTileState extends State<_StopTile> {
+  int _retryKey = 0;
+
+  void _retry() {
+    if (mounted) {
+      setState(() {
+        _retryKey++;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final stop = widget.stop;
+    final displayUrl = stop.displayImageUrl;
+
     return GlassPanel(
-      onTap: () => _showStopDetailsSheet(context, stop, tour: tour),
+      onTap: () async {
+        await _showStopDetailsSheet(context, stop, tour: widget.tour);
+        if (mounted) {
+          setState(() {
+            _retryKey++;
+          });
+        }
+      },
       padding: const EdgeInsets.all(12),
       radius: 22,
       child: Row(
@@ -1413,31 +1447,48 @@ class _StopTile extends StatelessWidget {
             height: 76,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Builder(
-                builder: (context) {
-                  final displayUrl = stop.displayImageUrl;
-                  return displayUrl.isEmpty
-                      ? TravelImageFallback(
-                          title: stop.name,
-                          icon: Icons.place_rounded,
-                        )
-                      : CachedNetworkImage(
-                          imageUrl: displayUrl,
-                          width: 76,
-                          height: 76,
-                          fit: BoxFit.cover,
-                          httpHeaders: const {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                          },
-                          placeholder: (context, url) =>
-                              const SkeletonBox(width: 76, height: 76),
-                          errorWidget: (context, url, error) => TravelImageFallback(
-                            title: stop.name,
-                            icon: Icons.place_rounded,
-                          ),
-                        );
-                },
-              ),
+              child: displayUrl.isEmpty
+                  ? TravelImageFallback(
+                      title: stop.name,
+                      icon: Icons.place_rounded,
+                    )
+                  : CachedNetworkImage(
+                      key: ValueKey('$displayUrl-$_retryKey'),
+                      imageUrl: displayUrl,
+                      width: 76,
+                      height: 76,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 200,
+                      memCacheHeight: 200,
+                      maxWidthDiskCache: 600,
+                      maxHeightDiskCache: 600,
+                      placeholder: (context, url) =>
+                          const SkeletonBox(width: 76, height: 76),
+                      errorWidget: (context, url, error) => GestureDetector(
+                        onTap: _retry,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            TravelImageFallback(
+                              title: stop.name,
+                              icon: Icons.place_rounded,
+                            ),
+                            Positioned(
+                              bottom: 4,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.refresh_rounded, size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
             ),
           ),
           const SizedBox(width: 12),

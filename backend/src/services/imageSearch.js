@@ -137,7 +137,7 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
         const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
         if (sumRes.ok) {
           const sumJson = await sumRes.json()
-          const imageUrl = sumJson.originalimage?.source || sumJson.thumbnail?.source
+          const imageUrl = sumJson.thumbnail?.source || sumJson.originalimage?.source
           if (imageUrl) {
             const lower = imageUrl.toLowerCase()
             const isUnusable = [
@@ -168,7 +168,7 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
       if (!response.ok) continue
       const json = await response.json()
       if (json.type === 'standard' || json.type === 'normal') {
-        const imageUrl = json.originalimage?.source || json.thumbnail?.source
+        const imageUrl = json.thumbnail?.source || json.originalimage?.source
         if (imageUrl) {
           const lower = imageUrl.toLowerCase()
           const isUnusable = [
@@ -287,6 +287,7 @@ async function wikimediaGeoImage(lat, lon, radiusMeters = 1000, indexSeed = 0) {
     url.searchParams.set('ggslimit', '10')
     url.searchParams.set('prop', 'imageinfo')
     url.searchParams.set('iiprop', 'url')
+    url.searchParams.set('iiurlwidth', '800')
     url.searchParams.set('format', 'json')
     url.searchParams.set('origin', '*')
 
@@ -297,7 +298,7 @@ async function wikimediaGeoImage(lat, lon, radiusMeters = 1000, indexSeed = 0) {
 
     const validPages = pages.filter((page) => {
       const title = page.title ?? ''
-      const imageUrl = page.imageinfo?.[0]?.url ?? ''
+      const imageUrl = page.imageinfo?.[0]?.thumburl ?? page.imageinfo?.[0]?.url ?? ''
       if (!imageUrl) return false
       
       const titleLower = title.toLowerCase()
@@ -309,7 +310,7 @@ async function wikimediaGeoImage(lat, lon, radiusMeters = 1000, indexSeed = 0) {
 
     if (validPages.length === 0) return null
     const chosenPage = validPages[Math.abs(indexSeed) % validPages.length]
-    return chosenPage?.imageinfo?.[0]?.url ?? null
+    return chosenPage?.imageinfo?.[0]?.thumburl ?? chosenPage?.imageinfo?.[0]?.url ?? null
   } catch {
     return null
   }
@@ -352,6 +353,7 @@ async function wikimediaImage(query, requiredGroups = null, indexSeed = 0) {
     url.searchParams.set('gsrlimit', '8')
     url.searchParams.set('prop', 'imageinfo')
     url.searchParams.set('iiprop', 'url')
+    url.searchParams.set('iiurlwidth', '800')
     url.searchParams.set('format', 'json')
     url.searchParams.set('origin', '*')
     const response = await fetch(url, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
@@ -362,7 +364,7 @@ async function wikimediaImage(query, requiredGroups = null, indexSeed = 0) {
     // Filtrar todos los resultados relevantes
     const relevantPages = pages.filter((page) => {
       const title = page.title ?? ''
-      const imageUrl = page.imageinfo?.[0]?.url ?? ''
+      const imageUrl = page.imageinfo?.[0]?.thumburl ?? page.imageinfo?.[0]?.url ?? ''
       return imageUrl && isImageTitleRelevant(title, query, requiredGroups, imageUrl)
     })
     
@@ -370,7 +372,7 @@ async function wikimediaImage(query, requiredGroups = null, indexSeed = 0) {
     
     // Rotar imagen según la semilla para evitar repeticiones
     const chosenPage = relevantPages[Math.abs(indexSeed) % relevantPages.length]
-    return chosenPage?.imageinfo?.[0]?.url ?? null
+    return chosenPage?.imageinfo?.[0]?.thumburl ?? chosenPage?.imageinfo?.[0]?.url ?? null
   } catch {
     return null
   }
@@ -389,7 +391,7 @@ async function openverseImage(query, requiredGroups = null, indexSeed = 0) {
     // Filtrar todos los resultados relevantes
     const relevantMatches = (json.results ?? []).filter((result) => {
       const title = result.title ?? ''
-      const imageUrl = result.url ?? result.thumbnail ?? ''
+      const imageUrl = result.thumbnail ?? result.url ?? ''
       return imageUrl && isImageTitleRelevant(title, query, requiredGroups, imageUrl)
     })
     
@@ -397,7 +399,7 @@ async function openverseImage(query, requiredGroups = null, indexSeed = 0) {
     
     // Rotar imagen según la semilla
     const chosenMatch = relevantMatches[Math.abs(indexSeed) % relevantMatches.length]
-    return chosenMatch ? (chosenMatch.url ?? chosenMatch.thumbnail) : null
+    return chosenMatch ? (chosenMatch.thumbnail ?? chosenMatch.url) : null
   } catch {
     return null
   }
