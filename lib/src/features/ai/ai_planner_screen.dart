@@ -279,13 +279,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Text('Tour Planner AI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 4),
-                    Icon(Icons.auto_awesome, size: 14, color: Colors.blue.shade700),
-                  ],
-                ),
+                const Text('Tour Planner AI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 Text('Tu asistente de viajes', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
               ],
             ),
@@ -320,7 +314,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   _buildMessageBubble(msg, builderState.isLoading || builderState.isBuilding),
                   const SizedBox(height: 16),
                 ],
-                if (builderState.isLoading || builderState.isBuilding) ...[
+                if (builderState.isLoading && builderState.recommendations.isEmpty) ...[
                   _buildTourBuildingProgressCard(),
                   const SizedBox(height: 16),
                 ],
@@ -526,7 +520,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           ),
           const SizedBox(height: 8),
           _buildProgressStep(
-            icon: Icons.auto_awesome_rounded,
+            icon: Icons.record_voice_over_rounded,
             title: 'Redactando guías de voz y notas culturales',
             subtitle: 'Personalizando historias y recomendaciones para ti...',
             isDark: isDark,

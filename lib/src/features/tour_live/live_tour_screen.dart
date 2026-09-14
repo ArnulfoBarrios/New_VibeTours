@@ -2373,7 +2373,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  stop.tips.isNotEmpty ? Icons.lightbulb_outline_rounded : Icons.auto_awesome_rounded,
+                  stop.tips.isNotEmpty ? Icons.lightbulb_outline_rounded : Icons.info_outline_rounded,
                   size: 16,
                   color: Theme.of(context).colorScheme.primary,
                 ),

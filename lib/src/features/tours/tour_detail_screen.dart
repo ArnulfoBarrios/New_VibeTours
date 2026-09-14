@@ -561,7 +561,7 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.auto_awesome, color: AppTheme.primary, size: 20),
+              const Icon(Icons.map_rounded, color: AppTheme.primary, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

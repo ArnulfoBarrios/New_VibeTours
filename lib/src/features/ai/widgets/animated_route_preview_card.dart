@@ -158,7 +158,7 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
                     ),
                   ),
                   child: Icon(
-                    Icons.auto_awesome_rounded,
+                    Icons.route_rounded,
                     size: 16,
                     color: isDark
                         ? const Color(0xFF00E5FF)
@@ -250,40 +250,42 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      side: BorderSide(
-                        color: isDark
-                            ? const Color(0xFF334155)
-                            : Colors.blue.shade300,
+                if (!widget.isBuilding) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        side: BorderSide(
+                          color: isDark
+                              ? const Color(0xFF334155)
+                              : Colors.blue.shade300,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: Icon(
-                      Icons.edit_location_alt_outlined,
-                      size: 16,
-                      color: isDark
-                          ? const Color(0xFF38BDF8)
-                          : Colors.blue.shade700,
-                    ),
-                    label: Text(
-                      'Modificar paradas',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                      icon: Icon(
+                        Icons.edit_location_alt_outlined,
+                        size: 16,
                         color: isDark
                             ? const Color(0xFF38BDF8)
                             : Colors.blue.shade700,
                       ),
+                      label: Text(
+                        'Modificar paradas',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isDark
+                              ? const Color(0xFF38BDF8)
+                              : Colors.blue.shade700,
+                        ),
+                      ),
+                      onPressed: widget.onModifyStops,
                     ),
-                    onPressed: widget.onModifyStops,
                   ),
-                ),
-                const SizedBox(width: 10),
+                  const SizedBox(width: 10),
+                ],
                 Expanded(
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(

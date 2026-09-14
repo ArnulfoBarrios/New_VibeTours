@@ -545,7 +545,7 @@ class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10, left: 10),
-                      child: Icon(Icons.auto_awesome, color: Colors.grey.shade600, size: 20),
+                      child: Icon(Icons.search_rounded, color: Colors.grey.shade600, size: 22),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -608,155 +608,255 @@ class _ToursForYouSection extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     if (tours.isEmpty) return const SizedBox.shrink();
 
-    final t1 = tours.isNotEmpty ? tours[0] : null;
-    final t2 = tours.length > 1 ? tours[1] : null;
-    final t3 = tours.length > 2 ? tours[2] : null;
-    final t4 = tours.length > 3 ? tours[3] : null;
-
-    final headerAndFeatured = Column(
+    final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              l10n.toursForYou,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface),
-            ),
-            TextButton(
-              onPressed: () => context.go('/tours'),
-              child: Text(l10n.viewAll, style: const TextStyle(fontWeight: FontWeight.w700)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (t1 != null) _StaggeredTourCard(tour: t1, height: 210, isLarge: true),
-      ],
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (tourKey != null)
-            KeyedSubtree(key: tourKey!, child: headerAndFeatured)
-          else
-            headerAndFeatured,
-          if (t2 != null) ...[
-            const SizedBox(height: 12),
-            _StaggeredTourCard(tour: t2, height: 130, isLarge: false),
-          ],
-          if (t3 != null || t4 != null) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                if (t3 != null) Expanded(child: _StaggeredTourCard(tour: t3, height: 145, isLarge: false, alignBottom: true)),
-                if (t3 != null && t4 != null) const SizedBox(width: 12),
-                if (t4 != null) Expanded(child: _StaggeredTourCard(tour: t4, height: 145, isLarge: false, alignBottom: true)),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _StaggeredTourCard extends ConsumerWidget {
-  final Tour tour;
-  final double height;
-  final bool isLarge;
-  final bool alignBottom;
-
-  const _StaggeredTourCard({
-    required this.tour,
-    required this.height,
-    required this.isLarge,
-    this.alignBottom = false,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    return GestureDetector(
-      onTap: () {
-        ref.read(selectedTourProvider.notifier).state = tour;
-        context.push('/tours/${tour.id}');
-      },
-      child: Container(
-        height: height,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          image: DecorationImage(
-            image: CachedNetworkImageProvider(optimizeImageUrl(tour.coverUrl), maxWidth: 600),
-            fit: BoxFit.cover,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: const LinearGradient(
-              begin: Alignment(0.0, 0.15),
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                Colors.black87,
-              ],
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          alignment: Alignment.bottomLeft,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (isLarge) ...[
-                Text(
-                  tourTypeLabel(tour.type).toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 3),
-              ],
               Text(
-                tour.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                l10n.toursForYou,
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: isLarge ? 18 : (alignBottom ? 13 : 15),
+                  fontSize: 22,
                   fontWeight: FontWeight.w800,
-                  height: 1.18,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
-              const SizedBox(height: 3),
-              Text(
-                alignBottom
-                    ? formatDuration(tour.durationHours)
-                    : '${formatDuration(tour.durationHours)} • ${90 + (tour.title.length % 10)}% ${l10n.matchAffinity}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
+              TextButton(
+                onPressed: () => context.go('/tours'),
+                child: Text(
+                  l10n.viewAll,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 275,
+          child: ListView.separated(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            scrollDirection: Axis.horizontal,
+            itemCount: tours.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              return _TourForYouCard(tour: tours[index]);
+            },
+          ),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 20),
+      child: tourKey != null ? KeyedSubtree(key: tourKey!, child: content) : content,
+    );
+  }
+}
+
+class _TourForYouCard extends ConsumerWidget {
+  final Tour tour;
+  const _TourForYouCard({required this.tour});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
+
+    final durationText = formatTourDuration(tour);
+    final affinity = 90 + (tour.title.length % 10);
+
+    return SizedBox(
+      width: 255,
+      child: InkWell(
+        onTap: () {
+          ref.read(selectedTourProvider.notifier).state = tour;
+          context.push('/tours/${tour.id}');
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Clean photo container with rounded corners and subtle floating pills
+            Container(
+              height: 155,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+                image: DecorationImage(
+                  image: CachedNetworkImageProvider(
+                    optimizeImageUrl(tour.coverUrl),
+                    maxWidth: 600,
+                  ),
+                  fit: BoxFit.cover,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  // Subtle top gradient vignette for badge contrast without darkening the photo
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.center,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.38),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Duration floating pill
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.schedule_rounded, size: 12, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text(
+                            durationText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Affinity match floating pill
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primary.withValues(alpha: 0.35),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        '$affinity% ${l10n.matchAffinity}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Category tag in theme primary color
+            Text(
+              tourTypeLabel(tour.type).toUpperCase(),
+              style: TextStyle(
+                color: isDark ? AppTheme.primary : AppTheme.primaryDeep,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 3),
+
+            // Tour title (crisp, readable on clean surface)
+            Text(
+              tour.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: theme.colorScheme.onSurface,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                height: 1.22,
+              ),
+            ),
+            const SizedBox(height: 5),
+
+            // Footer metadata: Location & Stop count
+            Row(
+              children: [
+                if (tour.city.isNotEmpty) ...[
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: 13,
+                    color: theme.textTheme.bodySmall?.color,
+                  ),
+                  const SizedBox(width: 2),
+                  Flexible(
+                    child: Text(
+                      tour.city,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: theme.textTheme.bodySmall?.color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '•',
+                    style: TextStyle(
+                      color: theme.textTheme.bodySmall?.color,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Icon(
+                  Icons.flag_outlined,
+                  size: 13,
+                  color: theme.textTheme.bodySmall?.color,
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  '${tour.stops.length} ${l10n.stops}',
+                  style: TextStyle(
+                    color: theme.textTheme.bodySmall?.color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
