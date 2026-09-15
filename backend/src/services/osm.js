@@ -10,6 +10,47 @@ const hotelsCache = new GeoCache(60 * 60 * 1000, 200)
 const foodCache = new GeoCache(60 * 60 * 1000, 200)
 const citiesCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 
+// Coordinate provenance is deliberately kept separate from the place name.
+// An LLM can suggest a real venue while still inventing an inaccurate point.
+// Only coordinates returned by a map provider (or our small curated seed set)
+// may be used as navigation coordinates.
+const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog'])
+
+export function hasVerifiedCoordinates(place) {
+  if (!place || typeof place !== 'object') return false
+  if (place.coordinatesVerified === true || place.coordinates_verified === true || place.coordenadas_verificadas === true) return true
+
+  const source = String(place.coordinateSource ?? place.coordinate_source ?? place.fuente_coordenadas ?? '').trim().toLowerCase()
+  if (VERIFIED_COORDINATE_SOURCES.has(source)) return true
+
+  const tags = place.tags && typeof place.tags === 'object' ? place.tags : {}
+  const grounded = tags.grounded_geocoded === true || tags.grounded_geocoded === 'true'
+  const providerId = place.placeId ?? place.place_id ?? place.osmId ?? place.osm_id
+  return grounded && Boolean(providerId)
+}
+
+function withVerifiedCoordinates(place, coordinateSource, placeId = '') {
+  if (!place || typeof place !== 'object') return place
+  const resolvedPlaceId = String(place.placeId ?? place.place_id ?? placeId ?? '').trim()
+  return {
+    ...place,
+    ...(resolvedPlaceId ? { placeId: resolvedPlaceId, place_id: resolvedPlaceId } : {}),
+    coordinateSource,
+    coordinate_source: coordinateSource,
+    coordinatesVerified: true,
+    coordinates_verified: true,
+  }
+}
+
+function curatedPlaceId(place) {
+  return `curated:${String(place?.name || 'place')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')}`
+}
+
 export async function reverseGeocodeUserCountry(lat, lon) {
   if (!lat || !lon) return null
   const key = `user_country_${Number(lat).toFixed(2)}_${Number(lon).toFixed(2)}`
@@ -722,8 +763,9 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   // Early check: High-confidence curated landmarks (Zero-latency exact coordinates)
   const earlyLandmark = matchIconicLandmark(query, normalizedQuery, centerLat, centerLon, maxDistanceMeters)
   if (earlyLandmark) {
-    geocodeCache.set(key, earlyLandmark)
-    return earlyLandmark
+    const verifiedLandmark = withVerifiedCoordinates(earlyLandmark, 'curated', curatedPlaceId(earlyLandmark))
+    geocodeCache.set(key, verifiedLandmark)
+    return verifiedLandmark
   }
 
   // 2. Candidate query variations
@@ -761,7 +803,14 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
             latitude: Number(photonProx.latitude),
             longitude: Number(photonProx.longitude),
             city: resolveCityFromPhoton(photonProx),
-            country: photonProx.country || ''
+            country: photonProx.country || '',
+            address: photonProx.address || '',
+            placeId: photonProx.placeId || photonProx.place_id || '',
+            place_id: photonProx.placeId || photonProx.place_id || '',
+            coordinateSource: 'photon',
+            coordinate_source: 'photon',
+            coordinatesVerified: true,
+            coordinates_verified: true,
           }
           geocodeCache.set(key, res)
           return res
@@ -784,7 +833,14 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
             latitude: Number(photonGlobal.latitude),
             longitude: Number(photonGlobal.longitude),
             city: resolveCityFromPhoton(photonGlobal),
-            country: photonGlobal.country || ''
+            country: photonGlobal.country || '',
+            address: photonGlobal.address || '',
+            placeId: photonGlobal.placeId || photonGlobal.place_id || '',
+            place_id: photonGlobal.placeId || photonGlobal.place_id || '',
+            coordinateSource: 'photon',
+            coordinate_source: 'photon',
+            coordinatesVerified: true,
+            coordinates_verified: true,
           }
           geocodeCache.set(key, res)
           return res
@@ -877,7 +933,18 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
                 latitude: rLat,
                 longitude: rLon,
                 city,
-                country
+                country,
+                address: validResult.display_name || '',
+                placeId: validResult.osm_type && validResult.osm_id
+                  ? `${validResult.osm_type}/${validResult.osm_id}`
+                  : (validResult.place_id ? `nominatim:${validResult.place_id}` : ''),
+                place_id: validResult.osm_type && validResult.osm_id
+                  ? `${validResult.osm_type}/${validResult.osm_id}`
+                  : (validResult.place_id ? `nominatim:${validResult.place_id}` : ''),
+                coordinateSource: 'nominatim',
+                coordinate_source: 'nominatim',
+                coordinatesVerified: true,
+                coordinates_verified: true,
               }
               geocodeCache.set(key, res)
               return res
@@ -921,8 +988,9 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
       isValidInRegion = dist <= maxDistanceMeters
     }
     if (isValidInRegion) {
-      geocodeCache.set(key, landmarkMatch)
-      return landmarkMatch
+      const verifiedLandmark = withVerifiedCoordinates(landmarkMatch, 'curated', curatedPlaceId(landmarkMatch))
+      geocodeCache.set(key, verifiedLandmark)
+      return verifiedLandmark
     }
   }
 
@@ -966,15 +1034,28 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
       return []
     }
     const json = await response.json()
-    const results = (json.features ?? []).map((feature) => ({
-      name: feature.properties.name ?? feature.properties.city ?? query,
-      city: cleanAdministrativeCityName(feature.properties.city || feature.properties.state || ''),
-      country: feature.properties.country,
-      latitude: feature.geometry.coordinates[1],
-      longitude: feature.geometry.coordinates[0],
-      type: feature.properties.osm_value ?? feature.properties.type ?? 'place',
-      tags: feature.properties
-    }))
+    const results = (json.features ?? []).map((feature) => {
+      const properties = feature.properties || {}
+      const osmType = properties.osm_type || ''
+      const osmId = properties.osm_id || ''
+      const providerId = osmType && osmId ? `${osmType}/${osmId}` : ''
+      return {
+        name: properties.name ?? properties.city ?? query,
+        city: cleanAdministrativeCityName(properties.city || properties.state || ''),
+        country: properties.country,
+        address: [properties.street, properties.housenumber].filter(Boolean).join(' '),
+        latitude: feature.geometry.coordinates[1],
+        longitude: feature.geometry.coordinates[0],
+        type: properties.osm_value ?? properties.type ?? 'place',
+        placeId: providerId,
+        place_id: providerId,
+        coordinateSource: 'photon',
+        coordinate_source: 'photon',
+        coordinatesVerified: true,
+        coordinates_verified: true,
+        tags: properties
+      }
+    })
     if (results.length > 0) {
       photonCache.set(key, results)
     }
@@ -1060,11 +1141,18 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
           if (lat == null || lon == null || !name) return null
           if (isAccommodation(type) || isNonTouristFacility(element.tags) || isFoodOrDrinkEstablishment(name)) return null
           return {
+            id: `${element.type}/${element.id}`,
             name,
             latitude: lat,
             longitude: lon,
             type,
             category: classifyAttraction(element.tags),
+            placeId: `${element.type}/${element.id}`,
+            place_id: `${element.type}/${element.id}`,
+            coordinateSource: 'osm',
+            coordinate_source: 'osm',
+            coordinatesVerified: true,
+            coordinates_verified: true,
             tags: element.tags
           }
         })
@@ -1092,11 +1180,18 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
         if (!seen.has(k)) {
           seen.add(k)
           results.push({
+            id: item.placeId || item.place_id || item.id || '',
             name: item.name,
             latitude: item.latitude,
             longitude: item.longitude,
             type: item.type ?? 'attraction',
             category: 'attraction',
+            placeId: item.placeId || item.place_id || item.id || '',
+            place_id: item.placeId || item.place_id || item.id || '',
+            coordinateSource: item.coordinateSource || item.coordinate_source || 'photon',
+            coordinate_source: item.coordinateSource || item.coordinate_source || 'photon',
+            coordinatesVerified: item.coordinatesVerified !== false,
+            coordinates_verified: item.coordinatesVerified !== false,
             tags: item.tags || {}
           })
         }
@@ -1372,6 +1467,12 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
             type: element.tags?.amenity ?? 'restaurant',
             cuisine: element.tags?.cuisine ?? null,
             address: element.tags?.['addr:street'] ?? null,
+            placeId: `${element.type}/${element.id}`,
+            place_id: `${element.type}/${element.id}`,
+            coordinateSource: 'osm',
+            coordinate_source: 'osm',
+            coordinatesVerified: true,
+            coordinates_verified: true,
             tags: element.tags
           }
         })
@@ -1413,6 +1514,16 @@ export async function photonFoodFallback(latitude, longitude) {
           name,
           latitude: lat,
           longitude: lon,
+          placeId: feature.properties.osm_type && feature.properties.osm_id
+            ? `${feature.properties.osm_type}/${feature.properties.osm_id}`
+            : '',
+          place_id: feature.properties.osm_type && feature.properties.osm_id
+            ? `${feature.properties.osm_type}/${feature.properties.osm_id}`
+            : '',
+          coordinateSource: 'photon',
+          coordinate_source: 'photon',
+          coordinatesVerified: true,
+          coordinates_verified: true,
           type: 'restaurant',
           cuisine: feature.properties.cuisine ?? null,
           address: feature.properties.street ?? null,

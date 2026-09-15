@@ -961,6 +961,8 @@ class AiRecommendation {
     required this.locationInfo,
     this.day = 1,
     this.dia = 1,
+    this.coordinateSource = '',
+    this.coordinatesVerified = false,
   });
 
   final String id;
@@ -975,9 +977,17 @@ class AiRecommendation {
   final TourLocationInfo locationInfo;
   final int day;
   final int dia;
+  final String coordinateSource;
+  final bool coordinatesVerified;
 
   factory AiRecommendation.fromJson(Map<String, dynamic> json) {
     final parsedDay = int.tryParse(json['dia']?.toString() ?? json['day']?.toString() ?? '1') ?? 1;
+    final locationInfo = json['locationInfo'] is Map
+        ? Map<String, dynamic>.from(json['locationInfo'] as Map)
+        : <String, dynamic>{};
+    final verifiedRaw = json['coordinatesVerified'] ??
+        json['coordinates_verified'] ??
+        locationInfo['coordenadas_verificadas'];
     return AiRecommendation(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
@@ -992,14 +1002,20 @@ class AiRecommendation {
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 25,
       day: parsedDay,
       dia: parsedDay,
+      coordinateSource: (json['coordinateSource'] ??
+              json['coordinate_source'] ??
+              locationInfo['fuente_coordenadas'] ??
+              '')
+          .toString(),
+      coordinatesVerified: verifiedRaw == true || verifiedRaw?.toString().toLowerCase() == 'true',
       locationInfo: TourLocationInfo(
-        nombreLugar: json['locationInfo']?['nombre_lugar'] ?? '',
-        direccion: json['locationInfo']?['direccion'] ?? '',
-        ciudad: json['locationInfo']?['ciudad'] ?? '',
-        region: json['locationInfo']?['region'] ?? '',
-        pais: json['locationInfo']?['pais'] ?? '',
-        placeId: json['locationInfo']?['place_id'] ?? '',
-        urlMapa: json['locationInfo']?['url_mapa'] ?? '',
+        nombreLugar: locationInfo['nombre_lugar'] ?? '',
+        direccion: locationInfo['direccion'] ?? '',
+        ciudad: locationInfo['ciudad'] ?? '',
+        region: locationInfo['region'] ?? '',
+        pais: locationInfo['pais'] ?? '',
+        placeId: locationInfo['place_id'] ?? '',
+        urlMapa: locationInfo['url_mapa'] ?? '',
       ),
     );
   }
@@ -1016,7 +1032,13 @@ class AiRecommendation {
     'durationMinutes': durationMinutes,
     'dia': dia,
     'day': day,
-    'locationInfo': locationInfo.toCreationJson(),
+    'coordinateSource': coordinateSource,
+    'coordinatesVerified': coordinatesVerified,
+    'locationInfo': {
+      ...locationInfo.toCreationJson(),
+      'fuente_coordenadas': coordinateSource,
+      'coordenadas_verificadas': coordinatesVerified,
+    },
   };
 
   AiRecommendation copyWith({
@@ -1032,6 +1054,8 @@ class AiRecommendation {
     TourLocationInfo? locationInfo,
     int? day,
     int? dia,
+    String? coordinateSource,
+    bool? coordinatesVerified,
   }) {
     final d = day ?? dia ?? this.day;
     return AiRecommendation(
@@ -1047,6 +1071,8 @@ class AiRecommendation {
       locationInfo: locationInfo ?? this.locationInfo,
       day: d,
       dia: d,
+      coordinateSource: coordinateSource ?? this.coordinateSource,
+      coordinatesVerified: coordinatesVerified ?? this.coordinatesVerified,
     );
   }
 }

@@ -103,3 +103,42 @@ test('normalizeStop overrides OpenAI hallucinated coordinates with authentic lan
   const distCeller = haversineMeters(normCeller.publicStop.ubicacion.latitud, normCeller.publicStop.ubicacion.longitud, 11.0022, -74.8075)
   assert.ok(distCeller < 100, `El Celler resolved at ${distCeller}m from Cra 54 # 75-119 (must be < 100m)`)
 })
+
+test('normalizeStop does not trust an AI candidate coordinate when the name matches', async () => {
+  const input = {
+    destination: 'Barranquilla',
+    city: 'Barranquilla',
+    country: 'Colombia',
+    durationDays: 1,
+    durationHours: 8,
+    canonicalDestination: {
+      latitude: 10.9685,
+      longitude: -74.7813,
+      displayName: 'Barranquilla',
+      city: 'Barranquilla',
+      country: 'Colombia'
+    }
+  }
+
+  const aiCandidate = {
+    name: 'Restaurante Narcobollo',
+    latitude: 11.0010,
+    longitude: -74.8150,
+    tags: { requested_place: 'true', ai_geocoded: 'true' }
+  }
+
+  const normalized = await normalizeStop(
+    { nombre: 'Restaurante Narcobollo' },
+    0,
+    input,
+    aiCandidate,
+    [aiCandidate]
+  )
+
+  const resolved = normalized.publicStop.ubicacion
+  const realDistance = haversineMeters(resolved.latitud, resolved.longitud, 10.99820, -74.82020)
+  assert.ok(realDistance < 100, `Narcobollo resolved at ${realDistance}m from the verified landmark`)
+  assert.notEqual(resolved.latitud, aiCandidate.latitude, 'The AI latitude must not be reused')
+  assert.equal(resolved.coordenadas_verificadas, true)
+  assert.match(resolved.fuente_coordenadas, /curated|osm|photon|nominatim/)
+})

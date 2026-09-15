@@ -3,8 +3,8 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, geocodePlacesWithOpenAI, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog } from '../services/openai.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates } from '../services/osm.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -1230,6 +1230,8 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
           name: place.name,
           latitude: place.latitude,
           longitude: place.longitude,
+          coordinateSource: place.coordinateSource || place.coordinate_source || '',
+          coordinatesVerified: isVerifiedCoordinatePlace(place),
           category: place.category || 'turismo',
           imageUrl,
           description: placeDesc,
@@ -1244,6 +1246,8 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
             region: place.region || '',
             pais: place.country || input.country || '',
             place_id: place.placeId,
+            fuente_coordenadas: place.coordinateSource || place.coordinate_source || '',
+            coordenadas_verificadas: isVerifiedCoordinatePlace(place),
             url_mapa: mapUrlFor(place.latitude, place.longitude)
           }
         }
@@ -1462,18 +1466,12 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
     // 3. Resolve exact coordinates and map to rich alternative objects
     let alternatives = (await Promise.all(
       validAiItems.map(async (item, i) => {
-        // Check verified iconic landmark first, then dynamic geocode
+        // The model may suggest the name, but it is never the source of truth
+        // for the coordinates. Resolve the name through a map provider.
         const landmark = await geocodePlace(`${item.name}, ${city}`, centerLat, centerLon).catch(() => null)
-        const realLat = (landmark && hasUsableCoordinates(landmark.latitude, landmark.longitude))
-          ? landmark.latitude
-          : ((item.latitude && hasUsableCoordinates(item.latitude, item.longitude))
-              ? Number(item.latitude)
-              : null)
-        const realLon = (landmark && hasUsableCoordinates(landmark.latitude, landmark.longitude))
-          ? landmark.longitude
-          : ((item.longitude && hasUsableCoordinates(item.latitude, item.longitude))
-              ? Number(item.longitude)
-              : null)
+        if (!landmark || !isVerifiedCoordinatePlace(landmark)) return null
+        const realLat = hasUsableCoordinates(landmark.latitude, landmark.longitude) ? landmark.latitude : null
+        const realLon = hasUsableCoordinates(landmark.latitude, landmark.longitude) ? landmark.longitude : null
 
         if (!realLat || !realLon || !hasUsableCoordinates(realLat, realLon)) {
           return null
@@ -1499,6 +1497,8 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
           name: item.name,
           latitude: realLat,
           longitude: realLon,
+          coordinateSource: landmark.coordinateSource || landmark.coordinate_source || '',
+          coordinatesVerified: true,
           category,
           imageUrl,
           description: richDesc,
@@ -1510,7 +1510,9 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
             ciudad: city,
             region: city,
             pais: country,
-            place_id: item.placeId || item.id || '',
+            place_id: landmark.placeId || landmark.place_id || item.placeId || item.id || '',
+            fuente_coordenadas: landmark.coordinateSource || landmark.coordinate_source || '',
+            coordenadas_verificadas: true,
             url_mapa: mapUrlFor(realLat, realLon)
           }
         }
@@ -1526,8 +1528,12 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
           if (alternatives.length >= 8) break
           if (!catPlace || !catPlace.name) continue
           if (isDuplicatePlace(catPlace.name, catPlace.placeId || catPlace.id)) continue
-          if (!hasUsableCoordinates(catPlace.latitude, catPlace.longitude)) continue
           if (!isQualityTouristPlace(catPlace)) continue
+
+          const catGeo = isVerifiedCoordinatePlace(catPlace)
+            ? catPlace
+            : await geocodePlace(`${catPlace.name}, ${city}`, centerLat, centerLon).catch(() => null)
+          if (!catGeo || !isVerifiedCoordinatePlace(catGeo) || !hasUsableCoordinates(catGeo.latitude, catGeo.longitude)) continue
 
           const catImg = catPlace.imageUrl || catPlace.images?.[0] || getReliableCategoryFallbackImage(catPlace.name, catPlace.category || 'turismo')
           const catDesc = catPlace.description || `Lugar emblemático en ${city}.`
@@ -1535,8 +1541,10 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
           alternatives.push({
             id: catPlace.placeId || catPlace.id || `rec-cat-${Date.now()}-${alternatives.length}`,
             name: catPlace.name,
-            latitude: Number(catPlace.latitude),
-            longitude: Number(catPlace.longitude),
+            latitude: Number(catGeo.latitude),
+            longitude: Number(catGeo.longitude),
+            coordinateSource: catGeo.coordinateSource || catGeo.coordinate_source || '',
+            coordinatesVerified: true,
             category: catPlace.category || 'turismo',
             imageUrl: catImg,
             description: catDesc,
@@ -1548,8 +1556,10 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
               ciudad: city,
               region: city,
               pais: country,
-              place_id: catPlace.placeId || '',
-              url_mapa: mapUrlFor(catPlace.latitude, catPlace.longitude)
+              place_id: catGeo.placeId || catGeo.place_id || catPlace.placeId || '',
+              fuente_coordenadas: catGeo.coordinateSource || catGeo.coordinate_source || '',
+              coordenadas_verificadas: true,
+              url_mapa: mapUrlFor(catGeo.latitude, catGeo.longitude)
             }
           })
         }
@@ -1644,7 +1654,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     const planner = {
       selectedPlaces: confirmedPlaces.map((p, i) => ({
         ...p,
-        placeId: p.id,
+        placeId: p.placeId || p.locationInfo?.place_id || p.id,
         order: i,
         minutes: p.durationMinutes
       })),
@@ -1752,6 +1762,12 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       } catch (err) {
         settledStops.push({ status: 'rejected', reason: err })
       }
+    }
+    const rejectedStop = settledStops.find(result => result.status === 'rejected')
+    if (rejectedStop) {
+      throw rejectedStop.reason instanceof Error
+        ? rejectedStop.reason
+        : new Error('No pudimos confirmar una o más ubicaciones del tour.')
     }
     const rawStops = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
     
@@ -2053,6 +2069,12 @@ async function processTourGeneration(jobId, input) {
           settledStops.push({ status: 'rejected', reason: err })
         }
       }
+      const rejectedStop = settledStops.find(result => result.status === 'rejected')
+      if (rejectedStop) {
+        throw rejectedStop.reason instanceof Error
+          ? rejectedStop.reason
+          : new Error('No pudimos confirmar una o más ubicaciones del tour.')
+      }
       const rawNormalized = settledStops.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
       
       // Preservar estrictamente el orden secuencial cronológico por días
@@ -2161,6 +2183,9 @@ async function processTourGeneration(jobId, input) {
       updateJob({ status: 'completed', message: 'Tour generado con éxito', tour, route })
       if (isSync) return { tour, route }
     } catch (assemblyError) {
+      if (assemblyError?.code === 'UNVERIFIED_STOP_LOCATION') {
+        throw assemblyError
+      }
       console.error('[tour-ai] assembly-failed', { message: assemblyError?.message ?? String(assemblyError), fallbackReason, ollamaError: ollamaError ? (ollamaError.message ?? String(ollamaError)) : null })
       const emergencyTour = buildEmergencyTour(input, planner, fallbackReason)
       const emergencyRoute = {
@@ -2622,6 +2647,9 @@ function normalizeCandidate(place, index, input, origin) {
     region: place.region,
     address: place.address ?? '',
     placeId: place.placeId ?? place.id ?? place.name ?? `${name}-${index}`,
+    coordinateSource: place.coordinateSource ?? place.coordinate_source ?? '',
+    coordinatesVerified: isVerifiedCoordinatePlace(place),
+    coordinates_verified: isVerifiedCoordinatePlace(place),
     imageUrl: images[0] ?? '',
     images,
     history: place.history ?? place.description ?? '',
@@ -4085,6 +4113,12 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     startPlace,
     endPlace,
   })
+  if (!coordinates || coordinates.unresolved || !hasUsableCoordinates(coordinates.latitude, coordinates.longitude)) {
+    const error = new Error(`No pudimos confirmar la ubicación real de "${sourceName}" en ${input.city || input.destination}.`)
+    error.code = 'UNVERIFIED_STOP_LOCATION'
+    error.placeName = sourceName
+    throw error
+  }
   let resolvedName = cleanPlacePhysicalName(sourceName || matchedPlace?.name || candidateFallback?.name || `${input.destination}`)
   const cityCenterCoords = (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude)
     ? input.canonicalDestination
@@ -4232,13 +4266,15 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     consejos: rawTips,
     ubicacion: {
       nombre_lugar: resolvedName,
-      direccion: matchedPlace?.address ?? ubicacion.direccion ?? source.address ?? "",
+      direccion: coordinates.address ?? matchedPlace?.address ?? ubicacion.direccion ?? source.address ?? "",
       ciudad: matchedPlace?.city ?? ubicacion.ciudad ?? input.city ?? "",
       region: matchedPlace?.region ?? ubicacion.region ?? "",
       pais: matchedPlace?.country ?? ubicacion.pais ?? input.country ?? "",
       latitud: coordinates.latitude,
       longitud: coordinates.longitude,
-      place_id: matchedPlace?.placeId ?? matchedPlace?.place_id ?? ubicacion.place_id ?? placeIdFor(resolvedName, coordinates.latitude, coordinates.longitude),
+      place_id: coordinates.placeId ?? coordinates.place_id ?? matchedPlace?.placeId ?? matchedPlace?.place_id ?? ubicacion.place_id ?? placeIdFor(resolvedName, coordinates.latitude, coordinates.longitude),
+      fuente_coordenadas: coordinates.coordinateSource || coordinates.coordinate_source || matchedPlace?.coordinateSource || matchedPlace?.coordinate_source || '',
+      coordenadas_verificadas: coordinates.coordinatesVerified === true,
       url_mapa: matchedPlace?.urlMapa ?? ubicacion.url_mapa ?? mapUrlFor(coordinates.latitude, coordinates.longitude),
     },
     imagenes: unique([image, ...images]),
@@ -4247,6 +4283,8 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     name: resolvedName,
     latitude: coordinates.latitude,
     longitude: coordinates.longitude,
+    coordinateSource: coordinates.coordinateSource || coordinates.coordinate_source || '',
+    coordinatesVerified: coordinates.coordinatesVerified === true,
     imageUrl: publicStop.imagenes[0],
     description: publicStop.descripcion,
     activities: publicStop.actividades,
@@ -4257,8 +4295,9 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
 }
 
 export async function resolveStopCoordinates({ source, input, name, matchedPlace = null, fallbackPlace = null, startPlace = null, endPlace = null }) {
-  const sourceLatitude = numberValue(source.latitude ?? source.ubicacion?.latitud, NaN)
-  const sourceLongitude = numberValue(source.longitude ?? source.ubicacion?.longitud, NaN)
+  const sourceLocation = source.locationInfo ?? source.ubicacion ?? {}
+  const sourceLatitude = numberValue(source.latitude ?? sourceLocation.latitud ?? sourceLocation.latitude, NaN)
+  const sourceLongitude = numberValue(source.longitude ?? sourceLocation.longitud ?? sourceLocation.longitude, NaN)
 
   const isCorridor = Boolean(input.originPlace && input.destinationPlace && startPlace && endPlace)
   let canonicalDest = input.canonicalDestination
@@ -4297,26 +4336,45 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
     destination: input.destination
   }
 
-  // 1. Si matchedPlace existe y está verificado para esta parada exacta
-  if (matchedPlace && hasUsableCoordinates(matchedPlace.latitude, matchedPlace.longitude)) {
+  // 1. A candidate is safe to reuse only when it carries provider provenance.
+  // Names and coordinates generated by an LLM are intentionally not enough.
+  if (matchedPlace && isVerifiedCoordinatePlace(matchedPlace) && hasUsableCoordinates(matchedPlace.latitude, matchedPlace.longitude)) {
     const isNearby = !canonicalDest || validateCandidateLocation(matchedPlace, canonicalDest, 75)
     if (isNearby && (!isCorridor || isWithinCorridor(matchedPlace, startPlace, endPlace))) {
       return {
         latitude: Number(matchedPlace.latitude),
         longitude: Number(matchedPlace.longitude),
-        place_id: matchedPlace.placeId || matchedPlace.place_id || matchedPlace.id || ''
+        place_id: matchedPlace.placeId || matchedPlace.place_id || matchedPlace.id || '',
+        placeId: matchedPlace.placeId || matchedPlace.place_id || matchedPlace.id || '',
+        coordinateSource: matchedPlace.coordinateSource || matchedPlace.coordinate_source || '',
+        coordinatesVerified: true
       }
     }
   }
 
-  // 2. Si source viene de una fuente explícitamente verificada en OSM (grounded)
-  const isExplicitlyVerifiedSource = Boolean(
-    source.isVerified === true ||
-    source.tags?.grounded_geocoded === 'true' ||
-    (source.place_id && /^(osm|node|way|relation|\d+)/i.test(String(source.place_id)))
-  )
+  // 2. Reuse coordinates received from the client only if the backend marked
+  // them as provider-backed (or they carry a trusted provider source).
+  const sourceCoordinatePlace = {
+    ...source,
+    ...sourceLocation,
+    latitude: sourceLatitude,
+    longitude: sourceLongitude,
+    placeId: source.placeId || source.place_id || sourceLocation.placeId || sourceLocation.place_id,
+    place_id: source.place_id || source.placeId || sourceLocation.place_id || sourceLocation.placeId,
+    coordinateSource: source.coordinateSource || source.coordinate_source || sourceLocation.fuente_coordenadas,
+    coordinatesVerified: source.coordinatesVerified ?? source.coordinates_verified ?? sourceLocation.coordenadas_verificadas
+  }
+  const isExplicitlyVerifiedSource = isVerifiedCoordinatePlace(sourceCoordinatePlace)
   if (isExplicitlyVerifiedSource && hasUsableCoordinates(sourceLatitude, sourceLongitude)) {
-    const candidateCoord = { latitude: sourceLatitude, longitude: sourceLongitude, name, place_id: source.place_id || '' }
+    const candidateCoord = {
+      latitude: sourceLatitude,
+      longitude: sourceLongitude,
+      name,
+      place_id: sourceCoordinatePlace.place_id || '',
+      placeId: sourceCoordinatePlace.placeId || sourceCoordinatePlace.place_id || '',
+      coordinateSource: sourceCoordinatePlace.coordinateSource || sourceCoordinatePlace.coordinate_source || '',
+      coordinatesVerified: true
+    }
     const isNearby = !canonicalDest || validateCandidateLocation(candidateCoord, canonicalDest, 75)
     if (isNearby && (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace))) {
       return candidateCoord
@@ -4340,13 +4398,17 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
       return {
         latitude: Number(geocoded.latitude),
         longitude: Number(geocoded.longitude),
-        place_id: geocoded.place_id || ''
+        place_id: geocoded.placeId || geocoded.place_id || '',
+        placeId: geocoded.placeId || geocoded.place_id || '',
+        coordinateSource: geocoded.coordinateSource || geocoded.coordinate_source || '',
+        coordinatesVerified: true,
+        address: geocoded.address || geocoded.name || ''
       }
     }
   }
 
   // 4. Si el geocodificador no lo encontró pero fallbackPlace coincide con el nombre de la parada
-  if (fallbackPlace && hasUsableCoordinates(fallbackPlace.latitude, fallbackPlace.longitude)) {
+  if (fallbackPlace && isVerifiedCoordinatePlace(fallbackPlace) && hasUsableCoordinates(fallbackPlace.latitude, fallbackPlace.longitude)) {
     const isNameMatch = arePlacesSimilar(fallbackPlace.name, name) ||
       normalizePlaceKey(fallbackPlace.name) === normalizePlaceKey(name)
     if (isNameMatch) {
@@ -4355,7 +4417,10 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
         return {
           latitude: Number(fallbackPlace.latitude),
           longitude: Number(fallbackPlace.longitude),
-          place_id: fallbackPlace.place_id || '',
+          place_id: fallbackPlace.placeId || fallbackPlace.place_id || '',
+          placeId: fallbackPlace.placeId || fallbackPlace.place_id || '',
+          coordinateSource: fallbackPlace.coordinateSource || fallbackPlace.coordinate_source || '',
+          coordinatesVerified: true,
           wasFallback: false
         }
       }
@@ -4378,9 +4443,12 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
   }
 
   return {
-    latitude: Number(cityCenterLat),
-    longitude: Number(cityCenterLon),
-    wasFallback: true
+    latitude: 0,
+    longitude: 0,
+    wasFallback: true,
+    unresolved: true,
+    coordinateSource: 'unresolved',
+    coordinatesVerified: false
   }
 }
 
@@ -4950,13 +5018,21 @@ async function collectCorridorCandidates(input, location) {
             name: item.name,
             latitude: geo.latitude,
             longitude: geo.longitude,
+            placeId: geo.placeId || geo.place_id || '',
+            coordinateSource: geo.coordinateSource || geo.coordinate_source || 'osm',
+            coordinatesVerified: true,
             type: item.type || 'tourism',
             category: item.category || 'historic',
             city,
             country,
             address: geo.name || `${city}, ${item.name}`,
             description: item.description || '',
-            tags: { iconic_landmark: 'true' }
+            tags: {
+              iconic_landmark: 'true',
+              grounded_geocoded: 'true',
+              coordinates_verified: 'true',
+              coordinate_source: geo.coordinateSource || geo.coordinate_source || 'osm'
+            }
           }
         }
         return null
@@ -5094,31 +5170,6 @@ export async function collectTourCandidates(input, location) {
   let geocodedSpecifics = []
   if (mergedSpecifics.length > 0) {
 
-    let preGeocodedAi = {}
-    if (mergedSpecifics.length >= 3 && process.env.OPENAI_API_KEY) {
-      const allNames = mergedSpecifics.map(p => {
-        if (typeof p === 'string') {
-          const str = p.trim()
-          if (str.startsWith('{') && str.includes('name:')) {
-            const m = str.match(/name\s*:\s*([^,\}]+)/)
-            return m ? m[1].trim() : str
-          }
-          return str
-        }
-        return p?.name || ''
-      }).filter(pName => isValidSpecificPlace(pName))
-
-      if (allNames.length > 0) {
-        preGeocodedAi = await geocodePlacesWithOpenAI({
-          city,
-          country,
-          places: allNames,
-          centerLat: canonicalDest?.latitude ?? cityCenterLat,
-          centerLon: canonicalDest?.longitude ?? cityCenterLon
-        }).catch(() => ({}))
-      }
-    }
-
     const specificSettled = await Promise.allSettled(
       mergedSpecifics.map(async (rawPlace, index) => {
         let placeName = ''
@@ -5207,36 +5258,7 @@ export async function collectTourCandidates(input, location) {
           const photonHits = await photonSearch(`${placeName} ${city}`, 4, destLat, destLon).catch(() => [])
           const validHit = photonHits.find(h => isDistinctNameMatch(placeName, h.name) && validateCandidateLocation(h, canonicalDest, 70))
           if (validHit) {
-            geo = {
-              name: validHit.name,
-              latitude: validHit.latitude,
-              longitude: validHit.longitude,
-              city,
-              country
-            }
-          }
-        }
-
-        // Tier 3: Fallback con coordenadas de IA previamente obtenidas en paralelo únicamente si OSM no lo tiene
-        if (!geo) {
-          const aiCoord = preGeocodedAi[placeName] ||
-            Object.entries(preGeocodedAi).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
-              arePlacesSimilar(k, placeName) ||
-              normalizePlaceKey(k) === normalizePlaceKey(placeName) ||
-              placeName.toLowerCase().includes(k.toLowerCase()) ||
-              k.toLowerCase().includes(placeName.toLowerCase()))?.[1]
-
-          if (aiCoord && Number.isFinite(aiCoord.latitude) && Number.isFinite(aiCoord.longitude)) {
-            const candidate = {
-              name: placeName,
-              latitude: Number(aiCoord.latitude),
-              longitude: Number(aiCoord.longitude),
-              city,
-              country
-            }
-            if (validateCandidateLocation(candidate, canonicalDest, 70)) {
-              geo = candidate
-            }
+            geo = validHit
           }
         }
 
@@ -5273,7 +5295,15 @@ export async function collectTourCandidates(input, location) {
             country,
             address: geo?.name || `${placeName}, ${city}`,
             description: '',
-            tags: { requested_place: 'true' }
+            placeId: geo.placeId || geo.place_id || geo.id || '',
+            coordinateSource: geo.coordinateSource || geo.coordinate_source || 'osm',
+            coordinatesVerified: true,
+            tags: {
+              requested_place: 'true',
+              grounded_geocoded: 'true',
+              coordinates_verified: 'true',
+              coordinate_source: geo.coordinateSource || geo.coordinate_source || 'osm'
+            }
           }
         }
         return null
@@ -5284,7 +5314,7 @@ export async function collectTourCandidates(input, location) {
       .map(r => r.status === 'fulfilled' ? r.value : null)
       .filter(Boolean)
 
-    // Dynamic AI Geocoding Fallback: If any requested places failed OSM lookup, batch-geocode them dynamically with OpenAI
+    // Retry unresolved requested places only through map-backed geocoding.
     const geocodedNames = new Set(geocodedSpecifics.map(p => p.name.toLowerCase()))
     const missingSpecifics = mergedSpecifics.filter(raw => {
       const name = typeof raw === 'string' ? raw : (raw?.name || '')
@@ -5301,31 +5331,6 @@ export async function collectTourCandidates(input, location) {
         durationDays: input.durationDays,
         city,
         country
-      }
-
-      let missingAiMap = {}
-      if (process.env.OPENAI_API_KEY && missingSpecifics.length > 0) {
-        const missingNames = missingSpecifics.map(raw => {
-          if (typeof raw === 'string') {
-            const str = raw.trim()
-            if (str.startsWith('{') && str.includes('name:')) {
-              const m = str.match(/name\s*:\s*([^,\}]+)/)
-              return m ? m[1].trim() : str
-            }
-            return str
-          }
-          return raw?.name || ''
-        }).filter(pName => isValidSpecificPlace(pName))
-
-        if (missingNames.length > 0) {
-          missingAiMap = await geocodePlacesWithOpenAI({
-            city,
-            country,
-            places: missingNames,
-            centerLat: canonicalDest?.latitude ?? cityCenterLat,
-            centerLon: canonicalDest?.longitude ?? cityCenterLon
-          }).catch(() => ({}))
-        }
       }
 
       for (const raw of missingSpecifics) {
@@ -5380,28 +5385,7 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        let tagSource = 'grounded_geocoded'
-
-        // Tertiary fallback: OpenAI geocoded coordinates
-        if (!directGeo) {
-          const aiCoord = missingAiMap[placeName] || preGeocodedAi[placeName] ||
-            Object.entries({ ...preGeocodedAi, ...missingAiMap }).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
-              arePlacesSimilar(k, placeName) ||
-              normalizePlaceKey(k) === normalizePlaceKey(placeName))?.[1]
-          if (aiCoord && Number.isFinite(aiCoord.latitude) && Number.isFinite(aiCoord.longitude)) {
-            const candidate = {
-              name: placeName,
-              latitude: Number(aiCoord.latitude),
-              longitude: Number(aiCoord.longitude),
-              city,
-              country
-            }
-            if (validateCandidateLocation(candidate, canonicalDest, 70)) {
-              directGeo = candidate
-              tagSource = 'ai_geocoded'
-            }
-          }
-        }
+        const tagSource = directGeo?.coordinateSource || directGeo?.coordinate_source || 'osm'
 
         let finalLat = null
         let finalLon = null
@@ -5432,7 +5416,9 @@ export async function collectTourCandidates(input, location) {
               finalLon = Number(repGeo.longitude)
               address = repGeo.name || `${repName}, ${city}`
               placeName = repName
-              tagSource = 'catalog_replacement'
+              // The replacement was also resolved through a map provider.
+              // Keep its provider provenance instead of treating it as AI data.
+              directGeo = repGeo
               console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified "${repName}" on Day ${placeDay}.`)
             }
           }
@@ -5454,7 +5440,15 @@ export async function collectTourCandidates(input, location) {
             country,
             address,
             description: '',
-            tags: { requested_place: 'true', [tagSource]: 'true' }
+            placeId: directGeo?.placeId || directGeo?.place_id || directGeo?.id || '',
+            coordinateSource: directGeo?.coordinateSource || directGeo?.coordinate_source || tagSource,
+            coordinatesVerified: true,
+            tags: {
+              requested_place: 'true',
+              grounded_geocoded: 'true',
+              coordinates_verified: 'true',
+              coordinate_source: directGeo?.coordinateSource || directGeo?.coordinate_source || tagSource
+            }
           })
           continue
         }
@@ -5937,6 +5931,11 @@ function findCandidatePlace(name, candidatePlaces, anchorPlace = null) {
 
 function hasUsableCoordinates(latitude, longitude) {
   return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
+}
+
+function isVerifiedCoordinatePlace(place) {
+  if (!place || typeof place !== 'object') return false
+  return hasVerifiedCoordinates(place) || hasVerifiedCoordinates(place.locationInfo)
 }
 
 
