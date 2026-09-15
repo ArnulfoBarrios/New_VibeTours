@@ -62,16 +62,26 @@ const requestSchema = z.object({
     latitude: z.number(),
     longitude: z.number(),
     placeId: z.string().optional().default(''),
-    isAmbiguous: z.boolean().optional().default(false)
+    isAmbiguous: z.boolean().optional().default(false),
+    // Keep the geographic identity returned by destinationService. Without
+    // these fields Zod stripped the micro-destination flag before the planner
+    // could decide whether a regional radius was appropriate.
+    entityName: z.string().optional(),
+    isMicroDestination: z.boolean().optional().default(false),
+    category: z.string().optional(),
+    type: z.string().optional()
   }).optional(),
   originPlace: z.string().optional(),
   destinationPlace: z.string().optional(),
   isUserLocationOrigin: z.boolean().optional(),
   cities: z.array(z.string()).optional().default([]),
   isMultiCity: z.boolean().optional().default(false),
+  isMultiCountry: z.boolean().optional().default(false),
+  tourType: z.string().optional(),
   durationHours: z.number().min(1).max(720).optional(),
   durationDays: z.number().min(1).max(30).optional(),
   type: z.string().optional().default('cultural'),
+  transport: z.string().optional(),
   language: z.string().optional().default('es'),
   prompt: z.string().optional().default(''),
   touristProfileSummary: z.string().optional().default(''),
@@ -85,6 +95,173 @@ const requestSchema = z.object({
   selectedPlaces: z.array(z.any()).optional().default([]),
   specificPlaces: z.array(z.any()).optional().default([])
 })
+
+const TOUR_TRIP_TYPES = new Set([
+  'micro_destination',
+  'coastal_islands',
+  'single_city',
+  'city_to_city',
+  'international_multicity',
+  'location_to_destination',
+])
+
+const MICRO_DESTINATION_PATTERN = /tayrona|minca|guatap[eé]|valle de cocora|parque nacional|reserva natural|sierra nevada|amazonas|eje cafetero|pueblito|monta[nñ]a|ca[nñ]o?n|cascada/i
+const COASTAL_ISLAND_PATTERN = /\bislas?\b|\bcayos?\b|islas? del rosario|isla bar[uú]|san bernardo|archipi[eé]lago|islas? de san bernardo|coastal islands|island hopping/i
+
+export function normalizeTourType(value) {
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_')
+
+  const aliases = {
+    microdestino: 'micro_destination',
+    micro_destination: 'micro_destination',
+    destino_natural: 'micro_destination',
+    coastal: 'coastal_islands',
+    coastal_islands: 'coastal_islands',
+    islas_costeras: 'coastal_islands',
+    single_city: 'single_city',
+    ciudad_unica: 'single_city',
+    city_to_city: 'city_to_city',
+    entre_ciudades: 'city_to_city',
+    international_multicity: 'international_multicity',
+    multi_ciudad_internacional: 'international_multicity',
+    location_to_destination: 'location_to_destination',
+    ubicacion_a_destino: 'location_to_destination',
+  }
+
+  const result = aliases[normalized] || normalized
+  return TOUR_TRIP_TYPES.has(result) ? result : ''
+}
+
+/**
+ * Resolves the geographic topology of a trip independently from its thematic
+ * TourType (cultural, gastronomic, ecological, etc.). A seven-day city tour
+ * is still single_city; duration alone must not widen its geographic scope.
+ */
+export function inferTourType(input = {}, extracted = null) {
+  const explicit = normalizeTourType(
+    input.tourType || input.tour_type || extracted?.tourType || extracted?.tour_type
+  )
+  if (explicit) return explicit
+
+  const destinationText = [input.destination, input.city].filter(Boolean).join(' ')
+  const specificText = Array.isArray(input.specificPlaces)
+    ? input.specificPlaces.map(place => typeof place === 'string' ? place : place?.name).filter(Boolean).join(' ')
+    : ''
+
+  if (input.isUserLocationOrigin || input.is_user_location_origin) {
+    return 'location_to_destination'
+  }
+
+  if (
+    input.isMultiCity ||
+    input.is_multi_city ||
+    input.isMultiCountry ||
+    input.is_multi_country ||
+    (Array.isArray(input.cities) && input.cities.length > 1) ||
+    (input.originPlace && input.destinationPlace)
+  ) {
+    return input.isMultiCountry || input.is_multi_country
+      ? 'international_multicity'
+      : 'city_to_city'
+  }
+
+  // A micro-destination mentioned as a day stop does not automatically turn
+  // the whole hub-city tour into a micro-destination. For example, Tayrona
+  // may be an excursion from Santa Marta, while it must never widen a
+  // Barranquilla tour. Prefer the canonical destination and only use a
+  // specific-place fallback when no hub has been established yet.
+  if (
+    input.canonicalDestination?.isMicroDestination ||
+    MICRO_DESTINATION_PATTERN.test(destinationText) ||
+    (!destinationText && MICRO_DESTINATION_PATTERN.test(specificText))
+  ) {
+    return 'micro_destination'
+  }
+
+  if (COASTAL_ISLAND_PATTERN.test(`${destinationText} ${specificText}`)) {
+    return 'coastal_islands'
+  }
+
+  return 'single_city'
+}
+
+/**
+ * Geographic policy used by every candidate and stop validation stage.
+ * Nearby municipalities are allowed for a single-city tour, but distant
+ * cities are not admitted just because the itinerary lasts several days.
+ */
+export function geographicScopeFor(input = {}, extracted = null) {
+  const tourType = inferTourType(input, extracted)
+  const transport = String(input.transport || '').toLowerCase()
+  const asksForNearby = /cerca|cercan|alrededores|municipios?|afueras|zona metropolitana|pueblos cercanos/i.test(
+    [input.prompt, input.destination, input.city].filter(Boolean).join(' ')
+  )
+
+  if (tourType === 'single_city') {
+    const maxDistanceKm = transport.includes('camin')
+      ? 10
+      : transport.includes('bicic')
+        ? 18
+        : asksForNearby
+          ? 50
+          : 35
+    return {
+      tourType,
+      mode: 'single_city',
+      maxDistanceKm,
+      isRegional: false,
+      allowNearbyMunicipalities: true,
+    }
+  }
+
+  if (tourType === 'micro_destination') {
+    return {
+      tourType,
+      mode: 'micro_destination',
+      maxDistanceKm: 25,
+      isRegional: true,
+      allowNearbyMunicipalities: false,
+    }
+  }
+
+  if (tourType === 'coastal_islands') {
+    return {
+      tourType,
+      mode: 'coastal_islands',
+      maxDistanceKm: 90,
+      isRegional: true,
+      allowNearbyMunicipalities: true,
+    }
+  }
+
+  if (tourType === 'city_to_city' || tourType === 'location_to_destination') {
+    return {
+      tourType,
+      mode: 'corridor',
+      maxDistanceKm: 120,
+      isRegional: true,
+      allowNearbyMunicipalities: true,
+    }
+  }
+
+  return {
+    tourType,
+    mode: 'multicity',
+    maxDistanceKm: 250,
+    isRegional: true,
+    allowNearbyMunicipalities: true,
+  }
+}
+
+function applyTourType(input, extracted = null) {
+  input.tourType = inferTourType(input, extracted)
+  return input
+}
 
 // Clasificador de tipos de entidad universal para evitar que lugares de distinta categoría se confundan entre sí
 export function getPlaceEntityType(placeName) {
@@ -901,6 +1078,7 @@ aiRouter.post('/chat', async (req, res, next) => {
 aiRouter.post('/tours/generate', async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)
+    applyTourType(input)
     if (input.city && input.city.trim().length > 0) {
       input.destination = input.city.trim()
     }
@@ -969,6 +1147,7 @@ aiRouter.get('/tours/status/:jobId', (req, res) => {
 aiRouter.post('/tours/recommend', async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)
+    applyTourType(input)
     
     let userCountry = null;
     let revLocation = null;
@@ -1006,6 +1185,9 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         if (extracted.destination_place && !input.destinationPlace) {
           input.destinationPlace = extracted.destination_place
         }
+        if (!input.tourType && (extracted.tourType || extracted.tour_type)) {
+          input.tourType = extracted.tourType || extracted.tour_type
+        }
         if (!input.destination && (input.destinationPlace || extracted?.destination_place || extracted?.explicit_destination)) {
           input.destination = input.destinationPlace || extracted?.destination_place || extracted?.explicit_destination || input.city || ''
         }
@@ -1031,6 +1213,10 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         }
       }
     }
+
+    // Extraction can add the origin/destination, cities or user-GPS origin.
+    // Resolve the topology again after those fields are known.
+    applyTourType(input, extracted)
     
     // Classify Tour Type strictly
     const isExplicitUserGpsOrigin = Boolean(extracted?.is_user_location_origin || input?.originPlace === 'user_current_location')
@@ -1273,9 +1459,12 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
       destination: input.destination,
       city: input.city,
       country: input.country,
+      tourType: input.tourType,
       budget: input.budget,
       recommendations,
       plannerContext: {
+        tourType: input.tourType,
+        geographicScope: geographicScopeFor(input),
         distanceKm: planner.distanceKm,
         recommendedSchedule: planner.recommendedSchedule,
         difficulty: planner.difficulty,
@@ -1300,6 +1489,7 @@ aiRouter.post('/tours/build', async (req, res, next) => {
       plannerContext: z.record(z.any()).optional()
     })
     const { request: input, places, plannerContext } = buildSchema.parse(req.body)
+    applyTourType(input, plannerContext)
     
     const destQuery = input.city || input.destination || ''
     const firstPlaceWithCoords = Array.isArray(places) ? places.find(p => Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude))) : null
@@ -1777,6 +1967,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         settledStops.push({ status: 'rejected', reason: err })
       }
     }
+
     const rejectedStop = settledStops.find(result => result.status === 'rejected')
     if (rejectedStop) {
       throw rejectedStop.reason instanceof Error
@@ -2788,14 +2979,9 @@ function contextualScoreFor(candidate, selected, input) {
   const sameGroup = lastGroup === candidate.broadGroup
   const distanceFromLastKm = haversineMeters(last.latitude, last.longitude, candidate.latitude, candidate.longitude) / 1000
 
-  // Detect if the tour is regional or nature-oriented
-  const isRegionalOrNature = 
-    input.type === 'ecological' || 
-    input.type === 'sports' || 
-    (input.durationHours && input.durationHours >= 12) ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.prompt || '') ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.city || '');
+  // Long duration does not make a single-city tour regional. Use the
+  // explicitly resolved geographic topology instead.
+  const isRegionalOrNature = geographicScopeFor(input).isRegional
 
   if (sameCategory) score -= 30
   if (sameGroup) score -= 14
@@ -4054,8 +4240,12 @@ async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lo
   const normPlace = String(placeName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const normCity = String(targetCity || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-  // 1. Verificación por distancia radial esférica desde el centro del municipio/región turística (máximo 80 km para tours regionales/multidía, 50 km para tours urbanos)
-  const maxRadiusKm = (options.isRegional || (options.durationDays && options.durationDays >= 2)) ? 80 : 50
+  // 1. Verificación por distancia radial desde el centro del destino. La
+  // duración no amplía el alcance: un tour de varios días en una sola ciudad
+  // sigue limitado a esa ciudad y sus municipios cercanos.
+  const maxRadiusKm = Number.isFinite(Number(options.maxDistanceKm))
+    ? Number(options.maxDistanceKm)
+    : (options.isRegional ? 80 : 35)
   if (lat && lon && targetCityCoords?.latitude && targetCityCoords?.longitude) {
     const distKm = haversineMeters(targetCityCoords.latitude, targetCityCoords.longitude, lat, lon) / 1000
     if (distKm > maxRadiusKm) {
@@ -4118,7 +4308,7 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
   const matchedPlace = findCandidatePlace(sourceName, candidatePlaces)
   const startPlace = candidatePlaces[0] ?? null
   const endPlace = candidatePlaces[candidatePlaces.length - 1] ?? null
-  const coordinates = await resolveStopCoordinates({
+  let coordinates = await resolveStopCoordinates({
     source,
     input,
     name: sourceName,
@@ -4137,21 +4327,40 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
   const cityCenterCoords = (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude)
     ? input.canonicalDestination
     : (input.latitude && input.longitude ? { latitude: input.latitude, longitude: input.longitude } : candidatePlaces[0])
-  const isRegionalOrNature = Boolean(
-    input.durationDays >= 2 ||
-    input.durationHours >= 24 ||
-    /tayrona|minca|sierra nevada|cove[ñn]as|san bernardo|rosario|bar[uú]|guajira|palomino|amazonas|eje cafetero/i.test(input.destination || input.city)
-  )
+  const geoScope = geographicScopeFor(input)
+  const isRegionalOrNature = geoScope.isRegional
   const isValidCityPlace = await isPlaceBelongingToCity(
     resolvedName,
     input.city || input.destination,
     coordinates.latitude,
     coordinates.longitude,
     cityCenterCoords,
-    { isRegional: isRegionalOrNature, durationDays: input.durationDays }
+    {
+      isRegional: isRegionalOrNature,
+      maxDistanceKm: geoScope.maxDistanceKm,
+      durationDays: input.durationDays,
+    }
   )
   if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
-    resolvedName = cleanPlacePhysicalName(candidateFallback?.name || `${input.destination}`)
+    const fallbackIsValid = candidateFallback &&
+      isVerifiedCoordinatePlace(candidateFallback) &&
+      hasUsableCoordinates(candidateFallback.latitude, candidateFallback.longitude) &&
+      validateCandidateLocation(candidateFallback, cityCenterCoords, geoScope.maxDistanceKm)
+    if (!fallbackIsValid) {
+      const error = new Error(`No pudimos confirmar la ubicación real de "${sourceName}" dentro del alcance del tour.`)
+      error.code = 'OUT_OF_SCOPE_STOP_LOCATION'
+      error.placeName = sourceName
+      throw error
+    }
+    coordinates = {
+      latitude: Number(candidateFallback.latitude),
+      longitude: Number(candidateFallback.longitude),
+      address: candidateFallback.address || '',
+      placeId: candidateFallback.placeId || candidateFallback.place_id || '',
+      coordinateSource: candidateFallback.coordinateSource || candidateFallback.coordinate_source || '',
+      coordinatesVerified: true,
+    }
+    resolvedName = cleanPlacePhysicalName(candidateFallback.name || `${input.destination}`)
   }
   let richData = options?.descriptionsMap?.[resolvedName] || options?.descriptionsMap?.[sourceName]
   if (!richData && options?.descriptionsMap && typeof options.descriptionsMap === 'object') {
@@ -4336,16 +4545,14 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
   const destLat = canonicalDest?.latitude ?? input.latitude ?? null
   const destLon = canonicalDest?.longitude ?? input.longitude ?? null
 
-  const isRegionalOrNature = Boolean(
-    input.durationDays >= 2 ||
-    input.durationHours >= 24 ||
-    /tayrona|minca|sierra nevada|cove[ñn]as|san bernardo|rosario|bar[uú]|guajira|palomino|amazonas|eje cafetero/i.test(input.destination || cleanCity)
-  )
+  const geoScope = geographicScopeFor(input)
+  const isRegionalOrNature = geoScope.isRegional
   const isMicroDest = Boolean(canonicalDest?.isMicroDestination)
   const geocodeOpts = {
     isRegionalOrNature,
     isMicroDest,
     durationDays: input.durationDays,
+    maxDistanceKm: geoScope.maxDistanceKm,
     city: cleanCity,
     destination: input.destination
   }
@@ -4353,7 +4560,7 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
   // 1. A candidate is safe to reuse only when it carries provider provenance.
   // Names and coordinates generated by an LLM are intentionally not enough.
   if (matchedPlace && isVerifiedCoordinatePlace(matchedPlace) && hasUsableCoordinates(matchedPlace.latitude, matchedPlace.longitude)) {
-    const isNearby = !canonicalDest || validateCandidateLocation(matchedPlace, canonicalDest, 75)
+    const isNearby = !canonicalDest || validateCandidateLocation(matchedPlace, canonicalDest, geoScope.maxDistanceKm)
     if (isNearby && (!isCorridor || isWithinCorridor(matchedPlace, startPlace, endPlace))) {
       return {
         latitude: Number(matchedPlace.latitude),
@@ -4389,7 +4596,7 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
       coordinateSource: sourceCoordinatePlace.coordinateSource || sourceCoordinatePlace.coordinate_source || '',
       coordinatesVerified: true
     }
-    const isNearby = !canonicalDest || validateCandidateLocation(candidateCoord, canonicalDest, 75)
+    const isNearby = !canonicalDest || validateCandidateLocation(candidateCoord, canonicalDest, geoScope.maxDistanceKm)
     if (isNearby && (!isCorridor || isWithinCorridor(candidateCoord, startPlace, endPlace))) {
       return candidateCoord
     }
@@ -4407,7 +4614,7 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
   }
 
   if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
-    const isNearby = !canonicalDest || validateCandidateLocation(geocoded, canonicalDest, 75)
+    const isNearby = !canonicalDest || validateCandidateLocation(geocoded, canonicalDest, geoScope.maxDistanceKm)
     if (isNearby && (!isCorridor || isWithinCorridor(geocoded, startPlace, endPlace))) {
       return {
         latitude: Number(geocoded.latitude),
@@ -4426,7 +4633,7 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
     const isNameMatch = arePlacesSimilar(fallbackPlace.name, name) ||
       normalizePlaceKey(fallbackPlace.name) === normalizePlaceKey(name)
     if (isNameMatch) {
-      const isNearby = !canonicalDest || validateCandidateLocation(fallbackPlace, canonicalDest, 75)
+      const isNearby = !canonicalDest || validateCandidateLocation(fallbackPlace, canonicalDest, geoScope.maxDistanceKm)
       if (isNearby && (!isCorridor || isWithinCorridor(fallbackPlace, startPlace, endPlace))) {
         return {
           latitude: Number(fallbackPlace.latitude),
@@ -5037,8 +5244,8 @@ async function collectCorridorCandidates(input, location) {
             coordinatesVerified: true,
             type: item.type || 'tourism',
             category: item.category || 'historic',
-            city,
-            country,
+            city: geo.city || city,
+            country: geo.country || country,
             address: geo.name || `${city}, ${item.name}`,
             description: item.description || '',
             tags: {
@@ -5112,11 +5319,8 @@ export async function collectTourCandidates(input, location) {
   }
 
   // Case C: Standard single-city tour
-  const isMicroDest = Boolean(
-    input.canonicalDestination?.isMicroDestination ||
-    /tayrona|minca|guatapé|guatape|islas del rosario|isla barú|isla baru|san bernardo/i.test(input.destination || '') ||
-    /tayrona|minca|guatapé|guatape|islas del rosario|isla barú|isla baru|san bernardo/i.test(input.city || '')
-  )
+  const geoScope = geographicScopeFor(input)
+  const isMicroDest = geoScope.tourType === 'micro_destination' || Boolean(input.canonicalDestination?.isMicroDestination)
 
   const city = isMicroDest
     ? (input.canonicalDestination?.entityName || input.destination || location?.city || input.city || '')
@@ -5147,18 +5351,11 @@ export async function collectTourCandidates(input, location) {
     }
   }
 
-  // Check if it is a regional or nature-oriented tour
-  const isRegionalOrNature = 
-    input.type === 'ecological' || 
-    input.type === 'sports' || 
-    (input.durationHours && input.durationHours >= 12) ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.prompt || '') ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(city);
+  // Geographic reach comes from the trip topology, not the number of days
+  // or the thematic tour type.
+  const isRegionalOrNature = geoScope.isRegional
 
-  const isMultiDay = Boolean((input.durationDays && input.durationDays >= 2) || (input.durationHours && input.durationHours >= 24))
-  const isWalkingOrUrban = input.transport === 'Caminando' || input.transport === 'Bicicleta' || input.type === 'cultural' || input.type === 'historic'
-  const maxCityRadiusKm = (isMicroDest && !isMultiDay) ? 14 : ((isRegionalOrNature || isMultiDay) ? 75 : (isWalkingOrUrban ? 4.5 : 15))
+  const maxCityRadiusKm = geoScope.maxDistanceKm
 
   function isWithinCityBounds(lat, lon, maxDistanceKm = maxCityRadiusKm) {
     if (!cityCenterLat || !cityCenterLon || !lat || !lon) return true
@@ -5213,9 +5410,10 @@ export async function collectTourCandidates(input, location) {
         const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
 
         const regionalOpts = {
-          isRegionalOrNature: Boolean(isRegionalOrNature || input.durationDays >= 2 || input.durationHours >= 24),
+          isRegionalOrNature,
           isMicroDest: Boolean(isMicroDest || canonicalDest?.isMicroDestination),
           durationDays: input.durationDays,
+          maxDistanceKm: geoScope.maxDistanceKm,
           city,
           country
         }
@@ -5250,17 +5448,17 @@ export async function collectTourCandidates(input, location) {
             geo = null
           } else if (/\bmuseo\b/i.test(pLower) && !/\bmuseo|museum|galer[íi]a|parque cultural\b/i.test(gLower)) {
             geo = null
-          } else if (!validateCandidateLocation(geo, canonicalDest, 70)) {
+          } else if (!validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
             geo = null
           }
         }
 
         // Tier 1: Descomposición de consultas compuestas si aplica (ej: "Museo del Oro - Casa de la Aduana")
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
           const decomposed = decomposeCompoundPlaceQuery(placeName)
           for (const dQuery of decomposed) {
             const dGeo = await geocodePlace(`${dQuery}, ${city}`, destLat, destLon, regionalOpts).catch(() => null)
-            if (dGeo && isDistinctNameMatch(placeName, dGeo.name) && validateCandidateLocation(dGeo, canonicalDest, 70)) {
+            if (dGeo && isDistinctNameMatch(placeName, dGeo.name) && validateCandidateLocation(dGeo, canonicalDest, geoScope.maxDistanceKm)) {
               geo = dGeo
               break
             }
@@ -5268,15 +5466,15 @@ export async function collectTourCandidates(input, location) {
         }
 
         // Tier 2: Búsqueda rápida de proximidad con Photon (1 sola llamada ligera)
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
           const photonHits = await photonSearch(`${placeName} ${city}`, 4, destLat, destLon).catch(() => [])
-          const validHit = photonHits.find(h => isDistinctNameMatch(placeName, h.name) && validateCandidateLocation(h, canonicalDest, 70))
+          const validHit = photonHits.find(h => isDistinctNameMatch(placeName, h.name) && validateCandidateLocation(h, canonicalDest, geoScope.maxDistanceKm))
           if (validHit) {
             geo = validHit
           }
         }
 
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, 70)) {
+        if (!geo || !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
           console.warn(`[tour-ai] Discarding unverified or out-of-bounds place "${placeName}" in ${city}. No synthetic coordinates generated.`)
           return null
         }
@@ -5289,8 +5487,7 @@ export async function collectTourCandidates(input, location) {
           const originLon = location?.longitude || canonicalDest?.longitude
           if (originLat && originLon) {
             const distKm = haversineMeters(finalLat, finalLon, originLat, originLon) / 1000
-            const isCoastalOrMarine = isRegionalOrNature || /cove[ñn]as|tol[uú]|cartagena|santa marta|san andr[eé]s|canc[uú]n|barranquilla|atl[aá]ntico/i.test(city) || /isla|playa|bah[íi]a|caimanera|archipi[eé]lago/i.test(placeName)
-            const maxBound = ((isMicroDest || canonicalDest?.isMicroDestination) && !isMultiDay) ? 18 : (isCoastalOrMarine ? 75 : 55)
+            const maxBound = geoScope.maxDistanceKm
             if (distKm > maxBound) {
               console.warn(`[tour-ai] Discarding specific place "${placeName}" (${distKm.toFixed(1)}km from ${city}) because it exceeds boundary (${maxBound}km).`)
               return null
@@ -5305,9 +5502,9 @@ export async function collectTourCandidates(input, location) {
             category: isRestaurant ? 'restaurant' : 'requested',
             dia: placeDay,
             day: placeDay,
-            city,
-            country,
-            address: geo?.name || `${placeName}, ${city}`,
+            city: geo.city || city,
+            country: geo.country || country,
+            address: geo?.address || geo?.name || `${placeName}, ${geo?.city || city}`,
             description: '',
             placeId: geo.placeId || geo.place_id || geo.id || '',
             coordinateSource: geo.coordinateSource || geo.coordinate_source || 'osm',
@@ -5340,11 +5537,12 @@ export async function collectTourCandidates(input, location) {
       const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
       const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
       const regionalOpts = {
-        isRegionalOrNature: Boolean(isRegionalOrNature || input.durationDays >= 2 || input.durationHours >= 24),
-        isMicroDest: Boolean(isMicroDest || canonicalDest?.isMicroDestination),
-        durationDays: input.durationDays,
-        city,
-        country
+          isRegionalOrNature,
+          isMicroDest: Boolean(isMicroDest || canonicalDest?.isMicroDestination),
+          durationDays: input.durationDays,
+          maxDistanceKm: geoScope.maxDistanceKm,
+          city,
+          country
       }
 
       for (const raw of missingSpecifics) {
@@ -5393,7 +5591,7 @@ export async function collectTourCandidates(input, location) {
         // Secondary fallback: Photon search
         if (!directGeo) {
           const photonHits = await photonSearch(`${cleanPName} ${city}`, 3, destLat, destLon).catch(() => [])
-          const validHit = photonHits.find(h => isDistinctNameMatch(cleanPName, h.name) && validateCandidateLocation(h, canonicalDest, 70))
+          const validHit = photonHits.find(h => isDistinctNameMatch(cleanPName, h.name) && validateCandidateLocation(h, canonicalDest, geoScope.maxDistanceKm))
           if (validHit) {
             directGeo = validHit
           }
@@ -5406,7 +5604,7 @@ export async function collectTourCandidates(input, location) {
         let address = directGeo?.name || `${placeName}, ${city}`
 
         if (directGeo && Number.isFinite(directGeo.latitude) && Number.isFinite(directGeo.longitude)) {
-          if (validateCandidateLocation(directGeo, canonicalDest, 70)) {
+          if (validateCandidateLocation(directGeo, canonicalDest, geoScope.maxDistanceKm)) {
             finalLat = Number(directGeo.latitude)
             finalLon = Number(directGeo.longitude)
           }
@@ -5417,24 +5615,49 @@ export async function collectTourCandidates(input, location) {
           const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
           const catalog = await getRealDestinationCatalog(city, country, destLat, destLon).catch(() => null)
           const pool = isExplicitDining ? (catalog?.restaurants || []) : (catalog?.places || [])
-          const usedInTour = new Set(geocodedSpecifics.map(p => p.name.toLowerCase()))
-          const replacement = pool.find(item => {
-            const iName = typeof item === 'string' ? item : item?.name
-            return iName && !usedInTour.has(iName.toLowerCase())
-          })
-          if (replacement) {
-            const repName = typeof replacement === 'string' ? replacement : replacement.name
-            const repGeo = await geocodePlace(`${repName}, ${city}`, destLat, destLon, regionalOpts).catch(() => null)
-            if (repGeo && Number.isFinite(repGeo.latitude) && Number.isFinite(repGeo.longitude) && validateCandidateLocation(repGeo, canonicalDest, 70)) {
-              finalLat = Number(repGeo.latitude)
-              finalLon = Number(repGeo.longitude)
-              address = repGeo.name || `${repName}, ${city}`
-              placeName = repName
-              // The replacement was also resolved through a map provider.
-              // Keep its provider provenance instead of treating it as AI data.
-              directGeo = repGeo
-              console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified "${repName}" on Day ${placeDay}.`)
+          const usedInTour = new Set(
+            geocodedSpecifics.map(p => canonicalPlaceKey(p.name, p.city || city))
+          )
+
+          // A catalog may contain an LLM-suggested venue from another city.
+          // Never accept the first result blindly: try several catalog entries
+          // and keep only the first one confirmed by the map provider and the
+          // geographic boundary. This also prevents replacing an invalid place
+          // with the same invalid place under a different spelling.
+          for (const replacementCandidate of pool.slice(0, 12)) {
+            const repName = typeof replacementCandidate === 'string'
+              ? replacementCandidate
+              : replacementCandidate?.name
+            if (!repName) continue
+
+            const replacementKey = canonicalPlaceKey(repName, city)
+            if (
+              usedInTour.has(replacementKey) ||
+              arePlacesSimilar(repName, placeName) ||
+              replacementKey === canonicalPlaceKey(placeName, city)
+            ) {
+              continue
             }
+
+            const repGeo = await geocodePlace(`${repName}, ${city}`, destLat, destLon, regionalOpts).catch(() => null)
+            if (
+              !repGeo ||
+              !Number.isFinite(repGeo.latitude) ||
+              !Number.isFinite(repGeo.longitude) ||
+              !validateCandidateLocation(repGeo, canonicalDest, geoScope.maxDistanceKm)
+            ) {
+              continue
+            }
+
+            finalLat = Number(repGeo.latitude)
+            finalLon = Number(repGeo.longitude)
+            address = repGeo.name || `${repName}, ${city}`
+            placeName = repName
+            // The replacement was also resolved through a map provider.
+            // Keep its provider provenance instead of treating it as AI data.
+            directGeo = repGeo
+            console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified "${repName}" on Day ${placeDay}.`)
+            break
           }
         }
 
@@ -5450,8 +5673,8 @@ export async function collectTourCandidates(input, location) {
             category: isRestaurant ? 'restaurant' : 'requested',
             dia: placeDay,
             day: placeDay,
-            city,
-            country,
+            city: directGeo?.city || city,
+            country: directGeo?.country || country,
             address,
             description: '',
             placeId: directGeo?.placeId || directGeo?.place_id || directGeo?.id || '',
@@ -5471,9 +5694,12 @@ export async function collectTourCandidates(input, location) {
       }
     }
 
-    // Fast-path: Si el usuario ya seleccionó paradas específicas en el chat y la gran mayoría están geocodificadas con éxito,
-    // retornar directamente ahorrando múltiples llamadas lentas y timeouts a Overpass/Photon/OpenAI
-    if (geocodedSpecifics.length >= 2 && geocodedSpecifics.length >= Math.ceil(mergedSpecifics.length * 0.7)) {
+    // Fast-path: Si el usuario ya seleccionó paradas específicas en el chat y
+    // todas quedaron geocodificadas (o sustituidas por un POI local verificado),
+    // retornar directamente ahorrando múltiples llamadas lentas y timeouts a
+    // Overpass/Photon/OpenAI. Nunca devolver una lista parcial: eso hacía que
+    // una parada, y con ella todo un día del itinerario, desapareciera.
+    if (geocodedSpecifics.length >= 2 && geocodedSpecifics.length >= mergedSpecifics.length) {
       console.info(`[collectTourCandidates] Fast-path: Successfully geocoded ${geocodedSpecifics.length}/${mergedSpecifics.length} user selected stops directly. Skipping generic city scrapers.`)
       return {
         rawCount: geocodedSpecifics.length,
@@ -5494,7 +5720,12 @@ export async function collectTourCandidates(input, location) {
     const geocodedSettled = await Promise.allSettled(
       iconicLandmarks.map(async (item) => {
         const searchQuery = `${item.name} ${city} ${country}`.trim()
-        const geo = await geocodePlace(searchQuery, cityCenterLat, cityCenterLon, { city, country, isRegionalOrNature: Boolean(isRegionalOrNature || isMultiDay) })
+        const geo = await geocodePlace(searchQuery, cityCenterLat, cityCenterLon, {
+          city,
+          country,
+          isRegionalOrNature,
+          maxDistanceKm: geoScope.maxDistanceKm,
+        })
         if (geo && (geo.latitude || geo.longitude) && isWithinCityBounds(geo.latitude, geo.longitude)) {
           return {
             name: item.name,
@@ -5521,8 +5752,7 @@ export async function collectTourCandidates(input, location) {
   const query = `${input.destination} ${city} ${country}`.trim()
   const photonPlaces = await photonSearch(query, 30).catch(() => [])
 
-  const radiusPrimary = isRegionalOrNature ? 15000 : 4500
-  const radiusWide = isRegionalOrNature ? 55000 : 9000
+  const radiusWide = Math.round(geoScope.maxDistanceKm * 1000)
 
   // Calculate subzone centroid if user has specific requested places (e.g. Tayrona cluster, Minca, etc.)
   let searchCenterLat = input.canonicalDestination?.latitude || location?.latitude || cityCenterLat
@@ -5547,7 +5777,7 @@ export async function collectTourCandidates(input, location) {
     pool = pool.filter(place => {
       if (!hasUsableCoordinates(place.latitude, place.longitude)) return false
       const distToCentroid = haversineMeters(place.latitude, place.longitude, searchCenterLat, searchCenterLon) / 1000
-      return distToCentroid <= (isRegionalOrNature ? 22 : 12)
+      return distToCentroid <= (isRegionalOrNature ? Math.min(geoScope.maxDistanceKm, 22) : Math.min(geoScope.maxDistanceKm, 12))
     })
   }
   
@@ -5645,7 +5875,7 @@ export async function collectTourCandidates(input, location) {
         aiFallbacks.map(async (item) => {
           const searchQuery = `${item.name} ${city} ${country}`.trim()
           const geo = await geocodePlace(searchQuery).catch(() => null)
-          if (geo && validateCandidateLocation(geo, input.canonicalDestination || location, 35)) {
+          if (geo && validateCandidateLocation(geo, input.canonicalDestination || location, geoScope.maxDistanceKm)) {
             return {
               name: item.name,
               latitude: geo.latitude,
@@ -5899,15 +6129,8 @@ function isCandidateNearDestination(place, input, location) {
 
   if (!canonicalDest) return true
 
-  const isRegionalOrNature = 
-    input.type === 'ecological' || 
-    input.type === 'sports' || 
-    (input.durationHours && input.durationHours >= 12) ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.prompt || '') ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.destination || '') ||
-    /regional|naturaleza|alrededores|excursión|excursion|field|nature|beach|playa|isla|island|ecoturismo|senderismo|trekking/i.test(input.city || '')
-
-  const maxDistanceKm = isRegionalOrNature ? 65 : 35
+  const geoScope = geographicScopeFor(input)
+  const maxDistanceKm = geoScope.maxDistanceKm
   return validateCandidateLocation(place, canonicalDest, maxDistanceKm)
 }
 
