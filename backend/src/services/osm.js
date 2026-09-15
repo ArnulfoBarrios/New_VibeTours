@@ -16,6 +16,65 @@ const citiesCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 // may be used as navigation coordinates.
 const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog'])
 
+// Algunas atracciones tienen más de un nombre comercial o institucional, pero
+// representan el mismo punto de visita. Esto es una identidad semántica, no
+// un catálogo mundial de coordenadas: el proveedor cartográfico sigue siendo
+// la fuente de la posición.
+const CANONICAL_PLACE_IDENTITIES = [
+  {
+    id: 'barranquilla-carnaval-house-museum',
+    city: 'barranquilla',
+    aliases: [
+      'casa del carnaval',
+      'museo del carnaval',
+      'casa del carnaval y museo del carnaval',
+      'museo del carnaval de barranquilla',
+      'casa del carnaval de barranquilla',
+    ],
+    geocodeQuery: 'Casa del Carnaval, Barranquilla, Colombia',
+  },
+]
+
+function normalizeIdentityText(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isAliasWithCityContext(normalizedName, alias, city) {
+  if (normalizedName === alias) return true
+  if (!normalizedName.startsWith(`${alias} `)) return false
+
+  const remainder = normalizedName.slice(alias.length).trim()
+  const cityKey = normalizeIdentityText(city)
+  if (cityKey && !/\b(barranquilla|atlantico)\b/.test(cityKey)) return false
+  return /^(?:de )?(?:barranquilla|atlantico|colombia)(?: barranquilla| colombia)?$/.test(remainder)
+}
+
+export function resolveCanonicalPlaceIdentity(name, city = '') {
+  const normalizedName = normalizeIdentityText(name)
+  if (!normalizedName) return null
+
+  const normalizedCity = normalizeIdentityText(city)
+  const fromNameContext = normalizedName.includes('barranquilla') || normalizedName.includes('atlantico')
+  for (const identity of CANONICAL_PLACE_IDENTITIES) {
+    if (normalizedCity && !/\b(barranquilla|atlantico)\b/.test(normalizedCity)) continue
+    if (identity.aliases.some(alias => isAliasWithCityContext(normalizedName, alias, city)) ||
+        (fromNameContext && identity.aliases.some(alias => normalizedName.startsWith(`${alias} `)))) {
+      return { ...identity }
+    }
+  }
+  return null
+}
+
+export function canonicalPlaceId(name, city = '') {
+  return resolveCanonicalPlaceIdentity(name, city)?.id || ''
+}
+
 export function hasVerifiedCoordinates(place) {
   if (!place || typeof place !== 'object') return false
   if (place.coordinatesVerified === true || place.coordinates_verified === true || place.coordenadas_verificadas === true) return true
@@ -501,7 +560,10 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'catedral metropolitana': { name: 'Catedral Metropolitana María Reina', latitude: 10.9885, longitude: -74.7906, city: 'Barranquilla', country: 'Colombia' },
   'plaza de la paz': { name: 'Plaza de la Paz', latitude: 10.98802, longitude: -74.78901, city: 'Barranquilla', country: 'Colombia' },
   'parque plaza de la paz': { name: 'Plaza de la Paz', latitude: 10.98802, longitude: -74.78901, city: 'Barranquilla', country: 'Colombia' },
-  'casa del carnaval': { name: 'Casa del Carnaval', latitude: 10.9935, longitude: -74.7818, city: 'Barranquilla', country: 'Colombia' },
+  // Casa del Carnaval y Museo del Carnaval son un mismo complejo cultural.
+  // Este punto sólo es un último respaldo offline; en condiciones normales
+  // geocodePlace consulta Photon/Nominatim antes de llegar aquí.
+  'casa del carnaval': { name: 'Casa del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
   'museo del carnaval': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
   'museo del carnaval de barranquilla': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
   'castillo de salgar': { name: 'Castillo de Salgar', latitude: 11.0182, longitude: -74.9417, city: 'Puerto Colombia', country: 'Colombia' },
@@ -709,10 +771,12 @@ export function getRegionalBoundingBox(lat, lon, options = {}) {
 
 export async function geocodePlace(query, lat = null, lon = null, options = {}) {
   if (!query || typeof query !== 'string') return null
-  const normalizedQuery = normalizeGeocodeQuery(query)
+  const canonicalIdentity = resolveCanonicalPlaceIdentity(query, options?.city || options?.destination || '')
+  const lookupQuery = canonicalIdentity?.geocodeQuery || query
+  const normalizedQuery = normalizeGeocodeQuery(lookupQuery)
   if (!normalizedQuery) return null
 
-  const key = `geocode_${normalizedQuery.toLowerCase().trim()}_${lat ?? ''}_${lon ?? ''}`
+  const key = `geocode_${canonicalIdentity?.id || normalizedQuery.toLowerCase().trim()}_${lat ?? ''}_${lon ?? ''}`
   const cached = geocodeCache.get(key)
   if (cached) return cached
 
@@ -732,14 +796,14 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   if (centerLat == null || centerLon == null) {
     let detectedCity = options?.city || options?.destination || ''
     if (!detectedCity) {
-      const commaParts = query.split(',').map(s => s.trim())
+      const commaParts = lookupQuery.split(',').map(s => s.trim())
       if (commaParts.length > 1) {
         detectedCity = commaParts[1]
       }
     }
     if (!detectedCity) {
       const knownCities = Object.keys(FALLBACK_DESTINATION_CENTROIDS)
-      const qLower = query.toLowerCase()
+      const qLower = lookupQuery.toLowerCase()
       for (const kc of knownCities) {
         if (qLower.includes(kc)) {
           detectedCity = kc
@@ -759,14 +823,6 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
 
   const regionalBbox = (centerLat != null && centerLon != null) ? getRegionalBoundingBox(centerLat, centerLon, options) : null
   const maxDistanceMeters = regionalBbox ? (regionalBbox.delta * 111000 * 1.45) : 75000
-
-  // Early check: High-confidence curated landmarks (Zero-latency exact coordinates)
-  const earlyLandmark = matchIconicLandmark(query, normalizedQuery, centerLat, centerLon, maxDistanceMeters)
-  if (earlyLandmark) {
-    const verifiedLandmark = withVerifiedCoordinates(earlyLandmark, 'curated', curatedPlaceId(earlyLandmark))
-    geocodeCache.set(key, verifiedLandmark)
-    return verifiedLandmark
-  }
 
   // 2. Candidate query variations
   const queryCandidates = [normalizedQuery]
@@ -792,7 +848,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
         centerLon,
         regionalBbox ? regionalBbox.photonBbox : null
       )
-      const photonProx = selectBestPoiResult(proxResults, query)
+      const photonProx = selectBestPoiResult(proxResults, lookupQuery)
       if (photonProx && Number.isFinite(photonProx.latitude) && Number.isFinite(photonProx.longitude)) {
         const dMeters = (centerLat != null && centerLon != null)
           ? haversineMeters(centerLat, centerLon, photonProx.latitude, photonProx.longitude)
@@ -826,7 +882,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
     try {
       for (const qc of queryCandidates) {
         const globalResults = await photonSearch(qc, 5, null, null, null)
-        const photonGlobal = selectBestPoiResult(globalResults, query)
+        const photonGlobal = selectBestPoiResult(globalResults, lookupQuery)
         if (photonGlobal && Number.isFinite(photonGlobal.latitude) && Number.isFinite(photonGlobal.longitude)) {
           const res = {
             name: photonGlobal.name,
@@ -889,14 +945,14 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
             const isUtility = ['waste_disposal', 'vending_machine', 'atm', 'car_wash', 'toilet', 'bench'].includes(type)
             if (isUtility) return false
 
-            const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(query)
+            const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(lookupQuery)
             if (isFoodQuery) {
               const isNonFoodGeo = ['boundary', 'place', 'highway'].includes(category) ||
                 ['administrative', 'neighbourhood', 'suburb', 'pedestrian', 'residential', 'road'].includes(type)
               if (isNonFoodGeo) return false
             }
 
-            const isIslandQuery = /\b(isla|islas|archipi[ée]lago|cayo|cayos)\b/i.test(query)
+            const isIslandQuery = /\b(isla|islas|archipi[ée]lago|cayo|cayos)\b/i.test(lookupQuery)
             if (isIslandQuery) {
               const isNonIsland = ['boundary', 'highway', 'amenity'].includes(category) ||
                 ['administrative', 'neighbourhood', 'suburb', 'residential', 'road', 'street', 'city', 'town', 'school', 'place_of_worship'].includes(type)
@@ -905,7 +961,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
               if (!hasIslandWord && type !== 'island' && type !== 'islet') return false
             }
 
-            if (query && !isDistinctNameMatch(query, r.display_name || r.name || '')) return false
+            if (lookupQuery && !isDistinctNameMatch(lookupQuery, r.display_name || r.name || '')) return false
             return true
           })
 
@@ -960,7 +1016,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   // 6. High-confidence Seed Landmark Fallback (Only for local venues unmapped in OSM)
   // Strictly validated against regional bounds so out-of-city landmarks NEVER match
   const normLower = normalizedQuery.toLowerCase().trim()
-  const rawClean = String(query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const rawClean = String(lookupQuery || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const strippedCity = normLower.replace(/,\s*(barranquilla|santa marta|cartagena|coveñas|covenas|medellin|medellín|bogota|bogotá|colombia)/gi, '').trim()
   const unaccentedStripped = strippedCity.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const unaccentedQuery = normLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
@@ -988,7 +1044,10 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
       isValidInRegion = dist <= maxDistanceMeters
     }
     if (isValidInRegion) {
-      const verifiedLandmark = withVerifiedCoordinates(landmarkMatch, 'curated', curatedPlaceId(landmarkMatch))
+      const verifiedLandmark = withVerifiedCoordinates({
+        ...landmarkMatch,
+        ...(canonicalIdentity ? { canonicalPlaceId: canonicalIdentity.id } : {}),
+      }, 'curated', curatedPlaceId(landmarkMatch))
       geocodeCache.set(key, verifiedLandmark)
       return verifiedLandmark
     }

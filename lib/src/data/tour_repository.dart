@@ -714,6 +714,15 @@ class TourRepository {
               location['url_mapa']?.toString() ??
               location['urlMapa']?.toString() ??
               '',
+          coordinateSource:
+              location['fuente_coordenadas']?.toString() ??
+              location['coordinateSource']?.toString() ??
+              location['coordinate_source']?.toString() ??
+              '',
+          coordinatesVerified:
+              location['coordenadas_verificadas'] == true ||
+              location['coordinatesVerified'] == true ||
+              location['coordinates_verified'] == true,
         ),
         images: images,
         suggestedMinutes: _minutesFromValue(
@@ -1228,6 +1237,15 @@ class TourRepository {
           json['place_id']?.toString() ?? json['placeId']?.toString() ?? '',
       urlMapa:
           json['url_mapa']?.toString() ?? json['urlMapa']?.toString() ?? '',
+      coordinateSource:
+          json['fuente_coordenadas']?.toString() ??
+          json['coordinateSource']?.toString() ??
+          json['coordinate_source']?.toString() ??
+          '',
+      coordinatesVerified:
+          json['coordenadas_verificadas'] == true ||
+          json['coordinatesVerified'] == true ||
+          json['coordinates_verified'] == true,
     );
   }
 

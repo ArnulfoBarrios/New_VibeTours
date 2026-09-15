@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, canonicalPlaceId } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
@@ -157,6 +157,15 @@ export function normalizePlaceKey(placeName) {
   return result
 }
 
+// La clave de presentación puede variar (por ejemplo, Casa/Museo del
+// Carnaval), pero la clave física debe ser única para planificar y guardar el
+// tour. Para lugares no incluidos en identidades canónicas se conserva la
+// normalización general existente.
+export function canonicalPlaceKey(placeName, city = '') {
+  const canonicalId = canonicalPlaceId(placeName, city)
+  return canonicalId ? `canonical:${canonicalId}` : `name:${normalizePlaceKey(placeName)}`
+}
+
 // Deduplica una lista de nombres de lugares usando su clave canónica y similitud de subcadenas
 export function deduplicatePlacesByName(places = []) {
   const result = []
@@ -167,16 +176,19 @@ export function deduplicatePlacesByName(places = []) {
     const dia = typeof p === 'object' ? (p.dia || p.day) : null
     if (!name || !isValidSpecificPlace(name)) continue
     const key = normalizePlaceKey(name)
+    const identityKey = canonicalPlaceKey(name)
     if (!key) continue
     const type = getPlaceEntityType(name)
 
     const existingIdx = result.findIndex(item => {
       const existingName = typeof item === 'string' ? item : (item.name || '')
       const existingKey = normalizePlaceKey(existingName)
+      const existingIdentityKey = canonicalPlaceKey(existingName)
       const existingType = getPlaceEntityType(existingName)
       const existingDia = typeof item === 'object' ? (item.dia || item.day) : null
 
       if (key === existingKey) return true
+      if (identityKey.startsWith('canonical:') && identityKey === existingIdentityKey) return true
 
       // Si tienen categorías explícitas incompatibles (ej: beach_coastal vs cultural, food vs cultural), NUNCA son duplicados
       if (type !== 'generic' && existingType !== 'generic' && type !== existingType) {
@@ -214,7 +226,9 @@ export function deduplicatePlacesByName(places = []) {
       const existing = result[existingIdx]
       const existingName = typeof existing === 'string' ? existing : (existing.name || '')
       const existingDia = typeof existing === 'object' ? (existing.dia || existing.day) : null
-      const finalDia = dia || existingDia
+      // Cuando dos alias apuntan al mismo lugar, conservar el primer día
+      // asignado para no mover una parada por una segunda mención de la IA.
+      const finalDia = existingDia ?? dia
       if (name.length > existingName.length && /[A-Z]/.test(name)) {
         result[existingIdx] = finalDia ? { name, dia: Number(finalDia), day: Number(finalDia) } : name
       } else if (finalDia && typeof result[existingIdx] === 'string') {
@@ -1782,7 +1796,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
         continue
       }
-      const nameKey = normalizePlaceKey(name) || normalizeKey(name)
+      const nameKey = canonicalPlaceKey(name, input.city || input.destination)
       if (!seenKeys.has(nameKey)) {
         seenKeys.add(nameKey)
         normalizedStops.push(item)
@@ -2088,7 +2102,7 @@ async function processTourGeneration(jobId, input) {
         if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
           continue
         }
-        const nameKey = normalizePlaceKey(name) || normalizeKey(name)
+        const nameKey = canonicalPlaceKey(name, input.city || input.destination)
         if (!seenKeys.has(nameKey)) {
           seenKeys.add(nameKey)
           normalizedStops.push(item)
@@ -4527,7 +4541,7 @@ function uniqueByName(values) {
     const rawType = (value.type || value.category || '').toLowerCase()
     const isFood = rawType.includes('food') || rawType.includes('restaurant') || /restaurante|cafe|bistro|bar|comida/i.test(value.name)
     const typePrefix = isFood ? 'food' : 'attraction'
-    const key = `${typePrefix}_${normalizeKey(value.name)}`
+    const key = `${typePrefix}_${canonicalPlaceKey(value.name, value.city || '')}`
     const fuzzyKey = `${typePrefix}_${fuzzyNormalizeKey(value.name)}`
     if (seen.has(key) || (fuzzyKey.length > 5 && seen.has(fuzzyKey))) return false
     seen.add(key)
@@ -5542,13 +5556,21 @@ export async function collectTourCandidates(input, location) {
     for (const p of places) {
       if (!p || !p.name) continue
       const pKey = normalizePlaceKey(p.name)
+      const pIdentityKey = canonicalPlaceKey(p.name, p.city || city)
       const pType = getPlaceEntityType(p.name)
       const pDay = p.dia || p.day
       
       const existingIdx = result.findIndex(item => {
         const itemKey = normalizePlaceKey(item.name)
+        const itemIdentityKey = canonicalPlaceKey(item.name, item.city || city)
         const itemType = getPlaceEntityType(item.name)
         const itemDay = item.dia || item.day
+
+        // Un mismo complejo físico no debe convertirse en dos paradas sólo
+        // porque la IA alternó entre su nombre institucional y comercial.
+        if (pIdentityKey.startsWith('canonical:') && pIdentityKey === itemIdentityKey) {
+          return true
+        }
 
         // 1. Nunca mezclar lugares asignados a días diferentes
         if (pDay != null && itemDay != null && Number(pDay) !== Number(itemDay)) {
@@ -5602,8 +5624,8 @@ export async function collectTourCandidates(input, location) {
     selected = dedupeByProximity(geocodedSpecifics)
     source = 'chat-confirmed-places'
   } else if (geocodedSpecifics.length > 0) {
-    const specificKeys = new Set(geocodedSpecifics.map(p => normalizePlaceKey(p.name)))
-    const remainder = normalizedPool.filter(p => !specificKeys.has(normalizePlaceKey(p.name)))
+    const specificKeys = new Set(geocodedSpecifics.map(p => canonicalPlaceKey(p.name, p.city || city)))
+    const remainder = normalizedPool.filter(p => !specificKeys.has(canonicalPlaceKey(p.name, p.city || city)))
     selected = dedupeByProximity([...geocodedSpecifics, ...remainder])
     source = 'chat-augmented-places'
   }
@@ -5898,25 +5920,34 @@ function findCandidatePlace(name, candidatePlaces, anchorPlace = null) {
   const exact = candidatePlaces.find((place) => normalizeKey(place.name) === key)
   if (exact) return exact
 
-  // 2. Coincidencia normalizada de clave de lugar
+  // 2. Coincidencia por identidad física canónica (ej. Casa/Museo del Carnaval)
+  const canonicalKey = canonicalPlaceKey(name, anchorPlace?.city || '')
+  if (canonicalKey.startsWith('canonical:')) {
+    const canonicalMatch = candidatePlaces.find((place) =>
+      canonicalPlaceKey(place.name, place.city || anchorPlace?.city || '') === canonicalKey
+    )
+    if (canonicalMatch) return canonicalMatch
+  }
+
+  // 3. Coincidencia normalizada de clave de lugar
   const normKey = normalizePlaceKey(name)
   if (normKey) {
     const keyMatch = candidatePlaces.find((place) => normalizePlaceKey(place.name) === normKey)
     if (keyMatch) return keyMatch
   }
 
-  // 3. Coincidencia por similitud profunda
+  // 4. Coincidencia por similitud profunda
   const similar = candidatePlaces.find((place) => arePlacesSimilar(place.name, name))
   if (similar) return similar
   
-  // 4. Coincidencia donde el candidato contiene la parada (Ej: Parada "Catedral", Candidato "Catedral de Santa Marta")
+  // 5. Coincidencia donde el candidato contiene la parada (Ej: Parada "Catedral", Candidato "Catedral de Santa Marta")
   const candidateContainsStop = candidatePlaces.find((place) => {
     const placeKey = normalizeKey(place.name)
     return placeKey.includes(key) && key.length >= 6
   })
   if (candidateContainsStop) return candidateContainsStop
 
-  // 5. Coincidencia donde la parada contiene al candidato, sólo si no es un término genérico muy corto
+  // 6. Coincidencia donde la parada contiene al candidato, sólo si no es un término genérico muy corto
   const stopContainsCandidate = candidatePlaces.find((place) => {
     const placeKey = normalizeKey(place.name)
     if (placeKey.length < 6) return false

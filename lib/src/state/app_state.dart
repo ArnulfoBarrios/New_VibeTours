@@ -963,6 +963,10 @@ Map<String, dynamic> _locationInfoToJson(TourLocationInfo location) {
     'pais': location.pais,
     'placeId': location.placeId,
     'urlMapa': location.urlMapa,
+    'coordinateSource': location.coordinateSource,
+    'coordinatesVerified': location.coordinatesVerified,
+    'fuente_coordenadas': location.coordinateSource,
+    'coordenadas_verificadas': location.coordinatesVerified,
   };
 }
 
@@ -977,6 +981,15 @@ TourLocationInfo _locationInfoFromJson(Object? value) {
     pais: _string(json['pais'], ''),
     placeId: _string(json['placeId'] ?? json['place_id'], ''),
     urlMapa: _string(json['urlMapa'] ?? json['url_mapa'], ''),
+    coordinateSource: _string(
+      json['coordinateSource'] ??
+          json['coordinate_source'] ??
+          json['fuente_coordenadas'],
+      '',
+    ),
+    coordinatesVerified: json['coordinatesVerified'] == true ||
+        json['coordinates_verified'] == true ||
+        json['coordenadas_verificadas'] == true,
   );
 }
 

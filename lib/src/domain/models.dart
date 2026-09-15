@@ -37,6 +37,8 @@ class TourLocationInfo {
     required this.pais,
     required this.placeId,
     required this.urlMapa,
+    this.coordinateSource = '',
+    this.coordinatesVerified = false,
   });
 
   final String nombreLugar;
@@ -46,6 +48,8 @@ class TourLocationInfo {
   final String pais;
   final String placeId;
   final String urlMapa;
+  final String coordinateSource;
+  final bool coordinatesVerified;
 
   static const empty = TourLocationInfo(
     nombreLugar: '',
@@ -55,6 +59,8 @@ class TourLocationInfo {
     pais: '',
     placeId: '',
     urlMapa: '',
+    coordinateSource: '',
+    coordinatesVerified: false,
   );
 
   bool get isEmpty =>
@@ -64,7 +70,9 @@ class TourLocationInfo {
       region.isEmpty &&
       pais.isEmpty &&
       placeId.isEmpty &&
-      urlMapa.isEmpty;
+      urlMapa.isEmpty &&
+      coordinateSource.isEmpty &&
+      !coordinatesVerified;
 
   Map<String, dynamic> toCreationJson() => {
     'nombre_lugar': nombreLugar,
@@ -74,6 +82,8 @@ class TourLocationInfo {
     'pais': pais,
     'place_id': placeId,
     'url_mapa': urlMapa,
+    'fuente_coordenadas': coordinateSource,
+    'coordenadas_verificadas': coordinatesVerified,
   };
 }
 
@@ -1016,6 +1026,12 @@ class AiRecommendation {
         pais: locationInfo['pais'] ?? '',
         placeId: locationInfo['place_id'] ?? '',
         urlMapa: locationInfo['url_mapa'] ?? '',
+        coordinateSource: locationInfo['fuente_coordenadas'] ??
+            locationInfo['coordinateSource'] ??
+            locationInfo['coordinate_source'] ??
+            '',
+        coordinatesVerified: verifiedRaw == true ||
+            verifiedRaw?.toString().toLowerCase() == 'true',
       ),
     );
   }
