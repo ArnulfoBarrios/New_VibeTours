@@ -401,8 +401,8 @@ export function validateCandidateLocation(place, canonicalDest, maxDistanceKm = 
     return true
   }
 
-  // 1. If destination is a micro-destination (e.g. Parque Tayrona, Minca, Guatapé), use a strict radius (18 km) around the park/entity center
-  const allowedRadius = canonicalDest.isMicroDestination ? 18 : maxDistanceKm
+  // 1. If destination is a micro-destination (e.g. Parque Tayrona, Minca, Guatapé) and caller didn't explicitly allow a broader regional radius, use 18 km
+  const allowedRadius = (canonicalDest.isMicroDestination && maxDistanceKm <= 35) ? 18 : maxDistanceKm
 
   // 2. Haversine distance check from canonical center
   const distKm = haversineDistanceKm(canonicalDest.latitude, canonicalDest.longitude, lat, lon)

@@ -1188,6 +1188,27 @@ REGLAS PARA "specificPlaces":
         }
       }
 
+      // Si faltan restaurantes para cubrir todos los días, enriquecer con la ciudad cabecera o catálogo de respaldo
+      if (uniqueRests.length < daysCount) {
+        const hubCity = known.city && known.city !== dName ? known.city : null
+        if (hubCity) {
+          const hubCat = await getRealDestinationCatalog(hubCity, destCountry).catch(() => null)
+          for (const hr of (hubCat?.restaurants || [])) {
+            if (hr && hr.name && !uniqueRests.some(existing => arePlacesSimilar(existing.name, hr.name))) {
+              uniqueRests.push(hr)
+            }
+          }
+        }
+        if (uniqueRests.length < daysCount) {
+          const presets = getDestinationPresets(hubCity || dName, destCountry)
+          for (const pr of (presets.restaurants || [])) {
+            if (pr && pr.name && !uniqueRests.some(existing => arePlacesSimilar(existing.name, pr.name))) {
+              uniqueRests.push(pr)
+            }
+          }
+        }
+      }
+
       let prefixIntro = ''
       if (isUserAskingForMoreStops) {
         prefixIntro = `¡Por supuesto! He añadido paradas y atractivos adicionales para enriquecer cada día de tu viaje a ${dName}. Aquí tienes el itinerario ampliado:\n\n`
@@ -1242,7 +1263,9 @@ REGLAS PARA "specificPlaces":
         }
         if (!chosenRest) {
           chosenRest = uniqueRests.find(r => !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, r.name)))?.name ||
-            `Gastronomía tradicional de ${dName} (Día ${d})`
+            uniqueRests[(d - 1) % Math.max(1, uniqueRests.length)]?.name ||
+            cat?.restaurants?.[(d - 1) % Math.max(1, cat?.restaurants?.length || 1)]?.name ||
+            (known.city ? `Restaurante Típico de ${known.city}` : `Restaurante Típico de ${dName}`)
         }
         globalUsedNames.add(chosenRest)
         dayUsed.add(chosenRest)
@@ -1353,8 +1376,14 @@ Mensaje actual del usuario: "${userMessage}"
 Datos ya conocidos: ${JSON.stringify(currentData)}
 
 REGLA CRÍTICA DE DESTINO TURÍSTICO (UNIVERSAL: CIUDADES, PARQUES, ISLAS, REGIONES):
-- Extraer "destination" como el destino turístico explícito, sea un parque natural, reserva ecológica, isla, archipiélago, valle, región, pueblo, ciudad, ruta o países (ej: "Parque Tayrona", "Minca", "Tolú y Coveñas", "San Andrés", "Barranquilla", "Santa Marta", "Barranquilla a Santa Marta", "Italia y España", "Roma").
-- Extraer "city" como el municipio o ciudad de referencia correspondiente (ej: "Santa Marta" si es Parque Tayrona, "Salento" si es Valle de Cocora, o el mismo destino si es ciudad).
+- JERARQUÍA DE CIUDAD CABECERA VS SUB-ZONAS / EXCURSIONES:
+  * Si el usuario menciona una ciudad principal o municipio cabecera (ej: "Santa Marta", "Medellín", "Cartagena", "Bogotá", "Barranquilla", "Madrid", "Roma") y a la vez menciona parques, pueblos, corregimientos o zonas aledañas (ej: "Minca", "Parque Tayrona", "Guatapé", "Islas del Rosario", "Puerto Colombia"):
+    - "destination": la ciudad cabecera principal (ej: "Santa Marta"). NUNCA asignes un parque, vereda o pueblo menor como "destination" si se mencionó una ciudad cabecera base.
+    - "city": la ciudad cabecera principal (ej: "Santa Marta").
+    - Agrega los parques o pueblos aledaños obligatoriamente a "specificPlaces" (ej: [{ "name": "Minca", "dia": 2 }, { "name": "Parque Nacional Natural Tayrona", "dia": 3 }]).
+  * Si el usuario menciona ÚNICAMENTE un parque natural, reserva, isla o pueblo sin mencionar ciudad cabecera (ej: "Quiero ir a Minca", "un viaje al Parque Tayrona", "tour en Guatapé"):
+    - "destination": el parque o destino solicitado (ej: "Parque Nacional Natural Tayrona", "Minca").
+    - "city": el municipio o ciudad de referencia correspondiente (ej: "Santa Marta" si es Tayrona/Minca, "Salento" si es Valle de Cocora).
 - Solo extraer si el usuario declara EXPLÍCITAMENTE que desea viajar allí, explorar la zona o cambiar de destino.
 - Si el usuario menciona un lugar como corrección, queja o negación (ej: "te equivocaste, esos lugares son de Barranquilla, no de Santa Marta"), NO sobreescribas el destino y mantén: "destination": ${JSON.stringify(currentData.destination || currentData.city || null)}, "city": ${JSON.stringify(currentData.city || currentData.destination || null)}.
 

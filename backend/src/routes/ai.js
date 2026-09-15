@@ -176,6 +176,8 @@ export function deduplicatePlacesByName(places = []) {
       const existingType = getPlaceEntityType(existingName)
       const existingDia = typeof item === 'object' ? (item.dia || item.day) : null
 
+      if (key === existingKey) return true
+
       // Si tienen categorías explícitas incompatibles (ej: beach_coastal vs cultural, food vs cultural), NUNCA son duplicados
       if (type !== 'generic' && existingType !== 'generic' && type !== existingType) {
         return false
@@ -192,8 +194,6 @@ export function deduplicatePlacesByName(places = []) {
       if (dia != null && existingDia != null && Number(dia) !== Number(existingDia) && key !== existingKey) {
         return false
       }
-
-      if (key === existingKey) return true
 
       // Substring match: only when both keys have multi-word distinctive phrases and significant length
       if (key.length >= 6 && existingKey.length >= 6) {
@@ -549,6 +549,30 @@ aiRouter.post('/chat', async (req, res, next) => {
         delete validExtracted.city
         delete validExtracted.destination
         delete validExtracted.canonicalDestination
+      }
+    } else if (!hasExistingCity && validExtracted.destination) {
+      const isSubordinateParkOrAttraction = (dest) => {
+        if (!dest) return false
+        return /tayrona|minca|guatap[eé]|valle de cocora|islas del rosario|isla bar[uú]|san bernardo|taganga|rodadero/i.test(dest) ||
+               /\b(parque|reserva|isla|playa|valle|mirador)\b/i.test(dest)
+      }
+      if (isSubordinateParkOrAttraction(validExtracted.destination)) {
+        const hubInMessage = message.match(/\b(santa marta|cartagena|medell[íi]n|bogot[áa]|barranquilla|cali|bucaramanga|pereira)\b/i)
+        const detectedHub = (validExtracted.city && !isSubordinateParkOrAttraction(validExtracted.city))
+          ? validExtracted.city
+          : (hubInMessage ? hubInMessage[1] : null)
+
+        if (detectedHub) {
+          console.info(`[ai/chat] Promoting base hub city "${detectedHub}" as primary destination and saving "${validExtracted.destination}" as specific place.`)
+          if (!validExtracted.specificPlaces) validExtracted.specificPlaces = []
+          const alreadyHas = validExtracted.specificPlaces.some(p => (typeof p === 'string' ? p : p.name).toLowerCase().includes(validExtracted.destination.toLowerCase()))
+          if (!alreadyHas) {
+            validExtracted.specificPlaces.push({ name: validExtracted.destination, dia: 2 })
+          }
+          validExtracted.destination = cleanAdministrativeCityName(detectedHub)
+          validExtracted.city = cleanAdministrativeCityName(detectedHub)
+          delete validExtracted.canonicalDestination
+        }
       }
     }
 
@@ -5044,7 +5068,7 @@ export async function collectTourCandidates(input, location) {
 
   const isMultiDay = Boolean((input.durationDays && input.durationDays >= 2) || (input.durationHours && input.durationHours >= 24))
   const isWalkingOrUrban = input.transport === 'Caminando' || input.transport === 'Bicicleta' || input.type === 'cultural' || input.type === 'historic'
-  const maxCityRadiusKm = isMicroDest ? 14 : ((isRegionalOrNature || isMultiDay) ? 65 : (isWalkingOrUrban ? 4.5 : 15))
+  const maxCityRadiusKm = (isMicroDest && !isMultiDay) ? 14 : ((isRegionalOrNature || isMultiDay) ? 75 : (isWalkingOrUrban ? 4.5 : 15))
 
   function isWithinCityBounds(lat, lon, maxDistanceKm = maxCityRadiusKm) {
     if (!cityCenterLat || !cityCenterLon || !lat || !lon) return true
@@ -5230,7 +5254,7 @@ export async function collectTourCandidates(input, location) {
           if (originLat && originLon) {
             const distKm = haversineMeters(finalLat, finalLon, originLat, originLon) / 1000
             const isCoastalOrMarine = isRegionalOrNature || /cove[ñn]as|tol[uú]|cartagena|santa marta|san andr[eé]s|canc[uú]n|barranquilla|atl[aá]ntico/i.test(city) || /isla|playa|bah[íi]a|caimanera|archipi[eé]lago/i.test(placeName)
-            const maxBound = (isMicroDest || canonicalDest?.isMicroDestination) ? 18 : (isCoastalOrMarine ? 75 : 55)
+            const maxBound = ((isMicroDest || canonicalDest?.isMicroDestination) && !isMultiDay) ? 18 : (isCoastalOrMarine ? 75 : 55)
             if (distKm > maxBound) {
               console.warn(`[tour-ai] Discarding specific place "${placeName}" (${distKm.toFixed(1)}km from ${city}) because it exceeds boundary (${maxBound}km).`)
               return null
@@ -5279,6 +5303,31 @@ export async function collectTourCandidates(input, location) {
         country
       }
 
+      let missingAiMap = {}
+      if (process.env.OPENAI_API_KEY && missingSpecifics.length > 0) {
+        const missingNames = missingSpecifics.map(raw => {
+          if (typeof raw === 'string') {
+            const str = raw.trim()
+            if (str.startsWith('{') && str.includes('name:')) {
+              const m = str.match(/name\s*:\s*([^,\}]+)/)
+              return m ? m[1].trim() : str
+            }
+            return str
+          }
+          return raw?.name || ''
+        }).filter(pName => isValidSpecificPlace(pName))
+
+        if (missingNames.length > 0) {
+          missingAiMap = await geocodePlacesWithOpenAI({
+            city,
+            country,
+            places: missingNames,
+            centerLat: canonicalDest?.latitude ?? cityCenterLat,
+            centerLon: canonicalDest?.longitude ?? cityCenterLon
+          }).catch(() => ({}))
+        }
+      }
+
       for (const raw of missingSpecifics) {
         let placeName = ''
         let placeDay = null
@@ -5322,10 +5371,41 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
+        // Secondary fallback: Photon search
+        if (!directGeo) {
+          const photonHits = await photonSearch(`${cleanPName} ${city}`, 3, destLat, destLon).catch(() => [])
+          const validHit = photonHits.find(h => isDistinctNameMatch(cleanPName, h.name) && validateCandidateLocation(h, canonicalDest, 70))
+          if (validHit) {
+            directGeo = validHit
+          }
+        }
+
+        let tagSource = 'grounded_geocoded'
+
+        // Tertiary fallback: OpenAI geocoded coordinates
+        if (!directGeo) {
+          const aiCoord = missingAiMap[placeName] || preGeocodedAi[placeName] ||
+            Object.entries({ ...preGeocodedAi, ...missingAiMap }).find(([k]) => k.toLowerCase() === placeName.toLowerCase() ||
+              arePlacesSimilar(k, placeName) ||
+              normalizePlaceKey(k) === normalizePlaceKey(placeName))?.[1]
+          if (aiCoord && Number.isFinite(aiCoord.latitude) && Number.isFinite(aiCoord.longitude)) {
+            const candidate = {
+              name: placeName,
+              latitude: Number(aiCoord.latitude),
+              longitude: Number(aiCoord.longitude),
+              city,
+              country
+            }
+            if (validateCandidateLocation(candidate, canonicalDest, 70)) {
+              directGeo = candidate
+              tagSource = 'ai_geocoded'
+            }
+          }
+        }
+
         let finalLat = null
         let finalLon = null
         let address = directGeo?.name || `${placeName}, ${city}`
-        let tagSource = 'grounded_geocoded'
 
         if (directGeo && Number.isFinite(directGeo.latitude) && Number.isFinite(directGeo.longitude)) {
           if (validateCandidateLocation(directGeo, canonicalDest, 70)) {
@@ -5334,8 +5414,29 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        // Strict grounding: Never invent synthetic coordinates.
-        // If a venue cannot be resolved to verified OpenStreetMap coordinates, drop the ungrounded candidate cleanly.
+        // Zero-Drop policy: If an unlocatable venue still has no coordinates, pick a verified replacement from catalog
+        if (finalLat == null || finalLon == null) {
+          const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
+          const catalog = await getRealDestinationCatalog(city, country, destLat, destLon).catch(() => null)
+          const pool = isExplicitDining ? (catalog?.restaurants || []) : (catalog?.places || [])
+          const usedInTour = new Set(geocodedSpecifics.map(p => p.name.toLowerCase()))
+          const replacement = pool.find(item => {
+            const iName = typeof item === 'string' ? item : item?.name
+            return iName && !usedInTour.has(iName.toLowerCase())
+          })
+          if (replacement) {
+            const repName = typeof replacement === 'string' ? replacement : replacement.name
+            const repGeo = await geocodePlace(`${repName}, ${city}`, destLat, destLon, regionalOpts).catch(() => null)
+            if (repGeo && Number.isFinite(repGeo.latitude) && Number.isFinite(repGeo.longitude) && validateCandidateLocation(repGeo, canonicalDest, 70)) {
+              finalLat = Number(repGeo.latitude)
+              finalLon = Number(repGeo.longitude)
+              address = repGeo.name || `${repName}, ${city}`
+              placeName = repName
+              tagSource = 'catalog_replacement'
+              console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified "${repName}" on Day ${placeDay}.`)
+            }
+          }
+        }
 
         if (finalLat != null && finalLon != null) {
           const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)

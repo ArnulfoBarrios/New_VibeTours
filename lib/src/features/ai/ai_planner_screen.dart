@@ -270,10 +270,23 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircleAvatar(
-              backgroundColor: Colors.blue.shade100,
-              radius: 16,
-              child: const Icon(Icons.smart_toy_rounded, color: Colors.blue, size: 20),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/tour_planner_ai.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => CircleAvatar(
+                    backgroundColor: Colors.blue.shade100,
+                    radius: 16,
+                    child: const Icon(Icons.smart_toy_rounded, color: Colors.blue, size: 20),
+                  ),
+                ),
+              ),
             ),
             const SizedBox(width: 8),
             Column(
@@ -662,37 +675,65 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              backgroundColor: Colors.blue.shade50,
-              radius: 16,
-              child: const Icon(Icons.smart_toy_rounded, color: Colors.blue, size: 20),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16).copyWith(
+              bottomLeft: const Radius.circular(4),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    )
-                  ],
-                ),
-                child: const Text(
-                  '¡Hola! Qué gusto saludarte. Soy Tour Planner AI 🤖, tu asistente personal de viajes en VibeTours.\n\nEstoy aquí para diseñar un tour increíble adaptado a tus fechas, acompañantes, presupuesto y gustos. Cuéntame: ¿a qué ciudad o lugar te gustaría viajar hoy?',
-                  style: TextStyle(fontSize: 15, height: 1.4),
-                ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              )
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/images/tour_planner_ai.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.smart_toy_rounded,
+                          color: Colors.blue,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Tour Planner AI',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ).animate().fadeIn().slideX(begin: -0.1),
+              const SizedBox(height: 10),
+              const Text(
+                '¡Hola! Qué gusto saludarte. Soy Tour Planner AI 🤖, tu asistente personal de viajes en VibeTours.\n\nEstoy aquí para diseñar un tour increíble adaptado a tus fechas, acompañantes, presupuesto y gustos. Cuéntame: ¿a qué ciudad o lugar te gustaría viajar hoy?',
+                style: TextStyle(fontSize: 15, height: 1.4),
+              ),
+            ],
+          ),
+        ).animate().fadeIn().slideX(begin: -0.05),
         const SizedBox(height: 16),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -762,89 +803,235 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     );
   }
 
+  String _formatTime(DateTime timestamp) {
+    final hour = timestamp.hour;
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final minute = timestamp.minute.toString().padLeft(2, '0');
+    final period = hour < 12 ? 'AM' : 'PM';
+    return '$displayHour:$minute $period';
+  }
+
   Widget _buildMessageBubble(ChatMessage message, bool isBusy) {
-    final isUser = message.isUser;
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (message.isUser) {
+      return _buildUserMessageBubble(message, screenWidth);
+    } else {
+      return _buildAiMessageBubble(message, screenWidth);
+    }
+  }
+
+  Widget _buildUserMessageBubble(ChatMessage message, double screenWidth) {
+    final timeStr = _formatTime(message.timestamp);
+
     return Column(
-      crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Row(
-          mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.end,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!isUser) ...[
-              CircleAvatar(
-                backgroundColor: Colors.blue.shade50,
-                radius: 16,
-                child: const Icon(Icons.smart_toy_rounded, color: Colors.blue, size: 20),
-              ),
-              const SizedBox(width: 8),
-            ],
             Flexible(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isUser ? Colors.blue.shade600 : Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16).copyWith(
-                    bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(16),
-                    bottomLeft: !isUser ? const Radius.circular(4) : const Radius.circular(16),
-                  ),
-                  boxShadow: !isUser
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : null,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: screenWidth * 0.76,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (message.localImagePath != null) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(
-                          File(message.localImagePath!),
-                          width: 200,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    if (message.text.isNotEmpty)
-                      FormattedMessageText(
-                        text: message.text,
-                        isUser: isUser,
-                        textColor: isUser ? Colors.white : Theme.of(context).colorScheme.onSurface,
-                      ),
-                    if (message.embeddedTour != null) ...[
-                      const SizedBox(height: 12),
-                      _buildEmbeddedTourCard(message.embeddedTour!),
-                    ],
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')} ${message.timestamp.hour < 12 ? 'AM' : 'PM'}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isUser ? Colors.white70 : Colors.grey.shade500,
-                          ),
-                        ),
-                        if (isUser) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.done_all, size: 12, color: Colors.white70),
-                        ]
-                      ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade600,
+                    borderRadius: BorderRadius.circular(16).copyWith(
+                      bottomRight: const Radius.circular(4),
                     ),
-                  ],
+                  ),
+                  child: _buildUserBubbleContent(message, timeStr, screenWidth * 0.76 - 28),
                 ),
               ),
             ),
-            if (isUser) const SizedBox(width: 32),
+          ],
+        ).animate().fadeIn().slideY(begin: 0.05),
+      ],
+    );
+  }
+
+  Widget _buildUserBubbleContent(ChatMessage message, String timeStr, double maxInnerWidth) {
+    const textStyle = TextStyle(
+      fontSize: 15,
+      color: Colors.white,
+      height: 1.35,
+    );
+
+    final timestampWidget = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          timeStr,
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.white70,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const SizedBox(width: 4),
+        const Icon(Icons.done_all, size: 12, color: Colors.white70),
+      ],
+    );
+
+    if (message.localImagePath != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.file(
+              File(message.localImagePath!),
+              width: 200,
+              fit: BoxFit.cover,
+            ),
+          ),
+          if (message.text.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(message.text, style: textStyle),
+          ],
+          const SizedBox(height: 4),
+          timestampWidget,
+        ],
+      );
+    }
+
+    final textPainter = TextPainter(
+      text: TextSpan(text: message.text, style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxInnerWidth);
+
+    final lineMetrics = textPainter.computeLineMetrics();
+    const timeApproxWidth = 64.0;
+    const spacing = 8.0;
+
+    final isSingleLineFits = lineMetrics.length == 1 &&
+        (lineMetrics.first.width + spacing + timeApproxWidth <= maxInnerWidth);
+
+    if (isSingleLineFits) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Text(message.text, style: textStyle),
+          ),
+          const SizedBox(width: spacing),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 1.0),
+            child: timestampWidget,
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(message.text, style: textStyle),
+        const SizedBox(height: 4),
+        timestampWidget,
+      ],
+    );
+  }
+
+  Widget _buildAiMessageBubble(ChatMessage message, double screenWidth) {
+    final timeStr = _formatTime(message.timestamp);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flexible(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: screenWidth * 0.85,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(16).copyWith(
+                      bottomLeft: const Radius.circular(4),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                            ),
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/images/tour_planner_ai.png',
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => const Icon(
+                                  Icons.smart_toy_rounded,
+                                  color: Colors.blue,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Tour Planner AI',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (message.text.isNotEmpty)
+                        FormattedMessageText(
+                          text: message.text,
+                          isUser: false,
+                          textColor: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      if (message.embeddedTour != null) ...[
+                        const SizedBox(height: 12),
+                        _buildEmbeddedTourCard(message.embeddedTour!),
+                      ],
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.bottomRight,
+                        child: Text(
+                          timeStr,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ],
         ).animate().fadeIn().slideY(begin: 0.05),
       ],
@@ -1006,7 +1193,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
   Widget _buildTypingIndicator() {
     return Padding(
-      padding: const EdgeInsets.only(left: 40, top: 8),
+      padding: const EdgeInsets.only(left: 4, top: 8),
       child: Row(
         children: [
           SizedBox(
