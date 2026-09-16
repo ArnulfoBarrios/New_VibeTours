@@ -14,6 +14,7 @@ import 'package:geolocator/geolocator.dart';
 
 
 import '../../core/design/openfree_route_map.dart';
+import '../../core/utils/transport_utils.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
@@ -384,7 +385,13 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     if (durationDays != null && durationDays.toString().isNotEmpty) items.add({'icon': Icons.timer_rounded, 'label': '$durationDays día(s)', 'color': Colors.amber.shade800});
     if (companions != null && companions.toString().isNotEmpty) items.add({'icon': Icons.people_rounded, 'label': '$companions', 'color': Colors.teal});
     if (budget != null && budget.toString().isNotEmpty) items.add({'icon': Icons.account_balance_wallet_rounded, 'label': 'Presupuesto: $budget', 'color': Colors.green});
-    if (transport != null && transport.toString().isNotEmpty) items.add({'icon': Icons.directions_car_rounded, 'label': '$transport', 'color': Colors.indigo});
+    if (transport != null && transport.toString().isNotEmpty) {
+      items.add({
+        'icon': transportIconFor(transport),
+        'label': '$transport',
+        'color': Colors.indigo,
+      });
+    }
     if (accommodation != null && accommodation.toString().isNotEmpty) items.add({'icon': Icons.hotel_rounded, 'label': '$accommodation', 'color': Colors.deepOrange});
     if (specificPlaces.isNotEmpty) items.add({'icon': Icons.star_rounded, 'label': 'Paradas: $specificPlaces', 'color': Colors.pink});
 

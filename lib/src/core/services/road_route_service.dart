@@ -9,6 +9,8 @@ import '../../domain/models.dart';
 
 enum TrafficSeverity { unavailable, clear, moderate, heavy, severe }
 
+enum RouteTravelMode { driving, walking, cycling, publicTransport, taxi }
+
 class RoutePortWaypoint {
   const RoutePortWaypoint({
     required this.name,
@@ -38,6 +40,7 @@ class RoadRouteResult {
     this.travelTimeSeconds,
     this.trafficDelaySeconds,
     this.trafficSeverity = TrafficSeverity.unavailable,
+    this.travelMode = RouteTravelMode.driving,
   });
 
   final List<GeoPoint> geometry;
@@ -55,6 +58,7 @@ class RoadRouteResult {
   final int? travelTimeSeconds;
   final int? trafficDelaySeconds;
   final TrafficSeverity trafficSeverity;
+  final RouteTravelMode travelMode;
 }
 
 class RoadRouteService {
@@ -77,6 +81,7 @@ class RoadRouteService {
   final String _tomTomRoutingBaseUrl;
 
   static final Map<String, Future<RoadRouteResult>> _routeCache = {};
+  static final Map<String, Future<RoadRouteResult>> _inFlightRoutes = {};
   static final Map<String, Future<List<RoutePortWaypoint>>> _portCache = {};
 
   bool get hasLiveTrafficProvider => _tomTomApiKey.trim().isNotEmpty;
@@ -86,38 +91,55 @@ class RoadRouteService {
     bool preferLiveTraffic = false,
     bool forceRefresh = false,
     double? originHeading,
+    RouteTravelMode travelMode = RouteTravelMode.driving,
   }) {
     if (points.length < 2) {
       return Future.value(RoadRouteResult(geometry: points));
     }
     final key = [
       preferLiveTraffic && hasLiveTrafficProvider ? 'traffic' : 'road',
+      travelMode.name,
       points.map(_pointKey).join('|'),
       if (originHeading != null) 'h_${originHeading.round()}',
       if (preferLiveTraffic && hasLiveTrafficProvider)
         DateTime.now().millisecondsSinceEpoch ~/ Duration.millisecondsPerMinute,
     ].join('|');
-    if (forceRefresh) {
-      return _resolveRoute(
-        points,
-        preferLiveTraffic: preferLiveTraffic && hasLiveTrafficProvider,
-        originHeading: originHeading,
-      );
-    }
-    return _routeCache.putIfAbsent(
-      key,
-      () => _resolveRoute(
-        points,
-        preferLiveTraffic: preferLiveTraffic && hasLiveTrafficProvider,
-        originHeading: originHeading,
-      ),
+    final inFlight = _inFlightRoutes[key];
+    if (inFlight != null) return inFlight;
+
+    final cached = _routeCache[key];
+    if (!forceRefresh && cached != null) return cached;
+
+    final future = _resolveRoute(
+      points,
+      preferLiveTraffic: preferLiveTraffic && hasLiveTrafficProvider,
+      originHeading: originHeading,
+      travelMode: travelMode,
     );
+    _inFlightRoutes[key] = future;
+    if (!forceRefresh) _routeCache[key] = future;
+
+    return _removeInFlightWhenComplete(key, future);
+  }
+
+  Future<RoadRouteResult> _removeInFlightWhenComplete(
+    String key,
+    Future<RoadRouteResult> future,
+  ) async {
+    try {
+      return await future;
+    } finally {
+      if (identical(_inFlightRoutes[key], future)) {
+        _inFlightRoutes.remove(key);
+      }
+    }
   }
 
   Future<RoadRouteResult> _resolveRoute(
     List<GeoPoint> points, {
     required bool preferLiveTraffic,
     double? originHeading,
+    required RouteTravelMode travelMode,
   }) async {
     final geometry = <GeoPoint>[];
     final maritimeSegments = <List<GeoPoint>>[];
@@ -157,10 +179,22 @@ class RoadRouteService {
       }
 
       _DrivingRoute? roadRoute;
-      if (preferLiveTraffic) {
-        roadRoute = await _fetchTomTomTrafficRoute(start, end, originHeading: legHeading);
+      if (preferLiveTraffic &&
+          (travelMode == RouteTravelMode.driving ||
+              travelMode == RouteTravelMode.taxi)) {
+        roadRoute = await _fetchTomTomTrafficRoute(
+          start,
+          end,
+          originHeading: legHeading,
+          travelMode: travelMode,
+        );
       }
-      roadRoute ??= await _fetchDrivingRoute(start, end, originHeading: legHeading);
+      roadRoute ??= await _fetchDrivingRoute(
+        start,
+        end,
+        originHeading: legHeading,
+        travelMode: travelMode,
+      );
 
       final requiresPortTransfer =
           roadRoute == null ||
@@ -249,6 +283,7 @@ class RoadRouteService {
       trafficSeverity: usesLiveTraffic
           ? _trafficSeverity(totalTrafficDelaySeconds, totalTravelTimeSeconds)
           : TrafficSeverity.unavailable,
+      travelMode: travelMode,
     );
   }
 
@@ -477,10 +512,17 @@ out center tags 10;
     GeoPoint start,
     GeoPoint end, {
     double? originHeading,
+    RouteTravelMode travelMode = RouteTravelMode.driving,
   }) async {
-    final baseUrls = [
-      _osrmBaseUrl,
-      'https://routing.openstreetmap.de/routed-car',
+    final profile = switch (travelMode) {
+      RouteTravelMode.walking => 'foot',
+      RouteTravelMode.cycling => 'bike',
+      _ => 'car',
+    };
+    final baseUrls = <String>[
+      if (profile == 'car') _osrmBaseUrl,
+      'https://routing.openstreetmap.de/routed-$profile',
+      if (profile != 'car') 'https://routing.openstreetmap.de/routed-car',
     ];
 
     final hasHeading = originHeading != null && originHeading >= 0;
@@ -533,6 +575,7 @@ out center tags 10;
     GeoPoint start,
     GeoPoint end, {
     double? originHeading,
+    RouteTravelMode travelMode = RouteTravelMode.driving,
   }) async {
     final key = _tomTomApiKey.trim();
     if (key.isEmpty) return null;
@@ -549,7 +592,7 @@ out center tags 10;
             'key': key,
             'traffic': 'true',
             'routeType': 'fastest',
-            'travelMode': 'car',
+            'travelMode': travelMode == RouteTravelMode.taxi ? 'taxi' : 'car',
             'maxAlternatives': '2',
             if (isIntraUrban) 'avoid': 'unpavedRoads',
             'computeTravelTimeFor': 'all',

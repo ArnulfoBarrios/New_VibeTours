@@ -306,21 +306,21 @@ class _HeaderSection extends StatelessWidget {
         bottom: 12,
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${l10n.goodMorning}, $userName',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+          Expanded(
+            child: Text(
+              '${l10n.goodMorning}, $userName',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
-            ],
+            ),
           ),
+          const SizedBox(width: 12),
           // Weather badge
           weatherAsync.when(
             data: (weather) {

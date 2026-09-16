@@ -113,6 +113,7 @@ class VoiceGuideService {
   final SpeechToText _speech = SpeechToText();
   double _currentMultiplier = 1.0;
   String _selectedOpenAiVoice = 'nova';
+  int _speechGeneration = 0;
 
   // In-memory cache for synthesized speech MP3 bytes
   static final Map<String, Uint8List> _speechMemoryCache = {};
@@ -486,14 +487,20 @@ class VoiceGuideService {
     final value = text.trim();
     if (value.isEmpty) return;
 
-    await stop();
+    final generation = ++_speechGeneration;
+    await _stopPlayback();
 
     // 1. Intentar reproducir con voz hiperrealista (ElevenLabs / OpenAI TTS)
     try {
       final audioBytes = await _fetchSpeechAudio(value, voice: voice, model: 'tts-1');
+      if (generation != _speechGeneration) return;
       if (audioBytes != null && audioBytes.isNotEmpty) {
         await _audioPlayer.setPlaybackRate(_currentMultiplier);
         await _audioPlayer.play(BytesSource(audioBytes));
+        if (generation != _speechGeneration) {
+          await _audioPlayer.stop();
+          return;
+        }
         debugPrint('[VoiceGuide] Reproduciendo narración con voz humana de alta fidelidad');
         return;
       }
@@ -503,7 +510,9 @@ class VoiceGuideService {
 
     // 2. Fallback offline: motor nativo del dispositivo con FlutterTts optimizado
     try {
+      if (generation != _speechGeneration) return;
       await setLanguage(lang);
+      if (generation != _speechGeneration) return;
       await _tts.speak(value);
       debugPrint('[VoiceGuide] Reproduciendo narración con TTS nativo optimizado (fallback offline)');
     } catch (e) {
@@ -512,6 +521,11 @@ class VoiceGuideService {
   }
 
   Future<void> stop() async {
+    _speechGeneration++;
+    await _stopPlayback();
+  }
+
+  Future<void> _stopPlayback() async {
     try {
       await _audioPlayer.stop();
     } catch (e) {
@@ -521,6 +535,11 @@ class VoiceGuideService {
       await _tts.stop();
     } catch (e) {
       debugPrint('[VoiceGuide] Error al detener TTS: $e');
+    }
+    try {
+      await _speech.stop();
+    } catch (e) {
+      debugPrint('[VoiceGuide] Error al detener reconocimiento de voz: $e');
     }
   }
 

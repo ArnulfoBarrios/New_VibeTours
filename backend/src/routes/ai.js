@@ -6474,6 +6474,7 @@ ACCIONES DISPONIBLES (actionType):
    - Tu responseText DEBE confirmar: "Entendido, he actualizado tu hotel a [nombre]."
 6. "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre la parada actual.
 7. "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro punto del recorrido.
+   - Extrae en "destinationAddress" el nombre concreto del nuevo destino o lugar solicitado.
 8. null: consulta informativa general (clima, tips, etc.).
 
 RESPUESTA (responseText): En español colombiano/latinoamericano, natural, cálido, conciso (máximo 2 oraciones).
@@ -6619,7 +6620,39 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
       }
     }
 
-    // 3. Manejo de RETURN_TO_ACCOMMODATION / REQUEST_ACCOMMODATION_LOCATION / SET_ACCOMMODATION
+    // 3. Manejo de CHANGE_DESTINATION. The client needs a real coordinate,
+    // not only a spoken confirmation, so resolve the requested place before
+    // returning the structured action.
+    if (aiResult.isRelatedToTravel && aiResult.actionType === 'CHANGE_DESTINATION') {
+      const requestedDestination = String(aiResult.destinationAddress || '').trim() ||
+        userQuery
+          .replace(/^\s*(?:quiero|prefiero|mejor|cambia(?:r)?|ll[eé]vame|llevame|vamos|ir)\s+/i, '')
+          .replace(/^\s*(?:el\s+)?(?:destino|parada|ruta)\s*(?:a|hacia|por)?\s*/i, '')
+          .replace(/^\s*(?:a|hacia)\s+/i, '')
+          .trim()
+
+      if (!requestedDestination) {
+        aiResult.actionType = null
+        aiResult.responseText = '¿A qué lugar quieres cambiar el destino?'
+      } else {
+        const query = `${requestedDestination}, ${tourContext?.city || ''} ${tourContext?.country || ''}`.trim()
+        const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
+        if (geo?.latitude != null && geo?.longitude != null) {
+          targetDestination = {
+            name: geo.name || requestedDestination,
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            address: requestedDestination,
+            type: 'attraction'
+          }
+        } else {
+          aiResult.actionType = null
+          aiResult.responseText = `No pude ubicar "${requestedDestination}". ¿Puedes decirme el nombre o la dirección con más detalle?`
+        }
+      }
+    }
+
+    // 4. Manejo de RETURN_TO_ACCOMMODATION / REQUEST_ACCOMMODATION_LOCATION / SET_ACCOMMODATION
     if (aiResult.isRelatedToTravel && (aiResult.actionType === 'RETURN_TO_ACCOMMODATION' || aiResult.actionType === 'REQUEST_ACCOMMODATION_LOCATION' || aiResult.actionType === 'SET_ACCOMMODATION')) {
       if (aiResult.actionType === 'SET_ACCOMMODATION') {
         const hotelNameOrAddr = (aiResult.destinationAddress || '').trim() ||

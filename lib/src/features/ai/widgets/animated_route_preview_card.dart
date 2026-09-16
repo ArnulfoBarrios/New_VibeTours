@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -38,6 +39,9 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
   late final AnimationController _mainController;
   late final AnimationController _pulseController;
   bool _showRealMap = false;
+  bool _routeReady = false;
+  RoadRouteResult? _resolvedRoute;
+  int _routeRequestId = 0;
   int _mapAnimKey = 0;
 
   @override
@@ -55,23 +59,44 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
     )..repeat();
 
     _mainController.addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
+      if (status == AnimationStatus.completed && mounted && _routeReady) {
         setState(() {
           _showRealMap = true;
         });
       }
     });
 
-    _preWarmRoadRoute();
+    unawaited(_preWarmRoadRoute());
     _mainController.forward();
   }
 
-  void _preWarmRoadRoute() {
-    if (widget.stops.length >= 2) {
-      final points = widget.stops
-          .map((r) => GeoPoint(latitude: r.latitude, longitude: r.longitude))
-          .toList();
-      RoadRouteService().resolveRoute(points);
+  Future<void> _preWarmRoadRoute() async {
+    final requestId = ++_routeRequestId;
+    _routeReady = false;
+    _resolvedRoute = null;
+    if (widget.stops.length < 2) {
+      _routeReady = true;
+      if (mounted && _mainController.isCompleted) {
+        setState(() => _showRealMap = true);
+      }
+      return;
+    }
+
+    final points = widget.stops
+        .map((r) => GeoPoint(latitude: r.latitude, longitude: r.longitude))
+        .toList();
+    try {
+      final route = await RoadRouteService().resolveRoute(points);
+      if (!mounted || requestId != _routeRequestId) return;
+      _resolvedRoute = route;
+    } catch (_) {
+      if (!mounted || requestId != _routeRequestId) return;
+      _resolvedRoute = const RoadRouteResult(geometry: []);
+    }
+
+    _routeReady = true;
+    if (mounted && _mainController.isCompleted) {
+      setState(() => _showRealMap = true);
     }
   }
 
@@ -81,7 +106,7 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
     if (oldWidget.stops != widget.stops && widget.stops.isNotEmpty) {
       _showRealMap = false;
       _mapAnimKey++;
-      _preWarmRoadRoute();
+      unawaited(_preWarmRoadRoute());
       _mainController.reset();
       _mainController.forward();
     }
@@ -99,7 +124,7 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
       _showRealMap = false;
       _mapAnimKey++;
     });
-    _preWarmRoadRoute();
+    unawaited(_preWarmRoadRoute());
     _mainController.reset();
     _mainController.forward();
   }
@@ -387,7 +412,8 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
         borderRadius: 0,
         fitPadding: const EdgeInsets.symmetric(horizontal: 36, vertical: 32),
         showNumbers: true,
-        useRoadRouting: true,
+        useRoadRouting: _resolvedRoute == null,
+        routeOverride: _resolvedRoute,
       ),
     );
   }

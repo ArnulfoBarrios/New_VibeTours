@@ -85,6 +85,10 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   bool _isUpdatingPuck = false;
   bool _userIsExploringMap = false;
   int _overviewRequestId = 0;
+  int _liveRouteRenderRequestId = 0;
+  bool _liveRouteRenderRunning = false;
+  LatLng? _pendingTrimmedRoutePosition;
+  bool _isFlushingTrimmedRoute = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -593,18 +597,47 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     _updateTrimmedWalkingSegments(currentPos);
 
     if (_routeLine != null) {
-      final trimmed = _getZeroGapTrimmedGeometry(currentPos);
-      if (trimmed.length >= 2) {
+      _queueTrimmedRouteLineUpdate(currentPos);
+    }
+  }
+
+  void _queueTrimmedRouteLineUpdate(LatLng currentPos) {
+    _pendingTrimmedRoutePosition = currentPos;
+    if (_isFlushingTrimmedRoute) return;
+    _isFlushingTrimmedRoute = true;
+    unawaited(_flushTrimmedRouteUpdates());
+  }
+
+  Future<void> _flushTrimmedRouteUpdates() async {
+    try {
+      while (mounted && _pendingTrimmedRoutePosition != null) {
+        final currentPos = _pendingTrimmedRoutePosition!;
+        _pendingTrimmedRoutePosition = null;
+        final controller = _controller;
+        final line = _routeLine;
+        final renderRequestId = _liveRouteRenderRequestId;
+        if (controller == null || line == null || !_styleLoaded) continue;
+
+        final trimmed = _getZeroGapTrimmedGeometry(currentPos);
+        if (trimmed.length < 2 ||
+            renderRequestId != _liveRouteRenderRequestId ||
+            !identical(line, _routeLine)) {
+          continue;
+        }
+
         try {
-          controller.updateLine(
-            _routeLine!,
-            LineOptions(
-              geometry: trimmed,
-            ),
+          await controller.updateLine(
+            line,
+            LineOptions(geometry: trimmed),
           );
         } catch (e) {
           debugPrint('Error updating live navigation line: $e');
         }
+      }
+    } finally {
+      _isFlushingTrimmedRoute = false;
+      if (mounted && _pendingTrimmedRoutePosition != null) {
+        _queueTrimmedRouteLineUpdate(_pendingTrimmedRoutePosition!);
       }
     }
   }
@@ -742,7 +775,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     }
 
     if (routeChanged) {
-      _renderLiveRoute();
+      _requestLiveRouteRender();
     }
 
     if (locationChanged && widget.currentLocation != null) {
@@ -776,9 +809,36 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     super.dispose();
   }
 
-  Future<void> _renderLiveRoute() async {
+  void _requestLiveRouteRender() {
+    _liveRouteRenderRequestId++;
+    if (_liveRouteRenderRunning) return;
+    _liveRouteRenderRunning = true;
+    unawaited(_drainLiveRouteRenders());
+  }
+
+  Future<void> _drainLiveRouteRenders() async {
+    var processedRequestId = _liveRouteRenderRequestId;
+    try {
+      while (mounted) {
+        processedRequestId = _liveRouteRenderRequestId;
+        await _renderLiveRoute(processedRequestId);
+        if (processedRequestId == _liveRouteRenderRequestId) break;
+      }
+    } finally {
+      _liveRouteRenderRunning = false;
+      if (mounted && processedRequestId != _liveRouteRenderRequestId) {
+        _requestLiveRouteRender();
+      }
+    }
+  }
+
+  bool _isCurrentLiveRouteRender(int requestId) {
+    return mounted && requestId == _liveRouteRenderRequestId;
+  }
+
+  Future<void> _renderLiveRoute(int requestId) async {
     final controller = _controller;
-    if (controller == null || !_styleLoaded) return;
+    if (controller == null || !_styleLoaded || !_isCurrentLiveRouteRender(requestId)) return;
 
     final routeGeom = widget.route?.geometry ?? [];
     final currentLocation = widget.currentLocation;
@@ -808,6 +868,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         await controller.clearCircles();
         await controller.clearSymbols();
       } catch (_) {}
+      if (!_isCurrentLiveRouteRender(requestId)) return;
       _userPuckCircle = null;
       _userPuckHalo = null;
       _destinationCircle = null;
@@ -819,6 +880,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       _displayedBearing ??= widget.trackingHeading;
       _queueUserPuckUpdate(_displayedPosition!);
     }
+
+    if (!_isCurrentLiveRouteRender(requestId)) return;
 
     final visualPosition = _displayedPosition ?? currentPos;
     // Always trim the route line ahead of the user position in all camera modes
@@ -835,7 +898,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     // Draw Destination POI marker
     if (_destinationCircle == null) {
       try {
-        _destinationCircle = await controller.addCircle(
+        final destinationCircle = await controller.addCircle(
           CircleOptions(
             geometry: destPos,
             circleRadius: 12,
@@ -845,6 +908,11 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
             circleStrokeWidth: 3,
           ),
         );
+        if (!_isCurrentLiveRouteRender(requestId)) {
+          await controller.removeCircle(destinationCircle);
+          return;
+        }
+        _destinationCircle = destinationCircle;
         await controller.addSymbol(
           SymbolOptions(
             geometry: destPos,
@@ -858,10 +926,12 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       } catch (_) {}
     }
 
+    if (!_isCurrentLiveRouteRender(requestId)) return;
+
     if (lineGeometry.length >= 2) {
       try {
         if (_routeLine == null) {
-          _routeLine = await controller.addLine(
+          final newLine = await controller.addLine(
             LineOptions(
               geometry: lineGeometry,
               lineColor: '#007AFF',
@@ -870,11 +940,23 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
               lineJoin: 'round',
             ),
           );
+          if (!_isCurrentLiveRouteRender(requestId)) {
+            await controller.removeLine(newLine);
+            return;
+          }
+          _routeLine = newLine;
         } else {
           try {
+            final line = _routeLine!;
             await controller.updateLine(_routeLine!, LineOptions(geometry: lineGeometry));
+            if (!_isCurrentLiveRouteRender(requestId) || !identical(line, _routeLine)) return;
           } catch (_) {
-            _routeLine = await controller.addLine(
+            final oldLine = _routeLine;
+            try {
+              if (oldLine != null) await controller.removeLine(oldLine);
+            } catch (_) {}
+            if (identical(oldLine, _routeLine)) _routeLine = null;
+            final newLine = await controller.addLine(
               LineOptions(
                 geometry: lineGeometry,
                 lineColor: '#007AFF',
@@ -883,24 +965,34 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                 lineJoin: 'round',
               ),
             );
+            if (!_isCurrentLiveRouteRender(requestId)) {
+              await controller.removeLine(newLine);
+              return;
+            }
+            _routeLine = newLine;
           }
         }
       } catch (_) {}
     } else if (_routeLine != null) {
+      final oldLine = _routeLine;
       try {
-        await controller.removeLine(_routeLine!);
+        await controller.removeLine(oldLine!);
       } catch (_) {}
-      _routeLine = null;
+      if (_isCurrentLiveRouteRender(requestId) && identical(oldLine, _routeLine)) {
+        _routeLine = null;
+      }
     }
 
     // Clear previous walking annotations before drawing new ones
     await _clearWalkingAnnotations();
+    if (!_isCurrentLiveRouteRender(requestId)) return;
 
     // Draw walking / hiking trail approach segments in live navigation
     final walkingSegments = widget.route?.usesMaritimeTransfer == true
         ? const <List<GeoPoint>>[]
         : widget.route?.walkingSegments ?? const <List<GeoPoint>>[];
     for (final walkingSegment in walkingSegments) {
+      if (!_isCurrentLiveRouteRender(requestId)) return;
       final segmentPoints = [
         for (final point in walkingSegment)
           LatLng(point.latitude, point.longitude),
@@ -950,7 +1042,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
-    _updateCameraPosition();
+    if (_isCurrentLiveRouteRender(requestId)) {
+      _updateCameraPosition();
+    }
   }
 
   @override
@@ -1010,7 +1104,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                     _hasMapError = false;
                   });
                 }
-                _renderLiveRoute();
+                _requestLiveRouteRender();
                 _updateCameraPosition();
               },
             ),

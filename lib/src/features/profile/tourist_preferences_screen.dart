@@ -141,12 +141,17 @@ class _TouristPreferencesScreenState extends ConsumerState<TouristPreferencesScr
       if (_transportPreference.isNotEmpty) answeredDetails.add('moviéndome ${_tx(_transportPreference).toLowerCase()}');
       if (_interests.isNotEmpty) answeredDetails.add('me interesan: ${_interests.map((i) => _tx(i.translationKey)).join(', ')}');
 
-      final prompt = answeredDetails.isNotEmpty
-          ? 'Hola, deseo diseñar un tour personalizado. Ten en cuenta que ${answeredDetails.join(", ")}.'
-          : '¡Hola! Deseo diseñar un tour turístico personalizado según mis recomendaciones.';
-
-      ref.read(aiPromptProvider.notifier).state = prompt;
-      ref.read(aiPromptAutoStartProvider.notifier).state = true;
+      if (answeredDetails.isNotEmpty) {
+        final prompt =
+            'Hola, deseo diseñar un tour personalizado. Ten en cuenta que ${answeredDetails.join(", ")}.';
+        ref.read(aiPromptProvider.notifier).state = prompt;
+        ref.read(aiPromptAutoStartProvider.notifier).state = true;
+      } else {
+        // Skipping every step must open the creator without fabricating a
+        // user message or triggering an automatic AI request.
+        ref.read(aiPromptProvider.notifier).state = null;
+        ref.read(aiPromptAutoStartProvider.notifier).state = false;
+      }
       
       if (mounted) {
         context.go('/creator');

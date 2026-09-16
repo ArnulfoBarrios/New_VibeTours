@@ -15,6 +15,7 @@ import '../../core/design/app_theme.dart';
 import '../../core/design/live_navigation_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/services/road_route_service.dart';
+import '../../core/utils/transport_utils.dart';
 import '../../core/tour/tour_builder.dart';
 import '../../core/tour/tour_controller.dart';
 import '../../core/tour/tour_phase.dart';
@@ -122,6 +123,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   int _activeStop = 0;
   bool _isRouting = false;
   bool _isOffRoute = false;
+  DateTime? _offRouteSince;
+  int _routeRequestToken = 0;
   bool _locationStreamRequested = false;
   bool _noLandRouteAvailable = false;
   // Live navigation opens in route overview mode by default, transitioning to close tracking once movement begins.
@@ -831,8 +834,25 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           _promptForAccommodation(tour);
         }
 
-      // DESCRIBE_CURRENT_POI and CHANGE_DESTINATION are handled
-      // by the spoken response alone — no extra UI action needed.
+      case 'CHANGE_DESTINATION':
+        final newDestination = response.targetDestination;
+        if (tour != null && newDestination != null) {
+          setState(() {
+            _selectedVoicePlace = newDestination;
+            _voiceFoodPlaces = [];
+            _navigatingToHotel = false;
+            _isAtStopMode = false;
+            _isOffRoute = false;
+            _liveRoute = null;
+            _liveRouteStopIndex = null;
+          });
+          // The navigation scheduler will also retry if a previous route
+          // request is still in flight; this call handles the normal case
+          // immediately.
+          await _recalculateRoute(tour, force: true);
+        }
+
+      // DESCRIBE_CURRENT_POI is intentionally handled by the spoken answer.
       default:
         break;
     }
@@ -844,6 +864,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   void dispose() {
     unawaited(WakelockPlus.disable());
     _positionSubscription?.cancel();
+    unawaited(ref.read(voiceGuideProvider).stop());
+    ref.read(liveTourPlaybackProvider.notifier).stopTour();
     _micPulseController.dispose();
     super.dispose();
   }
@@ -1540,26 +1562,39 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
     final distanceToRoute = _distanceToRouteMeters(point, route.geometry);
     final now = DateTime.now();
+    final routeSupportsLiveTraffic =
+        route.travelMode == RouteTravelMode.driving ||
+        route.travelMode == RouteTravelMode.taxi;
     final refreshTraffic =
+        routeSupportsLiveTraffic &&
         _routeService.hasLiveTrafficProvider &&
         now.difference(
               _lastTrafficRefreshAt ?? DateTime.fromMillisecondsSinceEpoch(0),
             ) >
             const Duration(minutes: 2);
-    // Real deviation threshold: 65m to accommodate wide multi-lane boulevards and service roads
+    // Require a sustained deviation. A single noisy GPS fix must not trigger
+    // a new traffic request or replace the route on screen.
     final deviated = distanceToRoute > 65;
-    if (deviated || refreshTraffic) {
-      if (_canReroute(now, isOffRoute: deviated)) {
+    if (deviated) {
+      _offRouteSince ??= now;
+    } else {
+      _offRouteSince = null;
+    }
+    final sustainedDeviation = _offRouteSince != null &&
+        now.difference(_offRouteSince!) >= const Duration(seconds: 8);
+
+    if (sustainedDeviation || refreshTraffic) {
+      if (_canReroute(now, isOffRoute: sustainedDeviation)) {
         if (deviated) {
           setState(() {
-            _isOffRoute = true;
+            _isOffRoute = sustainedDeviation;
           });
         }
         unawaited(
           _recalculateRoute(
             tour,
-            force: refreshTraffic || deviated,
-            markOffRoute: deviated,
+            force: refreshTraffic || sustainedDeviation,
+            markOffRoute: sustainedDeviation,
           ),
         );
       }
@@ -1571,7 +1606,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     bool force = false,
     bool markOffRoute = false,
   }) async {
-    if (_isRouting && !force) return;
+    // `force` means bypass the completed-route cache; it must never allow
+    // overlapping network requests. Older code used it to bypass this guard,
+    // which made GPS updates race and caused the traffic label to blink.
+    if (_isRouting) return;
     var origin = _currentPoint;
     if (origin == null) {
       final position = await ref
@@ -1607,13 +1645,34 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       _isRouting = true;
       _isOffRoute = markOffRoute;
     });
-    final route = await _routeService.resolveRoute(
-      [origin, destination],
-      preferLiveTraffic: true,
-      forceRefresh: true,
-      originHeading: _currentHeading,
-    );
-    if (!mounted) return;
+    final requestToken = ++_routeRequestToken;
+    final profileTransport = ref.read(touristProfileProvider).valueOrNull?.transportPreference;
+    final travelMode = routeTravelModeFor(profileTransport);
+    late final RoadRouteResult route;
+    try {
+      route = await _routeService.resolveRoute(
+        [origin, destination],
+        preferLiveTraffic: travelMode == RouteTravelMode.driving ||
+            travelMode == RouteTravelMode.taxi,
+        forceRefresh: force,
+        originHeading: _currentHeading,
+        travelMode: travelMode,
+      );
+    } catch (error) {
+      debugPrint('[live-route] Error calculando ruta: $error');
+      if (mounted && requestToken == _routeRequestToken) {
+        setState(() {
+          _isRouting = false;
+          _noLandRouteAvailable = true;
+        });
+      }
+      return;
+    }
+    if (!mounted || requestToken != _routeRequestToken) return;
+    if (!_isCurrentRouteContext(stopIndex, destination)) {
+      setState(() => _isRouting = false);
+      return;
+    }
     
     // Validate non-zero coordinates and distance bounds before navigation
     final isZeroOrigin = origin.latitude == 0 && origin.longitude == 0;
@@ -1666,8 +1725,36 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     if (_isRouting) return false;
     final last = _lastRerouteAt;
     if (last == null) return true;
-    final minInterval = isOffRoute ? const Duration(seconds: 2) : const Duration(seconds: 12);
+    final minInterval = isOffRoute
+        ? const Duration(seconds: 15)
+        : const Duration(seconds: 30);
     return now.difference(last) > minInterval;
+  }
+
+  bool _isCurrentRouteContext(int stopIndex, GeoPoint destination) {
+    final currentStopIndex = _selectedVoicePlace != null
+        ? -2
+        : _navigatingToHotel
+            ? -1
+            : _activeStop;
+    if (currentStopIndex != stopIndex) return false;
+
+    final currentTour = _navigationTour;
+    final currentDestination = _selectedVoicePlace != null
+        ? _selectedVoicePlace!.toGeoPoint()
+        : _navigatingToHotel
+            ? (currentTour == null ? null : _findHotelStop(currentTour)?.location)
+            : (currentTour != null && _activeStop < currentTour.stops.length)
+                ? currentTour.stops[_activeStop].location
+                : null;
+    if (currentDestination == null) return false;
+    return Geolocator.distanceBetween(
+          destination.latitude,
+          destination.longitude,
+          currentDestination.latitude,
+          currentDestination.longitude,
+        ) <=
+        2;
   }
 
   GeoPoint _pointFromPosition(Position position) {
@@ -1698,8 +1785,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     // Calculate realistic walking time for the active leg based on remaining meters
     final legMeters = _remainingRouteDistanceMeters(route) ?? route?.distanceMeters ?? 0;
     if (legMeters > 0) {
-      // Estimated walking speed: 4.2 km/h (1.16 m/s)
-      final estimatedMins = (legMeters / 1000.0 / 4.2 * 60).round().clamp(1, 90);
+      final speedKmh = switch (route?.travelMode ?? RouteTravelMode.driving) {
+        RouteTravelMode.walking => 4.2,
+        RouteTravelMode.cycling => 15.0,
+        RouteTravelMode.publicTransport => 22.0,
+        RouteTravelMode.taxi => 28.0,
+        RouteTravelMode.driving => 35.0,
+      };
+      final estimatedMins = (legMeters / 1000.0 / speedKmh * 60).round().clamp(1, 180);
       return '$estimatedMins min';
     }
     final activeStopMins = tour.stops.isNotEmpty && _activeStop < tour.stops.length
@@ -1709,9 +1802,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   String _trafficLabel(RoadRouteResult? route) {
-    // Route and traffic requests are asynchronous. Keep the previous route on
-    // screen while they refresh instead of suggesting that navigation stopped.
-    if (_isRouting) return 'Actualizando trafico';
+    // Keep the last confirmed traffic state visible while a refresh is in
+    // flight. Replacing it with "Actualizando" on every GPS refresh made the
+    // navigation panel visibly blink.
     if (!_routeService.hasLiveTrafficProvider) return 'Sin trafico en vivo';
     if (route == null || !route.usesLiveTraffic) return 'Trafico pendiente';
     final delayMinutes = ((route.trafficDelaySeconds ?? 0) / 60).round();
@@ -2129,7 +2222,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         // Row 1 Subtitle: Integrated Telemetry Strip
         Row(
           children: [
-            Icon(Icons.directions_walk_rounded, size: 14, color: AppTheme.primary),
+            Icon(
+              transportIconFor(
+                ref.read(touristProfileProvider).valueOrNull?.transportPreference,
+              ),
+              size: 14,
+              color: AppTheme.primary,
+            ),
             const SizedBox(width: 3),
             Text(
               _distanceLabel(tour, progress, liveRoute),
@@ -2577,6 +2676,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   Future<void> _finishTour(Tour tour) async {
+    // Stop both currently playing audio and any pending synthesis before
+    // leaving the live-tour screen. The generation guard in VoiceGuideService
+    // prevents an older request from starting playback after this point.
+    await ref.read(voiceGuideProvider).stop();
+    ref.read(liveTourPlaybackProvider.notifier).stopTour();
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('tour_progress_${widget.tourId}');
 

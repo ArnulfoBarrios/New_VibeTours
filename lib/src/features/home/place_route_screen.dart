@@ -134,7 +134,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
   }
 
   Future<void> _recalculateRoute({bool force = false}) async {
-    if (_isRouting && !force) return;
+    if (_isRouting) return;
     final place = ref.read(selectedNearbyPlaceProvider);
     if (place == null) return;
 
@@ -154,7 +154,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
       final route = await _routeService.resolveRoute(
         [origin, place.location],
         preferLiveTraffic: true,
-        forceRefresh: true,
+        forceRefresh: force,
         originHeading: _currentHeading,
       );
       if (!mounted) return;
@@ -243,7 +243,14 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
     }
     final m = route?.distanceMeters ?? 0;
     if (m > 0) {
-      final mins = (m / 1000.0 / 4.2 * 60).round().clamp(1, 120);
+      final speedKmh = switch (route?.travelMode ?? RouteTravelMode.driving) {
+        RouteTravelMode.walking => 4.2,
+        RouteTravelMode.cycling => 15.0,
+        RouteTravelMode.publicTransport => 22.0,
+        RouteTravelMode.taxi => 28.0,
+        RouteTravelMode.driving => 35.0,
+      };
+      final mins = (m / 1000.0 / speedKmh * 60).round().clamp(1, 180);
       return '$mins min';
     }
     return 'Calculando...';
