@@ -84,6 +84,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   LatLng? _pendingPuckPosition;
   bool _isUpdatingPuck = false;
   bool _userIsExploringMap = false;
+  int _overviewRequestId = 0;
 
   @override
   bool get wantKeepAlive => true;
@@ -661,32 +662,59 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
               ? LatLng(currentLocation.latitude, currentLocation.longitude)
               : null);
       final destPos = LatLng(widget.destination.latitude, widget.destination.longitude);
+      final route = widget.route;
+      final isMaritimeTransfer = route?.usesMaritimeTransfer == true;
 
       final boundsPoints = <LatLng>[
         ?currentPos,
-        destPos,
         ..._fullGeometry,
-        if (widget.additionalWaypoints != null)
-          ...widget.additionalWaypoints!.map((p) => LatLng(p.latitude, p.longitude)),
+        // A maritime destination is not the point the user can reach by road.
+        // Fit the map around the current land position and the transfer hub;
+        // the destination marker remains available without forcing the camera
+        // across the whole water segment.
+        if (!isMaritimeTransfer) destPos,
+        if (isMaritimeTransfer && route != null)
+          ...route.ports.take(1).map((port) => LatLng(
+                port.location.latitude,
+                port.location.longitude,
+              )),
       ];
 
       if (boundsPoints.isNotEmpty) {
         final bounds = _calculateBounds(boundsPoints);
+        final overviewRequestId = ++_overviewRequestId;
         unawaited(() async {
           try {
+            // Let MapLibre finish the current layout/style frame before
+            // applying bounds. This prevents the first overview calculation
+            // from being overwritten by the map's initial camera position.
+            await Future<void>.delayed(Duration.zero);
+            if (!mounted || widget.trackingMode || _userIsExploringMap ||
+                overviewRequestId != _overviewRequestId) {
+              return;
+            }
             // First, reset orientation facing North (0.0°) and 2D flat view (0.0° tilt)
             await controller.moveCamera(CameraUpdate.bearingTo(0.0));
             await controller.moveCamera(CameraUpdate.tiltTo(0.0));
-            // Then fit the entire route within the viewport with bottom/top padding
-            await controller.moveCamera(
-              CameraUpdate.newLatLngBounds(
-                bounds,
-                left: widget.fitPadding.left,
-                top: widget.fitPadding.top,
-                right: widget.fitPadding.right,
-                bottom: widget.fitPadding.bottom,
-              ),
-            );
+            // Then fit only the active route within the viewport. Additional
+            // stops from the selected day are intentionally not included:
+            // “Vista general” is the route from the current location to the
+            // active stop, not the whole itinerary.
+            if (boundsPoints.length == 1) {
+              await controller.moveCamera(
+                CameraUpdate.newLatLngZoom(boundsPoints.first, 15.0),
+              );
+            } else {
+              await controller.moveCamera(
+                CameraUpdate.newLatLngBounds(
+                  bounds,
+                  left: widget.fitPadding.left,
+                  top: widget.fitPadding.top,
+                  right: widget.fitPadding.right,
+                  bottom: widget.fitPadding.bottom,
+                ),
+              );
+            }
           } catch (_) {}
         }());
       }
@@ -794,9 +822,15 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
 
     final visualPosition = _displayedPosition ?? currentPos;
     // Always trim the route line ahead of the user position in all camera modes
-    final lineGeometry = visualPosition != null && _fullGeometry.length >= 2
-        ? _getZeroGapTrimmedGeometry(visualPosition)
-        : _fullGeometry;
+    // A maritime transfer is represented by the banner and its terminal
+    // action. Do not paint either the sea segment or a land-to-destination
+    // connector in this mode; tapping the banner starts a separate route to
+    // the terminal where a normal road line can be shown.
+    final lineGeometry = widget.route?.usesMaritimeTransfer == true
+        ? const <LatLng>[]
+        : visualPosition != null && _fullGeometry.length >= 2
+            ? _getZeroGapTrimmedGeometry(visualPosition)
+            : _fullGeometry;
 
     // Draw Destination POI marker
     if (_destinationCircle == null) {
@@ -863,7 +897,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     await _clearWalkingAnnotations();
 
     // Draw walking / hiking trail approach segments in live navigation
-    final walkingSegments = widget.route?.walkingSegments ?? const [];
+    final walkingSegments = widget.route?.usesMaritimeTransfer == true
+        ? const <List<GeoPoint>>[]
+        : widget.route?.walkingSegments ?? const <List<GeoPoint>>[];
     for (final walkingSegment in walkingSegments) {
       final segmentPoints = [
         for (final point in walkingSegment)

@@ -196,6 +196,9 @@ class RoadRouteService {
 
       final maritimeRoute = await _buildMaritimeAwareRoute(start, end);
       if (maritimeRoute != null) {
+        // Keep only the real land approach in the main geometry. The transfer
+        // between ports is intentionally kept in maritimeSegments so map
+        // renderers cannot mistake it for a road or walking route.
         _appendGeometry(geometry, maritimeRoute.geometry);
         maritimeSegments.addAll(maritimeRoute.maritimeSegments);
         ports.addAll(maritimeRoute.ports);
@@ -206,37 +209,28 @@ class RoadRouteService {
         totalTrafficDelaySeconds += maritimeRoute.trafficDelaySeconds ?? 0;
         usesLiveTraffic = usesLiveTraffic || maritimeRoute.usesLiveTraffic;
       } else if (roadRoute != null) {
-        final roadGeo = roadRoute.geometry;
-        List<GeoPoint> fullLegGeometry = [];
-        if (roadGeo.isNotEmpty) {
-          final firstPoint = roadGeo.first;
-          final lastPoint = roadGeo.last;
-          if (_distanceMeters(start, firstPoint) <= 15) {
-            fullLegGeometry.add(start);
-          }
-          _appendGeometry(fullLegGeometry, roadGeo);
-          if (_distanceMeters(lastPoint, end) <= 15) {
-            fullLegGeometry.add(end);
-          }
-        } else {
-          fullLegGeometry = [start, end];
-        }
-        _appendGeometry(geometry, fullLegGeometry.isEmpty ? [start, end] : fullLegGeometry);
+        // If the provider found a road only up to the coast, preserve that
+        // reachable road section. Never bridge the remaining gap with a
+        // straight line to a maritime destination.
+        _appendGeometry(geometry, roadRoute.geometry);
         totalDistanceMeters += roadRoute.distanceMeters;
         totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
         totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
         usesLiveTraffic = usesLiveTraffic || roadRoute.usesLiveTraffic;
       } else {
-        // Pedestrian / trail off-road access segment
-        walkingSegments.add([start, end]);
-        _appendGeometry(geometry, [start, end]);
+        // Do not infer an off-road/walking segment from two unrelated points.
+        // That fallback used to create a dotted line across water or across
+        // the whole map when routing failed.
         totalDistanceMeters += _distanceMeters(start, end);
         usedFallback = true;
       }
     }
 
     return RoadRouteResult(
-      geometry: geometry.isEmpty ? points : geometry,
+      // An empty geometry is meaningful: it tells the map that there is no
+      // verified land route to draw. Falling back to `points` would recreate
+      // the straight-line artefact we are explicitly avoiding.
+      geometry: geometry,
       maritimeSegments: maritimeSegments,
       flightSegments: flightSegments,
       walkingSegments: walkingSegments,
@@ -455,21 +449,16 @@ out center tags 10;
 
     if (startPort != null && _distanceMeters(start, seaStart) > 180) {
       final startRoad = await _fetchDrivingRoute(start, seaStart);
-      _appendGeometry(geometry, startRoad?.geometry ?? [start, seaStart]);
+      if (startRoad != null) {
+        _appendGeometry(geometry, startRoad.geometry);
+      }
     } else {
       _appendGeometry(geometry, [start]);
     }
 
-    if (_distanceMeters(seaStart, seaEnd) > 120) {
-      _appendGeometry(geometry, [seaStart, seaEnd]);
-    }
-
-    if (endPort != null && _distanceMeters(seaEnd, end) > 180) {
-      final endRoad = await _fetchDrivingRoute(seaEnd, end);
-      _appendGeometry(geometry, endRoad?.geometry ?? [seaEnd, end]);
-    } else {
-      _appendGeometry(geometry, [end]);
-    }
+    // Do not append seaStart -> seaEnd or the road after the arrival port to
+    // the single land geometry. Concatenating those disconnected sections
+    // would make MapLibre draw a false straight connector across the water.
 
     final portName = startPort?.name ?? 'el muelle de embarque';
     return RoadRouteResult(

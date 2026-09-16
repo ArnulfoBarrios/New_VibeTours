@@ -625,11 +625,13 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       return const SizedBox.shrink();
     }
 
+    final isBusy = builderState.isLoading || builderState.isBuilding;
+
     return AnimatedRoutePreviewCard(
       key: const ValueKey('ai_planner_animated_route_card_stable'),
       stops: builderState.recommendations,
       mapStyleUrl: ref.watch(mapStyleProvider),
-      isBuilding: builderState.isBuilding,
+      isBuilding: isBusy,
       onModifyStops: () {
         ref.read(aiBuilderProvider.notifier).prepareForEditing();
         context.push('/ai/builder');
@@ -816,7 +818,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     if (message.isUser) {
       return _buildUserMessageBubble(message, screenWidth);
     } else {
-      return _buildAiMessageBubble(message, screenWidth);
+      return _buildAiMessageBubble(message, screenWidth, isBusy);
     }
   }
 
@@ -939,7 +941,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     );
   }
 
-  Widget _buildAiMessageBubble(ChatMessage message, double screenWidth) {
+  Widget _buildAiMessageBubble(ChatMessage message, double screenWidth, bool isBusy) {
     final timeStr = _formatTime(message.timestamp);
 
     return Column(
@@ -1014,7 +1016,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                         ),
                       if (message.embeddedTour != null) ...[
                         const SizedBox(height: 12),
-                        _buildEmbeddedTourCard(message.embeddedTour!),
+                        _buildEmbeddedTourCard(
+                          message.embeddedTour!,
+                          hideModifyStops: isBusy,
+                        ),
                       ],
                       const SizedBox(height: 6),
                       Align(
@@ -1038,7 +1043,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     );
   }
 
-  Widget _buildEmbeddedTourCard(Tour tour) {
+  Widget _buildEmbeddedTourCard(
+    Tour tour, {
+    bool hideModifyStops = false,
+  }) {
     final points = tour.stops.map((s) => s.location).toList();
     final labels = tour.stops.map((s) => s.name).toList();
     final mapStyle = ref.watch(mapStyleProvider);
@@ -1146,25 +1154,27 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      side: BorderSide(color: Colors.blue.shade300),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                if (!hideModifyStops) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        side: BorderSide(color: Colors.blue.shade300),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: Icon(Icons.edit_location_alt_outlined, size: 16, color: Colors.blue.shade700),
+                      label: Text(
+                        'Modificar paradas',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
+                      ),
+                      onPressed: () {
+                        ref.read(aiBuilderProvider.notifier).prepareForEditing(tour);
+                        context.push('/ai/builder');
+                      },
                     ),
-                    icon: Icon(Icons.edit_location_alt_outlined, size: 16, color: Colors.blue.shade700),
-                    label: Text(
-                      'Modificar paradas',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
-                    ),
-                    onPressed: () {
-                      ref.read(aiBuilderProvider.notifier).prepareForEditing(tour);
-                      context.push('/ai/builder');
-                    },
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(

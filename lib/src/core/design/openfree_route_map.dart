@@ -810,8 +810,11 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       }
     } catch (_) {
       try {
+        // A routing failure must not fall back to a straight line between
+        // stops. The markers remain visible while the map waits for a valid
+        // road geometry, avoiding false routes over water.
         await _paintRoute(
-          RoadRouteResult(geometry: widget.points),
+          const RoadRouteResult(geometry: []),
           focusActiveStop: focusActiveStop,
           fitRoute: !_hasFitRoute,
           isIncremental: isIncremental,
@@ -941,27 +944,14 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
 
     if (animId != _currentAnimationId || !mounted) return;
 
-    for (final maritimeSegment in route.maritimeSegments) {
-      final segmentPoints = [
-        for (final point in maritimeSegment)
-          LatLng(point.latitude, point.longitude),
-      ];
-      if (segmentPoints.length > 1) {
-        try {
-          await controller.addLine(
-            LineOptions(
-              geometry: segmentPoints,
-              lineColor: '#FF9F0A',
-              lineWidth: 5,
-              lineOpacity: 0.94,
-              lineJoin: 'round',
-            ),
-          );
-        } catch (_) {}
-      }
-    }
+    // Maritime segments are informational only. They must never be painted
+    // as a line in the general map because a straight port-to-port segment
+    // looks like a road or walking route crossing the water.
 
-    // Draw walking / hiking trail approach segments with Google Maps-style dotted trail and hiking boots icon
+    // Draw walking / hiking trail approach segments with Google Maps-style
+    // dotted trail and hiking boots icon. The route service only supplies
+    // verified short approaches; it no longer fabricates [start, end]
+    // segments when a road route is unavailable.
     await _clearWalkingAnnotations();
     for (final walkingSegment in route.walkingSegments) {
       final segmentPoints = [
