@@ -2,8 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { canonicalPlaceKey, deduplicatePlacesByName } from '../routes/ai.js'
-import { collapseCanonicalDuplicateLines, deduplicateChatSpecificPlaces } from '../services/openai.js'
-import { canonicalPlaceId, resolveCanonicalPlaceIdentity } from '../services/osm.js'
+import { collapseCanonicalDuplicateLines, deduplicateChatSpecificPlaces, sanitizeChatItineraryText } from '../services/openai.js'
+import { canonicalPlaceId, hasOsmMapRecord, resolveCanonicalPlaceIdentity } from '../services/osm.js'
 
 test('Casa del Carnaval y Museo del Carnaval comparten una identidad física', () => {
   assert.equal(canonicalPlaceId('Casa del Carnaval', 'Barranquilla'), 'barranquilla-carnaval-house-museum')
@@ -45,4 +45,27 @@ test('la respuesta textual del chat no muestra Casa y Museo del Carnaval como pa
   const collapsed = collapseCanonicalDuplicateLines(itinerary, 'Barranquilla')
   assert.equal((collapsed.match(/Carnaval/gi) || []).length, 1)
   assert.match(collapsed, /La Cueva/)
+})
+
+test('el hotel elegido no se convierte en una parada textual del itinerario', () => {
+  const itinerary = [
+    'Itinerario de Viaje: Barranquilla',
+    '',
+    'Día 1: Barranquilla',
+    '• Hotel El Prado',
+    '• Gran Malecón del Río',
+    '• Restaurante Varadero',
+  ].join('\n')
+
+  const sanitized = sanitizeChatItineraryText(itinerary, 'Barranquilla', { name: 'Hotel El Prado' })
+  assert.doesNotMatch(sanitized, /• Hotel El Prado/i)
+  assert.match(sanitized, /Gran Malecón del Río/)
+  assert.match(sanitized, /Restaurante Varadero/)
+})
+
+test('solo una coordenada entregada por un proveedor OSM habilita una recomendación', () => {
+  assert.equal(hasOsmMapRecord({ latitude: 10.99, longitude: -74.79, coordinateSource: 'osm' }), true)
+  assert.equal(hasOsmMapRecord({ latitude: 10.99, longitude: -74.79, coordinateSource: 'photon' }), true)
+  assert.equal(hasOsmMapRecord({ latitude: 10.99, longitude: -74.79, coordinateSource: 'curated' }), false)
+  assert.equal(hasOsmMapRecord({ latitude: 10.99, longitude: -74.79 }), false)
 })

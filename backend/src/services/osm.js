@@ -15,6 +15,7 @@ const citiesCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 // Only coordinates returned by a map provider (or our small curated seed set)
 // may be used as navigation coordinates.
 const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog'])
+const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim'])
 
 // Algunas atracciones tienen más de un nombre comercial o institucional, pero
 // representan el mismo punto de visita. Esto es una identidad semántica, no
@@ -86,6 +87,22 @@ export function hasVerifiedCoordinates(place) {
   const grounded = tags.grounded_geocoded === true || tags.grounded_geocoded === 'true'
   const providerId = place.placeId ?? place.place_id ?? place.osmId ?? place.osm_id
   return grounded && Boolean(providerId)
+}
+
+// A recommendation is allowed only when its position comes from a live
+// OpenStreetMap-backed provider. Curated/manual/catalog coordinates are useful
+// as internal fallbacks, but they are not proof that the place currently exists
+// as a POI in the map.
+export function hasOsmMapRecord(place) {
+  if (!place || typeof place !== 'object') return false
+  const latitude = Number(place.latitude ?? place.lat ?? place.latitud)
+  const longitude = Number(place.longitude ?? place.lon ?? place.lng ?? place.longitud)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || (latitude === 0 && longitude === 0)) return false
+
+  const source = String(place.coordinateSource ?? place.coordinate_source ?? place.fuente_coordenadas ?? '')
+    .trim()
+    .toLowerCase()
+  return OSM_MAP_SOURCES.has(source)
 }
 
 function withVerifiedCoordinates(place, coordinateSource, placeId = '') {

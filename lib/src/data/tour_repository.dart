@@ -150,14 +150,15 @@ class TourRepository {
     final tourId = savedTour['id'].toString();
     await client.from('tour_stops').delete().eq('tour_id', tourId);
     if (tour.stops.isNotEmpty) {
-      // Filter out temporary/persistent hotel stops from being permanently saved to the database
+      // The selected hotel is a private navigation base, never a public tour stop.
       final nonHotelStops = tour.stops.where((stop) {
         final idLower = stop.id.toLowerCase();
         final nameLower = stop.name.toLowerCase();
-        final isHotel = idLower == 'hotel_start' || 
-                        idLower == 'hotel_end' || 
-                        ((idLower.contains('hotel') || nameLower.contains('hotel')) && 
-                         (stop.order == 0 || stop.order == tour.stops.length - 1));
+        final locationNameLower = stop.locationInfo.nombreLugar.toLowerCase();
+        final isHotel = idLower == 'hotel_start' ||
+            idLower == 'hotel_end' ||
+            _isAccommodationLabel(nameLower) ||
+            _isAccommodationLabel(locationNameLower);
         return !isHotel;
       }).toList();
 
@@ -1028,12 +1029,51 @@ class TourRepository {
     ).hasMatch(value);
   }
 
+  bool _isAccommodationLabel(String value) {
+    return RegExp(
+      r'\b(hotel|hostal|hostel|resort|inn|lodging|alojamiento|hospedaje|motel)\b',
+      caseSensitive: false,
+    ).hasMatch(value);
+  }
+
+  TourLocationInfo _publicMeetingPoint(Tour tour) {
+    final currentLabel = '${tour.meetingPoint} ${tour.meetingPointInfo.nombreLugar}';
+    if (!_isAccommodationLabel(currentLabel)) {
+      return tour.meetingPointInfo;
+    }
+
+    for (final stop in tour.stops) {
+      if (_isAccommodationLabel('${stop.name} ${stop.locationInfo.nombreLugar}')) {
+        continue;
+      }
+      if (!stop.locationInfo.isEmpty) {
+        return stop.locationInfo;
+      }
+      return TourLocationInfo(
+        nombreLugar: stop.name,
+        direccion: '',
+        ciudad: tour.city,
+        region: '',
+        pais: tour.country,
+        placeId: '',
+        urlMapa:
+            'https://www.google.com/maps/search/?api=1&query=${stop.location.latitude},${stop.location.longitude}',
+      );
+    }
+    return TourLocationInfo.empty;
+  }
+
   Map<String, dynamic> _tourPayload(
     Tour tour,
     String ownerId, {
     required String difficultyValue,
   }) {
     final isApproved = tour.moderationStatus == 'approved' && tour.isPublished;
+    final publicMeetingPoint = _publicMeetingPoint(tour);
+    final creationJson = tour.toCreationJson();
+    creationJson['punto_encuentro'] = publicMeetingPoint.toCreationJson();
+    creationJson.remove('user_hotel');
+    creationJson.remove('public_punto_encuentro');
     return {
       'owner_id': ownerId,
       'created_by': ownerId,
@@ -1053,7 +1093,7 @@ class TourRepository {
       'is_published': isApproved,
       'is_private': !tour.isPublished,
       'moderation_status': tour.moderationStatus,
-      'creation_json': tour.toCreationJson(),
+      'creation_json': creationJson,
       'short_summary': tour.shortSummary,
       'subcategories': tour.subcategories,
       'featured_experience': tour.featuredExperience,
@@ -1063,8 +1103,8 @@ class TourRepository {
       'recommended_audience': tour.recommendedAudience,
       'best_season': tour.bestSeason,
       'recommended_schedule': tour.recommendedSchedule,
-      'meeting_point': tour.meetingPoint,
-      'meeting_point_info': tour.meetingPointInfo.toCreationJson(),
+      'meeting_point': publicMeetingPoint.nombreLugar,
+      'meeting_point_info': publicMeetingPoint.toCreationJson(),
       'includes': tour.includes,
       'excludes': tour.excludes,
       'recommendations': tour.recommendations,

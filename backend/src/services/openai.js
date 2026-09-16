@@ -2,7 +2,7 @@ import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
-import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity } from './osm.js'
+import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord } from './osm.js'
 import { generateSpeechAudio } from './ttsService.js'
 
 export { generateSpeechAudio }
@@ -78,6 +78,27 @@ function canonicalChatDisplayName(placeName, city = '') {
   return CHAT_CANONICAL_DISPLAY_NAMES[identity?.id] || String(placeName || '').trim()
 }
 
+export function isChatHotelStop(placeName, selectedHotel = null) {
+  const normalizedName = normalizeChatPlaceName(placeName)
+  if (!normalizedName) return false
+
+  const selectedName = typeof selectedHotel === 'string'
+    ? selectedHotel
+    : selectedHotel?.name || selectedHotel?.nombre || selectedHotel?.nombre_lugar || ''
+  const normalizedSelectedName = normalizeChatPlaceName(selectedName)
+
+  if (/\b(hotel|hostal|hostel|resort|inn|lodging|alojamiento|hospedaje|motel)\b/i.test(normalizedName)) {
+    return true
+  }
+  return Boolean(
+    normalizedSelectedName &&
+    normalizedSelectedName.length >= 3 &&
+    (normalizedName === normalizedSelectedName ||
+      normalizedName.includes(normalizedSelectedName) ||
+      normalizedSelectedName.includes(normalizedName))
+  )
+}
+
 /**
  * Deduplicates structured places before they are used to compose the chat
  * itinerary. The first occurrence keeps its day/order, matching the route
@@ -90,6 +111,7 @@ export function deduplicateChatSpecificPlaces(places = [], city = '') {
   for (const place of Array.isArray(places) ? places : []) {
     const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
     if (!name) continue
+    if (isChatHotelStop(name)) continue
 
     const key = canonicalChatPlaceKey(name, city)
     if (seen.has(key)) continue
@@ -104,6 +126,126 @@ export function deduplicateChatSpecificPlaces(places = [], city = '') {
   }
 
   return result
+}
+
+/**
+ * Removes accommodation lines only when they are being rendered as itinerary
+ * bullets. Hotel information in normal explanatory prose remains intact.
+ */
+export function stripHotelStopsFromItineraryText(text, selectedHotel = null) {
+  const source = String(text ?? '')
+  if (!/itinerario\s+de\s+viaje|\bD[ií]a\s+\d+\s*:/i.test(source)) return source
+
+  return source
+    .split(/\r?\n/)
+    .filter(line => {
+      const bullet = line.match(/^\s*(?:[•●▪◦*-]|\d+[.)])\s+(.*)$/)
+      if (!bullet) return true
+
+      const candidate = bullet[1]
+        .replace(/\*{1,2}/g, '')
+        .replace(/^[^\p{L}\p{N}]*/u, '')
+        .replace(/^(?:\d{1,2}:\d{2}\s*(?:AM|PM)?\s*[-—:]\s*)/i, '')
+        .replace(/^(?:alojamiento|hospedaje|punto\s+de\s+(?:partida|encuentro)|base)\s*(?:\/|:|-)?\s*/i, '')
+        .trim()
+
+      return !isChatHotelStop(candidate, selectedHotel)
+    })
+    .join('\n')
+}
+
+export function sanitizeChatItineraryText(text, city = '', selectedHotel = null) {
+  return stripHotelStopsFromItineraryText(collapseCanonicalDuplicateLines(text, city), selectedHotel)
+}
+
+async function resolveOsmBackedChatPlace(place, city = '', country = '', selectedHotel = null) {
+  const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
+  if (!name || isChatHotelStop(name, selectedHotel) || isUnmappedOrClosedVenue(name)) return null
+
+  const query = [name, city, country].filter(Boolean).join(', ')
+  const geo = await geocodePlace(query, null, null, { city, country }).catch(() => null)
+  return hasOsmMapRecord(geo) ? geo : null
+}
+
+export async function filterChatSpecificPlacesByOsm(places = [], city = '', country = '', selectedHotel = null) {
+  const input = Array.isArray(places) ? places : []
+  const settled = await Promise.all(input.map(async place => {
+    const geo = await resolveOsmBackedChatPlace(place, city, country, selectedHotel)
+    if (!geo) return null
+
+    if (typeof place === 'string') return place.trim()
+    return {
+      ...place,
+      name: String(place?.name || geo.name || '').trim(),
+      latitude: geo.latitude,
+      longitude: geo.longitude,
+      address: geo.address || place.address || '',
+      placeId: geo.placeId || place.placeId || place.id || '',
+      coordinateSource: geo.coordinateSource,
+      coordinatesVerified: true,
+    }
+  }))
+
+  return deduplicateChatSpecificPlaces(
+    settled.filter(Boolean).filter(place => {
+      const name = typeof place === 'string' ? place : place?.name
+      return !isChatHotelStop(name, selectedHotel)
+    }),
+    city
+  )
+}
+
+function itineraryBulletPlaceName(line) {
+  let candidate = String(line || '')
+    .replace(/^\s*(?:[•●▪◦*-]|\d+[.)])\s*/, '')
+    .replace(/\*{1,2}/g, '')
+    .replace(/^[^\p{L}\p{N}]*/u, '')
+    .trim()
+
+  const actionMatch = candidate.match(/(?:visita\s+a|recorrido\s+por|almuerzo\s+en|cena\s+en|desayuno\s+en|parada\s+en|conoce\s+|explora\s+)\s*(.+)$/i)
+  if (actionMatch) candidate = actionMatch[1].trim()
+  candidate = candidate.split(/\s*:\s+/)[0].trim()
+  return candidate
+}
+
+async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = '') {
+  const source = String(text ?? '')
+  if (!/\b(lugares|atracciones|sitios|restaurantes|gastronom[íi]a|hoteles|hospedaje|alojamiento|recomiend|visitar)\b/i.test(source)) {
+    return source
+  }
+
+  const nonPlaceBullet = /^(ubicaci[oó]n|direcci[oó]n|instalaciones|servicios|tarifa|precio|horario|consejo|recomendaci[oó]n)\b/i
+  const lines = source.split(/\r?\n/)
+  const checks = await Promise.all(lines.map(async line => {
+    if (!/^\s*(?:[•●▪◦*-]|\d+[.)])\s+/.test(line)) return true
+    const candidate = itineraryBulletPlaceName(line)
+    if (!candidate || nonPlaceBullet.test(candidate)) return true
+    if (isUnmappedOrClosedVenue(candidate) || isGenericFacilityName(candidate) || isNonTouristFacility({ name: candidate })) {
+      return false
+    }
+    const query = [candidate, city, country].filter(Boolean).join(', ')
+    const geo = await geocodePlace(query, null, null, { city, country }).catch(() => null)
+    return hasOsmMapRecord(geo)
+  }))
+
+  return lines.filter((_, index) => checks[index]).join('\n')
+}
+
+export async function sanitizeChatItineraryTextWithOsm(text, city = '', country = '', selectedHotel = null) {
+  const sanitized = sanitizeChatItineraryText(text, city, selectedHotel)
+  if (!/itinerario\s+de\s+viaje|\bD[ií]a\s+\d+\s*:/i.test(sanitized)) {
+    return sanitizeChatRecommendationTextWithOsm(sanitized, city, country)
+  }
+
+  const lines = sanitized.split(/\r?\n/)
+  const checks = await Promise.all(lines.map(async line => {
+    if (!/^\s*(?:[•●▪◦*-]|\d+[.)])\s+/.test(line)) return true
+    const candidate = itineraryBulletPlaceName(line)
+    if (!candidate || isChatHotelStop(candidate, selectedHotel)) return false
+    return Boolean(await resolveOsmBackedChatPlace(candidate, city, country, selectedHotel))
+  }))
+
+  return lines.filter((_, index) => checks[index]).join('\n')
 }
 
 /**
@@ -211,6 +353,34 @@ export function isUnmappedOrClosedVenue(name) {
   return false
 }
 
+async function verifyCatalogEntryOnOsm(entry, city, country) {
+  const name = typeof entry === 'string'
+    ? entry.trim()
+    : String(entry?.name || '').trim()
+  if (!name || isUnmappedOrClosedVenue(name)) return null
+
+  const query = [name, city, country].filter(Boolean).join(', ')
+  const geo = await geocodePlace(query, null, null, { city, country }).catch(() => null)
+  if (!hasOsmMapRecord(geo)) return null
+
+  return {
+    ...(typeof entry === 'object' ? entry : {}),
+    name,
+    latitude: geo.latitude,
+    longitude: geo.longitude,
+    address: geo.address || entry?.address || '',
+    placeId: geo.placeId || entry?.placeId || '',
+    coordinateSource: geo.coordinateSource,
+    coordinatesVerified: true,
+  }
+}
+
+async function verifyCatalogEntriesOnOsm(entries, city, country, limit = 16) {
+  const candidates = (Array.isArray(entries) ? entries : []).slice(0, limit)
+  const verified = await Promise.all(candidates.map(entry => verifyCatalogEntryOnOsm(entry, city, country)))
+  return verified.filter(Boolean)
+}
+
 /**
  * 100% Dynamic Global Catalog Resolver.
  * Fetches verified real venues, restaurants, cafes, bars, and attractions
@@ -219,7 +389,7 @@ export function isUnmappedOrClosedVenue(name) {
 export async function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null) {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
 
-  const cacheKey = `catalog_${clean}_${countryName}`
+  const cacheKey = `catalog_osm_v2_${clean}_${countryName}`
   const cached = destinationCatalogCache.get(cacheKey)
   if (cached) return cached
 
@@ -300,18 +470,21 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   try {
     const dynamicProfile = await fetchDynamicDestinationProfile(clean, targetCountry).catch(() => null)
     if (dynamicProfile) {
-      for (const p of (dynamicProfile.places || [])) {
-        if (!isUnmappedOrClosedVenue(p) && !realPlaces.some(rp => arePlacesSimilar(rp, p))) {
-          realPlaces.push(p)
+      const verifiedProfilePlaces = await verifyCatalogEntriesOnOsm(dynamicProfile.places || [], clean, targetCountry, 12)
+      for (const p of verifiedProfilePlaces) {
+        if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
+          realPlaces.push(p.name)
         }
       }
-      for (const r of (dynamicProfile.restaurants || [])) {
-        if (!isUnmappedOrClosedVenue(r.name || r) && !realRests.some(existing => arePlacesSimilar(existing.name || existing, r.name || r))) {
+      const verifiedProfileRestaurants = await verifyCatalogEntriesOnOsm(dynamicProfile.restaurants || [], clean, targetCountry, 12)
+      for (const r of verifiedProfileRestaurants) {
+        if (!realRests.some(existing => arePlacesSimilar(existing.name || existing, r.name))) {
           realRests.push(r)
         }
       }
-      for (const h of (dynamicProfile.hotels || [])) {
-        if (!realHotels.some(existing => arePlacesSimilar(existing.name || existing, h.name || h))) {
+      const verifiedProfileHotels = await verifyCatalogEntriesOnOsm(dynamicProfile.hotels || [], clean, targetCountry, 8)
+      for (const h of verifiedProfileHotels) {
+        if (!realHotels.some(existing => arePlacesSimilar(existing.name || existing, h.name))) {
           realHotels.push(h)
         }
       }
@@ -378,74 +551,6 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     if (!seenCleanRests.has(k)) {
       seenCleanRests.add(k)
       cleanRests.push(cr)
-    }
-  }
-
-  // Ensure 100% verified OpenFreeMap POIs for Barranquilla
-  if (clean === 'barranquilla') {
-    const verifiedBqPlaces = [
-      'Gran Malecón del Río',
-      'Monumento Ventana al Mundo',
-      'Monumento La Aleta del Tiburón',
-      'Plaza de la Paz',
-      'Catedral Metropolitana María Reina',
-      'Zoológico de Barranquilla',
-      'Casa del Carnaval',
-      'Museo del Carnaval',
-      'Castillo de Salgar',
-      'Ciénaga de Mallorquín',
-      'Muelle de Puerto Colombia'
-    ]
-    for (const p of verifiedBqPlaces) {
-      if (!cleanPlaces.some(cp => arePlacesSimilar(cp, p))) {
-        cleanPlaces.push(p)
-      }
-    }
-    const verifiedBqRests = [
-      { name: 'El Caimán del Río', specialty: 'Mercado gastronómico frente al Río Magdalena' },
-      { name: 'Restaurante Bar La Cueva', specialty: 'Gastronomía costeña y patrimonio literario del Grupo de Barranquilla' },
-      { name: 'Restaurante Cucayo', specialty: 'Auténtico arroz de lisa y comida tradicional costeña' },
-      { name: 'Restaurante Varadero', specialty: 'Cocina caribeña y marinera tradicional en Alto Prado' },
-      { name: 'Manuel Restaurante', specialty: 'Alta cocina de autor colombiana' }
-    ]
-    for (const r of verifiedBqRests) {
-      if (!cleanRests.some(cr => arePlacesSimilar(cr.name, r.name))) {
-        cleanRests.push(r)
-      }
-    }
-  }
-
-  if (cleanPlaces.length < 4) {
-    try {
-      const { KNOWN_ICONIC_LANDMARKS } = await import('./osm.js')
-      for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
-        if (landmark.city && landmark.city.toLowerCase() === clean.toLowerCase()) {
-          if (!isUnmappedOrClosedVenue(landmark.name) && !cleanPlaces.some(cp => arePlacesSimilar(cp, landmark.name))) {
-            cleanPlaces.push(landmark.name)
-          }
-        }
-      }
-    } catch (_) {}
-  }
-
-  if (cleanPlaces.length < 4) {
-    const fallbackPresets = getDestinationPresets(clean, targetCountry)
-    for (const fp of (fallbackPresets.places || [])) {
-      if (!cleanPlaces.includes(fp)) cleanPlaces.push(fp)
-    }
-  }
-
-  if (cleanHotels.length === 0) {
-    const fallbackPresets = getDestinationPresets(clean, targetCountry)
-    cleanHotels.push(...(fallbackPresets.hotels || []))
-  }
-
-  if (cleanRests.length < 2) {
-    const fallbackPresets = getDestinationPresets(clean, targetCountry)
-    for (const fr of (fallbackPresets.restaurants || [])) {
-      if (!cleanRests.some(r => arePlacesSimilar(r.name, fr.name))) {
-        cleanRests.push(fr)
-      }
     }
   }
 
@@ -610,6 +715,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const destName = cleanAdministrativeCityName(rawDestName)
   const hasCity = Boolean(destName && !isVagueDestination(destName))
   const destCountry = known.country || (destName.toLowerCase() === 'cartagena' || destName.toLowerCase() === 'santa marta' || destName.toLowerCase() === 'medellín' || destName.toLowerCase() === 'bogotá' ? 'Colombia' : '')
+  if (hasCity && Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0) {
+    known.specificPlaces = await filterChatSpecificPlacesByOsm(known.specificPlaces, destName, destCountry, known.selectedHotel)
+  }
   const hasDurationOrDates = Boolean(known.durationDays || known.datesSeason)
   const knownPlacesList = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
     ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
@@ -634,14 +742,20 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   // Grounding Data: Instant cache retrieval or non-blocking background pre-warming
   let realCatalog = null
   if (hasCity) {
-    const cacheKey = `catalog_${destName.toLowerCase()}__${(destCountry || '').toLowerCase()}`
+    const cacheKey = `catalog_osm_v2_${destName.toLowerCase()}_${(destCountry || '').toLowerCase()}`
     const cached = destinationCatalogCache.get(cacheKey)
     if (cached) {
       realCatalog = cached
     } else {
-      // Warm up catalog in background so it is instantly available for tour generation without blocking chat
-      getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude)
-        .catch(err => console.warn('[generateChatResponse] Background catalog pre-warm error:', err.message))
+      // The visible chat must receive the same OSM-grounded catalog as the map.
+      // Keeping this await is intentional: a background warm-up allowed the LLM
+      // to answer before the verified places were available and it could invent
+      // names that had no map record.
+      realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude)
+        .catch(err => {
+          console.warn('[generateChatResponse] Catalog lookup error:', err.message)
+          return { places: [], restaurants: [], hotels: [] }
+        })
     }
     if (!webSearchSummary && /\b(evento|festivales|feria|carnaval|cu[aá]ndo ir|fechas?|agenda)\b/i.test(lastUserMsg)) {
       const ws = await searchWebForTravel({
@@ -708,7 +822,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = '¡Hola! Soy Tour Planner AI 🤖. Cuéntame: ¿a qué ciudad o destino te gustaría viajar hoy?'
       }
     } else {
-      const preset = realCatalog || getDestinationPresets(known.city || 'Destino', known.country || 'Local')
+      const preset = realCatalog || await getRealDestinationCatalog(
+        known.city || 'Destino',
+        known.country || 'Local',
+        known.latitude,
+        known.longitude
+      ).catch(() => ({ places: [], restaurants: [], hotels: [] }))
       const fbHasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
@@ -750,14 +869,16 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
           ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
           : []
-        const p1 = rawSpecifics[0] || preset.places[0] || `Centro histórico de ${destName}`
-        const p2 = rawSpecifics[1] || preset.places[1] || `Plaza principal de ${destName}`
-        const r1 = preset.restaurants?.[0]?.name || `Restaurante tradicional de ${destName}`
+        const p1 = rawSpecifics[0] || preset.places?.[0]
+        const p2 = rawSpecifics[1] || preset.places?.[1]
+        const r1 = preset.restaurants?.[0]?.name
+        const detailLines = [
+          p1 ? `• 🌅 **09:00 AM - Mañana**: Visita a ${p1}` : '',
+          r1 ? `• 🍽️ **12:30 PM - Almuerzo**: ${r1}` : '',
+          p2 ? `• 🌇 **03:30 PM - Tarde**: Recorrido por ${p2}` : '',
+        ].filter(Boolean)
         fallbackMsg = `Día 1: ${destName}\n\n` +
-          `• 🏨 **Alojamiento / Punto de partida**: ${known.selectedHotel?.name || known.selectedHotel || 'Hotel acordado'}\n` +
-          `• 🌅 **09:00 AM - Mañana**: Visita a ${p1}\n` +
-          `• 🍽️ **12:30 PM - Almuerzo**: ${r1}\n` +
-          `• 🌇 **03:30 PM - Tarde**: Recorrido por ${p2}\n\n` +
+          (detailLines.length > 0 ? `${detailLines.join('\n')}\n\n` : 'No encontré suficientes lugares verificados en OpenStreetMap para completar este día.\n\n') +
           `¿Te gustaría generar el tour completo o ver otro día?`
       } else if (/\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|muestres el itinerario)\b/i.test(lastUserMsg)) {
         if (hasDurationOrDates) {
@@ -783,8 +904,6 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
                 break
               }
             }
-            if (!p1) p1 = `Recorrido emblemático por ${destName} (Sector ${d})`
-
             let p2 = null
             while (poolIdx < pool.length) {
               const cand = pool[poolIdx++]
@@ -794,14 +913,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
                 break
               }
             }
-            if (!p2) p2 = `Atractivo cultural de ${destName} (Punto ${d})`
-
-            const r = preset.restaurants[(d - 1) % (preset.restaurants.length || 1)]?.name || 'Restaurante Típico'
-            dayBlocks.push(`Día ${d}: ${destName}\n• ${p1}\n• ${p2}\n• ${r}`)
+            const r = preset.restaurants?.[(d - 1) % Math.max(1, preset.restaurants?.length || 1)]?.name
+            const dayLines = [p1, p2, r].filter(Boolean).map(place => `• ${place}`)
+            if (dayLines.length > 0) {
+              dayBlocks.push(`Día ${d}: ${destName}\n${dayLines.join('\n')}`)
+            }
           }
 
           fallbackMsg = `Itinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
-            dayBlocks.join('\n\n') +
+            (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.') +
             `\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está listo para generar el tour?`
         } else {
           fallbackMsg = `¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName}?`
@@ -851,8 +971,6 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
               break
             }
           }
-          if (!p1) p1 = `Recorrido emblemático por ${destName} (Sector ${d})`
-
           let p2 = null
           while (poolIdx < pool.length) {
             const cand = pool[poolIdx++]
@@ -862,14 +980,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
               break
             }
           }
-          if (!p2) p2 = `Atractivo cultural de ${destName} (Punto ${d})`
-
-          const r = preset.restaurants?.[(d - 1) % Math.max(1, preset.restaurants?.length || 1)]?.name || 'Restaurante Típico'
-          dayBlocks.push(`Día ${d}: ${destName}\n • ${p1}\n • ${p2}\n • ${r}`)
+          const r = preset.restaurants?.[(d - 1) % Math.max(1, preset.restaurants?.length || 1)]?.name
+          const dayLines = [p1, p2, r].filter(Boolean).map(place => ` • ${place}`)
+          if (dayLines.length > 0) {
+            dayBlocks.push(`Día ${d}: ${destName}\n${dayLines.join('\n')}`)
+          }
         }
 
         fallbackMsg = `¡Perfecto! Con tu hospedaje confirmado en ${known.selectedHotel?.name || 'tu estancia'} y movilidad definida, aquí tienes tu plan:\n\nItinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
-          dayBlocks.join('\n\n') +
+          (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.') +
           `\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
       } else if (hasDurationOrDates) {
         fallbackMsg = `¡Excelente! Para tu viaje a ${destName} de ${known.datesSeason || `${known.durationDays} días`}, ¿qué lugares o tipo de actividades te gustaría incluir?`
@@ -884,7 +1003,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     )
 
     return {
-      responseMessage: collapseCanonicalDuplicateLines(fallbackMsg, destName),
+      responseMessage: await sanitizeChatItineraryTextWithOsm(
+        fallbackMsg,
+        destName,
+        destCountry,
+        known.selectedHotel
+      ),
       actionChips: fallbackChips,
       extractedPreferences: { ...known, specificPlaces: fallbackSpecificPlaces },
       specificPlaces: fallbackSpecificPlaces,
@@ -967,7 +1091,7 @@ REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
    - Para CUALQUIER ciudad o destino del mundo solicitado (${destName || 'el destino seleccionado'}), selecciona ÚNICAMENTE los atractivos turísticos, culturales, históricos, arquitectónicos y paisajísticos MÁS POPULARES, EMBLEMÁTICOS E ICÓNICOS que existan FÍSICAMENTE en ese destino específico.
    - AISLAMIENTO METROPOLITANO ESTRICTO (PROHIBIDO FUGAS INTER-CIUDAD):
      * Todos los atractivos y restaurantes recomendados DEBEN estar ubicados DENTRO del municipio o área metropolitana inmediata de "${destName || 'el destino'}".
-     * ESTRICTAMENTE PROHIBIDO sugerir lugares que pertenezcan a OTRA ciudad vecina o distante (por ejemplo, para Barranquilla NUNCA sugieras lugares de Cartagena como "Restaurante La Mulata", "Castillo San Felipe", etc.; ni para Santa Marta lugares de Barranquilla o viceversa). Cada ciudad tiene sus propios restaurantes y atractivos emblemáticos.
+     * ESTRICTAMENTE PROHIBIDO sugerir lugares que pertenezcan a OTRA ciudad vecina o distante. Cada ciudad tiene sus propios restaurantes y atractivos emblemáticos; usa únicamente los nombres presentes en el catálogo verificado.
    - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o cadenas de hipermercados/supermercados cotidianos (como Alkosto, Éxito, Olímpica, Carulla, Jumbo, Makro, Ara, D1, Homecenter, etc.) como paradas turísticas.
    - REGLA CRÍTICA DE CARTOGRAFÍA EN OPENSTREETMAP / OPENFREEMAP:
      * El tour y tus recomendaciones deben estar anclados al 100% en lugares reales existentes en OpenFreeMap / OpenStreetMap.
@@ -1046,8 +1170,8 @@ REGLAS CRÍTICAS DEL ITINERARIO:
 4. Si TODOS los datos previos (fechas, acompañantes, transporte, presupuesto, hospedaje) están confirmados:
    Pregunta al final del itinerario: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?"
 5. DIVERSIDAD Y EQUILIBRIO TEMÁTICO (NO MONOPOLIO DE PLAYAS EN CIUDADES URBANAS):
-   - En capitales y ciudades metropolitanas/culturales (ej: Barranquilla, Medellín, Bogotá, Cartagena, Roma, París, etc.):
-     Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas, arquitectura, parques y gastronomía local (ej. en Barranquilla: Gran Malecón del Río, Ventana al Mundo, Museo del Carnaval, Barrio El Prado, Catedral Metropolitana, Ciénaga de Mallorquín, Castillo de Salgar). Si la ciudad tiene costa o playas cercanas, incluye a lo sumo 1 o 2 visitas de playa, pero ESTÁ ESTRICTAMENTE PROHIBIDO llenar un tour urbano de 4 o 5 días exclusivamente con 10 paradas de playas repetidas.
+     - En capitales y ciudades metropolitanas/culturales (ej: Barranquilla, Medellín, Bogotá, Cartagena, Roma, París, etc.):
+     Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas, arquitectura, parques y gastronomía local usando únicamente los POI del catálogo verificado. Si la ciudad tiene costa o playas cercanas, incluye a lo sumo 1 o 2 visitas de playa, pero ESTÁ ESTRICTAMENTE PROHIBIDO llenar un tour urbano de 4 o 5 días exclusivamente con 10 paradas de playas repetidas.
    - En destinos con vocación puramente balnearia (ej: Coveñas, San Andrés, Cancún): Las playas e islas sí son el atractivo central diario.
 6. REGLA ESTRICTA DE UNICIDAD GLOBAL INTER-DÍAS (CERO PARADAS REPETIDAS):
    - Cada atractivo turístico, monumento, museo, parque o restaurante debe aparecer exactamente UNA SOLA VEZ en TODO el itinerario completo (Día 1 a Día N).
@@ -1064,7 +1188,7 @@ REGLAS CRÍTICAS DEL ITINERARIO:
      Inicia exactamente con "Día 1: ${destName || 'Destino'}" y desglosa las paradas correspondientes a ese día. Si hay LUGARES SELECCIONADOS POR EL VIAJERO (${knownPlacesList.join(', ')}), el primer lugar de la lista (${knownPlacesList[0] || 'el primer lugar'}) DEBE aparecer obligatoriamente en los detalles del Día 1.
    - Si el usuario pide ver o consultar el itinerario (ej: "Ver el itinerario", "cómo va el itinerario", etc.):
      Si hay LUGARES SELECCIONADOS POR EL VIAJERO (${knownPlacesList.join(', ')}), TODOS ellos son OBLIGATORIOS y deben distribuirse en el itinerario. El primer lugar (${knownPlacesList[0] || 'el primer lugar'}) DEBE figurar obligatoriamente en el Día 1.
-   - Si el usuario pide "Ver menús" o comida: recomienda restaurantes y platos típicos (ej: Restaurante La Cevicheria, Restaurante Celele, platos locales) y NO incluyas atractivos como Castillo San Felipe.
+   - Si el usuario pide "Ver menús" o comida: recomienda únicamente establecimientos del catálogo gastronómico verificado y platos típicos; NO conviertas atractivos turísticos en restaurantes.
 
 ETAPA DE AJUSTE O AMPLIACIÓN DE ITINERARIO (AÑADIR O CAMBIAR PARADAS):
 - Si el usuario pide agregar más paradas, añadir más sitios, o enriquecer el plan ("puedes agregar más paradas", "añade más paradas", "más lugares", etc.):
@@ -1173,6 +1297,15 @@ REGLAS PARA "specificPlaces":
     }
     const parsedExtracted = parsed.extractedPreferences || {}
 
+    if (hasCity && Array.isArray(parsedExtracted.specificPlaces) && parsedExtracted.specificPlaces.length > 0) {
+      parsedExtracted.specificPlaces = await filterChatSpecificPlacesByOsm(
+        parsedExtracted.specificPlaces,
+        destName,
+        destCountry,
+        parsedExtracted.selectedHotel || known.selectedHotel
+      )
+    }
+
     // Filtrar estrictamente cualquier hotel que se haya colado en specificPlaces
     if (Array.isArray(parsedExtracted.specificPlaces)) {
       parsedExtracted.specificPlaces = parsedExtracted.specificPlaces.filter(p => {
@@ -1273,18 +1406,19 @@ REGLAS PARA "specificPlaces":
       const totalPlacesNeeded = daysCount * perDayPlacesCount
 
       // Obtener atractivos del catálogo dinámico y enriquecer si faltan paradas
-      let catPlaces = (cat?.places || []).filter(p => p && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
+      let catPlaces = (cat?.places || []).filter(p => p && !isGenericFacilityName(p) && !isUnmappedOrClosedVenue(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
       if (catPlaces.length < totalPlacesNeeded) {
         const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry).catch(() => [])
-        for (const di of dynamicIconics) {
+        const verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
+        for (const di of verifiedDynamicIconics) {
           const diName = typeof di === 'string' ? di : (di?.name || '')
-          if (diName && !isGenericFacilityName(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !catPlaces.some(cp => arePlacesSimilar(cp, diName))) {
+          if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !catPlaces.some(cp => arePlacesSimilar(cp, diName))) {
             catPlaces.push(diName)
           }
         }
       }
 
-      const cleanExplicitPool = placeNames.filter(p => p && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
+      const cleanExplicitPool = placeNames.filter(p => p && !isGenericFacilityName(p) && !isUnmappedOrClosedVenue(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
       const rawAttractions = [...cleanExplicitPool, ...catPlaces]
       const uniqueAttractions = deduplicateChatSpecificPlaces(rawAttractions, dName)
         .map(p => typeof p === 'string' ? p : p.name)
@@ -1311,14 +1445,6 @@ REGLAS PARA "specificPlaces":
           for (const hr of (hubCat?.restaurants || [])) {
             if (hr && hr.name && !uniqueRests.some(existing => arePlacesSimilar(existing.name, hr.name))) {
               uniqueRests.push(hr)
-            }
-          }
-        }
-        if (uniqueRests.length < daysCount) {
-          const presets = getDestinationPresets(hubCity || dName, destCountry)
-          for (const pr of (presets.restaurants || [])) {
-            if (pr && pr.name && !uniqueRests.some(existing => arePlacesSimilar(existing.name, pr.name))) {
-              uniqueRests.push(pr)
             }
           }
         }
@@ -1357,8 +1483,10 @@ REGLAS PARA "specificPlaces":
             }
           }
           if (!chosenPlace) {
-            chosenPlace = uniqueAttractions.find(p => !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, p))) ||
-              `Recorrido patrimonial y arquitectónico por ${dName} (Sector ${d})`
+            chosenPlace = uniqueAttractions.find(p => !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, p))) || null
+          }
+          if (!chosenPlace) {
+            continue
           }
           globalUsedNames.add(chosenPlace)
           dayUsed.add(chosenPlace)
@@ -1380,7 +1508,11 @@ REGLAS PARA "specificPlaces":
           chosenRest = uniqueRests.find(r => !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, r.name)))?.name ||
             uniqueRests[(d - 1) % Math.max(1, uniqueRests.length)]?.name ||
             cat?.restaurants?.[(d - 1) % Math.max(1, cat?.restaurants?.length || 1)]?.name ||
-            (known.city ? `Restaurante Típico de ${known.city}` : `Restaurante Típico de ${dName}`)
+            null
+        }
+        if (!chosenRest) {
+          reconstructed += '\n'
+          continue
         }
         globalUsedNames.add(chosenRest)
         dayUsed.add(chosenRest)
@@ -1449,9 +1581,11 @@ REGLAS PARA "specificPlaces":
 
     // Final textual guard: the visible chat itinerary must obey the same
     // canonical identity rules as the structured map payload.
-    responseMessage = collapseCanonicalDuplicateLines(
+    responseMessage = await sanitizeChatItineraryTextWithOsm(
       responseMessage,
-      destName || known.city || known.destination || ''
+      destName || known.city || known.destination || '',
+      destCountry,
+      parsedExtracted.selectedHotel || known.selectedHotel
     )
 
     // Enforce cross-day global uniqueness on specificPlaces: no POI can appear on multiple days
@@ -2029,7 +2163,7 @@ Debes devolver un JSON estrictamente estructurado con:
 2. "restaurants": Array de 8 a 12 restaurantes o mercados gastronómicos MÁS EMBLEMÁTICOS, TRADICIONALES Y FAMOSOS representativos de esa ciudad específica.
    - Cada restaurante con: "name" (nombre real y limpio), "cuisine" (tipo de cocina regional/especialidad), y "specialty" (plato o experiencia destacada).
    - ESTRICTAMENTE PROHIBIDO cadenas de comida rápida multinacionales (McDonald's, KFC, etc.) o locales genéricos de comida rápida de barrio.
-   - ESTRICTAMENTE PROHIBIDO incluir restaurantes de OTRAS ciudades lejanas (ej: si el destino es Barranquilla, NUNCA incluyas restaurantes de Cartagena como "Restaurante La Mulata").
+   - ESTRICTAMENTE PROHIBIDO incluir restaurantes de OTRAS ciudades lejanas; usa únicamente establecimientos del catálogo verificado del destino.
 3. "hotels": Array de 4 a 6 hoteles reales y destacados de diferentes gamas (boutique colonial/histórico, lujo, céntrico).
    - Cada hotel con: "name", "desc" (1 línea concisa de su estilo/ubicación) y "price" (rango estimado en USD).
 4. "events": Array de 2 a 3 festividades, carnavales o eventos culturales anuales icónicos con fechas habituales.

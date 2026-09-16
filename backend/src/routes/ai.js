@@ -3,8 +3,8 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, canonicalPlaceId } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, generateChatResponse, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog } from '../services/openai.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId } from '../services/osm.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -92,6 +92,7 @@ const requestSchema = z.object({
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   budget: z.string().optional(),
+  selectedHotel: z.record(z.any()).nullable().optional(),
   selectedPlaces: z.array(z.any()).optional().default([]),
   specificPlaces: z.array(z.any()).optional().default([])
 })
@@ -1055,6 +1056,14 @@ aiRouter.post('/chat', async (req, res, next) => {
         : deduplicatePlacesByName(rawCombined)
 
       let validatedSpecifics = combinedSpecifics
+      if (validatedSpecifics.length > 0 && updatedPreferences.city) {
+        validatedSpecifics = await filterChatSpecificPlacesByOsm(
+          validatedSpecifics,
+          updatedPreferences.city,
+          updatedPreferences.country || '',
+          updatedPreferences.selectedHotel || null
+        )
+      }
       if (validatedSpecifics.length > 0) {
         updatedPreferences.specificPlaces = validatedSpecifics
       } else {
@@ -1979,12 +1988,12 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     // Preservar estrictamente el orden secuencial cronológico por días
     const seenKeys = new Set()
     const normalizedStops = []
-    const hotelNameLower = String(input.selectedHotel?.name || plannerContext?.selectedHotel?.name || '').toLowerCase()
+    const selectedHotel = input.selectedHotel || plannerContext?.selectedHotel || null
     
     for (const item of rawStops) {
       const name = item.publicStop.nombre
       const nameLower = (item.routeStop?.name || name || '').toLowerCase()
-      if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
+      if (isAccommodationStopName(nameLower, selectedHotel)) {
         continue
       }
       const nameKey = canonicalPlaceKey(name, input.city || input.destination)
@@ -2040,6 +2049,8 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       }
     }
 
+    const publicMeetingPoint = normalizeLocationInfo(sourceTour.punto_encuentro, publicStops[0], input)
+
     const tour = {
       id: `ai-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
       nombre_tour: sourceTour.nombre_tour ?? sourceTour.title ?? `${input.city || input.destination} VibeTour AI`,
@@ -2057,7 +2068,8 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       publico_recomendado: normalizeAudience(sourceTour.publico_recomendado, input.type, input.touristInterests),
       mejor_epoca: (sourceTour.mejor_epoca || plannerContext?.datesSeason || planner.bestSeason || 'Todo el año').toString().replace(/\bano\b/gi, 'año'),
       horario_recomendado: sourceTour.horario_recomendado ?? planner.recommendedSchedule,
-      punto_encuentro: hotelPuntoEncuentro || normalizeLocationInfo(sourceTour.punto_encuentro, publicStops[0], input),
+      punto_encuentro: hotelPuntoEncuentro || publicMeetingPoint,
+      public_punto_encuentro: publicMeetingPoint,
       imagen_portada: coverUrl,
       galeria_tour: unique([
         ...publicStops.flatMap(s => s.imagenes).filter(img => img && !img.includes('photo-1469854523086') && !img.includes('photo-1507525428034')),
@@ -2285,12 +2297,12 @@ async function processTourGeneration(jobId, input) {
       // Preservar estrictamente el orden secuencial cronológico por días
       const seenKeys = new Set()
       const normalizedStops = []
-      const hotelNameLower = String(input.selectedHotel?.name || plannerContext?.selectedHotel?.name || '').toLowerCase()
+      const selectedHotel = input.selectedHotel || null
       
       for (const item of rawNormalized) {
         const name = item.publicStop.nombre
         const nameLower = (item.routeStop?.name || name || '').toLowerCase()
-        if (/hotel|hospedaje|resort|hostal|movich/i.test(nameLower) && (nameLower.includes('movich') || (hotelNameLower.length >= 3 && (hotelNameLower.includes(nameLower) || nameLower.includes(hotelNameLower))))) {
+        if (isAccommodationStopName(nameLower, selectedHotel)) {
           continue
         }
         const nameKey = canonicalPlaceKey(name, input.city || input.destination)
@@ -2307,6 +2319,36 @@ async function processTourGeneration(jobId, input) {
       const coverUrl = (planner?.selectedPlaces?.[0]?.imageUrl && !planner.selectedPlaces[0].imageUrl.includes('fallback'))
         ? planner.selectedPlaces[0].imageUrl
         : (await imageForPlace(targetCity, targetCity, targetCountry).catch(() => null) || fallbackCover(input.destination || targetCity))
+
+      let hotelPuntoEncuentro = null
+      if (selectedHotel?.name) {
+        let hLat = Number(selectedHotel.latitude)
+        let hLon = Number(selectedHotel.longitude)
+        let hAddr = selectedHotel.tags?.['addr:street'] || selectedHotel.address || ''
+        if (!hLat || !hLon || Number.isNaN(hLat) || Number.isNaN(hLon)) {
+          const query = `${selectedHotel.name}, ${input.city || input.destination || ''} ${input.country || ''}`.trim()
+          const geo = await geocodePlace(query, input.latitude, input.longitude).catch(() => null)
+          if (geo?.latitude && geo?.longitude) {
+            hLat = geo.latitude
+            hLon = geo.longitude
+            if (!hAddr && geo.address) hAddr = geo.address
+          }
+        }
+        if (hLat && hLon && !Number.isNaN(hLat) && !Number.isNaN(hLon)) {
+          hotelPuntoEncuentro = {
+            nombre_lugar: selectedHotel.name,
+            direccion: hAddr,
+            ciudad: input.city || input.destination || '',
+            region: '',
+            pais: input.country || '',
+            latitud: hLat,
+            longitud: hLon,
+            place_id: selectedHotel.id?.toString() || '',
+            url_mapa: mapUrlFor(hLat, hLon)
+          }
+        }
+      }
+      const publicMeetingPoint = normalizeLocationInfo(sourceTour.punto_encuentro, stops[0], input)
       tour = {
         id: `ai-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
         nombre_tour: sourceTour.nombre_tour ?? sourceTour.title ?? `${input.city || input.destination} VibeTour AI`,
@@ -2337,7 +2379,8 @@ async function processTourGeneration(jobId, input) {
         ),
         mejor_epoca: (sourceTour.mejor_epoca || planner.bestSeason || 'Todo el año').toString().replace(/\bano\b/gi, 'año'),
         horario_recomendado: sourceTour.horario_recomendado ?? planner.recommendedSchedule,
-        punto_encuentro: normalizeLocationInfo(sourceTour.punto_encuentro, stops[0], input),
+        punto_encuentro: hotelPuntoEncuentro || publicMeetingPoint,
+        public_punto_encuentro: publicMeetingPoint,
         imagen_portada: sourceTour.imagen_portada ?? sourceTour.coverUrl ?? coverUrl,
         galeria_tour: unique([
           ...stops.flatMap((stop) => stop.imagenes).filter(img => img && !img.includes('photo-1469854523086') && !img.includes('photo-1507525428034')),
@@ -2376,6 +2419,7 @@ async function processTourGeneration(jobId, input) {
           apto_para_adultos_mayores:
             sourceTour.informacion_adicional?.apto_para_adultos_mayores ?? true,
         },
+        user_hotel: hotelPuntoEncuentro,
       }
       const route = {
         durationHours: input.durationHours,
@@ -5302,8 +5346,9 @@ export async function collectTourCandidates(input, location) {
       input.durationHours = Math.max(48, (input.cities?.length || 2) * 24)
     }
     const multiCityPlaces = await collectMultiCityCandidates(input)
-    if (multiCityPlaces.length >= 3) {
-      return { rawCount: multiCityPlaces.length, places: multiCityPlaces, source: 'multi-city-geodata' }
+    const osmMultiCityPlaces = multiCityPlaces.filter(hasOsmMapRecord)
+    if (osmMultiCityPlaces.length >= 3) {
+      return { rawCount: osmMultiCityPlaces.length, places: osmMultiCityPlaces, source: 'multi-city-geodata' }
     }
   }
 
@@ -5313,8 +5358,9 @@ export async function collectTourCandidates(input, location) {
       input.durationHours = 8 // Default 1 day (8h)
     }
     const corridorPlaces = await collectCorridorCandidates(input, location)
-    if (corridorPlaces.length >= 2) {
-      return { rawCount: corridorPlaces.length, places: corridorPlaces, source: 'corridor-route-geodata' }
+    const osmCorridorPlaces = corridorPlaces.filter(hasOsmMapRecord)
+    if (osmCorridorPlaces.length >= 2) {
+      return { rawCount: osmCorridorPlaces.length, places: osmCorridorPlaces, source: 'corridor-route-geodata' }
     }
   }
 
@@ -5440,6 +5486,9 @@ export async function collectTourCandidates(input, location) {
           if (invRest) {
             geo = await geocodePlace(`${invRest}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
           }
+        }
+        if (geo && !hasOsmMapRecord(geo)) {
+          geo = null
         }
         if (geo) {
           const pLower = placeName.toLowerCase()
@@ -5597,6 +5646,10 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
+        if (directGeo && !hasOsmMapRecord(directGeo)) {
+          directGeo = null
+        }
+
         const tagSource = directGeo?.coordinateSource || directGeo?.coordinate_source || 'osm'
 
         let finalLat = null
@@ -5642,6 +5695,7 @@ export async function collectTourCandidates(input, location) {
             const repGeo = await geocodePlace(`${repName}, ${city}`, destLat, destLon, regionalOpts).catch(() => null)
             if (
               !repGeo ||
+              !hasOsmMapRecord(repGeo) ||
               !Number.isFinite(repGeo.latitude) ||
               !Number.isFinite(repGeo.longitude) ||
               !validateCandidateLocation(repGeo, canonicalDest, geoScope.maxDistanceKm)
@@ -5726,7 +5780,7 @@ export async function collectTourCandidates(input, location) {
           isRegionalOrNature,
           maxDistanceKm: geoScope.maxDistanceKm,
         })
-        if (geo && (geo.latitude || geo.longitude) && isWithinCityBounds(geo.latitude, geo.longitude)) {
+        if (geo && hasOsmMapRecord(geo) && (geo.latitude || geo.longitude) && isWithinCityBounds(geo.latitude, geo.longitude)) {
           return {
             name: item.name,
             latitude: geo.latitude,
@@ -5735,9 +5789,16 @@ export async function collectTourCandidates(input, location) {
             category: item.category || 'historic',
             city,
             country,
-            address: geo.name || `${city}, ${item.name}`,
+            address: geo.address || geo.name || `${city}, ${item.name}`,
+            placeId: geo.placeId || geo.place_id || '',
+            coordinateSource: geo.coordinateSource || geo.coordinate_source || '',
+            coordinatesVerified: true,
             description: item.description || '',
-            tags: { iconic_landmark: 'true' }
+            tags: {
+              iconic_landmark: 'true',
+              coordinate_source: geo.coordinateSource || geo.coordinate_source || '',
+              coordinates_verified: 'true'
+            }
           }
         }
         return null
@@ -5841,7 +5902,7 @@ export async function collectTourCandidates(input, location) {
 
   const normalizedPool = dedupeByProximity(uniqueByName(pool))
     .filter((place) => place && place.name)
-    .filter((place) => hasUsableCoordinates(place.latitude, place.longitude) || place.city || place.country)
+    .filter((place) => hasOsmMapRecord(place))
     .filter((place) => isCandidateNearDestination(place, input, location))
     .filter((place) => isValidTouristAttraction(place, input))
 
@@ -5875,18 +5936,25 @@ export async function collectTourCandidates(input, location) {
         aiFallbacks.map(async (item) => {
           const searchQuery = `${item.name} ${city} ${country}`.trim()
           const geo = await geocodePlace(searchQuery).catch(() => null)
-          if (geo && validateCandidateLocation(geo, input.canonicalDestination || location, geoScope.maxDistanceKm)) {
+          if (geo && hasOsmMapRecord(geo) && validateCandidateLocation(geo, input.canonicalDestination || location, geoScope.maxDistanceKm)) {
             return {
               name: item.name,
               latitude: geo.latitude,
               longitude: geo.longitude,
-              type: item.type || 'tourism',
-              category: item.category || input.type || 'historic',
-              city,
-              country,
-              address: geo.name || `${city}, ${item.name}`,
-              description: item.description || '',
-              tags: { ai_generated_fallback: 'true' }
+            type: item.type || 'tourism',
+            category: item.category || input.type || 'historic',
+            city,
+            country,
+            address: geo.address || geo.name || `${city}, ${item.name}`,
+            placeId: geo.placeId || geo.place_id || '',
+            coordinateSource: geo.coordinateSource || geo.coordinate_source || '',
+            coordinatesVerified: true,
+            description: item.description || '',
+            tags: {
+              ai_generated_fallback: 'true',
+              coordinate_source: geo.coordinateSource || geo.coordinate_source || '',
+              coordinates_verified: 'true'
+            }
             }
           }
           return null
@@ -5911,6 +5979,8 @@ export async function collectTourCandidates(input, location) {
       return !pNameLower.includes(hotelNameLower) && !hotelNameLower.includes(pNameLower)
     })
   }
+
+  selected = selected.filter(hasOsmMapRecord)
 
   if (selected.length < 3) {
     console.warn('[tour-ai] Insufficient validated POIs for destination:', input.destination)
@@ -6236,6 +6306,23 @@ function mapUrlFor(latitude, longitude) {
   return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
 }
 
+function isAccommodationStopName(value, selectedHotel = null) {
+  const name = String(value || '').trim().toLowerCase()
+  if (!name) return false
+  if (/\b(hotel|hostal|hostel|resort|inn|lodging|alojamiento|hospedaje|motel)\b/i.test(name)) {
+    return true
+  }
+
+  const selectedName = String(
+    selectedHotel?.name || selectedHotel?.nombre || selectedHotel?.nombre_lugar || selectedHotel || ''
+  ).trim().toLowerCase()
+  return selectedName.length >= 3 && (
+    name === selectedName ||
+    name.includes(selectedName) ||
+    selectedName.includes(name)
+  )
+}
+
 function placeIdFor(name, latitude, longitude) {
   return `${name}-${latitude}-${longitude}`
     .toLowerCase()
@@ -6244,6 +6331,18 @@ function placeIdFor(name, latitude, longitude) {
 }
 
 function persistTour(tour, route, input, userId) {
+  const firstPublicStop = (tour.itinerario || []).find(stop => !isAccommodationStopName(stop?.nombre))
+  const publicMeetingPoint = tour.public_punto_encuentro || (
+    isAccommodationStopName(tour.punto_encuentro?.nombre_lugar, tour.user_hotel)
+      ? (firstPublicStop?.ubicacion || {})
+      : (tour.punto_encuentro || {})
+  )
+  const { user_hotel: _privateHotel, public_punto_encuentro: _publicMarker, ...publicTour } = tour
+  const publicCreationJson = {
+    ...publicTour,
+    punto_encuentro: publicMeetingPoint,
+  }
+
   return supabase
     .from('tours')
     .insert({
@@ -6262,7 +6361,7 @@ function persistTour(tour, route, input, userId) {
       is_published: false,
       moderation_status: 'pending',
       tags: tour.etiquetas,
-      creation_json: tour,
+      creation_json: publicCreationJson,
       short_summary: tour.resumen_corto,
       subcategories: tour.subcategorias,
       featured_experience: tour.experiencia_destacada,
@@ -6272,8 +6371,8 @@ function persistTour(tour, route, input, userId) {
       recommended_audience: tour.publico_recomendado,
       best_season: tour.mejor_epoca,
       recommended_schedule: tour.horario_recomendado,
-      meeting_point: tour.punto_encuentro?.nombre_lugar ?? '',
-      meeting_point_info: tour.punto_encuentro,
+      meeting_point: publicMeetingPoint?.nombre_lugar ?? '',
+      meeting_point_info: publicMeetingPoint,
       includes: tour.incluye,
       excludes: tour.no_incluye,
       recommendations: tour.recomendaciones,
@@ -6292,9 +6391,8 @@ function persistTour(tour, route, input, userId) {
         .map((stop, index) => {
           const routeStop = route.stops[index] ?? {}
           const stopNameLower = (stop.nombre || "").toLowerCase()
-          // Exclude hotel stops from the start or the end of the tour
-          const isHotel = stopNameLower.includes('hotel') && (index === 0 || index === tour.itinerario.length - 1)
-          if (isHotel) return null
+          // Accommodation is a private navigation base, never a public tourist stop.
+          if (isAccommodationStopName(stopNameLower, tour.user_hotel)) return null
 
           return {
             name: stop.nombre,
