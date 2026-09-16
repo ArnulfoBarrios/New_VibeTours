@@ -2,7 +2,7 @@ import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
-import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters } from './osm.js'
+import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity } from './osm.js'
 import { generateSpeechAudio } from './ttsService.js'
 
 export { generateSpeechAudio }
@@ -47,6 +47,93 @@ export function cleanAndParseJson(rawContent, fallback = null) {
 
 const planCache = new GeoCache(6 * 60 * 60 * 1000, 200)
 const destinationCatalogCache = new GeoCache(12 * 60 * 60 * 1000, 200)
+
+// The chat response and the map planner must share the same physical-place
+// identity. Some venues have several public names; these are aliases, not
+// separate stops. Keep this normalization here as well as in the route layer
+// because the visible itinerary is assembled before /tours/build runs.
+const CHAT_CANONICAL_DISPLAY_NAMES = {
+  'barranquilla-carnaval-house-museum': 'Casa del Carnaval',
+}
+
+function normalizeChatPlaceName(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function canonicalChatPlaceKey(placeName, city = '') {
+  const identity = resolveCanonicalPlaceIdentity(placeName, city)
+  return identity
+    ? `canonical:${identity.id}`
+    : `name:${normalizeChatPlaceName(placeName)}`
+}
+
+function canonicalChatDisplayName(placeName, city = '') {
+  const identity = resolveCanonicalPlaceIdentity(placeName, city)
+  return CHAT_CANONICAL_DISPLAY_NAMES[identity?.id] || String(placeName || '').trim()
+}
+
+/**
+ * Deduplicates structured places before they are used to compose the chat
+ * itinerary. The first occurrence keeps its day/order, matching the route
+ * planner's existing behavior.
+ */
+export function deduplicateChatSpecificPlaces(places = [], city = '') {
+  const result = []
+  const seen = new Set()
+
+  for (const place of Array.isArray(places) ? places : []) {
+    const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
+    if (!name) continue
+
+    const key = canonicalChatPlaceKey(name, city)
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const displayName = canonicalChatDisplayName(name, city)
+    if (typeof place === 'string') {
+      result.push(displayName)
+    } else {
+      result.push({ ...place, name: displayName })
+    }
+  }
+
+  return result
+}
+
+/**
+ * Removes duplicate canonical aliases from bullet/numbered itinerary lines.
+ * This is intentionally limited to list items so normal explanatory prose is
+ * not rewritten.
+ */
+export function collapseCanonicalDuplicateLines(text, city = '') {
+  const seen = new Set()
+  return String(text ?? '')
+    .split(/\r?\n/)
+    .filter(line => {
+      const bullet = line.match(/^(\s*(?:[•●▪◦*-]|\d+[.)])\s+)(.*)$/)
+      if (!bullet) return true
+
+      const candidate = bullet[2]
+        .replace(/\*{1,2}/g, '')
+        .replace(/\s*\([^)]*\)\s*$/, '')
+        .split(/\s+[—–-]\s+|\s*:\s*/)[0]
+        .trim()
+      const identity = resolveCanonicalPlaceIdentity(candidate, city)
+      if (!identity) return true
+
+      const key = `canonical:${identity.id}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .join('\n')
+}
 
 export function getOpenAiModelConfig() {
   const model = process.env.OPENAI_MODEL || 'gpt-5.6-luna'
@@ -502,6 +589,14 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const history = state.history || []
   const lastUserMsg = state.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
 
+  // Normalize already-confirmed stops before they reach the prompt, fallback
+  // itinerary, or structured response. This prevents an old chat state that
+  // contains both aliases from reintroducing the duplicate on every turn.
+  const knownPlaceCity = known.city || known.destination || ''
+  if (Array.isArray(known.specificPlaces)) {
+    known.specificPlaces = deduplicateChatSpecificPlaces(known.specificPlaces, knownPlaceCity)
+  }
+
   let rawDestName = known.city || known.destination || ''
   if (!rawDestName && lastUserMsg) {
     const fallbackExtracted = extractChatInformationFallback(lastUserMsg)
@@ -670,7 +765,10 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
             ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
             : []
-          const pool = Array.from(new Set([...rawSpecifics, ...(preset.places || [])]))
+          const pool = deduplicateChatSpecificPlaces(
+            [...rawSpecifics, ...(preset.places || [])],
+            destName
+          ).map(p => typeof p === 'string' ? p : p.name)
 
           let dayBlocks = []
           const usedGlobal = new Set()
@@ -735,7 +833,10 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
           ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
           : []
-        const pool = Array.from(new Set([...rawSpecifics, ...(preset.places || [])]))
+        const pool = deduplicateChatSpecificPlaces(
+          [...rawSpecifics, ...(preset.places || [])],
+          destName
+        ).map(p => typeof p === 'string' ? p : p.name)
 
         let dayBlocks = []
         const usedGlobal = new Set()
@@ -777,11 +878,16 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     }
 
+    const fallbackSpecificPlaces = deduplicateChatSpecificPlaces(
+      Array.isArray(known.specificPlaces) ? known.specificPlaces : [],
+      destName
+    )
+
     return {
-      responseMessage: fallbackMsg,
+      responseMessage: collapseCanonicalDuplicateLines(fallbackMsg, destName),
       actionChips: fallbackChips,
-      extractedPreferences: { ...known },
-      specificPlaces: Array.isArray(known.specificPlaces) ? known.specificPlaces : [],
+      extractedPreferences: { ...known, specificPlaces: fallbackSpecificPlaces },
+      specificPlaces: fallbackSpecificPlaces,
       destinationSuggestions: (!hasCity) ? await buildVisualDestinationSuggestions(fallbackChips).catch(() => []) : [],
       readyToBuild: Boolean(effectiveReadyToBuild),
     }
@@ -851,6 +957,11 @@ REGLA UNIVERSAL DE AGRUPAMIENTO GEOGRÁFICO Y DISTRIBUCIÓN POR DÍAS:
      * Sector El Zaino / Calabazo (Senderos centrales): Cabo San Juan, La Piscina, Arrecifes, Sendero a Pueblito, Cañaveral.
      * Sector Neguanje / Palangana (Playas y Bahías): Playa Cristal, Bahía Concha, Neguanje, Cinto.
    - Prohibido mezclar en el mismo día atractivos de sectores opuestos que requieren diferentes accesos vehiculares.
+
+IDENTIDADES FÍSICAS CANÓNICAS:
+- "Casa del Carnaval" y "Museo del Carnaval" en Barranquilla son el mismo complejo y la misma parada física.
+- Nunca los presentes como dos paradas, ni los asignes a días distintos. Usa un solo nombre, preferiblemente "Casa del Carnaval".
+
 REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
 1. SELECCIÓN DE ATRACTIVOS ICÓNICOS Y REALES (NIVEL TURISMO INTERNACIONAL, CERO HARDCODEO):
    - Para CUALQUIER ciudad o destino del mundo solicitado (${destName || 'el destino seleccionado'}), selecciona ÚNICAMENTE los atractivos turísticos, culturales, históricos, arquitectónicos y paisajísticos MÁS POPULARES, EMBLEMÁTICOS E ICÓNICOS que existan FÍSICAMENTE en ese destino específico.
@@ -1072,6 +1183,11 @@ REGLAS PARA "specificPlaces":
         }
         return true
       })
+
+      parsedExtracted.specificPlaces = deduplicateChatSpecificPlaces(
+        parsedExtracted.specificPlaces,
+        destName || known.city || known.destination || ''
+      )
     }
 
     // Evaluar estado completo de información clave
@@ -1134,7 +1250,10 @@ REGLAS PARA "specificPlaces":
     )
 
     if (shouldReconstructItinerary) {
-      let placesList = (parsedExtracted.specificPlaces || known.specificPlaces || [])
+      let placesList = deduplicateChatSpecificPlaces(
+        (parsedExtracted.specificPlaces || known.specificPlaces || []),
+        destName || known.city || known.destination || ''
+      )
       let placeNames = placesList.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
       let daysCount = Number(parsedExtracted.durationDays || known.durationDays || 0)
       if (!daysCount || daysCount < 1) {
@@ -1167,12 +1286,8 @@ REGLAS PARA "specificPlaces":
 
       const cleanExplicitPool = placeNames.filter(p => p && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
       const rawAttractions = [...cleanExplicitPool, ...catPlaces]
-      const uniqueAttractions = []
-      for (const p of rawAttractions) {
-        if (!uniqueAttractions.some(existing => arePlacesSimilar(existing, p))) {
-          uniqueAttractions.push(p)
-        }
-      }
+      const uniqueAttractions = deduplicateChatSpecificPlaces(rawAttractions, dName)
+        .map(p => typeof p === 'string' ? p : p.name)
 
       const validRests = (cat?.restaurants || []).filter(r =>
         r && r.name &&
@@ -1332,20 +1447,21 @@ REGLAS PARA "specificPlaces":
       .replace(/([^\n])\s*(¿(?:Qué te parece|Deseas hacer))/gi, '$1\n\n$2')
       .trim()
 
+    // Final textual guard: the visible chat itinerary must obey the same
+    // canonical identity rules as the structured map payload.
+    responseMessage = collapseCanonicalDuplicateLines(
+      responseMessage,
+      destName || known.city || known.destination || ''
+    )
+
     // Enforce cross-day global uniqueness on specificPlaces: no POI can appear on multiple days
     const rawSpecifics = Array.isArray(parsedExtracted.specificPlaces) && parsedExtracted.specificPlaces.length > 0
       ? parsedExtracted.specificPlaces
       : (known.specificPlaces || [])
-    const seenGlobalStopKeys = new Set()
-    const dedupedSpecificPlaces = []
-    for (const p of rawSpecifics) {
-      const pName = typeof p === 'string' ? p : (p?.name || '')
-      const pKey = pName.toLowerCase().replace(/[\u0300-\u036f]/g, '').replace(/[^\w]/g, '')
-      if (pKey && !seenGlobalStopKeys.has(pKey)) {
-        seenGlobalStopKeys.add(pKey)
-        dedupedSpecificPlaces.push(p)
-      }
-    }
+    const dedupedSpecificPlaces = deduplicateChatSpecificPlaces(
+      rawSpecifics,
+      destName || known.city || known.destination || ''
+    )
 
     return {
       responseMessage,
@@ -2544,5 +2660,3 @@ ${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
     return {}
   }
 }
-
-
