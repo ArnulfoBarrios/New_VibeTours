@@ -99,6 +99,49 @@ export function isChatHotelStop(placeName, selectedHotel = null) {
   )
 }
 
+export const GENERIC_LODGING_TERMS = new Set([
+  'hotel', 'hoteles', 'hostal', 'hostales', 'resort', 'resorts', 'villa', 'villas',
+  'villa privada', 'villas privadas', 'cabana', 'cabanas', 'cabaña', 'cabañas', 'posada', 'posadas',
+  'apartamento', 'apartamentos', 'airbnb', 'alojamiento', 'hospedaje', 'glamping',
+  'casa de campo', 'casa de playa', 'habitacion', 'habitación', 'habitaciones',
+  'por definir', 'pendiente', 'a definir', 'por confirmar', 'sin definir', 'cualquiera',
+  'el que sea', 'lo que recomiendes', 'lo que sea', 'resort de lujo', 'hotel boutique',
+  'hotel frente al mar', 'hotel economico', 'hotel económico', 'hotel centrico', 'hotel céntrico'
+])
+
+export function isLodgingCategoryOrGeneric(text) {
+  if (!text || typeof text !== 'string') return false
+  const clean = text.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
+  if (GENERIC_LODGING_TERMS.has(clean)) return true
+  return /^(?:un|una|unos|unas|el|la|los|las)?\s*(?:villa(?:\s+privada)?|resort(?:\s+de\s+lujo|\s+frente\s+al\s+mar)?|hotel(?:\s+boutique|\s+economico|\s+centrico|\s+frente\s+al\s+mar)?|caba[nñ]a|hostal|posada|apartamento|airbnb|alojamiento|hospedaje|glamping)(?:\s+(?:esta\s+bien|estaria\s+bien|prefiero|de\s+playa|de\s+lujo))?$/i.test(clean)
+}
+
+export function isLodgingExplicitlyConfirmed(hotel, status) {
+  // 1. Private home or local family accommodation is explicitly confirmed
+  const statusStr = String(status || '').trim().toLowerCase()
+  const isStatusHome = /\b(casa propia|familiar|alojamiento particular|en casa|mi casa|casa de familiares|casa de amigos|vivo aqu[ií]|no necesito hotel|alojamiento propio)\b/i.test(statusStr)
+  const hotelName = typeof hotel === 'string' ? hotel : (hotel?.name || hotel?.nombre || '')
+  const hotelNameStr = String(hotelName || '').trim().toLowerCase()
+  const isHotelHome = /\b(casa propia|familiar|alojamiento particular|en mi casa|mi casa|en casa)\b/i.test(hotelNameStr)
+
+  if (isStatusHome || isHotelHome) {
+    return true
+  }
+
+  // 2. If status is empty, null, "Por definir", "Pendiente", not confirmed
+  if (!statusStr || /^(por definir|pendiente|a definir|por confirmar|sin definir|null|undefined|en consulta)$/i.test(statusStr)) {
+    return false
+  }
+
+  // 3. Hotel name validation: must exist and cannot be a generic category
+  if (!hotelNameStr || hotelNameStr.length < 3) return false
+  if (isLodgingCategoryOrGeneric(hotelNameStr)) return false
+
+  // 4. Status must be explicitly confirmed
+  const isStatusConfirmed = /\b(confirmado|hotel elegido|elegido|reservado)\b/i.test(statusStr)
+  return isStatusConfirmed
+}
+
 /**
  * Deduplicates structured places before they are used to compose the chat
  * itinerary. The first occurrence keeps its day/order, matching the route
@@ -779,19 +822,25 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   }
 
   function hasValidLodging(hotel, status) {
-    if (status && hasValidValue(status)) return true
-    if (!hotel) return false
-    if (typeof hotel === 'string') return hasValidValue(hotel)
-    if (typeof hotel === 'object') {
-      return hasValidValue(hotel.name) || hasValidValue(hotel.nombre)
-    }
-    return false
+    return isLodgingExplicitlyConfirmed(hotel, status)
   }
 
   const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
   if (isHomeOrLocalLodging) {
     known.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
     known.accommodationStatus = 'Casa propia / familiar'
+  } else if (isLodgingCategoryOrGeneric(lastUserMsg)) {
+    delete known.selectedHotel
+    known.accommodationStatus = 'Por definir'
+    known.lodgingTypePreference = lastUserMsg.trim()
+  }
+
+  if (known.selectedHotel?.name && isLodgingCategoryOrGeneric(known.selectedHotel.name)) {
+    if (!known.lodgingTypePreference) {
+      known.lodgingTypePreference = known.selectedHotel.name
+    }
+    delete known.selectedHotel
+    known.accommodationStatus = 'Por definir'
   }
 
   const allUserChatText = [
@@ -865,6 +914,14 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             `• 💰 **Tarifa estimada**: ~$100 - $180 USD/noche.\n\n` +
             `¿Deseas confirmar este hospedaje?`
         }
+      } else if (hasCity && isLodgingCategoryOrGeneric(lastUserMsg)) {
+        const lodgingPref = lastUserMsg.trim()
+        const optHotels = (preset.hotels && preset.hotels.length > 0)
+          ? preset.hotels.slice(0, 3).map(h => `• 🏨 **${h.name}**`).join('\n')
+          : ''
+        fallbackMsg = `¡Excelente elección! Buscar ${lodgingPref} en ${destName} es una gran idea. ✨\n\n` +
+          (optHotels ? `Aquí tienes algunas opciones destacadas en la zona:\n${optHotels}\n\n` : '') +
+          `¿Tienes ya alguna opción reservada con nombre propio o prefieres que tomemos una de estas como base para tu recorrido?`
       } else if (hasCity && /\b(detalles del d[íi]a\s*(\d+)|ver detalles del d[íi]a\s*(\d+)|ver d[íi]a\s*(\d+)|d[íi]a\s*(\d+))\b/i.test(lastUserMsg)) {
         const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
           ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
@@ -1119,6 +1176,9 @@ CATÁLOGO VERIFICADO DE ${destName.toUpperCase()} (${destCountry || 'DESTINO'}):
 • Atractivos y patrimonio: ${realCatalog.places?.join(', ') || 'N/A'}
 ` : ''}
 
+REGLA DE NATURALIDAD Y CERO FUGAS TÉCNICAS:
+- ESTRICTAMENTE PROHIBIDO emitir advertencias técnicas o disculpas al usuario como "no tengo atractivos ni restaurantes verificados en el catálogo actual" o "¿deseas que genere el tour usando únicamente lugares del mapa?". Si algún catálogo está en N/A o con pocos datos para destinos emergentes, recomienda con total naturalidad y conocimiento los atractivos geográficos, playas o lugares más icónicos y reales de ${destName || 'la zona'}.
+
 ESTADO ACTUAL DE DATOS:
 • DESTINO: ${hasCity ? `CONFIRMADO (${destName})` : 'PENDIENTE'}
 • FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADO (${known.datesSeason || `${known.durationDays || 2} días`})` : 'PENDIENTE'}
@@ -1138,14 +1198,17 @@ ETAPA 1: ASESORÍA DE DESTINOS, FECHAS / DURACIÓN Y ACOMPAÑANTES
 - Si ya indicó destino (${destName}): Acéptalo con entusiasmo y pregunta por las fechas y días de estadía (y acompañantes si faltan).
 
 ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
-- Si el usuario pide recomendaciones de hotel/alojamiento o indica que aún no tiene alojamiento (ej: "¿qué recomiendas?", "recomiéndame hoteles"):
-  Presenta de inmediato 4 o 5 opciones de hoteles reales con nombre propio de diversas categorías (boutique, colonial, resort o de playa según aplique) físicamente ubicados en ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas disponibles: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}, con 1 línea concisa de cada uno, e invítalo a elegir uno para armar el itinerario.
+- Si el usuario pide recomendaciones de hotel/alojamiento o indica una preferencia de categoría (ej: "¿qué recomiendas?", "recomiéndame hoteles", "una villa privada está bien", "busco resort"):
+  * Si el usuario eligió una categoría o estilo (ej: "una villa privada está bien", "un resort", "un hotel económico"), el hospedaje SIGUE PENDIENTE. NO lo consideres confirmado. Sugiérele 2 o 3 opciones reales con nombre propio que encajen en esa preferencia o pregúntale si ya tiene alguna reservada con nombre comercial específico.
+  * Si pide opciones generales, presenta de inmediato 3 o 4 opciones de hoteles/alojamientos reales con nombre propio de diversas categorías físicamente ubicados en ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas disponibles: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}, con 1 línea concisa de cada uno, e invítalo a elegir uno para armar el itinerario.
+  * PROHIBIDO presentar el itinerario definitivo ni activar "readyToBuild" mientras el hospedaje siga como PENDIENTE.
   NUNCA des consejos genéricos como "buscar en plataformas" ni vuelvas a preguntar por datos que ya estén CONFIRMADOS (presupuesto, transporte, fechas).
 - Si faltan datos de transporte, presupuesto o alojamiento:
   Pregunta en 1 sola línea directa ÚNICAMENTE por los campos que figuren como PENDIENTE en el ESTADO ACTUAL DE DATOS.
 
-ETAPA 3: PRESENTACIÓN COMPLETA DEL ITINERARIO POR DÍAS (ENTREGA INMEDIATA)
-- Si el usuario acaba de responder dónde se hospedará (ej: "en mi casa", un hotel, etc.), o si ya contamos con destino, fechas, transporte, presupuesto y hospedaje:
+ETAPA 3: PRESENTACIÓN COMPLETA DEL ITINERARIO POR DÍAS (ENTREGA INMEDIATA ÚNICAMENTE TRAS CONFIRMACIÓN REAL)
+- REQUISITO OBLIGATORIO: Esta etapa SOLO se activa si el HOSPEDAJE está efectivamente CONFIRMADO (un hotel con nombre comercial real elegido, o indicación de "casa propia / familiar"). Si el hospedaje figura como PENDIENTE, ESTÁ TOTALMENTE PROHIBIDO emitir el itinerario final o avanzar a generación.
+- Si el usuario acaba de confirmar su hospedaje real con nombre propio o en casa propia (y ya contamos con destino, fechas, transporte y presupuesto):
   DEBES GENERAR Y MOSTRAR OBLIGATORIAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE.
   PROHIBIDO TERMINAR EL MENSAJE CON UN SIMPLE ACUSE DE RECIBO (ej: "Con su casa como base, taxis y presupuesto de lujo...") SIN EL ITINERARIO COMPLETO. Si el usuario ya dio su hospedaje, NO te detengas en palabras amables ni felicitaciones aisladas: ENTREGA DE INMEDIATO EL ITINERARIO COMPLETO (Día 1 a Día N con todas sus viñetas •).
 - DURACIÓN EXACTA: Debes estructurar EXACTAMENTE ${Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))} días en el itinerario (desde Día 1 hasta Día ${Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))}), sin omitir ningún día ni generar días de menos.
@@ -1198,8 +1261,8 @@ ETAPA DE AJUSTE O AMPLIACIÓN DE ITINERARIO (AÑADIR O CAMBIAR PARADAS):
 
 ETAPA 4: GENERACIÓN DEL TOUR ("readyToBuild": true)
 - Si el usuario pide generar el tour:
-  - Si falta algún dato clave: "readyToBuild" = false y pregunta en 1 línea por el dato faltante.
-  - Si todos los datos están completos: "readyToBuild" = true y responde de forma breve: "¡Excelente! Procedo a generar tu tour en el mapa para que disfrutes tu viaje a ${destName || known.destination}."
+  - Si falta algún dato clave (incluyendo si el hospedaje sigue PENDIENTE o solo se indicó una categoría genérica): "readyToBuild" = false y pregunta en 1 línea por el dato faltante o pide confirmar el hotel específico.
+  - Si todos los datos están completos y el hospedaje está CONFIRMADO: "readyToBuild" = true y responde de forma breve: "¡Excelente! Procedo a generar tu tour en el mapa para que disfrutes tu viaje a ${destName || known.destination}."
 
 FORMATO DE SALIDA (JSON):
 Devuelve ÚNICAMENTE un objeto JSON válido con este esquema:
@@ -1221,6 +1284,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema:
     "interests": [],
     "selectedHotel": null,
     "accommodationStatus": null,
+    "lodgingTypePreference": null,
     "specificPlaces": [
       {
         "name": "Nombre Real y Limpio del Lugar Físico",
@@ -1684,8 +1748,9 @@ Devuelve ÚNICAMENTE un JSON con:
 - "transport": "Caminando", "Auto rentado", "Transporte público", "Bicicleta", "Taxi / Uber" o null.
 - "interests": lista de intereses mencionados.
 - "specialEvent": nombre explícito de fiesta, festival o evento especial (ej: "Festival Internacional de Música de Cartagena", "Carnaval de Barranquilla") o null.
-- "selectedHotel": { "name": "Nombre del hotel" } o null si no se ha elegido.
-- "accommodationStatus": "Casa propia / familiar", "Hotel elegido", "Por definir" o null.
+- "selectedHotel": { "name": "Nombre comercial exacto del hotel específico" } si el usuario CONFIRMÓ EXPLÍCITAMENTE quedarse allí con su nombre propio (ej: "confirmo el Hotel Casa La Fe", "elijo el Hotel Dann Carlton", "me hospedo en el Hotel X") O { "name": "Casa propia / Alojamiento particular" } si es casa propia/familiar. NUNCA coloques categorías o tipos genéricos como "Villa privada", "Resort", "Hotel boutique", "Cabaña", "Apartamento" en selectedHotel; en tales casos DEBE ser null.
+- "accommodationStatus": "Casa propia / familiar" (si indica casa propia/familiar), "Hotel elegido" (ÚNICAMENTE si el usuario confirmó explícitamente un hotel con nombre comercial específico), "Por definir" (si menciona un tipo de hospedaje como "una villa privada", "un resort", pide recomendaciones, o aún no confirma) o null.
+- "lodgingTypePreference": categoría o estilo preferido si el usuario lo menciona (ej: "villa privada", "resort frente al mar", "hotel boutique", "cabaña", "económico") o null.
 - "specificPlaces": lista de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Cabo San Juan", "dia": 1 }, { "name": "Playa Cristal", "dia": 2 }]). NUNCA incluir actividades genéricas ("Llegada", "Despedida", "Tiempo libre", "Día libre").`
 
   try {
@@ -1711,6 +1776,16 @@ Devuelve ÚNICAMENTE un JSON con:
       const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
       if (parsed.durationDays && !parsed.durationHours) {
         parsed.durationHours = Number(parsed.durationDays) * 24
+      }
+
+      if (parsed.selectedHotel?.name && isLodgingCategoryOrGeneric(parsed.selectedHotel.name)) {
+        if (!parsed.lodgingTypePreference) {
+          parsed.lodgingTypePreference = parsed.selectedHotel.name
+        }
+        parsed.selectedHotel = null
+        if (parsed.accommodationStatus === 'Hotel elegido') {
+          parsed.accommodationStatus = 'Por definir'
+        }
       }
 
       if (Array.isArray(parsed.specificPlaces)) {

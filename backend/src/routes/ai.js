@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -850,6 +850,18 @@ aiRouter.post('/chat', async (req, res, next) => {
         delete updatedPreferences.selectedHotel
         delete updatedPreferences.accommodationStatus
       }
+    } else if (isLodgingCategoryOrGeneric(message)) {
+      delete updatedPreferences.selectedHotel
+      updatedPreferences.accommodationStatus = 'Por definir'
+      updatedPreferences.lodgingTypePreference = message.trim()
+    }
+
+    if (updatedPreferences.selectedHotel?.name && isLodgingCategoryOrGeneric(updatedPreferences.selectedHotel.name)) {
+      if (!updatedPreferences.lodgingTypePreference) {
+        updatedPreferences.lodgingTypePreference = updatedPreferences.selectedHotel.name
+      }
+      delete updatedPreferences.selectedHotel
+      updatedPreferences.accommodationStatus = 'Por definir'
     }
 
     if (!updatedPreferences.companions && /\b(nos\s+vamos|nos\s+quedamos|nos\s+hospedamos|tenemos|vamos\s+con|viajamos|somos)\b/i.test(message)) {
@@ -1157,7 +1169,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       responseMessage: aiResponse.responseMessage,
       actionChips: aiResponse.actionChips || [],
       destinationSuggestions: aiResponse.destinationSuggestions || [],
-      readyToBuild: Boolean(aiResponse.readyToBuild),
+      readyToBuild: Boolean(aiResponse.readyToBuild) && isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus),
       preferences: updatedPreferences,
       webSearchDone: Boolean(webSearchResult)
     })
