@@ -18,6 +18,105 @@ import '../../state/app_state.dart';
 import '../shared/location_disclosure_dialog.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
+String _nearbyPlaceCategoryLabel(BuildContext context, NearbyPlace place) {
+  final raw = (place.category.isNotEmpty ? place.category : place.type).trim();
+  final key = raw
+      .toLowerCase()
+      .replaceAll('á', 'a')
+      .replaceAll('é', 'e')
+      .replaceAll('í', 'i')
+      .replaceAll('ó', 'o')
+      .replaceAll('ú', 'u')
+      .replaceAll('_', ' ');
+  final isSpanish = Localizations.localeOf(context).languageCode == 'es';
+  const spanishLabels = <String, String>{
+    'nature': 'Naturaleza',
+    'naturaleza': 'Naturaleza',
+    'religious': 'Religioso',
+    'religioso': 'Religioso',
+    'attraction': 'Atracción',
+    'atraccion': 'Atracción',
+    'museum': 'Museo',
+    'museo': 'Museo',
+    'gallery': 'Galería',
+    'theatre': 'Teatro',
+    'theater': 'Teatro',
+    'historic': 'Histórico',
+    'historico': 'Histórico',
+    'sports': 'Deportivo',
+    'sport': 'Deportivo',
+    'deportivo': 'Deportivo',
+    'market': 'Mercado',
+    'marketplace': 'Mercado',
+    'viewpoint': 'Mirador',
+    'mirador': 'Mirador',
+    'park': 'Parque',
+    'garden': 'Jardín',
+    'water': 'Naturaleza',
+    'wetland': 'Naturaleza',
+    'nature reserve': 'Naturaleza',
+    'forest': 'Naturaleza',
+    'beach': 'Playa',
+    'zoo': 'Zoológico',
+    'aquarium': 'Acuario',
+    'theme park': 'Parque de atracciones',
+    'restaurant': 'Restaurante',
+    'cafe': 'Café',
+    'bar': 'Bar',
+    'place of worship': 'Religioso',
+    'ubicacion': 'Ubicación',
+    'location': 'Ubicación',
+  };
+  const englishLabels = <String, String>{
+    'nature': 'Nature',
+    'naturaleza': 'Nature',
+    'religious': 'Religious',
+    'religioso': 'Religious',
+    'attraction': 'Attraction',
+    'atraccion': 'Attraction',
+    'museum': 'Museum',
+    'museo': 'Museum',
+    'gallery': 'Gallery',
+    'theatre': 'Theatre',
+    'theater': 'Theater',
+    'historic': 'Historic',
+    'historico': 'Historic',
+    'sports': 'Sports',
+    'sport': 'Sports',
+    'deportivo': 'Sports',
+    'market': 'Market',
+    'marketplace': 'Market',
+    'viewpoint': 'Viewpoint',
+    'mirador': 'Viewpoint',
+    'park': 'Park',
+    'garden': 'Garden',
+    'water': 'Nature',
+    'wetland': 'Nature',
+    'nature reserve': 'Nature',
+    'forest': 'Nature',
+    'beach': 'Beach',
+    'zoo': 'Zoo',
+    'aquarium': 'Aquarium',
+    'theme park': 'Theme park',
+    'restaurant': 'Restaurant',
+    'cafe': 'Cafe',
+    'bar': 'Bar',
+    'place of worship': 'Religious',
+    'ubicacion': 'Location',
+    'location': 'Location',
+  };
+  final labels = isSpanish ? spanishLabels : englishLabels;
+  final translated = labels[key];
+  if (translated != null) return translated;
+
+  return raw
+      .replaceAll('_', ' ')
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .map((word) => '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+      .join(' ');
+}
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -1006,19 +1105,33 @@ class _NearbyPlacesSection extends ConsumerWidget {
                                       : null,
                                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                 ),
-                                alignment: Alignment.topRight,
-                                padding: const EdgeInsets.all(8),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.65),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.5),
-                                  ),
-                                  child: Text(
-                                    '${(place.distanceMeters / 1000).toStringAsFixed(1)} km',
-                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
-                                  ),
+                                child: Stack(
+                                  children: [
+                                    if (place.imageUrl.isEmpty)
+                                      Center(
+                                        child: Icon(
+                                          Icons.photo_outlined,
+                                          size: 34,
+                                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.28),
+                                        ),
+                                      ),
+                                    Positioned(
+                                      top: 8,
+                                      right: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.65),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.5),
+                                        ),
+                                        child: Text(
+                                          '${(place.distanceMeters / 1000).toStringAsFixed(1)} km',
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -1030,7 +1143,7 @@ class _NearbyPlacesSection extends ConsumerWidget {
                               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
                             ),
                             Text(
-                              place.category.isEmpty ? place.type : place.category,
+                              _nearbyPlaceCategoryLabel(context, place),
                               style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                             ),
                           ],

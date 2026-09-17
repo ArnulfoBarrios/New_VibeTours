@@ -11,6 +11,139 @@ import '../domain/models.dart';
 class DiscoveryRepository {
   static final Map<String, String> _imageCache = {};
 
+  static String _imageCacheKey(
+    String name, {
+    String placeId = '',
+    String city = '',
+    double? latitude,
+    double? longitude,
+  }) {
+    final normalizedName = name
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ');
+    final normalizedCity = city
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ');
+    final location = latitude != null && longitude != null
+        ? '${latitude.toStringAsFixed(4)},${longitude.toStringAsFixed(4)}'
+        : '';
+    return 'nearby-image-v2|$normalizedName|${placeId.trim().toLowerCase()}|$normalizedCity|$location';
+  }
+
+  static String? _directImageUrlFromTags(
+    Map<String, dynamic>? tags, {
+    String placeName = '',
+    String category = '',
+  }) {
+    if (tags == null || tags.isEmpty) return null;
+
+    final candidates = [
+      tags['image']?.toString().trim(),
+      tags['wikimedia_commons']?.toString().trim(),
+    ].whereType<String>().where((value) => value.isNotEmpty);
+
+    for (final value in candidates) {
+      if (value.toLowerCase().startsWith('category:')) continue;
+      final url = value.startsWith('http://') || value.startsWith('https://')
+          ? value
+          : value.startsWith('File:')
+              ? 'https://commons.wikimedia.org/wiki/Special:FilePath/${Uri.encodeComponent(value.replaceFirst('File:', '').trim())}?width=800'
+              : 'https://commons.wikimedia.org/wiki/Special:FilePath/${Uri.encodeComponent(value.trim())}?width=800';
+      if (_isUsableImageUrl(url, placeName: placeName, category: category)) {
+        return url;
+      }
+    }
+    return null;
+  }
+
+  static bool _isUsableImageUrl(
+    String url, {
+    String placeName = '',
+    String category = '',
+    String imageTitle = '',
+  }) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+
+    final haystack = '$url $imageTitle'
+        .toLowerCase()
+        .replaceAll(RegExp(r'[_%\-]+'), ' ');
+    const blockedImageTerms = [
+      'map',
+      'mapa',
+      'locator',
+      'location map',
+      'flag',
+      'bandera',
+      'logo',
+      'escudo',
+      'coat of arms',
+      'diagram',
+      'chart',
+      'schema',
+      'symbol',
+      'icon',
+      'screenshot',
+      'document',
+      '.pdf',
+    ];
+    if (blockedImageTerms.any((term) => haystack.contains(term))) return false;
+
+    final lowerPlace = placeName.toLowerCase();
+    final lowerCategory = category.toLowerCase();
+    final isNature = lowerCategory == 'nature' ||
+        RegExp(r'ci[ée]naga|laguna|humedal|manglar|parque|reserva|sendero|bosque|r[íi]o|jard[íi]n bot[aá]nico')
+            .hasMatch(lowerPlace);
+    final isBeach = lowerCategory == 'beach' ||
+        RegExp(r'playa|beach|bah[íi]a|isla|cayo|costa|litoral').hasMatch(lowerPlace);
+    if (isNature && RegExp(r'church|cathedral|iglesia|catedral|templo|mall|shopping').hasMatch(haystack)) {
+      return false;
+    }
+    if (isBeach && RegExp(r'church|cathedral|iglesia|catedral|templo|convent').hasMatch(haystack)) {
+      return false;
+    }
+    return true;
+  }
+
+  static List<String> _imageSearchTokens(String value) {
+    const stopWords = {
+      'de', 'del', 'la', 'las', 'el', 'los', 'un', 'una', 'y', 'en', 'the', 'of', 'and',
+    };
+    return value
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((token) => token.length >= 3 && !stopWords.contains(token))
+        .toSet()
+        .toList();
+  }
+
+  static bool _isRelevantImageTitle(String title, String placeName) {
+    final candidate = _imageSearchTokens(title.replaceFirst(RegExp(r'^File:\s*', caseSensitive: false), ''));
+    final requested = _imageSearchTokens(placeName);
+    if (candidate.isEmpty || requested.isEmpty) return false;
+
+    final normalizedTitle = candidate.join(' ');
+    final normalizedPlace = requested.join(' ');
+    if (normalizedTitle == normalizedPlace ||
+        normalizedTitle.contains(normalizedPlace) ||
+        normalizedPlace.contains(normalizedTitle)) {
+      return true;
+    }
+
+    final overlap = requested.where(candidate.contains).length;
+    final required = requested.length <= 1 ? 1 : 2;
+    return overlap >= required && overlap * 2 >= requested.length;
+  }
+
   /// Asynchronously resolves the authentic photograph of a place from
   /// Wikipedia Search API or Wikimedia Commons Search API, caching the result.
   static Future<String> fetchRealPlaceImageUrl(
@@ -18,55 +151,63 @@ class DiscoveryRepository {
     String category = 'Atraccion',
     String placeId = '',
     Map<String, dynamic>? tags,
+    String city = '',
+    double? latitude,
+    double? longitude,
   }) async {
-    final cacheKey = name.trim().toLowerCase();
+    final cacheKey = _imageCacheKey(
+      name,
+      placeId: placeId,
+      city: city,
+      latitude: latitude,
+      longitude: longitude,
+    );
     if (_imageCache.containsKey(cacheKey) && _imageCache[cacheKey]!.isNotEmpty) {
       return _imageCache[cacheKey]!;
     }
 
     // 1. Direct OSM image tags if present
-    if (tags != null) {
-      final imageTag = tags['image']?.toString().trim();
-      if (imageTag != null && imageTag.isNotEmpty) {
-        if (imageTag.startsWith('http://') || imageTag.startsWith('https://')) {
-          _imageCache[cacheKey] = imageTag;
-          return imageTag;
-        }
-        if (imageTag.startsWith('File:')) {
-          final fileName = imageTag.replaceFirst('File:', '').trim();
-          final url = 'https://commons.wikimedia.org/wiki/Special:FilePath/${Uri.encodeComponent(fileName)}?width=800';
-          _imageCache[cacheKey] = url;
-          return url;
-        }
-      }
-
-      final commonsTag = tags['wikimedia_commons']?.toString().trim();
-      if (commonsTag != null && commonsTag.isNotEmpty) {
-        final fileName = commonsTag.startsWith('File:') ? commonsTag.replaceFirst('File:', '').trim() : commonsTag;
-        final url = 'https://commons.wikimedia.org/wiki/Special:FilePath/${Uri.encodeComponent(fileName)}?width=800';
-        _imageCache[cacheKey] = url;
-        return url;
-      }
+    final directImage = _directImageUrlFromTags(
+      tags,
+      placeName: name,
+      category: category,
+    );
+    if (directImage != null) {
+      _imageCache[cacheKey] = directImage;
+      return directImage;
     }
 
-    // 2. Wikipedia Search API (generator=search with pageimages)
-    final wikiUrl = await _fetchWikipediaSearchImage(name);
+    // 2. Wikipedia Search API (generator=search with pageimages).
+    // Only accept a page whose title is related to the requested place and
+    // whose lead image is not a map, logo, flag, diagram or document.
+    final wikiQueries = <String>[
+      name.trim(),
+      if (city.trim().isNotEmpty) '${name.trim()}, ${city.trim()}',
+    ];
+    String? wikiUrl;
+    for (final query in wikiQueries) {
+      wikiUrl = await _fetchWikipediaSearchImage(query, placeName: name);
+      if (wikiUrl != null && wikiUrl.isNotEmpty) break;
+    }
     if (wikiUrl != null && wikiUrl.isNotEmpty) {
       _imageCache[cacheKey] = wikiUrl;
       return wikiUrl;
     }
 
-    // 3. Wikimedia Commons Search API
-    final commonsUrl = await _fetchCommonsSearchImage(name);
+    // 3. Wikimedia Commons Search API, also with title validation.
+    String? commonsUrl;
+    for (final query in wikiQueries) {
+      commonsUrl = await _fetchCommonsSearchImage(query, placeName: name);
+      if (commonsUrl != null && commonsUrl.isNotEmpty) break;
+    }
     if (commonsUrl != null && commonsUrl.isNotEmpty) {
       _imageCache[cacheKey] = commonsUrl;
       return commonsUrl;
     }
 
-    // 4. Clean architectural fallback
-    final fallbackUrl = _getSafeFallbackImageUrl(category, name, placeId: placeId);
-    _imageCache[cacheKey] = fallbackUrl;
-    return fallbackUrl;
+    // Do not invent an image for a real place. The UI will show a neutral
+    // surface instead of attributing a generic stock image to that place.
+    return '';
   }
 
   static String resolveDynamicImageForPlace(
@@ -75,14 +216,23 @@ class DiscoveryRepository {
     String placeId = '',
     Map<String, dynamic>? tags,
   }) {
-    final cacheKey = name.trim().toLowerCase();
+    final cacheKey = _imageCacheKey(name, placeId: placeId);
     if (_imageCache.containsKey(cacheKey) && _imageCache[cacheKey]!.isNotEmpty) {
       return _imageCache[cacheKey]!;
+    }
+    final directImage = _directImageUrlFromTags(
+      tags,
+      placeName: name,
+      category: category,
+    );
+    if (directImage != null) {
+      _imageCache[cacheKey] = directImage;
+      return directImage;
     }
     return _getSafeFallbackImageUrl(category, name, placeId: placeId);
   }
 
-  static Future<String?> _fetchWikipediaSearchImage(String rawQuery) async {
+  static Future<String?> _fetchWikipediaSearchImage(String rawQuery, {String? placeName}) async {
     final searchTerms = <String>[rawQuery.trim()];
     final clean = rawQuery.trim().replaceAll(
       RegExp(r'^(Monumento\s+|Parque\s+|Iglesia\s+|Catedral\s+|Plaza\s+|Museo\s+|Castillo\s+|Centro\s+Comercial\s+|Malecon\s+|Malecón\s+)', caseSensitive: false),
@@ -94,8 +244,8 @@ class DiscoveryRepository {
 
     for (final term in searchTerms) {
       final endpoints = [
-        'https://es.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${Uri.encodeComponent(term)}&gsrlimit=1&prop=pageimages&pithumbsize=800&format=json',
-        'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${Uri.encodeComponent(term)}&gsrlimit=1&prop=pageimages&pithumbsize=800&format=json',
+        'https://es.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${Uri.encodeComponent(term)}&gsrlimit=5&prop=pageimages&pithumbsize=800&format=json',
+        'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${Uri.encodeComponent(term)}&gsrlimit=5&prop=pageimages&pithumbsize=800&format=json',
       ];
 
       for (final endpoint in endpoints) {
@@ -109,14 +259,17 @@ class DiscoveryRepository {
             final json = jsonDecode(res.body) as Map<String, dynamic>;
             final pages = (json['query'] as Map?)?['pages'] as Map?;
             if (pages != null && pages.isNotEmpty) {
-              final page = pages.values.first as Map?;
-              final thumb = (page?['thumbnail'] as Map?)?['source']?.toString();
-              if (thumb != null && thumb.startsWith('http')) {
-                return thumb;
-              }
-              final original = (page?['original'] as Map?)?['source']?.toString();
-              if (original != null && original.startsWith('http')) {
-                return original;
+              for (final rawPage in pages.values) {
+                final page = rawPage as Map?;
+                final title = page?['title']?.toString() ?? '';
+                final imageTitle = page?['pageimage']?.toString() ?? '';
+                final image = (page?['thumbnail'] as Map?)?['source']?.toString() ??
+                    (page?['original'] as Map?)?['source']?.toString();
+                if (image != null &&
+                    _isRelevantImageTitle(title, placeName ?? rawQuery) &&
+                    _isUsableImageUrl(image, placeName: placeName ?? rawQuery, imageTitle: imageTitle)) {
+                  return image;
+                }
               }
             }
           }
@@ -126,11 +279,11 @@ class DiscoveryRepository {
     return null;
   }
 
-  static Future<String?> _fetchCommonsSearchImage(String query) async {
+  static Future<String?> _fetchCommonsSearchImage(String query, {String? placeName}) async {
     try {
       final uri = Uri.parse(
         'https://commons.wikimedia.org/w/api.php?action=query&generator=search'
-        '&gsrsearch=${Uri.encodeComponent(query)}&gsrlimit=1&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json',
+        '&gsrsearch=${Uri.encodeComponent(query)}&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json',
       );
       final res = await http.get(
         uri,
@@ -142,13 +295,18 @@ class DiscoveryRepository {
         final queryObj = data['query'] as Map?;
         final pages = queryObj?['pages'] as Map?;
         if (pages != null && pages.isNotEmpty) {
-          final firstPage = pages.values.first as Map?;
-          final imageInfoList = firstPage?['imageinfo'] as List?;
-          if (imageInfoList != null && imageInfoList.isNotEmpty) {
-            final info = imageInfoList.first as Map?;
-            final thumbUrl = info?['thumburl']?.toString() ?? info?['url']?.toString();
-            if (thumbUrl != null && thumbUrl.startsWith('http')) {
-              return thumbUrl;
+          for (final rawPage in pages.values) {
+            final page = rawPage as Map?;
+            final title = page?['title']?.toString() ?? '';
+            final imageInfoList = page?['imageinfo'] as List?;
+            if (imageInfoList != null && imageInfoList.isNotEmpty) {
+              final info = imageInfoList.first as Map?;
+              final image = info?['thumburl']?.toString() ?? info?['url']?.toString();
+              if (image != null &&
+                  _isRelevantImageTitle(title, placeName ?? query) &&
+                  _isUsableImageUrl(image, placeName: placeName ?? query, imageTitle: title)) {
+                return image;
+              }
             }
           }
         }
@@ -251,13 +409,13 @@ class DiscoveryRepository {
     required double latitude,
     required double longitude,
   }) async {
-    final wikiPlaces = await _nearbyWikipediaPlaces(latitude: latitude, longitude: longitude);
-    if (wikiPlaces.isNotEmpty) {
-      return _enrichPlacesWithRealImages(wikiPlaces);
-    }
     final overpassPlaces = await _nearbyOverpassPlaces(latitude, longitude);
     if (overpassPlaces.isNotEmpty) {
       return _enrichPlacesWithRealImages(overpassPlaces);
+    }
+    final wikiPlaces = await _nearbyWikipediaPlaces(latitude: latitude, longitude: longitude);
+    if (wikiPlaces.isNotEmpty) {
+      return _enrichPlacesWithRealImages(wikiPlaces);
     }
     final tomtomPlaces = await _nearbyTomTomPlaces(latitude: latitude, longitude: longitude);
     if (tomtomPlaces.isNotEmpty) {
@@ -293,11 +451,15 @@ class DiscoveryRepository {
             final lat = _double(item['lat']);
             final lon = _double(item['lon']);
             final dist = _double(item['dist']).round();
-            if (lat == 0.0 || lon == 0.0) continue;
+            if (lat == 0.0 || lon == 0.0 || dist > 6000) continue;
 
             final category = _classifyWikipediaTitle(cleanName);
             final placeId = 'wiki-${item['pageid'] ?? cleanName}';
-            final img = resolveDynamicImageForPlace(cleanName, category: category, placeId: placeId);
+            final img = resolveDynamicImageForPlace(
+              cleanName,
+              category: category,
+              placeId: placeId,
+            );
 
             places.add(NearbyPlace(
               id: placeId,
@@ -321,7 +483,11 @@ class DiscoveryRepository {
 
   String _classifyWikipediaTitle(String name) {
     final lower = name.toLowerCase();
-    if (lower.contains('parque') || lower.contains('ciénaga') || lower.contains('cienaga') || lower.contains('jardín')) return 'nature';
+    if (lower.contains('parque') || lower.contains('ciénaga') || lower.contains('cienaga') ||
+        (lower.contains('jardín') && !lower.contains('ciudad jardín') && !lower.contains('ciudad jardin')) ||
+        lower.contains('jardin botanico')) {
+      return 'nature';
+    }
     if (lower.contains('museo') || lower.contains('teatro') || lower.contains('casa')) return 'museum';
     if (lower.contains('monumento') || lower.contains('estatua') || lower.contains('ventana') || lower.contains('faro') || lower.contains('castillo')) return 'historic';
     if (lower.contains('estadio') || lower.contains('coliseo') || lower.contains('patinódromo')) return 'sports';
@@ -334,11 +500,18 @@ class DiscoveryRepository {
     if (places.isEmpty) return places;
     final enriched = await Future.wait(
       places.map((place) async {
+        if (place.id.startsWith('fallback-')) return place;
         try {
           final realUrl = await fetchRealPlaceImageUrl(
             place.name,
             category: place.category,
             placeId: place.id,
+            city: place.sourceTags['addr:city']?.toString() ??
+                place.sourceTags['addr:municipality']?.toString() ??
+                place.sourceTags['city']?.toString() ?? '',
+            latitude: place.location.latitude,
+            longitude: place.location.longitude,
+            tags: place.sourceTags,
           );
           if (realUrl.isNotEmpty) {
             return place.copyWith(
@@ -347,7 +520,8 @@ class DiscoveryRepository {
             );
           }
         } catch (_) {}
-        return place;
+        // Never attribute a generic category photo to a real place.
+        return place.copyWith(imageUrl: '', thumbnailUrl: '');
       }),
     );
     return enriched;
@@ -538,7 +712,12 @@ class DiscoveryRepository {
     final lng = coordinates.isNotEmpty ? _double(coordinates[0]) : 0.0;
     final category = _classifyAttraction(properties);
     final placeId = 'search-$index';
-    final img = resolveDynamicImageForPlace(name, category: category, placeId: placeId, tags: properties);
+    final img = resolveDynamicImageForPlace(
+      name,
+      category: category,
+      placeId: placeId,
+      tags: properties,
+    );
 
     return NearbyPlace(
       id: placeId,
@@ -547,6 +726,7 @@ class DiscoveryRepository {
       distanceMeters: 0,
       location: GeoPoint(latitude: lat, longitude: lng),
       category: category,
+      sourceTags: properties,
       imageUrl: img,
       thumbnailUrl: img,
       statusLabel: 'Disponible',
@@ -567,6 +747,8 @@ class DiscoveryRepository {
         node(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve|water_park"]["wikipedia"];
         node(around:$radius,$latitude,$longitude)["tourism"~"attraction|museum|viewpoint|theme_park|zoo"];
         node(around:$radius,$latitude,$longitude)["historic"~"castle|fort|ruins|cathedral"];
+        node(around:$radius,$latitude,$longitude)["amenity"="place_of_worship"]["name"];
+        node(around:$radius,$latitude,$longitude)["natural"~"water|wetland|beach|bay"]["name"];
         way(around:$radius,$latitude,$longitude)["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"]["wikidata"];
         way(around:$radius,$latitude,$longitude)["historic"~"monument|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage|plaza|square"]["wikidata"];
         way(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve|water_park"]["wikidata"];
@@ -575,8 +757,12 @@ class DiscoveryRepository {
         way(around:$radius,$latitude,$longitude)["leisure"~"park|garden|nature_reserve|water_park"]["wikipedia"];
         way(around:$radius,$latitude,$longitude)["tourism"~"attraction|museum|viewpoint|theme_park|zoo"];
         way(around:$radius,$latitude,$longitude)["historic"~"castle|fort|ruins|cathedral"];
+        way(around:$radius,$latitude,$longitude)["amenity"="place_of_worship"]["name"];
+        way(around:$radius,$latitude,$longitude)["natural"~"water|wetland|beach|bay"]["name"];
         relation(around:$radius,$latitude,$longitude)["boundary"="national_park"];
         relation(around:$radius,$latitude,$longitude)["leisure"="nature_reserve"];
+        relation(around:$radius,$latitude,$longitude)["amenity"="place_of_worship"]["name"];
+        relation(around:$radius,$latitude,$longitude)["natural"~"water|wetland|beach|bay"]["name"];
         relation(around:$radius,$latitude,$longitude)["historic"~"heritage|monument|memorial|church"]["wikidata"];
       );
       out center tags 40;
@@ -632,7 +818,12 @@ class DiscoveryRepository {
             seenNames.add(normalizedKey);
             final category = _classifyAttraction(tags);
             final placeId = 'overpass-${element['id'] ?? idx++}';
-            final img = resolveDynamicImageForPlace(name, category: category, placeId: placeId, tags: tags);
+            final img = resolveDynamicImageForPlace(
+              name,
+              category: category,
+              placeId: placeId,
+              tags: tags,
+            );
 
             places.add(NearbyPlace(
               id: placeId,
@@ -641,6 +832,7 @@ class DiscoveryRepository {
               distanceMeters: distance.round(),
               location: GeoPoint(latitude: lat, longitude: lon),
               category: category,
+              sourceTags: tags,
               imageUrl: img,
               thumbnailUrl: img,
               statusLabel: 'Abierto',
@@ -669,11 +861,16 @@ class DiscoveryRepository {
   }
 
   String _classifyAttraction(Map<String, dynamic> tags) {
-    final tourism = tags['tourism']?.toString().toLowerCase() ?? '';
+    final osmKey = tags['osm_key']?.toString().toLowerCase() ?? '';
+    final osmValue = tags['osm_value']?.toString().toLowerCase() ?? '';
+    final tourism = tags['tourism']?.toString().toLowerCase() ??
+        (osmKey == 'tourism' ? osmValue : '');
     final historic = tags['historic']?.toString().toLowerCase() ?? '';
-    final amenity = tags['amenity']?.toString().toLowerCase() ?? '';
+    final amenity = tags['amenity']?.toString().toLowerCase() ??
+        (osmKey == 'amenity' ? osmValue : '');
     final leisure = tags['leisure']?.toString().toLowerCase() ?? '';
-    final natural = tags['natural']?.toString().toLowerCase() ?? '';
+    final natural = tags['natural']?.toString().toLowerCase() ??
+        (osmKey == 'natural' ? osmValue : '');
     final sport = tags['sport']?.toString().toLowerCase() ?? '';
 
     if (const ['museum', 'gallery', 'arts_centre'].contains(amenity) || tourism == 'museum') return 'museum';
@@ -681,9 +878,12 @@ class DiscoveryRepository {
     if (const ['attraction', 'viewpoint', 'theme_park', 'zoo', 'aquarium'].contains(tourism)) return tourism;
     if (amenity == 'marketplace') return 'market';
     if (const ['sports_centre', 'stadium', 'pitch', 'track', 'fitness_centre'].contains(leisure) || sport.isNotEmpty) return 'sports';
-    if (const ['park', 'garden', 'nature_reserve', 'forest'].contains(leisure) || const ['tree', 'wood', 'grassland', 'beach'].contains(natural)) return 'nature';
+    if (const ['park', 'garden', 'nature_reserve', 'forest'].contains(leisure) ||
+        const ['tree', 'wood', 'grassland', 'beach', 'wetland', 'water', 'bay'].contains(natural)) {
+      return 'nature';
+    }
     if (const ['restaurant', 'cafe', 'food_court', 'pub', 'bar', 'nightclub'].contains(amenity)) return amenity;
-    if (const ['cathedral', 'church', 'temple', 'mosque'].contains(historic)) return 'religious';
+    if (amenity == 'place_of_worship' || const ['cathedral', 'church', 'temple', 'mosque'].contains(historic)) return 'religious';
     return tourism.isNotEmpty ? tourism : (historic.isNotEmpty ? historic : (amenity.isNotEmpty ? amenity : (leisure.isNotEmpty ? leisure : (natural.isNotEmpty ? natural : 'place'))));
   }
 
@@ -755,10 +955,30 @@ class DiscoveryRepository {
     return switch (type) {
       'museum' => 'Museo',
       'theatre' => 'Teatro',
+      'theater' => 'Teatro',
+      'gallery' => 'Galeria',
       'arts_centre' => 'Arte',
       'marketplace' => 'Mercado',
       'viewpoint' => 'Mirador',
       'attraction' => 'Atraccion',
+      'nature' => 'Naturaleza',
+      'religious' => 'Religioso',
+      'place_of_worship' => 'Religioso',
+      'park' => 'Parque',
+      'garden' => 'Jardin',
+      'beach' => 'Playa',
+      'zoo' => 'Zoologico',
+      'aquarium' => 'Acuario',
+      'theme_park' => 'Parque de atracciones',
+      'sports' => 'Deportivo',
+      'restaurant' => 'Restaurante',
+      'cafe' => 'Cafe',
+      'bar' => 'Bar',
+      'church' => 'Religioso',
+      'cathedral' => 'Religioso',
+      'temple' => 'Religioso',
+      'mosque' => 'Religioso',
+      'historic' => 'Historico',
       'memorial' => 'Memoria',
       'monument' => 'Monumento',
       _ => type.replaceAll('_', ' '),
@@ -871,6 +1091,9 @@ class DiscoveryRepository {
         longitude: lon,
       ),
       category: category,
+      sourceTags: <String, dynamic>{
+        if (address['municipality'] != null) 'addr:city': address['municipality'],
+      },
       imageUrl: img,
       thumbnailUrl: img,
       statusLabel: 'Abierto',

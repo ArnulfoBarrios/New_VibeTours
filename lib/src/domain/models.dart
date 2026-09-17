@@ -430,6 +430,7 @@ class NearbyPlace {
     this.imageUrl = '',
     this.thumbnailUrl = '',
     this.category = '',
+    this.sourceTags = const <String, dynamic>{},
     this.rating,
     this.isOpenNow,
     this.statusLabel = '',
@@ -443,6 +444,10 @@ class NearbyPlace {
   final String imageUrl;
   final String thumbnailUrl;
   final String category;
+  /// Original provider metadata used to resolve a trustworthy image.
+  /// It is intentionally kept out of the public JSON model because it is
+  /// only needed while displaying nearby places.
+  final Map<String, dynamic> sourceTags;
   final double? rating;
   final bool? isOpenNow;
   final String statusLabel;
@@ -456,6 +461,7 @@ class NearbyPlace {
     String? imageUrl,
     String? thumbnailUrl,
     String? category,
+    Map<String, dynamic>? sourceTags,
     double? rating,
     bool? isOpenNow,
     String? statusLabel,
@@ -469,6 +475,7 @@ class NearbyPlace {
       imageUrl: imageUrl ?? this.imageUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       category: category ?? this.category,
+      sourceTags: sourceTags ?? this.sourceTags,
       rating: rating ?? this.rating,
       isOpenNow: isOpenNow ?? this.isOpenNow,
       statusLabel: statusLabel ?? this.statusLabel,
