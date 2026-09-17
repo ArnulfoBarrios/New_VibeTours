@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -109,7 +109,7 @@ const TOUR_TRIP_TYPES = new Set([
 const MICRO_DESTINATION_PATTERN = /tayrona|minca|guatap[eé]|valle de cocora|parque nacional|reserva natural|sierra nevada|amazonas|eje cafetero|pueblito|monta[nñ]a|ca[nñ]o?n|cascada/i
 const COASTAL_ISLAND_PATTERN = /\bislas?\b|\bcayos?\b|islas? del rosario|isla bar[uú]|san bernardo|archipi[eé]lago|islas? de san bernardo|coastal islands|island hopping/i
 
-const EXPLICIT_TOUR_BUILD_PATTERN = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|procede\s+a\s+generar|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i
+const EXPLICIT_TOUR_BUILD_PATTERN = /\b(gener(?:ar|es|a|e|en|al)?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta|viaje|plan|mapa)|cre(?:ar|es|a|e|en)?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta|viaje|plan|mapa)|inicia?r?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta)|finaliza?r?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta)|constru(?:ye|ir)\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta|viaje)|dise[ñn](?:ar|a|es|e)?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta)|procede\s+a\s+generar|adelante\s+(?:con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(?:a\s+)?(?:generar|crear)\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta)|armar?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta|viaje))\b/i
 
 function hasDefinedChatValue(value) {
   if (!value) return false
@@ -133,6 +133,23 @@ function firstMissingTourDetail(preferences) {
   if (!hasDefinedChatValue(preferences?.transport)) return '¿Qué medio de transporte usarás para moverte?'
   if (!hasDefinedChatValue(preferences?.budget)) return '¿Qué presupuesto aproximado tienes para el viaje?'
   return null
+}
+
+function messageMayContainMissingTourDetail(message, missingQuestion) {
+  const text = String(message || '')
+  if (missingQuestion.startsWith('¿Cuántos')) {
+    return /(?:[0-9]+[ \t]*d[íi]as?|fin de semana|puente|semana|del[ \t]+[0-9]{1,2}[ \t]+(?:al|hasta)|fechas?|mes)/i.test(text)
+  }
+  if (missingQuestion.startsWith('¿Dónde')) {
+    return /(?:hotel|hostal|resort|hospedaje|alojamiento|me quedar[eé]|me hospedar[eé]|casa propia|casa de un familiar)/i.test(text)
+  }
+  if (missingQuestion.startsWith('¿Qué medio')) {
+    return /(?:transporte|caminar|caminando|a pie|auto|carro|coche|taxi|uber|bus|metro|bicicleta|bici)/i.test(text)
+  }
+  if (missingQuestion.startsWith('¿Qué presupuesto')) {
+    return /(?:presupuesto|econ[oó]mico|barato|moderado|lujo|premium|mochilero)/i.test(text)
+  }
+  return false
 }
 
 export function normalizeTourType(value) {
@@ -699,6 +716,37 @@ aiRouter.post('/chat', async (req, res, next) => {
           if (geoResult.country) currentPreferences.country = geoResult.country
         }
       } catch (_) {}
+    }
+
+    // Fast path for the first build command. The local extractor handles the
+    // common values already written in the message (for example, "crear un
+    // tour a Coveñas") without spending two remote calls before asking for
+    // the next required value. Requests with complete preferences continue
+    // through the full AI conversation below.
+    const isExplicitBuildRequest = EXPLICIT_TOUR_BUILD_PATTERN.test(message)
+    if (isExplicitBuildRequest) {
+      const quickExtracted = extractChatInformationFallback(message)
+      const quickPreferences = { ...currentPreferences }
+      Object.entries(quickExtracted || {}).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && value !== '') {
+          quickPreferences[key] = value
+        }
+      })
+
+      const quickMissingTourDetail = firstMissingTourDetail(quickPreferences)
+      if (quickMissingTourDetail && !messageMayContainMissingTourDetail(message, quickMissingTourDetail)) {
+        return res.json({
+          responseMessage: quickMissingTourDetail,
+          message: quickMissingTourDetail,
+          botMessage: quickMissingTourDetail,
+          preferences: quickPreferences,
+          updatedPreferences: quickPreferences,
+          destinationSuggestions: [],
+          actionChips: [],
+          readyToBuild: false,
+          webSearchDone: Boolean(quickPreferences.webSearchDone)
+        })
+      }
     }
 
     // 1. Extraer preferencias del último mensaje del usuario usando LLM + Fallback
