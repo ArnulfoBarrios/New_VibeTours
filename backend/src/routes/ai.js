@@ -109,47 +109,12 @@ const TOUR_TRIP_TYPES = new Set([
 const MICRO_DESTINATION_PATTERN = /tayrona|minca|guatap[eé]|valle de cocora|parque nacional|reserva natural|sierra nevada|amazonas|eje cafetero|pueblito|monta[nñ]a|ca[nñ]o?n|cascada/i
 const COASTAL_ISLAND_PATTERN = /\bislas?\b|\bcayos?\b|islas? del rosario|isla bar[uú]|san bernardo|archipi[eé]lago|islas? de san bernardo|coastal islands|island hopping/i
 
-const EXPLICIT_TOUR_BUILD_PATTERN = /\b(gener(?:ar|es|a|e|en|al)?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta|viaje|plan|mapa)|cre(?:ar|es|a|e|en)?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta|viaje|plan|mapa)|inicia?r?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta)|finaliza?r?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta)|constru(?:ye|ir)\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta|viaje)|dise[ñn](?:ar|a|es|e)?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta)|procede\s+a\s+generar|adelante\s+(?:con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(?:a\s+)?(?:generar|crear)\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta)|armar?\s+(?:(?:el|la|un|una)\s+)?(?:tour|itinerario|ruta|viaje))\b/i
-
-function hasDefinedChatValue(value) {
-  if (!value) return false
-  if (typeof value === 'string') {
-    return value.trim().length > 0 && !/^(por definir|pendiente|a definir|por confirmar|sin definir|null|undefined)$/i.test(value.trim())
-  }
-  return true
-}
-
-function hasDefinedLodging(preferences) {
-  const lodging = preferences?.selectedHotel
-  return hasDefinedChatValue(preferences?.accommodationStatus) ||
-    hasDefinedChatValue(typeof lodging === 'object' ? (lodging?.name || lodging?.nombre) : lodging)
-}
-
-function firstMissingTourDetail(preferences) {
-  const destination = preferences?.city || preferences?.destination || preferences?.canonicalDestination?.city
-  if (!hasDefinedChatValue(destination)) return '¿A qué destino te gustaría viajar?'
-  if (!hasDefinedChatValue(preferences?.durationDays) && !hasDefinedChatValue(preferences?.datesSeason)) return '¿Cuántos días durará tu viaje o qué fechas tienes previstas?'
-  if (!hasDefinedLodging(preferences)) return '¿Dónde te hospedarás durante el viaje?'
-  if (!hasDefinedChatValue(preferences?.transport)) return '¿Qué medio de transporte usarás para moverte?'
-  if (!hasDefinedChatValue(preferences?.budget)) return '¿Qué presupuesto aproximado tienes para el viaje?'
-  return null
-}
-
-function messageMayContainMissingTourDetail(message, missingQuestion) {
-  const text = String(message || '')
-  if (missingQuestion.startsWith('¿Cuántos')) {
-    return /(?:[0-9]+[ \t]*d[íi]as?|fin de semana|puente|semana|del[ \t]+[0-9]{1,2}[ \t]+(?:al|hasta)|fechas?|mes)/i.test(text)
-  }
-  if (missingQuestion.startsWith('¿Dónde')) {
-    return /(?:hotel|hostal|resort|hospedaje|alojamiento|me quedar[eé]|me hospedar[eé]|casa propia|casa de un familiar)/i.test(text)
-  }
-  if (missingQuestion.startsWith('¿Qué medio')) {
-    return /(?:transporte|caminar|caminando|a pie|auto|carro|coche|taxi|uber|bus|metro|bicicleta|bici)/i.test(text)
-  }
-  if (missingQuestion.startsWith('¿Qué presupuesto')) {
-    return /(?:presupuesto|econ[oó]mico|barato|moderado|lujo|premium|mochilero)/i.test(text)
-  }
-  return false
+function destinationKey(value) {
+  return cleanAdministrativeCityName(String(value || ''))
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
 }
 
 export function normalizeTourType(value) {
@@ -718,36 +683,40 @@ aiRouter.post('/chat', async (req, res, next) => {
       } catch (_) {}
     }
 
-    // Fast path for the first build command. The local extractor handles the
-    // common values already written in the message (for example, "crear un
-    // tour a Coveñas") without spending two remote calls before asking for
-    // the next required value. Requests with complete preferences continue
-    // through the full AI conversation below.
-    const isExplicitBuildRequest = EXPLICIT_TOUR_BUILD_PATTERN.test(message)
-    if (isExplicitBuildRequest) {
-      const quickExtracted = extractChatInformationFallback(message)
-      const quickPreferences = { ...currentPreferences }
-      Object.entries(quickExtracted || {}).forEach(([key, value]) => {
-        if (value !== null && value !== undefined && value !== '') {
-          quickPreferences[key] = value
-        }
-      })
-
-      const quickMissingTourDetail = firstMissingTourDetail(quickPreferences)
-      if (quickMissingTourDetail && !messageMayContainMissingTourDetail(message, quickMissingTourDetail)) {
-        return res.json({
-          responseMessage: quickMissingTourDetail,
-          message: quickMissingTourDetail,
-          botMessage: quickMissingTourDetail,
-          preferences: quickPreferences,
-          updatedPreferences: quickPreferences,
-          destinationSuggestions: [],
-          actionChips: [],
-          readyToBuild: false,
-          webSearchDone: Boolean(quickPreferences.webSearchDone)
-        })
+    // Precalentar en paralelo los datos que el flujo normal necesitará
+    // después. La conversación sigue usando el mismo extractor y el mismo
+    // generador; únicamente se solapan las consultas independientes.
+    const quickExtracted = extractChatInformationFallback(message)
+    const existingCanonical = currentPreferences.canonicalDestination
+    const preloadDestination = existingCanonical?.city ||
+      existingCanonical?.entityName ||
+      currentPreferences.city ||
+      currentPreferences.destination ||
+      quickExtracted?.city ||
+      quickExtracted?.destination ||
+      ''
+    const preloadDestinationKey = destinationKey(preloadDestination)
+    const existingCanonicalIsUsable = Boolean(
+      existingCanonical &&
+      Number.isFinite(Number(existingCanonical.latitude)) &&
+      Number.isFinite(Number(existingCanonical.longitude))
+    )
+    const canonicalWarmup = preloadDestinationKey && existingCanonicalIsUsable
+      ? Promise.resolve(existingCanonical)
+      : preloadDestinationKey
+        ? resolveCanonicalDestination(preloadDestination).catch(() => null)
+        : Promise.resolve(null)
+    const catalogWarmup = canonicalWarmup.then(canonical => {
+      if (!canonical || !Number.isFinite(Number(canonical.latitude)) || !Number.isFinite(Number(canonical.longitude))) {
+        return null
       }
-    }
+      return getRealDestinationCatalog(
+        canonical.city || canonical.entityName || preloadDestination,
+        canonical.country || currentPreferences.country || 'Colombia',
+        Number(canonical.latitude),
+        Number(canonical.longitude)
+      ).catch(() => null)
+    })
 
     // 1. Extraer preferencias del último mensaje del usuario usando LLM + Fallback
     const extracted = await extractChatInformation(message, currentPreferences, history)
@@ -933,7 +902,21 @@ aiRouter.post('/chat', async (req, res, next) => {
       let rawDest = updatedPreferences.destination || updatedPreferences.city
       if (rawDest && typeof rawDest === 'string' && rawDest.trim().length > 0) {
         rawDest = cleanAdministrativeCityName(rawDest)
-        const canonical = await resolveCanonicalDestination(rawDest)
+        const rawDestinationKey = destinationKey(rawDest)
+        const currentCanonicalKey = destinationKey(
+          currentPreferences.canonicalDestination?.city ||
+          currentPreferences.canonicalDestination?.entityName ||
+          currentPreferences.destination ||
+          currentPreferences.city
+        )
+        const canonical = (
+          existingCanonicalIsUsable &&
+          currentCanonicalKey === rawDestinationKey
+        )
+          ? existingCanonical
+          : preloadDestinationKey === rawDestinationKey
+            ? await canonicalWarmup
+            : await resolveCanonicalDestination(rawDest)
         if (canonical) {
           // If destination changed, clear previous specific places and hotel to prevent cross-destination pollution
           const prevDest = currentPreferences.canonicalDestination?.entityName || currentPreferences.canonicalDestination?.city || currentPreferences.destination || currentPreferences.city
@@ -972,24 +955,26 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences.destination = 'Cartagena, Bolívar, Colombia'
     }
 
-    // Si el usuario intenta generar antes de completar los datos, responder
-    // aquí. No se consulta catálogo, web ni modelo para no repetir itinerarios
-    // ni retrasar una pregunta que puede resolverse de inmediato.
-    const missingTourDetail = EXPLICIT_TOUR_BUILD_PATTERN.test(message)
-      ? firstMissingTourDetail(updatedPreferences)
+    // Si el destino es el mismo, dejamos que el catálogo precalentado termine
+    // mientras la extracción de preferencias ya estaba ejecutándose. Así
+    // generateChatResponse reutiliza el caché sin cambiar su contenido.
+    const updatedDestinationKey = destinationKey(
+      updatedPreferences.canonicalDestination?.city ||
+      updatedPreferences.canonicalDestination?.entityName ||
+      updatedPreferences.city ||
+      updatedPreferences.destination
+    )
+    const warmedCanonical = updatedDestinationKey && preloadDestinationKey
+      ? await canonicalWarmup
       : null
-    if (missingTourDetail) {
-      return res.json({
-        responseMessage: missingTourDetail,
-        message: missingTourDetail,
-        botMessage: missingTourDetail,
-        preferences: updatedPreferences,
-        updatedPreferences,
-        destinationSuggestions: [],
-        actionChips: [],
-        readyToBuild: false,
-        webSearchDone: Boolean(updatedPreferences.webSearchDone)
-      })
+    const warmedCanonicalKey = destinationKey(
+      warmedCanonical?.city || warmedCanonical?.entityName
+    )
+    if (updatedDestinationKey && (
+      updatedDestinationKey === preloadDestinationKey ||
+      updatedDestinationKey === warmedCanonicalKey
+    )) {
+      await catalogWarmup
     }
 
     // 2. Realizar búsqueda en vivo solo si el usuario pregunta explícitamente

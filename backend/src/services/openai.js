@@ -388,8 +388,8 @@ async function verifyCatalogEntriesOnOsm(entries, city, country, limit = 16) {
  */
 export async function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null) {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
-
-  const cacheKey = `catalog_osm_v2_${clean}_${countryName}`
+  const normalizedCountry = String(countryName || '').trim().toLowerCase()
+  const cacheKey = `catalog_osm_v2_${clean}_${normalizedCountry}`
   const cached = destinationCatalogCache.get(cacheKey)
   if (cached) return cached
 

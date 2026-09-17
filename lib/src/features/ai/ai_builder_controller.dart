@@ -224,7 +224,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         if (lat != null) 'latitude': lat,
         // ignore: use_null_aware_elements
         if (lon != null) 'longitude': lon,
-      }, timeout: const Duration(seconds: 45));
+      });
 
       if (requestSequence != _chatRequestSequence) return;
 
