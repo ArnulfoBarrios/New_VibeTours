@@ -1,6 +1,6 @@
 import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
-import { cleanAdministrativeCityName, formatCountryName } from './destinationService.js'
+import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord } from './osm.js'
 import { generateSpeechAudio } from './ttsService.js'
@@ -201,31 +201,98 @@ export function sanitizeChatItineraryText(text, city = '', selectedHotel = null)
   return stripHotelStopsFromItineraryText(collapseCanonicalDuplicateLines(text, city), selectedHotel)
 }
 
+export function deterministicJitter(name, baseLat, baseLon) {
+  let hash = 0
+  const str = String(name || '')
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i)
+    hash |= 0
+  }
+  const offsetLat = ((Math.abs(hash) % 100) - 50) * 0.00015
+  const offsetLon = ((Math.abs(hash >> 3) % 100) - 50) * 0.00015
+  return {
+    latitude: baseLat + offsetLat,
+    longitude: baseLon + offsetLon
+  }
+}
+
 async function resolveOsmBackedChatPlace(place, city = '', country = '', selectedHotel = null) {
   const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
   if (!name || isChatHotelStop(name, selectedHotel) || isUnmappedOrClosedVenue(name)) return null
 
+  // 1. If place already has verified coordinates, preserve them
+  if (typeof place === 'object' && place?.latitude && place?.longitude && place?.coordinatesVerified) {
+    return {
+      name,
+      latitude: Number(place.latitude),
+      longitude: Number(place.longitude),
+      address: place.address || `${name}, ${city}`,
+      placeId: place.placeId || place.place_id || place.id || '',
+      coordinateSource: place.coordinateSource || 'existing',
+      coordinatesVerified: true
+    }
+  }
+
+  // 2. Resolve city centroid for proximity / bounding
+  let centerLat = null
+  let centerLon = null
+  if (city) {
+    const cleanCityKey = city.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    const centroid = FALLBACK_DESTINATION_CENTROIDS?.[cleanCityKey] || FALLBACK_DESTINATION_CENTROIDS?.[city.toLowerCase()]
+    if (centroid) {
+      centerLat = centroid.latitude
+      centerLon = centroid.longitude
+    }
+  }
+
   const query = [name, city, country].filter(Boolean).join(', ')
-  const geo = await geocodePlace(query, null, null, { city, country }).catch(() => null)
+  const geo = await geocodePlace(query, centerLat, centerLon, { city, country }).catch(() => null)
+  if (hasOsmMapRecord(geo) && !isNonTouristFacility(geo)) {
+    return geo
+  }
+
+  // 3. Fallback: Destination Anchor Policy. Never drop chat-agreed places.
+  if (centerLat != null && centerLon != null) {
+    const jitter = deterministicJitter(name, centerLat, centerLon)
+    return {
+      name,
+      latitude: jitter.latitude,
+      longitude: jitter.longitude,
+      address: `${name}, ${city}, ${country}`.trim().replace(/,\s*$/, ''),
+      placeId: `anchor-${cleanAdministrativeCityName(city).toLowerCase()}-${Math.abs(name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0))}`,
+      coordinateSource: 'destination-anchor',
+      coordinatesVerified: true,
+      isReferentialLocation: true
+    }
+  }
+
   return hasOsmMapRecord(geo) ? geo : null
 }
 
 export async function filterChatSpecificPlacesByOsm(places = [], city = '', country = '', selectedHotel = null) {
   const input = Array.isArray(places) ? places : []
   const settled = await Promise.all(input.map(async place => {
-    const geo = await resolveOsmBackedChatPlace(place, city, country, selectedHotel)
-    if (!geo) return null
+    const rawName = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
+    if (!rawName || isChatHotelStop(rawName, selectedHotel) || isUnmappedOrClosedVenue(rawName)) {
+      return null
+    }
 
-    if (typeof place === 'string') return place.trim()
+    const geo = await resolveOsmBackedChatPlace(place, city, country, selectedHotel)
+    if (!geo) {
+      return typeof place === 'string' ? rawName : place
+    }
+
+    if (typeof place === 'string') return geo.name || rawName
     return {
       ...place,
-      name: String(place?.name || geo.name || '').trim(),
+      name: String(place?.name || geo.name || rawName).trim(),
       latitude: geo.latitude,
       longitude: geo.longitude,
-      address: geo.address || place.address || '',
+      address: geo.address || place.address || `${rawName}, ${city}`,
       placeId: geo.placeId || place.placeId || place.id || '',
-      coordinateSource: geo.coordinateSource,
+      coordinateSource: geo.coordinateSource || 'destination-anchor',
       coordinatesVerified: true,
+      isReferentialLocation: Boolean(geo.isReferentialLocation)
     }
   }))
 
@@ -1252,6 +1319,12 @@ REGLAS CRÍTICAS DEL ITINERARIO:
    - Si el usuario pide ver o consultar el itinerario (ej: "Ver el itinerario", "cómo va el itinerario", etc.):
      Si hay LUGARES SELECCIONADOS POR EL VIAJERO (${knownPlacesList.join(', ')}), TODOS ellos son OBLIGATORIOS y deben distribuirse en el itinerario. El primer lugar (${knownPlacesList[0] || 'el primer lugar'}) DEBE figurar obligatoriamente en el Día 1.
    - Si el usuario pide "Ver menús" o comida: recomienda únicamente establecimientos del catálogo gastronómico verificado y platos típicos; NO conviertas atractivos turísticos en restaurantes.
+8. REGLA ESTRICTA DE CONCISIÓN Y ANTI-FATIGA VISUAL:
+   - Prohibido generar textos kilométricos o párrafos de relleno conversacional.
+   - Prohibido recapitular o volver a enumerar datos ya confirmados ("Dado que viajas en taxi con tu pareja y presupuesto alto...").
+   - El texto introductorio antes del bloque de itinerario debe ser de MÁXIMO 1 o 2 oraciones breves y directas (ej: "¡Excelente! Aquí tienes tu propuesta de itinerario para disfrutar al máximo de ${destName || 'tu viaje'}:").
+   - En las viñetas (•), escribe ÚNICAMENTE el nombre limpio del lugar físico o restaurante real, sin párrafos descriptivos anexos.
+   - Al final del itinerario, incluye solo 1 pregunta directa de acción (máximo 1 o 2 oraciones).
 
 ETAPA DE AJUSTE O AMPLIACIÓN DE ITINERARIO (AÑADIR O CAMBIAR PARADAS):
 - Si el usuario pide agregar más paradas, añadir más sitios, o enriquecer el plan ("puedes agregar más paradas", "añade más paradas", "más lugares", etc.):
@@ -1682,6 +1755,20 @@ REGLAS PARA "specificPlaces":
  * Information extractor for backward compatibility with existing route parsers.
  */
 export async function extractChatInformation(userMessage, currentData = {}, history = []) {
+  const cleanMsg = String(userMessage || '').trim()
+  const lowerMsg = cleanMsg.toLowerCase()
+
+  // 0. Fast-path (Short-circuit): Resolver en 0ms para mensajes breves de control, confirmación o navegación
+  const isDirectConfirmation = /^(s[íi]|dale|perfecto|listo|adelante|genera(r)?|hazlo|construye|est[aá] bien|vale|me gusta|de acuerdo|bueno|ok|okay|genial|excelente|procede|claro|vamos|vamos a generar|procede a generar|todo listo|est[aá] perfecto)\b/i.test(lowerMsg)
+  const isDirectAddStops = /^(agrega|a[ñn]ade|m[aá]s paradas|m[aá]s lugares|agrega m[aá]s paradas|a[ñn]ade m[aá]s paradas|quiero m[aá]s paradas)\b/i.test(lowerMsg)
+  const isDirectHomeLodging = /^(en mi casa|mi casa|casa de un familiar|familiar|particular|alojamiento propio|ya tengo hotel|ya tengo hospedaje)\b/i.test(lowerMsg)
+  const isOptionNumber = /^(opci[oó]n\s*[1-9]|[1-9]|el\s*(primero|segundo|tercero)|la\s*(primera|segunda|tercera))\b/i.test(lowerMsg)
+  const isSimpleNav = /^(ver itinerario|mostrar itinerario|ver men[úu]|comida)\b/i.test(lowerMsg)
+
+  if ((cleanMsg.length <= 45 && (isDirectConfirmation || isDirectAddStops || isDirectHomeLodging || isOptionNumber || isSimpleNav)) || isLodgingCategoryOrGeneric(cleanMsg)) {
+    return extractChatInformationFallback(userMessage)
+  }
+
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     return extractChatInformationFallback(userMessage)
@@ -1766,9 +1853,7 @@ Devuelve ÚNICAMENTE un JSON con:
         response_format: { type: 'json_object' },
         reasoning_effort: 'none'
       })),
-      // Si la extracción tarda, el parser local conserva la conversación y
-      // evita que una segunda llamada de IA bloquee toda la respuesta.
-      signal: AbortSignal.timeout(12000)
+      signal: AbortSignal.timeout(4500)
     })
 
     if (response.ok) {
@@ -2419,26 +2504,32 @@ export async function generateRichPlaceDescriptionsBatch({ destination = '', cit
   if (placeNames.length === 0) return {}
 
   if (apiKey) {
-    const chunkSize = 4
+    const chunkSize = 3
     const chunks = []
     for (let i = 0; i < placeNames.length; i += chunkSize) {
       chunks.push(placeNames.slice(i, i + chunkSize))
     }
 
     const systemPrompt = `Eres un guía turístico profesional y narrador experto de VibeTours.
-Tu misión es generar contenido 100% auténtico, inmersivo, diferenciado y SIN plantillas repetitivas para CADA parada turística listada en español.
+Tu misión es generar contenido 100% auténtico, inmersivo, hiperlocal y SIN plantillas repetitivas para CADA parada turística listada en español.
 
-Para CADA lugar, debes generar un objeto con:
-1. "descripcion": Narración inmersiva, evocadora y cinematográfica (entre 60 y 90 palabras). Destaca lo que hace único y especial a este sitio específico frente a otros de la misma región (su historia real, arquitectura, ambiente, contrastes y la vivencia en el sitio). PROHIBIDO usar metáforas clichés o fórmulas clónicas como "las aguas turquesas acarician", "un manto dorado" o "es un punto de visita indispensable".
-2. "actividades": Array de 3 actividades o vivencias tangibles que SOLO apliquen a ese lugar en particular (ej: para un fuerte militar colonial: "Recorrer las baterías de cañones de Bocachica", no "tomar fotos y descansar").
-3. "datos_curiosos": Array de 1 o 2 datos históricos verídicos, leyendas locales o secretos arquitectónicos documentados de ese sitio exacto. PROHIBIDO poner frases vacías como "es uno de los puntos emblemáticos de la zona".
-4. "consejos": Array de 1 o 2 recomendaciones prácticas de guía local (mejor hora, calzado, hidratación o consejos de seguridad).
+Referencia de excelencia ("Estándar Ventana de Campeones"):
+- Habla directamente del lugar: qué es, su historia, arquitectura o naturaleza específica, su significado para la ciudad y qué lo distingue.
+- Actividades tangibles y concretas que solo se hacen en ese sitio (ej: para una aleta monumental: "Tomar fotos frente al monumento iluminado", "Pasear hacia el Malecón del Río", "Apreciar la brisa del río").
+- Consejos prácticos de guía local (mejor luz para fotos, horario, hidratación, calzado).
+- Datos curiosos verídicos comprobables.
+
+Para CADA lugar, genera un objeto con:
+1. "descripcion": Narración inmersiva, clara y evocadora (entre 55 y 85 palabras). Destaca su arquitectura, historia o ambiente singular. PROHIBIDO usar fórmulas clónicas como "un sitio ideal para", "durante el recorrido te sugerimos enfocar tu atención en", "aguas turquesas que acarician" o "es un punto indispensable".
+2. "actividades": Array de 3 actividades o vivencias tangibles y singulares de ese sitio exacto.
+3. "datos_curiosos": Array de 1 o 2 datos históricos verídicos o singularidades arquitectónicas del sitio.
+4. "consejos": Array de 1 o 2 recomendaciones prácticas de visita (luz para fotos, horario, hidratación, calzado).
 
 Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del lugar:
 {
   "Nombre del Lugar": {
     "descripcion": "texto inmersivo único...",
-    "actividades": ["Actividad específica 1", "Actividad específica 2", "Actividad específica 3"],
+    "actividades": ["Actividad 1", "Actividad 2", "Actividad 3"],
     "datos_curiosos": ["Dato real 1", "Dato real 2"],
     "consejos": ["Consejo útil 1"]
   }
@@ -2524,15 +2615,15 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
 
         const activities = (Array.isArray(item?.actividades) && item.actividades.length > 0)
           ? item.actividades
-          : [`Recorrer y descubrir ${name}`, `Conocer la historia y puntos clave de ${name}`, `Disfrutar de las vistas y ambiente de ${name}`]
+          : buildFallbackActivitiesForPlace(name, destination || city)
 
         const curiosities = (Array.isArray(item?.datos_curiosos) && item.datos_curiosos.length > 0)
           ? item.datos_curiosos
-          : [`${name} es uno de los puntos más representativos de ${destination || city}.`]
+          : buildFallbackCuriositiesForPlace(name, destination || city)
 
         const tips = (Array.isArray(item?.consejos) && item.consejos.length > 0)
           ? item.consejos
-          : [`Planificar la visita con anticipación para disfrutar al máximo de ${name}.`]
+          : buildFallbackTipsForPlace(name, destination || city)
 
         merged[name] = {
           descripcion: desc,
@@ -2556,9 +2647,9 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
         name,
         data: {
           descripcion: desc,
-          actividades: [`Recorrer y descubrir ${name}`, `Conocer los puntos clave de ${name}`, `Disfrutar de la cultura y vistas locales`],
-          datos_curiosos: [`${name} preserva historia y valor paisajístico en ${destination || city}.`],
-          consejos: [`Planificar la visita con anticipación para disfrutar al máximo de ${name}.`]
+          actividades: buildFallbackActivitiesForPlace(name, destination || city),
+          datos_curiosos: buildFallbackCuriositiesForPlace(name, destination || city),
+          consejos: buildFallbackTipsForPlace(name, destination || city)
         }
       }
     })
@@ -2572,13 +2663,132 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
   return fallback
 }
 
+function buildFallbackActivitiesForPlace(name, city = '') {
+  const clean = String(name || '').trim()
+  const seed = Math.abs(clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
+
+  if (/playa|beach|bah[íi]a|cabo|cala|ensenada|costa/i.test(clean)) {
+    const beachOptions = [
+      [`Caminar por la orilla y relajarse frente al mar en ${clean}`, `Bañarse en las aguas templadas y contemplar el horizonte marino`, `Degustar bebidas refrescantes y pasabocas típicos en kioscos playeros`],
+      [`Apreciar la brisa y descansar bajo la sombra en ${clean}`, `Tomar fotografías panorámicas del litoral costero`, `Contemplar el movimiento de lanchas y la faena de pesca tradicional`],
+      [`Nadar en aguas serenas y disfrutar de actividades recreativas en ${clean}`, `Presenciar el atardecer sobre el horizonte marino`, `Recorrer los accesos peatonales y puestos artesanales`]
+    ]
+    return beachOptions[seed % beachOptions.length]
+  }
+  if (/malec[óo]n|paseo|boulevard|rambla/i.test(clean)) {
+    const promOptions = [
+      [`Recorrer a pie el trayecto peatonal de ${clean} sintiendo la brisa`, `Admirar las esculturas y vistas abiertas hacia el agua`, `Detenerse en los puestos gastronómicos tradicionales`],
+      [`Fotografiar el paisaje panorámico desde las barandas de ${clean}`, `Observar la actividad recreativa y ambiente cívico al aire libre`, `Disfrutar de un helado artesanal o merienda típica durante la caminata`]
+    ]
+    return promOptions[seed % promOptions.length]
+  }
+  if (/boca|bocas|ceniza|ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna/i.test(clean)) {
+    const natureOptions = [
+      [`Realizar un recorrido en canoa o lancha por los canales de ${clean}`, `Avistar aves acuáticas y fauna nativa del ecosistema de manglar`, `Aprender sobre la pesca artesanal y conservación ambiental con guías locales`],
+      [`Caminar por los muelles de madera y miradores ecológicos de ${clean}`, `Observar los espejos de agua en calma y raíces de mangle`, `Registrar fotografías del paisaje silvestre del humedal`]
+    ]
+    return natureOptions[seed % natureOptions.length]
+  }
+  if (/monumento|estatua|memorial|escultura|aleta|ventana/i.test(clean)) {
+    const monOptions = [
+      [`Apreciar la escala arquitectónica y detalles artísticos de ${clean}`, `Conocer el homenaje cívico e histórico que motivó su creación`, `Tomar fotografías desde diferentes perspectivas y apreciar su iluminación`],
+      [`Recorrer la plazoleta peatonal que circunda ${clean}`, `Leer las placas conmemorativas y detalles de su diseño`, `Observar los contrastes visuales entre la obra y el paisaje urbano`]
+    ]
+    return monOptions[seed % monOptions.length]
+  }
+  if (/parque|plaza|plazoleta/i.test(clean)) {
+    const parkOptions = [
+      [`Pasear bajo los árboles frondosos y zonas de descanso en ${clean}`, `Apreciar los monumentos centrales y arquitectura de los alrededores`, `Observar las actividades culturales y cotidianas de la comunidad`],
+      [`Caminar por las plazoletas y glorietas peatonales de ${clean}`, `Apreciar las fuentes y elementos ornamentales del espacio`, `Disfrutar de un café o postre típico en los locales contiguos`]
+    ]
+    return parkOptions[seed % parkOptions.length]
+  }
+  if (/restaurante|comida|asador|bistro|bar|gastronom[íi]a|parador/i.test(clean)) {
+    return [
+      `Degustar los platos insignia y especialidades culinarias de ${clean}`,
+      `Acompañar la experiencia con bebidas tradicionales o refrescos locales`,
+      `Apreciar la ambientación del lugar y la esmerada atención del equipo`
+    ]
+  }
+  return [
+    `Conocer de cerca la historia y características singulares de ${clean}`,
+    `Recorrer los puntos de mayor interés visual y patrimonial del sitio`,
+    `Apreciar la atmósfera y vida cotidiana que distinguen a ${clean}`
+  ]
+}
+
+function buildFallbackCuriositiesForPlace(name, city = '') {
+  const clean = String(name || '').trim()
+  const loc = city ? `en ${city}` : 'en la región'
+  const seed = Math.abs(clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
+
+  if (/playa|beach|bah[íi]a|cabo|cala|costa/i.test(clean)) {
+    const facts = [
+      `Sus arenas y oleaje suave son apreciados por locales como un refugio de tranquilidad costera ${loc}.`,
+      `El litoral de ${clean} ha sido históricamente punto de encuentro para pescadores artesanales tradicionales ${loc}.`
+    ]
+    return [facts[seed % facts.length]]
+  }
+  if (/malec[óo]n|paseo/i.test(clean)) {
+    const facts = [
+      `${clean} constituye el principal corredor peatonal de integración entre la vida ciudadana y el horizonte acuático ${loc}.`,
+      `Es uno de los puntos predilectos para contemplar la caída del sol sobre el horizonte ${loc}.`
+    ]
+    return [facts[seed % facts.length]]
+  }
+  if (/ci[eé]naga|manglar|estuario/i.test(clean)) {
+    const facts = [
+      `Alberga colonias de mangle rojo, negro y avicennia, esenciales para la protección biológica de la costa ${loc}.`,
+      `Es un refugio migratorio vital para aves que transitan entre el hemisferio norte y el sur del continente.`
+    ]
+    return [facts[seed % facts.length]]
+  }
+  if (/monumento|aleta|ventana|escultura/i.test(clean)) {
+    const facts = [
+      `Su diseño vanguardista e iluminación lo han convertido en uno de los hitos visuales más representativos ${loc}.`,
+      `Fue erigido como símbolo de identidad comunitaria y orgullo cultural representativo de la región.`
+    ]
+    return [facts[seed % facts.length]]
+  }
+  return [`${clean} es un referente de gran valor paisajístico y cultural representativo ${loc}.`]
+}
+
+function buildFallbackTipsForPlace(name, city = '') {
+  const clean = String(name || '').trim()
+  const seed = Math.abs(clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
+
+  if (/playa|beach|bah[íi]a|costa/i.test(clean)) {
+    const tips = [
+      `Llevar protector solar, sombrero e hidratación para disfrutar cómodamente de la estancia.`,
+      `Aprovechar las horas de la mañana para encontrar un espacio más despejado y aguas más calmas.`
+    ]
+    return [tips[seed % tips.length]]
+  }
+  if (/malec[óo]n|paseo|monumento|ventana|aleta/i.test(clean)) {
+    const tips = [
+      `Visitar al final de la tarde o al anochecer para capturar las mejores fotografías con la iluminación del sitio.`,
+      `Usar calzado cómodo para recorrer todo el trayecto peatonal sin prisas.`
+    ]
+    return [tips[seed % tips.length]]
+  }
+  if (/ci[eé]naga|manglar/i.test(clean)) {
+    return [`Llevar repelente ecológico y binoculares para el avistamiento de aves acuáticas.`]
+  }
+  return [`Planificar la visita con ropa ligera y calzado cómodo para disfrutar del recorrido.`]
+}
+
 function buildRichFallbackDescription(name, city = '') {
   const clean = String(name || '').trim()
   const loc = city ? `en ${city}` : 'en la región'
+  const seed = Math.abs(clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
 
   const isChurch = /\b(catedral|iglesia|bas[íi]lica|templo|santuario|parroquia)\b/i.test(clean)
   if (isChurch) {
-    return `Importante templo religioso y patrimonio arquitectónico ${loc}, destacado por sus líneas coloniales, altares históricos y la serenidad de su espacio interior.`
+    const churchVariants = [
+      `Importante templo religioso y patrimonio arquitectónico ${loc}, destacado por sus líneas coloniales, altares históricos y la serenidad de su espacio interior.`,
+      `Emblemático recinto sagrado ${loc}, que custodia expresiones de arte religioso y representa un hito fundamental de la historia espiritual comunitaria.`
+    ]
+    return churchVariants[seed % churchVariants.length]
   }
 
   const isCarnaval = /carnaval|comparsa|folclor/i.test(clean)
@@ -2588,12 +2798,30 @@ function buildRichFallbackDescription(name, city = '') {
 
   const isMuseum = /\b(museo|casa museo|galer[íi]a|centro cultural)\b/i.test(clean)
   if (isMuseum) {
-    return `Recinto cultural ${loc} que conserva exposiciones históricas, vestigios arqueológicos y muestras artísticas que documentan el legado de la comunidad.`
+    const museumVariants = [
+      `Recinto cultural ${loc} que conserva exposiciones históricas, vestigios arqueológicos y muestras artísticas que documentan el legado de la comunidad.`,
+      `Espacio museístico ${loc} dedicado a salvaguardar la memoria colectiva, documentos visuales y creaciones representativas de la identidad regional.`
+    ]
+    return museumVariants[seed % museumVariants.length]
   }
 
   const isEstuaryOrNature = /\b(boca|bocas|ceniza|ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna|pantano)\b/i.test(clean)
   if (isEstuaryOrNature) {
-    return `${clean} es un imponente enclave natural ${loc}, donde confluyen corrientes fluviales y marinas ofreciendo vistas panorámicas excepcionales y una rica biodiversidad.`
+    const natureVariants = [
+      `${clean} es un imponente enclave natural ${loc}, donde confluyen corrientes fluviales y marinas ofreciendo vistas panorámicas excepcionales y una rica biodiversidad.`,
+      `Importante humedal y reserva ecológica ${loc}, con bosques de mangle y canales navegables ideales para el avistamiento de aves y la contemplación silvestre.`
+    ]
+    return natureVariants[seed % natureVariants.length]
+  }
+
+  const isBeach = /\b(playa|beach|bah[íi]a|cabo|cala|ensenada|costa)\b/i.test(clean)
+  if (isBeach) {
+    const beachVariants = [
+      `${clean} es un atractivo frente costero ${loc}, caracterizado por su oleaje apacible, brisa marina constante y ambiente ideal para el descanso junto al mar.`,
+      `Destacada franja litoral ${loc}, apreciada por visitantes y locales por sus aguas templadas, extensas orillas de arena y pintorescos atardeceres marinos.`,
+      `${clean} ofrece un entorno playero relajante ${loc}, con kioscos tradicionales de gastronomía de mar y espacios idóneos para pasear por la costa.`
+    ]
+    return beachVariants[seed % beachVariants.length]
   }
 
   const isZoo = /\b(zool[óo]gico|zoo|acuario|bioparque|aviario)\b/i.test(clean)
@@ -2603,12 +2831,20 @@ function buildRichFallbackDescription(name, city = '') {
 
   const isWaterOrPark = /\b(malec[óo]n|parque|plaza|mirador|paseo|boulevard|jard[íi]n|cerro)\b/i.test(clean)
   if (isWaterOrPark) {
-    return `Espacio emblemático al aire libre ${loc}, ideal para pasear, contemplar el paisaje y disfrutar del encuentro social y la naturaleza circundante.`
+    const parkVariants = [
+      `Espacio emblemático al aire libre ${loc}, ideal para pasear, contemplar el paisaje y disfrutar del encuentro social y la naturaleza circundante.`,
+      `Punto de encuentro ciudadano y recreación ${loc}, con amplias zonas peatonales, sombra arbolada y vistas panorámicas del entorno urbano y paisajístico.`
+    ]
+    return parkVariants[seed % parkVariants.length]
   }
 
-  const isMonument = /\b(monumento|estatua|busto|obelisco|escultura|hito|memorial)\b/i.test(clean)
+  const isMonument = /\b(monumento|estatua|busto|obelisco|escultura|hito|memorial|aleta|ventana)\b/i.test(clean)
   if (isMonument) {
-    return `Hito conmemorativo ${loc} erigido en honor a personajes y acontecimientos determinantes en la construcción histórica y cultural del territorio.`
+    const monVariants = [
+      `Hito conmemorativo y visual ${loc} erigido en honor a personajes y acontecimientos determinantes en la construcción histórica y cultural del territorio.`,
+      `Estructura escultórica emblemática ${loc}, reconocida por su audaz diseño y su valor como tributo a la identidad y grandeza deportiva o civil de la región.`
+    ]
+    return monVariants[seed % monVariants.length]
   }
 
   const isSeafood = /mariscos|pescado|ceviche|costeñ|mar|playa|puerto/i.test(clean)
@@ -2626,7 +2862,12 @@ function buildRichFallbackDescription(name, city = '') {
     return `Reconocido espacio gastronómico ${loc} que rinde homenaje a la cocina local mediante platos tradicionales e ingredientes frescos de la tierra.`
   }
 
-  return `${clean} ofrece un atractivo recorrido ${loc}, permitiendo a los visitantes apreciar de cerca la identidad, historia y dinamismo característico del destino.`
+  const genericVariants = [
+    `${clean} ofrece un atractivo recorrido ${loc}, permitiendo a los visitantes apreciar de cerca la identidad, historia y dinamismo característico del destino.`,
+    `${clean} constituye un punto singular ${loc}, propicio para descubrir el ambiente genuino y los contrastes cotidianos de la región.`,
+    `La visita a ${clean} enriquece el itinerario ${loc}, brindando un contacto directo con las costumbres y el entorno local.`
+  ]
+  return genericVariants[seed % genericVariants.length]
 }
 
 export async function generateCustomPlaceReasons(arg1 = [], arg2 = '', arg3 = '') {

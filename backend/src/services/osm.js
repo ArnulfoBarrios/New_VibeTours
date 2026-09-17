@@ -1382,6 +1382,16 @@ export function isNonTouristFacility(tags = {}) {
 
   const rawName = String(tags.name ?? '').toLowerCase()
   const name = rawName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (tags.amenity === 'military' || tags.military) {
+    const isHistoricAttraction = tags.tourism === 'attraction' || tags.historic === 'fort' || tags.historic === 'castle' || tags.historic === 'ruins'
+    if (!isHistoricAttraction) return true
+  }
+  if (
+    /\b(infanteria|base\s+de\s+entrenamiento|base\s+militar|base\s+naval|batallon|brigada\s+militar|cuartel\s+militar|fuerzas\s+armadas)\b/i.test(name) &&
+    !/\b(museo|castillo|fuerte\s+historico)\b/i.test(name)
+  ) {
+    return true
+  }
   if (isGenericFacilityName(rawName) || isGenericFacilityName(name)) return true
   if (/\b(carnaval|festival|fiesta|feria|desfile|reinado)\b/i.test(name)) {
     const isPhysicalVenue = /\b(museo|casa|centro|parque|plaza|sala|galeria|teatro|estadio|concha|complejo)\b/i.test(name)

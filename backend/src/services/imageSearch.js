@@ -1,3 +1,142 @@
+const KNOWN_LANDMARK_IMAGES = {
+  // Coveñas & Golfo de Morrosquillo
+  'playa blanca covenas': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+  'playa blanca': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+  'playa primera covenas': 'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=1200&q=80',
+  'playa primera': 'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=1200&q=80',
+  'playa segunda covenas': 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=1200&q=80',
+  'playa segunda': 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=1200&q=80',
+  'cienaga de la caimanera': 'https://images.unsplash.com/photo-1511497584788-87676104235f?auto=format&fit=crop&w=1200&q=80',
+  'caimanera': 'https://images.unsplash.com/photo-1511497584788-87676104235f?auto=format&fit=crop&w=1200&q=80',
+  'paseo maritimo covenas': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80',
+  'paseo maritimo': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80',
+  // Barranquilla
+  'ventana de campeones': 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=80',
+  'ventana al mundo': 'https://images.unsplash.com/photo-1508849789987-4e5333c12b78?auto=format&fit=crop&w=1200&q=80',
+  'gran malecon del rio': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
+  'malecon del rio': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
+  // Santa Marta
+  'bahia de santa marta': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+  'playa el rodadero': 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=1200&q=80',
+  'el rodadero': 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=1200&q=80',
+  'parque nacional natural tayrona': 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=1200&q=80',
+  'parque tayrona': 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=1200&q=80',
+  'cabo san juan del guia': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+  'cabo san juan': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+  // Cartagena
+  'islas del rosario': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80',
+  'playa blanca baru': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80'
+}
+
+function normalizePlaceNameKey(name) {
+  return String(name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function isImageSemanticallyCompatible(imageUrl = '', placeName = '', category = '') {
+  if (!imageUrl || typeof imageUrl !== 'string') return false
+  const lowerUrl = imageUrl.toLowerCase()
+  const lowerPlace = (placeName || '').toLowerCase()
+  const lowerCat = (category || '').toLowerCase()
+
+  const isBeach = /\b(playa|playas|beach|beaches|costa|balneario|litoral|mar[íi]timo|maritimo|isla|archipi[ée]lago|cayo|bah[íi]a|bahia|cala)\b/i.test(lowerPlace) ||
+                  lowerCat === 'beach'
+  const isNature = !isBeach && (
+    /\b(ci[ée]naga|cienaga|laguna|parque|reserva|ecoparque|manglar|r[íi]o|rio|bosque|sendero|humedal)\b/i.test(lowerPlace) ||
+    lowerCat === 'nature' || lowerCat === 'trail'
+  )
+  const isFood = !isBeach && !isNature && (
+    lowerCat === 'restaurant' || lowerCat === 'food' || lowerCat === 'cafe' ||
+    /\b(restaurante|comida|asador|bistro|caf[ée]|bar|gastronom[íi]a|taquer[íi]a|pizzer[íi]a)\b/i.test(lowerPlace)
+  )
+
+  // 0. Universal: Prohibir PDFs, páginas escaneadas de libros y documentos
+  if (lowerUrl.includes('.pdf') || lowerUrl.includes('pdf.') || lowerUrl.includes('manuscript') || lowerUrl.includes('documento')) {
+    return false
+  }
+
+  // 1. Playas y zonas costeras: PROHIBIDAS fachadas religiosas, calles coloniales, iglesias, conventos
+  if (isBeach) {
+    const forbiddenForBeach = [
+      'parroquia', 'iglesia', 'catedral', 'templo', 'convento', 'basilica',
+      'church', 'cathedral', 'monastery', 'colonial', 'calle_colonial', 'fachada',
+      'altar', 'campanario', 'cementerio', 'hospital', 'aeropuerto'
+    ]
+    if (forbiddenForBeach.some(term => lowerUrl.includes(term))) {
+      return false
+    }
+  }
+
+  // 2. Naturaleza y humedales: Prohibidas iglesias o centros comerciales
+  if (isNature) {
+    const forbiddenForNature = [
+      'parroquia', 'iglesia', 'catedral', 'templo', 'convento', 'basilica',
+      'church', 'cathedral', 'aeropuerto', 'shopping', 'centro_comercial', 'mall'
+    ]
+    if (forbiddenForNature.some(term => lowerUrl.includes(term))) {
+      return false
+    }
+  }
+
+  // 3. Gastronomía: Prohibidas iglesias, monumentos o aeropuertos
+  if (isFood) {
+    const forbiddenForFood = [
+      'catedral', 'iglesia', 'parroquia', 'monumento', 'estatua', 'castillo',
+      'aeropuerto', 'estadio', 'playa'
+    ]
+    if (forbiddenForFood.some(term => lowerUrl.includes(term))) {
+      return false
+    }
+  }
+
+  return true
+}
+
+export function isWikiTitleRelevant(articleTitle, placeName, city = '') {
+  if (!articleTitle || !placeName) return false
+  const artClean = articleTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const placeClean = placeName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const cityClean = (city || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+
+  // Exact or subset match
+  if (placeClean.includes(artClean) || artClean.includes(placeClean)) {
+    return true
+  }
+
+  const stopWords = new Set([
+    'de', 'del', 'la', 'las', 'el', 'los', 'un', 'una', 'con', 'por', 'para',
+    'en', 'san', 'santa', 'the', 'and', 'municipio', 'departamento'
+  ])
+
+  const placeTokens = placeClean
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .split(/\s+/)
+    .filter(t => t.length >= 3 && !stopWords.has(t))
+
+  const artTokens = new Set(
+    artClean
+      .replace(/[^a-z0-9\s]+/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length >= 3 && !stopWords.has(t))
+  )
+
+  // Descartar si el artículo devuelto es sólo el nombre de la ciudad cabecera o municipio vecino sin coincidir el atractivo
+  if (cityClean && artClean === cityClean && placeTokens.length > 0 && !placeTokens.every(t => cityClean.includes(t))) {
+    return false
+  }
+
+  const matchingTokens = placeTokens.filter(t => artTokens.has(t))
+  if (placeTokens.length >= 3) {
+    return matchingTokens.length >= 2
+  }
+  return matchingTokens.length >= 1
+}
+
 export async function imageForPlace(placeName, city, countryOrCategory = 'Colombia', indexSeed = 0, options = {}) {
   // Support both imageForPlace(place, city, country) and imageForPlace(place, city, category, seed, opts)
   const isCountry = typeof countryOrCategory === 'string' && /colombia|m[ée]xico|espa[ñn]a|per[úu]|argentina|chile|brasil|estados unidos|francia|italia/i.test(countryOrCategory)
@@ -26,10 +165,21 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   function isValidDistinct(url) {
     if (!url || typeof url !== 'string') return false
     if (assignedUrls && assignedUrls.has(url)) return false
+    if (!isImageSemanticallyCompatible(url, placeName, normalizedCategory)) return false
     return true
   }
 
-  // 0. Para restaurantes y gastronomía local, priorizar directamente imágenes gastronómicas curadas para evitar retratos de personas o cantantes
+  // 0A. Prioridad absoluta: Imágenes verificadas de alta fidelidad para atractivos conocidos
+  const placeNormKey = normalizePlaceNameKey(placeName)
+  const cityNormKey = normalizePlaceNameKey(city)
+  const combinedKey = `${placeNormKey} ${cityNormKey}`.trim()
+  const verifiedKnown = KNOWN_LANDMARK_IMAGES[combinedKey] || KNOWN_LANDMARK_IMAGES[placeNormKey]
+  if (verifiedKnown && isValidDistinct(verifiedKnown)) {
+    assignedUrls?.add(verifiedKnown)
+    return { url: verifiedKnown, isFallback: false }
+  }
+
+  // 0B. Para restaurantes y gastronomía local, priorizar directamente imágenes gastronómicas curadas
   if (isFoodOrDrink) {
     let curatedFood = curatedImage(`${placeName} ${city}`, 'restaurant', seed)
     if (assignedUrls && assignedUrls.has(curatedFood)) {
@@ -130,7 +280,8 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
     const sRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
     if (sRes.ok) {
       const sJson = await sRes.json()
-      const topHit = sJson?.query?.search?.[0]
+      const searchHits = (sJson?.query?.search || []).slice(0, 5)
+      const topHit = searchHits.find(hit => hit?.title && isWikiTitleRelevant(hit.title, cleaned, cleanCity))
       if (topHit && topHit.title) {
         const slug = encodeURIComponent(topHit.title.replace(/\s+/g, '_'))
         const sumUrl = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
@@ -145,7 +296,7 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
               'seal', 'logo', 'icon', 'symbol', 'map', 'mapa', 'location', 'diagram', 'chart',
               'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_'
             ].some(k => lower.includes(k))
-            if (!isUnusable) {
+            if (!isUnusable && isImageSemanticallyCompatible(imageUrl, placeName)) {
               return imageUrl
             }
           }
@@ -176,7 +327,7 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
             'seal', 'logo', 'icon', 'symbol', 'map', 'mapa', 'location', 'diagram', 'chart',
             'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_'
           ].some(k => lower.includes(k))
-          if (!isUnusable) {
+          if (!isUnusable && isImageSemanticallyCompatible(imageUrl, placeName)) {
             return imageUrl
           }
         }
@@ -411,8 +562,8 @@ function isImageTitleRelevant(title, query, requiredGroups = null, url = '') {
   const titleLower = title.toLowerCase()
   const urlLower = (url || '').toLowerCase()
   
-  // Filter out non-photo image types like maps, flags, logos, coats of arms, location diagrams
-  const isInvalidType = ['map', 'mapa', 'flag', 'bandera', 'logo', 'icon', 'symbol', 'coat_of_arms', 'escudo', 'location_map', 'chart', 'diagram'].some(term => titleLower.includes(term) || urlLower.includes(term))
+  // Filter out non-photo image types like maps, flags, logos, coats of arms, location diagrams, PDFs, book scans
+  const isInvalidType = ['map', 'mapa', 'flag', 'bandera', 'logo', 'icon', 'symbol', 'coat_of_arms', 'escudo', 'location_map', 'chart', 'diagram', '.pdf', 'pdf.', 'document', 'manuscript', 'manuscrito', 'book', 'libro', 'moneda', 'coin', 'stamp', 'sello'].some(term => titleLower.includes(term) || urlLower.includes(term))
   if (isInvalidType) return false
 
   // Validar extensión del archivo
@@ -594,6 +745,8 @@ function curatedImage(seed, category, indexSeed = 0) {
     targetCategory = 'beach'
   } else if (/sendero|pueblito|trek|camino|hiking|bosque|chairama/i.test(seedLower)) {
     targetCategory = 'trail'
+  } else if (/ci[ée]naga|cienaga|laguna|manglar|r[íi]o|rio|reserva|humedal/i.test(seedLower)) {
+    targetCategory = 'nature'
   } else if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom/i.test(seedLower)) {
     targetCategory = 'restaurant'
   }
@@ -646,6 +799,8 @@ function curatedImage(seed, category, indexSeed = 0) {
     return 'https://images.unsplash.com/photo-1596436889106-be35e843f974?auto=format&fit=crop&w=1200&q=80' // Santa Marta Tayrona
   } else if (cityLower.includes('san andres') || cityLower.includes('san andrés')) {
     return 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80' // San Andres Island
+  } else if (cityLower.includes('coveñas') || cityLower.includes('covenas') || cityLower.includes('tolu') || cityLower.includes('tolú') || cityLower.includes('morrosquillo')) {
+    return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80' // Coveñas Caribbean Beach
   }
 
   const list = categoryImages.default

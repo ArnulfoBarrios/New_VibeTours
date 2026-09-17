@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, deterministicJitter } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
@@ -1082,6 +1082,12 @@ aiRouter.post('/chat', async (req, res, next) => {
         // SSOT: El itinerario estructurado visible en el mensaje del chat es la verdad absoluta.
         // Poblamos extractedFromMsg ÚNICAMENTE con los lugares del mensaje del chat para evitar lugares fantasma.
         extractedFromMsg.push(...confirmedPois)
+        const itineraryDays = confirmedPois.map(p => Number(p.dia || p.day || 1)).filter(d => d > 0)
+        const maxDay = itineraryDays.length > 0 ? Math.max(...itineraryDays) : 0
+        if (maxDay >= 1) {
+          updatedPreferences.durationDays = maxDay
+          updatedPreferences.durationHours = maxDay === 1 ? 8 : maxDay * 24
+        }
       } else {
         // Extraer lugares estructurados devueltos por OpenAI si están disponibles
         if (Array.isArray(aiResponse.extractedPreferences?.specificPlaces) && aiResponse.extractedPreferences.specificPlaces.length > 0) {
@@ -1116,6 +1122,17 @@ aiRouter.post('/chat', async (req, res, next) => {
           updatedPreferences[k] = v
         }
       })
+    }
+
+    // SSOT: Ensure durationDays matches the maximum day specified in any extracted itinerary places
+    const allSpecificDays = [
+      ...extractedFromMsg.map(p => Number(p.dia || p.day || 0)),
+      ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces.map(p => Number(p.dia || p.day || 0)) : [])
+    ].filter(d => d > 0)
+    const maxSpecificDay = allSpecificDays.length > 0 ? Math.max(...allSpecificDays) : 0
+    if (maxSpecificDay >= 1 && (!updatedPreferences.durationDays || updatedPreferences.durationDays < maxSpecificDay)) {
+      updatedPreferences.durationDays = maxSpecificDay
+      updatedPreferences.durationHours = maxSpecificDay === 1 ? 8 : maxSpecificDay * 24
     }
 
     if (updatedPreferences.city) {
@@ -1681,6 +1698,9 @@ aiRouter.post('/tours/build', async (req, res, next) => {
   }
 })
 
+const ALTERNATIVES_CACHE_TTL = 20 * 60 * 1000 // 20 minutes
+const alternativesCache = new Map()
+
 aiRouter.post('/tours/alternatives', async (req, res, next) => {
   try {
     const altSchema = z.object({
@@ -1694,15 +1714,13 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
     const lat = input.latitude || firstPlace?.latitude
     const lon = input.longitude || firstPlace?.longitude
 
-    // 1. Reverse Geocode exact location from coordinates if available
+    // 1. Identificar ciudad y destino sin bloqueos innecesarios de red si ya vienen provistos
+    let rawCity = input.city || input.destination || firstPlace?.city || firstPlace?.locationInfo?.ciudad || ''
     let revLocation = null
-    if (lat && lon) {
-      revLocation = await reverseGeocodeLocation(lat, lon).catch(() => null)
-    }
-
-    // Clean destination and city (avoid taking attraction name as city)
-    let rawCity = input.city || input.destination || revLocation?.city || firstPlace?.city || firstPlace?.locationInfo?.ciudad || ''
-    if (rawCity.length > 30 || /\b(catedral|hotel|restaurante|parada|museo|parque|recorrido|tour)\b/i.test(rawCity)) {
+    if (!rawCity || rawCity.length > 30 || /\b(catedral|hotel|restaurante|parada|museo|parque|recorrido|tour)\b/i.test(rawCity)) {
+      if (lat && lon) {
+        revLocation = await reverseGeocodeLocation(lat, lon).catch(() => null)
+      }
       rawCity = revLocation?.city || firstPlace?.city || firstPlace?.locationInfo?.ciudad || ''
     }
     const city = cleanAdministrativeCityName(rawCity).trim()
@@ -1712,17 +1730,6 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       : city
 
     console.info('[alternatives] Identified destination city:', { city, country, destination, lat, lon })
-
-    let centerLat = (lat != null && Number.isFinite(Number(lat))) ? Number(lat) : (revLocation?.latitude || null)
-    let centerLon = (lon != null && Number.isFinite(Number(lon))) ? Number(lon) : (revLocation?.longitude || null)
-
-    if ((centerLat == null || centerLon == null) && (city || destination)) {
-      const canonical = await resolveCanonicalDestination(city || destination).catch(() => null)
-      if (canonical?.latitude && canonical?.longitude) {
-        centerLat = canonical.latitude
-        centerLon = canonical.longitude
-      }
-    }
 
     const currentKeys = new Set(
       currentPlaces.map(p => normalizeKey(p.name || '')).filter(Boolean)
@@ -1761,42 +1768,100 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
       return isValidSpecificPlace(p.name)
     }
 
+    // 2. Comprobar caché en memoria para respuesta instantánea (< 50ms)
+    const cacheKey = `${city.toLowerCase()}:${(destination || '').toLowerCase()}:${input.type || 'cultural'}`
+    const cachedEntry = alternativesCache.get(cacheKey)
+    if (cachedEntry && (Date.now() - cachedEntry.timestamp < ALTERNATIVES_CACHE_TTL)) {
+      const available = cachedEntry.alternatives.filter(alt => !isDuplicatePlace(alt.name, alt.id))
+      if (available.length > 0) {
+        console.info('[alternatives] Returning cached alternatives for:', cacheKey)
+        return res.json({ alternatives: available.slice(0, 10) })
+      }
+    }
+
+    let centerLat = (lat != null && Number.isFinite(Number(lat))) ? Number(lat) : (revLocation?.latitude || null)
+    let centerLon = (lon != null && Number.isFinite(Number(lon))) ? Number(lon) : (revLocation?.longitude || null)
+
+    if ((centerLat == null || centerLon == null) && (city || destination)) {
+      const canonical = await resolveCanonicalDestination(city || destination).catch(() => null)
+      if (canonical?.latitude && canonical?.longitude) {
+        centerLat = canonical.latitude
+        centerLon = canonical.longitude
+      }
+    }
+
     const excludeNameList = Array.from(currentKeys).filter(n => n.length > 2)
 
-    // 2. Fetch high-quality suggestions directly with single-pass AI or catalog
-    const rawAiList = await suggestFallbackPlacesWithOpenAI({
-      destination,
-      city,
-      country,
-      type: input.type || 'cultural',
-      excludeNames: excludeNameList
-    }).catch(() => [])
+    // 3. Consultar en PARALELO el catálogo verificado y las sugerencias de IA
+    const [catalogSettled, aiSettled] = await Promise.allSettled([
+      getRealDestinationCatalog(destination || city, country, centerLat, centerLon).catch(() => null),
+      suggestFallbackPlacesWithOpenAI({
+        destination,
+        city,
+        country,
+        type: input.type || 'cultural',
+        excludeNames: excludeNameList
+      }).catch(() => [])
+    ])
 
-    const validAiItems = (Array.isArray(rawAiList) ? rawAiList : [])
-      .filter(item => item?.name && !isDuplicatePlace(item.name, item.id) && isQualityTouristPlace(item))
-      .slice(0, 8)
+    const catalog = catalogSettled.status === 'fulfilled' && catalogSettled.value ? catalogSettled.value : null
+    const rawAiList = aiSettled.status === 'fulfilled' && Array.isArray(aiSettled.value) ? aiSettled.value : []
 
-    // 3. Resolve exact coordinates and map to rich alternative objects
-    let alternatives = (await Promise.all(
-      validAiItems.map(async (item, i) => {
-        // The model may suggest the name, but it is never the source of truth
-        // for the coordinates. Resolve the name through a map provider.
-        const landmark = await geocodePlace(`${item.name}, ${city}`, centerLat, centerLon).catch(() => null)
-        if (!landmark || !isVerifiedCoordinatePlace(landmark)) return null
-        const realLat = hasUsableCoordinates(landmark.latitude, landmark.longitude) ? landmark.latitude : null
-        const realLon = hasUsableCoordinates(landmark.latitude, landmark.longitude) ? landmark.longitude : null
+    const candidatePool = []
+    // Prioridad 1: POIs verificados del catálogo de destino
+    if (catalog) {
+      const catPlaces = [...(catalog.places || []), ...(catalog.restaurants || [])]
+      for (const p of catPlaces) {
+        if (!p) continue
+        const pObj = typeof p === 'string' ? { name: p } : p
+        if (!pObj.name || isDuplicatePlace(pObj.name, pObj.placeId || pObj.id)) continue
+        if (!isQualityTouristPlace(pObj)) continue
+        if (!candidatePool.some(cp => arePlacesSimilar(cp.name, pObj.name))) {
+          candidatePool.push(pObj)
+        }
+      }
+    }
+    // Prioridad 2: Sugerencias de IA complementarias
+    for (const p of rawAiList) {
+      if (!p || !p.name) continue
+      if (isDuplicatePlace(p.name, p.id || p.placeId)) continue
+      if (!isQualityTouristPlace(p)) continue
+      if (!candidatePool.some(cp => arePlacesSimilar(cp.name, p.name))) {
+        candidatePool.push(p)
+      }
+    }
+
+    // 4. Geocodificar y enriquecer candidatos en PARALELO
+    const candidateSlice = candidatePool.slice(0, 12)
+    const settledAlternatives = await Promise.allSettled(
+      candidateSlice.map(async (item, i) => {
+        let realLat = null
+        let realLon = null
+        let landmark = null
+
+        if (isVerifiedCoordinatePlace(item) && hasUsableCoordinates(item.latitude, item.longitude)) {
+          realLat = Number(item.latitude)
+          realLon = Number(item.longitude)
+          landmark = item
+        } else {
+          landmark = await geocodePlace(`${item.name}, ${city}`, centerLat, centerLon).catch(() => null)
+          if (landmark && isVerifiedCoordinatePlace(landmark) && hasUsableCoordinates(landmark.latitude, landmark.longitude)) {
+            realLat = Number(landmark.latitude)
+            realLon = Number(landmark.longitude)
+          }
+        }
 
         if (!realLat || !realLon || !hasUsableCoordinates(realLat, realLon)) {
           return null
         }
 
         const category = item.category || item.type || input.type || 'attraction'
-        let imageUrl = item.imageUrl || ''
+        let imageUrl = item.imageUrl || item.images?.[0] || ''
         if (!imageUrl) {
           try {
             imageUrl = await Promise.race([
               imageForPlace(item.name, city),
-              new Promise(res => setTimeout(() => res(''), 1200))
+              new Promise(res => setTimeout(() => res(''), 800))
             ]).catch(() => '')
           } catch (_) {}
         }
@@ -1810,7 +1875,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
           name: item.name,
           latitude: realLat,
           longitude: realLon,
-          coordinateSource: landmark.coordinateSource || landmark.coordinate_source || '',
+          coordinateSource: landmark?.coordinateSource || landmark?.coordinate_source || 'osm-verified',
           coordinatesVerified: true,
           category,
           imageUrl,
@@ -1823,65 +1888,24 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
             ciudad: city,
             region: city,
             pais: country,
-            place_id: landmark.placeId || landmark.place_id || item.placeId || item.id || '',
-            fuente_coordenadas: landmark.coordinateSource || landmark.coordinate_source || '',
+            place_id: landmark?.placeId || landmark?.place_id || item.placeId || item.id || '',
+            fuente_coordenadas: landmark?.coordinateSource || landmark?.coordinate_source || 'osm-verified',
             coordenadas_verificadas: true,
             url_mapa: mapUrlFor(realLat, realLon)
           }
         }
       })
-    )).filter(Boolean)
+    )
 
-    // 4. If fewer than 4 verified alternatives, supplement directly with verified destination catalog POIs
-    if (alternatives.length < 4) {
-      try {
-        const catalog = await getRealDestinationCatalog(destination || city, country, centerLat, centerLon).catch(() => null)
-        const pool = [...(catalog?.places || []), ...(catalog?.restaurants || [])]
-        for (const catPlace of pool) {
-          if (alternatives.length >= 8) break
-          if (!catPlace || !catPlace.name) continue
-          if (isDuplicatePlace(catPlace.name, catPlace.placeId || catPlace.id)) continue
-          if (!isQualityTouristPlace(catPlace)) continue
+    const alternatives = settledAlternatives
+      .filter(r => r.status === 'fulfilled' && r.value)
+      .map(r => r.value)
 
-          const catGeo = isVerifiedCoordinatePlace(catPlace)
-            ? catPlace
-            : await geocodePlace(`${catPlace.name}, ${city}`, centerLat, centerLon).catch(() => null)
-          if (!catGeo || !isVerifiedCoordinatePlace(catGeo) || !hasUsableCoordinates(catGeo.latitude, catGeo.longitude)) continue
-
-          const catImg = catPlace.imageUrl || catPlace.images?.[0] || getReliableCategoryFallbackImage(catPlace.name, catPlace.category || 'turismo')
-          const catDesc = catPlace.description || `Lugar emblemático en ${city}.`
-
-          alternatives.push({
-            id: catPlace.placeId || catPlace.id || `rec-cat-${Date.now()}-${alternatives.length}`,
-            name: catPlace.name,
-            latitude: Number(catGeo.latitude),
-            longitude: Number(catGeo.longitude),
-            coordinateSource: catGeo.coordinateSource || catGeo.coordinate_source || '',
-            coordinatesVerified: true,
-            category: catPlace.category || 'turismo',
-            imageUrl: catImg,
-            description: catDesc,
-            reason: catDesc,
-            durationMinutes: catPlace.minutes || 35,
-            locationInfo: {
-              nombre_lugar: catPlace.name,
-              direccion: catPlace.address || `${city}, ${country}`,
-              ciudad: city,
-              region: city,
-              pais: country,
-              place_id: catGeo.placeId || catGeo.place_id || catPlace.placeId || '',
-              fuente_coordenadas: catGeo.coordinateSource || catGeo.coordinate_source || '',
-              coordenadas_verificadas: true,
-              url_mapa: mapUrlFor(catGeo.latitude, catGeo.longitude)
-            }
-          })
-        }
-      } catch (err) {
-        console.warn('[alternatives] Catalog fallback failed:', err.message)
-      }
+    if (alternatives.length > 0) {
+      alternativesCache.set(cacheKey, { alternatives, timestamp: Date.now() })
     }
 
-    res.json({ alternatives })
+    res.json({ alternatives: alternatives.slice(0, 10) })
   } catch (error) {
     console.error('[alternatives] error:', error)
     res.json({ alternatives: [] })
@@ -2043,7 +2067,8 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         })
       : (Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length ? sourceTour.itinerario : (sourceTour.stops ?? planner.selectedPlaces))
     const stopsTarget = plannedStops.length > 0 ? plannedStops.length : planner.selectedPlaces.length
-    const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
+    const maxPlannedDay = Math.max(...plannedStops.map(p => Number(p.dia || p.day || 0)), 0)
+    const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1), maxPlannedDay)
     
     const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
     const richDescriptionsMap = await Promise.race([
@@ -2054,7 +2079,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         places: plannedPlaceNames,
         prompt: input.prompt
       }).catch(() => ({})),
-      new Promise(resolve => setTimeout(() => resolve({}), 6500))
+      new Promise(resolve => setTimeout(() => resolve({}), 12000))
     ])
 
     const assignedUrls = new Set()
@@ -2356,7 +2381,8 @@ async function processTourGeneration(jobId, input) {
           })
         : (Array.isArray(sourceTour.itinerario) && sourceTour.itinerario.length ? sourceTour.itinerario : (sourceTour.stops ?? planner.selectedPlaces))
       const stopTarget = plannedStops.length > 0 ? plannedStops.length : Math.min(30, Math.max(3, planner.selectedPlaces.length))
-      const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
+      const maxPlannedDay = Math.max(...plannedStops.map(p => Number(p.dia || p.day || 0)), 0)
+      const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1), maxPlannedDay)
       
       const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
       const richDescriptionsMap = await Promise.race([
@@ -2367,7 +2393,7 @@ async function processTourGeneration(jobId, input) {
           places: plannedPlaceNames,
           prompt: input.prompt
         }).catch(() => ({})),
-        new Promise(resolve => setTimeout(() => resolve({}), 6500))
+        new Promise(resolve => setTimeout(() => resolve({}), 12000))
       ])
 
       const assignedUrls = new Set()
@@ -2826,7 +2852,17 @@ export function buildTourPlanner(input, location = null, places = []) {
         return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
       })
 
-      const totalDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
+      const maxRequestedDay = Math.max(
+        ...requestedPlaces.map(p => Number(p.dia || p.day || 0)),
+        ...refList.map(item => Number(typeof item === 'object' ? (item.dia || item.day || 0) : 0)),
+        0
+      )
+      const baseDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
+      const totalDays = Math.max(baseDays, maxRequestedDay)
+      if (totalDays > baseDays) {
+        input.durationDays = totalDays
+        input.durationHours = totalDays === 1 ? 8 : totalDays * 24
+      }
       selectedPlaces = requestedPlaces.map((p, i) => {
         // Prioritize exact matchedRef first, then p.dia, then substring match
         const exactRef = refList.find(item => normalizePlaceKey(getName(item)) === normalizePlaceKey(p.name))
@@ -2948,6 +2984,7 @@ export function buildTourPlanner(input, location = null, places = []) {
       ? 'Media'
       : 'Intensa'
   return {
+    totalDays: Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1)),
     selectedPlaces: selectedPlaces.map((place, index) => ({
       ...place,
       order: index,
@@ -3688,45 +3725,38 @@ function selectDeterministic(array, seed) {
   return array[index]
 }
 
-function buildStopDescription(place, input) {
+function buildStopDescription(place, input = {}) {
   const seed = place.name || ''
-  const action = stopActionFor(input.type, place.category, seed)
-  const focus = stopFocusFor(input.type, place.category, seed)
-  
-  // Obtener información real del lugar si está disponible en history, tags o descriptions
+  const inputObj = (typeof input === 'object' && input !== null) ? input : { type: input }
+
   let realDetail = ''
-  if (place.history && place.history.trim().length > 10) {
+  if (place.history && place.history.trim().length > 15) {
     realDetail = place.history.trim()
-  } else if (place.rawTags?.description && place.rawTags.description.trim().length > 10) {
+  } else if (place.rawTags?.description && place.rawTags.description.trim().length > 15) {
     realDetail = place.rawTags.description.trim()
   } else {
-    realDetail = buildRecommendationReason(place, input.type)
+    realDetail = buildRecommendationReason(place, inputObj)
   }
 
-  // Asegurar que termine en punto si no lo tiene
   if (realDetail && !/[.!?]$/.test(realDetail)) {
     realDetail += '.'
   }
 
-  // Construir consejos personalizados para esta parada
-  const stopTips = buildTips(place, input.type)
-  let tipsText = ''
-  if (stopTips && stopTips.length > 0) {
-    tipsText = ` Como consejo para tu parada: ${stopTips[0]}.`
-    if (stopTips[1]) {
-      tipsText += ` También te recomendamos ${stopTips[1].toLowerCase()}.`
-    }
+  if (realDetail.length < 130) {
+    const action = stopActionFor(inputObj.type, place.category, seed)
+    const stopTips = buildTips(place, inputObj.type)
+    const tipSentence = (stopTips && stopTips.length > 0) ? ` Se sugiere ${stopTips[0].toLowerCase()}.` : ''
+    
+    const variants = [
+      `${realDetail} Excelente parada para ${action}.${tipSentence}`,
+      `${realDetail} Punto destacado para ${action}.${tipSentence}`,
+      `${realDetail} Espacio propicio para ${action}.${tipSentence}`,
+      `${realDetail}${tipSentence}`
+    ]
+    return selectDeterministic(variants, seed)
   }
 
-  const templates = [
-    `${place.name} es un sitio ideal para ${action}. Durante el recorrido, te sugerimos enfocar tu atención en ${focus}. ${realDetail}${tipsText}`,
-    `Te recomendamos visitar ${place.name}, un espacio excelente para ${action}. En esta parada, te sugerimos centrarte en ${focus}. ${realDetail}${tipsText}`,
-    `${place.name} te ofrece la oportunidad perfecta para ${action}. Durante tu estancia, es ideal prestar atención a ${focus}. ${realDetail}${tipsText}`,
-    `Una parada clave en nuestro itinerario es ${place.name}, donde podrás ${action}. Te aconsejamos enfocar tu visita en ${focus}. ${realDetail}${tipsText}`,
-    `Explora ${place.name}, un lugar destacado para ${action}. Aprovecha para centrar tu atención en ${focus}. ${realDetail}${tipsText}`
-  ]
-
-  return selectDeterministic(templates, seed)
+  return realDetail
 }
 
 function buildActivities(place, type) {
@@ -4098,48 +4128,79 @@ export function validateTourQuality(tour, planner, input) {
 function generateDynamicDescription(name, category, city) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
   const loc = city ? `en ${city}` : 'en la zona'
+  const seed = Math.abs(cleanName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
 
   if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom/i.test(cleanName) || /food|restaurant|gastronom/i.test(category)) {
-    return `${cleanName} es un destacado establecimiento gastronómico ${loc}, ideal para degustar exquisitos sabores autóctonos, preparaciones tradicionales y disfrutar de una experiencia culinaria inolvidable.`
+    const variants = [
+      `${cleanName} es un referente culinario ${loc}, donde destacan recetas tradicionales, ingredientes frescos y una esmerada sazón local.`,
+      `En ${cleanName}, los visitantes disfrutan de una experiencia gastronómica representativa ${loc}, con platos autóctonos y un ambiente acogedor.`,
+      `${cleanName} deleita a locales y viajeros ${loc} con sabores característicos de la cocina regional y preparaciones preparadas al momento.`
+    ]
+    return variants[seed % variants.length]
   }
   if (/sendero|pueblito|trek|camino|hiking|bosque|reserva|chairama/i.test(cleanName) || /trail|nature|park/i.test(category)) {
-    return `${cleanName} es una fascinante ruta de senderismo y patrimonio natural ${loc}, rodeada de exuberante vegetación tropical, miradores panorámicos y vestigios culturales de gran valor.`
+    const variants = [
+      `${cleanName} es una fascinante ruta de senderismo y patrimonio natural ${loc}, rodeada de vegetación nativa y miradores panorámicos.`,
+      `Este sendero por ${cleanName} sumerge a los excursionistas en la biodiversidad ${loc}, con caminos sombreados y puntos de observación privilegiados.`,
+      `${cleanName} ofrece una caminata enriquecedora ${loc}, ideal para apreciar el ecosistema, aves locales y formaciones naturales únicas.`
+    ]
+    return variants[seed % variants.length]
   }
   if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada|costa/i.test(cleanName) || /beach|playa|coastal/i.test(category)) {
-    return `${cleanName} cautiva por sus impresionantes paisajes costeros, arenas doradas y aguas cristalinas ${loc}, ofreciendo un entorno perfecto para el descanso, el mar y la conexión con la naturaleza.`
+    const variants = [
+      `${cleanName} es un atractivo frente costero ${loc}, conocido por su oleaje apacible, brisa marina y espacio para desconectarse frente al mar.`,
+      `Las aguas templadas y la extensión de arena en ${cleanName} la convierten en un punto predilecto ${loc} para descansar y pasear por el litoral.`,
+      `${cleanName} destaca en el litoral de ${city || 'la región'} por su ambiente marinero, opciones de descanso bajo sombra y vistas amplias del horizonte.`
+    ]
+    return variants[seed % variants.length]
   }
-  if (/convención|convention|congreso|eventos/i.test(cleanName) || /convention/i.test(category)) {
-    return `${cleanName} es un emblemático centro de eventos y exposiciones ${loc}, reconocido por albergar importantes cumbres internacionales, conferencias corporativas y eventos culturales de primer nivel.`
-  }
-  if (/mall|plaza comercial|centro comercial|shopping|outlet/i.test(cleanName) || /compras|shopping/i.test(category)) {
-    return `${cleanName} es uno de los centros comerciales y gastronómicos más concurridos ${loc}, ofreciendo tiendas de marcas exclusivas, boutiques locales, restaurantes frente al mar y áreas de esparcimiento.`
-  }
-  if (/cantina|bar|club|discoteca|pub|roe|wabo|karaoke|nightlife/i.test(cleanName) || /vida nocturna|bar/i.test(category)) {
-    return `${cleanName} es un legendario ícono de la vida nocturna y el entretenimiento ${loc}, famoso por sus espectáculos de música en vivo, ambiente festivo, cócteles artesanales y vibrante gastronomía local.`
-  }
-  if (/marina|puerto|dock|embarcadero|puerto deportivo/i.test(cleanName) || /marina|puerto/i.test(category)) {
-    return `${cleanName} constituye el corazón náutico ${loc}, punto de partida de excursiones marítimas, yates de lujo y paseos hacia los acantilados, rodeado de un animado malecón comercial.`
-  }
-  if (/faro|lighthouse/i.test(cleanName)) {
-    return `${cleanName} destaca por su histórica presencia en el litoral marítimo ${loc}, guiando a la navegación sobre las costas y brindando una de las panorámicas fotográficas más hermosas sobre el océano.`
-  }
-  if (/arco|arch|formación/i.test(cleanName)) {
-    return `${cleanName} representa uno de los monumentos naturales más espectaculares e icónicos ${loc}, tallado por la fuerza del mar y el viento donde se encuentran grandes corrientes oceánicas.`
-  }
-  if (/museo|museum|galeria|gallery|exhibición/i.test(cleanName) || /museo|arte/i.test(category)) {
-    return `${cleanName} resguarda valiosas colecciones históricas, artesanales y artísticas ${loc}, ofreciendo recorridos educativos que conectan a los visitantes con la historia y herencia cultural del lugar.`
+  if (/malec[óo]n|paseo|boulevard|rambla/i.test(cleanName)) {
+    const variants = [
+      `${cleanName} es uno de los paseos peatonales más dinámicos ${loc}, ideal para recorrer junto a la brisa y disfrutar de la vida social y comercial.`,
+      `Caminar por ${cleanName} permite apreciar la confluencia entre el paisaje marítimo y la energía urbana de ${city || 'la ciudad'}.`,
+      `${cleanName} ofrece un trayecto panorámico al aire libre ${loc}, frecuentado por viajeros para tomar fotografías y contemplar el atardecer.`
+    ]
+    return variants[seed % variants.length]
   }
   if (/boca|bocas|ceniza|ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna|pantano/i.test(cleanName)) {
-    return `${cleanName} es un imponente enclave natural ${loc}, donde confluyen corrientes fluviales y marinas ofreciendo vistas panorámicas excepcionales y una rica biodiversidad.`
+    const variants = [
+      `${cleanName} es un valioso humedal y enclave ecológico ${loc}, hogar de avifauna acuática y bosques de manglar de gran importancia ambiental.`,
+      `En ${cleanName} convergen corrientes acuáticas que sustentan una rica biodiversidad ${loc}, ofreciendo recorridos en canoa y avistamiento de fauna.`,
+      `${cleanName} sorprende por sus espejos de agua serenos y canales rodeados de mangles ${loc}, brindando un contacto genuino con la naturaleza nativa.`
+    ]
+    return variants[seed % variants.length]
   }
-  if (/zool[óo]gico|zoo|acuario|bioparque|aviario/i.test(cleanName)) {
-    return `${cleanName} es un espacio dedicado a la conservación biológica y educación ambiental ${loc}, que alberga fauna representativa y flora tropical en senderos ecológicos acondicionados.`
+  if (/monumento|estatua|escultura|hito|memorial|aleta|ventana/i.test(cleanName)) {
+    const variants = [
+      `${cleanName} es un hito conmemorativo y visual icónico ${loc}, creado para homenajear la identidad, cultura y legado de la comunidad.`,
+      `La arquitectura y significado de ${cleanName} lo sitúan entre los puntos más fotografiados y emblemáticos de ${city || 'la zona'}.`,
+      `${cleanName} rinde tributo a la historia y personajes ilustres ${loc}, convirtiéndose en un símbolo contemporáneo de encuentro e identidad.`
+    ]
+    return variants[seed % variants.length]
   }
-  if (/monumento|estatua|escultura|hito|memorial|aleta/i.test(cleanName)) {
-    return `${cleanName} es un hito conmemorativo y visual icónico ${loc}, creado para homenajear la identidad, cultura y legado de la región.`
+  if (/museo|museum|galeria|gallery|exhibición/i.test(cleanName) || /museo|arte/i.test(category)) {
+    const variants = [
+      `${cleanName} resguarda valiosas colecciones históricas y artísticas ${loc}, ofreciendo un recorrido pedagógico por la memoria regional.`,
+      `Visitar ${cleanName} permite comprender las raíces culturales, sucesos históricos y patrimonio patrimonial custodiado ${loc}.`,
+      `${cleanName} exhibe piezas arqueológicas, artísticas o testimoniales que ilustran el desarrollo y costumbres de ${city || 'este territorio'}.`
+    ]
+    return variants[seed % variants.length]
+  }
+  if (/parque|plaza|plazoleta/i.test(cleanName)) {
+    const variants = [
+      `${cleanName} es el corazón cívico y de encuentro ${loc}, con sombra de árboles frondosos y una vibrante atmósfera comunitaria.`,
+      `En ${cleanName}, los visitantes encuentran un punto de pausa agradable rodeado de arquitectura representativa y vida local cotidiana.`,
+      `${cleanName} reúne historia y cotidianidad ${loc}, siendo el epicentro tradicional donde confluyen paseantes y tertulias locales.`
+    ]
+    return variants[seed % variants.length]
   }
 
-  return `${cleanName} ofrece un atractivo recorrido ${loc}, permitiendo a los visitantes apreciar de cerca la identidad, arquitectura e historia viva de la zona.`
+  const genericVariants = [
+    `${cleanName} ofrece un atractivo recorrido ${loc}, permitiendo apreciar de cerca la identidad, historia y carácter del destino.`,
+    `${cleanName} es un punto de notable interés ${loc}, ideal para conocer vivencias auténticas y contrastes propios de la región.`,
+    `Conocer ${cleanName} enriquece la visita ${loc}, ofreciendo una mirada representativa sobre las costumbres y entorno de la zona.`
+  ]
+  return genericVariants[seed % genericVariants.length]
 }
 
 function generateDynamicTips(name, category, city) {
@@ -4272,14 +4333,57 @@ function generateDynamicTips(name, category, city) {
 
 function generateDynamicActivities(name, category) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
-  const seed = cleanName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  const seed = Math.abs(cleanName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
 
   if (/playa|beach|bah[íi]a|cala|cabo|ensenada/i.test(cleanName)) {
-    return [
-      `Caminar y relajarse junto a la orilla de ${cleanName}`,
-      `Bañarse en las aguas y contemplar el horizonte marino en ${cleanName}`,
-      `Apreciar la brisa y la atmósfera costera de ${cleanName}`
+    const beachVariants = [
+      [
+        `Caminar por la orilla y relajarse frente al mar en ${cleanName}`,
+        `Bañarse en las aguas templadas y contemplar el horizonte marino`,
+        `Disfrutar de refrescos o preparaciones marinas en los quioscos locales`
+      ],
+      [
+        `Apreciar la brisa y descansar en zona de sombra en ${cleanName}`,
+        `Hacer un recorrido costero para capturar postales del paisaje litoral`,
+        `Degustar bebidas tradicionales y contemplar el zarpe de pescadores`
+      ],
+      [
+        `Nadar en aguas serenas y practicar actividades recreativas en ${cleanName}`,
+        `Apreciar el atardecer y el juego de colores sobre el horizonte costero`,
+        `Recorrer los senderos de acceso y puestos artesanales playeros`
+      ]
     ]
+    return beachVariants[seed % beachVariants.length]
+  }
+  if (/malec[óo]n|paseo|boulevard|rambla/i.test(cleanName)) {
+    const promenadeVariants = [
+      [
+        `Recorrer a pie el trayecto peatonal de ${cleanName} disfrutando de la brisa`,
+        `Apreciar las esculturas, fuentes y vistas abiertas hacia el agua`,
+        `Detenerse en los puntos de encuentro y puestos gastronómicos tradicionales`
+      ],
+      [
+        `Fotografiar la panorámica ribereña o marítima desde las barandas de ${cleanName}`,
+        `Observar la dinámica cívica y actividades deportivas al aire libre`,
+        `Disfrutar de un helado artesanal o merienda típica durante la caminata`
+      ]
+    ]
+    return promenadeVariants[seed % promenadeVariants.length]
+  }
+  if (/ci[eé]naga|manglar|laguna|pantano/i.test(cleanName)) {
+    const wetlandVariants = [
+      [
+        `Embarcar en un recorrido en canoa o lancha por los canales de ${cleanName}`,
+        `Avistar aves acuáticas autóctonas y fauna propia del ecosistema de manglar`,
+        `Aprender sobre el equilibrio ecológico y la pesca tradicional con guías locales`
+      ],
+      [
+        `Recorrer los muelles de madera y senderos ecológicos de ${cleanName}`,
+        `Observar la flora halófita y los espejos de agua en calma`,
+        `Registrar fotografías de los túneles naturales formados por las raíces de mangle`
+      ]
+    ]
+    return wetlandVariants[seed % wetlandVariants.length]
   }
   if (/isla|cayo|archipi[eé]lago/i.test(cleanName)) {
     return [
@@ -4322,7 +4426,7 @@ function generateDynamicActivities(name, category) {
         `Capturar recuerdos fotográficos del ambiente y la presentación de los platos`
       ]
     ]
-    return foodActivityVariants[Math.abs(seed) % foodActivityVariants.length]
+    return foodActivityVariants[seed % foodActivityVariants.length]
   }
 
   // Actividades en museos y recintos culturales variados
@@ -4351,7 +4455,7 @@ function generateDynamicActivities(name, category) {
         `Visitar la sala de memoria para comprender el impacto cultural de la colección`
       ]
     ]
-    return museumActivityVariants[Math.abs(seed) % museumActivityVariants.length]
+    return museumActivityVariants[seed % museumActivityVariants.length]
   }
   if (/puente|bridge/i.test(cleanName)) {
     return [
@@ -4360,24 +4464,40 @@ function generateDynamicActivities(name, category) {
       `Capturar fotografías del skyline y el entorno fluvial o marítimo`
     ]
   }
-  if (/estatua|monumento|memorial|plaza|catedral|iglesia|fuerte|castillo/i.test(cleanName)) {
-    return [
-      `Contemplar la majestuosidad histórica y arquitectura de ${cleanName}`,
-      `Conocer los hitos y eventos coloniales o patrióticos vinculados`,
-      `Tomar fotos de la fachada y plazas emblemáticas circundantes`
+  if (/monumento|estatua|memorial|escultura|aleta|ventana/i.test(cleanName)) {
+    const monumentVariants = [
+      [
+        `Apreciar la escala monumental y los detalles escultóricos de ${cleanName}`,
+        `Conocer el homenaje y significado cívico que inspiró su construcción`,
+        `Tomar fotografías desde distintos ángulos y apreciar su iluminación`
+      ],
+      [
+        `Recorrer la rotonda o plazoleta que rodea ${cleanName}`,
+        `Leer las inscripciones conmemorativas y detalles arquitectónicos`,
+        `Apreciar los contrastes visuales entre el monumento y el entorno urbano`
+      ]
     ]
+    return monumentVariants[seed % monumentVariants.length]
   }
-  if (/parque|park|garden/i.test(cleanName)) {
-    return [
-      `Pasear con tranquilidad por las arboledas y avenidas de ${cleanName}`,
-      `Descansar en las áreas verdes integradas con la vida urbana`,
-      `Observar las actividades culturales y cotidianas locales`
+  if (/parque|park|plaza|garden/i.test(cleanName)) {
+    const parkVariants = [
+      [
+        `Pasear con tranquilidad bajo las arboledas de ${cleanName}`,
+        `Descansar en las áreas verdes y bancos integrados con la vida urbana`,
+        `Observar las actividades culturales y cotidianas locales`
+      ],
+      [
+        `Caminar por los senderos peatonales y glorietas de ${cleanName}`,
+        `Apreciar las fuentes, esculturas y elementos arquitectónicos centrales`,
+        `Disfrutar de un refrigerio o café al aire libre en los alrededores`
+      ]
     ]
+    return parkVariants[seed % parkVariants.length]
   }
   return [
-    `Visitar y explorar los rincones destacados de ${cleanName}`,
-    `Conocer el valor cultural y la identidad de ${cleanName}`,
-    `Disfrutar del ambiente característico y las vistas del lugar`
+    `Conocer de cerca la historia y características singulares de ${cleanName}`,
+    `Recorrer los puntos de mayor interés visual y patrimonial del lugar`,
+    `Apreciar la atmósfera y vida cotidiana que distinguen a ${cleanName}`
   ]
 }
 
@@ -5548,11 +5668,26 @@ export async function collectTourCandidates(input, location) {
         }
         if (!isValidSpecificPlace(placeName) || isNonTouristFacility({ name: placeName })) return null
 
+        // If rawPlace already has verified coordinates from chat SSOT, preserve and reuse them directly
+        let geo = null
+        if (rawPlace && typeof rawPlace === 'object' && Number.isFinite(Number(rawPlace.latitude)) && Number.isFinite(Number(rawPlace.longitude)) && rawPlace.coordinatesVerified) {
+          geo = {
+            name: placeName,
+            latitude: Number(rawPlace.latitude),
+            longitude: Number(rawPlace.longitude),
+            city: rawPlace.city || city,
+            country: rawPlace.country || country,
+            address: rawPlace.address || `${placeName}, ${city}`,
+            placeId: rawPlace.placeId || rawPlace.id || '',
+            coordinateSource: rawPlace.coordinateSource || 'destination-anchor',
+            coordinatesVerified: true,
+            isReferentialLocation: Boolean(rawPlace.isReferentialLocation)
+          }
+        }
+
         const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
         const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
         const isRestaurant = isExplicitDining && !isCulturalVenue
-        
-        let geo = null
         const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
         const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
 
@@ -5625,8 +5760,24 @@ export async function collectTourCandidates(input, location) {
         }
 
         if (!geo || !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
-          console.warn(`[tour-ai] Discarding unverified or out-of-bounds place "${placeName}" in ${city}. No synthetic coordinates generated.`)
-          return null
+          if (destLat != null && destLon != null) {
+            const jitter = deterministicJitter(placeName, destLat, destLon)
+            geo = {
+              name: placeName,
+              latitude: jitter.latitude,
+              longitude: jitter.longitude,
+              city,
+              country,
+              address: `${placeName}, ${city}`,
+              placeId: `anchor-${placeName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+              coordinateSource: 'destination-anchor',
+              coordinatesVerified: true,
+              isReferentialLocation: true
+            }
+          } else {
+            console.warn(`[tour-ai] Discarding unverified or out-of-bounds place "${placeName}" in ${city}. No synthetic coordinates generated.`)
+            return null
+          }
         }
 
         const finalLat = geo.latitude
@@ -5845,6 +5996,46 @@ export async function collectTourCandidates(input, location) {
           continue
         }
 
+        if (destLat != null && destLon != null) {
+          const jitter = deterministicJitter(placeName, destLat, destLon)
+          finalLat = jitter.latitude
+          finalLon = jitter.longitude
+          address = `${placeName}, ${city}`
+          directGeo = {
+            name: placeName,
+            latitude: finalLat,
+            longitude: finalLon,
+            city,
+            country,
+            address,
+            coordinateSource: 'destination-anchor',
+            coordinatesVerified: true,
+            isReferentialLocation: true
+          }
+          geocodedSpecifics.push({
+            name: placeName,
+            latitude: finalLat,
+            longitude: finalLon,
+            type: 'tourism',
+            category: 'requested',
+            dia: placeDay,
+            day: placeDay,
+            city,
+            country,
+            address,
+            description: '',
+            placeId: directGeo.placeId || '',
+            coordinateSource: 'destination-anchor',
+            coordinatesVerified: true,
+            tags: {
+              requested_place: 'true',
+              grounded_geocoded: 'true',
+              coordinates_verified: 'true',
+              coordinate_source: 'destination-anchor'
+            }
+          })
+          continue
+        }
         console.warn(`[collectTourCandidates] Discarding unverified candidate "${placeName}" in ${city}. No synthetic or hallucinated coordinates allowed.`)
       }
     }
