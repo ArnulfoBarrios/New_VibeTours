@@ -122,6 +122,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   int? _liveRouteStopIndex;
   int _activeStop = 0;
   bool _isRouting = false;
+  bool _isTrafficRefreshing = false;
   bool _isOffRoute = false;
   DateTime? _offRouteSince;
   int _routeRequestToken = 0;
@@ -1461,6 +1462,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         }
       });
     }
+    // Do not request a preliminary route from a stale/low-quality location.
+    // The first visible route must be based on the same reliable GPS fix that
+    // the live position stream will use.
+    if (!_hasInitialAccurateRoute) return;
+
     final targetStopIndex = _selectedVoicePlace != null
         ? -2
         : _navigatingToHotel
@@ -1487,8 +1493,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     if (!mounted) return;
     if (initialPosition != null) {
       setState(() {
-        _currentPoint = _pointFromPosition(initialPosition);
-        if (initialPosition.speed >= 1.0 && initialPosition.heading >= 0) {
+        // The stream is authoritative once it has emitted a fix. Do not let
+        // this one-shot lookup overwrite a newer live position.
+        _currentPoint ??= _pointFromPosition(initialPosition);
+        if (_currentHeading == null &&
+            initialPosition.speed >= 1.0 &&
+            initialPosition.heading >= 0) {
           _currentHeading = initialPosition.heading;
         }
       });
@@ -1501,7 +1511,16 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           maxCount: 3,
           lang: tour.language,
         );
-        await _recalculateRoute(tour, force: true);
+
+        // When the stream is active, wait for its first reliable fix. The
+        // one-shot currentPosition can be stale and would otherwise produce a
+        // first route that is immediately replaced by a second route.
+        if (stream == null &&
+            initialPosition.accuracy <= 25.0 &&
+            !_hasInitialAccurateRoute) {
+          _hasInitialAccurateRoute = true;
+          await _recalculateRoute(tour, force: true);
+        }
       }
     }
   }
@@ -1537,11 +1556,23 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final tour = _navigationTour;
     if (tour == null || tour.stops.isEmpty) return;
 
-    final route = _liveRoute;
-    // Auto-refine to optimal live route as soon as verified satellite fix arrives
-    if (route == null || (!_hasInitialAccurateRoute && position.accuracy <= 25.0)) {
+    // The first route must use a reliable stream fix. Do not display a route
+    // calculated from the initial one-shot location and then replace it a
+    // moment later with the stream location.
+    if (!_hasInitialAccurateRoute) {
+      if (position.accuracy > 25.0) return;
       _hasInitialAccurateRoute = true;
-      unawaited(_recalculateRoute(tour, force: true));
+      if (!_isRouting) {
+        unawaited(_recalculateRoute(tour, force: true));
+      }
+      return;
+    }
+
+    final route = _liveRoute;
+    if (route == null) {
+      if (!_isRouting) {
+        unawaited(_recalculateRoute(tour, force: true));
+      }
       return;
     }
 
@@ -1583,18 +1614,42 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final sustainedDeviation = _offRouteSince != null &&
         now.difference(_offRouteSince!) >= const Duration(seconds: 8);
 
-    if (sustainedDeviation || refreshTraffic) {
-      if (_canReroute(now, isOffRoute: sustainedDeviation)) {
-        if (deviated) {
-          setState(() {
-            _isOffRoute = sustainedDeviation;
-          });
-        }
+    if (sustainedDeviation && _canReroute(now, isOffRoute: true)) {
+      setState(() {
+        _isOffRoute = true;
+      });
+      unawaited(
+        _recalculateRoute(
+          tour,
+          force: true,
+          markOffRoute: true,
+        ),
+      );
+    } else if (refreshTraffic &&
+        !_isTrafficRefreshing &&
+        _canReroute(now)) {
+      // Refresh traffic metadata only. Re-routing here would replace the
+      // road geometry every few minutes even when the user is still on route.
+      final destination = _selectedVoicePlace != null
+          ? _selectedVoicePlace!.toGeoPoint()
+          : _navigatingToHotel
+              ? _findHotelStop(tour)?.location
+              : (_activeStop < tour.stops.length
+                  ? tour.stops[_activeStop].location
+                  : null);
+      if (destination != null) {
         unawaited(
-          _recalculateRoute(
-            tour,
-            force: refreshTraffic || sustainedDeviation,
-            markOffRoute: sustainedDeviation,
+          _refreshTrafficInBackground(
+            baseRoute: route,
+            origin: point,
+            destination: destination,
+            stopIndex: _selectedVoicePlace != null
+                ? -2
+                : _navigatingToHotel
+                    ? -1
+                    : _activeStop,
+            requestToken: _routeRequestToken,
+            travelMode: route.travelMode,
           ),
         );
       }
@@ -1609,7 +1664,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     // `force` means bypass the completed-route cache; it must never allow
     // overlapping network requests. Older code used it to bypass this guard,
     // which made GPS updates race and caused the traffic label to blink.
-    if (_isRouting) return;
+    if (_isRouting || !_hasInitialAccurateRoute) return;
     var origin = _currentPoint;
     if (origin == null) {
       final position = await ref
@@ -1648,22 +1703,27 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final requestToken = ++_routeRequestToken;
     final profileTransport = ref.read(touristProfileProvider).valueOrNull?.transportPreference;
     final travelMode = routeTravelModeFor(profileTransport);
+    final previousRoute = _liveRoute;
     late final RoadRouteResult route;
     try {
-      route = await _routeService.resolveRoute(
-        [origin, destination],
-        preferLiveTraffic: travelMode == RouteTravelMode.driving ||
-            travelMode == RouteTravelMode.taxi,
-        forceRefresh: force,
-        originHeading: _currentHeading,
-        travelMode: travelMode,
-      );
+      route = await _routeService
+          .resolveRoute(
+            [origin, destination],
+            // Get the road geometry first. Traffic is requested below in the
+            // background so the first visible route is not delayed or replaced.
+            preferLiveTraffic: false,
+            forceRefresh: force,
+            originHeading: _currentHeading,
+            travelMode: travelMode,
+          )
+          .timeout(const Duration(seconds: 8));
     } catch (error) {
       debugPrint('[live-route] Error calculando ruta: $error');
       if (mounted && requestToken == _routeRequestToken) {
         setState(() {
           _isRouting = false;
-          _noLandRouteAvailable = true;
+          // Keep the last valid road route visible when a refresh times out.
+          _noLandRouteAvailable = previousRoute == null;
         });
       }
       return;
@@ -1719,6 +1779,64 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       _isOffRoute = false;
       _noLandRouteAvailable = isUnreachable;
     });
+
+    final supportsLiveTraffic =
+        _routeService.hasLiveTrafficProvider &&
+        (travelMode == RouteTravelMode.driving ||
+            travelMode == RouteTravelMode.taxi);
+    if (supportsLiveTraffic && route.geometry.length >= 2) {
+      unawaited(
+        _refreshTrafficInBackground(
+          baseRoute: route,
+          origin: origin,
+          destination: destination,
+          stopIndex: stopIndex,
+          requestToken: requestToken,
+          travelMode: travelMode,
+        ),
+      );
+    }
+  }
+
+  Future<void> _refreshTrafficInBackground({
+    required RoadRouteResult baseRoute,
+    required GeoPoint origin,
+    required GeoPoint destination,
+    required int stopIndex,
+    required int requestToken,
+    required RouteTravelMode travelMode,
+  }) async {
+    if (_isTrafficRefreshing) return;
+    _isTrafficRefreshing = true;
+    _lastTrafficRefreshAt = DateTime.now();
+    try {
+      final trafficRoute = await _routeService.resolveRoute(
+        [origin, destination],
+        preferLiveTraffic: true,
+        forceRefresh: true,
+        originHeading: _currentHeading,
+        travelMode: travelMode,
+      );
+
+      if (!mounted ||
+          requestToken != _routeRequestToken ||
+          !identical(_liveRoute, baseRoute) ||
+          !_isCurrentRouteContext(stopIndex, destination) ||
+          !trafficRoute.usesLiveTraffic) {
+        return;
+      }
+
+      // Traffic may return a different alternative geometry. Keep the road
+      // geometry already shown to the user and import only its ETA/status.
+      setState(() {
+        _liveRoute = baseRoute.withTrafficFrom(trafficRoute);
+        _lastTrafficRefreshAt = DateTime.now();
+      });
+    } catch (error) {
+      debugPrint('[live-traffic] Error actualizando trafico: $error');
+    } finally {
+      _isTrafficRefreshing = false;
+    }
   }
 
   bool _canReroute(DateTime now, {bool isOffRoute = false}) {

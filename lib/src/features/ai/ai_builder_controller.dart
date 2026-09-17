@@ -127,6 +127,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
   final Ref ref;
 
   String? _workingBaseUrl;
+  int _chatRequestSequence = 0;
 
   Future<String> _findWorkingBaseUrl() async {
     if (_workingBaseUrl != null) return _workingBaseUrl!;
@@ -147,13 +148,17 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     throw lastError ?? Exception('No se pudo encontrar el servidor local. Revisa que el backend esté corriendo.');
   }
 
-  Future<http.Response> _postJson(String path, Map<String, dynamic> body) async {
+  Future<http.Response> _postJson(
+    String path,
+    Map<String, dynamic> body, {
+    Duration timeout = const Duration(minutes: 3),
+  }) async {
     final baseUrl = await _findWorkingBaseUrl();
     return await http.post(
       Uri.parse('$baseUrl$path'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
-    ).timeout(const Duration(minutes: 3));
+    ).timeout(timeout);
   }
   
   Future<http.Response> _getJson(String path) async {
@@ -172,6 +177,11 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
   Future<void> sendMessage(String text, {String? imagePath, double? lat, double? lon, String? displayLabel}) async {
     final now = DateTime.now();
     final messageText = displayLabel ?? text;
+
+    // El chat debe procesar una sola petición a la vez. Esto evita respuestas
+    // fuera de orden cuando el usuario toca enviar o finaliza una nota de voz
+    // mientras la respuesta anterior aún está en curso.
+    if (state.isTyping || state.isLoading || state.isBuilding) return;
 
     // Prevent duplicate submission if the last user message is identical and sent within 1.5 seconds
     if (state.messages.isNotEmpty) {
@@ -194,11 +204,16 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       error: null,
     );
 
-    // Preparar historial reciente para el backend
-    final history = state.messages.map((m) => {
+    // El mensaje actual se envía en `message`; no debe repetirse en `history`.
+    // Mantener solo el contexto reciente evita reenviar itinerarios completos
+    // en cada turno y reduce tanto latencia como coste del modelo.
+    final previousMessages = state.messages.where((m) => m.id != userMsg.id).toList();
+    final historyStart = previousMessages.length > 10 ? previousMessages.length - 10 : 0;
+    final history = previousMessages.sublist(historyStart).map((m) => {
       'role': m.isUser ? 'user' : 'assistant',
-      'content': m.text,
+      'content': _compactHistoryEntry(m.text),
     }).toList();
+    final requestSequence = ++_chatRequestSequence;
 
     try {
       final response = await _postJson('/ai/chat', {
@@ -209,7 +224,9 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         if (lat != null) 'latitude': lat,
         // ignore: use_null_aware_elements
         if (lon != null) 'longitude': lon,
-      });
+      }, timeout: const Duration(seconds: 45));
+
+      if (requestSequence != _chatRequestSequence) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -332,11 +349,19 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
         );
       }
     } catch (e) {
+      if (requestSequence != _chatRequestSequence) return;
       state = state.copyWith(
         isTyping: false,
         error: _friendlyError(e),
       );
     }
+  }
+
+  String _compactHistoryEntry(String text) {
+    const maxLength = 1200;
+    final normalized = text.trim();
+    if (normalized.length <= maxLength) return normalized;
+    return '${normalized.substring(0, maxLength)}…';
   }
 
   Future<void> startPlanning(AiTourRequest request) async {

@@ -8,6 +8,18 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../services/road_route_service.dart';
 import '../../domain/models.dart';
 
+class _NearestRoutePoint {
+  const _NearestRoutePoint({
+    required this.segmentIndex,
+    required this.projection,
+    required this.distanceMeters,
+  });
+
+  final int segmentIndex;
+  final LatLng projection;
+  final double distanceMeters;
+}
+
 class LiveNavigationMap extends ConsumerStatefulWidget {
   const LiveNavigationMap({
     super.key,
@@ -89,6 +101,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   bool _liveRouteRenderRunning = false;
   LatLng? _pendingTrimmedRoutePosition;
   bool _isFlushingTrimmedRoute = false;
+
+  static const _maxRouteSnapDistanceMeters = 150.0;
 
   @override
   bool get wantKeepAlive => true;
@@ -308,8 +322,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   }
 
   void _setRouteGeometry(List<LatLng> newPoints) {
-    final previousGeometry = _fullGeometry;
-    final previousIndex = _lastSegmentIndex;
     _fullGeometry = List.from(newPoints);
     _cumulativeDistances = [0.0];
     double total = 0.0;
@@ -320,52 +332,55 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       _cumulativeDistances.add(total);
     }
 
+    // A refreshed route is a new geometry. Never carry the previous segment
+    // index into it: doing so can make the first paint start in the middle of
+    // the route and leave a large portion of the polyline invisible.
+    _lastSegmentIndex = 0;
     final currentPos = _displayedPosition;
-    if (currentPos != null && previousGeometry.length >= 2 && previousIndex > 0) {
-      int bestSegment = 0;
-      double minDist = double.infinity;
-      for (int i = 0; i < _fullGeometry.length - 1; i++) {
-        final proj = _projectPointOntoSegmentMetric(currentPos, _fullGeometry[i], _fullGeometry[i + 1]);
-        final d = _metricDistanceMeters(currentPos, proj);
-        if (d < minDist) {
-          minDist = d;
-          bestSegment = i;
-        }
-      }
-      if (minDist <= 65.0) {
-        _lastSegmentIndex = bestSegment;
-      } else {
-        _lastSegmentIndex = 0;
-      }
-    } else {
-      _lastSegmentIndex = 0;
+    final nearest = currentPos == null ? null : _findNearestRoutePoint(currentPos);
+    if (nearest != null && nearest.distanceMeters <= 150.0) {
+      _lastSegmentIndex = nearest.segmentIndex;
     }
   }
 
-  LatLng _getSnappedPosition(LatLng rawPos) {
-    if (_fullGeometry.length < 2) return rawPos;
-    final startIdx = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
-    final searchEndIdx = math.min(startIdx + 12, _fullGeometry.length - 1);
+  _NearestRoutePoint? _findNearestRoutePoint(LatLng currentPos) {
+    if (_fullGeometry.length < 2) return null;
 
-    LatLng bestProj = rawPos;
-    double minDist = double.infinity;
-    int bestSegment = startIdx;
+    var bestSegment = 0;
+    var bestProjection = _fullGeometry.first;
+    var minDistance = double.infinity;
 
-    for (int i = startIdx; i < searchEndIdx; i++) {
-      final a = _fullGeometry[i];
-      final b = _fullGeometry[i + 1];
-      final proj = _projectPointOntoSegmentMetric(rawPos, a, b);
-      final dist = _metricDistanceMeters(rawPos, proj);
-      if (dist < minDist) {
-        minDist = dist;
-        bestProj = proj;
+    // Search the complete geometry. Restricting this search to a handful of
+    // segments is unsafe after a GPS correction, a route refresh, or a road
+    // with a loop/roundabout because it can select a wrong segment and trim
+    // away the rest of the route.
+    for (int i = 0; i < _fullGeometry.length - 1; i++) {
+      final projection = _projectPointOntoSegmentMetric(
+        currentPos,
+        _fullGeometry[i],
+        _fullGeometry[i + 1],
+      );
+      final distance = _metricDistanceMeters(currentPos, projection);
+      if (distance < minDistance) {
+        minDistance = distance;
         bestSegment = i;
+        bestProjection = projection;
       }
     }
 
-    if (minDist <= 35.0) {
-      _lastSegmentIndex = math.max(_lastSegmentIndex, bestSegment);
-      return bestProj;
+    return _NearestRoutePoint(
+      segmentIndex: bestSegment,
+      projection: bestProjection,
+      distanceMeters: minDistance,
+    );
+  }
+
+  LatLng _getSnappedPosition(LatLng rawPos) {
+    final nearest = _findNearestRoutePoint(rawPos);
+    if (nearest != null &&
+        nearest.distanceMeters <= _maxRouteSnapDistanceMeters) {
+      _lastSegmentIndex = nearest.segmentIndex;
+      return nearest.projection;
     }
     return rawPos;
   }
@@ -373,54 +388,24 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   List<LatLng> _getZeroGapTrimmedGeometry(LatLng currentPos) {
     if (_fullGeometry.length < 2) return _fullGeometry;
 
-    final startIdx = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
-    // Search forward through sequential segments (up to 12 segments ahead for curves and wide avenues)
-    final searchEndIdx = math.min(startIdx + 12, _fullGeometry.length - 1);
+    final nearest = _findNearestRoutePoint(currentPos);
 
-    int bestSegment = startIdx;
-    double minDist = double.infinity;
-
-    for (int i = startIdx; i < searchEndIdx; i++) {
-      final a = _fullGeometry[i];
-      final b = _fullGeometry[i + 1];
-
-      final proj = _projectPointOntoSegmentMetric(currentPos, a, b);
-      final dist = _metricDistanceMeters(currentPos, proj);
-
-      if (dist < minDist) {
-        minDist = dist;
-        bestSegment = i;
-      }
+    // Never draw a straight GPS-to-road connector. If the current fix is not
+    // close enough to a routed road, wait for a matching route refresh instead
+    // of painting a line through buildings, parks, or private property.
+    if (nearest == null ||
+        nearest.distanceMeters > _maxRouteSnapDistanceMeters) {
+      return const <LatLng>[];
     }
 
-    // Advance segment index when user is within the roadway corridor (up to 65m for multi-lane avenues and roundabouts)
-    if (minDist <= 65.0) {
-      _lastSegmentIndex = math.max(_lastSegmentIndex, bestSegment);
-    }
-
-    final activeSegment = _lastSegmentIndex.clamp(0, _fullGeometry.length - 2);
-    final a = _fullGeometry[activeSegment];
-    final b = _fullGeometry[activeSegment + 1];
-    final activeProj = _projectPointOntoSegmentMetric(currentPos, a, b);
-
-    final remaining = _fullGeometry.sublist(activeSegment + 1);
-    final connectorDistance = _metricDistanceMeters(currentPos, activeProj);
-
-    // If user is near roadway (<= 35m), start cleanly at the projected road position (no lateral hook)
-    if (connectorDistance <= 35.0) {
-      return [
-        activeProj,
-        ...remaining,
-      ];
-    } else {
-      if (_lastSegmentIndex == 0) {
-        return _fullGeometry;
-      }
-      return [
-        activeProj,
-        ...remaining,
-      ];
-    }
+    // Start at the snapped road position and keep every remaining point from
+    // the provider geometry through the destination. The puck uses the same
+    // projection, so no artificial gap or diagonal shortcut is introduced.
+    _lastSegmentIndex = nearest.segmentIndex;
+    return [
+      nearest.projection,
+      ..._fullGeometry.sublist(nearest.segmentIndex + 1),
+    ];
   }
 
   Future<void> _createPuckCircles(LatLng currentPos) async {
@@ -757,7 +742,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   @override
   void didUpdateWidget(covariant LiveNavigationMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final routeChanged = oldWidget.route != widget.route ||
+    final routeChanged = _routeGeometryChanged(oldWidget.route, widget.route) ||
         oldWidget.destination != widget.destination ||
         oldWidget.styleUrl != widget.styleUrl;
     final locationChanged = oldWidget.currentLocation != widget.currentLocation;
@@ -789,8 +774,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     if (trackingChanged) {
       _userIsExploringMap = false;
       _updateCameraPosition(force: true);
-    } else if (routeChanged) {
-      _updateCameraPosition();
     } else if (widget.trackingMode && headingChanged && !locationChanged) {
       final oldHeading = oldWidget.trackingHeading ?? 0.0;
       final newHeading = widget.trackingHeading ?? 0.0;
@@ -799,6 +782,20 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         _updateCameraPosition();
       }
     }
+  }
+
+  bool _routeGeometryChanged(
+    RoadRouteResult? previous,
+    RoadRouteResult? current,
+  ) {
+    if (identical(previous, current)) return false;
+    if (previous == null || current == null) return true;
+
+    // Traffic refreshes create a new immutable result but deliberately reuse
+    // the same geometry list. Do not redraw the map for metadata-only changes.
+    return !identical(previous.geometry, current.geometry) ||
+        previous.usesMaritimeTransfer != current.usesMaritimeTransfer ||
+        !identical(previous.walkingSegments, current.walkingSegments);
   }
 
   @override
@@ -853,14 +850,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
 
     _setRouteGeometry(rawPoints);
 
-    // Fit the full geometry before waiting for platform annotation calls.
-    // addCircle/addSymbol/addLine are asynchronous and must not delay the
-    // fixed-mode camera from showing the entire route.
-    if (!widget.trackingMode) {
-      _updateCameraPosition();
-    }
-
-
     final destinationChanged = _renderedDestination == null ||
         _metricDistanceMeters(_renderedDestination!, destPos) > 2;
     if (destinationChanged) {
@@ -884,7 +873,9 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     if (!_isCurrentLiveRouteRender(requestId)) return;
 
     final visualPosition = _displayedPosition ?? currentPos;
-    // Always trim the route line ahead of the user position in all camera modes
+    // Trim only the already-traversed part. The geometry sent to the map is
+    // still the complete remaining route from the current position to the
+    // destination; it is never a partial chunk selected by the zoom level.
     // A maritime transfer is represented by the banner and its terminal
     // action. Do not paint either the sea segment or a land-to-destination
     // connector in this mode; tapping the banner starts a separate route to
@@ -983,6 +974,13 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
+    // Fit the camera only after the complete route line has been accepted by
+    // MapLibre. Fitting it before addLine finishes caused the first visible
+    // frame to show a route that appeared incomplete until a later redraw.
+    if (_isCurrentLiveRouteRender(requestId)) {
+      _updateCameraPosition();
+    }
+
     // Clear previous walking annotations before drawing new ones
     await _clearWalkingAnnotations();
     if (!_isCurrentLiveRouteRender(requestId)) return;
@@ -1042,9 +1040,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
-    if (_isCurrentLiveRouteRender(requestId)) {
-      _updateCameraPosition();
-    }
   }
 
   @override
@@ -1105,7 +1100,6 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                   });
                 }
                 _requestLiveRouteRender();
-                _updateCameraPosition();
               },
             ),
           ),

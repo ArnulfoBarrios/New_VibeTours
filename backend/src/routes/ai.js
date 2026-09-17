@@ -109,6 +109,32 @@ const TOUR_TRIP_TYPES = new Set([
 const MICRO_DESTINATION_PATTERN = /tayrona|minca|guatap[eé]|valle de cocora|parque nacional|reserva natural|sierra nevada|amazonas|eje cafetero|pueblito|monta[nñ]a|ca[nñ]o?n|cascada/i
 const COASTAL_ISLAND_PATTERN = /\bislas?\b|\bcayos?\b|islas? del rosario|isla bar[uú]|san bernardo|archipi[eé]lago|islas? de san bernardo|coastal islands|island hopping/i
 
+const EXPLICIT_TOUR_BUILD_PATTERN = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|procede\s+a\s+generar|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i
+
+function hasDefinedChatValue(value) {
+  if (!value) return false
+  if (typeof value === 'string') {
+    return value.trim().length > 0 && !/^(por definir|pendiente|a definir|por confirmar|sin definir|null|undefined)$/i.test(value.trim())
+  }
+  return true
+}
+
+function hasDefinedLodging(preferences) {
+  const lodging = preferences?.selectedHotel
+  return hasDefinedChatValue(preferences?.accommodationStatus) ||
+    hasDefinedChatValue(typeof lodging === 'object' ? (lodging?.name || lodging?.nombre) : lodging)
+}
+
+function firstMissingTourDetail(preferences) {
+  const destination = preferences?.city || preferences?.destination || preferences?.canonicalDestination?.city
+  if (!hasDefinedChatValue(destination)) return '¿A qué destino te gustaría viajar?'
+  if (!hasDefinedChatValue(preferences?.durationDays) && !hasDefinedChatValue(preferences?.datesSeason)) return '¿Cuántos días durará tu viaje o qué fechas tienes previstas?'
+  if (!hasDefinedLodging(preferences)) return '¿Dónde te hospedarás durante el viaje?'
+  if (!hasDefinedChatValue(preferences?.transport)) return '¿Qué medio de transporte usarás para moverte?'
+  if (!hasDefinedChatValue(preferences?.budget)) return '¿Qué presupuesto aproximado tienes para el viaje?'
+  return null
+}
+
 export function normalizeTourType(value) {
   const normalized = String(value ?? '')
     .trim()
@@ -898,17 +924,36 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences.destination = 'Cartagena, Bolívar, Colombia'
     }
 
-    // 2. Realizar búsqueda en vivo en la web (Tavily/DDG) SOLO si el usuario pregunta explícitamente por fechas, clima, festivos o eventos
+    // Si el usuario intenta generar antes de completar los datos, responder
+    // aquí. No se consulta catálogo, web ni modelo para no repetir itinerarios
+    // ni retrasar una pregunta que puede resolverse de inmediato.
+    const missingTourDetail = EXPLICIT_TOUR_BUILD_PATTERN.test(message)
+      ? firstMissingTourDetail(updatedPreferences)
+      : null
+    if (missingTourDetail) {
+      return res.json({
+        responseMessage: missingTourDetail,
+        message: missingTourDetail,
+        botMessage: missingTourDetail,
+        preferences: updatedPreferences,
+        updatedPreferences,
+        destinationSuggestions: [],
+        actionChips: [],
+        readyToBuild: false,
+        webSearchDone: Boolean(updatedPreferences.webSearchDone)
+      })
+    }
+
+    // 2. Realizar búsqueda en vivo solo si el usuario pregunta explícitamente
+    // por fechas, clima, festivos o eventos. Una conversación normal no debe
+    // esperar una búsqueda externa antes de poder responder.
     let webSearchResult = null
     const dest = updatedPreferences.canonicalDestination?.displayName || updatedPreferences.city || updatedPreferences.destination
     const isDateOrEventQuery = /\b(festivo|festivos|puente|puentes|clima|evento|eventos|calendario|septiembre|octubre|noviembre|diciembre|enero|febrero|marzo|abril|mayo|junio|julio|agosto|feria|carnaval)\b/i.test(message)
-    const hasTavily = Boolean(process.env.TAVILY_API_KEY)
-    const shouldSearchWeb = isDateOrEventQuery || (hasTavily && !currentPreferences.webSearchDone && Boolean(dest))
+    const shouldSearchWeb = isDateOrEventQuery
 
     if (shouldSearchWeb) {
-      const searchQuery = isDateOrEventQuery 
-        ? `${message} en ${dest || 'Colombia'}`
-        : `eventos turismo atracciones imperdibles en ${dest} ${updatedPreferences.datesSeason || ''}`.trim()
+      const searchQuery = `${message} en ${dest || 'Colombia'}`
 
       webSearchResult = await searchWebForTravel({
         query: searchQuery,
@@ -942,11 +987,15 @@ aiRouter.post('/chat', async (req, res, next) => {
     }
 
     // 3. Generar respuesta conversacional amigable y cordial con la IA
+    const recentHistory = (history || [])
+      .filter(item => item && typeof item.content === 'string' && item.content.trim())
+      .slice(-10)
+    const lastHistoryItem = recentHistory[recentHistory.length - 1]
+    const historyAlreadyHasMessage = lastHistoryItem?.role === 'user' && lastHistoryItem.content.trim() === message.trim()
     const chatState = {
-      history: [
-        ...history,
-        { role: 'user', content: message }
-      ]
+      history: historyAlreadyHasMessage
+        ? recentHistory
+        : [...recentHistory, { role: 'user', content: message }]
     }
 
     const aiResponse = await generateChatResponse(
@@ -1403,12 +1452,18 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
     
     // Batch-generate 100% unique custom reasons for all selected places using fast AI
     const placeNames = planner.selectedPlaces.map(p => p.name)
-    const customReasonsMap = await generateCustomPlaceReasons({
-      destination: input.destination,
-      city: input.city,
-      prompt: input.prompt,
-      places: placeNames
-    }).catch(() => ({}))
+    // Las razones personalizadas enriquecen la tarjeta, pero no deben bloquear
+    // el resultado principal si el proveedor tarda. buildRecommendationReason
+    // conserva una explicación determinística como respaldo.
+    const customReasonsMap = await Promise.race([
+      generateCustomPlaceReasons({
+        destination: input.destination,
+        city: input.city,
+        prompt: input.prompt,
+        places: placeNames
+      }).catch(() => ({})),
+      new Promise(resolve => setTimeout(() => resolve({}), 3500))
+    ])
 
     const assignedUrls = new Set()
     // We send back the selected places as recommendations with real unique images & custom reasons
@@ -1888,21 +1943,16 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
       if (!shouldAskAiPlanner) {
         console.info('[tour-ai] ai-planner-skipped (build)')
       } else {
-        const dest = input.city || input.destination
-        const webSearchResult = await searchWebForTravel({
-          city: dest,
-          destination: dest,
-          country: input.country || '',
-          dates: plannerContext?.datesSeason || ''
-        }).catch(() => null)
-
         aiTour = await planWithOpenAI({
           ...input,
           places: planner.selectedPlaces,
           recommendedSchedule: planner.recommendedSchedule,
           timeProfile: planner.timeProfile,
           selectedHotel: plannerContext?.selectedHotel,
-          webSearchSummary: webSearchResult?.summary || '',
+          // Las consultas actuales (clima, eventos o fechas) se hacen en el
+          // chat cuando el usuario las solicita. Repetirlas aquí retrasa la
+          // creación sin modificar la geometría ni las paradas seleccionadas.
+          webSearchSummary: '',
           userPreferences: plannerContext || {},
           sourceSummary: { location: null, candidateSource: 'user-confirmed', candidateCount: confirmedPlaces.length, selectedCount: confirmedPlaces.length },
         })
@@ -1951,13 +2001,16 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
     
     const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
-    const richDescriptionsMap = await generateRichPlaceDescriptionsBatch({
-      destination: input.destination,
-      city: input.city,
-      country: input.country,
-      places: plannedPlaceNames,
-      prompt: input.prompt
-    }).catch(() => ({}))
+    const richDescriptionsMap = await Promise.race([
+      generateRichPlaceDescriptionsBatch({
+        destination: input.destination,
+        city: input.city,
+        country: input.country,
+        places: plannedPlaceNames,
+        prompt: input.prompt
+      }).catch(() => ({})),
+      new Promise(resolve => setTimeout(() => resolve({}), 6500))
+    ])
 
     const assignedUrls = new Set()
     const settledStops = []
@@ -2261,13 +2314,16 @@ async function processTourGeneration(jobId, input) {
       const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1))
       
       const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
-      const richDescriptionsMap = await generateRichPlaceDescriptionsBatch({
-        destination: input.destination,
-        city: input.city,
-        country: input.country,
-        places: plannedPlaceNames,
-        prompt: input.prompt
-      }).catch(() => ({}))
+      const richDescriptionsMap = await Promise.race([
+        generateRichPlaceDescriptionsBatch({
+          destination: input.destination,
+          city: input.city,
+          country: input.country,
+          places: plannedPlaceNames,
+          prompt: input.prompt
+        }).catch(() => ({})),
+        new Promise(resolve => setTimeout(() => resolve({}), 6500))
+      ])
 
       const assignedUrls = new Set()
       const settledStops = []

@@ -1257,7 +1257,10 @@ REGLAS PARA "specificPlaces":
         temperature: 0.4,
         response_format: { type: 'json_object' },
         reasoning_effort: 'none'
-      }))
+      })),
+      // El fallback conversacional puede responder sin este proveedor; no
+      // dejamos la interfaz esperando indefinidamente ante una red lenta.
+      signal: AbortSignal.timeout(25000)
     })
 
     if (!response.ok) {
@@ -1697,7 +1700,10 @@ Devuelve ÚNICAMENTE un JSON con:
         temperature: 0.1,
         response_format: { type: 'json_object' },
         reasoning_effort: 'none'
-      }))
+      })),
+      // Si la extracción tarda, el parser local conserva la conversación y
+      // evita que una segunda llamada de IA bloquee toda la respuesta.
+      signal: AbortSignal.timeout(12000)
     })
 
     if (response.ok) {

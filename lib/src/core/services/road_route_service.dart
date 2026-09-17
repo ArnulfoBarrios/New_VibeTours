@@ -59,6 +59,29 @@ class RoadRouteResult {
   final int? trafficDelaySeconds;
   final TrafficSeverity trafficSeverity;
   final RouteTravelMode travelMode;
+
+  /// Keeps the already-rendered road geometry while importing only the
+  /// traffic metadata from a later live-traffic request.
+  RoadRouteResult withTrafficFrom(RoadRouteResult trafficRoute) {
+    return RoadRouteResult(
+      geometry: geometry,
+      maritimeSegments: maritimeSegments,
+      flightSegments: flightSegments,
+      walkingSegments: walkingSegments,
+      ports: ports,
+      airports: airports,
+      usesMaritimeTransfer: usesMaritimeTransfer,
+      usesFlightTransfer: usesFlightTransfer,
+      transitAdviceMessage: transitAdviceMessage,
+      usesLiveTraffic: trafficRoute.usesLiveTraffic,
+      usedFallback: usedFallback,
+      distanceMeters: distanceMeters,
+      travelTimeSeconds: trafficRoute.travelTimeSeconds ?? travelTimeSeconds,
+      trafficDelaySeconds: trafficRoute.trafficDelaySeconds,
+      trafficSeverity: trafficRoute.trafficSeverity,
+      travelMode: travelMode,
+    );
+  }
 }
 
 class RoadRouteService {

@@ -107,7 +107,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   Future<void> _sendMessage() async {
     if (_isProcessingAction) return;
     final builderState = ref.read(aiBuilderProvider);
-    if (builderState.isLoading || builderState.isBuilding) return;
+    if (builderState.isTyping || builderState.isLoading || builderState.isBuilding) return;
 
     final text = _prompt.text.trim();
     if (text.isEmpty && _selectedImagePath == null) return;
@@ -347,7 +347,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
               ],
             ),
           ),
-          _buildInputArea(builderState.isLoading || builderState.isBuilding),
+          _buildInputArea(builderState.isTyping || builderState.isLoading || builderState.isBuilding),
         ],
       ),
     );
