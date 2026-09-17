@@ -1121,8 +1121,13 @@ aiRouter.post('/chat', async (req, res, next) => {
       Object.entries(aiResponse.extractedPreferences).forEach(([k, v]) => {
         if (v !== null && v !== undefined && v !== '') {
           if (k === 'selectedHotel' || k === 'accommodationStatus') {
-            if (isLodgingExplicitlyConfirmed(v, aiResponse.extractedPreferences.accommodationStatus)) {
+            const hVal = k === 'selectedHotel' ? v : (aiResponse.extractedPreferences.selectedHotel || updatedPreferences.selectedHotel)
+            const sVal = k === 'accommodationStatus' ? v : (aiResponse.extractedPreferences.accommodationStatus || updatedPreferences.accommodationStatus)
+            if (isLodgingExplicitlyConfirmed(hVal, sVal)) {
               updatedPreferences[k] = v
+              if (k === 'selectedHotel' && (!updatedPreferences.accommodationStatus || updatedPreferences.accommodationStatus === 'Por definir')) {
+                updatedPreferences.accommodationStatus = 'Hotel elegido'
+              }
             }
           } else if (!updatedPreferences[k] || updatedPreferences[k] === 'Por definir') {
             updatedPreferences[k] = v

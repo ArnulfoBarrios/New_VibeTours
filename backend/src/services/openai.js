@@ -128,8 +128,8 @@ export function isLodgingExplicitlyConfirmed(hotel, status) {
     return true
   }
 
-  // 2. If status is empty, null, "Por definir", "Pendiente", not confirmed
-  if (!statusStr || /^(por definir|pendiente|a definir|por confirmar|sin definir|null|undefined|en consulta)$/i.test(statusStr)) {
+  // 2. Explicitly unconfirmed / pending statuses
+  if (/^(por definir|pendiente|a definir|por confirmar|sin definir|en consulta)$/i.test(statusStr)) {
     return false
   }
 
@@ -137,7 +137,11 @@ export function isLodgingExplicitlyConfirmed(hotel, status) {
   if (!hotelNameStr || hotelNameStr.length < 3) return false
   if (isLodgingCategoryOrGeneric(hotelNameStr)) return false
 
-  // 4. Status must be explicitly confirmed
+  // 4. Valid specific commercial hotel without pending status is confirmed
+  if (!statusStr || statusStr === 'null' || statusStr === 'undefined') {
+    return true
+  }
+
   const isStatusConfirmed = /\b(confirmado|hotel elegido|elegido|reservado)\b/i.test(statusStr)
   return isStatusConfirmed
 }
@@ -907,6 +911,30 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     delete known.selectedHotel
     known.accommodationStatus = 'Por definir'
     known.lodgingTypePreference = lastUserMsg.trim()
+  } else {
+    const hotelMatch = lastUserMsg.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
+    if (hotelMatch) {
+      const rawHotel = `${hotelMatch[1]} ${hotelMatch[2]}`.trim()
+      if (!isLodgingCategoryOrGeneric(rawHotel) && rawHotel.length >= 4) {
+        const cleanHotel = rawHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        known.selectedHotel = cleanHotel
+        known.accommodationStatus = 'Hotel elegido'
+      }
+    }
+  }
+
+  const isUserConfirmingLodging = /\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar|en\s+el\s+hotel)\b/i.test(lastUserMsg)
+  if (isUserConfirmingLodging && (!known.selectedHotel || isLodgingCategoryOrGeneric(known.selectedHotel?.name || known.selectedHotel))) {
+    const prevBotMsg = (history || []).slice().reverse().find(m => m.role === 'assistant' || m.role === 'bot')?.content || ''
+    const prevHotelMatch = prevBotMsg.match(/\b(hotel|hostal|hostel|resort|posada)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:como\s+alojamiento|\?|\.|\,))/i)
+    if (prevHotelMatch) {
+      const rawPrevHotel = `${prevHotelMatch[1]} ${prevHotelMatch[2]}`.trim()
+      if (!isLodgingCategoryOrGeneric(rawPrevHotel) && rawPrevHotel.length >= 4) {
+        const cleanPrevHotel = rawPrevHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        known.selectedHotel = cleanPrevHotel
+        known.accommodationStatus = 'Hotel elegido'
+      }
+    }
   }
 
   if (known.selectedHotel?.name && isLodgingCategoryOrGeneric(known.selectedHotel.name)) {
@@ -1408,7 +1436,12 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema:
 
 REGLAS PARA "specificPlaces":
 1. DEBE contener ÚNICAMENTE lugares físicos y restaurantes reales con su nombre propio y su número de día ('dia': 1, 2, ...).
-2. Prohibido incluir textos genéricos como "Llegada", "Despedida", "Tiempo libre", "Día libre", "Tarde libre".`
+2. Prohibido incluir textos genéricos como "Llegada", "Despedida", "Tiempo libre", "Día libre", "Tarde libre".
+
+REGLAS PARA "accommodationStatus":
+- "Hotel elegido": si el usuario indicó o confirmó un hotel con nombre propio comercial real (ej: "Hotel Palma Linda").
+- "Casa propia / familiar": si indicó alojamiento en casa propia, familiar o de amigos.
+- "Por definir": si aún no hay hotel definido o el usuario solo mencionó una categoría genérica ("resort", "villa", "hotel boutique").`
 
   try {
     const formattedHistory = history.slice(-8).map(m => ({
@@ -1473,6 +1506,28 @@ REGLAS PARA "specificPlaces":
       }
     }
     const parsedExtracted = parsed.extractedPreferences || {}
+
+    // Preservar o auto-promover hotel si es un nombre real comercial
+    if (parsedExtracted.selectedHotel) {
+      const hName = typeof parsedExtracted.selectedHotel === 'string'
+        ? parsedExtracted.selectedHotel
+        : (parsedExtracted.selectedHotel?.name || '')
+      if (hName && hName.length >= 3 && !isLodgingCategoryOrGeneric(hName)) {
+        if (!parsedExtracted.accommodationStatus || parsedExtracted.accommodationStatus === 'Por definir') {
+          parsedExtracted.accommodationStatus = 'Hotel elegido'
+        }
+      }
+    } else if (known.selectedHotel) {
+      const kName = typeof known.selectedHotel === 'string'
+        ? known.selectedHotel
+        : (known.selectedHotel?.name || '')
+      if (kName && kName.length >= 3 && !isLodgingCategoryOrGeneric(kName)) {
+        parsedExtracted.selectedHotel = known.selectedHotel
+        if (!parsedExtracted.accommodationStatus) {
+          parsedExtracted.accommodationStatus = known.accommodationStatus || 'Hotel elegido'
+        }
+      }
+    }
 
     if (hasCity && Array.isArray(parsedExtracted.specificPlaces) && parsedExtracted.specificPlaces.length > 0) {
       parsedExtracted.specificPlaces = await filterChatSpecificPlacesByOsm(
@@ -1556,7 +1611,7 @@ REGLAS PARA "specificPlaces":
     const hasDayHeaders = /(?:^|\n)\s*(?:#{1,4}\s*)?d[íi]a\s*1\b/i.test(responseMessage) ||
       /\b(?:d[íi]a\s*1\s*[:\-–]|\*\*d[íi]a\s*1\*\*)/i.test(responseMessage)
     const mentionsPresentingItinerary = /\b(aqu[íi]\s+(?:tienes|est[áa]|te\s+dejo|te\s+presento|va)\s+(?:un|el|tu|este)?\s*itinerario|itinerario\s+para\s+tu\s+viaje|itinerario\s+para|este\s+es\s+(?:el|tu|un)\s+itinerario|itinerario\s+de\s+viaje|itinerario\s+sugerido|itinerario\s+personalizado|aqu[íi]\s+tienes\s+tu\s+itinerario|aqu[íi]\s+est[áa]\s+tu\s+itinerario|aqu[íi]\s+tienes\s+el\s+itinerario|aqu[íi]\s+est[áa]\s+el\s+itinerario|tu\s+itinerario\s+para|itinerario\s*:)\b/i.test(responseMessage)
-    const userRequestedItinerary = /\b(mu[ée]strame\s+(el\s+|tu\s+)?itinerario|ver\s+(el\s+|tu\s+)?itinerario|cu[aá]l\s+es\s+el\s+itinerario|quiero\s+ver\s+el\s+itinerario|dame\s+el\s+itinerario)\b/i.test(lastUserMsg)
+    const userRequestedItinerary = /\b(mu[ée]strame\s+(el\s+|tu\s+)?itinerario|ver\s+(el\s+|tu\s+)?itinerario|cu[aá]l\s+es\s+el\s+itinerario|quiero\s+ver\s+el\s+itinerario|dame\s+el\s+itinerario|d[oó]nde\s+est[aá]\s+(el\s+|tu\s+)?itinerario|no\s+veo\s+(el\s+|tu\s+)?itinerario|pasa\s+(el\s+|tu\s+)?itinerario|itinerario\s+completo|itinerario\b)/i.test(lastUserMsg)
     const hasLodgingJustProvided = Boolean(
       finalHasLodging &&
       finalHasCity &&
@@ -1717,9 +1772,14 @@ REGLAS PARA "specificPlaces":
     }
 
     // Si el hospedaje aún no está confirmado y el usuario no pidió ver el itinerario expresamente, PURGAR cualquier bloque de itinerario por días que haya emitido la IA
-    if (!finalHasLodging && !userRequestedItinerary) {
+    const botConfirmedLodging = /\b(hospedaje confirmado|hotel confirmado|alojamiento confirmado|confirmado el hotel|queda confirmado el hotel|registrado el hotel|registr[eé]\s+.+\s+como\s+alojamiento)\b/i.test(responseMessage)
+    const effectiveHasLodging = finalHasLodging || botConfirmedLodging
+
+    if (!effectiveHasLodging && !userRequestedItinerary) {
       responseMessage = responseMessage
         .replace(/(?:Itinerario de Viaje:|(?:\n|^)\s*(?:#{1,4}\s*)?D[íi]a\s*1\b)[^]*$/i, '')
+        .replace(/:\s*$/, '.')
+        .replace(/(?:aqu[íi]\s+(?:tienes|est[aá])\s+(?:tu|el)\s+itinerario[^.]*\.)/gi, '')
         .trim()
       const asksForLodging = /\b(hotel|hospedaje|alojamiento|d[oó]nde se hospedar[aá]n|d[oó]nde te hospedar[aá]s|quedan|quedar[aá]n)\b/i.test(responseMessage)
       if (!asksForLodging) {
@@ -2127,10 +2187,22 @@ export function extractChatInformationFallback(prompt) {
     res.transport = 'Taxi / Uber'
   }
 
+  const hotelMatch = text.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
+  if (hotelMatch) {
+    const rawHotel = `${hotelMatch[1]} ${hotelMatch[2]}`.trim()
+    if (!isLodgingCategoryOrGeneric(rawHotel) && rawHotel.length >= 4) {
+      const cleanHotel = rawHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      res.selectedHotel = cleanHotel
+      res.accommodationStatus = 'Hotel elegido'
+    }
+  }
+
   if (/\b(recomi[eé]ndame hoteles|hoteles|opciones de hotel|buscar hotel|sin hotel|no tengo hotel)\b/i.test(text)) {
     res.accommodationStatus = 'Recomiéndame hoteles'
   } else if (/\b(casa propia|mi casa|casa familiar|tengo hospedaje|tengo hotel|ya tengo hotel|tengo donde quedarme)\b/i.test(text)) {
     res.accommodationStatus = 'Casa propia / familiar'
+  } else if (/\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar)\b/i.test(text)) {
+    res.accommodationStatus = 'Hotel elegido'
   }
 
   const isPreferenceInput = Boolean(

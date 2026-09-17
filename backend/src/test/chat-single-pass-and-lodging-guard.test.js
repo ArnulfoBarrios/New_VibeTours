@@ -214,5 +214,68 @@ describe('Chat Single-Pass and Lodging Guardrail Tests', () => {
       )
     }
   })
+
+  it('should handle hotel declaration and inquiry without dropping hotel or truncating itinerary', async () => {
+    // 1. isLodgingExplicitlyConfirmed accepts hotel name even when status enum is null/undefined
+    assert.equal(isLodgingExplicitlyConfirmed('Hotel Palma Linda', null), true)
+    assert.equal(isLodgingExplicitlyConfirmed('Hotel Palma Linda', undefined), true)
+    assert.equal(isLodgingExplicitlyConfirmed({ name: 'Hotel Linda Palma' }, null), true)
+    assert.equal(isLodgingExplicitlyConfirmed('Hotel Palma Linda', 'Por definir'), false)
+
+    // 2. Chat with hotel declared and budget provided should output full itinerary and NOT re-ask for lodging
+    const state = {
+      message: 'Tenemos un presupuesto moderado',
+      history: [
+        { role: 'user', content: 'Crea un tour a Coveñas por 4 días con amigos' },
+        { role: 'assistant', content: '¡Excelente! ¿Qué transporte usarán, cuál es su presupuesto y dónde se hospedarán?' },
+        { role: 'user', content: 'Nos vamos a mover en carro y nos vamos a quedar en el Hotel Linda Palma' },
+        { role: 'assistant', content: '¡Perfecto! Registré transporte en carro y el Hotel Palma Linda como alojamiento. ¿Cuál es su presupuesto aproximado?' },
+        { role: 'user', content: 'Tenemos un presupuesto moderado' }
+      ]
+    }
+
+    const currentPreferences = {
+      city: 'Coveñas',
+      destination: 'Coveñas',
+      country: 'Colombia',
+      durationDays: 4,
+      companions: 'En grupo',
+      transport: 'Auto rentado',
+      budget: 'Moderado',
+      selectedHotel: 'Hotel Palma Linda',
+      accommodationStatus: 'Hotel elegido'
+    }
+
+    const result = await generateChatResponse(state, '', '', currentPreferences)
+
+    // Must have Day 1 headers
+    assert.ok(/Día\s*1\s*:/i.test(result.responseMessage), 'Itinerary must include Day 1')
+    // Must NOT ask for hotel again
+    assert.equal(
+      /¿En qué hotel o alojamiento se hospedarán/i.test(result.responseMessage),
+      false,
+      'Must NOT ask for hotel when hotel is already confirmed'
+    )
+    // Must NOT truncate with trailing colon
+    assert.equal(/:\s*$/.test(result.responseMessage.trim()), false, 'Must not end in dangling colon')
+
+    // 3. Asking "Dónde está el itinerario?" must deliver the full itinerary without asking for hotel
+    const inquiryState = {
+      message: 'Dónde está el itinerario?',
+      history: [
+        ...state.history,
+        { role: 'assistant', content: result.responseMessage },
+        { role: 'user', content: 'Dónde está el itinerario?' }
+      ]
+    }
+
+    const inquiryResult = await generateChatResponse(inquiryState, '', '', currentPreferences)
+    assert.ok(/Día\s*1\s*:/i.test(inquiryResult.responseMessage), 'Itinerary inquiry must return Day 1')
+    assert.equal(
+      /¿En qué hotel o alojamiento se hospedarán/i.test(inquiryResult.responseMessage),
+      false,
+      'Must NOT ask for hotel when user asks where the itinerary is'
+    )
+  })
 })
 
