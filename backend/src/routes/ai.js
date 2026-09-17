@@ -6,6 +6,7 @@ import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '..
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, deterministicJitter } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
+import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
 
@@ -718,19 +719,17 @@ aiRouter.post('/chat', async (req, res, next) => {
       ).catch(() => null)
     })
 
-    // 1. Extraer preferencias del último mensaje del usuario usando LLM + Fallback
-    const extracted = await extractChatInformation(message, currentPreferences, history)
-
-    // Si la intención es ambigua (ej. "presupuesto" sin contexto), no mutar estado ni inferir transportes
-    if (extracted?.isAmbiguousInput && extracted?.intentEval?.needsClarification) {
-      const promptText = extracted.intentEval.clarificationPrompt
-      const options = extracted.intentEval.options || []
+    // 1. Extraer preferencias de forma ultrarrápida (single-pass: intención + extracción determinista en 0ms)
+    const intentEval = classifyUserIntent(message, currentPreferences)
+    if (intentEval?.intent === INTENT_TYPES.AMBIGUOUS && intentEval?.needsClarification) {
+      const promptText = intentEval.clarificationPrompt
+      const options = intentEval.options || []
       const chips = options.map(o => (typeof o === 'string' ? o : (o.label || o.id || '')))
       return res.json({
         responseMessage: promptText,
         message: promptText,
         botMessage: promptText,
-        intentEval: extracted.intentEval,
+        intentEval,
         preferences: currentPreferences,
         updatedPreferences: currentPreferences,
         options,
@@ -740,6 +739,8 @@ aiRouter.post('/chat', async (req, res, next) => {
         needsClarification: true
       })
     }
+
+    const extracted = extractChatInformationFallback(message)
 
     const prevSpecifics = Array.isArray(currentPreferences.specificPlaces) ? currentPreferences.specificPlaces : []
     const extractedSpecifics = Array.isArray(extracted?.specificPlaces) ? extracted.specificPlaces : []
@@ -1118,8 +1119,14 @@ aiRouter.post('/chat', async (req, res, next) => {
 
     if (aiResponse.extractedPreferences && typeof aiResponse.extractedPreferences === 'object') {
       Object.entries(aiResponse.extractedPreferences).forEach(([k, v]) => {
-        if (v !== null && v !== undefined && v !== '' && !updatedPreferences[k]) {
-          updatedPreferences[k] = v
+        if (v !== null && v !== undefined && v !== '') {
+          if (k === 'selectedHotel' || k === 'accommodationStatus') {
+            if (isLodgingExplicitlyConfirmed(v, aiResponse.extractedPreferences.accommodationStatus)) {
+              updatedPreferences[k] = v
+            }
+          } else if (!updatedPreferences[k] || updatedPreferences[k] === 'Por definir') {
+            updatedPreferences[k] = v
+          }
         }
       })
     }

@@ -664,6 +664,13 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
+  if (cleanPlaces.length < 2) {
+    const preset = getDestinationPresets(capitalCity, targetCountry)
+    for (const p of preset.places) {
+      if (!cleanPlaces.includes(p)) cleanPlaces.push(p)
+    }
+  }
+
   const result = {
     name: capitalCity,
     country: targetCountry,
@@ -769,8 +776,8 @@ export function getDefaultActionChips(known = {}, lastMessage = '') {
   if (!known.transport) {
     return ['Caminando', 'Transporte público', 'Auto rentado', 'Taxi / Uber']
   }
-  if (!known.accommodationStatus) {
-    return ['Tengo mi propio hospedaje', 'Recomiéndame hoteles']
+  if (!isLodgingExplicitlyConfirmed(known.selectedHotel, known.accommodationStatus)) {
+    return ['Tengo mi propio hospedaje', '🏨 Recomiéndame hoteles']
   }
 
   return [`🚀 Generar tour en ${destName}`, '🍽️ Ver restaurantes', '🎯 Ver actividades']
@@ -925,7 +932,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const hasCompanions = hasValidValue(known.companions)
 
   async function runFallbackChatResponse() {
-    const fallbackChips = getDefaultActionChips(known, lastUserMsg)
+    let fallbackChips = getDefaultActionChips(known, lastUserMsg)
     let fallbackMsg = ''
     let effectiveReadyToBuild = false
 
@@ -957,11 +964,21 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         const missing = []
         if (!hasCity) missing.push('el destino')
         if (!hasDurationOrDates) missing.push('las fechas o días de viaje')
-        if (!fbHasLodging) missing.push('tu alojamiento u hotel')
+        if (!fbHasLodging) missing.push('tu alojamiento u hotel (o si te quedas en casa propia/familiar)')
         if (!fbHasTransport) missing.push('tu medio de transporte')
         if (!fbHasBudget) missing.push('tu presupuesto')
 
         fallbackMsg = `Para generar tu tour en el mapa, aún necesitamos definir: **${missing.join(', ')}**. ¿Podrías indicarme este dato?`
+        fallbackChips = []
+        if (!fbHasLodging) {
+          fallbackChips.push('Tengo mi propio hospedaje', '🏨 Recomiéndame hoteles')
+        }
+        if (!fbHasTransport) {
+          fallbackChips.push('Auto rentado', 'Taxi / Uber', 'Transporte público')
+        }
+        if (!fbHasBudget) {
+          fallbackChips.push('Económico', 'Moderado', 'Lujo')
+        }
       } else if (effectiveReadyToBuild) {
         fallbackMsg = `¡Perfecto! Todo está listo para tu viaje a ${destName}. Procedo a generar tu tour en el mapa.`
       } else if (hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua)\b/i.test(lastUserMsg)) {
@@ -1070,8 +1087,14 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           `\n\n¿Cuál de estos te gustaría elegir?`
       } else if (!hasCompanions && !fbHasLodging) {
         fallbackMsg = `¡Excelente! ¿Viajas solo, en pareja, con amigos o en familia con niños a ${destName}?`
-      } else if (!hasBudget || !hasTransport || !hasLodging) {
-        fallbackMsg = `¡Genial! ¿Cuál es tu presupuesto estimado (económico, moderado, lujo), en qué medio de transporte te moverás y si ya tienes alojamiento definido?`
+      } else if (!fbHasLodging && hasBudget && hasTransport) {
+        fallbackMsg = `¡Perfecto! Ya tenemos transporte y presupuesto. ¿En qué hotel o alojamiento se hospedarán en ${destName}? (o indícame si te quedas en casa propia / familiar).`
+      } else if (!hasBudget || !hasTransport || !fbHasLodging) {
+        const missing = []
+        if (!hasTransport) missing.push('tu medio de transporte')
+        if (!hasBudget) missing.push('tu presupuesto')
+        if (!fbHasLodging) missing.push('tu hotel o alojamiento')
+        fallbackMsg = `¡Genial! Para continuar planificando tu viaje a ${destName}, ¿podrías indicarme: ${missing.join(', ')}?`
       } else if (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging)) {
         const numDays = Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))
         const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
@@ -1125,6 +1148,16 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       Array.isArray(known.specificPlaces) ? known.specificPlaces : [],
       destName
     )
+
+    if (!hasLodging) {
+      fallbackChips = fallbackChips.filter(c => !/generar tour|crear tour|armar tour|construir tour/i.test(c))
+      if (!fallbackChips.some(c => /casa propia|familiar|propio hospedaje/i.test(c))) {
+        fallbackChips.unshift('Tengo mi propio hospedaje')
+      }
+      if (!fallbackChips.some(c => /hotel|hospedaje/i.test(c))) {
+        fallbackChips.push('🏨 Recomiéndame hoteles')
+      }
+    }
 
     return {
       responseMessage: await sanitizeChatItineraryTextWithOsm(
@@ -1265,10 +1298,13 @@ ETAPA 1: ASESORÍA DE DESTINOS, FECHAS / DURACIÓN Y ACOMPAÑANTES
 - Si ya indicó destino (${destName}): Acéptalo con entusiasmo y pregunta por las fechas y días de estadía (y acompañantes si faltan).
 
 ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
-- Si el usuario pide recomendaciones de hotel/alojamiento o indica una preferencia de categoría (ej: "¿qué recomiendas?", "recomiéndame hoteles", "una villa privada está bien", "busco resort"):
-  * Si el usuario eligió una categoría o estilo (ej: "una villa privada está bien", "un resort", "un hotel económico"), el hospedaje SIGUE PENDIENTE. NO lo consideres confirmado. Sugiérele 2 o 3 opciones reales con nombre propio que encajen en esa preferencia o pregúntale si ya tiene alguna reservada con nombre comercial específico.
-  * Si pide opciones generales, presenta de inmediato 3 o 4 opciones de hoteles/alojamientos reales con nombre propio de diversas categorías físicamente ubicados en ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas disponibles: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}, con 1 línea concisa de cada uno, e invítalo a elegir uno para armar el itinerario.
-  * PROHIBIDO presentar el itinerario definitivo ni activar "readyToBuild" mientras el hospedaje siga como PENDIENTE.
+- Si el HOSPEDAJE figura como PENDIENTE en el ESTADO ACTUAL DE DATOS:
+  * ESTRICTAMENTE PROHIBIDO redactar o mostrar el bloque de itinerario por días (Día 1, Día 2, etc.), viñetas de días ni preguntar si procedemos a generar el tour en el mapa.
+  * Tu respuesta debe ser MÁXIMO de 1 o 2 oraciones breves y directas, reconociendo amablemente los datos recibidos y preguntando ÚNICAMENTE por el hotel o alojamiento (o si se hospedarán en casa propia / familiar).
+  * Si el usuario pide recomendaciones de hotel/alojamiento o indica una preferencia de categoría (ej: "¿qué recomiendas?", "recomiéndame hoteles", "una villa privada está bien", "busco resort"):
+    - Si eligió categoría o estilo (ej: "una villa privada", "un resort"), el hospedaje SIGUE PENDIENTE. Sugiérele 2 o 3 opciones reales con nombre propio o pregúntale si tiene alguna reservada.
+    - Si pide opciones generales, presenta de inmediato 3 o 4 opciones de hoteles reales con nombre propio ubicados en ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}, con 1 línea concisa de cada uno, e invítalo a elegir uno.
+    - PROHIBIDO presentar el itinerario definitivo ni activar "readyToBuild" mientras el hospedaje siga como PENDIENTE.
   NUNCA des consejos genéricos como "buscar en plataformas" ni vuelvas a preguntar por datos que ya estén CONFIRMADOS (presupuesto, transporte, fechas).
 - Si faltan datos de transporte, presupuesto o alojamiento:
   Pregunta en 1 sola línea directa ÚNICAMENTE por los campos que figuren como PENDIENTE en el ESTADO ACTUAL DE DATOS.
@@ -1387,13 +1423,14 @@ REGLAS PARA "specificPlaces":
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify(buildOpenAiPayload({
+        modelConfig: getFastOpenAiModelConfig(),
         messages: [
           { role: 'system', content: systemPrompt },
           ...formattedHistory
         ],
         temperature: 0.4,
         response_format: { type: 'json_object' },
-        reasoning_effort: 'none'
+        reasoning_effort: 'low'
       })),
       // El fallback conversacional puede responder sin este proveedor; no
       // dejamos la interfaz esperando indefinidamente ante una red lenta.
@@ -1463,8 +1500,18 @@ REGLAS PARA "specificPlaces":
       )
     }
 
-    // Evaluar estado completo de información clave
-    const finalHasLodging = Boolean(hasLodging || hasValidValue(parsedExtracted.selectedHotel) || hasValidValue(parsedExtracted.accommodationStatus))
+    function isLodgingName(name) {
+      if (!name || typeof name !== 'string') return false
+      return /\b(hotel|hostal|hostel|resort|motel|inn|lodge|lodging|suites|alojamiento|apartahotel|posada|crowne plaza|hilton|marriott|decameron|iberoestar|dann carlton|ghl)\b/i.test(name)
+    }
+
+    // Evaluar estado completo de información clave mediante Single Source of Truth
+    const finalHasLodging = Boolean(
+      isLodgingExplicitlyConfirmed(
+        parsedExtracted.selectedHotel || known.selectedHotel,
+        parsedExtracted.accommodationStatus || known.accommodationStatus
+      )
+    )
     const finalHasTransport = Boolean(hasValidValue(known.transport) || hasValidValue(parsedExtracted.transport))
     const finalHasBudget = Boolean(hasValidValue(known.budget) || hasValidValue(parsedExtracted.budget))
     const finalHasCompanions = Boolean(hasValidValue(known.companions) || hasValidValue(parsedExtracted.companions))
@@ -1518,8 +1565,11 @@ REGLAS PARA "specificPlaces":
     )
 
     const shouldReconstructItinerary = !isUserExplicitlyOrderingBuild && (
-      (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || userRequestedItinerary || isUserAskingForMoreStops || hasLodgingJustProvided)) ||
-      (isUserAskingForMoreStops && !hasDayHeaders)
+      userRequestedItinerary ||
+      (finalHasLodging && (
+        (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || isUserAskingForMoreStops || hasLodgingJustProvided)) ||
+        (isUserAskingForMoreStops && !hasDayHeaders)
+      ))
     )
 
     if (shouldReconstructItinerary) {
@@ -1546,19 +1596,19 @@ REGLAS PARA "specificPlaces":
       const totalPlacesNeeded = daysCount * perDayPlacesCount
 
       // Obtener atractivos del catálogo dinámico y enriquecer si faltan paradas
-      let catPlaces = (cat?.places || []).filter(p => p && !isGenericFacilityName(p) && !isUnmappedOrClosedVenue(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
+      let catPlaces = (cat?.places || []).filter(p => p && !isGenericFacilityName(p) && !isUnmappedOrClosedVenue(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p) && !isLodgingName(p))
       if (catPlaces.length < totalPlacesNeeded) {
         const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry).catch(() => [])
         const verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
         for (const di of verifiedDynamicIconics) {
           const diName = typeof di === 'string' ? di : (di?.name || '')
-          if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !catPlaces.some(cp => arePlacesSimilar(cp, diName))) {
+          if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(cp, diName))) {
             catPlaces.push(diName)
           }
         }
       }
 
-      const cleanExplicitPool = placeNames.filter(p => p && !isGenericFacilityName(p) && !isUnmappedOrClosedVenue(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p))
+      const cleanExplicitPool = placeNames.filter(p => p && !isGenericFacilityName(p) && !isUnmappedOrClosedVenue(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p) && !isLodgingName(p))
       const rawAttractions = [...cleanExplicitPool, ...catPlaces]
       const uniqueAttractions = deduplicateChatSpecificPlaces(rawAttractions, dName)
         .map(p => typeof p === 'string' ? p : p.name)
@@ -1666,9 +1716,33 @@ REGLAS PARA "specificPlaces":
       responseMessage = reconstructed
     }
 
+    // Si el hospedaje aún no está confirmado y el usuario no pidió ver el itinerario expresamente, PURGAR cualquier bloque de itinerario por días que haya emitido la IA
+    if (!finalHasLodging && !userRequestedItinerary) {
+      responseMessage = responseMessage
+        .replace(/(?:Itinerario de Viaje:|(?:\n|^)\s*(?:#{1,4}\s*)?D[íi]a\s*1\b)[^]*$/i, '')
+        .trim()
+      const asksForLodging = /\b(hotel|hospedaje|alojamiento|d[oó]nde se hospedar[aá]n|d[oó]nde te hospedar[aá]s|quedan|quedar[aá]n)\b/i.test(responseMessage)
+      if (!asksForLodging) {
+        if (responseMessage.length > 0) {
+          responseMessage += `\n\n¿En qué hotel o alojamiento se hospedarán en ${destName || 'su destino'}?`
+        } else {
+          responseMessage = `¿En qué hotel o alojamiento se hospedarán en ${destName || 'su destino'}?`
+        }
+      }
+    }
+
     const isItineraryStatusInquiry = /\b(c[oó]mo va el itinerario|c[oó]mo va mi itinerario|estado del itinerario)\b/i.test(lastUserMsg)
     if (isItineraryStatusInquiry) {
       actionChips = ['🚀 Generar itinerario completo', '✏️ Modificar algún día', '➕ Agregar otra actividad']
+    } else if (!finalHasLodging) {
+      // Hospedaje aún pendiente: PROHIBIDO ofrecer "Generar tour". Ofrecer opciones de hospedaje.
+      actionChips = actionChips.filter(c => !/generar tour|crear tour|armar tour|construir tour/i.test(c))
+      if (!actionChips.some(c => /casa propia|familiar/i.test(c))) {
+        actionChips.unshift('Tengo casa propia / familiar')
+      }
+      if (!actionChips.some(c => /hotel|hospedaje/i.test(c))) {
+        actionChips.push('🏨 Recomiéndame hoteles')
+      }
     } else if ((shouldReconstructItinerary || hasDayHeaders || isAllKeyInfoComplete) && !actionChips.some(c => /generar tour/i.test(c))) {
       actionChips.unshift(`🚀 Generar tour en ${destName || known.destination || 'el mapa'}`)
       if (!actionChips.some(c => /paradas|atractivos/i.test(c))) {
@@ -1699,11 +1773,34 @@ REGLAS PARA "specificPlaces":
       const missing = []
       if (!finalHasCity) missing.push('el destino')
       if (!finalHasDates) missing.push('las fechas o días de viaje')
-      if (!finalHasLodging) missing.push('tu alojamiento u hotel')
+      if (!finalHasLodging) missing.push('tu alojamiento u hotel (o confirmar si te hospedas en casa propia/familiar)')
       if (!finalHasTransport) missing.push('tu medio de transporte')
       if (!finalHasBudget) missing.push('tu presupuesto estimado')
 
       responseMessage = `Para poder generar tu tour en el mapa y armar la ruta con precisión, aún necesitamos definir: **${missing.join(', ')}**. Por favor indícame este detalle para continuar.`
+      actionChips = []
+      if (!finalHasLodging) {
+        actionChips.push('Tengo casa propia / familiar', '🏨 Recomiéndame hoteles')
+      }
+      if (!finalHasTransport) {
+        actionChips.push('Auto rentado', 'Taxi / Uber', 'Transporte público')
+      }
+      if (!finalHasBudget) {
+        actionChips.push('Económico', 'Moderado', 'Lujo')
+      }
+    } else if (!isAllKeyInfoComplete && isBotConfirmingBuild) {
+      const missing = []
+      if (!finalHasCity) missing.push('el destino')
+      if (!finalHasDates) missing.push('las fechas o días de viaje')
+      if (!finalHasLodging) missing.push('tu alojamiento u hotel (o confirmar si te hospedas en casa propia/familiar)')
+      if (!finalHasTransport) missing.push('tu medio de transporte')
+      if (!finalHasBudget) missing.push('tu presupuesto estimado')
+
+      responseMessage = `Antes de generar tu tour en el mapa, necesitamos definir: **${missing.join(', ')}**. Por favor indícanos este detalle para armar tu ruta con precisión.`
+      actionChips = []
+      if (!finalHasLodging) {
+        actionChips.push('Tengo casa propia / familiar', '🏨 Recomiéndame hoteles')
+      }
     } else if (effectiveReadyToBuild && /\b(aún necesito|necesito que me indiques|dónde planeas hospedarte|cómo prefieres moverte|tienes algún presupuesto)\b/i.test(responseMessage)) {
       responseMessage = `¡Excelente! Procedo a generar tu tour personalizado en ${destName} en el mapa. ¡Prepárate para disfrutar tu viaje!`
     }
@@ -1848,10 +1945,11 @@ Devuelve ÚNICAMENTE un JSON con:
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify(buildOpenAiPayload({
+        modelConfig: getFastOpenAiModelConfig(),
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
         response_format: { type: 'json_object' },
-        reasoning_effort: 'none'
+        reasoning_effort: 'low'
       })),
       signal: AbortSignal.timeout(4500)
     })
@@ -1992,11 +2090,28 @@ export function extractChatInformationFallback(prompt) {
     res.companions = 'En grupo'
   }
 
-  if (/\b(econ[oó]mico|mochilero|barato|ajustado|bajo presupuesto)\b/i.test(text)) {
+  const budgetNumMatch = text.match(/\b(?:presupuesto\s+(?:de\s+)?|tengo\s+|contamos\s+con\s+)?(\d+(?:[.,]\d+)?)\s*(mill[oó]n(?:es)?|mil|k|usd|d[oó]lares|pesos|cop|euros|€|\$)\b/i)
+  if (budgetNumMatch) {
+    const num = parseFloat(budgetNumMatch[1].replace(',', '.'))
+    const unit = budgetNumMatch[2].toLowerCase()
+    if (unit.startsWith('mill')) {
+      if (num >= 10) res.budget = 'Lujo'
+      else if (num >= 3) res.budget = 'Moderado'
+      else res.budget = 'Económico'
+    } else if (unit === 'usd' || unit.startsWith('d[oó]lar') || unit === '$' || unit === 'euros' || unit === '€') {
+      if (num >= 3000) res.budget = 'Lujo'
+      else if (num >= 1000) res.budget = 'Moderado'
+      else res.budget = 'Económico'
+    } else {
+      res.budget = 'Moderado'
+    }
+  } else if (/\b(econ[oó]mico|mochilero|barato|ajustado|bajo presupuesto)\b/i.test(text)) {
     res.budget = 'Económico'
   } else if (/\b(lujo|premium|alto|cinco estrellas)\b/i.test(text)) {
     res.budget = 'Lujo'
   } else if (/\b(moderado|medio|est[aá]ndar)\b/i.test(text)) {
+    res.budget = 'Moderado'
+  } else if (/\bpresupuesto\b/i.test(text) && /\b\d+\b/.test(text)) {
     res.budget = 'Moderado'
   }
 
