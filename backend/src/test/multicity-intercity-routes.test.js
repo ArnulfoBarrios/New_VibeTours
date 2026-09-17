@@ -29,4 +29,15 @@ describe('Multi-City & Inter-City Route Extraction Tests', () => {
     assert.deepEqual(result.cities, ['Madrid', 'Barcelona'])
     assert.equal(result.durationDays, 3)
   })
+
+  it('should NOT treat budget or movement phrases like "de 7 millones de pesos y nos vamos a mover en carro" as a multi-city route', () => {
+    const result1 = extractChatInformationFallback('Tenemos un presupuesto de 7 millones de pesos y nos vamos a mover en carro')
+    assert.equal(result1.isMultiCity, undefined)
+    assert.notEqual(result1.city, 'Mover')
+    assert.notEqual(result1.destination, 'Pesos Y Nos Vamos a Mover')
+
+    const result2 = extractChatInformationFallback('Nos vamos a mover en carro y nos vamos a quedar en el Hotel Linda Palma')
+    assert.equal(result2.isMultiCity, undefined)
+    assert.notEqual(result2.city, 'Mover')
+  })
 })

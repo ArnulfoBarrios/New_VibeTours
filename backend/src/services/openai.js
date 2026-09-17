@@ -2074,15 +2074,45 @@ Devuelve ÚNICAMENTE un JSON con:
   return extractChatInformationFallback(userMessage)
 }
 
+export function isValidRouteEndpoint(candidate = '') {
+  if (!candidate || typeof candidate !== 'string') return false
+  const clean = candidate.trim().toLowerCase()
+  if (clean.length < 3 || clean.length > 35) return false
+
+  // 1. Cannot contain verbs or movement/stay words
+  if (/\b(mover|movernos|ir|irnos|viajar|viajaremos|quedar|quedarnos|hospedar|hospedarnos|caminar|llegar|salir|conocer|visitar|hacer|estar|pasar|comprar|comer|tomar|vamos|nos vamos)\b/i.test(clean)) {
+    return false
+  }
+
+  // 2. Cannot contain money, budget, companions, duration, transport, or hotel words
+  if (/\b(peso|pesos|d[oó]lar|d[oó]lares|mill[oó]n|millones|usd|cop|presupuesto|gasto|gastos|carro|auto|coche|taxi|bus|avi[oó]n|tren|amigo|amigos|familia|pareja|hotel|hostal|resort|d[íi]as?|noche|noches|semana|mes|a[ñn]o)\b/i.test(clean)) {
+    return false
+  }
+
+  // 3. Must not be a generic non-destination
+  if (/^(pareja|en pareja|familia|en familia|amigos|con amigos|solo|sola|grupo|en grupo|econ[oó]mico|moderado|lujo|barato|mochilero|caminando|a pie|auto|carro|coche|taxi|uber|bicicleta|bici|transporte p[úu]blico|hotel|hoteles|hostal|resort|hospedaje|alojamiento|un d[íi]a|\d+\s+d[íi]as?|fin de semana|puente|mes|semana|a[ñn]o|vacaciones|turismo|planes?|actividades|sitios|lugares|atracciones|nada|s[íi]|si|no|ok|hola|buenas?|gracias|adelante|generar?|crear?|empezar?|mover|movernos|pesos|vamos|nos vamos|presupuesto)$/i.test(clean)) {
+    return false
+  }
+
+  // 4. Must not be a vague destination or non-touristic input
+  if (isNonTouristicInput(clean) || isVagueDestination(clean)) return false
+
+  // 5. Must not have excessive word count (city names are 1 to 3 words)
+  const words = clean.split(/\s+/).filter(Boolean)
+  if (words.length > 3) return false
+
+  return true
+}
+
 export function extractChatInformationFallback(prompt) {
   const res = {}
   const text = (prompt || '').toLowerCase()
 
-  const routeMatch = text.match(/\b(?:de|desde)\s+([a-záéíóúñ\s]+?)\s+(?:a|hast[aá])\s+([a-záéíóúñ\s]+?)(?:$|\s+(?:en|con|para|el|la|los|del)\b)/i)
+  const routeMatch = text.match(/\b(?:tour\s+|viaje\s+|ruta\s+|road\s*trip\s+|trayecto\s+)?(?:de|desde)\s+([a-záéíóúñ\s]+?)\s+(?:a|hast[aá]|hacia)\s+([a-záéíóúñ\s]+?)(?:$|\s+(?:en|con|para|durante|del|por|el|la|los)\b)/i)
   if (routeMatch) {
     const originRaw = routeMatch[1].trim()
     const destinationRaw = routeMatch[2].trim()
-    if (originRaw.length > 2 && destinationRaw.length > 2) {
+    if (isValidRouteEndpoint(originRaw) && isValidRouteEndpoint(destinationRaw)) {
       const origin = originRaw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
       const destination = destinationRaw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
       res.isMultiCity = true
@@ -2217,7 +2247,7 @@ export function extractChatInformationFallback(prompt) {
 
   const isCommandOrControl = /\b(gener(ar|es|a|e|en|al)?|cre(ar|es|a|e|en)?|inicia(r)?|finaliza(r)?|constru(ye|ir)|dise[ñn](ar|a|es|e)?|est[aá]\s+perfecto|listo|procede|adelante|vamos|armar?|hazlo|de acuerdo|dale|genial|ok|comenzar|ver|mostrar|detalles|men[uú]|platos|comida|restaurantes?|hoteles?|atracciones|actividades|itinerario|itinerarios)\b/i.test(text)
 
-  const NON_DEST = /^(pareja|en pareja|familia|en familia|amigos|con amigos|solo|sola|grupo|en grupo|econ[oó]mico|moderado|lujo|barato|mochilero|caminando|a pie|auto|carro|coche|taxi|uber|bicicleta|bici|transporte p[úu]blico|hotel|hoteles|hostal|resort|hospedaje|alojamiento|un d[íi]a|\d+\s+d[íi]as?|fin de semana|puente|mes|semana|a[ñn]o|vacaciones|turismo|planes?|actividades|sitios|lugares|atracciones|nada|s[íi]|si|no|ok|hola|buenas?|gracias|adelante|generar?|crear?|empezar?)$/i
+  const NON_DEST = /^(pareja|en pareja|familia|en familia|amigos|con amigos|solo|sola|grupo|en grupo|econ[oó]mico|moderado|lujo|barato|mochilero|caminando|a pie|auto|carro|coche|taxi|uber|bicicleta|bici|transporte p[úu]blico|hotel|hoteles|hostal|resort|hospedaje|alojamiento|un d[íi]a|\d+\s+d[íi]as?|fin de semana|puente|mes|semana|a[ñn]o|vacaciones|turismo|planes?|actividades|sitios|lugares|atracciones|nada|s[íi]|si|no|ok|hola|buenas?|gracias|adelante|generar?|crear?|empezar?|mover|movernos|pesos|vamos|nos vamos|presupuesto)$/i
 
   if (!res.destination && !isPreferenceInput) {
     const destActionPattern = /\b(?:tour|viaje|itinerario|plan|vacaciones|escapada)\s+(?:a|hacia|en|por|para)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s]{2,30}?)(?:$|\s+(?:donde|que|para|con|en|el|la|los|las|del|durante|por|desde|sin|de\s+\d)\b)/i

@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, deterministicJitter } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, deterministicJitter, isValidRouteEndpoint } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
@@ -757,10 +757,33 @@ aiRouter.post('/chat', async (req, res, next) => {
     }
 
     // Safeguard: Protect confirmed destination from accidental overwrite when user mentions day stops or attractions
+    // Discard any bogus destination/city extracted from verbs or money phrases (e.g. "mover", "pesos", "nos vamos")
+    if (validExtracted.destination && !isValidRouteEndpoint(validExtracted.destination)) {
+      delete validExtracted.destination
+      delete validExtracted.canonicalDestination
+    }
+    if (validExtracted.city && !isValidRouteEndpoint(validExtracted.city)) {
+      delete validExtracted.city
+    }
+    if (validExtracted.originPlace && !isValidRouteEndpoint(validExtracted.originPlace)) {
+      delete validExtracted.originPlace
+      validExtracted.isMultiCity = false
+    }
+    if (validExtracted.destinationPlace && !isValidRouteEndpoint(validExtracted.destinationPlace)) {
+      delete validExtracted.destinationPlace
+      validExtracted.isMultiCity = false
+    }
+
+    // Safeguard: Protect confirmed destination from accidental overwrite when user mentions day stops or attractions
     const hasExistingCity = Boolean(currentPreferences.city || currentPreferences.destination)
     const isCorrectionOrNegation = /\b(te equivocaste|es de|son de|queda en|quedan en|no es de|no son de|no queda en|no quedan en|confusi[oó]n|en realidad|pertenece a|pertenecen a|equivocaci[oó]n|eso est[aá] en)\b/i.test(message)
     const isExplicitCityChange = /\b(cambiemos a|cambiar a|cambiar destino|nuevo destino|mejor vamos a|ahora quiero ir a|vamos mejor a|prefiero ir a)\b/i.test(message)
-    const isExplicitMultiRoute = Boolean(validExtracted.isMultiCity || validExtracted.isMultiCountry || /\b(de\s+[a-záéíóúñ\s]+\s+a\s+[a-záéíóúñ\s]+|ruta\s+entre|road\s*trip)\b/i.test(message))
+    const isExplicitMultiRoute = Boolean(
+      (validExtracted.isMultiCity || validExtracted.isMultiCountry) &&
+      isValidRouteEndpoint(validExtracted.originPlace) &&
+      isValidRouteEndpoint(validExtracted.destinationPlace) &&
+      /\b(tour\s+(?:de|desde)|ruta\s+(?:de|desde|entre)|road\s*trip|viaje\s+(?:de|desde)|de\s+[a-záéíóúñ]{3,20}\s+a\s+[a-záéíóúñ]{3,20})\b/i.test(message)
+    )
 
     if (hasExistingCity && !isExplicitCityChange && !isExplicitMultiRoute) {
       const existingBaseCity = (currentPreferences.destination || currentPreferences.city || '').toLowerCase().trim()
@@ -775,7 +798,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       if (isSubordinateParkOrAttraction(validExtracted.destination) || (newDest && newDest !== existingBaseCity)) {
         console.info(`[ai/chat] Preserving base hub destination "${currentPreferences.destination || currentPreferences.city}" - keeping mentioned "${validExtracted.destination || validExtracted.city}" as a day stop.`)
         
-        if (validExtracted.destination && !/^(santa marta|cartagena|medell[íi]n|bogot[áa])$/i.test(validExtracted.destination)) {
+        if (validExtracted.destination && !/^(santa marta|cartagena|medell[íi]n|bogot[áa])$/i.test(validExtracted.destination) && isValidRouteEndpoint(validExtracted.destination)) {
           if (!validExtracted.specificPlaces) validExtracted.specificPlaces = []
           const alreadyHas = validExtracted.specificPlaces.some(p => (typeof p === 'string' ? p : p.name).toLowerCase().includes(validExtracted.destination.toLowerCase()))
           if (!alreadyHas) {
@@ -785,6 +808,10 @@ aiRouter.post('/chat', async (req, res, next) => {
         delete validExtracted.city
         delete validExtracted.destination
         delete validExtracted.canonicalDestination
+        delete validExtracted.originPlace
+        delete validExtracted.destinationPlace
+        delete validExtracted.cities
+        validExtracted.isMultiCity = false
       }
     } else if (!hasExistingCity && validExtracted.destination) {
       const isSubordinateParkOrAttraction = (dest) => {
@@ -902,7 +929,18 @@ aiRouter.post('/chat', async (req, res, next) => {
     })
 
     // Resolve Canonical Destination if city/destination is present
-    if (updatedPreferences.isMultiCity && updatedPreferences.originPlace && updatedPreferences.destinationPlace) {
+    if (updatedPreferences.isMultiCity && (!isValidRouteEndpoint(updatedPreferences.originPlace) || !isValidRouteEndpoint(updatedPreferences.destinationPlace))) {
+      updatedPreferences.isMultiCity = false
+      delete updatedPreferences.originPlace
+      delete updatedPreferences.destinationPlace
+      delete updatedPreferences.cities
+      if (currentPreferences.destination) {
+        updatedPreferences.destination = currentPreferences.destination
+        updatedPreferences.city = currentPreferences.city || currentPreferences.destination
+      }
+    }
+
+    if (updatedPreferences.isMultiCity && updatedPreferences.originPlace && updatedPreferences.destinationPlace && isValidRouteEndpoint(updatedPreferences.originPlace) && isValidRouteEndpoint(updatedPreferences.destinationPlace)) {
       updatedPreferences.destination = `${updatedPreferences.originPlace} a ${updatedPreferences.destinationPlace}`
       updatedPreferences.city = updatedPreferences.destinationPlace
       if (!updatedPreferences.cities || updatedPreferences.cities.length === 0) {
