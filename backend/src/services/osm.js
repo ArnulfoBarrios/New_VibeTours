@@ -539,11 +539,16 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'el boliche cebicheria': { name: 'Restaurante El Boliche Cebichería', latitude: 10.4267, longitude: -75.5482, city: 'Cartagena', country: 'Colombia' },
 
   // Coveñas & Golfo de Morrosquillo
+  'islas de san bernardo': { name: 'Islas de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
+  'archipielago de san bernardo': { name: 'Islas de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
   'isla mucura': { name: 'Isla Múcura, Archipiélago de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
   'isla tintipan': { name: 'Isla Tintipán, Archipiélago de San Bernardo', latitude: 9.7950, longitude: -75.8450, city: 'Coveñas', country: 'Colombia' },
   'santa cruz del islote': { name: 'Santa Cruz del Islote, Archipiélago de San Bernardo', latitude: 9.7853, longitude: -75.8572, city: 'Coveñas', country: 'Colombia' },
   'isla palma': { name: 'Isla Palma, Archipiélago de San Bernardo', latitude: 9.7420, longitude: -75.6490, city: 'Coveñas', country: 'Colombia' },
   'cienaga de la caimanera': { name: 'Ciénaga de la Caimanera, Coveñas', latitude: 9.4236, longitude: -75.6183, city: 'Coveñas', country: 'Colombia' },
+  'malecon de santiago de tolu': { name: 'Malecón de Santiago de Tolú', latitude: 9.5255, longitude: -75.5815, city: 'Santiago de Tolú', country: 'Colombia' },
+  'malecon de tolu': { name: 'Malecón de Santiago de Tolú', latitude: 9.5255, longitude: -75.5815, city: 'Santiago de Tolú', country: 'Colombia' },
+  'playa el frances': { name: 'Playa El Francés, Tolú', latitude: 9.5600, longitude: -75.5700, city: 'Santiago de Tolú', country: 'Colombia' },
   'parque museo infanteria de marina': { name: 'Parque Museo de la Infantería de Marina, Coveñas', latitude: 9.4080, longitude: -75.6880, city: 'Coveñas', country: 'Colombia' },
   'isla fuerte': { name: 'Isla Fuerte, Bolívar / Córdoba', latitude: 9.3870, longitude: -76.1770, city: 'Coveñas', country: 'Colombia' },
   'playa blanca': { name: 'Playa Blanca, Coveñas', latitude: 9.4120, longitude: -75.6790, city: 'Coveñas', country: 'Colombia' },
@@ -621,6 +626,8 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'la casa de doris': { name: 'Restaurante La Casa de Doris', latitude: 10.9852, longitude: -74.7795, city: 'Barranquilla', country: 'Colombia' },
   'casa de doris': { name: 'Restaurante La Casa de Doris', latitude: 10.9852, longitude: -74.7795, city: 'Barranquilla', country: 'Colombia' },
   'nena lela': { name: 'Nena Lela Trattoria', latitude: 11.0223, longitude: -74.8625, city: 'Barranquilla', country: 'Colombia' },
+  'malecon de puerto colombia': { name: 'Malecón de Puerto Colombia', latitude: 10.9893, longitude: -74.9612, city: 'Puerto Colombia', country: 'Colombia' },
+  'malecon puerto colombia': { name: 'Malecón de Puerto Colombia', latitude: 10.9893, longitude: -74.9612, city: 'Puerto Colombia', country: 'Colombia' },
   'muelle de puerto colombia': { name: 'Muelle de Puerto Colombia', latitude: 10.9893, longitude: -74.9612, city: 'Puerto Colombia', country: 'Colombia' },
   'muelle puerto colombia': { name: 'Muelle de Puerto Colombia', latitude: 10.9893, longitude: -74.9612, city: 'Puerto Colombia', country: 'Colombia' },
   'muelle turistico de puerto colombia': { name: 'Muelle de Puerto Colombia', latitude: 10.9893, longitude: -74.9612, city: 'Puerto Colombia', country: 'Colombia' },
@@ -1105,9 +1112,9 @@ export function tripPhotonCircuit(durationMs = (process.env.NODE_ENV === 'test' 
   console.warn(`[osm] Photon circuit breaker tripped for ${durationMs / 1000}s`)
 }
 
-export async function photonSearch(query, limit = 8, lat = null, lon = null, bbox = null) {
+export async function photonSearch(query, limit = 8, lat = null, lon = null, bbox = null, maxDistanceMeters = null, targetCountry = null) {
   if (!query || isPhotonCircuitOpen()) return []
-  const key = `photon_${query.toLowerCase().trim()}_${limit}_${lat ?? ''}_${lon ?? ''}_${bbox ?? ''}`
+  const key = `photon_${query.toLowerCase().trim()}_${limit}_${lat ?? ''}_${lon ?? ''}_${bbox ?? ''}_${maxDistanceMeters ?? ''}_${(targetCountry || '').toLowerCase().trim()}`
   const cached = photonCache.get(key)
   if (cached) return cached
 
@@ -1131,7 +1138,7 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
       return []
     }
     const json = await response.json()
-    const results = (json.features ?? []).map((feature) => {
+    let results = (json.features ?? []).map((feature) => {
       const properties = feature.properties || {}
       const osmType = properties.osm_type || ''
       const osmId = properties.osm_id || ''
@@ -1153,6 +1160,27 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
         tags: properties
       }
     })
+
+    if (maxDistanceMeters != null && lat != null && lon != null) {
+      const maxDist = Number(maxDistanceMeters)
+      if (Number.isFinite(maxDist) && maxDist > 0) {
+        results = results.filter(r => {
+          if (r.latitude == null || r.longitude == null) return false
+          const d = haversineMeters(lat, lon, r.latitude, r.longitude)
+          return d <= maxDist
+        })
+      }
+    }
+
+    if (targetCountry && typeof targetCountry === 'string' && targetCountry.trim()) {
+      const normTarget = targetCountry.trim().toLowerCase()
+      results = results.filter(r => {
+        if (!r.country) return true
+        const cLower = r.country.toLowerCase()
+        return cLower === normTarget || cLower.includes(normTarget) || normTarget.includes(cLower)
+      })
+    }
+
     if (results.length > 0) {
       photonCache.set(key, results)
     }
@@ -1385,6 +1413,8 @@ export function isGenericFacilityName(rawName = '') {
   ]
   if (genericList.includes(clean)) return true
   if (/^(restaurante|restaurant|bar|café|cafe|hotel|hostal|atractivo)\s*#?\d*$/i.test(clean)) return true
+  if (/^(?:plaza|parque|plazoleta|zona)\s+(?:descanso(?:\s*\d+)?|hospital|salud|clinica|ips|eps)$/i.test(clean)) return true
+  if (/^descanso\s*\d+$/i.test(clean)) return true
   return false
 }
 
@@ -1414,6 +1444,14 @@ export function isNonTouristFacility(tags = {}) {
     return true
   }
   if (isGenericFacilityName(rawName) || isGenericFacilityName(name)) return true
+  if (
+    /\b(plaza|parque|plazoleta|zona|area)\s+(?:descanso(?:\s*\d+)?|hospital|salud|clinica|ips|eps)\b/i.test(name) ||
+    /\bdescanso\s*\d+\b/i.test(name) ||
+    /\bplaza\s+descanso\b/i.test(name) ||
+    /\bplaza\s+hospital\b/i.test(name)
+  ) {
+    return true
+  }
   if (/\b(carnaval|festival|fiesta|feria|desfile|reinado)\b/i.test(name)) {
     const isPhysicalVenue = /\b(museo|casa|centro|parque|plaza|sala|galeria|teatro|estadio|concha|complejo)\b/i.test(name)
     if (!isPhysicalVenue) return true

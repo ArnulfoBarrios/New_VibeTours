@@ -485,6 +485,115 @@ export function buildOpenAiPayload({
  */
 export const DESTINATION_LOCAL_PRESETS = Object.freeze({})
 
+export const DESTINATION_ICONIC_LANDMARKS = Object.freeze({
+  'barranquilla': [
+    'Gran Malecón del Río',
+    'Ventana al Mundo',
+    'Casa del Carnaval',
+    'Ciénaga de Mallorquín',
+    'Barrio El Prado',
+    'Aleta del Tiburón (Ventana de Campeones)',
+    'Bocas de Ceniza',
+    'Zoológico de Barranquilla',
+    'Monumento a Shakira',
+    'Museo del Atlántico',
+    'Castillo de Salgar',
+    'Muelle de Puerto Colombia',
+    'Catedral Metropolitana María Reina',
+    'Teatro Amira de la Rosa'
+  ],
+  'covenas': [
+    'Segunda Ensenada de Coveñas',
+    'Ciénaga de la Caimanera',
+    'Islas de San Bernardo',
+    'Isla Múcura',
+    'Isla Tintipán',
+    'Playa Palo Blanco',
+    'Punta de Piedra',
+    'Malecón de Santiago de Tolú',
+    'Bahía de Cispatá',
+    'Volcán de Lodo de San Antero',
+    'Playa La Coquerita',
+    'Santa Cruz del Islote'
+  ],
+  'coveñas': [
+    'Segunda Ensenada de Coveñas',
+    'Ciénaga de la Caimanera',
+    'Islas de San Bernardo',
+    'Isla Múcura',
+    'Isla Tintipán',
+    'Playa Palo Blanco',
+    'Punta de Piedra',
+    'Malecón de Santiago de Tolú',
+    'Bahía de Cispatá',
+    'Volcán de Lodo de San Antero',
+    'Playa La Coquerita',
+    'Santa Cruz del Islote'
+  ],
+  'tolu': [
+    'Malecón de Santiago de Tolú',
+    'Islas de San Bernardo',
+    'Isla Múcura',
+    'Isla Tintipán',
+    'Ciénaga de la Caimanera',
+    'Playa El Francés',
+    'Segunda Ensenada de Coveñas'
+  ],
+  'santiago de tolu': [
+    'Malecón de Santiago de Tolú',
+    'Islas de San Bernardo',
+    'Isla Múcura',
+    'Isla Tintipán',
+    'Ciénaga de la Caimanera',
+    'Playa El Francés',
+    'Segunda Ensenada de Coveñas'
+  ],
+  'san antero': [
+    'Bahía de Cispatá',
+    'Volcán de Lodo de San Antero',
+    'Playa Blanca San Antero',
+    'Ciénaga de la Caimanera',
+    'Segunda Ensenada de Coveñas',
+    'Islas de San Bernardo'
+  ]
+})
+
+export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
+  'covenas': [
+    { name: 'Restaurante La Fragata', specialty: 'Mariscos frescos y comida típica caribeña' },
+    { name: 'Restaurante El Gran Pez', specialty: 'Pescado frito y arroz con coco' },
+    { name: 'Restaurante Sabores del Mar', specialty: 'Cazuela de mariscos frente al mar' },
+    { name: 'Restaurante Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía de manglar' },
+    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones' },
+    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches típicos' }
+  ],
+  'coveñas': [
+    { name: 'Restaurante La Fragata', specialty: 'Mariscos frescos y comida típica caribeña' },
+    { name: 'Restaurante El Gran Pez', specialty: 'Pescado frito y arroz con coco' },
+    { name: 'Restaurante Sabores del Mar', specialty: 'Cazuela de mariscos frente al mar' },
+    { name: 'Restaurante Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía de manglar' },
+    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones' },
+    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches típicos' }
+  ],
+  'barranquilla': [
+    { name: 'Restaurante La Cueva', specialty: 'Gastronomía Caribe y tertulia cultural' },
+    { name: 'Cucayo', specialty: 'Comida tradicional costeña y arroz con cucayo' },
+    { name: 'Varadero', specialty: 'Pescados y mariscos al estilo cubano-caribeño' },
+    { name: 'Nena Lela', specialty: 'Comida típica tradicional barranquillera' },
+    { name: 'El Caimán del Río', specialty: 'Mercado gastronómico frente al río Magdalena' },
+    { name: 'Restaurante La Herradura', specialty: 'Carnes y asados tradicionales' }
+  ]
+})
+
+export function isCountryMatch(c1, c2) {
+  if (!c1 || !c2) return true
+  const n1 = String(c1).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const n2 = String(c2).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (n1 === n2) return true
+  if (n1 === 'colombia' && (n2 === 'brasil' || n2 === 'brazil' || n2 === 'espana' || n2 === 'spain')) return false
+  return n1.includes(n2) || n2.includes(n1)
+}
+
 /**
  * Detects venues that are permanently closed, obsolete, or unmapped on OpenFreeMap/OpenStreetMap
  * to strictly prevent the AI chat and itinerary generator from recommending them.
@@ -499,15 +608,20 @@ export function isUnmappedOrClosedVenue(name) {
   return false
 }
 
-async function verifyCatalogEntryOnOsm(entry, city, country) {
+async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, centerLon = null) {
   const name = typeof entry === 'string'
     ? entry.trim()
     : String(entry?.name || '').trim()
   if (!name || isUnmappedOrClosedVenue(name)) return null
 
   const query = [name, city, country].filter(Boolean).join(', ')
-  const geo = await geocodePlace(query, null, null, { city, country }).catch(() => null)
+  const geo = await geocodePlace(query, centerLat, centerLon, { city, country }).catch(() => null)
   if (!hasOsmMapRecord(geo)) return null
+
+  if (centerLat != null && centerLon != null && geo.latitude != null && geo.longitude != null) {
+    const dist = haversineMeters(centerLat, centerLon, geo.latitude, geo.longitude)
+    if (dist > 65000) return null
+  }
 
   return {
     ...(typeof entry === 'object' ? entry : {}),
@@ -521,9 +635,9 @@ async function verifyCatalogEntryOnOsm(entry, city, country) {
   }
 }
 
-async function verifyCatalogEntriesOnOsm(entries, city, country, limit = 16) {
+async function verifyCatalogEntriesOnOsm(entries, city, country, limit = 16, centerLat = null, centerLon = null) {
   const candidates = (Array.isArray(entries) ? entries : []).slice(0, limit)
-  const verified = await Promise.all(candidates.map(entry => verifyCatalogEntryOnOsm(entry, city, country)))
+  const verified = await Promise.all(candidates.map(entry => verifyCatalogEntryOnOsm(entry, city, country, centerLat, centerLon)))
   return verified.filter(Boolean)
 }
 
@@ -558,7 +672,40 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   let realPlaces = []
   let realEvents = []
 
-  // 1. Ground truth priority: Query live OpenStreetMap POIs (Overpass and Photon) FIRST
+  // 1. Ground truth priority:
+  // 1.1 Resolve iconic / priority landmarks FIRST (curated presets or dynamic iconic query)
+  const cleanKey = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const presetIconics = DESTINATION_ICONIC_LANDMARKS[cleanKey] || DESTINATION_ICONIC_LANDMARKS[clean] || []
+  if (presetIconics.length > 0) {
+    const verifiedIconics = await verifyCatalogEntriesOnOsm(presetIconics, clean, targetCountry, presetIconics.length, lat, lon)
+    for (const vi of verifiedIconics) {
+      if (!realPlaces.some(rp => arePlacesSimilar(rp, vi.name))) {
+        realPlaces.push(vi.name)
+      }
+    }
+  }
+
+  if (realPlaces.length < 8) {
+    const dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry).catch(() => [])
+    const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, 14, lat, lon)
+    for (const vd of verifiedDynamic) {
+      if (!realPlaces.some(rp => arePlacesSimilar(rp, vd.name))) {
+        realPlaces.push(vd.name)
+      }
+    }
+  }
+
+  // 1.2 Resolve iconic restaurants FIRST
+  const presetRests = DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[clean] || []
+  if (presetRests.length > 0) {
+    for (const pr of presetRests) {
+      if (!realRests.some(r => arePlacesSimilar(r.name, pr.name))) {
+        realRests.push(pr)
+      }
+    }
+  }
+
+  // 1.3 Query live OpenStreetMap POIs (Overpass and Photon) to complement
   if (lat && lon) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500))
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
@@ -568,8 +715,24 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     ])
 
     const fetchedHotels = (osmHotels || []).filter(h => h && h.name && !isGenericFacilityName(h.name) && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
-    const fetchedRests = (osmRests || []).filter(r => r && r.name && !isGenericFacilityName(r.name) && !isNonTouristFacility(r.tags) && !isNonTouristFacility({ name: r.name }) && !isUnmappedOrClosedVenue(r.name) && !r.name.toLowerCase().includes('perímetro urbano')).slice(0, 14)
-    const fetchedPlaces = (osmAttractions || []).filter(p => p && p.name && !isGenericFacilityName(p.name) && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name) && !isUnmappedOrClosedVenue(p.name) && !p.name.toLowerCase().includes('perímetro urbano')).slice(0, 14)
+    const fetchedRests = (osmRests || []).filter(r => {
+      if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isUnmappedOrClosedVenue(r.name)) return false
+      if (r.name.toLowerCase().includes('perímetro urbano')) return false
+      if (r.latitude != null && r.longitude != null) {
+        const d = haversineMeters(lat, lon, r.latitude, r.longitude)
+        if (d > 30000) return false
+      }
+      return true
+    }).slice(0, 14)
+    const fetchedPlaces = (osmAttractions || []).filter(p => {
+      if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
+      if (p.name.toLowerCase().includes('perímetro urbano')) return false
+      if (p.latitude != null && p.longitude != null) {
+        const d = haversineMeters(lat, lon, p.latitude, p.longitude)
+        if (d > 35000) return false
+      }
+      return true
+    }).slice(0, 14)
 
     if (realHotels.length === 0) realHotels = fetchedHotels
     for (const fr of fetchedRests) {
@@ -584,15 +747,13 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     if (realPlaces.length < 14) {
-      const [generalPlaces, museums, plazas] = await Promise.all([
-        photonSearch(`turismo ${clean}`, 6, lat, lon).catch(() => []),
-        photonSearch(`museo ${clean}`, 6, lat, lon).catch(() => []),
-        photonSearch(`plaza ${clean}`, 6, lat, lon).catch(() => [])
+      const [generalPlaces, museums] = await Promise.all([
+        photonSearch(`turismo ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => []),
+        photonSearch(`museo ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => [])
       ])
       const additional = [
         ...generalPlaces,
-        ...museums,
-        ...plazas
+        ...museums
       ].filter(p => {
         if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
         if (p.name.toLowerCase().includes('perímetro urbano')) return false
@@ -616,19 +777,19 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   try {
     const dynamicProfile = await fetchDynamicDestinationProfile(clean, targetCountry).catch(() => null)
     if (dynamicProfile) {
-      const verifiedProfilePlaces = await verifyCatalogEntriesOnOsm(dynamicProfile.places || [], clean, targetCountry, 12)
+      const verifiedProfilePlaces = await verifyCatalogEntriesOnOsm(dynamicProfile.places || [], clean, targetCountry, 12, lat, lon)
       for (const p of verifiedProfilePlaces) {
         if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
           realPlaces.push(p.name)
         }
       }
-      const verifiedProfileRestaurants = await verifyCatalogEntriesOnOsm(dynamicProfile.restaurants || [], clean, targetCountry, 12)
+      const verifiedProfileRestaurants = await verifyCatalogEntriesOnOsm(dynamicProfile.restaurants || [], clean, targetCountry, 12, lat, lon)
       for (const r of verifiedProfileRestaurants) {
         if (!realRests.some(existing => arePlacesSimilar(existing.name || existing, r.name))) {
           realRests.push(r)
         }
       }
-      const verifiedProfileHotels = await verifyCatalogEntriesOnOsm(dynamicProfile.hotels || [], clean, targetCountry, 8)
+      const verifiedProfileHotels = await verifyCatalogEntriesOnOsm(dynamicProfile.hotels || [], clean, targetCountry, 8, lat, lon)
       for (const h of verifiedProfileHotels) {
         if (!realHotels.some(existing => arePlacesSimilar(existing.name || existing, h.name))) {
           realHotels.push(h)
@@ -641,9 +802,14 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   } catch (_) {}
 
   if (realRests.length < 10 && lat && lon) {
-    const extraFood = await photonSearch(`gastronomia restaurante ${clean}`, 12, lat, lon).catch(() => [])
+    const extraFood = await photonSearch(`restaurante ${clean}`, 12, lat, lon, null, 30000, targetCountry).catch(() => [])
     for (const ef of extraFood) {
       if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name)) {
+        if (targetCountry && ef.country && !isCountryMatch(targetCountry, ef.country)) continue
+        if (ef.latitude != null && ef.longitude != null) {
+          const d = haversineMeters(lat, lon, ef.latitude, ef.longitude)
+          if (d > 30000) continue
+        }
         if (!realRests.some(r => r.name.toLowerCase() === ef.name.toLowerCase() || arePlacesSimilar(r.name, ef.name))) {
           realRests.push(ef)
         }
@@ -1463,10 +1629,13 @@ REGLAS CRÍTICAS DEL ITINERARIO:
 3. En las viñetas (•), escribe ÚNICAMENTE el nombre propio y limpio del lugar físico o restaurante real.
 4. Si TODOS los datos previos (fechas, acompañantes, transporte, presupuesto, hospedaje) están confirmados:
    Pregunta al final del itinerario: "¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?"
-5. DIVERSIDAD Y EQUILIBRIO TEMÁTICO (NO MONOPOLIO DE PLAYAS EN CIUDADES URBANAS):
-     - En capitales y ciudades metropolitanas/culturales (ej: Barranquilla, Medellín, Bogotá, Cartagena, Roma, París, etc.):
-     Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas, arquitectura, parques y gastronomía local usando únicamente los POI del catálogo verificado. Si la ciudad tiene costa o playas cercanas, incluye a lo sumo 1 o 2 visitas de playa, pero ESTÁ ESTRICTAMENTE PROHIBIDO llenar un tour urbano de 4 o 5 días exclusivamente con 10 paradas de playas repetidas.
-   - En destinos con vocación puramente balnearia (ej: Coveñas, San Andrés, Cancún): Las playas e islas sí son el atractivo central diario.
+5. DIVERSIDAD Y EQUILIBRIO TEMÁTICO (CERO DÍAS EXCLUSIVOS DE RESTAURANTES):
+   - En capitales y ciudades metropolitanas/culturales (ej: Barranquilla, Medellín, Bogotá, Cartagena, Roma, París, etc.):
+     Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas emblemáticas, arquitectura, parques y gastronomía local usando únicamente los POI del catálogo verificado.
+   - En destinos con vocación balnearia o micro-destinos (ej: Coveñas, San Andrés, Cancún): Las playas, islas, ciénagas y actividades ecoturísticas del corredor son los atractivos centrales.
+   - REGLA DE BALANCE DIARIO OBLIGATORIO:
+     * Cada día DEBE tener exactamente 2 atractivos turísticos en las primeras viñetas y como MÁXIMO 1 parada gastronómica en la última viñeta del día.
+     * ESTRICTAMENTE PROHIBIDO llenar un día con 2 o 3 restaurantes y 0 atractivos turísticos. Los días son para descubrir atractivos, no para ir de restaurante en restaurante sin visitar lugares.
 6. REGLA ESTRICTA DE UNICIDAD GLOBAL INTER-DÍAS (CERO PARADAS REPETIDAS):
    - Cada atractivo turístico, monumento, museo, parque o restaurante debe aparecer exactamente UNA SOLA VEZ en TODO el itinerario completo (Día 1 a Día N).
    - PROHIBIDO TERMINANTEMENTE repetir el mismo lugar en dos días distintos. Si ya visitaron Gran Malecón del Río o Ventana al Mundo el Día 1, NO puede volver a aparecer en el Día 5, 6 ni 7. Cada día DEBE tener lugares nuevos, diferentes y auténticos.
@@ -1719,8 +1888,16 @@ REGLAS PARA "accommodationStatus":
       (finalHasTransport || finalHasBudget)
     )
 
+    const isMalformedItinerary = hasDayHeaders && (
+      /(?:D[íi]a\s*\d+:[^\n]*\n(?:\s*•\s*(?:Restaurante|Gastronom[íi]a|Caf[ée]|Bar)[^\n]*\n){2,})/i.test(responseMessage) ||
+      /\b(?:Nordest[aã]o|Cal\s+Bandarra|Vers[aá]\s+Gastronomia|Albertu's)\b/i.test(responseMessage) ||
+      /\bPlaza\s+(?:descanso(?:\s*\d+)?|hospital)\b/i.test(responseMessage) ||
+      /\bdescanso\s*\d+\b/i.test(responseMessage)
+    )
+
     const shouldReconstructItinerary = !isUserExplicitlyOrderingBuild && (
       userRequestedItinerary ||
+      isMalformedItinerary ||
       (finalHasLodging && (
         (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || isUserAskingForMoreStops || hasLodgingJustProvided)) ||
         (isUserAskingForMoreStops && !hasDayHeaders)
@@ -1771,7 +1948,7 @@ REGLAS PARA "accommodationStatus":
         }
       }
 
-      // Si faltan restaurantes para cubrir todos los días, enriquecer con la ciudad cabecera o búsquedas geográficas
+      // Si faltan restaurantes para cubrir todos los días, enriquecer con la ciudad cabecera o búsquedas geográficas acotadas
       if (uniqueRests.length < daysCount) {
         const hubCity = known.city && known.city !== dName ? known.city : null
         if (hubCity) {
@@ -1785,11 +1962,20 @@ REGLAS PARA "accommodationStatus":
         }
       }
       if (uniqueRests.length < daysCount) {
-        const extraFood = await photonSearch(`gastronomia restaurante ${dName}`, 15).catch(() => [])
-        for (const ef of extraFood) {
-          if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name)) {
-            if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, ef.name))) {
-              uniqueRests.push({ name: ef.name })
+        const dLat = cat?.latitude || known.latitude || null
+        const dLon = cat?.longitude || known.longitude || null
+        if (dLat && dLon) {
+          const extraFood = await photonSearch(`restaurante ${dName}`, 15, dLat, dLon, null, 30000, destCountry).catch(() => [])
+          for (const ef of extraFood) {
+            if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name)) {
+              if (destCountry && ef.country && !isCountryMatch(destCountry, ef.country)) continue
+              if (ef.latitude != null && ef.longitude != null) {
+                const d = haversineMeters(dLat, dLon, ef.latitude, ef.longitude)
+                if (d > 30000) continue
+              }
+              if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, ef.name))) {
+                uniqueRests.push({ name: ef.name })
+              }
             }
           }
         }
@@ -1813,6 +1999,15 @@ REGLAS PARA "accommodationStatus":
         if (uniqueRests.some(r => arePlacesSimilar(r.name, pName))) return false
         return true
       })
+      if (catPlaces.length < totalPlacesNeeded) {
+        const cleanKey = dName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+        const corridorPlaces = DESTINATION_ICONIC_LANDMARKS[cleanKey] || []
+        for (const cp of corridorPlaces) {
+          if (!catPlaces.some(existing => arePlacesSimilar(existing, cp)) && !uniqueRests.some(r => arePlacesSimilar(r.name, cp))) {
+            catPlaces.push(cp)
+          }
+        }
+      }
       if (catPlaces.length < totalPlacesNeeded) {
         const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry).catch(() => [])
         const verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
@@ -1871,6 +2066,9 @@ REGLAS PARA "accommodationStatus":
               !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, p)) &&
               !Array.from(dayUsed).some(u => arePlacesSimilar(u, p))
             ) || null
+          }
+          if (!chosenPlace) {
+            chosenPlace = uniqueAttractions.find(p => !Array.from(dayUsed).some(u => arePlacesSimilar(u, p))) || null
           }
           if (!chosenPlace) {
             continue

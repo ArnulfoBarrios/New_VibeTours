@@ -501,6 +501,16 @@ export function isValidSpecificPlace(placeName) {
     return false
   }
 
+  // 2.3.1 Descartar infraestructura de descanso urbano, bancas de descanso o plazoletas hospitalarias
+  if (
+    /\b(plaza|parque|plazoleta|zona|area)\s+(?:descanso(?:\s*\d+)?|hospital|salud|clinica|ips|eps)\b/i.test(cleanLower) ||
+    /\bdescanso\s*\d+\b/i.test(cleanLower) ||
+    /\bplaza\s+descanso\b/i.test(cleanLower) ||
+    /\bplaza\s+hospital\b/i.test(cleanLower)
+  ) {
+    return false
+  }
+
   // 2.4 Descartar infraestructura industrial (oleoductos, gasoductos, tuberías, refinerías, plantas)
   if (/\b(oleoducto|gasoducto|poliducto|refiner[íi]a|tuber[íi]a|estaci[oó]n de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(cleanLower)) {
     return false
