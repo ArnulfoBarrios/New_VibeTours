@@ -40,16 +40,22 @@ describe('Chat to Tour SSOT Consistency Unit Tests', () => {
     assert.equal(isNonTouristFacility({ name: 'Playa Blanca Coveñas' }), false)
   })
 
-  it('should anchor places inside destination municipality instead of dropping them when OSM search fails', async () => {
+  it('should strictly discard unmapped places that do not exist in OSM and retain real OSM places', async () => {
     const rawChatPlaces = [
-      { name: 'Paseo Marítimo Desconocido', dia: 1, day: 1 },
-      { name: 'Playa Escondida Totalmente Nueva', dia: 2, day: 2 }
+      { name: 'Paseo Marítimo Totalmente Inexistente 12345', dia: 1, day: 1 },
+      { name: 'Playa Inventada Sin Registro Cartográfico', dia: 2, day: 2 }
     ]
 
     const filtered = await filterChatSpecificPlacesByOsm(rawChatPlaces, 'Coveñas')
-    assert.equal(filtered.length, 2, 'No agreed chat places should be dropped')
-    
-    for (const place of filtered) {
+    assert.equal(filtered.length, 0, 'Unmapped places must be strictly dropped to avoid synthetic coordinates')
+
+    const realChatPlaces = [
+      { name: 'Segunda Ensenada', dia: 1, day: 1 },
+      { name: 'Ciénaga de la Caimanera', dia: 2, day: 2 }
+    ]
+    const filteredReal = await filterChatSpecificPlacesByOsm(realChatPlaces, 'Coveñas')
+    assert.equal(filteredReal.length, 2, 'Real OSM places must be preserved')
+    for (const place of filteredReal) {
       assert.ok(typeof place.latitude === 'number' && !Number.isNaN(place.latitude), 'Latitude must be numeric')
       assert.ok(typeof place.longitude === 'number' && !Number.isNaN(place.longitude), 'Longitude must be numeric')
       assert.equal(place.coordinatesVerified, true, 'coordinatesVerified must be true')

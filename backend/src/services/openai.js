@@ -2,7 +2,7 @@ import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
-import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord } from './osm.js'
+import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds } from './osm.js'
 import { generateSpeechAudio } from './ttsService.js'
 
 export { generateSpeechAudio }
@@ -283,26 +283,11 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
 
   const query = [name, city, country].filter(Boolean).join(', ')
   const geo = await geocodePlace(query, centerLat, centerLon, { city, country }).catch(() => null)
-  if (hasOsmMapRecord(geo) && !isNonTouristFacility(geo)) {
+  if (hasOsmMapRecord(geo) && !isNonTouristFacility(geo) && isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) {
     return geo
   }
 
-  // 3. Fallback: Destination Anchor Policy. Never drop chat-agreed places.
-  if (centerLat != null && centerLon != null) {
-    const jitter = deterministicJitter(name, centerLat, centerLon)
-    return {
-      name,
-      latitude: jitter.latitude,
-      longitude: jitter.longitude,
-      address: `${name}, ${city}, ${country}`.trim().replace(/,\s*$/, ''),
-      placeId: `anchor-${cleanAdministrativeCityName(city).toLowerCase()}-${Math.abs(name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0))}`,
-      coordinateSource: 'destination-anchor',
-      coordinatesVerified: true,
-      isReferentialLocation: true
-    }
-  }
-
-  return hasOsmMapRecord(geo) ? geo : null
+  return null
 }
 
 export async function filterChatSpecificPlacesByOsm(places = [], city = '', country = '', selectedHotel = null) {
@@ -315,7 +300,7 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
 
     const geo = await resolveOsmBackedChatPlace(place, city, country, selectedHotel)
     if (!geo) {
-      return typeof place === 'string' ? rawName : place
+      return null
     }
 
     if (typeof place === 'string') return geo.name || rawName
@@ -326,7 +311,7 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
       longitude: geo.longitude,
       address: geo.address || place.address || `${rawName}, ${city}`,
       placeId: geo.placeId || place.placeId || place.id || '',
-      coordinateSource: geo.coordinateSource || 'destination-anchor',
+      coordinateSource: geo.coordinateSource || 'osm',
       coordinatesVerified: true,
       isReferentialLocation: Boolean(geo.isReferentialLocation)
     }
@@ -560,20 +545,20 @@ export const DESTINATION_ICONIC_LANDMARKS = Object.freeze({
 
 export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
   'covenas': [
-    { name: 'Restaurante La Fragata', specialty: 'Mariscos frescos y comida típica caribeña' },
-    { name: 'Restaurante El Gran Pez', specialty: 'Pescado frito y arroz con coco' },
-    { name: 'Restaurante Sabores del Mar', specialty: 'Cazuela de mariscos frente al mar' },
-    { name: 'Restaurante Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía de manglar' },
-    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones' },
-    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches típicos' }
+    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones frente al mar' },
+    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches frescos en la playa' },
+    { name: 'Restaurante El Marino', specialty: 'Cazuela de mariscos y arroz con coco' },
+    { name: 'Cevichería Bony', specialty: 'Ceviches frescos y cocina costera caribeña' },
+    { name: 'Restaurante Sabores del Mar', specialty: 'Pescados y mariscos tradicionales' },
+    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' }
   ],
   'coveñas': [
-    { name: 'Restaurante La Fragata', specialty: 'Mariscos frescos y comida típica caribeña' },
-    { name: 'Restaurante El Gran Pez', specialty: 'Pescado frito y arroz con coco' },
-    { name: 'Restaurante Sabores del Mar', specialty: 'Cazuela de mariscos frente al mar' },
-    { name: 'Restaurante Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía de manglar' },
-    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones' },
-    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches típicos' }
+    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones frente al mar' },
+    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches frescos en la playa' },
+    { name: 'Restaurante El Marino', specialty: 'Cazuela de mariscos y arroz con coco' },
+    { name: 'Cevichería Bony', specialty: 'Ceviches frescos y cocina costera caribeña' },
+    { name: 'Restaurante Sabores del Mar', specialty: 'Pescados y mariscos tradicionales' },
+    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' }
   ],
   'barranquilla': [
     { name: 'Restaurante La Cueva', specialty: 'Gastronomía Caribe y tertulia cultural' },
@@ -608,7 +593,22 @@ export function isUnmappedOrClosedVenue(name) {
   return false
 }
 
-async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, centerLon = null) {
+export function isMalformedItinerary(text) {
+  if (!text || typeof text !== 'string') return false
+  return (
+    /(?:D[íi]a\s*\d+:[^\n]*\n(?:\s*•\s*(?:Restaurante|Gastronom[íi]a|Caf[ée]|Bar)[^\n]*\n){2,})/i.test(text) ||
+    /\b(?:Nordest[aã]o|Cal\s+Bandarra|Vers[aá]\s+Gastronomia|Albertu's)\b/i.test(text) ||
+    /\bPlaza\s+(?:descanso(?:\s*\d+)?|hospital)\b/i.test(text) ||
+    /\bdescanso\s*\d+\b/i.test(text) ||
+    /\bParque\s+(?:Principal\s+de\s+)?Coveñas\b/i.test(text) ||
+    /\bRestaurante\s+La\s+Fragata\b/i.test(text) ||
+    /\bRestaurante\s+El\s+Gran\s+Pez\b/i.test(text) ||
+    /\bRestaurante\s+La\s+Iguana\b/i.test(text)
+  )
+}
+
+
+async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, centerLon = null, category = 'attraction') {
   const name = typeof entry === 'string'
     ? entry.trim()
     : String(entry?.name || '').trim()
@@ -617,6 +617,18 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
   const query = [name, city, country].filter(Boolean).join(', ')
   const geo = await geocodePlace(query, centerLat, centerLon, { city, country }).catch(() => null)
   if (!hasOsmMapRecord(geo)) return null
+
+  if (!isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) return null
+
+  if (category === 'restaurant' || (typeof entry === 'object' && entry?.specialty)) {
+    const geoTags = geo.tags || {}
+    const isAccom = ['chalet', 'hotel', 'guest_house', 'motel', 'hostel'].includes(geo.type) ||
+      ['chalet', 'hotel', 'guest_house', 'motel', 'hostel'].includes(geoTags.osm_value) ||
+      geoTags.tourism === 'chalet' || geoTags.tourism === 'hotel'
+    if (isAccom && !/restaurante|restaurant|bistro|caf[ée]|comida/i.test(geo.name)) {
+      return null
+    }
+  }
 
   if (centerLat != null && centerLon != null && geo.latitude != null && geo.longitude != null) {
     const dist = haversineMeters(centerLat, centerLon, geo.latitude, geo.longitude)
@@ -635,9 +647,9 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
   }
 }
 
-async function verifyCatalogEntriesOnOsm(entries, city, country, limit = 16, centerLat = null, centerLon = null) {
+async function verifyCatalogEntriesOnOsm(entries, city, country, limit = 16, centerLat = null, centerLon = null, category = 'attraction') {
   const candidates = (Array.isArray(entries) ? entries : []).slice(0, limit)
-  const verified = await Promise.all(candidates.map(entry => verifyCatalogEntryOnOsm(entry, city, country, centerLat, centerLon)))
+  const verified = await Promise.all(candidates.map(entry => verifyCatalogEntryOnOsm(entry, city, country, centerLat, centerLon, category)))
   return verified.filter(Boolean)
 }
 
@@ -698,7 +710,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   // 1.2 Resolve iconic restaurants FIRST
   const presetRests = DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[clean] || []
   if (presetRests.length > 0) {
-    for (const pr of presetRests) {
+    const verifiedRests = await verifyCatalogEntriesOnOsm(presetRests, clean, targetCountry, presetRests.length, lat, lon, 'restaurant')
+    for (const pr of verifiedRests) {
       if (!realRests.some(r => arePlacesSimilar(r.name, pr.name))) {
         realRests.push(pr)
       }
@@ -719,8 +732,9 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isUnmappedOrClosedVenue(r.name)) return false
       if (r.name.toLowerCase().includes('perímetro urbano')) return false
       if (r.latitude != null && r.longitude != null) {
+        if (!isWithinCoastalCorridorBounds(r.latitude, r.longitude, clean)) return false
         const d = haversineMeters(lat, lon, r.latitude, r.longitude)
-        if (d > 30000) return false
+        if (d > 25000) return false
       }
       return true
     }).slice(0, 14)
@@ -728,6 +742,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
       if (p.name.toLowerCase().includes('perímetro urbano')) return false
       if (p.latitude != null && p.longitude != null) {
+        if (!isWithinCoastalCorridorBounds(p.latitude, p.longitude, clean)) return false
         const d = haversineMeters(lat, lon, p.latitude, p.longitude)
         if (d > 35000) return false
       }
@@ -757,8 +772,9 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       ].filter(p => {
         if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
         if (p.name.toLowerCase().includes('perímetro urbano')) return false
-        // Geographic bound check: ensure POI is within 35km of destination center
+        // Geographic bound check: ensure POI is within 35km and respects coastal corridor
         if (p.latitude != null && p.longitude != null && lat != null && lon != null) {
+          if (!isWithinCoastalCorridorBounds(p.latitude, p.longitude, clean)) return false
           const dist = haversineMeters(lat, lon, p.latitude, p.longitude)
           if (dist > 35000) return false
         }
@@ -1546,6 +1562,7 @@ REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
    - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o cadenas de hipermercados/supermercados cotidianos (como Alkosto, Éxito, Olímpica, Carulla, Jumbo, Makro, Ara, D1, Homecenter, etc.) como paradas turísticas.
    - REGLA CRÍTICA DE CARTOGRAFÍA EN OPENSTREETMAP / OPENFREEMAP:
      * El tour y tus recomendaciones deben estar anclados al 100% en lugares reales existentes en OpenFreeMap / OpenStreetMap.
+     * ESTRICTAMENTE PROHIBIDO inventar plazas, parques o malecones que no existan en el mapa (por ejemplo, en Coveñas NO existe "Parque Principal de Coveñas", no lo menciones ni recomiendes jamás).
      * ESTRICTAMENTE PROHIBIDO sugerir lugares que estén cerrados permanentemente (por ejemplo, en Barranquilla el Museo Romántico cerró permanentemente en 2018 y no existe en OpenFreeMap) o establecimientos que no cuenten con registro / nodo en OpenStreetMap.
      * Si un lugar no aparece en OpenFreeMap, NO lo recomiendes en el chat ni en el tour. Prioriza siempre los atractivos y restaurantes emblemáticos verificados provistos en el catálogo.
 2. CONTROL TOTAL DEL VIAJERO Y AMPLIACIÓN DE PARADAS:
@@ -1559,6 +1576,7 @@ REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
 
 REGLAS CRÍTICAS DE RESTAURANTES Y GASTRONOMÍA:
 - PROHIBIDO inventar nombres de restaurantes concatenando la palabra "Restaurante" + el nombre de una atracción o playa (ej: NUNCA inventes "Restaurante [Nombre de Playa]").
+- PROHIBIDO recomendar hoteles, complejos vacacionales de cabañas o chalets como restaurantes (por ejemplo, "La Fragata" es un hotel/cabañas, NO un restaurante; no lo recomiendes como parada gastronómica).
 - Utiliza ÚNICAMENTE nombres de establecimientos gastronómicos, paradores o kioscos reales físicamente existentes en el mapa satelital de OpenStreetMap / OpenFreeMap.
 - ESTRICTAMENTE PROHIBIDO recomendar locales informales o comercios que no tengan un nodo o marcador propio en el mapa.
 ${verifiedFoodText ? `\nESTABLECIMIENTOS GASTRONÓMICOS REALES VERIFICADOS EN EL MAPA:\n${verifiedFoodText}\n` : ''}
@@ -1888,16 +1906,11 @@ REGLAS PARA "accommodationStatus":
       (finalHasTransport || finalHasBudget)
     )
 
-    const isMalformedItinerary = hasDayHeaders && (
-      /(?:D[íi]a\s*\d+:[^\n]*\n(?:\s*•\s*(?:Restaurante|Gastronom[íi]a|Caf[ée]|Bar)[^\n]*\n){2,})/i.test(responseMessage) ||
-      /\b(?:Nordest[aã]o|Cal\s+Bandarra|Vers[aá]\s+Gastronomia|Albertu's)\b/i.test(responseMessage) ||
-      /\bPlaza\s+(?:descanso(?:\s*\d+)?|hospital)\b/i.test(responseMessage) ||
-      /\bdescanso\s*\d+\b/i.test(responseMessage)
-    )
+    const itineraryMalformed = (hasDayHeaders || mentionsPresentingItinerary) && isMalformedItinerary(responseMessage)
 
     const shouldReconstructItinerary = !isUserExplicitlyOrderingBuild && (
       userRequestedItinerary ||
-      isMalformedItinerary ||
+      itineraryMalformed ||
       (finalHasLodging && (
         (!hasDayHeaders && (isAllKeyInfoComplete || mentionsPresentingItinerary || isUserAskingForMoreStops || hasLodgingJustProvided)) ||
         (isUserAskingForMoreStops && !hasDayHeaders)
@@ -1965,13 +1978,14 @@ REGLAS PARA "accommodationStatus":
         const dLat = cat?.latitude || known.latitude || null
         const dLon = cat?.longitude || known.longitude || null
         if (dLat && dLon) {
-          const extraFood = await photonSearch(`restaurante ${dName}`, 15, dLat, dLon, null, 30000, destCountry).catch(() => [])
+          const extraFood = await photonSearch(`restaurante ${dName}`, 15, dLat, dLon, null, 25000, destCountry).catch(() => [])
           for (const ef of extraFood) {
             if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name)) {
               if (destCountry && ef.country && !isCountryMatch(destCountry, ef.country)) continue
               if (ef.latitude != null && ef.longitude != null) {
+                if (!isWithinCoastalCorridorBounds(ef.latitude, ef.longitude, dName)) continue
                 const d = haversineMeters(dLat, dLon, ef.latitude, ef.longitude)
-                if (d > 30000) continue
+                if (d > 25000) continue
               }
               if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, ef.name))) {
                 uniqueRests.push({ name: ef.name })

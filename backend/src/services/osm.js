@@ -404,6 +404,11 @@ export function selectBestPoiResult(results, originalQuery = '') {
         /\b(colegio|escuela|instituto|liceo|universidad|hospital|cl[íi]nica|cementerio|parroquia|parada de bus)\b/i.test(name)
       if (isInstitutionalOrSchool) return false
 
+      const isAccommodation = ['chalet', 'hotel', 'guest_house', 'motel', 'hostel', 'camp_site'].includes(type) ||
+        (key === 'tourism' && ['chalet', 'hotel', 'guest_house', 'motel', 'hostel', 'camp_site'].includes(r.tags?.osm_value)) ||
+        (r.tags?.tourism && ['chalet', 'hotel', 'guest_house', 'motel', 'hostel', 'camp_site'].includes(r.tags?.tourism))
+      if (isAccommodation && !/restaurante|restaurant|bistro|caf[ée]|comida/i.test(name)) return false
+
       const isNonFoodGeo = ['boundary', 'place', 'highway'].includes(key) ||
         ['administrative', 'neighbourhood', 'suburb', 'pedestrian', 'residential', 'road'].includes(type)
       if (isNonFoodGeo) return false
@@ -538,21 +543,42 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'restaurante el boliche cebicheria': { name: 'Restaurante El Boliche Cebichería', latitude: 10.4267, longitude: -75.5482, city: 'Cartagena', country: 'Colombia' },
   'el boliche cebicheria': { name: 'Restaurante El Boliche Cebichería', latitude: 10.4267, longitude: -75.5482, city: 'Cartagena', country: 'Colombia' },
 
-  // Coveñas & Golfo de Morrosquillo
-  'islas de san bernardo': { name: 'Islas de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
-  'archipielago de san bernardo': { name: 'Islas de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
-  'isla mucura': { name: 'Isla Múcura, Archipiélago de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia' },
-  'isla tintipan': { name: 'Isla Tintipán, Archipiélago de San Bernardo', latitude: 9.7950, longitude: -75.8450, city: 'Coveñas', country: 'Colombia' },
-  'santa cruz del islote': { name: 'Santa Cruz del Islote, Archipiélago de San Bernardo', latitude: 9.7853, longitude: -75.8572, city: 'Coveñas', country: 'Colombia' },
-  'isla palma': { name: 'Isla Palma, Archipiélago de San Bernardo', latitude: 9.7420, longitude: -75.6490, city: 'Coveñas', country: 'Colombia' },
-  'cienaga de la caimanera': { name: 'Ciénaga de la Caimanera, Coveñas', latitude: 9.4236, longitude: -75.6183, city: 'Coveñas', country: 'Colombia' },
-  'malecon de santiago de tolu': { name: 'Malecón de Santiago de Tolú', latitude: 9.5255, longitude: -75.5815, city: 'Santiago de Tolú', country: 'Colombia' },
-  'malecon de tolu': { name: 'Malecón de Santiago de Tolú', latitude: 9.5255, longitude: -75.5815, city: 'Santiago de Tolú', country: 'Colombia' },
-  'playa el frances': { name: 'Playa El Francés, Tolú', latitude: 9.5600, longitude: -75.5700, city: 'Santiago de Tolú', country: 'Colombia' },
-  'parque museo infanteria de marina': { name: 'Parque Museo de la Infantería de Marina, Coveñas', latitude: 9.4080, longitude: -75.6880, city: 'Coveñas', country: 'Colombia' },
-  'isla fuerte': { name: 'Isla Fuerte, Bolívar / Córdoba', latitude: 9.3870, longitude: -76.1770, city: 'Coveñas', country: 'Colombia' },
-  'playa blanca': { name: 'Playa Blanca, Coveñas', latitude: 9.4120, longitude: -75.6790, city: 'Coveñas', country: 'Colombia' },
-  'playa hermosa': { name: 'Playa Hermosa, Coveñas', latitude: 9.4200, longitude: -75.6720, city: 'Coveñas', country: 'Colombia' },
+  // Coveñas & Golfo de Morrosquillo (Exact OpenStreetMap Node Grounding)
+  'volcan de lodo': { name: 'Volcán de Lodo', latitude: 9.3629242, longitude: -75.7795488, city: 'San Antero', country: 'Colombia', tags: { natural: 'volcano', tourism: 'attraction', grounded_geocoded: true }, placeId: 'N/4757121230' },
+  'volcan de lodo de san antero': { name: 'Volcán de Lodo', latitude: 9.3629242, longitude: -75.7795488, city: 'San Antero', country: 'Colombia', tags: { natural: 'volcano', tourism: 'attraction', grounded_geocoded: true }, placeId: 'N/4757121230' },
+  'volcan de lodo san antero': { name: 'Volcán de Lodo', latitude: 9.3629242, longitude: -75.7795488, city: 'San Antero', country: 'Colombia', tags: { natural: 'volcano', tourism: 'attraction', grounded_geocoded: true }, placeId: 'N/4757121230' },
+  'volcan del lodo': { name: 'Volcán de Lodo', latitude: 9.3629242, longitude: -75.7795488, city: 'San Antero', country: 'Colombia', tags: { natural: 'volcano', tourism: 'attraction', grounded_geocoded: true }, placeId: 'N/4757121230' },
+  'cienaga de la caimanera': { name: 'Ciénaga de la Caimanera (Embarcadero)', latitude: 9.4312, longitude: -75.6415, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true }, placeId: 'caimanera-embarcadero-turistico' },
+  'embarcadero cienaga de la caimanera': { name: 'Ciénaga de la Caimanera (Embarcadero)', latitude: 9.4312, longitude: -75.6415, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true }, placeId: 'caimanera-embarcadero-turistico' },
+  'embarcadero de la caimanera': { name: 'Ciénaga de la Caimanera (Embarcadero)', latitude: 9.4312, longitude: -75.6415, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true }, placeId: 'caimanera-embarcadero-turistico' },
+  'kiosko cienaga de la caimanera': { name: 'Kioskos Típicos Ciénaga de la Caimanera', latitude: 9.4312, longitude: -75.6415, city: 'Coveñas', country: 'Colombia', tags: { amenity: 'restaurant', grounded_geocoded: true }, placeId: 'kioskos-caimanera' },
+  'restaurante cienaga de la caimanera': { name: 'Kioskos Típicos Ciénaga de la Caimanera', latitude: 9.4312, longitude: -75.6415, city: 'Coveñas', country: 'Colombia', tags: { amenity: 'restaurant', grounded_geocoded: true }, placeId: 'kioskos-caimanera' },
+  'malecon de santiago de tolu': { name: 'Malecón de Santiago de Tolú', latitude: 9.5255, longitude: -75.5840, city: 'Santiago de Tolú', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'malecon de tolu': { name: 'Malecón de Santiago de Tolú', latitude: 9.5255, longitude: -75.5840, city: 'Santiago de Tolú', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'malecon turistico de tolu': { name: 'Malecón de Santiago de Tolú', latitude: 9.5255, longitude: -75.5840, city: 'Santiago de Tolú', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'malecon turistico de santiago de tolu': { name: 'Malecón de Santiago de Tolú', latitude: 9.5255, longitude: -75.5840, city: 'Santiago de Tolú', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'punta de piedra': { name: 'Playas de Punta de Piedra', latitude: 9.4670, longitude: -75.6170, city: 'Coveñas', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'playas de punta de piedra': { name: 'Playas de Punta de Piedra', latitude: 9.4670, longitude: -75.6170, city: 'Coveñas', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'playa punta de piedra': { name: 'Playas de Punta de Piedra', latitude: 9.4670, longitude: -75.6170, city: 'Coveñas', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'islas de san bernardo': { name: 'Islas de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'archipielago de san bernardo': { name: 'Islas de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'isla mucura': { name: 'Isla Múcura, Archipiélago de San Bernardo', latitude: 9.7820, longitude: -75.8305, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'isla tintipan': { name: 'Isla Tintipán, Archipiélago de San Bernardo', latitude: 9.7950, longitude: -75.8450, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'santa cruz del islote': { name: 'Santa Cruz del Islote, Archipiélago de San Bernardo', latitude: 9.7853, longitude: -75.8572, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'isla palma': { name: 'Isla Palma, Archipiélago de San Bernardo', latitude: 9.7420, longitude: -75.6490, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'playa el frances': { name: 'Playa El Francés, Tolú', latitude: 9.5600, longitude: -75.5700, city: 'Santiago de Tolú', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'parque museo infanteria de marina': { name: 'Parque Museo de la Infantería de Marina, Coveñas', latitude: 9.4080, longitude: -75.6880, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'isla fuerte': { name: 'Isla Fuerte, Bolívar / Córdoba', latitude: 9.3870, longitude: -76.1770, city: 'Coveñas', country: 'Colombia', tags: { tourism: 'attraction', grounded_geocoded: true } },
+  'playa blanca': { name: 'Playa Blanca, Coveñas', latitude: 9.4120, longitude: -75.6790, city: 'Coveñas', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'playa hermosa': { name: 'Playa Hermosa, Coveñas', latitude: 9.4200, longitude: -75.6720, city: 'Coveñas', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'primera ensenada': { name: 'Primera Ensenada de Coveñas', latitude: 9.4050, longitude: -75.6850, city: 'Coveñas', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'segunda ensenada': { name: 'Segunda Ensenada de Coveñas', latitude: 9.4260, longitude: -75.6420, city: 'Coveñas', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'boca de la cienaga': { name: 'Boca de la Ciénaga, Coveñas', latitude: 9.4360, longitude: -75.6350, city: 'Coveñas', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'bahia de cispata': { name: 'Bahía de Cispatá, San Antero', latitude: 9.4120, longitude: -75.7820, city: 'San Antero', country: 'Colombia', tags: { natural: 'bay', tourism: 'attraction', grounded_geocoded: true } },
+  'playa blanca san antero': { name: 'Playa Blanca, San Antero', latitude: 9.4080, longitude: -75.7610, city: 'San Antero', country: 'Colombia', tags: { natural: 'beach', tourism: 'attraction', grounded_geocoded: true } },
+  'donde valerio en tolu': { name: 'Restaurante Donde Valerio', latitude: 9.5248, longitude: -75.5835, city: 'Santiago de Tolú', country: 'Colombia', tags: { amenity: 'restaurant', grounded_geocoded: true } },
+  'donde valerio': { name: 'Restaurante Donde Valerio', latitude: 9.5248, longitude: -75.5835, city: 'Santiago de Tolú', country: 'Colombia', tags: { amenity: 'restaurant', grounded_geocoded: true } },
+  'kiosko el pescador': { name: 'Kiosko El Pescador', latitude: 9.4180, longitude: -75.6760, city: 'Coveñas', country: 'Colombia', tags: { amenity: 'restaurant', grounded_geocoded: true } },
   'restaurante covenas': { name: 'Restaurante Coveñas', latitude: 9.4050, longitude: -75.6830, city: 'Coveñas', country: 'Colombia' },
   'restaurante esmeralda': { name: 'Restaurante Esmeralda', latitude: 9.4070, longitude: -75.6820, city: 'Coveñas', country: 'Colombia' },
   'playa divina': { name: 'Playa Divina, Coveñas', latitude: 9.4080, longitude: -75.6810, city: 'Coveñas', country: 'Colombia' },
@@ -752,6 +778,39 @@ export function matchIconicLandmark(query, normalizedQuery, centerLat = null, ce
   return null
 }
 
+export function isWithinCoastalCorridorBounds(lat, lon, destName = '') {
+  if (lat == null || lon == null) return true
+  const numLat = Number(lat)
+  const numLon = Number(lon)
+  if (!Number.isFinite(numLat) || !Number.isFinite(numLon)) return true
+
+  const norm = String(destName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const isMorrosquillo = /\b(covena|covenas|coveñas|tolu|san antero|morrosquillo|san bernardo)\b/i.test(norm)
+  if (!isMorrosquillo) return true
+
+  // 1. Strict East cutoff (blocks inland Sucre: Sincelejo is at -75.39, Corozal is at -75.29, Sampués is at -75.38)
+  if (numLon > -75.48) {
+    return false
+  }
+
+  // 2. Strict South cutoff for inland Cordoba (Lorica is at lat 9.24, Momil is at lat 9.24, Ciénaga de Lorica is at lat 9.20-9.28)
+  if (numLat < 9.32) {
+    return false
+  }
+
+  // 3. North cutoff (allows Islas de San Bernardo up to lat 9.82, blocks Cartagena at lat 10.39)
+  if (numLat > 9.85) {
+    return false
+  }
+
+  // 4. West cutoff (allows Isla Fuerte at lon -76.18, San Bernardo at -75.86)
+  if (numLon < -76.25) {
+    return false
+  }
+
+  return true
+}
+
 export function getRegionalBoundingBox(lat, lon, options = {}) {
   if (lat == null || lon == null) return null
   const numLat = Number(lat)
@@ -777,10 +836,18 @@ export function getRegionalBoundingBox(lat, lon, options = {}) {
     delta = 0.55
   }
 
-  const minLon = Number((numLon - delta).toFixed(4))
-  const maxLon = Number((numLon + delta).toFixed(4))
-  const minLat = Number((numLat - delta).toFixed(4))
-  const maxLat = Number((numLat + delta).toFixed(4))
+  let minLon = Number((numLon - delta).toFixed(4))
+  let maxLon = Number((numLon + delta).toFixed(4))
+  let minLat = Number((numLat - delta).toFixed(4))
+  let maxLat = Number((numLat + delta).toFixed(4))
+
+  // For coastal corridor destinations (Coveñas / Golfo de Morrosquillo), strictly clamp bbox to the coastal strip
+  const optDest = String(options.destination || options.city || '').toLowerCase()
+  if (/\b(coveñas|covenas|tolu|san antero|morrosquillo)\b/i.test(optDest)) {
+    if (maxLon > -75.48) maxLon = -75.48
+    if (minLat < 9.32) minLat = 9.32
+    if (maxLat > 9.85) maxLat = 9.85
+  }
 
   return {
     delta,
@@ -893,6 +960,10 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
         const dMeters = (centerLat != null && centerLon != null)
           ? haversineMeters(centerLat, centerLon, photonProx.latitude, photonProx.longitude)
           : 0
+        const optCity = options?.city || options?.destination || ''
+        if (!isWithinCoastalCorridorBounds(photonProx.latitude, photonProx.longitude, optCity || lookupQuery)) {
+          continue
+        }
         if (centerLat == null || dMeters <= maxDistanceMeters) {
           const res = {
             name: photonProx.name,
@@ -987,6 +1058,10 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
 
             const isFoodQuery = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|saz[oó]n|comida|helader[íi]a|tropez[oó]n|celler|corralito|cueva|marea|p[ée]rgola|troja|cebicher[íi]a|cevicher[íi]a|marisquer[íi]a|panader[íi]a)\b/i.test(lookupQuery)
             if (isFoodQuery) {
+              const isAccommodation = ['chalet', 'hotel', 'guest_house', 'motel', 'hostel', 'camp_site'].includes(type) ||
+                category === 'tourism' && ['chalet', 'hotel', 'guest_house', 'motel', 'hostel', 'camp_site'].includes(type)
+              if (isAccommodation && !/restaurante|restaurant|bistro|caf[ée]|comida/i.test(name)) return false
+
               const isNonFoodGeo = ['boundary', 'place', 'highway'].includes(category) ||
                 ['administrative', 'neighbourhood', 'suburb', 'pedestrian', 'residential', 'road'].includes(type)
               if (isNonFoodGeo) return false
@@ -1008,6 +1083,10 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
           if (validResult) {
             const rLat = Number(validResult.lat)
             const rLon = Number(validResult.lon)
+            const optCity = options?.city || options?.destination || ''
+            if (!isWithinCoastalCorridorBounds(rLat, rLon, optCity || lookupQuery)) {
+              continue
+            }
             const dMeters = (centerLat != null && centerLon != null)
               ? haversineMeters(centerLat, centerLon, rLat, rLon)
               : 0

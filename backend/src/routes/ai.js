@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, deterministicJitter, isValidRouteEndpoint } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
@@ -5732,6 +5732,10 @@ export async function collectTourCandidates(input, location) {
 
   function isWithinCityBounds(lat, lon, maxDistanceKm = maxCityRadiusKm) {
     if (!cityCenterLat || !cityCenterLon || !lat || !lon) return true
+    if (!isWithinCoastalCorridorBounds(lat, lon, city)) {
+      console.warn(`[collectTourCandidates] Omitiendo parada fuera del corredor costero (${lat}, ${lon} en ${city})`)
+      return false
+    }
     const dist = getDistanceKm(cityCenterLat, cityCenterLon, lat, lon)
     if (dist > maxDistanceKm) {
       console.warn(`[collectTourCandidates] Omitiendo parada lejana (${dist.toFixed(1)} km > ${maxDistanceKm} km del centro de ${city})`)
@@ -5792,15 +5796,21 @@ export async function collectTourCandidates(input, location) {
         // If rawPlace already has verified coordinates from chat SSOT, preserve and reuse them directly
         let geo = null
         if (rawPlace && typeof rawPlace === 'object' && Number.isFinite(Number(rawPlace.latitude)) && Number.isFinite(Number(rawPlace.longitude)) && rawPlace.coordinatesVerified) {
+          const rawLat = Number(rawPlace.latitude)
+          const rawLon = Number(rawPlace.longitude)
+          if (!isWithinCoastalCorridorBounds(rawLat, rawLon, city)) {
+            console.warn(`[collectTourCandidates] Discarding place outside coastal corridor: ${placeName} (${rawLat}, ${rawLon} en ${city})`)
+            return null
+          }
           geo = {
             name: placeName,
-            latitude: Number(rawPlace.latitude),
-            longitude: Number(rawPlace.longitude),
+            latitude: rawLat,
+            longitude: rawLon,
             city: rawPlace.city || city,
             country: rawPlace.country || country,
             address: rawPlace.address || `${placeName}, ${city}`,
             placeId: rawPlace.placeId || rawPlace.id || '',
-            coordinateSource: rawPlace.coordinateSource || 'destination-anchor',
+            coordinateSource: rawPlace.coordinateSource || 'osm',
             coordinatesVerified: true,
             isReferentialLocation: Boolean(rawPlace.isReferentialLocation)
           }
@@ -5881,26 +5891,10 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        // 5. Deterministic jitter fallback if unlocatable
+        // 5. Strict rejection of unlocatable or out-of-bounds places (zero synthetic jitter coordinates)
         if (!geo || !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
-          if (destLat != null && destLon != null) {
-            const jitter = deterministicJitter(placeName, destLat, destLon)
-            geo = {
-              name: placeName,
-              latitude: jitter.latitude,
-              longitude: jitter.longitude,
-              city,
-              country,
-              address: `${placeName}, ${city}`,
-              placeId: `anchor-${placeName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-              coordinateSource: 'destination-anchor',
-              coordinatesVerified: true,
-              isReferentialLocation: true
-            }
-          } else {
-            console.warn(`[tour-ai] Discarding unverified or out-of-bounds place "${placeName}" in ${city}. No synthetic coordinates generated.`)
-            return null
-          }
+          console.warn(`[tour-ai] Discarding unverified or out-of-bounds place "${placeName}" in ${city}. No synthetic coordinates generated.`)
+          return null
         }
 
         const finalLat = geo.latitude
@@ -6059,7 +6053,7 @@ export async function collectTourCandidates(input, location) {
 
             const candLat = Number(replacementCandidate?.latitude ?? replacementCandidate?.lat)
             const candLon = Number(replacementCandidate?.longitude ?? replacementCandidate?.lon)
-            if (Number.isFinite(candLat) && Number.isFinite(candLon) && validateCandidateLocation({ latitude: candLat, longitude: candLon, name: repName }, canonicalDest, geoScope.maxDistanceKm)) {
+            if (Number.isFinite(candLat) && Number.isFinite(candLon) && isWithinCoastalCorridorBounds(candLat, candLon, city) && validateCandidateLocation({ latitude: candLat, longitude: candLon, name: repName }, canonicalDest, geoScope.maxDistanceKm)) {
               finalLat = candLat
               finalLon = candLon
               address = replacementCandidate.address || `${repName}, ${city}`
@@ -6087,7 +6081,7 @@ export async function collectTourCandidates(input, location) {
               const replacementKey = canonicalPlaceKey(repName, city)
               if (usedInTour.has(replacementKey) || arePlacesSimilar(repName, placeName) || replacementKey === canonicalPlaceKey(placeName, city)) continue
               const mapped = catalog.coordinatesMap[repName.toLowerCase().trim()]
-              if (mapped && validateCandidateLocation(mapped, canonicalDest, geoScope.maxDistanceKm)) {
+              if (mapped && isWithinCoastalCorridorBounds(mapped.latitude, mapped.longitude, city) && validateCandidateLocation(mapped, canonicalDest, geoScope.maxDistanceKm)) {
                 finalLat = mapped.latitude
                 finalLon = mapped.longitude
                 address = `${repName}, ${city}`
@@ -6125,6 +6119,7 @@ export async function collectTourCandidates(input, location) {
                 hasOsmMapRecord(repGeo) &&
                 Number.isFinite(repGeo.latitude) &&
                 Number.isFinite(repGeo.longitude) &&
+                isWithinCoastalCorridorBounds(repGeo.latitude, repGeo.longitude, city) &&
                 validateCandidateLocation(repGeo, canonicalDest, geoScope.maxDistanceKm)
               ) {
                 finalLat = Number(repGeo.latitude)
@@ -6138,25 +6133,33 @@ export async function collectTourCandidates(input, location) {
             }
           }
 
-          // 4. Priority 4: Fallback to destination anchor deterministic jitter (0 network calls)
+          // 4. Priority 4: Substitute with an available verified POI from pool if available
           if (finalLat == null || finalLon == null) {
-            if (destLat != null && destLon != null) {
-              const jitter = deterministicJitter(placeName, destLat, destLon)
-              finalLat = jitter.latitude
-              finalLon = jitter.longitude
-              address = `${placeName}, ${city}`
-              directGeo = {
-                name: placeName,
-                latitude: finalLat,
-                longitude: finalLon,
-                city,
-                country,
-                address,
-                coordinateSource: 'destination-anchor',
-                coordinatesVerified: true,
-                isReferentialLocation: true
+            for (const rep of pool) {
+              const rName = typeof rep === 'string' ? rep : rep?.name
+              if (!rName) continue
+              const rKey = canonicalPlaceKey(rName, city)
+              if (usedInTour.has(rKey) || arePlacesSimilar(rName, placeName)) continue
+              const rLat = Number(rep.latitude ?? rep.lat)
+              const rLon = Number(rep.longitude ?? rep.lon)
+              if (Number.isFinite(rLat) && Number.isFinite(rLon) && isWithinCoastalCorridorBounds(rLat, rLon, city) && validateCandidateLocation({ latitude: rLat, longitude: rLon, name: rName }, canonicalDest, geoScope.maxDistanceKm)) {
+                finalLat = rLat
+                finalLon = rLon
+                address = rep.address || `${rName}, ${city}`
+                placeName = rName
+                directGeo = {
+                  name: rName,
+                  latitude: rLat,
+                  longitude: rLon,
+                  city,
+                  country,
+                  address,
+                  coordinateSource: rep.coordinateSource || 'catalog',
+                  coordinatesVerified: true
+                }
+                console.info(`[collectTourCandidates] Replaced unmapped candidate with verified pool POI "${rName}" on Day ${placeDay}.`)
+                break
               }
-              console.info(`[collectTourCandidates] Zero-Drop: Fallback to destination anchor for "${placeName}" on Day ${placeDay}.`)
             }
           }
         }
@@ -6190,46 +6193,6 @@ export async function collectTourCandidates(input, location) {
           continue
         }
 
-        if (destLat != null && destLon != null) {
-          const jitter = deterministicJitter(placeName, destLat, destLon)
-          finalLat = jitter.latitude
-          finalLon = jitter.longitude
-          address = `${placeName}, ${city}`
-          directGeo = {
-            name: placeName,
-            latitude: finalLat,
-            longitude: finalLon,
-            city,
-            country,
-            address,
-            coordinateSource: 'destination-anchor',
-            coordinatesVerified: true,
-            isReferentialLocation: true
-          }
-          geocodedSpecifics.push({
-            name: placeName,
-            latitude: finalLat,
-            longitude: finalLon,
-            type: 'tourism',
-            category: 'requested',
-            dia: placeDay,
-            day: placeDay,
-            city,
-            country,
-            address,
-            description: '',
-            placeId: directGeo.placeId || '',
-            coordinateSource: 'destination-anchor',
-            coordinatesVerified: true,
-            tags: {
-              requested_place: 'true',
-              grounded_geocoded: 'true',
-              coordinates_verified: 'true',
-              coordinate_source: 'destination-anchor'
-            }
-          })
-          continue
-        }
         console.warn(`[collectTourCandidates] Discarding unverified candidate "${placeName}" in ${city}. No synthetic or hallucinated coordinates allowed.`)
       }
     }
