@@ -220,6 +220,38 @@ export function deterministicJitter(name, baseLat, baseLon) {
   }
 }
 
+export function resolveCoordinatesForPlace(placeName, ...sources) {
+  if (!placeName || typeof placeName !== 'string') return null
+  const target = placeName.toLowerCase().trim()
+  for (const src of sources) {
+    if (!src) continue
+    if (typeof src === 'object' && !Array.isArray(src)) {
+      if (src[target] && Number.isFinite(src[target].latitude) && Number.isFinite(src[target].longitude)) {
+        return src[target]
+      }
+    }
+    if (Array.isArray(src)) {
+      for (const item of src) {
+        if (!item || typeof item !== 'object') continue
+        const iName = (item.name || '').toLowerCase().trim()
+        if (iName === target || arePlacesSimilar(iName, target)) {
+          const lat = Number(item.latitude ?? item.lat)
+          const lon = Number(item.longitude ?? item.lon)
+          if (Number.isFinite(lat) && Number.isFinite(lon)) {
+            return {
+              latitude: lat,
+              longitude: lon,
+              coordinateSource: item.coordinateSource || 'osm',
+              coordinatesVerified: true
+            }
+          }
+        }
+      }
+    }
+  }
+  return null
+}
+
 async function resolveOsmBackedChatPlace(place, city = '', country = '', selectedHotel = null) {
   const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
   if (!name || isChatHotelStop(name, selectedHotel) || isUnmappedOrClosedVenue(name)) return null
@@ -651,12 +683,46 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
+  const coordinatesMap = {}
+  for (const p of realPlaces) {
+    const pName = typeof p === 'string' ? p : p?.name
+    const pLat = Number(p?.lat ?? p?.latitude)
+    const pLon = Number(p?.lon ?? p?.longitude)
+    if (pName && Number.isFinite(pLat) && Number.isFinite(pLon)) {
+      coordinatesMap[pName.toLowerCase().trim()] = {
+        latitude: pLat,
+        longitude: pLon,
+        coordinateSource: 'osm',
+        coordinatesVerified: true
+      }
+    }
+  }
+
   const rawCleanRests = realRests
     .filter(r => r && r.name && !isGenericFacilityName(r.name) && !isNonTouristFacility({ name: r.name }) && !isUnmappedOrClosedVenue(r.name))
-    .map(r => ({
-      name: r.name,
-      specialty: r.cuisine ? `Especialidad en cocina ${r.cuisine}` : `Gastronomía local en ${capitalCity}`
-    }))
+    .map(r => {
+      const rLat = Number(r.lat ?? r.latitude)
+      const rLon = Number(r.lon ?? r.longitude)
+      const hasCoords = Number.isFinite(rLat) && Number.isFinite(rLon)
+      if (hasCoords) {
+        coordinatesMap[r.name.toLowerCase().trim()] = {
+          latitude: rLat,
+          longitude: rLon,
+          coordinateSource: 'osm',
+          coordinatesVerified: true
+        }
+      }
+      return {
+        name: r.name,
+        specialty: r.cuisine ? `Especialidad en cocina ${r.cuisine}` : `Gastronomía local en ${capitalCity}`,
+        ...(hasCoords ? {
+          latitude: rLat,
+          longitude: rLon,
+          coordinateSource: 'osm',
+          coordinatesVerified: true
+        } : {})
+      }
+    })
 
   const seenCleanRests = new Set()
   const cleanRests = []
@@ -681,6 +747,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     hotels: cleanHotels,
     restaurants: cleanRests,
     places: cleanPlaces,
+    coordinatesMap,
     events: realEvents || []
   }
 
@@ -1067,6 +1134,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           let poolIdx = 0
           for (let d = 1; d <= numDays; d++) {
             let p1 = null
+            let p2 = null
             while (poolIdx < pool.length) {
               const cand = pool[poolIdx++]
               if (!usedGlobal.has(cand.toLowerCase())) {
@@ -1075,15 +1143,22 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
                 break
               }
             }
-            let p2 = null
+            if (!p1 && pool.length > 0) {
+              p1 = pool[0]
+            }
+
             while (poolIdx < pool.length) {
               const cand = pool[poolIdx++]
-              if (!usedGlobal.has(cand.toLowerCase())) {
+              if (!usedGlobal.has(cand.toLowerCase()) && cand.toLowerCase() !== (p1 || '').toLowerCase()) {
                 p2 = cand
                 usedGlobal.add(cand.toLowerCase())
                 break
               }
             }
+            if (!p2 && pool.length > 1) {
+              p2 = pool.find(cand => cand && cand.toLowerCase() !== (p1 || '').toLowerCase()) || pool[1]
+            }
+
             let r = rawPresetRests.find(cName =>
               !usedGlobal.has(cName.toLowerCase()) &&
               (!p1 || !arePlacesSimilar(p1, cName)) &&
@@ -1091,9 +1166,13 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             ) || rawPresetRests.find(cName =>
               (!p1 || !arePlacesSimilar(p1, cName)) &&
               (!p2 || !arePlacesSimilar(p2, cName))
-            ) || null
+            ) || (rawPresetRests.length > 0 ? rawPresetRests[(d - 1) % rawPresetRests.length] : null)
+
+            if (!r) {
+              r = `Gastronomía Local ${destName}`
+            }
             if (r) usedGlobal.add(r.toLowerCase())
-            const dayLines = [p1, p2, r].filter(Boolean).map(place => `• ${place}`)
+            const dayLines = [p1, p2, r].filter(Boolean).map(place => ` • ${place}`)
             if (dayLines.length > 0) {
               dayBlocks.push(`Día ${d}: ${destName}\n${dayLines.join('\n')}`)
             }
@@ -1799,29 +1878,39 @@ REGLAS PARA "accommodationStatus":
           globalUsedNames.add(chosenPlace)
           dayUsed.add(chosenPlace)
           reconstructed += ` • ${chosenPlace}\n`
-          parsedExtracted.specificPlaces.push({ name: chosenPlace, dia: d, type: 'cultural' })
+          const placeCoords = resolveCoordinatesForPlace(chosenPlace, cat?.coordinatesMap, verifiedDynamicIconics, catPlaces, known.specificPlaces)
+          parsedExtracted.specificPlaces.push({
+            name: chosenPlace,
+            dia: d,
+            type: 'cultural',
+            ...(placeCoords ? placeCoords : {})
+          })
         }
 
         let chosenRest = null
+        let chosenRestObj = null
         while (restCursor < uniqueRests.length) {
           const candidate = uniqueRests[restCursor++]
           const usedToday = Array.from(dayUsed).some(u => arePlacesSimilar(u, candidate.name))
           const usedGlobally = Array.from(globalUsedNames).some(u => arePlacesSimilar(u, candidate.name))
           if (!usedGlobally && !usedToday) {
             chosenRest = candidate.name
+            chosenRestObj = candidate
             break
           }
         }
         if (!chosenRest) {
-          chosenRest = uniqueRests.find(r => 
+          chosenRestObj = uniqueRests.find(r => 
             !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, r.name)) &&
             !Array.from(dayUsed).some(u => arePlacesSimilar(u, r.name))
-          )?.name || null
+          ) || null
+          chosenRest = chosenRestObj?.name || null
         }
         if (!chosenRest) {
-          chosenRest = uniqueRests.find(r => 
+          chosenRestObj = uniqueRests.find(r => 
             !Array.from(dayUsed).some(u => arePlacesSimilar(u, r.name))
-          )?.name || null
+          ) || null
+          chosenRest = chosenRestObj?.name || null
         }
         if (!chosenRest || Array.from(dayUsed).some(u => arePlacesSimilar(u, chosenRest))) {
           reconstructed += '\n'
@@ -1830,7 +1919,13 @@ REGLAS PARA "accommodationStatus":
         globalUsedNames.add(chosenRest)
         dayUsed.add(chosenRest)
         reconstructed += ` • ${chosenRest}\n\n`
-        parsedExtracted.specificPlaces.push({ name: chosenRest, dia: d, type: 'food' })
+        const restCoords = resolveCoordinatesForPlace(chosenRest, chosenRestObj, uniqueRests, cat?.coordinatesMap, cat?.restaurants)
+        parsedExtracted.specificPlaces.push({
+          name: chosenRest,
+          dia: d,
+          type: 'food',
+          ...(restCoords ? restCoords : {})
+        })
       }
 
       reconstructed += isUserAskingForMoreStops

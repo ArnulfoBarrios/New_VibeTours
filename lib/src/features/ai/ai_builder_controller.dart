@@ -286,12 +286,20 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             final rawSpecPlaces = updatedPreferences['specificPlaces'] as List? ?? [];
             final specPlaces = rawSpecPlaces.map((e) {
               if (e is Map) {
-                final name = (e['name'] ?? '').toString().trim();
-                final dia = e['dia'] ?? e['day'];
+                final m = Map<String, dynamic>.from(e);
+                final name = (m['name'] ?? '').toString().trim();
+                final dia = m['dia'] ?? m['day'];
                 if (name.isNotEmpty && dia != null) {
-                  return {'name': name, 'dia': dia, 'day': dia};
+                  m['name'] = name;
+                  m['dia'] = dia;
+                  m['day'] = dia;
+                  return m;
                 }
-                return name;
+                if (name.isNotEmpty) {
+                  m['name'] = name;
+                  return m;
+                }
+                return e;
               }
               final str = e.toString().trim();
               if (str.startsWith('{') && str.contains('name:')) {

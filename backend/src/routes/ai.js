@@ -8,7 +8,7 @@ import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetch
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
-import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName } from '../services/destinationService.js'
+import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName, FALLBACK_DESTINATION_CENTROIDS } from '../services/destinationService.js'
 
 export const aiRouter = Router()
 
@@ -213,11 +213,14 @@ export function geographicScopeFor(input = {}, extracted = null) {
   )
 
   if (tourType === 'single_city') {
+    const isCoastalCorridor = /\b(coveñas|covenas|tol[uú]|san antero|golfo de morrosquillo|san bernardo del viento)\b/i.test(
+      [input.prompt, input.destination, input.city].filter(Boolean).join(' ')
+    )
     const maxDistanceKm = transport.includes('camin')
       ? 10
       : transport.includes('bicic')
         ? 18
-        : asksForNearby
+        : (asksForNearby || isCoastalCorridor)
           ? 50
           : 35
     return {
@@ -405,7 +408,13 @@ export function deduplicatePlacesByName(places = []) {
       return false
     })
 
-    const entry = typeof p === 'object' && dia ? { name, dia: Number(dia), day: Number(dia) } : name
+    const entry = typeof p === 'object'
+      ? {
+          ...p,
+          name,
+          ...(dia ? { dia: Number(dia), day: Number(dia) } : {})
+        }
+      : name
 
     if (existingIdx === -1) {
       result.push(entry)
@@ -417,7 +426,21 @@ export function deduplicatePlacesByName(places = []) {
       // asignado para no mover una parada por una segunda mención de la IA.
       const finalDia = existingDia ?? dia
       if (name.length > existingName.length && /[A-Z]/.test(name)) {
-        result[existingIdx] = finalDia ? { name, dia: Number(finalDia), day: Number(finalDia) } : name
+        result[existingIdx] = (typeof p === 'object' || typeof existing === 'object')
+          ? {
+              ...(typeof existing === 'object' ? existing : {}),
+              ...(typeof p === 'object' ? p : {}),
+              name,
+              ...(finalDia ? { dia: Number(finalDia), day: Number(finalDia) } : {})
+            }
+          : (finalDia ? { name, dia: Number(finalDia), day: Number(finalDia) } : name)
+      } else if (typeof result[existingIdx] === 'object' || typeof p === 'object') {
+        result[existingIdx] = {
+          ...(typeof p === 'object' ? p : {}),
+          ...(typeof result[existingIdx] === 'object' ? result[existingIdx] : {}),
+          name: existingName,
+          ...(finalDia ? { dia: Number(finalDia), day: Number(finalDia) } : {})
+        }
       } else if (finalDia && typeof result[existingIdx] === 'string') {
         result[existingIdx] = { name: existingName, dia: Number(finalDia), day: Number(finalDia) }
       }
@@ -1584,12 +1607,15 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         let imageUrl = place.imageUrl || place.images?.[0] || ''
         if (!imageUrl || assignedUrls.has(imageUrl)) {
           try {
-            const imgRes = await imageForPlaceWithStatus(place.name, input.city || input.destination || '', place.category, index, {
-              country: input.country,
-              latitude: place.latitude,
-              longitude: place.longitude,
-              assignedUrls
-            })
+            const imgRes = await Promise.race([
+              imageForPlaceWithStatus(place.name, input.city || input.destination || '', place.category, index, {
+                country: input.country,
+                latitude: place.latitude,
+                longitude: place.longitude,
+                assignedUrls
+              }),
+              new Promise(resolve => setTimeout(() => resolve({ url: '', isFallback: true }), 2500))
+            ])
             imageUrl = imgRes.url
           } catch (_) {}
         }
@@ -2129,7 +2155,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         places: plannedPlaceNames,
         prompt: input.prompt
       }).catch(() => ({})),
-      new Promise(resolve => setTimeout(() => resolve({}), 12000))
+      new Promise(resolve => setTimeout(() => resolve({}), 4000))
     ])
 
     const assignedUrls = new Set()
@@ -4751,12 +4777,15 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     isFallbackImg = Boolean(source.isFallbackImage)
     options?.assignedUrls?.add(image)
   } else {
-    const imageStatus = await imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index, {
-      latitude: coordinates.latitude,
-      longitude: coordinates.longitude,
-      country: input.country,
-      assignedUrls: options?.assignedUrls
-    }).catch(() => ({ url: "", isFallback: true }))
+    const imageStatus = await Promise.race([
+      imageForPlaceWithStatus(resolvedName, cityFallback, placeCategory, index, {
+        latitude: coordinates.latitude,
+        longitude: coordinates.longitude,
+        country: input.country,
+        assignedUrls: options?.assignedUrls
+      }),
+      new Promise(resolve => setTimeout(() => resolve({ url: "", isFallback: true }), 2500))
+    ]).catch(() => ({ url: "", isFallback: true }))
     image = imageStatus.url || existingImageUrl
     isFallbackImg = imageStatus.isFallback
     if (image) options?.assignedUrls?.add(image)
@@ -5658,6 +5687,23 @@ export async function collectTourCandidates(input, location) {
   let cityCenterLat = cityGeo?.latitude ?? canonicalDest?.latitude ?? null
   let cityCenterLon = cityGeo?.longitude ?? canonicalDest?.longitude ?? null
 
+  // If cityCenterLat is still unresolved, check input GPS or known fallback centroids
+  if (cityCenterLat == null && input.latitude && input.longitude) {
+    cityCenterLat = Number(input.latitude)
+    cityCenterLon = Number(input.longitude)
+  }
+
+  if (cityCenterLat == null) {
+    const normC = (city || input.destination || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    const fallbackCentroid = FALLBACK_DESTINATION_CENTROIDS[normC] ||
+      FALLBACK_DESTINATION_CENTROIDS[normC.replace(/^(san|santa|el|la|los|las)\s+/, '')] ||
+      Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([k]) => normC === k || (k.length >= 4 && normC.includes(k)))?.[1]
+    if (fallbackCentroid) {
+      cityCenterLat = fallbackCentroid.latitude
+      cityCenterLon = fallbackCentroid.longitude
+    }
+  }
+
   if (!canonicalDest && cityCenterLat != null && cityCenterLon != null) {
     canonicalDest = {
       latitude: cityCenterLat,
@@ -5693,10 +5739,25 @@ export async function collectTourCandidates(input, location) {
     return isValidSpecificPlace(pName)
   })
 
+  // If cityCenterLat is still unresolved, check the first specific place with coordinates
+  if (cityCenterLat == null) {
+    const firstWithCoords = rawSpecifics.find(p => p && Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude)))
+    if (firstWithCoords) {
+      cityCenterLat = Number(firstWithCoords.latitude)
+      cityCenterLon = Number(firstWithCoords.longitude)
+    }
+  }
+
   const mergedSpecifics = deduplicatePlacesByName(rawSpecifics)
 
   let geocodedSpecifics = []
   if (mergedSpecifics.length > 0) {
+    const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
+    const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
+    const hasUnresolvedSpecifics = mergedSpecifics.some(p => !p || typeof p !== 'object' || !p.coordinatesVerified || !Number.isFinite(Number(p.latitude)))
+    const catalog = (hasUnresolvedSpecifics && destLat != null && destLon != null)
+      ? await getRealDestinationCatalog(city, country, destLat, destLon).catch(() => null)
+      : null
 
     const specificSettled = await Promise.allSettled(
       mergedSpecifics.map(async (rawPlace, index) => {
@@ -5750,65 +5811,67 @@ export async function collectTourCandidates(input, location) {
           country
         }
 
-        // Tier 0: Consulta directa en OSM con contexto de ciudad y país con sesgo de proximidad al destino
-        if (!geo && /pueblito|chairama/i.test(placeName)) {
-          geo = await geocodePlace('Pueblito Tayrona', destLat, destLon, regionalOpts).catch(() => null)
-          if (!geo) geo = await geocodePlace('El Pueblito Chairama', destLat, destLon, regionalOpts).catch(() => null)
-        }
-        if (!geo) {
-          const searchQuery = `${placeName}, ${city}, ${country}`.trim().replace(/,\s*$/, '')
-          geo = await geocodePlace(searchQuery, destLat, destLon, regionalOpts).catch(() => null)
-        }
-        if (!geo) {
-          geo = await geocodePlace(`${placeName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
-        }
-        if (!geo && (isExplicitDining || /restaurante/i.test(placeName))) {
-          let invRest = null
-          if (/^restaurante\s+/i.test(placeName)) {
-            invRest = placeName.replace(/^restaurante\s+/i, '').trim() + ' restaurante'
-          } else if (/\s+restaurante$/i.test(placeName)) {
-            invRest = 'restaurante ' + placeName.replace(/\s+restaurante$/i, '').trim()
-          }
-          if (invRest) {
-            geo = await geocodePlace(`${invRest}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
-          }
-        }
-        if (geo && !hasOsmMapRecord(geo)) {
-          geo = null
-        }
-        if (geo) {
-          const pLower = placeName.toLowerCase()
-          const gLower = (geo.name || '').toLowerCase()
-          if (!isDistinctNameMatch(placeName, geo.name)) {
-            geo = null
-          } else if (/\bmuseo\b/i.test(pLower) && !/\bmuseo|museum|galer[íi]a|parque cultural\b/i.test(gLower)) {
-            geo = null
-          } else if (!validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
-            geo = null
-          }
-        }
-
-        // Tier 1: Descomposición de consultas compuestas si aplica (ej: "Museo del Oro - Casa de la Aduana")
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
-          const decomposed = decomposeCompoundPlaceQuery(placeName)
-          for (const dQuery of decomposed) {
-            const dGeo = await geocodePlace(`${dQuery}, ${city}`, destLat, destLon, regionalOpts).catch(() => null)
-            if (dGeo && isDistinctNameMatch(placeName, dGeo.name) && validateCandidateLocation(dGeo, canonicalDest, geoScope.maxDistanceKm)) {
-              geo = dGeo
-              break
+        // 2. Check preloaded catalog coordinatesMap (0 network calls)
+        if (!geo && catalog?.coordinatesMap) {
+          const mapped = catalog.coordinatesMap[placeName.toLowerCase().trim()]
+          if (mapped && validateCandidateLocation(mapped, canonicalDest, geoScope.maxDistanceKm)) {
+            geo = {
+              name: placeName,
+              latitude: mapped.latitude,
+              longitude: mapped.longitude,
+              city: mapped.city || city,
+              country: mapped.country || country,
+              address: mapped.address || `${placeName}, ${city}`,
+              placeId: mapped.placeId || '',
+              coordinateSource: mapped.coordinateSource || 'osm',
+              coordinatesVerified: true
             }
           }
         }
 
-        // Tier 2: Búsqueda rápida de proximidad con Photon (1 sola llamada ligera)
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
-          const photonHits = await photonSearch(`${placeName} ${city}`, 4, destLat, destLon).catch(() => [])
-          const validHit = photonHits.find(h => isDistinctNameMatch(placeName, h.name) && validateCandidateLocation(h, canonicalDest, geoScope.maxDistanceKm))
-          if (validHit) {
-            geo = validHit
+        // 3. Check preloaded catalog pool for restaurants or places (0 network calls)
+        if (!geo && catalog) {
+          const pool = isExplicitDining ? (catalog.restaurants || []) : (catalog.places || [])
+          const match = pool.find(item => {
+            const iName = typeof item === 'string' ? item : item?.name
+            return iName && (iName.toLowerCase().trim() === placeName.toLowerCase().trim() || arePlacesSimilar(iName, placeName))
+          })
+          if (match && typeof match === 'object') {
+            const mLat = Number(match.latitude ?? match.lat)
+            const mLon = Number(match.longitude ?? match.lon)
+            if (Number.isFinite(mLat) && Number.isFinite(mLon) && validateCandidateLocation({ latitude: mLat, longitude: mLon, name: placeName }, canonicalDest, geoScope.maxDistanceKm)) {
+              geo = {
+                name: placeName,
+                latitude: mLat,
+                longitude: mLon,
+                city,
+                country,
+                address: match.address || `${placeName}, ${city}`,
+                placeId: match.placeId || match.id || '',
+                coordinateSource: match.coordinateSource || 'osm',
+                coordinatesVerified: true
+              }
+            }
           }
         }
 
+        // 4. Fast single-pass geocoding with strict 1500ms timeout
+        if (!geo) {
+          const cleanPName = cleanPlacePhysicalName(placeName) || placeName
+          const searchQuery = `${cleanPName}, ${city}`.trim()
+          geo = await Promise.race([
+            geocodePlace(searchQuery, destLat, destLon, regionalOpts).catch(() => null),
+            new Promise(resolve => setTimeout(() => resolve(null), 1500))
+          ])
+          if (geo && !hasOsmMapRecord(geo)) {
+            geo = null
+          }
+          if (geo && !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
+            geo = null
+          }
+        }
+
+        // 5. Deterministic jitter fallback if unlocatable
         if (!geo || !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
           if (destLat != null && destLon != null) {
             const jitter = deterministicJitter(placeName, destLat, destLon)
@@ -5916,36 +5979,31 @@ export async function collectTourCandidates(input, location) {
         if (!placeName || !isValidSpecificPlace(placeName) || isNonTouristFacility({ name: placeName })) continue
 
         const cleanPName = cleanPlacePhysicalName(placeName) || placeName
-        // Strictly query OpenStreetMap / Photon / Nominatim / Seed Landmarks with center coords & regional bounds
-        let directGeo = await geocodePlace(`${cleanPName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
-        if (!directGeo) {
-          directGeo = await geocodePlace(cleanPName, destLat, destLon, regionalOpts).catch(() => null)
-        }
-        if (!directGeo && cleanPName !== placeName) {
-          directGeo = await geocodePlace(`${placeName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
-        }
-        if (!directGeo && /restaurante/i.test(placeName)) {
-          let invRest = null
-          if (/^restaurante\s+/i.test(placeName)) {
-            invRest = placeName.replace(/^restaurante\s+/i, '').trim() + ' restaurante'
-          } else if (/\s+restaurante$/i.test(placeName)) {
-            invRest = 'restaurante ' + placeName.replace(/\s+restaurante$/i, '').trim()
-          }
-          if (invRest) {
-            directGeo = await geocodePlace(`${invRest}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null)
-            if (!directGeo) {
-              directGeo = await geocodePlace(invRest, destLat, destLon, regionalOpts).catch(() => null)
+        let directGeo = null
+
+        // 1. Fast check against preloaded catalog coordinatesMap (0 network calls)
+        if (catalog?.coordinatesMap) {
+          const mapped = catalog.coordinatesMap[cleanPName.toLowerCase().trim()] || catalog.coordinatesMap[placeName.toLowerCase().trim()]
+          if (mapped && validateCandidateLocation(mapped, canonicalDest, geoScope.maxDistanceKm)) {
+            directGeo = {
+              name: placeName,
+              latitude: mapped.latitude,
+              longitude: mapped.longitude,
+              city,
+              country,
+              address: `${placeName}, ${city}`,
+              coordinateSource: mapped.coordinateSource || 'osm',
+              coordinatesVerified: true
             }
           }
         }
 
-        // Secondary fallback: Photon search
+        // 2. Single fast geocoding attempt with tight 1200ms timeout
         if (!directGeo) {
-          const photonHits = await photonSearch(`${cleanPName} ${city}`, 3, destLat, destLon).catch(() => [])
-          const validHit = photonHits.find(h => isDistinctNameMatch(cleanPName, h.name) && validateCandidateLocation(h, canonicalDest, geoScope.maxDistanceKm))
-          if (validHit) {
-            directGeo = validHit
-          }
+          directGeo = await Promise.race([
+            geocodePlace(`${cleanPName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null),
+            new Promise(resolve => setTimeout(() => resolve(null), 1200))
+          ])
         }
 
         if (directGeo && !hasOsmMapRecord(directGeo)) {
@@ -5965,21 +6023,16 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        // Zero-Drop policy: If an unlocatable venue still has no coordinates, pick a verified replacement from catalog
+        // Zero-Drop policy: If an unlocatable venue still has no coordinates, pick a verified replacement from preloaded catalog
         if (finalLat == null || finalLon == null) {
           const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
-          const catalog = await getRealDestinationCatalog(city, country, destLat, destLon).catch(() => null)
           const pool = isExplicitDining ? (catalog?.restaurants || []) : (catalog?.places || [])
           const usedInTour = new Set(
             geocodedSpecifics.map(p => canonicalPlaceKey(p.name, p.city || city))
           )
 
-          // A catalog may contain an LLM-suggested venue from another city.
-          // Never accept the first result blindly: try several catalog entries
-          // and keep only the first one confirmed by the map provider and the
-          // geographic boundary. This also prevents replacing an invalid place
-          // with the same invalid place under a different spelling.
-          for (const replacementCandidate of pool.slice(0, 12)) {
+          // 1. Priority 1: Check if candidate already has verified coordinates from catalog (0 network calls)
+          for (const replacementCandidate of pool.slice(0, 15)) {
             const repName = typeof replacementCandidate === 'string'
               ? replacementCandidate
               : replacementCandidate?.name
@@ -5994,26 +6047,107 @@ export async function collectTourCandidates(input, location) {
               continue
             }
 
-            const repGeo = await geocodePlace(`${repName}, ${city}`, destLat, destLon, regionalOpts).catch(() => null)
-            if (
-              !repGeo ||
-              !hasOsmMapRecord(repGeo) ||
-              !Number.isFinite(repGeo.latitude) ||
-              !Number.isFinite(repGeo.longitude) ||
-              !validateCandidateLocation(repGeo, canonicalDest, geoScope.maxDistanceKm)
-            ) {
-              continue
+            const candLat = Number(replacementCandidate?.latitude ?? replacementCandidate?.lat)
+            const candLon = Number(replacementCandidate?.longitude ?? replacementCandidate?.lon)
+            if (Number.isFinite(candLat) && Number.isFinite(candLon) && validateCandidateLocation({ latitude: candLat, longitude: candLon, name: repName }, canonicalDest, geoScope.maxDistanceKm)) {
+              finalLat = candLat
+              finalLon = candLon
+              address = replacementCandidate.address || `${repName}, ${city}`
+              placeName = repName
+              directGeo = {
+                name: repName,
+                latitude: candLat,
+                longitude: candLon,
+                city,
+                country,
+                address,
+                coordinateSource: replacementCandidate.coordinateSource || 'osm',
+                coordinatesVerified: true
+              }
+              console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified pre-geocoded "${repName}" on Day ${placeDay}.`)
+              break
             }
+          }
 
-            finalLat = Number(repGeo.latitude)
-            finalLon = Number(repGeo.longitude)
-            address = repGeo.name || `${repName}, ${city}`
-            placeName = repName
-            // The replacement was also resolved through a map provider.
-            // Keep its provider provenance instead of treating it as AI data.
-            directGeo = repGeo
-            console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified "${repName}" on Day ${placeDay}.`)
-            break
+          // 2. Priority 2: Check catalog coordinatesMap (0 network calls)
+          if ((finalLat == null || finalLon == null) && catalog?.coordinatesMap) {
+            for (const replacementCandidate of pool.slice(0, 15)) {
+              const repName = typeof replacementCandidate === 'string' ? replacementCandidate : replacementCandidate?.name
+              if (!repName) continue
+              const replacementKey = canonicalPlaceKey(repName, city)
+              if (usedInTour.has(replacementKey) || arePlacesSimilar(repName, placeName) || replacementKey === canonicalPlaceKey(placeName, city)) continue
+              const mapped = catalog.coordinatesMap[repName.toLowerCase().trim()]
+              if (mapped && validateCandidateLocation(mapped, canonicalDest, geoScope.maxDistanceKm)) {
+                finalLat = mapped.latitude
+                finalLon = mapped.longitude
+                address = `${repName}, ${city}`
+                placeName = repName
+                directGeo = {
+                  name: repName,
+                  latitude: finalLat,
+                  longitude: finalLon,
+                  city,
+                  country,
+                  address,
+                  coordinateSource: mapped.coordinateSource || 'osm',
+                  coordinatesVerified: true
+                }
+                console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified catalog map "${repName}" on Day ${placeDay}.`)
+                break
+              }
+            }
+          }
+
+          // 3. Priority 3: Fast geocode attempt for top candidate only (with tight 1500ms timeout)
+          if (finalLat == null || finalLon == null) {
+            for (const replacementCandidate of pool.slice(0, 2)) {
+              const repName = typeof replacementCandidate === 'string' ? replacementCandidate : replacementCandidate?.name
+              if (!repName) continue
+              const replacementKey = canonicalPlaceKey(repName, city)
+              if (usedInTour.has(replacementKey) || arePlacesSimilar(repName, placeName) || replacementKey === canonicalPlaceKey(placeName, city)) continue
+
+              const repGeo = await Promise.race([
+                geocodePlace(`${repName}, ${city}`, destLat, destLon, regionalOpts).catch(() => null),
+                new Promise(resolve => setTimeout(() => resolve(null), 1500))
+              ])
+              if (
+                repGeo &&
+                hasOsmMapRecord(repGeo) &&
+                Number.isFinite(repGeo.latitude) &&
+                Number.isFinite(repGeo.longitude) &&
+                validateCandidateLocation(repGeo, canonicalDest, geoScope.maxDistanceKm)
+              ) {
+                finalLat = Number(repGeo.latitude)
+                finalLon = Number(repGeo.longitude)
+                address = repGeo.name || `${repName}, ${city}`
+                placeName = repName
+                directGeo = repGeo
+                console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified "${repName}" on Day ${placeDay}.`)
+                break
+              }
+            }
+          }
+
+          // 4. Priority 4: Fallback to destination anchor deterministic jitter (0 network calls)
+          if (finalLat == null || finalLon == null) {
+            if (destLat != null && destLon != null) {
+              const jitter = deterministicJitter(placeName, destLat, destLon)
+              finalLat = jitter.latitude
+              finalLon = jitter.longitude
+              address = `${placeName}, ${city}`
+              directGeo = {
+                name: placeName,
+                latitude: finalLat,
+                longitude: finalLon,
+                city,
+                country,
+                address,
+                coordinateSource: 'destination-anchor',
+                coordinatesVerified: true,
+                isReferentialLocation: true
+              }
+              console.info(`[collectTourCandidates] Zero-Drop: Fallback to destination anchor for "${placeName}" on Day ${placeDay}.`)
+            }
           }
         }
 

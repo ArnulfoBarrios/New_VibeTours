@@ -154,6 +154,23 @@ export async function resolveCanonicalDestination(query, options = {}) {
   const cached = canonicalCache.get(cacheKey)
   if (cached) return cached
 
+  // Fast-path: If destination is already a known top destination centroid, return immediately in 0ms
+  const normKey = cleaned.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const immediateFallback = FALLBACK_DESTINATION_CENTROIDS[normKey] ||
+    FALLBACK_DESTINATION_CENTROIDS[cleaned.toLowerCase().trim()] ||
+    Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([k]) => normKey === k || (k.length >= 4 && (normKey === k || normKey.startsWith(k) || k.startsWith(normKey))))?.[1]
+
+  if (immediateFallback) {
+    const result = {
+      ...immediateFallback,
+      placeId: `canonical_${normKey}`,
+      isAmbiguous: false,
+      candidates: []
+    }
+    canonicalCache.set(cacheKey, result)
+    return result
+  }
+
   // Normalize query for Nominatim
   let normalizedQuery = cleaned
     .replace(/\b(ee\s*uu|eeuu|usa|us|estados\s+unidos)\b/gi, 'United States')
@@ -368,7 +385,6 @@ export async function resolveCanonicalDestination(query, options = {}) {
   }
 
   // Fallback to precomputed destination centroids if all network providers fail
-  const normKey = cleaned.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const fallback = FALLBACK_DESTINATION_CENTROIDS[normKey] ||
     FALLBACK_DESTINATION_CENTROIDS[cleaned.toLowerCase().trim()] ||
     Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([k]) => normKey.includes(k) || k.includes(normKey))?.[1]
