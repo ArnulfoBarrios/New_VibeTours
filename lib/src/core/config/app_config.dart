@@ -111,6 +111,8 @@ class AppConfig {
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         _localNetworkApiBaseUrl,
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+        'http://192.168.1.229:3000/api',
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
         'http://10.0.2.2:3000/api',
       if (_definedApiBaseUrl.isNotEmpty) _definedApiBaseUrl,
       _asset('API_BASE_URL'),
