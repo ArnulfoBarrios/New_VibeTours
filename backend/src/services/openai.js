@@ -1055,10 +1055,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
             ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
             : []
+          const rawPresetRests = (preset.restaurants || []).map(r => typeof r === 'string' ? r : r.name).filter(Boolean)
           const pool = deduplicateChatSpecificPlaces(
             [...rawSpecifics, ...(preset.places || [])],
             destName
           ).map(p => typeof p === 'string' ? p : p.name)
+           .filter(p => !rawPresetRests.some(r => arePlacesSimilar(r, p)))
 
           let dayBlocks = []
           const usedGlobal = new Set()
@@ -1082,7 +1084,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
                 break
               }
             }
-            const r = preset.restaurants?.[(d - 1) % Math.max(1, preset.restaurants?.length || 1)]?.name
+            let r = rawPresetRests.find(cName =>
+              !usedGlobal.has(cName.toLowerCase()) &&
+              (!p1 || !arePlacesSimilar(p1, cName)) &&
+              (!p2 || !arePlacesSimilar(p2, cName))
+            ) || rawPresetRests.find(cName =>
+              (!p1 || !arePlacesSimilar(p1, cName)) &&
+              (!p2 || !arePlacesSimilar(p2, cName))
+            ) || null
+            if (r) usedGlobal.add(r.toLowerCase())
             const dayLines = [p1, p2, r].filter(Boolean).map(place => `• ${place}`)
             if (dayLines.length > 0) {
               dayBlocks.push(`Día ${d}: ${destName}\n${dayLines.join('\n')}`)
@@ -1128,10 +1138,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
           ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
           : []
+        const rawPresetRests = (preset.restaurants || []).map(r => typeof r === 'string' ? r : r.name).filter(Boolean)
         const pool = deduplicateChatSpecificPlaces(
           [...rawSpecifics, ...(preset.places || [])],
           destName
         ).map(p => typeof p === 'string' ? p : p.name)
+         .filter(p => !rawPresetRests.some(r => arePlacesSimilar(r, p)))
 
         let dayBlocks = []
         const usedGlobal = new Set()
@@ -1155,7 +1167,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
               break
             }
           }
-          const r = preset.restaurants?.[(d - 1) % Math.max(1, preset.restaurants?.length || 1)]?.name
+          let r = rawPresetRests.find(cName =>
+            !usedGlobal.has(cName.toLowerCase()) &&
+            (!p1 || !arePlacesSimilar(p1, cName)) &&
+            (!p2 || !arePlacesSimilar(p2, cName))
+          ) || rawPresetRests.find(cName =>
+            (!p1 || !arePlacesSimilar(p1, cName)) &&
+            (!p2 || !arePlacesSimilar(p2, cName))
+          ) || null
+          if (r) usedGlobal.add(r.toLowerCase())
           const dayLines = [p1, p2, r].filter(Boolean).map(place => ` • ${place}`)
           if (dayLines.length > 0) {
             dayBlocks.push(`Día ${d}: ${destName}\n${dayLines.join('\n')}`)
@@ -1177,7 +1197,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       destName
     )
 
-    if (!hasLodging) {
+    const isItineraryStatusInquiry = /\b(c[oó]mo va el itinerario|c[oó]mo va mi itinerario|estado del itinerario)\b/i.test(lastUserMsg)
+    if (!hasLodging && !isItineraryStatusInquiry) {
       fallbackChips = fallbackChips.filter(c => !/generar tour|crear tour|armar tour|construir tour/i.test(c))
       if (!fallbackChips.some(c => /casa propia|familiar|propio hospedaje/i.test(c))) {
         fallbackChips.unshift('Tengo mi propio hospedaje')
@@ -1650,50 +1671,89 @@ REGLAS PARA "accommodationStatus":
       const perDayPlacesCount = isUserAskingForMoreStops ? 3 : 2
       const totalPlacesNeeded = daysCount * perDayPlacesCount
 
-      // Obtener atractivos del catálogo dinámico y enriquecer si faltan paradas
-      let catPlaces = (cat?.places || []).filter(p => p && !isGenericFacilityName(p) && !isUnmappedOrClosedVenue(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p) && !isLodgingName(p))
-      if (catPlaces.length < totalPlacesNeeded) {
-        const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry).catch(() => [])
-        const verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
-        for (const di of verifiedDynamicIconics) {
-          const diName = typeof di === 'string' ? di : (di?.name || '')
-          if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(cp, diName))) {
-            catPlaces.push(diName)
-          }
-        }
-      }
-
-      const cleanExplicitPool = placeNames.filter(p => p && !isGenericFacilityName(p) && !isUnmappedOrClosedVenue(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p) && !isLodgingName(p))
-      const rawAttractions = [...cleanExplicitPool, ...catPlaces]
-      const uniqueAttractions = deduplicateChatSpecificPlaces(rawAttractions, dName)
-        .map(p => typeof p === 'string' ? p : p.name)
-
-      const validRests = (cat?.restaurants || []).filter(r =>
-        r && r.name &&
-        !isGenericFacilityName(r.name) &&
-        !isNonTouristFacility({ name: r.name }) &&
-        !/\b(zool[óo]gico|zoo|acuario|museo|catedral|iglesia|parque|carnaval|estadio)\b/i.test(r.name) &&
-        (isFoodOrDrinkEstablishment(r.name) || r.tags?.amenity === 'restaurant' || r.tags?.amenity === 'cafe' || r.tags?.amenity === 'fast_food')
-      )
+      // 1. Recolectar y enriquecer restaurantes para asegurar variedad y cantidad suficiente
+      const rawRestsPool = [
+        ...(cat?.restaurants || []),
+        ...(parsedExtracted.specificPlaces || []).filter(p => p && (p.type === 'food' || isFoodOrDrinkEstablishment(typeof p === 'string' ? p : p.name))),
+        ...(known.specificPlaces || []).filter(p => p && (p.type === 'food' || isFoodOrDrinkEstablishment(typeof p === 'string' ? p : p.name)))
+      ]
+      const validRests = rawRestsPool.filter(r => {
+        const rName = typeof r === 'string' ? r : (r?.name || '')
+        if (!rName || rName.trim().length === 0) return false
+        if (isGenericFacilityName(rName) || isNonTouristFacility({ name: rName }) || isUnmappedOrClosedVenue(rName)) return false
+        if (/\b(zool[óo]gico|zoo|acuario|museo|catedral|iglesia|parque|carnaval|estadio)\b/i.test(rName)) return false
+        return true
+      })
       const uniqueRests = []
       for (const r of validRests) {
-        if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, r.name))) {
-          uniqueRests.push(r)
+        const rName = typeof r === 'string' ? r : r.name
+        if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, rName))) {
+          uniqueRests.push(typeof r === 'string' ? { name: r } : r)
         }
       }
 
-      // Si faltan restaurantes para cubrir todos los días, enriquecer con la ciudad cabecera o catálogo de respaldo
+      // Si faltan restaurantes para cubrir todos los días, enriquecer con la ciudad cabecera o búsquedas geográficas
       if (uniqueRests.length < daysCount) {
         const hubCity = known.city && known.city !== dName ? known.city : null
         if (hubCity) {
           const hubCat = await getRealDestinationCatalog(hubCity, destCountry).catch(() => null)
           for (const hr of (hubCat?.restaurants || [])) {
-            if (hr && hr.name && !uniqueRests.some(existing => arePlacesSimilar(existing.name, hr.name))) {
-              uniqueRests.push(hr)
+            const hrName = typeof hr === 'string' ? hr : (hr?.name || '')
+            if (hrName && !uniqueRests.some(existing => arePlacesSimilar(existing.name, hrName))) {
+              uniqueRests.push(typeof hr === 'string' ? { name: hr } : hr)
             }
           }
         }
       }
+      if (uniqueRests.length < daysCount) {
+        const extraFood = await photonSearch(`gastronomia restaurante ${dName}`, 15).catch(() => [])
+        for (const ef of extraFood) {
+          if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name)) {
+            if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, ef.name))) {
+              uniqueRests.push({ name: ef.name })
+            }
+          }
+        }
+      }
+      if (uniqueRests.length < daysCount) {
+        const dynamicProfile = await fetchDynamicDestinationProfile(dName, destCountry).catch(() => null)
+        for (const dr of (dynamicProfile?.restaurants || [])) {
+          const drName = typeof dr === 'string' ? dr : (dr?.name || '')
+          if (drName && !isGenericFacilityName(drName) && !isNonTouristFacility({ name: drName }) && !isUnmappedOrClosedVenue(drName)) {
+            if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, drName))) {
+              uniqueRests.push(typeof dr === 'string' ? { name: dr } : dr)
+            }
+          }
+        }
+      }
+
+      // 2. Obtener atractivos del catálogo dinámico y enriquecer si faltan paradas, EXCLUYENDO rigurosamente restaurantes
+      let catPlaces = (cat?.places || []).filter(p => {
+        const pName = typeof p === 'string' ? p : (p?.name || '')
+        if (!pName || isGenericFacilityName(pName) || isUnmappedOrClosedVenue(pName) || isNonTouristFacility({ name: pName }) || isFoodOrDrinkEstablishment(pName) || isLodgingName(pName)) return false
+        if (uniqueRests.some(r => arePlacesSimilar(r.name, pName))) return false
+        return true
+      })
+      if (catPlaces.length < totalPlacesNeeded) {
+        const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry).catch(() => [])
+        const verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
+        for (const di of verifiedDynamicIconics) {
+          const diName = typeof di === 'string' ? di : (di?.name || '')
+          if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(cp, diName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, diName))) {
+            catPlaces.push(diName)
+          }
+        }
+      }
+
+      const cleanExplicitPool = placeNames.filter(p => {
+        if (!p || isGenericFacilityName(p) || isUnmappedOrClosedVenue(p) || isNonTouristFacility({ name: p }) || isFoodOrDrinkEstablishment(p) || isLodgingName(p)) return false
+        if (uniqueRests.some(r => arePlacesSimilar(r.name, p))) return false
+        return true
+      })
+      const rawAttractions = [...cleanExplicitPool, ...catPlaces]
+      const uniqueAttractions = deduplicateChatSpecificPlaces(rawAttractions, dName)
+        .map(p => typeof p === 'string' ? p : p.name)
+        .filter(p => !uniqueRests.some(r => arePlacesSimilar(r.name, p)))
 
       let prefixIntro = ''
       if (isUserAskingForMoreStops) {
@@ -1728,7 +1788,10 @@ REGLAS PARA "accommodationStatus":
             }
           }
           if (!chosenPlace) {
-            chosenPlace = uniqueAttractions.find(p => !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, p))) || null
+            chosenPlace = uniqueAttractions.find(p => 
+              !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, p)) &&
+              !Array.from(dayUsed).some(u => arePlacesSimilar(u, p))
+            ) || null
           }
           if (!chosenPlace) {
             continue
@@ -1750,12 +1813,17 @@ REGLAS PARA "accommodationStatus":
           }
         }
         if (!chosenRest) {
-          chosenRest = uniqueRests.find(r => !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, r.name)))?.name ||
-            uniqueRests[(d - 1) % Math.max(1, uniqueRests.length)]?.name ||
-            cat?.restaurants?.[(d - 1) % Math.max(1, cat?.restaurants?.length || 1)]?.name ||
-            null
+          chosenRest = uniqueRests.find(r => 
+            !Array.from(globalUsedNames).some(u => arePlacesSimilar(u, r.name)) &&
+            !Array.from(dayUsed).some(u => arePlacesSimilar(u, r.name))
+          )?.name || null
         }
         if (!chosenRest) {
+          chosenRest = uniqueRests.find(r => 
+            !Array.from(dayUsed).some(u => arePlacesSimilar(u, r.name))
+          )?.name || null
+        }
+        if (!chosenRest || Array.from(dayUsed).some(u => arePlacesSimilar(u, chosenRest))) {
           reconstructed += '\n'
           continue
         }
@@ -2217,13 +2285,16 @@ export function extractChatInformationFallback(prompt) {
     res.transport = 'Taxi / Uber'
   }
 
-  const hotelMatch = text.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
-  if (hotelMatch) {
-    const rawHotel = `${hotelMatch[1]} ${hotelMatch[2]}`.trim()
-    if (!isLodgingCategoryOrGeneric(rawHotel) && rawHotel.length >= 4) {
-      const cleanHotel = rawHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-      res.selectedHotel = cleanHotel
-      res.accommodationStatus = 'Hotel elegido'
+  const isHotelInquiryOnly = /\b(informaci[óo]n|detalles?|saber\s+m[aá]s|cu[ée]ntame)\s+(?:sobre|de|del)?\b/i.test(text)
+  if (!isHotelInquiryOnly) {
+    const hotelMatch = text.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
+    if (hotelMatch) {
+      const rawHotel = `${hotelMatch[1]} ${hotelMatch[2]}`.trim()
+      if (!isLodgingCategoryOrGeneric(rawHotel) && rawHotel.length >= 4) {
+        const cleanHotel = rawHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        res.selectedHotel = cleanHotel
+        res.accommodationStatus = 'Hotel elegido'
+      }
     }
   }
 

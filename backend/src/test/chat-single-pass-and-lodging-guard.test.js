@@ -277,5 +277,58 @@ describe('Chat Single-Pass and Lodging Guardrail Tests', () => {
       'Must NOT ask for hotel when user asks where the itinerary is'
     )
   })
+
+  it('should never produce duplicate stops in the same day and strictly separate attractions and restaurants in chat itinerary for multi-day tours (e.g. Coveñas 7 days)', async () => {
+    const state = {
+      message: 'Muéstrame el itinerario para Coveñas',
+      history: [
+        { role: 'user', content: 'Quiero viajar a Coveñas por 7 días con amigos' },
+        { role: 'assistant', content: '¡Excelente! ¿Dónde se hospedarán?' },
+        { role: 'user', content: 'Nos quedaremos en Hotel Palma Linda, nos moveremos en carro particular y presupuesto moderado' },
+        { role: 'assistant', content: 'Hospedaje confirmado en Hotel Palma Linda.' },
+        { role: 'user', content: 'Muéstrame el itinerario para Coveñas' }
+      ]
+    }
+
+    const currentPreferences = {
+      city: 'Coveñas',
+      destination: 'Coveñas',
+      country: 'Colombia',
+      datesSeason: 'octubre',
+      durationDays: 7,
+      companions: 'En grupo',
+      transport: 'Auto rentado',
+      budget: 'Moderado',
+      selectedHotel: 'Hotel Palma Linda',
+      accommodationStatus: 'Hotel elegido'
+    }
+
+    const result = await generateChatResponse(state, '', '', currentPreferences)
+    assert.ok(result.responseMessage.includes('Día 1: Coveñas'), 'Must include Day 1')
+
+    const daySections = result.responseMessage.split(/Día\s+\d+\s*:\s*[^\n]+/)
+    assert.ok(daySections.length >= 7, 'Must have at least 7 day blocks')
+
+    for (let i = 1; i < daySections.length; i++) {
+      const dayText = daySections[i].split(/(?:¿Qué te parece|Deseas hacer)/)[0]
+      const bullets = dayText
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.startsWith('•') || line.startsWith('-'))
+        .map(line => line.replace(/^[•\-]\s*/, '').trim())
+        .filter(Boolean)
+
+      const seenToday = new Set()
+      for (const bullet of bullets) {
+        const lower = bullet.toLowerCase()
+        assert.equal(
+          seenToday.has(lower),
+          false,
+          `Day ${i} contains duplicate stop: "${bullet}". Full day stops: ${bullets.join(', ')}`
+        )
+        seenToday.add(lower)
+      }
+    }
+  })
 })
 

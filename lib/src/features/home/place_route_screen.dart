@@ -8,6 +8,7 @@ import '../../core/design/app_theme.dart';
 import '../../core/design/live_navigation_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/services/road_route_service.dart';
+import '../../core/utils/transport_utils.dart';
 import '../../domain/models.dart';
 import '../../state/app_state.dart';
 import '../shared/location_disclosure_dialog.dart';
@@ -27,23 +28,35 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
   double? _currentHeading;
   RoadRouteResult? _liveRoute;
   bool _isRouting = false;
+  bool _isOffRoute = false;
   bool _isTrackingMode = false;
   GeoPoint? _initialOverviewPoint;
   bool _hasUserManuallyToggledTracking = false;
   DateTime? _lastRerouteAt;
-
+  DateTime? _lastTrafficRefreshAt;
+  int _routeRequestToken = 0;
+  bool _isTrafficRefreshing = false;
   bool _hasInitialAccurateRoute = false;
+  RouteTravelMode _travelMode = RouteTravelMode.driving;
 
   @override
   void initState() {
     super.initState();
+    final profileTransport =
+        ref.read(touristProfileProvider).valueOrNull?.transportPreference;
+    _travelMode = routeTravelModeFor(profileTransport);
+
     final cached = ref.read(currentPositionProvider).valueOrNull;
     if (cached != null) {
       _currentPoint = GeoPoint(latitude: cached.latitude, longitude: cached.longitude);
-      unawaited(_recalculateRoute(force: true));
+      if (cached.speed >= 1.0 && cached.heading >= 0) {
+        _currentHeading = cached.heading;
+      }
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startLiveNavigation();
+      if (mounted) {
+        _startLiveNavigation();
+      }
     });
   }
 
@@ -55,8 +68,8 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
 
   Future<void> _startLiveNavigation() async {
     final service = ref.read(locationServiceProvider);
-    
-    // Start live high-accuracy position stream immediately
+
+    // Start live high-accuracy satellite stream immediately
     final stream = await service.positionStream(distanceFilterMeters: 0);
     if (mounted && stream != null) {
       await _positionSubscription?.cancel();
@@ -68,23 +81,40 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
 
     if (initialPosition != null) {
       setState(() {
-        _currentPoint = GeoPoint(
-          latitude: initialPosition.latitude,
-          longitude: initialPosition.longitude,
-        );
-        if (initialPosition.speed >= 1.0 && initialPosition.heading >= 0) {
+        _currentPoint ??= _pointFromPosition(initialPosition);
+        if (_currentHeading == null &&
+            initialPosition.speed >= 1.0 &&
+            initialPosition.heading >= 0) {
           _currentHeading = initialPosition.heading;
         }
       });
-      unawaited(_recalculateRoute(force: true));
+
+      // When the stream is active, wait for its first reliable fix. The
+      // one-shot currentPosition can be stale and would otherwise produce a
+      // first route that is immediately replaced by a second route.
+      if (stream == null &&
+          initialPosition.accuracy <= 25.0 &&
+          !_hasInitialAccurateRoute) {
+        _hasInitialAccurateRoute = true;
+        await _recalculateRoute(force: true);
+      }
     }
+
+    // Safety fallback: if no fix arrives within 1.5 seconds, calculate route with best available point
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted && !_hasInitialAccurateRoute && _liveRoute == null && _currentPoint != null) {
+        _hasInitialAccurateRoute = true;
+        unawaited(_recalculateRoute(force: true));
+      }
+    });
+  }
+
+  GeoPoint _pointFromPosition(Position position) {
+    return GeoPoint(latitude: position.latitude, longitude: position.longitude);
   }
 
   void _handlePositionUpdate(Position position) {
-    final point = GeoPoint(
-      latitude: position.latitude,
-      longitude: position.longitude,
-    );
+    final point = _pointFromPosition(position);
     if (!mounted) return;
 
     _currentPoint = point;
@@ -105,35 +135,81 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
         point.latitude,
         point.longitude,
       );
-      if (position.speed >= 1.2 || movedDist >= 18.0) {
+      if (position.speed >= 1.2 || movedDist >= 15.0) {
         _isTrackingMode = true;
       }
     }
 
     setState(() {});
 
-    final route = _liveRoute;
-    // Auto-refine to optimal live route as soon as verified satellite fix arrives
-    if (route == null || (!_hasInitialAccurateRoute && position.accuracy <= 25.0)) {
+    final place = ref.read(selectedNearbyPlaceProvider);
+    if (place == null) return;
+
+    // The first route must use a reliable stream fix.
+    if (!_hasInitialAccurateRoute) {
+      if (position.accuracy > 25.0) return;
       _hasInitialAccurateRoute = true;
-      _recalculateRoute(force: true);
+      if (!_isRouting) {
+        unawaited(_recalculateRoute(force: true));
+      }
+      return;
+    }
+
+    final route = _liveRoute;
+    if (route == null) {
+      if (_canReroute(DateTime.now())) {
+        unawaited(_recalculateRoute(force: true));
+      }
       return;
     }
 
     final distanceToRoute = _distanceToRouteMeters(point, route.geometry);
-    final now = DateTime.now();
-    // Real deviation threshold: 65m to prevent false recalculations on wide avenues
-    final deviated = distanceToRoute > 65;
-
-    if (deviated) {
-      final last = _lastRerouteAt;
-      if (last == null || now.difference(last) > const Duration(seconds: 4)) {
-        unawaited(_recalculateRoute(force: true));
+    final isOffRoute = distanceToRoute > 60;
+    if (isOffRoute) {
+      if (_canReroute(DateTime.now(), isOffRoute: true)) {
+        unawaited(_recalculateRoute(force: true, markOffRoute: true));
+      }
+    } else {
+      final now = DateTime.now();
+      final routeSupportsLiveTraffic =
+          _travelMode == RouteTravelMode.driving ||
+          _travelMode == RouteTravelMode.taxi;
+      final refreshTraffic =
+          routeSupportsLiveTraffic &&
+          _routeService.hasLiveTrafficProvider &&
+          now.difference(
+                _lastTrafficRefreshAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+              ) >
+              const Duration(minutes: 2);
+      if (refreshTraffic && !_isTrafficRefreshing && route.geometry.length >= 2) {
+        unawaited(
+          _refreshTrafficInBackground(
+            baseRoute: route,
+            origin: point,
+            destination: place.location,
+            placeName: place.name,
+            requestToken: _routeRequestToken,
+            travelMode: _travelMode,
+          ),
+        );
       }
     }
   }
 
-  Future<void> _recalculateRoute({bool force = false}) async {
+  bool _canReroute(DateTime now, {bool isOffRoute = false}) {
+    if (_isRouting) return false;
+    final last = _lastRerouteAt;
+    if (last == null) return true;
+    final minInterval = isOffRoute
+        ? const Duration(seconds: 15)
+        : const Duration(seconds: 30);
+    return now.difference(last) > minInterval;
+  }
+
+  Future<void> _recalculateRoute({
+    bool force = false,
+    bool markOffRoute = false,
+  }) async {
     if (_isRouting) return;
     final place = ref.read(selectedNearbyPlaceProvider);
     if (place == null) return;
@@ -142,31 +218,125 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
     if (origin == null) {
       final position = await ref.read(locationServiceProvider).currentPosition();
       if (!mounted || position == null) return;
-      origin = GeoPoint(latitude: position.latitude, longitude: position.longitude);
+      origin = _pointFromPosition(position);
       setState(() {
         _currentPoint = origin;
       });
     }
 
-    setState(() => _isRouting = true);
+    final destination = place.location;
+
+    // Validate non-zero coordinates before navigation
+    final isZeroOrigin = origin.latitude == 0 && origin.longitude == 0;
+    final isZeroDest = destination.latitude == 0 && destination.longitude == 0;
+    if (isZeroOrigin || isZeroDest) {
+      return;
+    }
+
+    setState(() {
+      _isRouting = true;
+      _isOffRoute = markOffRoute;
+    });
+
+    final requestToken = ++_routeRequestToken;
+    final travelMode = _travelMode;
+    late final RoadRouteResult route;
 
     try {
-      final route = await _routeService.resolveRoute(
-        [origin, place.location],
-        preferLiveTraffic: true,
-        forceRefresh: force,
-        originHeading: _currentHeading,
-      );
-      if (!mounted) return;
-      setState(() {
-        _liveRoute = route;
-        _lastRerouteAt = DateTime.now();
-        _isRouting = false;
-      });
-    } catch (_) {
-      if (mounted) {
-        setState(() => _isRouting = false);
+      route = await _routeService
+          .resolveRoute(
+            [origin, destination],
+            // Get the road geometry first. Traffic is requested below in the
+            // background so the first visible route is not delayed or replaced.
+            preferLiveTraffic: false,
+            forceRefresh: force,
+            originHeading: _currentHeading,
+            travelMode: travelMode,
+          )
+          .timeout(const Duration(seconds: 8));
+    } catch (error) {
+      debugPrint('[nearby-route] Error calculando ruta: $error');
+      if (mounted && requestToken == _routeRequestToken) {
+        setState(() {
+          _isRouting = false;
+        });
       }
+      return;
+    }
+
+    if (!mounted || requestToken != _routeRequestToken) return;
+
+    final currentPlace = ref.read(selectedNearbyPlaceProvider);
+    if (currentPlace?.name != place.name) {
+      setState(() => _isRouting = false);
+      return;
+    }
+
+    setState(() {
+      _liveRoute = route;
+      _lastRerouteAt = DateTime.now();
+      _lastTrafficRefreshAt = DateTime.now();
+      _isRouting = false;
+      _isOffRoute = false;
+    });
+
+    final supportsLiveTraffic =
+        _routeService.hasLiveTrafficProvider &&
+        (travelMode == RouteTravelMode.driving ||
+            travelMode == RouteTravelMode.taxi);
+    if (supportsLiveTraffic && route.geometry.length >= 2) {
+      unawaited(
+        _refreshTrafficInBackground(
+          baseRoute: route,
+          origin: origin,
+          destination: destination,
+          placeName: place.name,
+          requestToken: requestToken,
+          travelMode: travelMode,
+        ),
+      );
+    }
+  }
+
+  Future<void> _refreshTrafficInBackground({
+    required RoadRouteResult baseRoute,
+    required GeoPoint origin,
+    required GeoPoint destination,
+    required String placeName,
+    required int requestToken,
+    required RouteTravelMode travelMode,
+  }) async {
+    if (_isTrafficRefreshing) return;
+    _isTrafficRefreshing = true;
+    _lastTrafficRefreshAt = DateTime.now();
+    try {
+      final trafficRoute = await _routeService.resolveRoute(
+        [origin, destination],
+        preferLiveTraffic: true,
+        forceRefresh: true,
+        originHeading: _currentHeading,
+        travelMode: travelMode,
+      );
+
+      final currentPlace = ref.read(selectedNearbyPlaceProvider);
+      if (!mounted ||
+          requestToken != _routeRequestToken ||
+          !identical(_liveRoute, baseRoute) ||
+          currentPlace?.name != placeName ||
+          !trafficRoute.usesLiveTraffic) {
+        return;
+      }
+
+      // Traffic may return a different alternative geometry. Keep the road
+      // geometry already shown to the user and import only its ETA/status.
+      setState(() {
+        _liveRoute = baseRoute.withTrafficFrom(trafficRoute);
+        _lastTrafficRefreshAt = DateTime.now();
+      });
+    } catch (error) {
+      debugPrint('[nearby-traffic] Error actualizando trafico: $error');
+    } finally {
+      _isTrafficRefreshing = false;
     }
   }
 
@@ -237,13 +407,15 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
   String _timeLabel(RoadRouteResult? route) {
     final seconds = route?.travelTimeSeconds;
     if (seconds != null && seconds > 0) {
-      final mins = (seconds / 60).round();
+      final delay = route?.trafficDelaySeconds ?? 0;
+      final totalSecs = seconds + delay;
+      final mins = (totalSecs / 60).round().clamp(1, 999);
       if (mins < 60) return '$mins min';
       return '${mins ~/ 60} h ${mins % 60} min';
     }
     final m = route?.distanceMeters ?? 0;
     if (m > 0) {
-      final speedKmh = switch (route?.travelMode ?? RouteTravelMode.driving) {
+      final speedKmh = switch (route?.travelMode ?? _travelMode) {
         RouteTravelMode.walking => 4.2,
         RouteTravelMode.cycling => 15.0,
         RouteTravelMode.publicTransport => 22.0,
@@ -406,7 +578,16 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
                             ),
                           ],
                         ),
-                        if (_isRouting) ...[
+                        if (_isOffRoute) ...[
+                          Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+                          const Row(
+                            children: [
+                              Icon(Icons.alt_route_rounded, size: 14, color: Colors.orange),
+                              SizedBox(width: 4),
+                              Text('Desvío...', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.orange)),
+                            ],
+                          ),
+                        ] else if (_isRouting) ...[
                           Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
                           const Row(
                             children: [
@@ -419,7 +600,50 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
+                  // Travel mode selector
+                  Center(
+                    child: SegmentedButton<RouteTravelMode>(
+                      showSelectedIcon: false,
+                      style: const ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      segments: const [
+                        ButtonSegment(
+                          value: RouteTravelMode.driving,
+                          icon: Icon(Icons.directions_car_rounded, size: 18),
+                          label: Text('Auto', style: TextStyle(fontSize: 12)),
+                        ),
+                        ButtonSegment(
+                          value: RouteTravelMode.taxi,
+                          icon: Icon(Icons.local_taxi_rounded, size: 18),
+                          label: Text('Taxi', style: TextStyle(fontSize: 12)),
+                        ),
+                        ButtonSegment(
+                          value: RouteTravelMode.cycling,
+                          icon: Icon(Icons.directions_bike_rounded, size: 18),
+                          label: Text('Bici', style: TextStyle(fontSize: 12)),
+                        ),
+                        ButtonSegment(
+                          value: RouteTravelMode.walking,
+                          icon: Icon(Icons.directions_walk_rounded, size: 18),
+                          label: Text('Pie', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                      selected: {_travelMode},
+                      onSelectionChanged: (newSelection) {
+                        if (newSelection.isNotEmpty && newSelection.first != _travelMode) {
+                          setState(() {
+                            _travelMode = newSelection.first;
+                            _liveRoute = null;
+                          });
+                          _recalculateRoute(force: true);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(

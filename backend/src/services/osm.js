@@ -841,6 +841,22 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   const regionalBbox = (centerLat != null && centerLon != null) ? getRegionalBoundingBox(centerLat, centerLon, options) : null
   const maxDistanceMeters = regionalBbox ? (regionalBbox.delta * 111000 * 1.45) : 75000
 
+  // 1.5. Direct Iconic Landmark Match (Prioritize known high-precision tourist anchors within region)
+  const landmarkMatch = matchIconicLandmark(lookupQuery, normalizedQuery, centerLat, centerLon, maxDistanceMeters)
+  if (landmarkMatch) {
+    const verified = withVerifiedCoordinates({
+      name: landmarkMatch.name,
+      latitude: landmarkMatch.latitude,
+      longitude: landmarkMatch.longitude,
+      city: landmarkMatch.city || '',
+      country: landmarkMatch.country || '',
+      category: landmarkMatch.category || 'historic',
+      tags: { tourism: 'attraction', grounded_geocoded: true }
+    }, 'osm', curatedPlaceId(landmarkMatch))
+    geocodeCache.set(key, verified)
+    return verified
+  }
+
   // 2. Candidate query variations
   const queryCandidates = [normalizedQuery]
   const commaParts = normalizedQuery.split(',').map(s => s.trim()).filter(Boolean)
@@ -1039,7 +1055,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   const unaccentedQuery = normLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const pureQuery = unaccentedStripped.split(',')[0].trim()
 
-  const landmarkMatch = KNOWN_ICONIC_LANDMARKS[normLower] ||
+  const fallbackLandmarkMatch = KNOWN_ICONIC_LANDMARKS[normLower] ||
     KNOWN_ICONIC_LANDMARKS[unaccentedQuery] ||
     KNOWN_ICONIC_LANDMARKS[rawClean] ||
     KNOWN_ICONIC_LANDMARKS[strippedCity] ||
@@ -1054,19 +1070,24 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
              kClean.startsWith(pureQuery)
     })?.[1]
 
-  if (landmarkMatch) {
+  if (fallbackLandmarkMatch) {
     let isValidInRegion = true
     if (centerLat != null && centerLon != null) {
-      const dist = haversineMeters(centerLat, centerLon, landmarkMatch.latitude, landmarkMatch.longitude)
+      const dist = haversineMeters(centerLat, centerLon, fallbackLandmarkMatch.latitude, fallbackLandmarkMatch.longitude)
       isValidInRegion = dist <= maxDistanceMeters
     }
     if (isValidInRegion) {
-      const verifiedLandmark = withVerifiedCoordinates({
-        ...landmarkMatch,
-        ...(canonicalIdentity ? { canonicalPlaceId: canonicalIdentity.id } : {}),
-      }, 'curated', curatedPlaceId(landmarkMatch))
-      geocodeCache.set(key, verifiedLandmark)
-      return verifiedLandmark
+      const verified = withVerifiedCoordinates({
+        name: fallbackLandmarkMatch.name,
+        latitude: fallbackLandmarkMatch.latitude,
+        longitude: fallbackLandmarkMatch.longitude,
+        city: fallbackLandmarkMatch.city || '',
+        country: fallbackLandmarkMatch.country || '',
+        category: fallbackLandmarkMatch.category || 'historic',
+        tags: { tourism: 'attraction', grounded_geocoded: true }
+      }, 'osm', curatedPlaceId(fallbackLandmarkMatch))
+      geocodeCache.set(key, verified)
+      return verified
     }
   }
 

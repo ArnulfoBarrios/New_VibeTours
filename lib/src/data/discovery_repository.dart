@@ -63,10 +63,12 @@ class DiscoveryRepository {
     String placeName = '',
     String category = '',
     String imageTitle = '',
+    String pageTitle = '',
   }) {
     if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
 
-    final haystack = '$url $imageTitle'
+    final lowerPlace = placeName.toLowerCase();
+    final haystack = '$url $imageTitle $pageTitle'
         .toLowerCase()
         .replaceAll(RegExp(r'[_%\-]+'), ' ');
     const blockedImageTerms = [
@@ -88,19 +90,24 @@ class DiscoveryRepository {
       'document',
       '.pdf',
     ];
-    if (blockedImageTerms.any((term) => haystack.contains(term))) return false;
+    for (final term in blockedImageTerms) {
+      if (lowerPlace.contains(term)) continue;
+      if (haystack.contains(term)) return false;
+    }
 
-    final lowerPlace = placeName.toLowerCase();
     final lowerCategory = category.toLowerCase();
     final isNature = lowerCategory == 'nature' ||
         RegExp(r'ci[ée]naga|laguna|humedal|manglar|parque|reserva|sendero|bosque|r[íi]o|jard[íi]n bot[aá]nico')
             .hasMatch(lowerPlace);
     final isBeach = lowerCategory == 'beach' ||
         RegExp(r'playa|beach|bah[íi]a|isla|cayo|costa|litoral').hasMatch(lowerPlace);
-    if (isNature && RegExp(r'church|cathedral|iglesia|catedral|templo|mall|shopping').hasMatch(haystack)) {
-      return false;
-    }
-    if (isBeach && RegExp(r'church|cathedral|iglesia|catedral|templo|convent').hasMatch(haystack)) {
+    final isSports = lowerCategory == 'sports' ||
+        RegExp(r'estadio|coliseo|cancha|patin[oó]dromo|vel[oó]dromo').hasMatch(lowerPlace);
+    final isSecular = lowerCategory != 'religious' &&
+        !RegExp(r'iglesia|catedral|templo|sinagoga|parroquia|bas[ií]lica|santuario|convento').hasMatch(lowerPlace);
+
+    if ((isNature || isBeach || isSports || isSecular) &&
+        RegExp(r'church|cathedral|iglesia|catedral|templo|basilica|basílica|convent|icono \(religi|vladimirskaya|virgen mar[íi]a|theotokos').hasMatch(haystack)) {
       return false;
     }
     return true;
@@ -177,16 +184,21 @@ class DiscoveryRepository {
       return directImage;
     }
 
-    // 2. Wikipedia Search API (generator=search with pageimages).
-    // Only accept a page whose title is related to the requested place and
-    // whose lead image is not a map, logo, flag, diagram or document.
-    final wikiQueries = <String>[
-      name.trim(),
-      if (city.trim().isNotEmpty) '${name.trim()}, ${city.trim()}',
-    ];
+    final cleanName = name.trim();
+    final stripped = cleanName
+        .replaceFirst(RegExp(r'^(monumento\s+(a\s+la\s+|al\s+|a\s+|de\s+|del\s+)?|estadio\s+(municipal\s+)?|parque\s+(de\s+|del\s+)?|plaza\s+(de\s+|del\s+)?|v[íi]a\s+parque\s+)', caseSensitive: false), '')
+        .trim();
+
+    final wikiQueries = <String>{
+      cleanName,
+      if (stripped.isNotEmpty && stripped.toLowerCase() != cleanName.toLowerCase()) stripped,
+      if (city.trim().isNotEmpty) '$cleanName, ${city.trim()}',
+      if (city.trim().isNotEmpty && stripped.isNotEmpty && stripped.toLowerCase() != cleanName.toLowerCase())
+        '$stripped, ${city.trim()}',
+    }.toList();
     String? wikiUrl;
     for (final query in wikiQueries) {
-      wikiUrl = await _fetchWikipediaSearchImage(query, placeName: name);
+      wikiUrl = await _fetchWikipediaSearchImage(query, placeName: name, category: category);
       if (wikiUrl != null && wikiUrl.isNotEmpty) break;
     }
     if (wikiUrl != null && wikiUrl.isNotEmpty) {
@@ -197,7 +209,7 @@ class DiscoveryRepository {
     // 3. Wikimedia Commons Search API, also with title validation.
     String? commonsUrl;
     for (final query in wikiQueries) {
-      commonsUrl = await _fetchCommonsSearchImage(query, placeName: name);
+      commonsUrl = await _fetchCommonsSearchImage(query, placeName: name, category: category);
       if (commonsUrl != null && commonsUrl.isNotEmpty) break;
     }
     if (commonsUrl != null && commonsUrl.isNotEmpty) {
@@ -232,15 +244,12 @@ class DiscoveryRepository {
     return _getSafeFallbackImageUrl(category, name, placeId: placeId);
   }
 
-  static Future<String?> _fetchWikipediaSearchImage(String rawQuery, {String? placeName}) async {
+  static Future<String?> _fetchWikipediaSearchImage(
+    String rawQuery, {
+    String? placeName,
+    String category = '',
+  }) async {
     final searchTerms = <String>[rawQuery.trim()];
-    final clean = rawQuery.trim().replaceAll(
-      RegExp(r'^(Monumento\s+|Parque\s+|Iglesia\s+|Catedral\s+|Plaza\s+|Museo\s+|Castillo\s+|Centro\s+Comercial\s+|Malecon\s+|Malecón\s+)', caseSensitive: false),
-      '',
-    ).trim();
-    if (clean.isNotEmpty && clean.toLowerCase() != rawQuery.trim().toLowerCase()) {
-      searchTerms.add(clean);
-    }
 
     for (final term in searchTerms) {
       final endpoints = [
@@ -267,7 +276,13 @@ class DiscoveryRepository {
                     (page?['original'] as Map?)?['source']?.toString();
                 if (image != null &&
                     _isRelevantImageTitle(title, placeName ?? rawQuery) &&
-                    _isUsableImageUrl(image, placeName: placeName ?? rawQuery, imageTitle: imageTitle)) {
+                    _isUsableImageUrl(
+                      image,
+                      placeName: placeName ?? rawQuery,
+                      imageTitle: imageTitle,
+                      pageTitle: title,
+                      category: category,
+                    )) {
                   return image;
                 }
               }
@@ -279,7 +294,11 @@ class DiscoveryRepository {
     return null;
   }
 
-  static Future<String?> _fetchCommonsSearchImage(String query, {String? placeName}) async {
+  static Future<String?> _fetchCommonsSearchImage(
+    String query, {
+    String? placeName,
+    String category = '',
+  }) async {
     try {
       final uri = Uri.parse(
         'https://commons.wikimedia.org/w/api.php?action=query&generator=search'
@@ -304,7 +323,13 @@ class DiscoveryRepository {
               final image = info?['thumburl']?.toString() ?? info?['url']?.toString();
               if (image != null &&
                   _isRelevantImageTitle(title, placeName ?? query) &&
-                  _isUsableImageUrl(image, placeName: placeName ?? query, imageTitle: title)) {
+                  _isUsableImageUrl(
+                    image,
+                    placeName: placeName ?? query,
+                    imageTitle: title,
+                    pageTitle: title,
+                    category: category,
+                  )) {
                 return image;
               }
             }
@@ -333,7 +358,8 @@ class DiscoveryRepository {
     // 2. Palabras clave prohibidas en el nombre (infraestructura, comercios, proyectos residenciales o memoriales menores)
     const blacklistNameKeywords = [
       'cementerio', 'cemetery', 'funeraria', 'jardines del recuerdo', 'jardín del recuerdo',
-      'universidad', 'university', 'colegio', 'school', 'hospital', 'clinica', 'clínica',
+      'universidad', 'universitaria', 'universitario', 'university', 'colegio', 'school',
+      'hospital', 'clinica', 'clínica', 'ips ', 'eps ', 'instituto educativo', 'institución educativa',
       'condominio', 'conjunto residencial', 'edificio', 'torre', 'reserva residencial', 'aptos',
       'apartamento', 'consultorio', 'dental', 'odontología', 'médico',
       'arroyo', 'puente', 'bridge', 'canal', 'quebrada', 'caño', 'drenaje',
@@ -409,20 +435,28 @@ class DiscoveryRepository {
     required double latitude,
     required double longitude,
   }) async {
+    final wikiPlaces = await _nearbyWikipediaPlaces(latitude: latitude, longitude: longitude);
+    if (wikiPlaces.length >= 8) {
+      final enriched = await _enrichPlacesWithRealImages(wikiPlaces);
+      return _deduplicatePlaces(enriched);
+    }
+
+    final tomtomPlaces = await _nearbyTomTomPlaces(latitude: latitude, longitude: longitude);
+    final combined = <NearbyPlace>[...wikiPlaces, ...tomtomPlaces];
+    if (combined.isNotEmpty) {
+      final enriched = await _enrichPlacesWithRealImages(combined);
+      return _deduplicatePlaces(enriched);
+    }
+
     final overpassPlaces = await _nearbyOverpassPlaces(latitude, longitude);
     if (overpassPlaces.isNotEmpty) {
-      return _enrichPlacesWithRealImages(overpassPlaces);
+      final enriched = await _enrichPlacesWithRealImages(overpassPlaces);
+      return _deduplicatePlaces(enriched);
     }
-    final wikiPlaces = await _nearbyWikipediaPlaces(latitude: latitude, longitude: longitude);
-    if (wikiPlaces.isNotEmpty) {
-      return _enrichPlacesWithRealImages(wikiPlaces);
-    }
-    final tomtomPlaces = await _nearbyTomTomPlaces(latitude: latitude, longitude: longitude);
-    if (tomtomPlaces.isNotEmpty) {
-      return _enrichPlacesWithRealImages(tomtomPlaces);
-    }
+
     final fallbacks = _fallbackPlaces(latitude: latitude, longitude: longitude);
-    return _enrichPlacesWithRealImages(fallbacks);
+    final enriched = await _enrichPlacesWithRealImages(fallbacks);
+    return _deduplicatePlaces(enriched);
   }
 
   Future<List<NearbyPlace>> _nearbyWikipediaPlaces({
@@ -430,70 +464,323 @@ class DiscoveryRepository {
     required double longitude,
   }) async {
     try {
-      final uri = Uri.parse(
-        'https://es.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=$latitude|$longitude&gsradius=10000&gslimit=25&format=json',
+      final geoUri = Uri.https(
+        'es.wikipedia.org',
+        '/w/api.php',
+        {
+          'action': 'query',
+          'list': 'geosearch',
+          'gscoord': '$latitude|$longitude',
+          'gsradius': '10000',
+          'gslimit': '35',
+          'format': 'json',
+        },
       );
-      final response = await http
-          .get(uri, headers: const {'User-Agent': 'VIBETOURS/1.0 (contact@vibetours.app)'})
+      final geoResponse = await http
+          .get(geoUri, headers: const {'User-Agent': 'VIBETOURS/1.0 (contact@vibetours.app)'})
           .timeout(const Duration(seconds: 6));
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final query = json['query'] as Map<String, dynamic>? ?? {};
-        final geosearch = query['geosearch'] as List<dynamic>? ?? const [];
-        final List<NearbyPlace> places = [];
-        for (final item in geosearch) {
-          if (item is Map) {
-            final rawTitle = item['title']?.toString() ?? '';
-            if (rawTitle.isEmpty) continue;
-            final cleanName = rawTitle.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
-            if (_isBlacklisted(cleanName, 'tourism')) continue;
-
-            final lat = _double(item['lat']);
-            final lon = _double(item['lon']);
-            final dist = _double(item['dist']).round();
-            if (lat == 0.0 || lon == 0.0 || dist > 6000) continue;
-
-            final category = _classifyWikipediaTitle(cleanName);
-            final placeId = 'wiki-${item['pageid'] ?? cleanName}';
-            final img = resolveDynamicImageForPlace(
-              cleanName,
-              category: category,
-              placeId: placeId,
-            );
-
-            places.add(NearbyPlace(
-              id: placeId,
-              name: cleanName,
-              type: _typeLabel(category),
-              distanceMeters: dist,
-              location: GeoPoint(latitude: lat, longitude: lon),
-              category: category,
-              imageUrl: img,
-              thumbnailUrl: img,
-              statusLabel: 'Abierto',
-              isOpenNow: true,
-            ));
-          }
-        }
-        return places;
+      if (geoResponse.statusCode < 200 || geoResponse.statusCode >= 300) {
+        return const [];
       }
-    } catch (_) {}
+
+      final geoJson = jsonDecode(geoResponse.body) as Map<String, dynamic>;
+      final query = geoJson['query'] as Map<String, dynamic>? ?? {};
+      final geosearch = query['geosearch'] as List<dynamic>? ?? const [];
+      if (geosearch.isEmpty) return const [];
+
+      final Map<int, Map<String, dynamic>> candidateByPageId = {};
+      for (final item in geosearch) {
+        if (item is! Map) continue;
+        final pageId = _int(item['pageid']);
+        if (pageId <= 0) continue;
+
+        final rawTitle = item['title']?.toString() ?? '';
+        if (rawTitle.isEmpty) continue;
+        final cleanName = rawTitle.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+        if (_isBlacklisted(cleanName, 'tourism')) continue;
+
+        final lat = _double(item['lat']);
+        final lon = _double(item['lon']);
+        final dist = _double(item['dist']).round();
+        if (lat == 0.0 || lon == 0.0 || dist > 6000) continue;
+
+        candidateByPageId[pageId] = {
+          'rawTitle': rawTitle,
+          'cleanName': cleanName,
+          'lat': lat,
+          'lon': lon,
+          'dist': dist,
+        };
+      }
+
+      if (candidateByPageId.isEmpty) return const [];
+
+      // Query Wikipedia batch API for pageimages and extracts
+      final pageIdsParam = candidateByPageId.keys.join('|');
+      final batchUri = Uri.https(
+        'es.wikipedia.org',
+        '/w/api.php',
+        {
+          'action': 'query',
+          'pageids': pageIdsParam,
+          'prop': 'pageimages|extracts',
+          'pithumbsize': '800',
+          'exintro': '1',
+          'explaintext': '1',
+          'format': 'json',
+        },
+      );
+      final batchResponse = await http
+          .get(batchUri, headers: const {'User-Agent': 'VIBETOURS/1.0 (contact@vibetours.app)'})
+          .timeout(const Duration(seconds: 6));
+
+      Map<String, dynamic> pagesMap = {};
+      if (batchResponse.statusCode >= 200 && batchResponse.statusCode < 300) {
+        final batchJson = jsonDecode(batchResponse.body) as Map<String, dynamic>;
+        pagesMap = (batchJson['query'] as Map<String, dynamic>?)?['pages'] as Map<String, dynamic>? ?? {};
+      }
+
+      final List<NearbyPlace> places = [];
+      for (final entry in candidateByPageId.entries) {
+        final pageId = entry.key;
+        final data = entry.value;
+        final cleanName = data['cleanName'] as String;
+        final rawTitle = data['rawTitle'] as String;
+        final lat = data['lat'] as double;
+        final lon = data['lon'] as double;
+        final dist = data['dist'] as int;
+
+        final pageData = pagesMap[pageId.toString()] as Map<String, dynamic>?;
+        final rawExtract = pageData?['extract']?.toString() ?? '';
+        final extract = _normalizeWikipediaText(rawExtract);
+
+        // Filter extinct or demolished places (e.g. Estadio Juana de Arco)
+        if (_isExtinctPlace(cleanName, extract)) continue;
+
+        // Filter city-wide administrative entries (e.g. "Barranquilla")
+        if (_isCityAdministrativeArticle(cleanName, extract)) continue;
+
+        // Filter non-tourism institutions (e.g. universities, colleges, hospitals)
+        if (_isNonTourismInstitution(cleanName, extract)) continue;
+
+        // Check if it is a neighborhood and whether it is emblematic
+        final isNeigh = _isNeighborhood(cleanName, extract, rawTitle: rawTitle);
+        if (isNeigh && !_isEmblematicNeighborhood(cleanName, extract)) {
+          continue;
+        }
+
+        final category = _classifyWikipediaPlace(
+          cleanName,
+          extract,
+          isEmblematicNeighborhood: isNeigh,
+        );
+
+        final pageThumb = (pageData?['thumbnail'] as Map?)?['source']?.toString();
+        final img = (pageThumb != null &&
+                pageThumb.isNotEmpty &&
+                _isUsableImageUrl(pageThumb, placeName: cleanName, category: category))
+            ? pageThumb
+            : '';
+
+        final placeIdStr = 'wiki-$pageId';
+        places.add(NearbyPlace(
+          id: placeIdStr,
+          name: cleanName,
+          type: isNeigh ? 'Barrio Emblemático' : _typeLabel(category),
+          distanceMeters: dist,
+          location: GeoPoint(latitude: lat, longitude: lon),
+          category: category,
+          sourceTags: {
+            'wikipedia': rawTitle,
+            'pageid': pageId,
+            'extract': extract,
+            'is_neighborhood': isNeigh,
+          },
+          imageUrl: img,
+          thumbnailUrl: img,
+          statusLabel: 'Abierto',
+          isOpenNow: true,
+        ));
+      }
+
+      return places;
+    } catch (_) {
+      // Return empty list on failure
+    }
     return const [];
   }
 
-  String _classifyWikipediaTitle(String name) {
-    final lower = name.toLowerCase();
-    if (lower.contains('parque') || lower.contains('ciénaga') || lower.contains('cienaga') ||
-        (lower.contains('jardín') && !lower.contains('ciudad jardín') && !lower.contains('ciudad jardin')) ||
-        lower.contains('jardin botanico')) {
+  static String _normalizeWikipediaText(String text) {
+    return text
+        .replaceAll(RegExp(r'[\u200B-\u200D\uFEFF\u00A0]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  static bool _isExtinctPlace(String name, String extract) {
+    final lowerExtract = extract.length > 250
+        ? extract.substring(0, 250).toLowerCase()
+        : extract.toLowerCase();
+    final extinctPattern = RegExp(
+      r'\b(fue un|fue una|antiguo|antigua|demolido|demolida|desaparecido|desaparecida|exestadio|ex estadio|ya no existe|inaugurado en \d{4} y demolido)\b',
+      caseSensitive: false,
+    );
+    return extinctPattern.hasMatch(lowerExtract);
+  }
+
+  static bool _isCityAdministrativeArticle(String name, String extract) {
+    final lowerExtract = extract.length > 250
+        ? extract.substring(0, 250).toLowerCase()
+        : extract.toLowerCase();
+    final cityPattern = RegExp(
+      r'\b(es una ciudad|es un municipio colombiano|es un municipio de|es la capital del departamento|es un distrito especial|es el distrito especial)\b',
+      caseSensitive: false,
+    );
+    return cityPattern.hasMatch(lowerExtract);
+  }
+
+  static bool _isNonTourismInstitution(String name, String extract) {
+    final lower = '$name $extract'.toLowerCase();
+    final instPattern = RegExp(
+      r'\b(instituci[oó]n de educaci[oó]n|universidad|universitaria|colegio|escuela normal|centro educativo|instituto t[eé]cnico|hospital general|cl[íi]nica privada)\b',
+      caseSensitive: false,
+    );
+    return instPattern.hasMatch(lower);
+  }
+
+  static bool _isNeighborhood(String name, String extract, {String rawTitle = ''}) {
+    final lowerName = name.toLowerCase();
+    final lowerTitle = rawTitle.toLowerCase();
+    if (lowerName.startsWith('barrio ') ||
+        lowerName.startsWith('comuna ') ||
+        lowerName.startsWith('urbanizaci') ||
+        lowerName.startsWith('ciudad jardín') ||
+        lowerName.startsWith('ciudad jardin') ||
+        lowerName.startsWith('el golf') ||
+        lowerName.startsWith('villa santos') ||
+        lowerTitle.contains('(barrio)')) {
+      return true;
+    }
+    final lowerExtract = extract.length > 350
+        ? extract.substring(0, 350).toLowerCase()
+        : extract.toLowerCase();
+    final neighPattern = RegExp(
+      r'\b(es un barrio|es una comuna|es un vecindario|es una urbanizaci[oó]n|es un sector residencial|sector de estratos|barrio de la localidad|barrio de barranquilla|barrio residencial)\b',
+      caseSensitive: false,
+    );
+    return neighPattern.hasMatch(lowerExtract);
+  }
+
+  static bool _isEmblematicNeighborhood(String name, String extract) {
+    final sanitized = '$name $extract'
+        .replaceAll(RegExp(r'localidad\s+(norte-centro\s+hist[oó]rico|centro\s+hist[oó]rico)', caseSensitive: false), '')
+        .toLowerCase();
+    final heritagePattern = RegExp(
+      r'\b(patrimonio|monumento nacional|bien de inter[eé]s cultural|inter[eé]s cultural|arquitectura patrimonial|barrio emblem[aá]tico|emblem[aá]tico barrio|tradicional barrio|barrio tradicional|cuna del carnaval|fundacional)\b',
+      caseSensitive: false,
+    );
+    return heritagePattern.hasMatch(sanitized);
+  }
+
+  String _classifyWikipediaPlace(
+    String name,
+    String extract, {
+    bool isEmblematicNeighborhood = false,
+  }) {
+    if (isEmblematicNeighborhood) return 'historic';
+    final lower = '$name $extract'.toLowerCase();
+    if (lower.contains('parque') ||
+        lower.contains('ciénaga') ||
+        lower.contains('cienaga') ||
+        lower.contains('jardin botanico') ||
+        lower.contains('reserva natural') ||
+        lower.contains('humedal')) {
       return 'nature';
     }
-    if (lower.contains('museo') || lower.contains('teatro') || lower.contains('casa')) return 'museum';
-    if (lower.contains('monumento') || lower.contains('estatua') || lower.contains('ventana') || lower.contains('faro') || lower.contains('castillo')) return 'historic';
-    if (lower.contains('estadio') || lower.contains('coliseo') || lower.contains('patinódromo')) return 'sports';
-    if (lower.contains('malecón') || lower.contains('malecon') || lower.contains('puerto') || lower.contains('bocas') || lower.contains('eventos')) return 'attraction';
-    if (lower.contains('catedral') || lower.contains('iglesia') || lower.contains('templo') || lower.contains('sinagoga')) return 'religious';
+    if (lower.contains('museo') ||
+        lower.contains('teatro') ||
+        lower.contains('casa de la cultura') ||
+        lower.contains('galería') ||
+        lower.contains('galeria')) {
+      return 'museum';
+    }
+    if (lower.contains('monumento') ||
+        lower.contains('estatua') ||
+        lower.contains('ventana al mundo') ||
+        lower.contains('faro') ||
+        lower.contains('castillo')) {
+      return 'historic';
+    }
+    if (lower.contains('estadio') ||
+        lower.contains('coliseo') ||
+        lower.contains('patinódromo') ||
+        lower.contains('patinodromo') ||
+        lower.contains('velódromo') ||
+        lower.contains('velodromo')) {
+      return 'sports';
+    }
+    if (lower.contains('malecón') ||
+        lower.contains('malecon') ||
+        lower.contains('puerto') ||
+        lower.contains('puerta de oro') ||
+        lower.contains('eventos')) {
+      return 'attraction';
+    }
+    if (lower.contains('catedral') ||
+        lower.contains('iglesia') ||
+        lower.contains('templo') ||
+        lower.contains('sinagoga') ||
+        lower.contains('parroquia')) {
+      return 'religious';
+    }
     return 'attraction';
+  }
+
+  List<NearbyPlace> _deduplicatePlaces(
+    List<NearbyPlace> places, {
+    double thresholdMeters = 75.0,
+  }) {
+    if (places.length <= 1) return places;
+    final List<NearbyPlace> result = [];
+
+    for (final place in places) {
+      int duplicateIndex = -1;
+      for (int i = 0; i < result.length; i++) {
+        final existing = result[i];
+        if (existing.name.trim().toLowerCase() == place.name.trim().toLowerCase()) {
+          duplicateIndex = i;
+          break;
+        }
+        final dist = _distanceMeters(
+          place.location.latitude,
+          place.location.longitude,
+          existing.location.latitude,
+          existing.location.longitude,
+        );
+        if (dist <= thresholdMeters) {
+          duplicateIndex = i;
+          break;
+        }
+      }
+
+      if (duplicateIndex == -1) {
+        result.add(place);
+      } else {
+        final existing = result[duplicateIndex];
+        final existingIsNeighborhood = existing.sourceTags['is_neighborhood'] == true;
+        final placeIsNeighborhood = place.sourceTags['is_neighborhood'] == true;
+
+        if (existingIsNeighborhood && !placeIsNeighborhood) {
+          result[duplicateIndex] = place;
+        } else if (!existingIsNeighborhood && placeIsNeighborhood) {
+          continue;
+        } else if (existing.imageUrl.isEmpty && place.imageUrl.isNotEmpty) {
+          result[duplicateIndex] = place;
+        }
+      }
+    }
+
+    return result;
   }
 
   Future<List<NearbyPlace>> _enrichPlacesWithRealImages(List<NearbyPlace> places) async {
@@ -501,6 +788,7 @@ class DiscoveryRepository {
     final enriched = await Future.wait(
       places.map((place) async {
         if (place.id.startsWith('fallback-')) return place;
+        if (place.imageUrl.isNotEmpty) return place;
         try {
           final realUrl = await fetchRealPlaceImageUrl(
             place.name,
@@ -520,7 +808,6 @@ class DiscoveryRepository {
             );
           }
         } catch (_) {}
-        // Never attribute a generic category photo to a real place.
         return place.copyWith(imageUrl: '', thumbnailUrl: '');
       }),
     );
@@ -712,12 +999,11 @@ class DiscoveryRepository {
     final lng = coordinates.isNotEmpty ? _double(coordinates[0]) : 0.0;
     final category = _classifyAttraction(properties);
     final placeId = 'search-$index';
-    final img = resolveDynamicImageForPlace(
-      name,
+    final directImg = _directImageUrlFromTags(
+      properties,
+      placeName: name,
       category: category,
-      placeId: placeId,
-      tags: properties,
-    );
+    ) ?? '';
 
     return NearbyPlace(
       id: placeId,
@@ -727,13 +1013,12 @@ class DiscoveryRepository {
       location: GeoPoint(latitude: lat, longitude: lng),
       category: category,
       sourceTags: properties,
-      imageUrl: img,
-      thumbnailUrl: img,
+      imageUrl: directImg,
+      thumbnailUrl: directImg,
       statusLabel: 'Disponible',
       isOpenNow: true,
     );
   }
-
   Future<List<NearbyPlace>> _nearbyOverpassPlaces(double latitude, double longitude) async {
     const radius = 6000;
     final query = '''
@@ -775,7 +1060,7 @@ class DiscoveryRepository {
           'User-Agent': 'VIBETOURS/1.0 contact=ops@vibetours.app'
         },
         body: {'data': query},
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 7));
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final elements = json['elements'] as List<dynamic>? ?? const [];
@@ -818,12 +1103,11 @@ class DiscoveryRepository {
             seenNames.add(normalizedKey);
             final category = _classifyAttraction(tags);
             final placeId = 'overpass-${element['id'] ?? idx++}';
-            final img = resolveDynamicImageForPlace(
-              name,
+            final directImg = _directImageUrlFromTags(
+              tags,
+              placeName: name,
               category: category,
-              placeId: placeId,
-              tags: tags,
-            );
+            ) ?? '';
 
             places.add(NearbyPlace(
               id: placeId,
@@ -833,8 +1117,8 @@ class DiscoveryRepository {
               location: GeoPoint(latitude: lat, longitude: lon),
               category: category,
               sourceTags: tags,
-              imageUrl: img,
-              thumbnailUrl: img,
+              imageUrl: directImg,
+              thumbnailUrl: directImg,
               statusLabel: 'Abierto',
               isOpenNow: true,
             ));
@@ -848,6 +1132,9 @@ class DiscoveryRepository {
     }
     return const [];
   }
+
+  double distanceMeters(double lat1, double lon1, double lat2, double lon2) =>
+      _distanceMeters(lat1, lon1, lat2, lon2);
 
   double _distanceMeters(double lat1, double lon1, double lat2, double lon2) {
     const radius = 6371000.0;
@@ -952,37 +1239,89 @@ class DiscoveryRepository {
   }
 
   String _typeLabel(String type) {
-    return switch (type) {
-      'museum' => 'Museo',
-      'theatre' => 'Teatro',
-      'theater' => 'Teatro',
-      'gallery' => 'Galeria',
-      'arts_centre' => 'Arte',
-      'marketplace' => 'Mercado',
-      'viewpoint' => 'Mirador',
-      'attraction' => 'Atraccion',
-      'nature' => 'Naturaleza',
-      'religious' => 'Religioso',
-      'place_of_worship' => 'Religioso',
-      'park' => 'Parque',
-      'garden' => 'Jardin',
-      'beach' => 'Playa',
-      'zoo' => 'Zoologico',
-      'aquarium' => 'Acuario',
-      'theme_park' => 'Parque de atracciones',
-      'sports' => 'Deportivo',
-      'restaurant' => 'Restaurante',
-      'cafe' => 'Cafe',
+    final lower = type.trim().toLowerCase().replaceAll('_', ' ');
+    return switch (lower) {
+      'important tourist attraction' ||
+      'tourist attraction' ||
+      'attraction' ||
+      'atraccion' ||
+      'atracción' => 'Atracción',
+      'park recreation area' ||
+      'recreation area' ||
+      'park' ||
+      'parque' ||
+      'national park' ||
+      'city park' => 'Parque',
+      'stadium' || 'estadio' => 'Estadio',
+      'sports centre' ||
+      'sports center' ||
+      'sports' ||
+      'sport' ||
+      'sports field' ||
+      'coliseo' ||
+      'cancha' => 'Deportivo',
+      'river scenic area' ||
+      'scenic/panoramic view' ||
+      'scenic area' ||
+      'scenic panoramic view' ||
+      'viewpoint' ||
+      'mirador' => 'Mirador',
+      'museum' || 'museo' => 'Museo',
+      'theatre' || 'theater' || 'teatro' => 'Teatro',
+      'gallery' || 'galeria' || 'galería' => 'Galería',
+      'arts centre' || 'arts center' || 'arts_centre' => 'Arte',
+      'marketplace' || 'market' || 'mercado' => 'Mercado',
+      'nature' ||
+      'nature reserve' ||
+      'naturaleza' ||
+      'forest' ||
+      'wetland' ||
+      'water' => 'Naturaleza',
+      'beach' || 'playa' => 'Playa',
+      'zoo' || 'zoologico' || 'zoológico' => 'Zoológico',
+      'aquarium' || 'acuario' => 'Acuario',
+      'theme park' || 'theme_park' => 'Parque de atracciones',
+      'restaurant' || 'restaurante' => 'Restaurante',
+      'cafe' || 'café' => 'Café',
       'bar' => 'Bar',
-      'church' => 'Religioso',
-      'cathedral' => 'Religioso',
-      'temple' => 'Religioso',
-      'mosque' => 'Religioso',
-      'historic' => 'Historico',
-      'memorial' => 'Memoria',
-      'monument' => 'Monumento',
-      _ => type.replaceAll('_', ' '),
+      'place of worship' ||
+      'place_of_worship' ||
+      'church' ||
+      'cathedral' ||
+      'temple' ||
+      'mosque' ||
+      'synagogue' ||
+      'religious' ||
+      'religioso' => 'Religioso',
+      'historic' ||
+      'historico' ||
+      'histórico' ||
+      'historic site' ||
+      'historical monument' ||
+      'monument' ||
+      'monumento' ||
+      'statue' ||
+      'estatua' ||
+      'memorial' ||
+      'memoria' ||
+      'ruins' ||
+      'castle' ||
+      'archaeological site' => 'Monumento',
+      'tower' || 'torre' => 'Torre',
+      'cemetery' || 'cementerio' => 'Cementerio',
+      'marina' || 'water sports' => 'Deportes acuáticos',
+      'bridge' || 'puente' => 'Puente',
+      _ => _capitalizeWords(lower),
     };
+  }
+
+  static String _capitalizeWords(String text) {
+    if (text.isEmpty) return text;
+    return text
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
   }
 
   int _int(Object? value) {
@@ -1067,12 +1406,12 @@ class DiscoveryRepository {
             (poi['categories'] as List).map((item) => item.toString()),
           )
         : const <String>[];
-    final category = categories.isEmpty ? 'Atraccion' : _typeLabel(categories.first);
+    final rawCategory = categories.isNotEmpty ? categories.first : 'attraction';
+    final translatedType = _typeLabel(rawCategory);
     final name = poi['name']?.toString() ??
         address['freeformAddress']?.toString() ??
         querySafe(address['municipality']);
     final placeId = json['id']?.toString() ?? name;
-    final img = resolveDynamicImageForPlace(name, category: category, placeId: placeId);
     
     final lat = _double(position['lat']);
     final lon = _double(position['lon']);
@@ -1084,18 +1423,18 @@ class DiscoveryRepository {
     return NearbyPlace(
       id: placeId,
       name: name,
-      type: categories.isEmpty ? 'Atraccion' : _typeLabel(categories.first),
+      type: translatedType,
       distanceMeters: distance,
       location: GeoPoint(
         latitude: lat,
         longitude: lon,
       ),
-      category: category,
+      category: translatedType,
       sourceTags: <String, dynamic>{
         if (address['municipality'] != null) 'addr:city': address['municipality'],
       },
-      imageUrl: img,
-      thumbnailUrl: img,
+      imageUrl: '',
+      thumbnailUrl: '',
       statusLabel: 'Abierto',
       isOpenNow: true,
     );
@@ -1106,7 +1445,6 @@ class DiscoveryRepository {
         ? value.toString().trim()
         : 'Lugar';
   }
-
 
   Future<List<NearbyPlace>> _nearbyTomTomPlaces({
     required double latitude,
