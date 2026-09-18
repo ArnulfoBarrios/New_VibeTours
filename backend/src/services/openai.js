@@ -544,21 +544,29 @@ export const DESTINATION_ICONIC_LANDMARKS = Object.freeze({
 })
 
 export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
+  'golfo de morrosquillo': [
+    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones frente al mar' },
+    { name: 'Restaurante Coveñas', specialty: 'Pescados frescos, mariscos y cazuela caribeña' },
+    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches frescos en la playa' },
+    { name: 'Restaurante el Montañero', specialty: 'Gastronomía típica colombiana y asados frente a la costa' },
+    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' },
+    { name: 'Restaurante Esmeralda', specialty: 'Comida tradicional costeña y frutos del mar en San Antero' }
+  ],
   'covenas': [
     { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones frente al mar' },
+    { name: 'Restaurante Coveñas', specialty: 'Pescados frescos, mariscos y cazuela caribeña' },
     { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches frescos en la playa' },
-    { name: 'Restaurante El Marino', specialty: 'Cazuela de mariscos y arroz con coco' },
-    { name: 'Cevichería Bony', specialty: 'Ceviches frescos y cocina costera caribeña' },
-    { name: 'Restaurante Sabores del Mar', specialty: 'Pescados y mariscos tradicionales' },
-    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' }
+    { name: 'Restaurante el Montañero', specialty: 'Gastronomía típica colombiana y asados frente a la costa' },
+    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' },
+    { name: 'Restaurante Esmeralda', specialty: 'Comida tradicional costeña y frutos del mar en San Antero' }
   ],
   'coveñas': [
     { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones frente al mar' },
+    { name: 'Restaurante Coveñas', specialty: 'Pescados frescos, mariscos y cazuela caribeña' },
     { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches frescos en la playa' },
-    { name: 'Restaurante El Marino', specialty: 'Cazuela de mariscos y arroz con coco' },
-    { name: 'Cevichería Bony', specialty: 'Ceviches frescos y cocina costera caribeña' },
-    { name: 'Restaurante Sabores del Mar', specialty: 'Pescados y mariscos tradicionales' },
-    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' }
+    { name: 'Restaurante el Montañero', specialty: 'Gastronomía típica colombiana y asados frente a la costa' },
+    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' },
+    { name: 'Restaurante Esmeralda', specialty: 'Comida tradicional costeña y frutos del mar en San Antero' }
   ],
   'barranquilla': [
     { name: 'Restaurante La Cueva', specialty: 'Gastronomía Caribe y tertulia cultural' },
@@ -590,6 +598,12 @@ export function isUnmappedOrClosedVenue(name) {
   if (lower.includes('museo romantico')) return true
   // Narcobollo lacks an explicit POI node on OpenFreeMap
   if (lower.includes('narcobollo')) return true
+  // La Fragata is an accommodation/chalet, NOT a restaurant
+  if (lower.includes('la fragata') && (lower.includes('restaurante') || lower.includes('restaurant'))) return true
+  // El Gran Pez has no node in Coveñas on OSM and causes pins in air base/empty lots
+  if (lower.includes('el gran pez')) return true
+  // Parque Principal de Coveñas does not exist on OpenStreetMap
+  if (lower.includes('parque principal de covena') || lower.includes('parque principal covena')) return true
   return false
 }
 
@@ -603,6 +617,7 @@ export function isMalformedItinerary(text) {
     /\bParque\s+(?:Principal\s+de\s+)?Coveñas\b/i.test(text) ||
     /\bRestaurante\s+La\s+Fragata\b/i.test(text) ||
     /\bRestaurante\s+El\s+Gran\s+Pez\b/i.test(text) ||
+    /\bRestaurante\s+Sabores\s+del\s+Mar\b/i.test(text) ||
     /\bRestaurante\s+La\s+Iguana\b/i.test(text)
   )
 }
