@@ -39,7 +39,7 @@ app.get(['/health', '/api/health'], (req, res) => {
   res.json({
     ok: true,
     name: 'VIBETOURS API',
-    version: '1.2.1',
+    version: '1.2.2',
     now: new Date().toISOString()
   })
 })

@@ -1,6 +1,6 @@
 {
   "name": "vibetours-backend",
-  "version": "1.0.0",
+  "version": "1.2.2",
   "private": true,
   "type": "module",
   "description": "VIBETOURS Express backend for AI planning, OSM discovery, Supabase persistence and seed data.",
