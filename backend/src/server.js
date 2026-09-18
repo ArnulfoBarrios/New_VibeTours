@@ -1,3 +1,4 @@
+// VibeTours Server v1.2.2 - OpenFreeMap & OSM Precision Grounding
 import 'dotenv/config'
 
 import cors from 'cors'

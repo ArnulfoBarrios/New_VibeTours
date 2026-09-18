@@ -3,7 +3,7 @@
   "version": "1.2.2",
   "private": true,
   "type": "module",
-  "description": "VIBETOURS Express backend for AI planning, OSM discovery, Supabase persistence and seed data.",
+  "description": "VIBETOURS Express backend for AI planning, OpenFreeMap/OSM node precision grounding, Supabase persistence and seed data.",
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
