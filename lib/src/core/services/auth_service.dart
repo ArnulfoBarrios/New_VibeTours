@@ -3,16 +3,38 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
 
+enum GoogleSignInResult {
+  completed,
+  webFlowLaunched,
+}
+
 class AuthService {
   AuthService(this._client);
 
   static const _googleScopes = ['openid', 'email', 'profile'];
+  static bool _isGoogleSignInInitialized = false;
 
   final SupabaseClient? _client;
 
   User? get currentUser => _client?.auth.currentUser;
 
   bool get isConfigured => _client != null;
+
+  static Future<void> _ensureGoogleSignInInitialized() async {
+    if (_isGoogleSignInInitialized) return;
+    if (AppConfig.googleWebClientId.isEmpty) return;
+    try {
+      await GoogleSignIn.instance.initialize(
+        clientId: AppConfig.googleIosClientId.isEmpty
+            ? null
+            : AppConfig.googleIosClientId,
+        serverClientId: AppConfig.googleWebClientId,
+      );
+      _isGoogleSignInInitialized = true;
+    } catch (_) {
+      // Ignorar fallo de inicialización repetida o no soportada
+    }
+  }
 
   bool isConfiguredAdmin(User? user) {
     if (user == null) return false;
@@ -43,54 +65,50 @@ class AuthService {
     await _client.auth.signUp(email: email, password: password);
   }
 
-  Future<void> signInWithGoogle() async {
+  Future<GoogleSignInResult> signInWithGoogle() async {
     if (_client == null) {
       throw StateError('Supabase no esta configurado.');
     }
-    // 1. Intento nativo con GoogleSignIn
+
+    // 1. Intento nativo con GoogleSignIn (Google Identity / Credential Manager)
     if (AppConfig.googleWebClientId.isNotEmpty) {
       try {
+        await _ensureGoogleSignInInitialized();
         final googleSignIn = GoogleSignIn.instance;
-        await googleSignIn.initialize(
-          clientId: AppConfig.googleIosClientId.isEmpty
-              ? null
-              : AppConfig.googleIosClientId,
-          serverClientId: AppConfig.googleWebClientId,
-        );
         final account = await googleSignIn.authenticate(scopeHint: _googleScopes);
         final idToken = account.authentication.idToken;
-        if (idToken != null) {
-          final authorization =
-              await account.authorizationClient.authorizationForScopes(
-                _googleScopes,
-              ) ??
-              await account.authorizationClient.authorizeScopes(_googleScopes);
+        if (idToken != null && idToken.isNotEmpty) {
+          // Intentar obtener accessToken de forma silenciosa si ya está disponible.
+          // NOTA: No llamamos a authorizeScopes porque Supabase solo necesita el idToken
+          // y authorizeScopes fuerza un segundo diálogo o falla si el cliente Android no está configurado.
+          String? accessToken;
+          try {
+            final authorization = await account.authorizationClient.authorizationForScopes(_googleScopes);
+            accessToken = authorization?.accessToken;
+          } catch (_) {
+            // El token de acceso es opcional para Supabase
+          }
+
           await _client.auth.signInWithIdToken(
             provider: OAuthProvider.google,
             idToken: idToken,
-            accessToken: authorization.accessToken,
+            accessToken: accessToken,
           );
-          return;
+          return GoogleSignInResult.completed;
         }
       } catch (error) {
-        final errText = error.toString().toLowerCase();
-        // Si el usuario canceló explícitamente y no es un fallo de configuración/reauth
-        if (errText.contains('canceled') &&
-            !errText.contains('16') &&
-            !errText.contains('reauth') &&
-            !errText.contains('failed')) {
-          rethrow;
-        }
-        // Si falló por configuración técnica (ej. SHA-1 no registrado en Google Cloud),
-        // procedemos al fallback vía navegador/Custom Tabs de Supabase.
+        // Si el intento nativo falla (por ejemplo: falta de SHA-1 en Google Cloud Console,
+        // incompatibilidad del Credential Manager en el dispositivo, etc.),
+        // procedemos de manera transparente al flujo web seguro de Supabase.
       }
     }
 
-    // 2. Fallback: Flujo web OAuth de Supabase (vía Custom Tabs / navegador)
+    // 2. Fallback: Flujo web OAuth de Supabase (vía Custom Tabs / navegador externo)
     await _client.auth.signInWithOAuth(
       OAuthProvider.google,
       redirectTo: 'com.vibetours.app://login-callback',
     );
+    return GoogleSignInResult.webFlowLaunched;
   }
 
   Future<void> updateUserProfile({String? fullName, String? avatarUrl, String? bio}) async {

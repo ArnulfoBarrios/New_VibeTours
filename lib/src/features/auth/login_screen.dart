@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/design/app_theme.dart';
+import '../../core/services/auth_service.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import 'widgets/google_sign_in_button.dart';
@@ -33,6 +34,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authUserProvider, (previous, next) {
+      if (next.valueOrNull != null) {
+        _onLoginSuccess();
+      }
+    });
+
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -234,8 +241,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final l10n = AppLocalizations.of(context);
     setState(() => _isLoading = true);
     try {
-      await ref.read(authServiceProvider).signInWithGoogle();
-      _onLoginSuccess();
+      final result = await ref.read(authServiceProvider).signInWithGoogle();
+      if (result == GoogleSignInResult.completed) {
+        _onLoginSuccess();
+      } else {
+        _message('Abriendo el navegador para iniciar sesión con Google...');
+      }
     } catch (error) {
       _message(_friendlyError(error, l10n));
     } finally {
