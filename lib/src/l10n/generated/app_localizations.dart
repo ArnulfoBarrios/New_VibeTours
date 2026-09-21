@@ -2898,7 +2898,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminSectionPerformance.
   ///
   /// In es, this message translates to:
-  /// **'Rendimiento y visualización'**
+  /// **'Visualización y preferencias'**
   String get adminSectionPerformance;
 
   /// No description provided for @admin120HzPreferred.

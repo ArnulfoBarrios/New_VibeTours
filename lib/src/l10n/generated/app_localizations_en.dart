@@ -1538,7 +1538,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminControlPanelSubtitle => 'Manage pending tours and support';
 
   @override
-  String get adminSectionPerformance => 'Performance and display';
+  String get adminSectionPerformance => 'Display and preferences';
 
   @override
   String get admin120HzPreferred => '120Hz preferred';

@@ -21,7 +21,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final _refreshRateKey = GlobalKey();
   final _mapPreferenceKey = GlobalKey();
   final _notificationsKey = GlobalKey();
   final _guidesSectionKey = GlobalKey();
@@ -39,15 +38,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _launchSettingsTour({bool isForced = false}) {
     final l10n = AppLocalizations.of(context);
     final steps = [
-      TourStepItem(
-        key: _refreshRateKey,
-        title: l10n.tourSettingsRefreshTitle,
-        description: l10n.tourSettingsRefreshDesc,
-        icon: Icons.speed_rounded,
-        shape: ShapeLightFocus.RRect,
-        radius: 16,
-        align: ContentAlign.bottom,
-      ),
       TourStepItem(
         key: _mapPreferenceKey,
         title: l10n.tourSettingsMapTitle,
@@ -97,7 +87,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     _triggerTourIfNeeded();
     final l10n = AppLocalizations.of(context);
-    final highRefresh = ref.watch(highRefreshRateProvider);
     final notifications = ref.watch(notificationsEnabledProvider);
     final mapStyleOption = ref.watch(mapStyleOptionProvider);
     final isAdmin = ref.watch(isAdminProvider);
@@ -149,20 +138,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _SectionTitle(l10n.adminSectionPerformance),
-              KeyedSubtree(
-                key: _refreshRateKey,
-                child: _SettingsListTile(
-                  icon: Icons.speed_rounded,
-                  iconColor: Colors.deepOrange,
-                  title: '60Hz / 120Hz',
-                  subtitle: highRefresh ? l10n.admin120HzPreferred : l10n.admin60HzSaving,
-                  trailing: Switch(
-                    value: highRefresh,
-                    onChanged: (value) => ref.read(highRefreshRateProvider.notifier).state = value,
-                  ),
-                  onTap: () => ref.read(highRefreshRateProvider.notifier).state = !highRefresh,
-                ),
-              ),
               KeyedSubtree(
                 key: _mapPreferenceKey,
                 child: _SettingsListTile(

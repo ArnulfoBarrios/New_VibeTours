@@ -1546,7 +1546,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Gestionar tours pendientes y soporte';
 
   @override
-  String get adminSectionPerformance => 'Rendimiento y visualización';
+  String get adminSectionPerformance => 'Visualización y preferencias';
 
   @override
   String get admin120HzPreferred => '120Hz preferido';

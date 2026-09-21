@@ -113,5 +113,3 @@ El diseño de la aplicación está construido con componentes reutilizables de a
 2. **Transiciones de Pantalla (`router.dart`)**:
    - Transiciones estilo `SlideTransition` de derecha a izquierda para vistas de detalle de tour.
    - Transiciones estilo `ScaleTransition` + `FadeTransition` para ingresar al modo Live Tour.
-3. **Modo de Alto Rendimiento / Tasa de Refresco (`highRefreshRateProvider`)**:
-   - Para garantizar que la interfaz se mantenga fluida a **60Hz o 120Hz** incluso en dispositivos de gama media, la app incluye una opción en ajustes que desactiva de forma inteligente los filtros pesados de desenfoque de fondo (`BackdropFilter`), reemplazándolos por colores sólidos de alto rendimiento.

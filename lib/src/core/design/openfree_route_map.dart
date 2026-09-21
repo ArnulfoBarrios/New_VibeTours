@@ -1385,13 +1385,16 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
 
     if (animId != _currentAnimationId || !mounted) return;
     
+    final stopName = (widget.stops != null && index < widget.stops!.length)
+        ? widget.stops![index].name.trim()
+        : '';
     final emoji = isSinglePoint
         ? '📍'
         : ((widget.stops != null && index < widget.stops!.length)
             ? _getStopEmoji(widget.stops![index])
             : '');
     final label = isSinglePoint
-        ? '📍 Ubicación Exacta'
+        ? (stopName.isNotEmpty ? '📍 $stopName' : '📍 Ubicación Exacta')
         : (widget.showNumbers
             ? (emoji.isNotEmpty ? '$emoji ${index + 1}' : '${index + 1}')
             : emoji);

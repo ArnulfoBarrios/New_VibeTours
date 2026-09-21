@@ -656,7 +656,7 @@ class _HeroTourSectionState extends ConsumerState<_HeroTourSection> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                "98% ${l10n.matchAffinity}",
+                                "${widget.tour.matchAffinity ?? 95}% ${l10n.matchAffinity}",
                                 style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
                               ),
                             ),
@@ -826,7 +826,7 @@ class _TourForYouCard extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
 
     final durationText = formatTourDuration(tour);
-    final affinity = 90 + (tour.title.length % 10);
+    final affinity = tour.matchAffinity ?? 85;
 
     return SizedBox(
       width: 255,

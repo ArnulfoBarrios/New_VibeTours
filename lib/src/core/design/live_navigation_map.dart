@@ -64,6 +64,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   Circle? _userPuckHalo;
   Circle? _destinationCircle;
   LatLng? _renderedDestination;
+  String? _renderedDestinationName;
   List<LatLng> _fullGeometry = [];
   List<double> _cumulativeDistances = [];
   int _lastSegmentIndex = 0;
@@ -744,6 +745,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     super.didUpdateWidget(oldWidget);
     final routeChanged = _routeGeometryChanged(oldWidget.route, widget.route) ||
         oldWidget.destination != widget.destination ||
+        oldWidget.destinationName != widget.destinationName ||
         oldWidget.styleUrl != widget.styleUrl;
     final locationChanged = oldWidget.currentLocation != widget.currentLocation;
     final headingChanged = oldWidget.trackingHeading != widget.trackingHeading;
@@ -756,6 +758,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       _userPuckHalo = null;
       _destinationCircle = null;
       _renderedDestination = null;
+      _renderedDestinationName = null;
       _controller?.setStyle(widget.styleUrl);
     }
 
@@ -851,7 +854,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     _setRouteGeometry(rawPoints);
 
     final destinationChanged = _renderedDestination == null ||
-        _metricDistanceMeters(_renderedDestination!, destPos) > 2;
+        _metricDistanceMeters(_renderedDestination!, destPos) > 2 ||
+        _renderedDestinationName != widget.destinationName;
     if (destinationChanged) {
       try {
         await controller.clearCircles();
@@ -862,6 +866,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       _userPuckHalo = null;
       _destinationCircle = null;
       _renderedDestination = destPos;
+      _renderedDestinationName = widget.destinationName;
     }
 
     if (currentPos != null) {
@@ -908,12 +913,28 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
           SymbolOptions(
             geometry: destPos,
             textField: '1',
-            textSize: 13,
+            textSize: 12,
             textColor: '#FFFFFF',
             textHaloColor: '#007AFF',
-            textHaloWidth: 1.2,
+            textHaloWidth: 1.0,
           ),
         );
+        final cleanDestName = widget.destinationName.trim();
+        if (cleanDestName.isNotEmpty) {
+          await controller.addSymbol(
+            SymbolOptions(
+              geometry: destPos,
+              textField: cleanDestName,
+              textSize: 12.0,
+              textColor: '#1C1C1E',
+              textHaloColor: '#FFFFFF',
+              textHaloWidth: 2.5,
+              textOffset: const Offset(0, 1.6),
+              textAnchor: 'top',
+              textMaxWidth: 12.0,
+            ),
+          );
+        }
       } catch (_) {}
     }
 

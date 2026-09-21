@@ -6,7 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:geolocator/geolocator.dart';
+
 import '../core/config/app_config.dart';
+import '../core/services/affinity_calculator.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/sqlite-service.dart';
 import '../core/services/tour_runtime_services.dart';
@@ -129,91 +132,33 @@ final recommendedToursProvider = FutureProvider<List<Tour>>((ref) async {
   final allTours = await ref.watch(toursProvider.future);
   final profile = ref.watch(touristProfileProvider).valueOrNull;
 
-  if (profile == null || profile.interests.isEmpty) {
-    final copy = List.of(allTours);
-    copy.sort((a, b) {
-      final ratingCompare = b.rating.compareTo(a.rating);
-      if (ratingCompare != 0) return ratingCompare;
-      final reviewCompare = b.reviewCount.compareTo(a.reviewCount);
-      if (reviewCompare != 0) return reviewCompare;
-      return a.id.compareTo(b.id);
-    });
-    return copy.take(10).toList();
-  }
+  Position? position;
+  try {
+    position = await ref.watch(currentPositionProvider.future);
+  } catch (_) {}
 
-  final interestTypes = <TourType>{};
-  for (final interest in profile.interests) {
-    switch (interest) {
-      case TouristInterest.beaches:
-        interestTypes.add(TourType.romantic);
-        break;
-      case TouristInterest.nature:
-      case TouristInterest.adventures:
-        interestTypes.add(TourType.ecological);
-        interestTypes.add(TourType.sports);
-        break;
-      case TouristInterest.museums:
-      case TouristInterest.monuments:
-        interestTypes.add(TourType.cultural);
-        interestTypes.add(TourType.historical);
-        break;
-      case TouristInterest.gastronomy:
-      case TouristInterest.nightlife:
-        interestTypes.add(TourType.gastronomic);
-        interestTypes.add(TourType.night);
-        break;
-      case TouristInterest.familyActivities:
-        interestTypes.add(TourType.family);
-        break;
-      case TouristInterest.shopping:
-        interestTypes.add(TourType.custom);
-        break;
-    }
-  }
-
-  final scoredTours = allTours.map((tour) {
-    int score = 0;
-    
-    if (interestTypes.contains(tour.type)) {
-      score += 3;
-    }
-
-    final targetAudiences = [
-      profile.travelerType.toLowerCase(),
-      profile.companionType.toLowerCase(),
-    ];
-
-    if (tour.recommendedAudience.isNotEmpty) {
-      for (final audience in tour.recommendedAudience) {
-        if (targetAudiences.any((t) => audience.toLowerCase().contains(t))) {
-          score += 2;
-        }
-      }
-    }
-
-    if (profile.hasChildren) {
-      final isForKids = tour.recommendedAudience.any((a) => a.toLowerCase().contains('niño') || a.toLowerCase().contains('familia'));
-      if (!isForKids) {
-        score -= 2;
-      } else {
-        score += 3;
-      }
-    }
-
-    return MapEntry(tour, score);
+  // Calculate real affinity for each tour combining profile & geographic accessibility
+  final toursWithAffinity = allTours.map((tour) {
+    final affinity = AffinityCalculator.calculateTourAffinity(
+      tour: tour,
+      profile: profile,
+      userPosition: position,
+    );
+    return tour.copyWith(matchAffinity: affinity);
   }).toList();
 
-  scoredTours.sort((a, b) {
-    final scoreCompare = b.value.compareTo(a.value);
-    if (scoreCompare != 0) return scoreCompare;
-    final ratingCompare = b.key.rating.compareTo(a.key.rating);
+  // Sort primarily by calculated affinity descending, using rating & review count as tie-breakers
+  toursWithAffinity.sort((a, b) {
+    final affinityCompare = (b.matchAffinity ?? 0).compareTo(a.matchAffinity ?? 0);
+    if (affinityCompare != 0) return affinityCompare;
+    final ratingCompare = b.rating.compareTo(a.rating);
     if (ratingCompare != 0) return ratingCompare;
-    final reviewCompare = b.key.reviewCount.compareTo(a.key.reviewCount);
+    final reviewCompare = b.reviewCount.compareTo(a.reviewCount);
     if (reviewCompare != 0) return reviewCompare;
-    return a.key.id.compareTo(b.key.id);
+    return a.id.compareTo(b.id);
   });
 
-  return scoredTours.map((e) => e.key).take(10).toList();
+  return toursWithAffinity.take(10).toList();
 });
 
 final adminPendingToursProvider = FutureProvider.autoDispose<List<Tour>>((
@@ -343,8 +288,6 @@ final mapStyleProvider = Provider<String>((ref) {
           : 'https://tiles.openfreemap.org/styles/liberty';
   }
 });
-
-final highRefreshRateProvider = StateProvider<bool>((ref) => true);
 
 final notificationsEnabledProvider = StateProvider<bool>((ref) => true);
 
@@ -762,47 +705,7 @@ class UserToursController extends AsyncNotifier<UserToursState> {
 }
 
 Tour _copyTour(Tour tour, {bool? isPublished}) {
-  return Tour(
-    id: tour.id,
-    title: tour.title,
-    country: tour.country,
-    city: tour.city,
-    type: tour.type,
-    description: tour.description,
-    coverUrl: tour.coverUrl,
-    gallery: tour.gallery,
-    durationHours: tour.durationHours,
-    distanceKm: tour.distanceKm,
-    rating: tour.rating,
-    reviewCount: tour.reviewCount,
-    likes: tour.likes,
-    difficulty: tour.difficulty,
-    language: tour.language,
-    tags: tour.tags,
-    stops: tour.stops,
-    isPublished: isPublished ?? tour.isPublished,
-    isAiGenerated: tour.isAiGenerated,
-    shortSummary: tour.shortSummary,
-    subcategories: tour.subcategories,
-    featuredExperience: tour.featuredExperience,
-    placeHistory: tour.placeHistory,
-    culturalContext: tour.culturalContext,
-    availableLanguages: tour.availableLanguages,
-    recommendedAudience: tour.recommendedAudience,
-    bestSeason: tour.bestSeason,
-    recommendedSchedule: tour.recommendedSchedule,
-    meetingPoint: tour.meetingPoint,
-    meetingPointInfo: tour.meetingPointInfo,
-    includes: tour.includes,
-    excludes: tour.excludes,
-    recommendations: tour.recommendations,
-    whatToBring: tour.whatToBring,
-    tourRules: tour.tourRules,
-    keywords: tour.keywords,
-    mainCategory: tour.mainCategory,
-    budget: tour.budget,
-    additionalInfo: tour.additionalInfo,
-  );
+  return tour.copyWith(isPublished: isPublished);
 }
 
 Map<String, dynamic> _tourToJson(Tour tour) {

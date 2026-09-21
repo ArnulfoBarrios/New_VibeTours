@@ -22,13 +22,9 @@ class VibeToursApp extends ConsumerWidget {
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: ref.watch(routerProvider),
       builder: (context, child) {
-        final highRefresh = ref.watch(highRefreshRateProvider);
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(
             boldText: false,
-            navigationMode: highRefresh
-                ? NavigationMode.directional
-                : NavigationMode.traditional,
           ),
           child: child ?? const SizedBox.shrink(),
         );
