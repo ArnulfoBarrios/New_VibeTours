@@ -111,7 +111,7 @@ class VoiceGuideService {
   final FlutterTts _tts = FlutterTts();
   final AudioPlayer _audioPlayer = AudioPlayer();
   final SpeechToText _speech = SpeechToText();
-  double _currentMultiplier = 1.0;
+  double _currentMultiplier = 1.06;
   String _selectedOpenAiVoice = 'nova';
   int _speechGeneration = 0;
 
@@ -140,39 +140,71 @@ class VoiceGuideService {
       debugPrint('TTS engine setting note: $e');
     }
     await setLanguage('es');
-    await setSpeedMultiplier(1.0);
-    await _tts.setPitch(1.0); // Natural human pitch
+    await setSpeedMultiplier(1.06);
+    await _tts.setPitch(1.05); // Natural young adult female pitch, lively and warm
   }
 
   Future<void> setLanguage(String lang) async {
-    final ttsLang = (lang.toLowerCase() == 'en' || lang.toLowerCase().startsWith('en'))
-        ? 'en-US'
-        : 'es-ES';
-    await _tts.setLanguage(ttsLang);
+    final isEn = lang.toLowerCase() == 'en' || lang.toLowerCase().startsWith('en');
+    final ttsLang = isEn ? 'en-US' : 'es-CO';
+    try {
+      await _tts.setLanguage(ttsLang);
+    } catch (_) {
+      if (!isEn) {
+        try {
+          await _tts.setLanguage('es-419');
+        } catch (_) {
+          await _tts.setLanguage('es');
+        }
+      }
+    }
+
     try {
       final voices = await _tts.getVoices;
       if (voices is List && voices.isNotEmpty) {
         Map<String, String>? bestVoice;
-        int bestScore = -1;
+        int bestScore = -100;
 
         for (final voice in voices) {
           if (voice is Map) {
             final name = voice['name']?.toString().toLowerCase() ?? '';
             final locale = voice['locale']?.toString().toLowerCase().replaceAll('_', '-') ?? '';
 
-            final targetLangPrefix = ttsLang.split('-').first.toLowerCase();
+            final targetLangPrefix = isEn ? 'en' : 'es';
             if (!locale.startsWith(targetLangPrefix)) continue;
 
             int score = 0;
-            if (locale == ttsLang.toLowerCase()) score += 10;
+            if (!isEn) {
+              // Strongly prioritize Colombian Spanish, then generic Latin American
+              if (locale.contains('es-co') || locale.contains('es_co') || name.contains('colombia')) {
+                score += 40;
+              } else if (locale.contains('es-419') || locale.contains('latin')) {
+                score += 25;
+              } else if (locale.contains('es-us')) {
+                score += 15;
+              } else if (locale.contains('es-es') || locale.contains('es_es')) {
+                score -= 30; // Avoid Spain Castilian accent for Colombian tour guide persona
+              }
+            } else {
+              if (locale == 'en-us') score += 10;
+            }
+
+            // High quality / neural neural network voice markers
             if (name.contains('network') || name.contains('neural') || name.contains('wavenet') || name.contains('natural') || name.contains('premium')) {
               score += 20;
             }
-            if (name.contains('female') || name.contains('fem') || name.contains('ana') || name.contains('elvira') || name.contains('conchita') || name.contains('marta') || name.contains('sfb') || name.contains('es-es-x-ana') || name.contains('es-us-x-sfb')) {
-              score += 25;
+
+            // Female voice markers (Colombian / Latin American female names & tags)
+            if (name.contains('female') || name.contains('fem') || name.contains('mujer') ||
+                name.contains('paola') || name.contains('catalina') || name.contains('salome') ||
+                name.contains('sofia') || name.contains('marcela') || name.contains('lucia') ||
+                name.contains('sfb') || name.contains('es-co-x')) {
+              score += 30;
+            } else if (name.contains('male') || name.contains('hombre')) {
+              score -= 40;
             }
+
             if (name.contains('google')) score += 5;
-            if (name.contains('es-es') || name.contains('es_es')) score += 5;
 
             if (score > bestScore) {
               bestScore = score;
@@ -185,7 +217,7 @@ class VoiceGuideService {
         }
 
         if (bestVoice != null) {
-          debugPrint('[VoiceGuide] Voz TTS de alta calidad seleccionada: ${bestVoice['name']} (${bestVoice['locale']}) score: $bestScore');
+          debugPrint('[VoiceGuide] Voz TTS colombiana/latina seleccionada: ${bestVoice['name']} (${bestVoice['locale']}) score: $bestScore');
           await _tts.setVoice(bestVoice);
         }
       }
@@ -199,8 +231,8 @@ class VoiceGuideService {
     try {
       await _audioPlayer.setPlaybackRate(multiplier);
     } catch (_) {}
-    // Natural speech rate for mobile FlutterTts
-    final rawRate = (0.48 * multiplier).clamp(0.2, 1.0);
+    // Dynamic, energetic speech rate for mobile FlutterTts
+    final rawRate = (0.50 * multiplier).clamp(0.2, 1.0);
     await _tts.setSpeechRate(rawRate);
   }
 
@@ -405,9 +437,9 @@ class VoiceGuideService {
             'text': trimmed,
             'model_id': 'eleven_multilingual_v2',
             'voice_settings': {
-              'stability': 0.5,
-              'similarity_boost': 0.75,
-              'style': 0.3,
+              'stability': 0.38, // Expressive, natural vocal variation
+              'similarity_boost': 0.80,
+              'style': 0.40, // Energetic and charismatic tour guide style
               'use_speaker_boost': true,
             },
           }),

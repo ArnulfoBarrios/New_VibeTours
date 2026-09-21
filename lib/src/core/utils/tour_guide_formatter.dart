@@ -72,7 +72,8 @@ class TourGuideFormatter {
     return cleaned;
   }
 
-  /// Formats an engaging tour guide narration for a specific stop.
+  /// Formats an engaging tour guide narration for a specific stop,
+  /// capturing the voice of a young adult, energetic, charismatic Colombian tour guide.
   static String formatStopNarration(
     TourStop stop, {
     int stopIndex = 0,
@@ -91,33 +92,46 @@ class TourGuideFormatter {
     // Generate natural contextual description if empty or too short
     if (cleanDesc.isEmpty || cleanDesc.length < 20 || cleanDesc.toLowerCase() == cleanName.toLowerCase()) {
       if (RegExp(r'restaurante|comida|caf[ée]|bar|gastronom|asador|bistro', caseSensitive: false).hasMatch(cleanName)) {
-        cleanDesc = 'Es un lugar gastronómico muy recomendado para probar exquisitos sabores locales y disfrutar de una buena comida.';
+        cleanDesc = 'Es un rincón gastronómico imperdible para deleitar el paladar con sabores locales y disfrutar de un ambiente delicioso.';
       } else if (RegExp(r'playa|beach|bah[íi]a|cabo|piscina|isla|arrecife', caseSensitive: false).hasMatch(cleanName)) {
-        cleanDesc = 'Es un hermoso espacio costero ideal para relajarse, disfrutar de la brisa marina y contemplar el paisaje.';
+        cleanDesc = 'Es un hermoso rincón costero, ideal para relajarse, sentir la brisa y contemplar una vista espectacular.';
       } else if (RegExp(r'museo|castillo|muralla|catedral|iglesia|templo|monumento|hist[oó]r', caseSensitive: false).hasMatch(cleanName)) {
-        cleanDesc = 'Es un sitio histórico lleno de patrimonio y cultura. Observa su arquitectura y los detalles que lo hacen único.';
+        cleanDesc = 'Es un sitio histórico lleno de magia y patrimonio. Tómate un instante para admirar cada detalle de su arquitectura y su legado.';
       } else if (RegExp(r'parque|jard[íi]n|mirador|sendero|bosque|reserva|cascada', caseSensitive: false).hasMatch(cleanName)) {
-        cleanDesc = 'Es un maravilloso entorno natural perfecto para caminar, respirar aire fresco y tomar excelentes fotografías.';
+        cleanDesc = 'Es un maravilloso entorno natural, perfecto para caminar con calma, respirar aire fresco y tomar unas fotos increíbles.';
       } else {
-        cleanDesc = 'Es uno de los atractivos más emblemáticos de esta ruta. Tómate un momento para apreciar su historia y su ambiente.';
+        cleanDesc = 'Es uno de los puntos más especiales de nuestra ruta. Tómate un momento para apreciar su energía y su historia.';
       }
     }
 
-    // Build warm, human tour guide introduction
+    // Build warm, charismatic Colombian guide introduction
     final StringBuffer script = StringBuffer();
     if (stopIndex == 0) {
-      script.write('¡Hola y bienvenidos a $cleanName! Comenzamos nuestro recorrido aquí. ');
+      script.write('¡Hola, viajero! Qué alegría empezar esta aventura juntos. Nuestra primera parada es $cleanName. ');
     } else if (stopIndex == totalStops - 1 && totalStops > 1) {
-      script.write('Hemos llegado a nuestra última parada: $cleanName. ');
+      script.write('¡Y llegamos a nuestra última parada: $cleanName! Qué recorrido tan increíble y especial hemos compartido hoy. ');
     } else {
-      script.write('Nos encontramos ahora en $cleanName. ');
+      final variant = stopIndex % 3;
+      if (variant == 1) {
+        script.write('¡Mira nada más dónde estamos! Llegamos a $cleanName. ');
+      } else if (variant == 2) {
+        script.write('Nos encontramos ahora en $cleanName, un rincón que de verdad te va a fascinar. ');
+      } else {
+        script.write('¡Seguimos descubriendo lugares geniales! Aquí estamos en $cleanName. ');
+      }
     }
 
     script.write(cleanDesc);
 
+    // Curious facts if available
+    if (stop.curiousFacts.isNotEmpty && stop.curiousFacts.first.trim().length > 15) {
+      final fact = stop.curiousFacts.first.trim();
+      script.write(' ¿Sabías qué? $fact.');
+    }
+
     // Tips or activities if available
-    if (stop.tips.isNotEmpty && stop.tips.first.length > 10) {
-      script.write(' Un consejo para tu visita: ${stop.tips.first}.');
+    if (stop.tips.isNotEmpty && stop.tips.first.trim().length > 10) {
+      script.write(' Un tip especial de guía para ti: ${stop.tips.first.trim()}.');
     }
 
     return normalizePhonetics(script.toString());
@@ -129,12 +143,12 @@ class TourGuideFormatter {
     final cleanTourDesc = tour.description.replaceAll(RegExp(r'[*_#]'), '').trim();
 
     final buffer = StringBuffer();
-    buffer.write('¡Hola! Te doy la bienvenida a ${tour.title} en ${tour.city}. ');
-    buffer.write('En este recorrido conoceremos sitios fascinantes como $firstStop. ');
+    buffer.write('¡Hola, viajero! Te doy la bienvenida a ${tour.title} en ${tour.city}. ');
+    buffer.write('En este recorrido descubriremos sitios fascinantes como $firstStop. ');
     if (cleanTourDesc.isNotEmpty && cleanTourDesc.length > 25) {
       buffer.write('$cleanTourDesc. ');
     }
-    buffer.write('¡Acompáñame a vivir esta gran experiencia!');
+    buffer.write('¡Ponte cómodo, acompáñame y vivamos juntos esta gran aventura!');
 
     return normalizePhonetics(buffer.toString());
   }

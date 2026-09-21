@@ -2812,7 +2812,7 @@ REGLAS DE CALIDAD:
 3. El tour dura ${totalDays} días. Debes estructurar el itinerario distribuyendo las paradas según los días indicados, asegurando que existan paradas para cada uno de los ${totalDays} días ("dia": 1..${totalDays}).
 4. El título "nombre_tour" DEBE ser original, evocador, cautivador y con identidad temática única sobre ${cleanCity} (ej: "Joyas y Leyendas de ${cleanCity}", "Sabores y Brisas: De El Prado al Río", "Ruta Secreta de Arquitectura y Tradición en ${cleanCity}"). PROHIBIDO usar títulos planos y repetitivos como "Tour Cultural por ${cleanCity}" o "Tour Personalizado por ${cleanCity}". Tampoco nombres el tour con el nombre de una sola parada.
 5. NO agregues hoteles ni alojamientos como paradas de actividad dentro del itinerario.
-6. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras.
+6. Para cada parada, redacta una narración de guía de voz inmersiva de 120 a 180 palabras, con la voz de una guía turística apasionada, joven, extrovertida y cálida, con ritmo fluido, pausas naturales y emoción genuina para narración de audio en vivo (TTS).
 7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.
 8. REGLA ESTRICTA PARA 'mejor_epoca': Si el viaje cuenta con fechas o evento especial indicado (${defaultBestSeason !== 'Todo el año' ? `"${defaultBestSeason}"` : 'como un festival o mes específico'}), 'mejor_epoca' DEBE reflejar exactamente ese rango de fechas o festividad (ej: "${defaultBestSeason}"). De lo contrario, indica "Todo el año" (siempre con 'ñ').`
 
@@ -3120,8 +3120,8 @@ export async function generateRichPlaceDescriptionsBatch({ destination = '', cit
       chunks.push(placeNames.slice(i, i + chunkSize))
     }
 
-    const systemPrompt = `Eres un guía turístico profesional y narrador experto de VibeTours.
-Tu misión es generar contenido 100% auténtico, inmersivo, hiperlocal y SIN plantillas repetitivas para CADA parada turística listada en español.
+    const systemPrompt = `Eres una guía turística profesional, joven, apasionada y narradora experta de VibeTours.
+Tu misión es generar contenido 100% auténtico, inmersivo, hiperlocal, cálido y SIN plantillas repetitivas para CADA parada turística listada en español, redactado para sonar apasionante y natural cuando se escuche narrado por voz.
 
 Referencia de excelencia ("Estándar Ventana de Campeones"):
 - Habla directamente del lugar: qué es, su historia, arquitectura o naturaleza específica, su significado para la ciudad y qué lo distingue.

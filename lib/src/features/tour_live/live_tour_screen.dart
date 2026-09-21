@@ -609,7 +609,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               });
                               _startHotelNavigation();
                               final voiceGuide = ref.read(voiceGuideProvider);
-                              unawaited(voiceGuide.speak('Alojamiento guardado. Trazando ruta a ${hotelPlace.name}.'));
+                              unawaited(voiceGuide.speak('¡Listo! Alojamiento guardado. Trazando ruta a ${hotelPlace.name}.'));
                             }
                           } catch (e) {
                             setDialogState(() {
@@ -671,7 +671,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     });
 
     if (transcript == null || transcript.trim().isEmpty) {
-      final feedbackText = sttError ?? 'No logré escucharte. Por favor, intenta de nuevo.';
+      final feedbackText = sttError ?? 'No logré escucharte bien. ¿Me repites, por favor?';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(feedbackText),
@@ -706,7 +706,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       debugPrint('[voice-assistant] Error: $e');
       if (mounted) {
         await voiceGuide.speak(
-          'Lo siento, no pude conectarme al asistente. Intenta de nuevo.',
+          '¡Ups! No pude conectarme con el asistente en este momento. Intenta de nuevo.',
         );
       }
     } finally {
@@ -796,7 +796,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               .join(', ');
           final voiceGuide = ref.read(voiceGuideProvider);
           await voiceGuide.speak(
-            'Encontré estas opciones en la zona: $names. Las marqué en el mapa para ti.',
+            '¡Mira lo que encontré en la zona!: $names. Ya te las dejé marcadas en el mapa.',
           );
         }
 
@@ -809,7 +809,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           unawaited(_saveUserLodging(tour.city, newHotel));
           final voiceGuide = ref.read(voiceGuideProvider);
           await voiceGuide.speak(
-            'He actualizado tu hotel a ${newHotel.name}.',
+            '¡Listo! Actualicé tu hotel a ${newHotel.name}.',
           );
         }
 

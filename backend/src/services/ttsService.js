@@ -26,9 +26,9 @@ async function synthesizeWithElevenLabs({
       text,
       model_id: model,
       voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.75,
-        style: 0.3,
+        stability: 0.38, // Expressive, lively vocal variation
+        similarity_boost: 0.80,
+        style: 0.40, // Energetic and charismatic tour guide style
         use_speaker_boost: true
       }
     })
@@ -49,7 +49,7 @@ async function synthesizeWithElevenLabs({
 async function synthesizeWithOpenAI({
   text,
   voice = 'nova',
-  speed = 1.0,
+  speed = 1.06,
   model = 'tts-1',
   apiKey
 }) {
@@ -92,7 +92,7 @@ async function synthesizeWithOpenAI({
 export async function generateSpeechAudio({
   text = '',
   voice = 'nova',
-  speed = 1.0,
+  speed = 1.06,
   model = 'tts-1',
   provider = 'auto' // 'auto' | 'elevenlabs' | 'openai'
 }) {
