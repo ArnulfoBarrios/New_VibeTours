@@ -2164,8 +2164,11 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         country: input.country,
         places: plannedPlaceNames,
         prompt: input.prompt
-      }).catch(() => ({})),
-      new Promise(resolve => setTimeout(() => resolve({}), 4000))
+      }).catch((err) => {
+        console.warn('[tour-ai] generateRichPlaceDescriptionsBatch build error:', err?.message || err)
+        return {}
+      }),
+      new Promise(resolve => setTimeout(() => resolve({}), 16000))
     ])
 
     const assignedUrls = new Set()
@@ -2478,8 +2481,11 @@ async function processTourGeneration(jobId, input) {
           country: input.country,
           places: plannedPlaceNames,
           prompt: input.prompt
-        }).catch(() => ({})),
-        new Promise(resolve => setTimeout(() => resolve({}), 12000))
+        }).catch((err) => {
+          console.warn('[tour-ai] generateRichPlaceDescriptionsBatch generate error:', err?.message || err)
+          return {}
+        }),
+        new Promise(resolve => setTimeout(() => resolve({}), 16000))
       ])
 
       const assignedUrls = new Set()
@@ -3821,7 +3827,13 @@ function buildStopDescription(place, input = {}) {
   } else if (place.rawTags?.description && place.rawTags.description.trim().length > 15) {
     realDetail = place.rawTags.description.trim()
   } else {
-    realDetail = buildRecommendationReason(place, inputObj)
+    const rawCat = place.category || place.type || 'lugar'
+    const dynamicDesc = generateDynamicDescription(place.name, rawCat, inputObj.city || inputObj.destination)
+    if (dynamicDesc && dynamicDesc.trim().length > 25) {
+      realDetail = dynamicDesc
+    } else {
+      realDetail = buildRecommendationReason(place, inputObj)
+    }
   }
 
   if (realDetail && !/[.!?]$/.test(realDetail)) {
@@ -4136,9 +4148,6 @@ function shouldUseAiPlanner(input, planner) {
   if (process.env.DISABLE_AI_PLANNER === 'true') return false
   if (input.durationHours > 168) return false
   if (planner.selectedPlaces.length > 30) return false
-  if (Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length >= 3 && (input.specificPlaces?.length || input.selectedPlaces?.length)) {
-    return false
-  }
   return true
 }
 
@@ -4146,9 +4155,6 @@ function aiPlannerSkipReason(input, planner) {
   if (process.env.DISABLE_AI_PLANNER === 'true') return 'disabled_by_env'
   if (input.durationHours > 168) return 'long_tour_uses_deterministic_planner'
   if (planner.selectedPlaces.length > 30) return 'too_many_places_for_ai_planner'
-  if (Array.isArray(planner.selectedPlaces) && planner.selectedPlaces.length >= 3 && (input.specificPlaces?.length || input.selectedPlaces?.length)) {
-    return 'user_selected_chat_places_already_complete'
-  }
   return 'not_skipped'
 }
 
@@ -4744,7 +4750,17 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
                          description.includes('Destacado atractivo en') ||
                          description.includes('Reconocido establecimiento culinario') ||
                          description.includes('es un lugar emblemático de gran interés') ||
-                         description.includes('es un destacado establecimiento gastronómico');
+                         description.includes('es un destacado establecimiento gastronómico') ||
+                         description.includes('es una parada emblemática de') ||
+                         description.includes('elegida para enriquecer tu recorrido') ||
+                         description.includes('autenticidad local') ||
+                         description.includes('funciona como parada de respaldo') ||
+                         description.includes('destaca por sus paisajes costeros') ||
+                         description.includes('tesoro arquitectónico y cultural imprescindible') ||
+                         description.includes('resguarda la memoria, el arte y el legado') ||
+                         description.includes('brinda un entorno natural y sombreado') ||
+                         description.includes('referente culinario reconocido para deleitarse') ||
+                         description.includes('panorámica excepcional de');
 
   if (isGenericDesc) {
     const wikiText = await wikipediaSummaryText(resolvedName, input.city || input.destination, input.country).catch(() => null)
@@ -4809,16 +4825,32 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
       rawActivities = [activityPhrase, ...rawActivities]
     }
   }
+  const genericActivityKeywords = [
+    'explorar el lugar con calma',
+    'tomar fotografias',
+    'tomar fotografías',
+    'leer senales o placas del entorno',
+    'leer señales o placas del entorno',
+    'preparar la siguiente parada'
+  ]
   const isGenericActivities = rawActivities.length === 0 || 
-                              (rawActivities.length <= 2 && rawActivities.every(a => a.toLowerCase() === 'explorar' || a.toLowerCase() === 'fotografiar'));
+                              (rawActivities.length <= 2 && rawActivities.every(a => a.toLowerCase() === 'explorar' || a.toLowerCase() === 'fotografiar')) ||
+                              (rawActivities.length <= 4 && rawActivities.every(a => genericActivityKeywords.some(g => a.toLowerCase().includes(g))));
   if (isGenericActivities) {
     rawActivities = generateDynamicActivities(resolvedName, rawCategory)
   }
 
   // Normalizar lista de consejos evitando el aviso genérico de horarios
   let rawTips = normalizeList(richObj?.consejos ?? source.consejos ?? source.tips, [])
+  const genericTipKeywords = [
+    'revisar los horarios de apertura del lugar',
+    'llegar con anticipación para disfrutar sin prisas',
+    'llevar suficiente batería en el móvil para fotos y navegación',
+    'confirma horarios',
+    'horarios locales'
+  ]
   const isGenericTips = rawTips.length === 0 || 
-                        rawTips.every(t => t.includes('Confirma horarios') || t.includes('horarios locales'));
+                        rawTips.every(t => genericTipKeywords.some(g => t.toLowerCase().includes(g)));
   if (isGenericTips) {
     rawTips = generateDynamicTips(resolvedName, rawCategory)
   }
@@ -5070,9 +5102,23 @@ function normalizeBudget(value, input) {
 }
 
 function normalizeList(value, fallback = []) {
-  if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean)
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim().replace(/^[\s\[\]"\'`]+/, '').replace(/[\s\[\]"\'`]+$/, '')).filter(Boolean)
+  }
   if (typeof value === 'string' && value.trim()) {
-    return value.split(',').map((item) => item.trim()).filter(Boolean)
+    const trimmed = value.trim()
+    if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          return parsed.map((item) => String(item).trim().replace(/^[\s\[\]"\'`]+/, '').replace(/[\s\[\]"\'`]+$/, '')).filter(Boolean)
+        }
+      } catch (_) {}
+    }
+    return trimmed
+      .split(',')
+      .map((item) => item.trim().replace(/^[\s\[\]"\'`]+/, '').replace(/[\s\[\]"\'`]+$/, ''))
+      .filter(Boolean)
   }
   return fallback
 }

@@ -259,6 +259,7 @@ class Tour {
     this.budget = TourBudget.empty,
     this.additionalInfo = TourAdditionalInfo.standard,
     this.matchAffinity,
+    this.startDate,
   });
 
   final String id;
@@ -303,10 +304,12 @@ class Tour {
   final TourBudget budget;
   final TourAdditionalInfo additionalInfo;
   final int? matchAffinity;
+  final DateTime? startDate;
 
   Tour copyWith({
     String? id,
     String? ownerId,
+    DateTime? startDate,
     String? title,
     String? country,
     String? city,
@@ -390,6 +393,7 @@ class Tour {
     budget: budget ?? this.budget,
     additionalInfo: additionalInfo ?? this.additionalInfo,
     matchAffinity: matchAffinity ?? this.matchAffinity,
+    startDate: startDate ?? this.startDate,
   );
 
   GeoPoint get center => stops.isEmpty
@@ -412,6 +416,7 @@ class Tour {
     'nombre_tour': title,
     'resumen_corto': shortSummary.isEmpty ? description : shortSummary,
     'tipo_tour': tourTypeLabel(type),
+    'fecha_inicio': startDate?.toIso8601String(),
     'subcategorias': subcategories.isEmpty ? tags : subcategories,
     'descripcion_tour': description,
     'experiencia_destacada': featuredExperience,

@@ -524,7 +524,58 @@ class _HeaderSection extends StatelessWidget {
     );
   }
 
+  (IconData, Color) _getWeatherVisuals(WeatherSnapshot weather) {
+    final code = weather.code;
+    final cond = weather.condition.toLowerCase();
+    final isDay = weather.isDay;
+
+    // Tormenta (Thunderstorm)
+    if (const [95, 96, 99].contains(code) || cond.contains('tormenta') || cond.contains('storm')) {
+      return (Icons.thunderstorm_rounded, Colors.amber.shade500);
+    }
+
+    // Lluvia / Chubascos (Rain / Showers)
+    if (const [61, 63, 65, 66, 67, 80, 81, 82].contains(code) ||
+        cond.contains('lluvia') ||
+        cond.contains('rain') ||
+        cond.contains('chubasco')) {
+      return (Icons.water_drop_rounded, Colors.lightBlueAccent);
+    }
+
+    // Llovizna (Drizzle)
+    if (const [51, 53, 55, 56, 57].contains(code) ||
+        cond.contains('llovizna') ||
+        cond.contains('drizzle')) {
+      return (Icons.grain_rounded, Colors.lightBlueAccent);
+    }
+
+    // Nieve (Snow)
+    if (const [71, 73, 75, 77, 85, 86].contains(code) ||
+        cond.contains('nieve') ||
+        cond.contains('snow')) {
+      return (Icons.ac_unit_rounded, Colors.lightBlue.shade100);
+    }
+
+    // Niebla (Fog)
+    if (const [45, 48].contains(code) || cond.contains('niebla') || cond.contains('fog')) {
+      return (Icons.cloud_rounded, Colors.blueGrey.shade300);
+    }
+
+    // Nublado / Parcialmente nublado (Cloudy)
+    if (const [1, 2, 3].contains(code) || cond.contains('nublado') || cond.contains('cloud')) {
+      return isDay
+          ? (Icons.wb_cloudy_rounded, Colors.amber.shade300)
+          : (Icons.cloud_rounded, Colors.blueGrey.shade200);
+    }
+
+    // Despejado / Soleado (Clear / Sunny)
+    return isDay
+        ? (Icons.wb_sunny_rounded, Colors.orange.shade400)
+        : (Icons.nights_stay_rounded, Colors.indigoAccent);
+  }
+
   Widget _buildWeatherBadge(BuildContext context, WeatherSnapshot weather) {
+    final (weatherIcon, weatherColor) = _getWeatherVisuals(weather);
     final badge = DynamicGlowBackground(
       child: GlassPanel(
         radius: 16,
@@ -532,8 +583,8 @@ class _HeaderSection extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              weather.isDay ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
-              color: weather.isDay ? Colors.orange.shade400 : Colors.indigo,
+              weatherIcon,
+              color: weatherColor,
               size: 20,
             ),
             const SizedBox(width: 8),

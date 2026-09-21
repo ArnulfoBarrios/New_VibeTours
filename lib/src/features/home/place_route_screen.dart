@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/design/app_theme.dart';
 import '../../core/design/live_navigation_map.dart';
 import '../../core/design/premium_components.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/services/road_route_service.dart';
 import '../../core/utils/transport_utils.dart';
 import '../../domain/models.dart';
@@ -37,6 +38,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
   int _routeRequestToken = 0;
   bool _isTrafficRefreshing = false;
   bool _hasInitialAccurateRoute = false;
+  bool _hasNotifiedArrival = false;
   RouteTravelMode _travelMode = RouteTravelMode.driving;
 
   @override
@@ -144,6 +146,22 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
 
     final place = ref.read(selectedNearbyPlaceProvider);
     if (place == null) return;
+
+    final distanceToDest = Geolocator.distanceBetween(
+      point.latitude,
+      point.longitude,
+      place.location.latitude,
+      place.location.longitude,
+    );
+    if (distanceToDest <= 45.0 && !_hasNotifiedArrival) {
+      _hasNotifiedArrival = true;
+      NotificationService.instance.showProximityNotification(
+        title: '🏁 ¡Has llegado a ${place.name}!',
+        body: 'Estás muy cerca de tu destino seleccionado en Lugares cercanos.',
+        id: 1100,
+        payload: 'place:${place.name}',
+      );
+    }
 
     // The first route must use a reliable stream fix.
     if (!_hasInitialAccurateRoute) {

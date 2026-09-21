@@ -11,10 +11,13 @@ const KNOWN_LANDMARK_IMAGES = {
   'paseo maritimo covenas': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80',
   'paseo maritimo': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80',
   // Barranquilla
-  'ventana de campeones': 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=80',
-  'ventana al mundo': 'https://images.unsplash.com/photo-1508849789987-4e5333c12b78?auto=format&fit=crop&w=1200&q=80',
-  'gran malecon del rio': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
-  'malecon del rio': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
+  'ventana de campeones': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Ventanacampeones.jpg/800px-Ventanacampeones.jpg',
+  'aleta del tiburon': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Ventanacampeones.jpg/800px-Ventanacampeones.jpg',
+  'aleta de tiburon': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Ventanacampeones.jpg/800px-Ventanacampeones.jpg',
+  'ventana al mundo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Ventanalmundo.jpg/800px-Ventanalmundo.jpg',
+  'gran malecon del rio': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/AspectoGranMalecon.jpg/800px-AspectoGranMalecon.jpg',
+  'gran malecon': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/AspectoGranMalecon.jpg/800px-AspectoGranMalecon.jpg',
+  'malecon del rio': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/AspectoGranMalecon.jpg/800px-AspectoGranMalecon.jpg',
   // Santa Marta
   'bahia de santa marta': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
   'playa el rodadero': 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=1200&q=80',

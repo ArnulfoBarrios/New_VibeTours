@@ -7,6 +7,7 @@ import '../../domain/models.dart';
 import '../../data/discovery_repository.dart';
 import 'package:http/http.dart' as http;
 import '../../core/config/app_config.dart';
+import '../../core/services/notification_service.dart';
 import '../../state/app_state.dart';
 
 class AiBuilderState {
@@ -856,9 +857,15 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     stops.addAll(rawStops);
 
     final currentUser = ref.read(authServiceProvider).currentUser;
+    final recommendedSchedule = tourData['horario_recomendado']?.toString() ?? '';
+    final calculatedStartDate = _parseStartDateFromPreferences(
+      state.preferences,
+      recommendedSchedule: recommendedSchedule,
+    );
     final tour = Tour(
       id: tourData['id'] ?? 'ai-${DateTime.now().millisecondsSinceEpoch}',
       ownerId: currentUser?.id,
+      startDate: calculatedStartDate,
       isPublished: false,
       isAiGenerated: true,
       title: tourData['nombre_tour'] ?? 'Tour VibeTours',
@@ -940,6 +947,117 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       builtTour: tour,
       messages: [...state.messages, aiMsg],
     );
+
+    unawaited(
+      NotificationService.instance.showAiTourCreatedNotification(
+        tourTitle: tour.title,
+        tourId: tour.id,
+      ),
+    );
+
+    if (tour.startDate != null) {
+      unawaited(
+        NotificationService.instance.scheduleTourReminder(
+          id: tour.id.hashCode.abs(),
+          tourTitle: tour.title,
+          startTime: tour.startDate!,
+          tourId: tour.id,
+          meetingPoint: tour.meetingPoint,
+        ),
+      );
+    }
+  }
+
+  DateTime? _parseStartDateFromPreferences(
+    Map<String, dynamic> preferences, {
+    String? recommendedSchedule,
+  }) {
+    final raw = (preferences['datesSeason'] ??
+            preferences['travelDate'] ??
+            preferences['startDate'] ??
+            preferences['date'])
+        ?.toString()
+        .trim();
+
+    if (raw == null || raw.isEmpty) return null;
+
+    final now = DateTime.now();
+    int startHour = 9;
+    int startMinute = 0;
+
+    // Extraer hora del horario recomendado si está disponible (ej. "09:00 - 12:20")
+    if (recommendedSchedule != null && recommendedSchedule.isNotEmpty) {
+      final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(recommendedSchedule);
+      if (match != null) {
+        startHour = int.tryParse(match.group(1)!) ?? startHour;
+        startMinute = int.tryParse(match.group(2)!) ?? startMinute;
+      }
+    }
+
+    final lower = raw.toLowerCase();
+
+    // 1. Expresiones relativas comunes
+    if (lower.contains('pasado mañana') || lower.contains('pasado manana')) {
+      final target = now.add(const Duration(days: 2));
+      return DateTime(target.year, target.month, target.day, startHour, startMinute);
+    }
+
+    if (lower.contains('mañana') || lower.contains('manana') || lower.contains('tomorrow')) {
+      final target = now.add(const Duration(days: 1));
+      return DateTime(target.year, target.month, target.day, startHour, startMinute);
+    }
+
+    if (lower.contains('hoy') || lower.contains('today')) {
+      var target = DateTime(now.year, now.month, now.day, startHour, startMinute);
+      if (target.isBefore(now)) {
+        target = now.add(const Duration(hours: 1));
+      }
+      return target;
+    }
+
+    // 2. Días de la semana
+    final weekdays = {
+      'lunes': DateTime.monday,
+      'martes': DateTime.tuesday,
+      'miercoles': DateTime.wednesday,
+      'miércoles': DateTime.wednesday,
+      'jueves': DateTime.thursday,
+      'viernes': DateTime.friday,
+      'sabado': DateTime.saturday,
+      'sábado': DateTime.saturday,
+      'domingo': DateTime.sunday,
+    };
+
+    for (final entry in weekdays.entries) {
+      if (lower.contains(entry.key)) {
+        var daysToAdd = entry.value - now.weekday;
+        if (daysToAdd <= 0) daysToAdd += 7;
+        final target = now.add(Duration(days: daysToAdd));
+        return DateTime(target.year, target.month, target.day, startHour, startMinute);
+      }
+    }
+
+    // 3. Intento de parseo de fecha estándar (ISO o YYYY-MM-DD o DD/MM/YYYY)
+    try {
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) {
+        return DateTime(parsed.year, parsed.month, parsed.day, startHour, startMinute);
+      }
+      if (raw.contains('/')) {
+        final parts = raw.split('/');
+        if (parts.length == 3) {
+          final d = int.tryParse(parts[0]);
+          final m = int.tryParse(parts[1]);
+          final y = int.tryParse(parts[2]);
+          if (d != null && m != null && y != null) {
+            final fullYear = y < 100 ? 2000 + y : y;
+            return DateTime(fullYear, m, d, startHour, startMinute);
+          }
+        }
+      }
+    } catch (_) {}
+
+    return null;
   }
 
   Future<void> _saveUserLodging(String city, Map<String, dynamic> hotel) async {

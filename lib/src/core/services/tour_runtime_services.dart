@@ -543,6 +543,14 @@ class VoiceGuideService {
     }
   }
 
+  Future<void> stopListening() async {
+    try {
+      await _speech.stop();
+    } catch (e) {
+      debugPrint('[VoiceGuide] Error al detener reconocimiento de voz: $e');
+    }
+  }
+
   Future<String?> listenCommand({
     void Function(String)? onPartialResult,
     void Function(String)? onError,
@@ -589,8 +597,8 @@ class VoiceGuideService {
         listenOptions: SpeechListenOptions(
           partialResults: true,
           cancelOnError: true,
-          listenFor: const Duration(seconds: 8),
-          pauseFor: const Duration(seconds: 3),
+          listenFor: const Duration(seconds: 25),
+          pauseFor: const Duration(seconds: 5),
           localeId: 'es-CO',
         ),
       );
@@ -601,7 +609,7 @@ class VoiceGuideService {
     }
 
     // Timeout fallback just in case
-    Future.delayed(const Duration(seconds: 9), () {
+    Future.delayed(const Duration(seconds: 26), () {
       if (!completer.isCompleted) {
         _speech.stop();
         completer.complete(recognizedWords);

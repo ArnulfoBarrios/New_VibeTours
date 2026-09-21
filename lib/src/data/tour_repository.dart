@@ -1158,17 +1158,48 @@ class TourRepository {
           if (item is Map && item['url'] != null)
             item['url'].toString()
           else
-            item.toString(),
+            _cleanStringItem(item.toString()),
       ];
     }
     if (value is String && value.trim().isNotEmpty) {
-      return value
+      final trimmed = value.trim();
+      if ((trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+          (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is List) {
+            return _stringList(decoded);
+          }
+        } catch (_) {}
+      }
+      return trimmed
           .split(',')
-          .map((item) => item.trim())
+          .map((item) => _cleanStringItem(item))
           .where((item) => item.isNotEmpty)
           .toList();
     }
     return const [];
+  }
+
+  String _cleanStringItem(String item) {
+    var cleaned = item.trim();
+    while (cleaned.isNotEmpty &&
+        (cleaned.startsWith('[') ||
+            cleaned.startsWith(']') ||
+            cleaned.startsWith('"') ||
+            cleaned.startsWith("'") ||
+            cleaned.startsWith('`'))) {
+      cleaned = cleaned.substring(1).trim();
+    }
+    while (cleaned.isNotEmpty &&
+        (cleaned.endsWith('[') ||
+            cleaned.endsWith(']') ||
+            cleaned.endsWith('"') ||
+            cleaned.endsWith("'") ||
+            cleaned.endsWith('`'))) {
+      cleaned = cleaned.substring(0, cleaned.length - 1).trim();
+    }
+    return cleaned;
   }
 
   double _doubleValue(Object? value, double fallback) {

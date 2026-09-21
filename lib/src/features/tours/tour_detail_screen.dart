@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -179,6 +180,12 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    tooltip: 'Agendar para mi viaje',
+                    onPressed: () => _scheduleTourForUser(context, ref, tour),
+                    icon: const Icon(Icons.event_available_rounded, color: Colors.purpleAccent),
+                  ),
+                  const SizedBox(width: 6),
                   KeyedSubtree(
                     key: _audioPreviewKey,
                     child: IconButton.filledTonal(
@@ -733,9 +740,88 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
       mainCategory: tour.mainCategory,
       budget: tour.budget,
       additionalInfo: tour.additionalInfo,
+      startDate: tour.startDate,
     );
   }
 
+  Future<void> _scheduleTourForUser(BuildContext context, WidgetRef ref, Tour tour) async {
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: tour.startDate ?? now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      helpText: 'SELECCIONA LA FECHA DE TU VIAJE',
+      confirmText: 'SIGUIENTE',
+    );
+    if (pickedDate == null || !context.mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: tour.startDate != null
+          ? TimeOfDay.fromDateTime(tour.startDate!)
+          : const TimeOfDay(hour: 9, minute: 0),
+      helpText: 'HORA DE PARTIDA DEL TOUR',
+      confirmText: 'AGENDAR',
+    );
+    if (pickedTime == null || !context.mounted) return;
+
+    final targetDateTime = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+
+    try {
+      final user = ref.read(authServiceProvider).currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Inicia sesión para guardar y agendar este tour en tus viajes.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        context.push('/login');
+        return;
+      }
+
+      final scheduledTour = _copyTour(
+        tour,
+        isPublished: false,
+        moderationStatus: 'approved',
+      ).copyWith(
+        id: tour.id.startsWith('manual-') || tour.id.startsWith('scheduled-')
+            ? tour.id
+            : 'scheduled-${DateTime.now().millisecondsSinceEpoch}',
+        startDate: targetDateTime,
+      );
+
+      final saved = await ref.read(userToursProvider.notifier).saveTour(scheduledTour);
+      ref.read(selectedTourProvider.notifier).state = saved;
+
+      if (context.mounted) {
+        final formattedDate = DateFormat('dd/MM/yyyy - hh:mm a').format(targetDateTime);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🗓️ ¡Tour agendado para el $formattedDate! Te recordaremos 24 horas antes de iniciar.'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al agendar tour: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _startTourFlow(BuildContext context, WidgetRef ref, Tour tour) async {
     final granted = await checkAndRequestLocationPermission(context, ref);
@@ -820,6 +906,15 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
             title: 'Punto de encuentro',
             value: meetingPointText,
           ),
+          if (tour.startDate != null) ...[
+            const Divider(height: 20, thickness: 0.5),
+            _SpecRow(
+              icon: Icons.event_available_rounded,
+              iconColor: Colors.purpleAccent,
+              title: 'Fecha programada',
+              value: DateFormat('dd/MM/yyyy - hh:mm a').format(tour.startDate!),
+            ),
+          ],
         ],
       ),
     );

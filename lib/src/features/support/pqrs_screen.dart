@@ -207,26 +207,6 @@ class _PqrsScreenState extends ConsumerState<PqrsScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 40),
-        Row(
-          children: [
-            Expanded(
-              child: _InfoCard(
-                icon: Icons.schedule_rounded,
-                title: l10n.pqrsFastResponse,
-                body: l10n.pqrsUnder24h,
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: _InfoCard(
-                icon: Icons.verified_user_rounded,
-                title: l10n.pqrsSecure,
-                body: l10n.pqrsSsl,
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -344,45 +324,6 @@ class _FieldTitle extends StatelessWidget {
       text,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.bold,
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.icon, required this.title, required this.body});
-
-  final IconData icon;
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassPanel(
-      radius: 24,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: AppTheme.primary, size: 28),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            body,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
-          ),
-        ],
       ),
     );
   }

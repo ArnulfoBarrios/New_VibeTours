@@ -14,6 +14,7 @@ import '../../core/config/app_config.dart';
 import '../../core/design/app_theme.dart';
 import '../../core/design/live_navigation_map.dart';
 import '../../core/design/premium_components.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/services/road_route_service.dart';
 import '../../core/utils/transport_utils.dart';
 import '../../core/tour/tour_builder.dart';
@@ -631,9 +632,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   /// Starts the mic listening cycle, sends transcript to backend,
   /// speaks the response, and executes any structured action.
   Future<void> _onMicPressed() async {
-    if (_isListening || _isProcessingVoice) return;
-
     final voiceGuide = ref.read(voiceGuideProvider);
+
+    // If currently listening, tap again to finish and process immediately
+    if (_isListening) {
+      await voiceGuide.stopListening();
+      return;
+    }
+    if (_isProcessingVoice) return;
     final tour = _navigationTour;
 
     // Start listening with blue pulse animation
@@ -781,6 +787,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             _voiceFoodPlaces = response.nearbyPlaces;
             _selectedVoicePlace = null;
             _navigatingToHotel = false;
+            _isTrackingMode = false;
           });
           // Narrate the found options
           final names = response.nearbyPlaces
@@ -927,9 +934,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   currentLocation: _currentPoint,
                   additionalWaypoints: _voiceFoodPlaces.isNotEmpty
                       ? _voiceFoodPlaces.map((p) => p.toGeoPoint()).toList()
-                      : (_selectedVoicePlace != null
-                          ? null
-                          : tour.stops.where((s) => s.day == _selectedDay).map((s) => s.location).toList()),
+                      : null,
+                  additionalWaypointLabels: _voiceFoodPlaces.isNotEmpty
+                      ? _voiceFoodPlaces.map((p) => p.name).toList()
+                      : null,
+                  additionalWaypointEmoji: _voiceFoodPlaces.isNotEmpty ? '🍽️' : null,
                   trackingMode: _isTrackingMode,
                   trackingHeading: _currentHeading,
                   showRecenterFab: false,
@@ -942,19 +951,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                         point.latitude,
                         point.longitude,
                       );
-                      if (dist < 25.0) {
+                      if (dist < 40.0) {
                         tappedPlace = p;
                         break;
                       }
                     }
                     if (tappedPlace != null) {
-                      setState(() {
-                        _selectedVoicePlace = tappedPlace;
-                        _navigatingToHotel = false;
-                        _liveRoute = null;
-                        _liveRouteStopIndex = null;
-                      });
-                      _recalculateRoute(tour, force: true);
+                      _selectVoiceRestaurant(tappedPlace, tour);
                     }
                   },
                 ),
@@ -1291,6 +1294,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    if (_voiceFoodPlaces.isNotEmpty && _selectedVoicePlace == null) ...[
+                      _buildNearbyFoodCarousel(context, tour),
+                    ],
                     if (!_isTrackingMode) ...[
                       FloatingActionButton.extended(
                         heroTag: 'live_tour_follow_fab',
@@ -1589,6 +1595,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         _autoTriggeredStopIds.add(currentStop.id);
         debugPrint('[ProximityTTS] Disparando llegada a parada ${currentStop.name} (distancia: ${distanceToActiveStop.toStringAsFixed(1)}m <= ${proximityRadius.toStringAsFixed(0)}m)');
         _enterAtStopMode(currentStop);
+        NotificationService.instance.showProximityNotification(
+          title: '📍 ¡Estás cerca de ${currentStop.name}!',
+          body: 'Has llegado a tu siguiente parada. Toca aquí para ver la información y audioguía.',
+          id: 1000 + _activeStop,
+          payload: 'stop:${currentStop.id}',
+        );
       }
     }
     final distanceToRoute = _distanceToRouteMeters(point, route.geometry);
@@ -2067,6 +2079,309 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
   }
 
+  static String _formatFoodCategory(String? cuisine, String? type) {
+    final raw = (cuisine != null && cuisine.trim().isNotEmpty)
+        ? cuisine.trim().toLowerCase()
+        : (type != null && type.trim().isNotEmpty ? type.trim().toLowerCase() : '');
+
+    if (raw.isEmpty) return 'Restaurante';
+
+    final primary = raw.split(RegExp(r'[,;]')).first.trim();
+
+    const translations = <String, String>{
+      'restaurant': 'Restaurante',
+      'cafe': 'Cafetería',
+      'coffee_shop': 'Cafetería',
+      'bar': 'Bar',
+      'pub': 'Pub / Cervecería',
+      'fast_food': 'Comida rápida',
+      'food_court': 'Plaza de comidas',
+      'ice_cream': 'Heladería',
+      'bakery': 'Panadería y repostería',
+      'sandwich': 'Sándwiches y bocadillos',
+      'pizza': 'Pizzería',
+      'burger': 'Hamburguesas',
+      'seafood': 'Pescados y mariscos',
+      'fish': 'Pescados y mariscos',
+      'chicken': 'Pollo y asados',
+      'meat': 'Carnes y parrilla',
+      'steak_house': 'Parrilla y carnes',
+      'barbecue': 'Parrilla / Asados',
+      'bbq': 'Parrilla / Asados',
+      'grill': 'Parrilla / Asados',
+      'asador': 'Asador',
+      'mexican': 'Comida mexicana',
+      'italian': 'Comida italiana',
+      'chinese': 'Comida china',
+      'japanese': 'Comida japonesa',
+      'sushi': 'Sushi',
+      'asian': 'Comida asiática',
+      'colombian': 'Comida típica colombiana',
+      'latin_american': 'Comida latina',
+      'regional': 'Comida típica regional',
+      'traditional': 'Comida tradicional',
+      'vegetarian': 'Vegetariana',
+      'vegan': 'Vegana',
+      'healthy': 'Comida saludable',
+      'salad': 'Ensaladas',
+      'dessert': 'Postres y dulces',
+      'breakfast': 'Desayunos',
+      'tapas': 'Tapas y picadas',
+      'beer': 'Cervecería',
+      'wine': 'Vinos y bar',
+      'cocktail': 'Cócteles y bar',
+      'pasta': 'Pastas italianas',
+      'shawarma': 'Comida árabe / Shawarma',
+      'lebanese': 'Comida árabe / Libanesa',
+      'crepe': 'Crepes y waffles',
+      'juice': 'Jugos y batidos',
+      'smoothie': 'Jugos y batidos',
+      'bistro': 'Bistró',
+      'brasserie': 'Restaurante / Bistró',
+      'diner': 'Restaurante',
+      'attraction': 'Punto de interés',
+      'tourism': 'Atracción turística',
+      'monument': 'Monumento',
+      'viewpoint': 'Mirador',
+      'park': 'Parque',
+      'museum': 'Museo',
+      'hotel': 'Hotel / Alojamiento',
+      'hostel': 'Hostal',
+    };
+
+    if (translations.containsKey(primary)) {
+      return translations[primary]!;
+    }
+
+    if (primary.contains('sandwich')) return 'Sándwiches';
+    if (primary.contains('burger') || primary.contains('hamburgue')) return 'Hamburguesas';
+    if (primary.contains('pizza')) return 'Pizzería';
+    if (primary.contains('cafe') || primary.contains('café') || primary.contains('coffee')) return 'Cafetería';
+    if (primary.contains('marisco') || primary.contains('seafood') || primary.contains('fish')) return 'Pescados y mariscos';
+    if (primary.contains('carne') || primary.contains('steak') || primary.contains('bbq') || primary.contains('asado')) return 'Carnes y asados';
+    if (primary.contains('colombia')) return 'Comida colombiana';
+    if (primary.contains('mexic')) return 'Comida mexicana';
+    if (primary.contains('ital')) return 'Comida italiana';
+    if (primary.contains('fast_food') || primary.contains('rapida')) return 'Comida rápida';
+    if (primary.contains('helado') || primary.contains('ice_cream')) return 'Heladería';
+    if (primary.contains('panad') || primary.contains('baker')) return 'Panadería';
+    if (primary.contains('bar') || primary.contains('pub')) return 'Bar';
+
+    return primary[0].toUpperCase() + primary.substring(1);
+  }
+
+  void _selectVoiceRestaurant(_NearbyFoodPlace place, Tour tour) {
+    setState(() {
+      _selectedVoicePlace = place;
+      _voiceFoodPlaces = [];
+      _navigatingToHotel = false;
+      _isTrackingMode = true;
+      _liveRoute = null;
+      _liveRouteStopIndex = null;
+    });
+    _recalculateRoute(tour, force: true);
+  }
+
+  Widget _buildNearbyFoodCarousel(BuildContext context, Tour tour) {
+    final currentPos = _currentPoint;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade800.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.restaurant_rounded, size: 14, color: Colors.white),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Opciones en la zona (${_voiceFoodPlaces.length})',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _voiceFoodPlaces = [];
+                    _isTrackingMode = true;
+                  });
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 105,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              itemCount: _voiceFoodPlaces.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final place = _voiceFoodPlaces[index];
+                double? distanceMeters;
+                if (currentPos != null) {
+                  distanceMeters = Geolocator.distanceBetween(
+                    currentPos.latitude,
+                    currentPos.longitude,
+                    place.latitude,
+                    place.longitude,
+                  );
+                }
+                final distString = distanceMeters != null
+                    ? (distanceMeters < 1000
+                        ? '${distanceMeters.round()} m'
+                        : '${(distanceMeters / 1000).toStringAsFixed(1)} km')
+                    : null;
+
+                return InkWell(
+                  onTap: () => _selectVoiceRestaurant(place, tour),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: 210,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.orange.withValues(alpha: 0.45),
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              place.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatFoodCategory(place.cuisine, place.type),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (distString != null)
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.directions_walk_rounded,
+                                    size: 13,
+                                    color: AppTheme.primary,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    distString,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Ir aquí',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRestaurantNavigationPanel(BuildContext context, Tour tour) {
     final isAirport = _selectedVoicePlace?.type == 'aeropuerto' ||
         (_selectedVoicePlace?.type?.contains('Aeropuerto') ?? false) ||
@@ -2147,12 +2462,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 fontWeight: FontWeight.w600,
               ),
         ),
-        if (_selectedVoicePlace?.cuisine != null) ...[
+        if (_selectedVoicePlace?.cuisine != null || _selectedVoicePlace?.type != null) ...[
           const SizedBox(height: 2),
           Text(
-            'Cocina: ${_selectedVoicePlace!.cuisine!}',
+            'Categoría: ${_formatFoodCategory(_selectedVoicePlace?.cuisine, _selectedVoicePlace?.type)}',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
                 ),
           ),
         ],

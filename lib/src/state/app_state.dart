@@ -11,6 +11,7 @@ import 'package:geolocator/geolocator.dart';
 import '../core/config/app_config.dart';
 import '../core/services/affinity_calculator.dart';
 import '../core/services/auth_service.dart';
+import '../core/services/notification_service.dart';
 import '../core/services/sqlite-service.dart';
 import '../core/services/tour_runtime_services.dart';
 import '../data/demo_tours.dart';
@@ -289,7 +290,33 @@ final mapStyleProvider = Provider<String>((ref) {
   }
 });
 
-final notificationsEnabledProvider = StateProvider<bool>((ref) => true);
+class NotificationsEnabledController extends StateNotifier<bool> {
+  NotificationsEnabledController(this.prefs) : super(_init(prefs));
+
+  final SharedPreferences prefs;
+
+  static bool _init(SharedPreferences prefs) {
+    return prefs.getBool('vibetours_notifications_enabled') ?? true;
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    state = enabled;
+    await prefs.setBool('vibetours_notifications_enabled', enabled);
+    if (!enabled) {
+      await NotificationService.instance.cancelAll();
+    }
+  }
+}
+
+final notificationsEnabledProvider =
+    StateNotifierProvider<NotificationsEnabledController, bool>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return NotificationsEnabledController(prefs);
+});
+
+final notificationServiceProvider = Provider<NotificationService>((ref) {
+  return NotificationService.instance;
+});
 
 final onboardingCompleteProvider =
     AsyncNotifierProvider<OnboardingCompleteController, bool>(
@@ -641,11 +668,23 @@ class UserToursController extends AsyncNotifier<UserToursState> {
       storedTour,
     ];
     await _persist(current.copyWith(manualTours: nextTours));
+    if (storedTour.startDate != null) {
+      unawaited(
+        NotificationService.instance.scheduleTourReminder(
+          id: storedTour.id.hashCode.abs(),
+          tourTitle: storedTour.title,
+          startTime: storedTour.startDate!,
+          tourId: storedTour.id,
+          meetingPoint: storedTour.meetingPoint,
+        ),
+      );
+    }
     return storedTour;
   }
 
   Future<void> deleteTour(Tour tour) async {
     final current = state.valueOrNull ?? await future;
+    unawaited(NotificationService.instance.cancelNotification(tour.id.hashCode.abs()));
     final user = ref.read(authServiceProvider).currentUser;
     if (user != null && !tour.id.startsWith('manual-')) {
       await ref.read(tourRepositoryProvider).deleteUserTour(tour.id);
@@ -715,6 +754,7 @@ Map<String, dynamic> _tourToJson(Tour tour) {
     'country': tour.country,
     'city': tour.city,
     'type': tour.type.name,
+    'startDate': tour.startDate?.toIso8601String(),
     'description': tour.description,
     'coverUrl': tour.coverUrl,
     'gallery': tour.gallery,
@@ -829,6 +869,11 @@ Tour _tourFromJson(Map<String, dynamic> json) {
     mainCategory: _string(json['mainCategory'], ''),
     budget: _budgetFromJson(json['budget']),
     additionalInfo: _additionalInfoFromJson(json['additionalInfo']),
+    startDate: json['startDate'] != null
+        ? DateTime.tryParse(json['startDate'].toString())
+        : (json['fecha_inicio'] != null
+            ? DateTime.tryParse(json['fecha_inicio'].toString())
+            : null),
   );
 }
 

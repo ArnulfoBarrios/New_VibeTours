@@ -29,6 +29,8 @@ class LiveNavigationMap extends ConsumerStatefulWidget {
     this.route,
     this.currentLocation,
     this.additionalWaypoints,
+    this.additionalWaypointLabels,
+    this.additionalWaypointEmoji,
     this.trackingMode = true,
     this.trackingHeading,
     this.showRecenterFab = true,
@@ -43,6 +45,8 @@ class LiveNavigationMap extends ConsumerStatefulWidget {
   final RoadRouteResult? route;
   final GeoPoint? currentLocation;
   final List<GeoPoint>? additionalWaypoints;
+  final List<String>? additionalWaypointLabels;
+  final String? additionalWaypointEmoji;
   final bool trackingMode;
   final double? trackingHeading;
   final bool showRecenterFab;
@@ -77,6 +81,10 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   final List<Circle> _walkingDots = [];
   final List<Symbol> _walkingSymbols = [];
   final List<List<LatLng>> _initialWalkingSegments = [];
+
+  // Additional POI / waypoints annotations tracking (e.g. nearby restaurants)
+  final List<Circle> _additionalCircles = [];
+  final List<Symbol> _additionalSymbols = [];
 
   // The location provider is intentionally event based to save battery.  These
   // fields turn its sparse updates into continuous map frames instead of moving
@@ -518,6 +526,109 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     _initialWalkingSegments.clear();
   }
 
+  Future<void> _clearAdditionalWaypoints() async {
+    final controller = _controller;
+    if (controller == null) return;
+    if (_additionalCircles.isNotEmpty) {
+      try {
+        await controller.removeCircles(_additionalCircles);
+      } catch (_) {
+        for (final c in _additionalCircles) {
+          try {
+            await controller.removeCircle(c);
+          } catch (_) {}
+        }
+      }
+      _additionalCircles.clear();
+    }
+    if (_additionalSymbols.isNotEmpty) {
+      try {
+        await controller.removeSymbols(_additionalSymbols);
+      } catch (_) {
+        for (final s in _additionalSymbols) {
+          try {
+            await controller.removeSymbol(s);
+          } catch (_) {}
+        }
+      }
+      _additionalSymbols.clear();
+    }
+  }
+
+  Future<void> _drawAdditionalWaypoints() async {
+    final controller = _controller;
+    if (controller == null || !_styleLoaded) return;
+
+    await _clearAdditionalWaypoints();
+
+    final waypoints = widget.additionalWaypoints;
+    if (waypoints == null || waypoints.isEmpty) return;
+
+    final labels = widget.additionalWaypointLabels;
+    final emoji = widget.additionalWaypointEmoji ?? '🍽️';
+
+    for (var i = 0; i < waypoints.length; i++) {
+      final wp = waypoints[i];
+      final latLng = LatLng(wp.latitude, wp.longitude);
+
+      try {
+        final circle = await controller.addCircle(
+          CircleOptions(
+            geometry: latLng,
+            circleRadius: 13,
+            circleColor: '#FF9500',
+            circleOpacity: 0.96,
+            circleStrokeColor: '#FFFFFF',
+            circleStrokeWidth: 2.5,
+          ),
+        );
+        _additionalCircles.add(circle);
+
+        final sym = await controller.addSymbol(
+          SymbolOptions(
+            geometry: latLng,
+            textField: emoji,
+            textSize: 13,
+            textColor: '#FFFFFF',
+            textHaloColor: '#000000',
+            textHaloWidth: 0.5,
+          ),
+        );
+        _additionalSymbols.add(sym);
+
+        if (labels != null && i < labels.length && labels[i].trim().isNotEmpty) {
+          final label = labels[i].trim();
+          final textSym = await controller.addSymbol(
+            SymbolOptions(
+              geometry: latLng,
+              textField: label,
+              textSize: 11.0,
+              textColor: '#1C1C1E',
+              textHaloColor: '#FFFFFF',
+              textHaloWidth: 2.5,
+              textOffset: const Offset(0, 1.8),
+              textAnchor: 'top',
+              textMaxWidth: 10.0,
+            ),
+          );
+          _additionalSymbols.add(textSym);
+        }
+      } catch (_) {}
+    }
+  }
+
+  static bool _areGeoPointsEqual(List<GeoPoint>? a, List<GeoPoint>? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].latitude != b[i].latitude || a[i].longitude != b[i].longitude) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void _updateTrimmedWalkingSegments(LatLng currentPos) {
     final controller = _controller;
     if (controller == null || _initialWalkingSegments.isEmpty) return;
@@ -697,6 +808,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                 port.location.latitude,
                 port.location.longitude,
               )),
+        if (widget.additionalWaypoints != null && widget.additionalWaypoints!.isNotEmpty)
+          ...widget.additionalWaypoints!.map((p) => LatLng(p.latitude, p.longitude)),
       ];
 
       if (boundsPoints.isNotEmpty) {
@@ -750,6 +863,8 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     final locationChanged = oldWidget.currentLocation != widget.currentLocation;
     final headingChanged = oldWidget.trackingHeading != widget.trackingHeading;
     final trackingChanged = oldWidget.trackingMode != widget.trackingMode;
+    final waypointsChanged = !_areGeoPointsEqual(oldWidget.additionalWaypoints, widget.additionalWaypoints) ||
+        oldWidget.additionalWaypointEmoji != widget.additionalWaypointEmoji;
 
     if (oldWidget.styleUrl != widget.styleUrl) {
       _styleLoaded = false;
@@ -764,6 +879,13 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
 
     if (routeChanged) {
       _requestLiveRouteRender();
+    }
+
+    if (waypointsChanged) {
+      unawaited(_drawAdditionalWaypoints());
+      if (!widget.trackingMode) {
+        _updateCameraPosition(force: true);
+      }
     }
 
     if (locationChanged && widget.currentLocation != null) {
@@ -1061,6 +1183,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
+    await _drawAdditionalWaypoints();
   }
 
   @override
@@ -1108,6 +1231,15 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
               },
               onMapCreated: (controller) {
                 _controller = controller;
+                controller.onCircleTapped.add((circle) {
+                  final latLng = circle.options.geometry;
+                  if (latLng != null && widget.onPointSelected != null) {
+                    widget.onPointSelected!(GeoPoint(
+                      latitude: latLng.latitude,
+                      longitude: latLng.longitude,
+                    ));
+                  }
+                });
                 if (widget.onMapCreated != null) {
                   widget.onMapCreated!(controller);
                 }
@@ -1121,6 +1253,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                   });
                 }
                 _requestLiveRouteRender();
+                _drawAdditionalWaypoints();
               },
             ),
           ),

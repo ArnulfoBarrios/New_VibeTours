@@ -158,9 +158,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   subtitle: l10n.adminToursEventsRecs,
                   trailing: Switch(
                     value: notifications,
-                    onChanged: (value) => ref.read(notificationsEnabledProvider.notifier).state = value,
+                    onChanged: (value) => ref.read(notificationsEnabledProvider.notifier).setEnabled(value),
                   ),
-                  onTap: () => ref.read(notificationsEnabledProvider.notifier).state = !notifications,
+                  onTap: () => ref.read(notificationsEnabledProvider.notifier).setEnabled(!notifications),
                 ),
               ),
             ],

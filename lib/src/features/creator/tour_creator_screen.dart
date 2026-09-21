@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/openfree_route_map.dart';
@@ -62,6 +63,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
   bool _useMapPickerMode = false;
   GeoPoint? _tappedMapLocation;
   bool _isReverseGeocoding = false;
+  DateTime? _scheduledStartDate;
 
   @override
   void initState() {
@@ -69,6 +71,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
     final selected = ref.read(selectedTourProvider);
     if (selected != null) {
       _editingTourId = selected.id.startsWith('manual-') ? selected.id : null;
+      _scheduledStartDate = selected.startDate;
       _name.text = selected.title;
       _description.text = selected.description;
       _coverImage = selected.coverUrl;
@@ -125,6 +128,35 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
     _recommendations.dispose();
     _accessibility.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickScheduledStartDate() async {
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _scheduledStartDate ?? now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: _scheduledStartDate != null
+          ? TimeOfDay.fromDateTime(_scheduledStartDate!)
+          : const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (pickedTime == null || !mounted) return;
+
+    setState(() {
+      _scheduledStartDate = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
+    });
   }
 
   @override
@@ -201,6 +233,33 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
                       labelText: 'Punto de encuentro',
                       hintText: 'Ej. Entrada principal del museo',
                       prefixIcon: Icon(Icons.flag_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: _pickScheduledStartDate,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Fecha de inicio del tour (opcional)',
+                        hintText: 'Seleccionar fecha y hora de partida',
+                        prefixIcon: const Icon(Icons.event_available_rounded),
+                        suffixIcon: _scheduledStartDate != null
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, size: 18),
+                                onPressed: () => setState(() => _scheduledStartDate = null),
+                              )
+                            : const Icon(Icons.arrow_drop_down_rounded),
+                      ),
+                      child: Text(
+                        _scheduledStartDate != null
+                            ? DateFormat('dd/MM/yyyy - hh:mm a').format(_scheduledStartDate!)
+                            : 'Sin fecha programada (Tour libre)',
+                        style: TextStyle(
+                          color: _scheduledStartDate != null ? null : Colors.grey,
+                          fontWeight: _scheduledStartDate != null ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -1094,6 +1153,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
     final category = tourTypeLabel(_type);
     return Tour(
       id: _editingTourId ?? 'manual-${DateTime.now().microsecondsSinceEpoch}',
+      startDate: _scheduledStartDate,
       title: _name.text.trim(),
       country: stops.first.locationInfo.pais.isEmpty
           ? 'Global'
