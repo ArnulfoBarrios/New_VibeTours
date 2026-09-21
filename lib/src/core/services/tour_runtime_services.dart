@@ -487,11 +487,10 @@ class VoiceGuideService {
       }
     }
 
-    // 3. Intentar con la URL base principal configurada en backend
-    final mainApiUrl = AppConfig.apiBaseUrl;
-    if (mainApiUrl.isNotEmpty) {
+    // 3. Intentar con los endpoints de API configurados (cloud y local fallback)
+    for (final baseUrl in AppConfig.apiBaseUrls) {
       try {
-        final uri = Uri.parse('$mainApiUrl/ai/speech');
+        final uri = Uri.parse('$baseUrl/ai/speech');
         final response = await http.post(
           uri,
           headers: {'Content-Type': 'application/json'},
@@ -501,14 +500,17 @@ class VoiceGuideService {
             'speed': s.clamp(0.25, 4.0),
             'model': model,
           }),
-        ).timeout(const Duration(seconds: 3));
+        ).timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+          debugPrint('[VoiceGuide] Síntesis de voz cloud exitosa desde $baseUrl (${response.bodyBytes.length} bytes)');
           _speechMemoryCache[cacheKey] = response.bodyBytes;
           return response.bodyBytes;
+        } else {
+          debugPrint('[VoiceGuide] Endpoint $baseUrl devolvió HTTP ${response.statusCode}');
         }
       } catch (e) {
-        debugPrint('[VoiceGuide] Backend speech note ($mainApiUrl): $e');
+        debugPrint('[VoiceGuide] Intento de speech en $baseUrl falló: $e');
       }
     }
 
