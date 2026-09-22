@@ -2906,9 +2906,9 @@ REGLAS DE CALIDAD:
 7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.
 8. REGLA ESTRICTA PARA 'mejor_epoca': Si el viaje cuenta con fechas o evento especial indicado (${defaultBestSeason !== 'Todo el año' ? `"${defaultBestSeason}"` : 'como un festival o mes específico'}), 'mejor_epoca' DEBE reflejar exactamente ese rango de fechas o festividad (ej: "${defaultBestSeason}"). De lo contrario, indica "Todo el año" (siempre con 'ñ').`
 
-  // For tours with more than 5 stops, split into dynamic parallel chunks of max 5 places so generation completes in ~15-20s regardless of stops count
-  if (selectedPlaces.length > 5) {
-    const CHUNK_SIZE = 5
+  // For tours with more than 4 stops, split into dynamic parallel chunks of max 4 places so generation completes in ~12-16s regardless of stops count
+  if (selectedPlaces.length > 4) {
+    const CHUNK_SIZE = 4
     const chunks = []
     for (let i = 0; i < selectedPlaces.length; i += CHUNK_SIZE) {
       chunks.push(selectedPlaces.slice(i, i + CHUNK_SIZE))
