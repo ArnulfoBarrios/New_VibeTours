@@ -8,6 +8,7 @@ import '../../domain/models.dart';
 import '../../data/discovery_repository.dart';
 import 'package:http/http.dart' as http;
 import '../../core/config/app_config.dart';
+import '../../core/services/foreground_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../state/app_state.dart';
 
@@ -869,6 +870,12 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
     // Keep CPU awake while generating tour
     unawaited(WakelockPlus.enable());
 
+    // Start native Android Foreground Service to prevent background process/network suspension
+    await ForegroundService.instance.startTourGeneration(
+      title: '✨ Creando tu tour personalizado',
+      message: 'Tour Planner AI está diseñando tu itinerario. Te avisaremos al terminar.',
+    );
+
     // Show progress notification so user sees it in the status bar while outside the app
     unawaited(
       NotificationService.instance.showAiTourProgressNotification(
@@ -878,25 +885,56 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
     );
 
     try {
-      // Synchronous request to avoid Vercel Serverless container-freeze & 404 polling issues
-      final response = await _postJson(
-        '/ai/tours/build',
-        {
-          'request': state.request!.toJson(),
-          'places': state.recommendations.map((e) => e.toJson()).toList(),
-          'plannerContext': {
-            ...?state.plannerContext,
-            ...state.preferences,
-            if (state.selectedHotel != null) 'selectedHotel': state.selectedHotel,
-          },
-          'async': false, // Enforce synchronous execution on Vercel
-        },
-        timeout: const Duration(seconds: 75),
-      );
+      http.Response? response;
+      Object? lastError;
+
+      // Resilient execution with up to 2 attempts if connection is interrupted in background
+      for (int attempt = 1; attempt <= 2; attempt++) {
+        try {
+          response = await _postJson(
+            '/ai/tours/build',
+            {
+              'request': state.request!.toJson(),
+              'places': state.recommendations.map((e) => e.toJson()).toList(),
+              'plannerContext': {
+                ...?state.plannerContext,
+                ...state.preferences,
+                if (state.selectedHotel != null) 'selectedHotel': state.selectedHotel,
+              },
+              'async': false, // Enforce synchronous execution on Vercel
+            },
+            timeout: const Duration(seconds: 75),
+          );
+
+          if (response.statusCode == 200) {
+            break;
+          }
+
+          // If server error or gateway timeout on first attempt, retry once
+          if (attempt < 2 && (response.statusCode >= 500 || response.statusCode == 408)) {
+            debugPrint('[AiBuilderController] Server returned ${response.statusCode}, retrying once...');
+            await Future.delayed(const Duration(seconds: 2));
+            continue;
+          }
+          break;
+        } catch (e) {
+          lastError = e;
+          debugPrint('[AiBuilderController] buildTour attempt $attempt failed: $e');
+          if (attempt < 2) {
+            await Future.delayed(const Duration(seconds: 2));
+            continue;
+          }
+        }
+      }
+
+      if (response == null) {
+        throw lastError ?? Exception('No se pudo establecer conexión con el servidor.');
+      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['status'] == 'completed' && data['tour'] != null) {
+          await ForegroundService.instance.stopTourGeneration();
           await NotificationService.instance.dismissAiTourProgressNotification();
           _handleCompletedTour(Map<String, dynamic>.from(data['tour']));
           return;
@@ -906,6 +944,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
           return;
         } else {
           final errorMsg = data['message']?.toString() ?? 'Respuesta inesperada del servidor al construir el tour.';
+          await ForegroundService.instance.stopTourGeneration();
           await NotificationService.instance.dismissAiTourProgressNotification();
           await NotificationService.instance.showAiTourErrorNotification(
             title: 'Error al generar tour',
@@ -917,6 +956,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         final errorMsg = response.statusCode == 504 || response.statusCode == 408
             ? 'El servidor tardó demasiado tiempo en responder. Intenta con menos paradas o reintenta en unos segundos.'
             : '¡Ups! Hubo un problema al crear el tour en el servidor (${response.statusCode}). Intenta de nuevo.';
+        await ForegroundService.instance.stopTourGeneration();
         await NotificationService.instance.dismissAiTourProgressNotification();
         await NotificationService.instance.showAiTourErrorNotification(
           title: 'Error al generar tour',
@@ -925,7 +965,8 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         state = state.copyWith(isBuilding: false, error: errorMsg);
       }
     } catch (e, stackTrace) {
-      debugPrint('[AiBuilderController] buildTour error: $e\n$stackTrace');
+      debugPrint('[AiBuilderController] buildTour fatal error: $e\n$stackTrace');
+      await ForegroundService.instance.stopTourGeneration();
       await NotificationService.instance.dismissAiTourProgressNotification();
       await NotificationService.instance.showAiTourErrorNotification(
         title: 'Error al generar tour',
@@ -933,6 +974,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
       );
       state = state.copyWith(isBuilding: false, error: _friendlyError(e));
     } finally {
+      await ForegroundService.instance.stopTourGeneration();
       unawaited(WakelockPlus.disable());
     }
   }
@@ -1069,6 +1111,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
       messages: [...state.messages, aiMsg],
     );
     ref.read(selectedTourProvider.notifier).state = tour;
+    unawaited(ref.read(userToursProvider.notifier).saveTour(tour));
 
     unawaited(SharedPreferences.getInstance().then((p) => p.remove(_pendingJobIdKey)));
 
