@@ -435,25 +435,22 @@ class DiscoveryRepository {
     required double latitude,
     required double longitude,
   }) async {
+    // 1. Wikipedia GeoSearch with adaptive radius (up to 10 km)
     final wikiPlaces = await _nearbyWikipediaPlaces(latitude: latitude, longitude: longitude);
-    if (wikiPlaces.length >= 8) {
+    if (wikiPlaces.length >= 6) {
       final enriched = await _enrichPlacesWithRealImages(wikiPlaces);
       return _deduplicatePlaces(enriched);
     }
 
-    final tomtomPlaces = await _nearbyTomTomPlaces(latitude: latitude, longitude: longitude);
-    final combined = <NearbyPlace>[...wikiPlaces, ...tomtomPlaces];
+    // 2. OpenStreetMap / Overpass Places (high-precision community-verified nodes)
+    final overpassPlaces = await _nearbyOverpassPlaces(latitude, longitude);
+    final combined = <NearbyPlace>[...wikiPlaces, ...overpassPlaces];
     if (combined.isNotEmpty) {
       final enriched = await _enrichPlacesWithRealImages(combined);
       return _deduplicatePlaces(enriched);
     }
 
-    final overpassPlaces = await _nearbyOverpassPlaces(latitude, longitude);
-    if (overpassPlaces.isNotEmpty) {
-      final enriched = await _enrichPlacesWithRealImages(overpassPlaces);
-      return _deduplicatePlaces(enriched);
-    }
-
+    // 3. Fallback places if offline
     final fallbacks = _fallbackPlaces(latitude: latitude, longitude: longitude);
     final enriched = await _enrichPlacesWithRealImages(fallbacks);
     return _deduplicatePlaces(enriched);
@@ -472,7 +469,7 @@ class DiscoveryRepository {
           'list': 'geosearch',
           'gscoord': '$latitude|$longitude',
           'gsradius': '10000',
-          'gslimit': '35',
+          'gslimit': '50',
           'format': 'json',
         },
       );
@@ -502,7 +499,7 @@ class DiscoveryRepository {
         final lat = _double(item['lat']);
         final lon = _double(item['lon']);
         final dist = _double(item['dist']).round();
-        if (lat == 0.0 || lon == 0.0 || dist > 6000) continue;
+        if (lat == 0.0 || lon == 0.0 || dist > 10000) continue;
 
         candidateByPageId[pageId] = {
           'rawTitle': rawTitle,
@@ -603,6 +600,7 @@ class DiscoveryRepository {
         ));
       }
 
+      places.sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
       return places;
     } catch (_) {
       // Return empty list on failure
@@ -821,13 +819,14 @@ class DiscoveryRepository {
   }) async {
     final trimmed = query.trim();
     if (trimmed.length < 2) return const [];
-    final tomTomResults = await _searchTomTomPlaces(
+    // 1. High precision Wikipedia search
+    final wikiResults = await _searchWikipediaPlaces(
       trimmed,
       userLat: userLat,
       userLon: userLon,
     );
-    if (tomTomResults.isNotEmpty) {
-      return _enrichPlacesWithRealImages(tomTomResults);
+    if (wikiResults.isNotEmpty) {
+      return _enrichPlacesWithRealImages(wikiResults);
     }
     try {
       final uri = Uri.parse('https://photon.komoot.io/api/').replace(
@@ -1020,7 +1019,7 @@ class DiscoveryRepository {
     );
   }
   Future<List<NearbyPlace>> _nearbyOverpassPlaces(double latitude, double longitude) async {
-    const radius = 6000;
+    const radius = 8000;
     final query = '''
       [out:json][timeout:25];
       (
@@ -1053,15 +1052,31 @@ class DiscoveryRepository {
       out center tags 40;
     ''';
     try {
-      final response = await http.post(
-        Uri.parse('https://overpass-api.de/api/interpreter'),
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'VIBETOURS/1.0 contact=ops@vibetours.app'
-        },
-        body: {'data': query},
-      ).timeout(const Duration(seconds: 7));
-      if (response.statusCode == 200) {
+      final overpassMirrors = [
+        'https://overpass-api.de/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter',
+        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+      ];
+      http.Response? response;
+      for (final mirror in overpassMirrors) {
+        try {
+          final res = await http.post(
+            Uri.parse(mirror),
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'User-Agent': 'VIBETOURS/1.0 contact=ops@vibetours.app',
+            },
+            body: {'data': query},
+          ).timeout(const Duration(seconds: 5));
+          if (res.statusCode == 200) {
+            response = res;
+            break;
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+      if (response != null && response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final elements = json['elements'] as List<dynamic>? ?? const [];
         final List<NearbyPlace> places = [];
@@ -1098,7 +1113,7 @@ class DiscoveryRepository {
             if (_isBlacklisted(name, typeStr)) continue;
 
             final distance = _distanceMeters(latitude, longitude, lat, lon);
-            if (distance > 6000) continue;
+            if (distance > 8000) continue;
             
             seenNames.add(normalizedKey);
             final category = _classifyAttraction(tags);
@@ -1334,161 +1349,131 @@ class DiscoveryRepository {
     return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
-  Future<List<NearbyPlace>> _searchTomTomPlaces(
+  Future<List<NearbyPlace>> _searchWikipediaPlaces(
     String query, {
     double? userLat,
     double? userLon,
   }) async {
-    final key = AppConfig.tomTomApiKey.trim();
-    if (key.isEmpty) return const [];
     try {
-      final encodedQuery = Uri.encodeComponent(query);
-      final uri = Uri.parse(
-        'https://api.tomtom.com/search/2/search/$encodedQuery.json',
-      ).replace(
-        queryParameters: {
-          'key': key,
-          'typeahead': 'true',
-          'limit': '10',
-          'countrySet': 'CO',
-          if (userLat != null && userLon != null) ...{
-            'lat': userLat.toString(),
-            'lon': userLon.toString(),
-            'radius': '50000',
+      final searchUri = Uri.https(
+        'es.wikipedia.org',
+        '/w/api.php',
+        {
+          'action': 'query',
+          'list': 'search',
+          'srsearch': query,
+          'srlimit': '10',
+          'format': 'json',
+        },
+      );
+      final searchResponse = await http
+          .get(searchUri, headers: const {'User-Agent': 'VIBETOURS/1.0 (contact@vibetours.app)'})
+          .timeout(const Duration(seconds: 6));
+      if (searchResponse.statusCode < 200 || searchResponse.statusCode >= 300) {
+        return const [];
+      }
+
+      final searchJson = jsonDecode(searchResponse.body) as Map<String, dynamic>;
+      final queryObj = searchJson['query'] as Map<String, dynamic>? ?? {};
+      final searchResults = queryObj['search'] as List<dynamic>? ?? const [];
+      if (searchResults.isEmpty) return const [];
+
+      final List<int> pageIds = [];
+      for (final item in searchResults) {
+        if (item is Map) {
+          final pid = _int(item['pageid']);
+          if (pid > 0) pageIds.add(pid);
+        }
+      }
+      if (pageIds.isEmpty) return const [];
+
+      final batchUri = Uri.https(
+        'es.wikipedia.org',
+        '/w/api.php',
+        {
+          'action': 'query',
+          'pageids': pageIds.join('|'),
+          'prop': 'coordinates|pageimages|extracts',
+          'pithumbsize': '800',
+          'exintro': '1',
+          'explaintext': '1',
+          'format': 'json',
+        },
+      );
+      final batchResponse = await http
+          .get(batchUri, headers: const {'User-Agent': 'VIBETOURS/1.0 (contact@vibetours.app)'})
+          .timeout(const Duration(seconds: 6));
+      if (batchResponse.statusCode < 200 || batchResponse.statusCode >= 300) {
+        return const [];
+      }
+
+      final batchJson = jsonDecode(batchResponse.body) as Map<String, dynamic>;
+      final pagesMap = (batchJson['query'] as Map<String, dynamic>?)?['pages'] as Map<String, dynamic>? ?? {};
+
+      final List<NearbyPlace> places = [];
+      for (final pageId in pageIds) {
+        final pageData = pagesMap[pageId.toString()] as Map<String, dynamic>?;
+        if (pageData == null) continue;
+
+        final coordsList = pageData['coordinates'] as List<dynamic>?;
+        if (coordsList == null || coordsList.isEmpty) continue;
+
+        final firstCoord = coordsList.first as Map<String, dynamic>;
+        final lat = _double(firstCoord['lat']);
+        final lon = _double(firstCoord['lon']);
+        if (lat == 0.0 || lon == 0.0) continue;
+
+        final rawTitle = pageData['title']?.toString() ?? '';
+        final cleanName = rawTitle.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+        final rawExtract = pageData['extract']?.toString() ?? '';
+        final extract = _normalizeWikipediaText(rawExtract);
+
+        if (_isExtinctPlace(cleanName, extract)) continue;
+        if (_isCityAdministrativeArticle(cleanName, extract)) continue;
+        if (_isNonTourismInstitution(cleanName, extract)) continue;
+
+        final isNeigh = _isNeighborhood(cleanName, extract, rawTitle: rawTitle);
+        final category = _classifyWikipediaPlace(
+          cleanName,
+          extract,
+          isEmblematicNeighborhood: isNeigh,
+        );
+
+        final pageThumb = (pageData['thumbnail'] as Map?)?['source']?.toString();
+        final img = (pageThumb != null &&
+                pageThumb.isNotEmpty &&
+                _isUsableImageUrl(pageThumb, placeName: cleanName, category: category))
+            ? pageThumb
+            : '';
+
+        final distance = (userLat != null && userLon != null)
+            ? _distanceMeters(userLat, userLon, lat, lon).round()
+            : 0;
+
+        places.add(NearbyPlace(
+          id: 'wiki-$pageId',
+          name: cleanName,
+          type: isNeigh ? 'Barrio Emblemático' : _typeLabel(category),
+          distanceMeters: distance,
+          location: GeoPoint(latitude: lat, longitude: lon),
+          category: category,
+          sourceTags: {
+            'wikipedia': rawTitle,
+            'pageid': pageId,
+            'extract': extract,
+            'is_neighborhood': isNeigh,
           },
-          'openingHours': 'nextSevenDays',
-          'language': 'es-ES',
-        },
-      );
-      final response = await http
-          .get(uri, headers: const {'User-Agent': 'VIBETOURS/1.0'})
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const [];
+          imageUrl: img,
+          thumbnailUrl: img,
+          statusLabel: 'Abierto',
+          isOpenNow: true,
+        ));
       }
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final results = json['results'] as List<dynamic>? ?? const [];
-      final List<NearbyPlace> places = [];
-      for (final item in results) {
-        if (item is Map) {
-          final place = _tomTomPlaceFromJson(
-            Map<String, dynamic>.from(item),
-            userLat: userLat,
-            userLon: userLon,
-          );
-          if (!_isBlacklisted(place.name, place.type)) {
-            places.add(place);
-          }
-        }
+
+      if (userLat != null && userLon != null) {
+        places.sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
       }
-      return places.take(10).toList();
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  NearbyPlace _tomTomPlaceFromJson(
-    Map<String, dynamic> json, {
-    double? userLat,
-    double? userLon,
-  }) {
-    final poi = json['poi'] is Map
-        ? Map<String, dynamic>.from(json['poi'] as Map)
-        : const <String, dynamic>{};
-    final address = json['address'] is Map
-        ? Map<String, dynamic>.from(json['address'] as Map)
-        : const <String, dynamic>{};
-    final position = json['position'] is Map
-        ? Map<String, dynamic>.from(json['position'] as Map)
-        : const <String, dynamic>{};
-    final categories = poi['categories'] is List
-        ? List<String>.from(
-            (poi['categories'] as List).map((item) => item.toString()),
-          )
-        : const <String>[];
-    final rawCategory = categories.isNotEmpty ? categories.first : 'attraction';
-    final translatedType = _typeLabel(rawCategory);
-    final name = poi['name']?.toString() ??
-        address['freeformAddress']?.toString() ??
-        querySafe(address['municipality']);
-    final placeId = json['id']?.toString() ?? name;
-    
-    final lat = _double(position['lat']);
-    final lon = _double(position['lon']);
-    
-    final distance = (userLat != null && userLon != null)
-        ? _distanceMeters(userLat, userLon, lat, lon).round()
-        : _int(json['dist']);
-
-    return NearbyPlace(
-      id: placeId,
-      name: name,
-      type: translatedType,
-      distanceMeters: distance,
-      location: GeoPoint(
-        latitude: lat,
-        longitude: lon,
-      ),
-      category: translatedType,
-      sourceTags: <String, dynamic>{
-        if (address['municipality'] != null) 'addr:city': address['municipality'],
-      },
-      imageUrl: '',
-      thumbnailUrl: '',
-      statusLabel: 'Abierto',
-      isOpenNow: true,
-    );
-  }
-
-  String querySafe(Object? value) {
-    return value?.toString().trim().isNotEmpty == true
-        ? value.toString().trim()
-        : 'Lugar';
-  }
-
-  Future<List<NearbyPlace>> _nearbyTomTomPlaces({
-    required double latitude,
-    required double longitude,
-  }) async {
-    final key = AppConfig.tomTomApiKey.trim();
-    if (key.isEmpty) return const [];
-    try {
-      final uri = Uri.parse(
-        'https://api.tomtom.com/search/2/nearbySearch/.json',
-      ).replace(
-        queryParameters: {
-          'key': key,
-          'lat': latitude.toString(),
-          'lon': longitude.toString(),
-          'radius': '5000',
-          'limit': '20',
-          'countrySet': 'CO',
-          'language': 'es-ES',
-          'categorySet': '7376,9362,7318,7374,7375',
-        },
-      );
-      final response = await http
-          .get(uri, headers: const {'User-Agent': 'VIBETOURS/1.0'})
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return const [];
-      }
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final results = json['results'] as List<dynamic>? ?? const [];
-      final List<NearbyPlace> places = [];
-      for (final item in results) {
-        if (item is Map) {
-          final place = _tomTomPlaceFromJson(
-            Map<String, dynamic>.from(item),
-            userLat: latitude,
-            userLon: longitude,
-          );
-          if (place.distanceMeters <= 5000 && !_isBlacklisted(place.name, place.type)) {
-            places.add(place);
-          }
-        }
-      }
-      return places.take(15).toList();
+      return places;
     } catch (_) {
       return const [];
     }
