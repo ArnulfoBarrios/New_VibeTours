@@ -106,7 +106,7 @@ describe('AI Rule Unification and International Destination Isolation', () => {
     assert.ok(res6.actionChips.some(c => /hospedaje|hotel/i.test(c)))
 
     // All complete
-    const prefs7 = { ...prefs6, accommodationStatus: 'Recomiéndame hoteles' }
+    const prefs7 = { ...prefs6, accommodationStatus: 'Tengo mi propio hospedaje' }
     const res7 = await generateChatResponse(state1, '', '', prefs7)
     assert.ok(res7.actionChips.some(c => /generar tour/i.test(c)))
   })

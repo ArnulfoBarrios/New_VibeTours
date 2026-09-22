@@ -343,7 +343,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   const SizedBox(height: 16),
                 ],
                 if (builderState.isTyping && !builderState.isLoading && !builderState.isBuilding)
-                  _buildTypingIndicator(),
+                  _buildTypingIndicator(builderState),
               ],
             ),
           ),
@@ -1208,10 +1208,31 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     );
   }
 
-  Widget _buildTypingIndicator() {
+  Widget _buildTypingIndicator([AiBuilderState? state]) {
+    String indicatorText = 'Analizando...';
+    if (state != null && state.messages.isNotEmpty) {
+      final lastUserMsg = state.messages.reversed.firstWhere(
+        (m) => m.isUser,
+        orElse: () => state.messages.last,
+      );
+      final text = lastUserMsg.text.toLowerCase();
+      if (text.contains('hotel') || text.contains('hospedaj') || text.contains('alojam') || text.contains('dormir')) {
+        indicatorText = 'Buscando las mejores opciones de hospedaje...';
+      } else if (text.contains('itinerar') || text.contains('tour') || text.contains('plan') || text.contains('ruta')) {
+        indicatorText = 'Diseñando tu viaje personalizado...';
+      } else if (text.contains('restaurante') || text.contains('comer') || text.contains('comida') || text.contains('gastronom')) {
+        indicatorText = 'Buscando recomendaciones gastronómicas...';
+      } else if (text.contains('presupuesto') || text.contains('precio') || text.contains('cuanto') || text.contains('cuánto')) {
+        indicatorText = 'Estimando costos y presupuestos...';
+      } else if (text.contains('foto') || text.contains('lugar') || text.contains('visitar') || text.contains('atractiv')) {
+        indicatorText = 'Explorando atractivos y lugares de interés...';
+      }
+    }
+
     return Padding(
       padding: const EdgeInsets.only(left: 4, top: 8),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
             height: 24,
@@ -1219,9 +1240,12 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
             child: Lottie.asset('assets/lottie/ai_pulse.json'),
           ),
           const SizedBox(width: 8),
-          Text(
-            'Analizando...',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+          Flexible(
+            child: Text(
+              indicatorText,
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),

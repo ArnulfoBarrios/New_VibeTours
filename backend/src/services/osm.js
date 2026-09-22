@@ -540,6 +540,15 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'la cevicheria': { name: 'Restaurante La Cevicheria', latitude: 10.4265, longitude: -75.5475, city: 'Cartagena', country: 'Colombia' },
   'restaurante celele': { name: 'Restaurante Celele', latitude: 10.4208, longitude: -75.5458, city: 'Cartagena', country: 'Colombia' },
   'celele': { name: 'Restaurante Celele', latitude: 10.4208, longitude: -75.5458, city: 'Cartagena', country: 'Colombia' },
+  'restaurante cande': { name: 'Restaurante Candé', latitude: 10.4267, longitude: -75.5469, city: 'Cartagena', country: 'Colombia' },
+  'cande': { name: 'Restaurante Candé', latitude: 10.4267, longitude: -75.5469, city: 'Cartagena', country: 'Colombia' },
+  'carmen cartagena': { name: 'Restaurante Carmen', latitude: 10.4269, longitude: -75.5475, city: 'Cartagena', country: 'Colombia' },
+  'restaurante carmen': { name: 'Restaurante Carmen', latitude: 10.4269, longitude: -75.5475, city: 'Cartagena', country: 'Colombia' },
+  'torre del reloj': { name: 'Torre del Reloj, Cartagena', latitude: 10.4225, longitude: -75.5478, city: 'Cartagena', country: 'Colombia' },
+  'getsemani': { name: 'Barrio Getsemaní, Cartagena', latitude: 10.4200, longitude: -75.5450, city: 'Cartagena', country: 'Colombia' },
+  'convento de la popa': { name: 'Convento de la Popa', latitude: 10.4190, longitude: -75.5250, city: 'Cartagena', country: 'Colombia' },
+  'plaza de santo domingo': { name: 'Plaza de Santo Domingo', latitude: 10.4230, longitude: -75.5515, city: 'Cartagena', country: 'Colombia' },
+  'playa blanca baru': { name: 'Playa Blanca Barú, Cartagena', latitude: 10.2200, longitude: -75.6150, city: 'Cartagena', country: 'Colombia' },
   'restaurante el boliche cebicheria': { name: 'Restaurante El Boliche Cebichería', latitude: 10.4267, longitude: -75.5482, city: 'Cartagena', country: 'Colombia' },
   'el boliche cebicheria': { name: 'Restaurante El Boliche Cebichería', latitude: 10.4267, longitude: -75.5482, city: 'Cartagena', country: 'Colombia' },
 
@@ -694,6 +703,13 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'restaurante la casa del marisco': { name: 'Restaurante La Casa del Marisco', latitude: 10.9975, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
   'casa del marisco': { name: 'Restaurante La Casa del Marisco', latitude: 10.9975, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
   'la troja': { name: 'La Troja', latitude: 10.9942, longitude: -74.8080, city: 'Barranquilla', country: 'Colombia' },
+  'monumento a shakira': { name: 'Estatua de Shakira', latitude: 11.0205, longitude: -74.7938, city: 'Barranquilla', country: 'Colombia' },
+  'estatua de shakira': { name: 'Estatua de Shakira', latitude: 11.0205, longitude: -74.7938, city: 'Barranquilla', country: 'Colombia' },
+  'shakira': { name: 'Estatua de Shakira', latitude: 11.0205, longitude: -74.7938, city: 'Barranquilla', country: 'Colombia' },
+  'museo del atlantico': { name: 'Museo del Atlántico', latitude: 10.9825, longitude: -74.7780, city: 'Barranquilla', country: 'Colombia' },
+  'hotel dann carlton barranquilla': { name: 'Hotel Dann Carlton Barranquilla', latitude: 11.0118, longitude: -74.8236, city: 'Barranquilla', country: 'Colombia' },
+  'hotel dann carlton': { name: 'Hotel Dann Carlton Barranquilla', latitude: 11.0118, longitude: -74.8236, city: 'Barranquilla', country: 'Colombia' },
+  'ghl hotel grand barranquilla': { name: 'GHL Hotel Grand Barranquilla', latitude: 11.0152, longitude: -74.8248, city: 'Barranquilla', country: 'Colombia' },
 
   // Santa Marta
   'playa el rodadero': { name: 'Playa El Rodadero', latitude: 11.2052, longitude: -74.2285, city: 'Santa Marta', country: 'Colombia' },
@@ -721,6 +737,10 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'playa la piscina': { name: 'La Piscina, Parque Tayrona', latitude: 11.2950, longitude: -73.9550, city: 'Santa Marta', country: 'Colombia' },
   'restaurante ouzo': { name: 'Restaurante Ouzo', latitude: 11.2422, longitude: -74.2129, city: 'Santa Marta', country: 'Colombia' },
   'ouzo': { name: 'Restaurante Ouzo', latitude: 11.2422, longitude: -74.2129, city: 'Santa Marta', country: 'Colombia' },
+  'restaurante donde chucho': { name: 'Restaurante Donde Chucho', latitude: 11.2023, longitude: -74.2274, city: 'Santa Marta', country: 'Colombia' },
+  'donde chucho': { name: 'Restaurante Donde Chucho', latitude: 11.2023, longitude: -74.2274, city: 'Santa Marta', country: 'Colombia' },
+  'burukuka': { name: 'Restaurante Burukuka', latitude: 11.1963, longitude: -74.2325, city: 'Santa Marta', country: 'Colombia' },
+  'restaurante burukuka': { name: 'Restaurante Burukuka', latitude: 11.1963, longitude: -74.2325, city: 'Santa Marta', country: 'Colombia' },
   'centro comercial buenavista': { name: 'Centro Comercial Buenavista', latitude: 11.2264, longitude: -74.1734, city: 'Santa Marta', country: 'Colombia' },
 
   // International Iconic Landmarks
@@ -736,7 +756,7 @@ export function matchIconicLandmark(query, normalizedQuery, centerLat = null, ce
   if (!query && !normalizedQuery) return null
   const normLower = String(normalizedQuery || query || '').toLowerCase().trim()
   const rawClean = String(query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-  const strippedCity = normLower.replace(/,\s*(barranquilla|santa marta|cartagena|coveñas|covenas|medellin|medellín|bogota|bogotá|colombia)/gi, '').trim()
+  const strippedCity = normLower.replace(/,\s*(barranquilla|santa marta|cartagena|coveñas|covenas|medellin|medellín|bogota|bogotá|colombia|local)\b/gi, '').trim()
   const unaccentedStripped = strippedCity.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const unaccentedQuery = normLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const pureQuery = unaccentedStripped.split(',')[0].trim()

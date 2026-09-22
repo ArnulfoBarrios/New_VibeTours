@@ -155,16 +155,26 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     Duration timeout = const Duration(minutes: 3),
   }) async {
     final baseUrl = await _findWorkingBaseUrl();
-    return await http.post(
-      Uri.parse('$baseUrl$path'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    ).timeout(timeout);
+    try {
+      return await http.post(
+        Uri.parse('$baseUrl$path'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ).timeout(timeout);
+    } catch (_) {
+      _workingBaseUrl = null;
+      rethrow;
+    }
   }
   
   Future<http.Response> _getJson(String path) async {
     final baseUrl = await _findWorkingBaseUrl();
-    return await http.get(Uri.parse('$baseUrl$path')).timeout(const Duration(minutes: 1));
+    try {
+      return await http.get(Uri.parse('$baseUrl$path')).timeout(const Duration(minutes: 1));
+    } catch (_) {
+      _workingBaseUrl = null;
+      rethrow;
+    }
   }
 
   void setInitialData(AiTourRequest request, List<AiRecommendation> initialRecs, Map<String, dynamic> context) {

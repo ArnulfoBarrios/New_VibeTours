@@ -1058,7 +1058,16 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedDestinationKey === preloadDestinationKey ||
       updatedDestinationKey === warmedCanonicalKey
     )) {
-      await catalogWarmup
+      const isExplicitItineraryRequest = /\b(itinerario|itinerarios|plan de viaje|cómo va el itinerario|mostrar el itinerario|muéstrame el itinerario|ver el itinerario|detalles del d[íi]a|ver d[íi]a|d[íi]a\s*\d+)\b/i.test(message)
+      const isExplicitHotelInquiry = /\b(recomi[eé]ndame hoteles|qu[eé] hoteles|opciones de hotel|d[oó]nde hospedarm[eé]|d[oó]nde quedarm[eé]|recomiendas alg[uú]n hotel|informaci[oó]n del? hotel)\b/i.test(message)
+      const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(message)
+      const isLodgingConfirmed = isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus)
+      const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(message)
+      const needsCatalogImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitAttractionInquiry || isLodgingConfirmed || isExplicitBuildRequest
+
+      if (needsCatalogImmediate) {
+        await catalogWarmup
+      }
     }
 
     // 2. Realizar búsqueda en vivo solo si el usuario pregunta explícitamente

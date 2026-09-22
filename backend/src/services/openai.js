@@ -119,10 +119,10 @@ export function isLodgingCategoryOrGeneric(text) {
 export function isLodgingExplicitlyConfirmed(hotel, status) {
   // 1. Private home or local family accommodation is explicitly confirmed
   const statusStr = String(status || '').trim().toLowerCase()
-  const isStatusHome = /\b(casa propia|familiar|alojamiento particular|en casa|mi casa|casa de familiares|casa de amigos|vivo aqu[ií]|no necesito hotel|alojamiento propio)\b/i.test(statusStr)
+  const isStatusHome = /\b(casa propia|familiar|alojamiento particular|en casa|mi casa|casa de familiares|casa de amigos|vivo aqu[ií]|no necesito hotel|alojamiento propio|propio hospedaje|propio alojamiento|tengo hospedaje|tengo mi propio hospedaje)\b/i.test(statusStr)
   const hotelName = typeof hotel === 'string' ? hotel : (hotel?.name || hotel?.nombre || '')
   const hotelNameStr = String(hotelName || '').trim().toLowerCase()
-  const isHotelHome = /\b(casa propia|familiar|alojamiento particular|en mi casa|mi casa|en casa)\b/i.test(hotelNameStr)
+  const isHotelHome = /\b(casa propia|familiar|alojamiento particular|en mi casa|mi casa|en casa|propio hospedaje|propio alojamiento)\b/i.test(hotelNameStr)
 
   if (isStatusHome || isHotelHome) {
     return true
@@ -540,6 +540,28 @@ export const DESTINATION_ICONIC_LANDMARKS = Object.freeze({
     'Ciénaga de la Caimanera',
     'Segunda Ensenada de Coveñas',
     'Islas de San Bernardo'
+  ],
+  'santa marta': [
+    'Quinta de San Pedro Alejandrino',
+    'Catedral Basílica de Santa Marta',
+    'Museo del Oro Tairona',
+    'Parque de Los Novios',
+    'Playa El Rodadero',
+    'Bahía de Taganga',
+    'Parque Nacional Natural Tayrona',
+    'Minca, Sierra Nevada',
+    'Playa Blanca, Santa Marta'
+  ],
+  'cartagena': [
+    'Castillo San Felipe de Barajas',
+    'Ciudad Amurallada de Cartagena',
+    'Torre del Reloj, Centro Histórico',
+    'Barrio Getsemaní, Cartagena',
+    'Convento de la Popa',
+    'Plaza de Santo Domingo',
+    'Islas del Rosario, Cartagena',
+    'Playa Blanca Barú, Cartagena',
+    'Bocagrande, Cartagena'
   ]
 })
 
@@ -575,6 +597,42 @@ export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
     { name: 'Nena Lela', specialty: 'Comida típica tradicional barranquillera' },
     { name: 'El Caimán del Río', specialty: 'Mercado gastronómico frente al río Magdalena' },
     { name: 'Restaurante La Herradura', specialty: 'Carnes y asados tradicionales' }
+  ],
+  'santa marta': [
+    { name: 'Restaurante Donde Chucho', specialty: 'Pescados frescos, mariscos y cazuela caribeña' },
+    { name: 'Restaurante Ouzo', specialty: 'Cocina mediterránea y griega con productos locales' },
+    { name: 'Restaurante Burukuka', specialty: 'Gastronomía caribeña y cócteles con vista al mar' }
+  ],
+  'cartagena': [
+    { name: 'Restaurante La Cevicheria', specialty: 'Ceviches frescos y frutos del mar en el Centro Histórico' },
+    { name: 'Restaurante Celele', specialty: 'Cocina contemporánea del Caribe colombiano' },
+    { name: 'Restaurante Candé', specialty: 'Gastronomía 100% cartagenera y caribeña tradicional' }
+  ]
+})
+
+export const DESTINATION_ICONIC_HOTELS = Object.freeze({
+  'barranquilla': [
+    { name: 'Hotel Dann Carlton Barranquilla', desc: 'Hotel de alta categoría ubicado frente al centro comercial Buenavista', price: '~$90 - $140 USD/noche' },
+    { name: 'Hotel El Prado', desc: 'Monumento arquitectónico y hotel patrimonial de estilo republicano en El Prado', price: '~$80 - $120 USD/noche' },
+    { name: 'GHL Hotel Grand Barranquilla', desc: 'Hotel moderno con excelente conectividad en el norte', price: '~$70 - $110 USD/noche' },
+    { name: 'Crowne Plaza Barranquilla', desc: 'Alojamiento contemporáneo con vistas panorámicas', price: '~$95 - $150 USD/noche' }
+  ],
+  'cartagena': [
+    { name: 'Hotel Casa La Fe', desc: 'Hotel boutique en la Plaza Fernández de Madrid en el Centro Histórico', price: '~$90 - $130 USD/noche' },
+    { name: 'Hotel Santa Clara', desc: 'Convento colonial icónico de lujo en el Centro Amurallado', price: '~$250 - $400 USD/noche' },
+    { name: 'Hotel Casa Isabel', desc: 'Hotel boutique en Getsemaní con terraza hacia la laguna', price: '~$80 - $120 USD/noche' }
+  ],
+  'santa marta': [
+    { name: 'Hotel Boutique Don Pepe', desc: 'Hotel boutique colonial en el Centro Histórico de Santa Marta', price: '~$100 - $160 USD/noche' },
+    { name: 'Santa Marta Marriott Resort Playa Dormida', desc: 'Resort frente al mar con acceso directo a la playa', price: '~$120 - $180 USD/noche' }
+  ],
+  'covenas': [
+    { name: 'Hotel Palma Linda', desc: 'Hotel de playa en la Primera Ensenada de Coveñas', price: '~$60 - $95 USD/noche' },
+    { name: 'Hotel Punta de Piedra', desc: 'Alojamiento frente al mar en el sector de Punta de Piedra', price: '~$70 - $110 USD/noche' }
+  ],
+  'coveñas': [
+    { name: 'Hotel Palma Linda', desc: 'Hotel de playa en la Primera Ensenada de Coveñas', price: '~$60 - $95 USD/noche' },
+    { name: 'Hotel Punta de Piedra', desc: 'Alojamiento frente al mar en el sector de Punta de Piedra', price: '~$70 - $110 USD/noche' }
   ]
 })
 
@@ -733,13 +791,31 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  // 1.3 Query live OpenStreetMap POIs (Overpass and Photon) to complement
-  if (lat && lon) {
-    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500))
+  // 1.2.1 Resolve iconic hotels from presets if available
+  const presetHotels = DESTINATION_ICONIC_HOTELS[cleanKey] || DESTINATION_ICONIC_HOTELS[clean] || []
+  if (presetHotels.length > 0 && realHotels.length === 0) {
+    const verifiedHotels = await verifyCatalogEntriesOnOsm(presetHotels, clean, targetCountry, presetHotels.length, lat, lon, 'hotel')
+    for (const vh of verifiedHotels) {
+      if (!realHotels.some(h => arePlacesSimilar(h.name, vh.name))) {
+        realHotels.push(vh)
+      }
+    }
+  }
+
+  // 1.3 Query live OpenStreetMap POIs (Overpass and Photon) only when complements are needed
+  const needsOsmComplement = (realPlaces.length < 10 || realRests.length < 4 || realHotels.length < 2) && lat && lon
+  if (needsOsmComplement) {
+    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 2000))
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
-      Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise]),
-      Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise]),
-      Promise.race([overpassAttractions(lat, lon, 35000).catch(() => []), timeoutPromise])
+      realHotels.length < 2
+        ? Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise])
+        : Promise.resolve([]),
+      realRests.length < 4
+        ? Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise])
+        : Promise.resolve([]),
+      realPlaces.length < 10
+        ? Promise.race([overpassAttractions(lat, lon, 35000).catch(() => []), timeoutPromise])
+        : Promise.resolve([])
     ])
 
     const fetchedHotels = (osmHotels || []).filter(h => h && h.name && !isGenericFacilityName(h.name) && !isNonTouristFacility(h.tags) && !isNonTouristFacility({ name: h.name }) && !h.name.toLowerCase().includes('perímetro urbano')).slice(0, 6)
@@ -776,7 +852,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       }
     }
 
-    if (realPlaces.length < 14) {
+    if (realPlaces.length < 10) {
       const [generalPlaces, museums] = await Promise.all([
         photonSearch(`turismo ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => []),
         photonSearch(`museo ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => [])
@@ -787,7 +863,6 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       ].filter(p => {
         if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
         if (p.name.toLowerCase().includes('perímetro urbano')) return false
-        // Geographic bound check: ensure POI is within 35km and respects coastal corridor
         if (p.latitude != null && p.longitude != null && lat != null && lon != null) {
           if (!isWithinCoastalCorridorBounds(p.latitude, p.longitude, clean)) return false
           const dist = haversineMeters(lat, lon, p.latitude, p.longitude)
@@ -804,33 +879,36 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  // 2. Dynamic global travel intelligence: Fetch authentic profile from OpenAI and merge missing verified entities
-  try {
-    const dynamicProfile = await fetchDynamicDestinationProfile(clean, targetCountry).catch(() => null)
-    if (dynamicProfile) {
-      const verifiedProfilePlaces = await verifyCatalogEntriesOnOsm(dynamicProfile.places || [], clean, targetCountry, 12, lat, lon)
-      for (const p of verifiedProfilePlaces) {
-        if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
-          realPlaces.push(p.name)
+  // 2. Dynamic global travel intelligence: Fetch authentic profile from OpenAI only when catalog lacks sufficient entities
+  const needsDynamicProfile = realPlaces.length < 8 || realRests.length < 3 || realHotels.length < 2
+  if (needsDynamicProfile) {
+    try {
+      const dynamicProfile = await fetchDynamicDestinationProfile(clean, targetCountry).catch(() => null)
+      if (dynamicProfile) {
+        const verifiedProfilePlaces = await verifyCatalogEntriesOnOsm(dynamicProfile.places || [], clean, targetCountry, 12, lat, lon)
+        for (const p of verifiedProfilePlaces) {
+          if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
+            realPlaces.push(p.name)
+          }
+        }
+        const verifiedProfileRestaurants = await verifyCatalogEntriesOnOsm(dynamicProfile.restaurants || [], clean, targetCountry, 12, lat, lon)
+        for (const r of verifiedProfileRestaurants) {
+          if (!realRests.some(existing => arePlacesSimilar(existing.name || existing, r.name))) {
+            realRests.push(r)
+          }
+        }
+        const verifiedProfileHotels = await verifyCatalogEntriesOnOsm(dynamicProfile.hotels || [], clean, targetCountry, 8, lat, lon)
+        for (const h of verifiedProfileHotels) {
+          if (!realHotels.some(existing => arePlacesSimilar(existing.name || existing, h.name))) {
+            realHotels.push(h)
+          }
+        }
+        if (realEvents.length === 0 && Array.isArray(dynamicProfile.events)) {
+          realEvents.push(...dynamicProfile.events)
         }
       }
-      const verifiedProfileRestaurants = await verifyCatalogEntriesOnOsm(dynamicProfile.restaurants || [], clean, targetCountry, 12, lat, lon)
-      for (const r of verifiedProfileRestaurants) {
-        if (!realRests.some(existing => arePlacesSimilar(existing.name || existing, r.name))) {
-          realRests.push(r)
-        }
-      }
-      const verifiedProfileHotels = await verifyCatalogEntriesOnOsm(dynamicProfile.hotels || [], clean, targetCountry, 8, lat, lon)
-      for (const h of verifiedProfileHotels) {
-        if (!realHotels.some(existing => arePlacesSimilar(existing.name || existing, h.name))) {
-          realHotels.push(h)
-        }
-      }
-      if (realEvents.length === 0 && Array.isArray(dynamicProfile.events)) {
-        realEvents.push(...dynamicProfile.events)
-      }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  }
 
   if (realRests.length < 10 && lat && lon) {
     const extraFood = await photonSearch(`restaurante ${clean}`, 12, lat, lon, null, 30000, targetCountry).catch(() => [])
@@ -866,8 +944,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     .filter(h => h && h.name && !isGenericFacilityName(h.name) && !isNonTouristFacility({ name: h.name }))
     .map(h => ({
       name: h.name,
-      desc: `Alojamiento verificado ubicado en ${capitalCity}.`,
-      price: '~$75 - $140 USD/noche'
+      desc: h.desc || `Alojamiento verificado ubicado en ${capitalCity}.`,
+      price: h.price || '~$75 - $140 USD/noche'
     }))
 
   const seenCleanHotels = new Set()
@@ -1099,7 +1177,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
 
   const destName = cleanAdministrativeCityName(rawDestName)
   const hasCity = Boolean(destName && !isVagueDestination(destName))
-  const destCountry = known.country || (destName.toLowerCase() === 'cartagena' || destName.toLowerCase() === 'santa marta' || destName.toLowerCase() === 'medellín' || destName.toLowerCase() === 'bogotá' ? 'Colombia' : '')
+  const knownCityNormalized = destName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const isKnownColombianCity = /^(cartagena|santa marta|medellin|bogota|barranquilla|cali|covenas|tolu|san andres|bucaramanga|pereira|salento|guatape|villa de leyva)$/i.test(knownCityNormalized)
+  const destCountry = known.canonicalDestination?.country || known.country || (isKnownColombianCity ? 'Colombia' : '')
   if (hasCity && Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0) {
     known.specificPlaces = await filterChatSpecificPlacesByOsm(known.specificPlaces, destName, destCountry, known.selectedHotel)
   }
@@ -1132,15 +1212,25 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     if (cached) {
       realCatalog = cached
     } else {
-      // The visible chat must receive the same OSM-grounded catalog as the map.
-      // Keeping this await is intentional: a background warm-up allowed the LLM
-      // to answer before the verified places were available and it could invent
-      // names that had no map record.
-      realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude)
-        .catch(err => {
-          console.warn('[generateChatResponse] Catalog lookup error:', err.message)
-          return { places: [], restaurants: [], hotels: [] }
-        })
+      const isExplicitItineraryRequest = /\b(itinerario|itinerarios|plan de viaje|cómo va el itinerario|mostrar el itinerario|muéstrame el itinerario|ver el itinerario|detalles del d[íi]a|ver d[íi]a|d[íi]a\s*\d+)\b/i.test(lastUserMsg)
+      const isExplicitHotelInquiry = /\b(recomi[eé]ndame hoteles|qu[eé] hoteles|opciones de hotel|d[oó]nde hospedarm[eé]|d[oó]nde quedarm[eé]|recomiendas alg[uú]n hotel|informaci[oó]n del? hotel)\b/i.test(lastUserMsg)
+      const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(lastUserMsg)
+      const isLodgingConfirmed = isLodgingExplicitlyConfirmed(known.selectedHotel, known.accommodationStatus)
+      const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(lastUserMsg)
+      const needsImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitAttractionInquiry || isLodgingConfirmed || isExplicitBuildRequest
+
+      if (needsImmediate) {
+        realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude)
+          .catch(err => {
+            console.warn('[generateChatResponse] Catalog lookup error:', err.message)
+            return { places: [], restaurants: [], hotels: [] }
+          })
+      } else {
+        // En turnos conversacionales previos (Etapas 1 y 2), no bloqueamos la respuesta conversacional.
+        // Se ejecuta en segundo plano para que esté disponible cuando el usuario llegue a la Etapa 3.
+        getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude).catch(() => null)
+        realCatalog = { places: [], restaurants: [], hotels: [] }
+      }
     }
     if (!webSearchSummary && /\b(evento|festivales|feria|carnaval|cu[aá]ndo ir|fechas?|agenda)\b/i.test(lastUserMsg)) {
       const ws = await searchWebForTravel({
