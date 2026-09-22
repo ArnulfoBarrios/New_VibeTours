@@ -891,7 +891,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
           },
           'async': false, // Enforce synchronous execution on Vercel
         },
-        timeout: const Duration(seconds: 55),
+        timeout: const Duration(seconds: 75),
       );
 
       if (response.statusCode == 200) {
