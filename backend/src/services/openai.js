@@ -2855,7 +2855,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
       "dia": 1,
       "parada": 1,
       "nombre": "Nombre real del lugar o restaurante",
-      "descripcion": "Guía de voz inmersiva de 120 a 180 palabras escrita como guía experto hablando al oído del turista, con historia, arquitectura y qué observar.",
+      "descripcion": "Guía de voz inmersiva de 60 a 90 palabras escrita como guía experto hablando al oído del turista, con historia, arquitectura y qué observar.",
       "duracion_estimada": "45 minutos",
       "actividades": ["Actividad 1", "Actividad 2"],
       "datos_curiosos": ["Dato curioso real 1", "Dato curioso real 2"],
@@ -2902,9 +2902,81 @@ REGLAS DE CALIDAD:
 3. El tour dura ${totalDays} días. Debes estructurar el itinerario distribuyendo las paradas según los días indicados, asegurando que existan paradas para cada uno de los ${totalDays} días ("dia": 1..${totalDays}).
 4. El título "nombre_tour" DEBE ser original, evocador, cautivador y con identidad temática única sobre ${cleanCity} (ej: "Joyas y Leyendas de ${cleanCity}", "Sabores y Brisas: De El Prado al Río", "Ruta Secreta de Arquitectura y Tradición en ${cleanCity}"). PROHIBIDO usar títulos planos y repetitivos como "Tour Cultural por ${cleanCity}" o "Tour Personalizado por ${cleanCity}". Tampoco nombres el tour con el nombre de una sola parada.
 5. NO agregues hoteles ni alojamientos como paradas de actividad dentro del itinerario.
-6. Para cada parada, redacta una narración de guía de voz inmersiva de 70 a 110 palabras, con la voz de una guía turística apasionada, joven, extrovertida y cálida, con ritmo fluido, pausas naturales y emoción genuina para narración de audio en vivo (TTS).
+6. Para cada parada, redacta una narración de guía de voz inmersiva de 60 a 90 palabras, con la voz de una guía turística apasionada, joven, extrovertida y cálida, con ritmo fluido, pausas naturales y emoción genuina para narración de audio en vivo (TTS).
 7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.
 8. REGLA ESTRICTA PARA 'mejor_epoca': Si el viaje cuenta con fechas o evento especial indicado (${defaultBestSeason !== 'Todo el año' ? `"${defaultBestSeason}"` : 'como un festival o mes específico'}), 'mejor_epoca' DEBE reflejar exactamente ese rango de fechas o festividad (ej: "${defaultBestSeason}"). De lo contrario, indica "Todo el año" (siempre con 'ñ').`
+
+  // For tours with more than 7 stops, split into parallel chunks so multi-day tours finish in ~20-25s within Vercel limits
+  if (selectedPlaces.length > 7) {
+    const mid = Math.ceil(selectedPlaces.length / 2)
+    const chunk1 = selectedPlaces.slice(0, mid)
+    const chunk2 = selectedPlaces.slice(mid)
+
+    try {
+      const [res1, res2] = await Promise.all([
+        fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify(buildOpenAiPayload({
+            modelConfig: getFastOpenAiModelConfig(),
+            messages: [
+              { role: 'system', content: system },
+              {
+                role: 'user',
+                content: `Genera la primera parte del tour para ${cleanCity}, ${targetCountry}.
+Fechas / Época: ${datesContext || 'Todo el año'}
+Evento o Festival: ${specialEventContext || 'No especificado'}
+Lugares obligatorios (Parte 1): ${JSON.stringify(chunk1)}`
+              }
+            ],
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
+            reasoning_effort: 'low'
+          }))
+        }),
+        fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify(buildOpenAiPayload({
+            modelConfig: getFastOpenAiModelConfig(),
+            messages: [
+              { role: 'system', content: system },
+              {
+                role: 'user',
+                content: `Genera la segunda parte del tour para ${cleanCity}, ${targetCountry}.
+Fechas / Época: ${datesContext || 'Todo el año'}
+Evento o Festival: ${specialEventContext || 'No especificado'}
+Lugares obligatorios (Parte 2): ${JSON.stringify(chunk2)}`
+              }
+            ],
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
+            reasoning_effort: 'low'
+          }))
+        })
+      ])
+
+      if (res1.ok) {
+        const json1 = await res1.json()
+        const parsed1 = cleanAndParseJson(json1.choices?.[0]?.message?.content, null)
+        if (parsed1 && res2.ok) {
+          const json2 = await res2.json()
+          const parsed2 = cleanAndParseJson(json2.choices?.[0]?.message?.content, null)
+          if (parsed2 && Array.isArray(parsed2.itinerario)) {
+            parsed1.itinerario = [
+              ...(Array.isArray(parsed1.itinerario) ? parsed1.itinerario : []),
+              ...parsed2.itinerario
+            ]
+          }
+        }
+        if (parsed1 && Array.isArray(parsed1.itinerario) && parsed1.itinerario.length >= 2) {
+          return parsed1
+        }
+      }
+    } catch (err) {
+      console.warn('[planWithOpenAI] Parallel chunks error, falling back to single call:', err?.message || err)
+    }
+  }
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

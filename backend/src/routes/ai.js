@@ -2268,37 +2268,43 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
     const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1), maxPlannedDay)
     
     const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
-    const richDescriptionsMap = await Promise.race([
-      generateRichPlaceDescriptionsBatch({
-        destination: input.destination,
-        city: input.city,
-        country: input.country,
-        places: plannedPlaceNames,
-        prompt: input.prompt
-      }).catch((err) => {
-        console.warn('[tour-ai] generateRichPlaceDescriptionsBatch build error:', err?.message || err)
-        return {}
-      }),
-      new Promise(resolve => setTimeout(() => resolve({}), 16000))
-    ])
+    const hasRichAiDescriptions = Array.isArray(sourceTour?.itinerario) && sourceTour.itinerario.length > 0 &&
+      plannedStops.every(p => p && typeof p.descripcion === 'string' && p.descripcion.trim().length > 30)
+
+    const richDescriptionsMap = hasRichAiDescriptions
+      ? {}
+      : await Promise.race([
+          generateRichPlaceDescriptionsBatch({
+            destination: input.destination,
+            city: input.city,
+            country: input.country,
+            places: plannedPlaceNames,
+            prompt: input.prompt
+          }).catch((err) => {
+            console.warn('[tour-ai] generateRichPlaceDescriptionsBatch build error:', err?.message || err)
+            return {}
+          }),
+          new Promise(resolve => setTimeout(() => resolve({}), 12000))
+        ])
 
     const assignedUrls = new Set()
-    const settledStops = []
-    for (let index = 0; index < stopsTarget; index++) {
-      const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
-      const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-      const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (sourceStop?.day ? Number(sourceStop.day) : (anchorPlace?.dia ? Number(anchorPlace.dia) : (anchorPlace?.day ? Number(anchorPlace.day) : null)))
-      const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopsTarget) + 1)
-      try {
-        const normalized = await normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
-          descriptionsMap: richDescriptionsMap,
-          assignedUrls
-        })
-        settledStops.push({ status: 'fulfilled', value: normalized })
-      } catch (err) {
-        settledStops.push({ status: 'rejected', reason: err })
-      }
-    }
+    const settledStops = await Promise.all(
+      Array.from({ length: stopsTarget }, async (_, index) => {
+        const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
+        const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
+        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (sourceStop?.day ? Number(sourceStop.day) : (anchorPlace?.dia ? Number(anchorPlace.dia) : (anchorPlace?.day ? Number(anchorPlace.day) : null)))
+        const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopsTarget) + 1)
+        try {
+          const normalized = await normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
+            descriptionsMap: richDescriptionsMap,
+            assignedUrls
+          })
+          return { status: 'fulfilled', value: normalized }
+        } catch (err) {
+          return { status: 'rejected', reason: err }
+        }
+      })
+    )
 
     const rejectedStop = settledStops.find(result => result.status === 'rejected')
     if (rejectedStop) {
@@ -2585,37 +2591,43 @@ async function processTourGeneration(jobId, input) {
       const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1), maxPlannedDay)
       
       const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
-      const richDescriptionsMap = await Promise.race([
-        generateRichPlaceDescriptionsBatch({
-          destination: input.destination,
-          city: input.city,
-          country: input.country,
-          places: plannedPlaceNames,
-          prompt: input.prompt
-        }).catch((err) => {
-          console.warn('[tour-ai] generateRichPlaceDescriptionsBatch generate error:', err?.message || err)
-          return {}
-        }),
-        new Promise(resolve => setTimeout(() => resolve({}), 16000))
-      ])
+      const hasRichAiDescriptions = Array.isArray(sourceTour?.itinerario) && sourceTour.itinerario.length > 0 &&
+        plannedStops.every(p => p && typeof p.descripcion === 'string' && p.descripcion.trim().length > 30)
+
+      const richDescriptionsMap = hasRichAiDescriptions
+        ? {}
+        : await Promise.race([
+            generateRichPlaceDescriptionsBatch({
+              destination: input.destination,
+              city: input.city,
+              country: input.country,
+              places: plannedPlaceNames,
+              prompt: input.prompt
+            }).catch((err) => {
+              console.warn('[tour-ai] generateRichPlaceDescriptionsBatch generate error:', err?.message || err)
+              return {}
+            }),
+            new Promise(resolve => setTimeout(() => resolve({}), 12000))
+          ])
 
       const assignedUrls = new Set()
-      const settledStops = []
-      for (let index = 0; index < stopTarget; index++) {
-        const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
-        const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
-        const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (sourceStop?.day ? Number(sourceStop.day) : (anchorPlace?.dia ? Number(anchorPlace.dia) : (anchorPlace?.day ? Number(anchorPlace.day) : null)))
-        const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopTarget) + 1)
-        try {
-          const normalized = await normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
-            descriptionsMap: richDescriptionsMap,
-            assignedUrls
-          })
-          settledStops.push({ status: 'fulfilled', value: normalized })
-        } catch (err) {
-          settledStops.push({ status: 'rejected', reason: err })
-        }
-      }
+      const settledStops = await Promise.all(
+        Array.from({ length: stopTarget }, async (_, index) => {
+          const sourceStop = plannedStops[index] ?? plannedStops[plannedStops.length - 1] ?? null
+          const anchorPlace = planner.selectedPlaces[index] ?? planner.selectedPlaces[planner.selectedPlaces.length - 1] ?? null
+          const sourceDay = sourceStop?.dia ? Number(sourceStop.dia) : (sourceStop?.day ? Number(sourceStop.day) : (anchorPlace?.dia ? Number(anchorPlace.dia) : (anchorPlace?.day ? Number(anchorPlace.day) : null)))
+          const calculatedDay = sourceDay || (Math.floor((index * totalDays) / stopTarget) + 1)
+          try {
+            const normalized = await normalizeStop(sourceStop, index, input, anchorPlace, planner.selectedPlaces, calculatedDay, {
+              descriptionsMap: richDescriptionsMap,
+              assignedUrls
+            })
+            return { status: 'fulfilled', value: normalized }
+          } catch (err) {
+            return { status: 'rejected', reason: err }
+          }
+        })
+      )
       const rejectedStop = settledStops.find(result => result.status === 'rejected')
       if (rejectedStop) {
         throw rejectedStop.reason instanceof Error
