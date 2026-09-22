@@ -159,9 +159,15 @@ export function inferTourType(input = {}, extracted = null) {
   if (explicit) return explicit
 
   const destinationText = [input.destination, input.city].filter(Boolean).join(' ')
-  const specificText = Array.isArray(input.specificPlaces)
-    ? input.specificPlaces.map(place => typeof place === 'string' ? place : place?.name).filter(Boolean).join(' ')
-    : ''
+  const placesList = [
+    ...(Array.isArray(input.specificPlaces) ? input.specificPlaces : []),
+    ...(Array.isArray(input.selectedPlaces) ? input.selectedPlaces : []),
+    ...(Array.isArray(input.places) ? input.places : [])
+  ]
+  const specificText = placesList
+    .map(place => typeof place === 'string' ? place : place?.name)
+    .filter(Boolean)
+    .join(' ')
 
   if (input.isUserLocationOrigin || input.is_user_location_origin) {
     return 'location_to_destination'
@@ -4832,12 +4838,13 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
       durationDays: input.durationDays,
     }
   )
-  if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
+  const isCandidateSelectedByUser = candidatePlaces.some(p => arePlacesSimilar(p?.name || '', sourceName) || arePlacesSimilar(p?.name || '', resolvedName) || (p?.name && resolvedName && ((p.name.toLowerCase().includes(resolvedName.toLowerCase())) || resolvedName.toLowerCase().includes(p.name.toLowerCase()))))
+  if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || (!isValidCityPlace && !isCandidateSelectedByUser)) {
     const fallbackIsValid = candidateFallback &&
-      isVerifiedCoordinatePlace(candidateFallback) &&
+      (isVerifiedCoordinatePlace(candidateFallback) || candidateFallback.coordinatesVerified || candidateFallback.id || candidateFallback.placeId || candidateFallback.place_id) &&
       hasUsableCoordinates(candidateFallback.latitude, candidateFallback.longitude) &&
       validateCandidateLocation(candidateFallback, cityCenterCoords, geoScope.maxDistanceKm)
-    if (!fallbackIsValid) {
+    if (!fallbackIsValid && !isCandidateSelectedByUser) {
       const error = new Error(`No pudimos confirmar la ubicación real de "${sourceName}" dentro del alcance del tour.`)
       error.code = 'OUT_OF_SCOPE_STOP_LOCATION'
       error.placeName = sourceName
