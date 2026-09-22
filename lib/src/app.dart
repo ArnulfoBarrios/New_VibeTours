@@ -1,16 +1,62 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/design/app_theme.dart';
+import 'core/services/notification_service.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'router.dart';
 import 'state/app_state.dart';
 
-class VibeToursApp extends ConsumerWidget {
+class VibeToursApp extends ConsumerStatefulWidget {
   const VibeToursApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VibeToursApp> createState() => _VibeToursAppState();
+}
+
+class _VibeToursAppState extends ConsumerState<VibeToursApp> {
+  StreamSubscription<String>? _notificationSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _notificationSubscription = NotificationService.instance.onNotificationTap.listen(_handleNotificationTap);
+  }
+
+  @override
+  void dispose() {
+    _notificationSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _handleNotificationTap(String payload) {
+    debugPrint('[VibeToursApp] Interacción con notificación: $payload');
+    try {
+      final router = ref.read(routerProvider);
+      if (payload.startsWith('tour:')) {
+        final tourId = payload.replaceFirst('tour:', '');
+        if (tourId.isNotEmpty) {
+          router.push('/tours/$tourId');
+        }
+      } else if (payload.startsWith('screen:')) {
+        final screen = payload.replaceFirst('screen:', '');
+        if (screen.isNotEmpty) {
+          router.push(screen);
+        }
+      } else if (payload.startsWith('live:')) {
+        final tourId = payload.replaceFirst('live:', '');
+        if (tourId.isNotEmpty) {
+          router.push('/live/$tourId');
+        }
+      }
+    } catch (e) {
+      debugPrint('[VibeToursApp] Error navegando desde notificación: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'VIBETOURS',

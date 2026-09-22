@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -12,6 +13,9 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
 
+  final StreamController<String> _payloadStreamController = StreamController<String>.broadcast();
+  Stream<String> get onNotificationTap => _payloadStreamController.stream;
+
   static const String proximityChannelId = 'proximity_channel';
   static const String proximityChannelName = 'Alertas de Proximidad';
   static const String proximityChannelDesc = 'Avisos cuando estás cerca de una parada o lugar de interés';
@@ -23,6 +27,10 @@ class NotificationService {
   static const String remindersChannelId = 'reminders_channel';
   static const String remindersChannelName = 'Recordatorios de Tours';
   static const String remindersChannelDesc = 'Alertas programadas 24 horas antes del inicio de tus tours';
+
+  static const int aiProgressNotificationId = 2000;
+  static const int aiSuccessNotificationId = 2001;
+  static const int aiErrorNotificationId = 2002;
 
   /// Inicializa los canales y configuraciones locales
   Future<void> initialize() async {
@@ -49,7 +57,11 @@ class NotificationService {
     await _plugin.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        debugPrint('[NotificationService] Notificación seleccionada: payload=${response.payload}');
+        final payload = response.payload;
+        debugPrint('[NotificationService] Notificación seleccionada: payload=$payload');
+        if (payload != null && payload.isNotEmpty) {
+          _payloadStreamController.add(payload);
+        }
       },
     );
 
@@ -121,10 +133,103 @@ class NotificationService {
       proximityChannelId,
       proximityChannelName,
       channelDescription: proximityChannelDesc,
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.max,
+      priority: Priority.max,
       ticker: 'Llegada a destino',
       icon: 'ic_stat_vibetours',
+      category: AndroidNotificationCategory.navigation,
+      visibility: NotificationVisibility.public,
+      enableVibration: true,
+      playSound: true,
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
+    );
+
+    try {
+      await _plugin.show(id, title, body, details, payload: payload);
+      debugPrint('[NotificationService] Notificación de proximidad emitida: $title');
+    } catch (e) {
+      debugPrint('[NotificationService] Error emitiendo notificación de proximidad: $e');
+    }
+  }
+
+  /// Notificación de progreso mientras se crea un tour con IA en segundo plano
+  Future<void> showAiTourProgressNotification({
+    required String message,
+    String? title,
+  }) async {
+    if (!await _areNotificationsEnabled()) return;
+
+    final androidDetails = AndroidNotificationDetails(
+      toursChannelId,
+      toursChannelName,
+      channelDescription: toursChannelDesc,
+      importance: Importance.low,
+      priority: Priority.low,
+      ongoing: true,
+      autoCancel: false,
+      showProgress: true,
+      indeterminate: true,
+      icon: 'ic_stat_vibetours',
+      category: AndroidNotificationCategory.progress,
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: false,
+        presentSound: false,
+      ),
+    );
+
+    try {
+      await _plugin.show(
+        aiProgressNotificationId,
+        title ?? '✨ Creando tu tour personalizado',
+        message,
+        details,
+        payload: 'screen:/ai/builder',
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] Error emitiendo notificación de progreso: $e');
+    }
+  }
+
+  /// Cancela la notificación de progreso de creación de tour
+  Future<void> dismissAiTourProgressNotification() async {
+    try {
+      await _plugin.cancel(aiProgressNotificationId);
+    } catch (e) {
+      debugPrint('[NotificationService] Error cancelando notificación de progreso: $e');
+    }
+  }
+
+  /// Notificación si la creación de tour con IA falla en segundo plano
+  Future<void> showAiTourErrorNotification({
+    required String title,
+    required String errorMessage,
+    String? destination,
+  }) async {
+    await dismissAiTourProgressNotification();
+    if (!await _areNotificationsEnabled()) return;
+
+    final androidDetails = AndroidNotificationDetails(
+      toursChannelId,
+      toursChannelName,
+      channelDescription: toursChannelDesc,
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: 'ic_stat_vibetours',
+      category: AndroidNotificationCategory.error,
     );
 
     final details = NotificationDetails(
@@ -137,10 +242,16 @@ class NotificationService {
     );
 
     try {
-      await _plugin.show(id, title, body, details, payload: payload);
-      debugPrint('[NotificationService] Notificación de proximidad emitida: $title');
+      await _plugin.show(
+        aiErrorNotificationId,
+        title,
+        errorMessage,
+        details,
+        payload: 'screen:/ai/builder',
+      );
+      debugPrint('[NotificationService] Notificación de error emitida: $title');
     } catch (e) {
-      debugPrint('[NotificationService] Error emitiendo notificación de proximidad: $e');
+      debugPrint('[NotificationService] Error emitiendo notificación de error: $e');
     }
   }
 
@@ -149,6 +260,7 @@ class NotificationService {
     required String tourTitle,
     String? tourId,
   }) async {
+    await dismissAiTourProgressNotification();
     if (!await _areNotificationsEnabled()) return;
 
     final aiPerson = Person(
@@ -198,7 +310,7 @@ class NotificationService {
 
     try {
       await _plugin.show(
-        2001,
+        aiSuccessNotificationId,
         'Tour Planner AI',
         '✨ ¡Tu tour está listo!\nEl tour "$tourTitle" ha sido creado exitosamente con IA. ¡Toca para explorarlo!',
         details,

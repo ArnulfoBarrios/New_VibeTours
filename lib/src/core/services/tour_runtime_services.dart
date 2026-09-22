@@ -44,6 +44,9 @@ class LocationService {
   Future<Stream<Position>?> positionStream({
     int distanceFilterMeters = 0,
     LocationSamplingMode mode = LocationSamplingMode.walking,
+    bool enableForegroundService = true,
+    String? foregroundTitle,
+    String? foregroundText,
   }) async {
     final ready = await _ensureLocationReady();
     if (!ready) return null;
@@ -53,8 +56,16 @@ class LocationService {
       settings = AndroidSettings(
         accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: distanceFilterMeters,
-        intervalDuration: const Duration(milliseconds: 500),
+        intervalDuration: const Duration(milliseconds: 1000),
         forceLocationManager: false,
+        foregroundNotificationConfig: enableForegroundService
+            ? ForegroundNotificationConfig(
+                notificationTitle: foregroundTitle ?? 'Recorrido en vivo - VibeTours',
+                notificationText: foregroundText ?? 'Monitoreando tu ubicación para avisarte al llegar a cada parada.',
+                notificationIcon: const AndroidResource(name: 'ic_stat_vibetours'),
+                enableWakeLock: true,
+              )
+            : null,
       );
     } else if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
       settings = AppleSettings(
@@ -62,7 +73,8 @@ class LocationService {
         distanceFilter: distanceFilterMeters,
         activityType: ActivityType.fitness,
         pauseLocationUpdatesAutomatically: false,
-        showBackgroundLocationIndicator: false,
+        showBackgroundLocationIndicator: enableForegroundService,
+        allowBackgroundLocationUpdates: enableForegroundService,
       );
     } else {
       settings = LocationSettings(

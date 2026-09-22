@@ -1488,8 +1488,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   Future<void> _startLiveNavigation() async {
     final service = ref.read(locationServiceProvider);
 
-    // Start live high-accuracy satellite stream immediately
-    final stream = await service.positionStream(distanceFilterMeters: 0);
+    final tour = _navigationTour;
+    // Start live high-accuracy satellite stream immediately with foreground service for background alerts
+    final stream = await service.positionStream(
+      distanceFilterMeters: 0,
+      enableForegroundService: true,
+      foregroundTitle: tour != null ? 'Recorrido en vivo: ${tour.title}' : 'Recorrido en vivo - VibeTours',
+      foregroundText: 'VibeTours te avisará cuando llegues a cada parada.',
+    );
     if (mounted && stream != null) {
       await _positionSubscription?.cancel();
       _positionSubscription = stream.listen(_handlePositionUpdate);

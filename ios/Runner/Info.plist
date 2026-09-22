@@ -29,6 +29,14 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>VIBETOURS usa tu ubicacion para mostrar rutas, lugares cercanos y progreso en vivo.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>VIBETOURS necesita tu ubicacion en segundo plano para avisarte cuando llegues a las paradas del tour, incluso con la pantalla bloqueada.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>VIBETOURS necesita tu ubicacion continua para guiarte durante el tour en vivo.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>VIBETOURS usa el microfono para comandos de voz en modo manos libres.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

@@ -24,8 +24,8 @@ void main() {
     );
 
     final narration = TourGuideFormatter.formatStopNarration(stop, stopIndex: 0, totalStops: 3);
-    expect(narration.startsWith('¡Hola y bienvenidos a Castillo San Felipe de Barajas!'), isTrue);
+    expect(narration.startsWith('¡Hola, viajero! Qué alegría empezar esta aventura juntos. Nuestra primera parada es Castillo San Felipe de Barajas.'), isTrue);
     expect(narration.contains('siglo diecisiete'), isTrue);
-    expect(narration.contains('Un consejo para tu visita: Lleva agua y sombrero para protegerte del sol.'), isTrue);
+    expect(narration.contains('Un tip especial de guía para ti: Lleva agua y sombrero para protegerte del sol.'), isTrue);
   });
 }

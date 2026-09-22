@@ -70,9 +70,14 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
 
   Future<void> _startLiveNavigation() async {
     final service = ref.read(locationServiceProvider);
-
-    // Start live high-accuracy satellite stream immediately
-    final stream = await service.positionStream(distanceFilterMeters: 0);
+    final place = ref.read(selectedNearbyPlaceProvider);
+    // Start live high-accuracy satellite stream with foreground service for background alerts
+    final stream = await service.positionStream(
+      distanceFilterMeters: 0,
+      enableForegroundService: true,
+      foregroundTitle: place != null ? 'Rumbo a ${place.name}' : 'Navegación en curso - VibeTours',
+      foregroundText: 'VibeTours te avisará cuando estés cerca de tu destino.',
+    );
     if (mounted && stream != null) {
       await _positionSubscription?.cancel();
       _positionSubscription = stream.listen(_handlePositionUpdate);

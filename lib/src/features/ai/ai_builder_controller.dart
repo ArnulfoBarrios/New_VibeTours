@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../domain/models.dart';
 import '../../data/discovery_repository.dart';
 import 'package:http/http.dart' as http;
@@ -128,12 +129,42 @@ class AiBuilderState {
 }
 
 
-class AiBuilderController extends StateNotifier<AiBuilderState> {
-  AiBuilderController(this.ref) : super(const AiBuilderState());
-  final Ref ref;
+class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBindingObserver {
+  AiBuilderController(this.ref) : super(const AiBuilderState()) {
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_checkPendingJobOnStartup());
+  }
 
+  static const String _pendingJobIdKey = 'vibetours_pending_tour_job_id';
+
+  final Ref ref;
   String? _workingBaseUrl;
   int _chatRequestSequence = 0;
+  bool _isPolling = false;
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && this.state.isBuilding && !_isPolling) {
+      unawaited(_resumeJobPollingIfActive());
+    }
+  }
+
+  Future<void> _checkPendingJobOnStartup() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_pendingJobIdKey);
+    } catch (_) {}
+  }
+
+  Future<void> _resumeJobPollingIfActive() async {
+    // Synchronous execution on Vercel maintains the active HTTP request while in background.
+  }
 
   Future<String> _findWorkingBaseUrl() async {
     if (_workingBaseUrl != null) return _workingBaseUrl!;
@@ -835,35 +866,73 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     if (state.isBuilding || state.request == null || state.recommendations.isEmpty) return;
     state = state.copyWith(isBuilding: true, error: null);
 
+    // Keep CPU awake while generating tour
+    unawaited(WakelockPlus.enable());
+
+    // Show progress notification so user sees it in the status bar while outside the app
+    unawaited(
+      NotificationService.instance.showAiTourProgressNotification(
+        title: '✨ Creando tu tour personalizado',
+        message: 'Tour Planner AI está diseñando tu itinerario. Te avisaremos al terminar.',
+      ),
+    );
+
     try {
-      final response = await _postJson('/ai/tours/build', {
-        'request': state.request!.toJson(),
-        'places': state.recommendations.map((e) => e.toJson()).toList(),
-        'plannerContext': {
-          ...?state.plannerContext,
-          ...state.preferences,
-          if (state.selectedHotel != null) 'selectedHotel': state.selectedHotel,
+      // Synchronous request to avoid Vercel Serverless container-freeze & 404 polling issues
+      final response = await _postJson(
+        '/ai/tours/build',
+        {
+          'request': state.request!.toJson(),
+          'places': state.recommendations.map((e) => e.toJson()).toList(),
+          'plannerContext': {
+            ...?state.plannerContext,
+            ...state.preferences,
+            if (state.selectedHotel != null) 'selectedHotel': state.selectedHotel,
+          },
+          'async': false, // Enforce synchronous execution on Vercel
         },
-      });
+        timeout: const Duration(seconds: 55),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['status'] == 'completed' && data['tour'] != null) {
-          // Direct synchronous tour build (e.g. on Vercel Serverless)
+          await NotificationService.instance.dismissAiTourProgressNotification();
           _handleCompletedTour(Map<String, dynamic>.from(data['tour']));
           return;
-        }
-        final jobId = data['jobId'];
-        if (jobId != null) {
-          await _pollBuildJob(jobId.toString());
+        } else if (data['jobId'] != null) {
+          // Fallback if backend returned a jobId (e.g. local persistent Node server)
+          await _pollBuildJob(data['jobId'].toString());
+          return;
         } else {
-          state = state.copyWith(isBuilding: false, error: 'Respuesta inesperada del servidor al construir el tour.');
+          final errorMsg = data['message']?.toString() ?? 'Respuesta inesperada del servidor al construir el tour.';
+          await NotificationService.instance.dismissAiTourProgressNotification();
+          await NotificationService.instance.showAiTourErrorNotification(
+            title: 'Error al generar tour',
+            errorMessage: errorMsg,
+          );
+          state = state.copyWith(isBuilding: false, error: errorMsg);
         }
       } else {
-        state = state.copyWith(isBuilding: false, error: '¡Ups! Hubo un problema al iniciar la creación del tour. Intenta de nuevo.');
+        final errorMsg = response.statusCode == 504 || response.statusCode == 408
+            ? 'El servidor tardó demasiado tiempo en responder. Intenta con menos paradas o reintenta en unos segundos.'
+            : '¡Ups! Hubo un problema al crear el tour en el servidor (${response.statusCode}). Intenta de nuevo.';
+        await NotificationService.instance.dismissAiTourProgressNotification();
+        await NotificationService.instance.showAiTourErrorNotification(
+          title: 'Error al generar tour',
+          errorMessage: errorMsg,
+        );
+        state = state.copyWith(isBuilding: false, error: errorMsg);
       }
     } catch (e) {
+      await NotificationService.instance.dismissAiTourProgressNotification();
+      await NotificationService.instance.showAiTourErrorNotification(
+        title: 'Error al generar tour',
+        errorMessage: _friendlyError(e),
+      );
       state = state.copyWith(isBuilding: false, error: _friendlyError(e));
+    } finally {
+      unawaited(WakelockPlus.disable());
     }
   }
 
@@ -986,6 +1055,8 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       builtTour: tour,
       messages: [...state.messages, aiMsg],
     );
+
+    unawaited(SharedPreferences.getInstance().then((p) => p.remove(_pendingJobIdKey)));
 
     unawaited(
       NotificationService.instance.showAiTourCreatedNotification(
@@ -1136,45 +1207,88 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
   }
 
   Future<void> _pollBuildJob(String jobId) async {
-    int attempts = 0;
-    const maxAttempts = 35; // 35 * 2s = 70s maximum
-    int notFoundCount = 0;
+    if (_isPolling) return;
+    _isPolling = true;
 
-    while (state.isBuilding && attempts < maxAttempts) {
-      attempts++;
-      await Future.delayed(const Duration(seconds: 2));
-      try {
-        final response = await _getJson('/ai/tours/status/$jobId');
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          if (data['status'] == 'completed') {
-            _handleCompletedTour(Map<String, dynamic>.from(data['tour']));
-            return;
-          } else if (data['status'] == 'failed') {
-            state = state.copyWith(isBuilding: false, error: data['message']);
-            return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingJobIdKey, jobId);
+
+    int attempts = 0;
+    const maxAttempts = 50; // 50 * 2s = 100s maximum
+    int notFoundCount = 0;
+    int consecutiveNetworkErrors = 0;
+
+    try {
+      while (state.isBuilding && attempts < maxAttempts) {
+        attempts++;
+        await Future.delayed(const Duration(seconds: 2));
+        try {
+          final response = await _getJson('/ai/tours/status/$jobId');
+          consecutiveNetworkErrors = 0;
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            if (data['status'] == 'completed') {
+              await prefs.remove(_pendingJobIdKey);
+              _handleCompletedTour(Map<String, dynamic>.from(data['tour']));
+              return;
+            } else if (data['status'] == 'failed') {
+              await prefs.remove(_pendingJobIdKey);
+              final errorMsg = data['message']?.toString() ?? 'Error al generar el tour.';
+              await NotificationService.instance.dismissAiTourProgressNotification();
+              await NotificationService.instance.showAiTourErrorNotification(
+                title: 'No se pudo crear el tour',
+                errorMessage: errorMsg,
+              );
+              state = state.copyWith(isBuilding: false, error: errorMsg);
+              return;
+            }
+          } else if (response.statusCode == 404) {
+            notFoundCount++;
+            if (notFoundCount >= 6) {
+              await prefs.remove(_pendingJobIdKey);
+              await NotificationService.instance.dismissAiTourProgressNotification();
+              await NotificationService.instance.showAiTourErrorNotification(
+                title: 'Error de servidor',
+                errorMessage: 'No se pudo verificar el estado en el servidor. Por favor intenta de nuevo.',
+              );
+              state = state.copyWith(
+                isBuilding: false, 
+                error: 'No se pudo verificar el estado en el servidor. Por favor intenta de nuevo.',
+              );
+              return;
+            }
           }
-        } else if (response.statusCode == 404) {
-          notFoundCount++;
-          if (notFoundCount >= 4) {
-            state = state.copyWith(
-              isBuilding: false, 
-              error: 'No se pudo verificar el estado en el servidor. Por favor intenta de nuevo.',
+        } catch (e) {
+          consecutiveNetworkErrors++;
+          debugPrint('[AiBuilderController] Fallo de red temporal en polling ($consecutiveNetworkErrors/8): $e');
+          if (consecutiveNetworkErrors >= 8) {
+            await prefs.remove(_pendingJobIdKey);
+            await NotificationService.instance.dismissAiTourProgressNotification();
+            await NotificationService.instance.showAiTourErrorNotification(
+              title: 'Conexión interrumpida',
+              errorMessage: _friendlyError(e),
             );
+            state = state.copyWith(isBuilding: false, error: _friendlyError(e));
             return;
           }
         }
-      } catch (e) {
-        state = state.copyWith(isBuilding: false, error: _friendlyError(e));
-        return;
       }
-    }
 
-    if (state.isBuilding) {
-      state = state.copyWith(
-        isBuilding: false,
-        error: 'El proceso tardó demasiado tiempo. Por favor intenta de nuevo en unos segundos.',
-      );
+      if (state.isBuilding) {
+        await prefs.remove(_pendingJobIdKey);
+        await NotificationService.instance.dismissAiTourProgressNotification();
+        await NotificationService.instance.showAiTourErrorNotification(
+          title: 'Tiempo de espera agotado',
+          errorMessage: 'El proceso tardó demasiado tiempo. Toca para reintentar.',
+        );
+        state = state.copyWith(
+          isBuilding: false,
+          error: 'El proceso tardó demasiado tiempo. Por favor intenta de nuevo en unos segundos.',
+        );
+      }
+    } finally {
+      _isPolling = false;
     }
   }
 
