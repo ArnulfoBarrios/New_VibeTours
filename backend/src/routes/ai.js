@@ -4798,10 +4798,21 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     endPlace,
   })
   if (!coordinates || coordinates.unresolved || !hasUsableCoordinates(coordinates.latitude, coordinates.longitude)) {
-    const error = new Error(`No pudimos confirmar la ubicación real de "${sourceName}" en ${input.city || input.destination}.`)
-    error.code = 'UNVERIFIED_STOP_LOCATION'
-    error.placeName = sourceName
-    throw error
+    if (candidateFallback && hasUsableCoordinates(candidateFallback.latitude, candidateFallback.longitude)) {
+      coordinates = {
+        latitude: Number(candidateFallback.latitude),
+        longitude: Number(candidateFallback.longitude),
+        placeId: candidateFallback.placeId || candidateFallback.id || '',
+        place_id: candidateFallback.placeId || candidateFallback.id || '',
+        coordinatesVerified: true,
+        coordinateSource: 'candidate-fallback'
+      }
+    } else {
+      const error = new Error(`No pudimos confirmar la ubicación real de "${sourceName}" en ${input.city || input.destination}.`)
+      error.code = 'UNVERIFIED_STOP_LOCATION'
+      error.placeName = sourceName
+      throw error
+    }
   }
   let resolvedName = cleanPlacePhysicalName(sourceName || matchedPlace?.name || candidateFallback?.name || `${input.destination}`)
   const cityCenterCoords = (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude)
@@ -5066,10 +5077,11 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
     destination: input.destination
   }
 
-  // 1. A candidate is safe to reuse only when it carries provider provenance or is a candidate with known ID.
+  // 1. A candidate from the confirmed places list is safe to reuse when it has usable coordinates and not marked as AI-geocoded.
   const hasMatchedUsableCoords = hasUsableCoordinates(matchedPlace?.latitude, matchedPlace?.longitude)
-  const isCandidateWithId = Boolean(matchedPlace && hasMatchedUsableCoords && (isVerifiedCoordinatePlace(matchedPlace) || matchedPlace.id || matchedPlace.placeId || matchedPlace.place_id))
-  if (isCandidateWithId) {
+  const isAiGeocoded = matchedPlace?.tags?.ai_geocoded === 'true' || matchedPlace?.tags?.ai_geocoded === true || matchedPlace?.coordinateSource === 'ai'
+  const hasProvenance = Boolean(isVerifiedCoordinatePlace(matchedPlace) || matchedPlace?.id || matchedPlace?.placeId || matchedPlace?.place_id || matchedPlace?.coordinatesVerified)
+  if (matchedPlace && hasMatchedUsableCoords && !isAiGeocoded && hasProvenance) {
     const isNearby = !canonicalDest || validateCandidateLocation(matchedPlace, canonicalDest, geoScope.maxDistanceKm)
     if (isNearby && (!isCorridor || isWithinCorridor(matchedPlace, startPlace, endPlace))) {
       return {
