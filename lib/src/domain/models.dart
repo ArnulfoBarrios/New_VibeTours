@@ -669,6 +669,10 @@ class LocalEvent {
       'lat': location.latitude,
       'longitude': location.longitude,
       'lng': location.longitude,
+      'placeId': id,
+      'place_id': id,
+      'coordinatesVerified': true,
+      'coordinateSource': 'osm',
     };
   }
 }
