@@ -2906,75 +2906,92 @@ REGLAS DE CALIDAD:
 7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.
 8. REGLA ESTRICTA PARA 'mejor_epoca': Si el viaje cuenta con fechas o evento especial indicado (${defaultBestSeason !== 'Todo el año' ? `"${defaultBestSeason}"` : 'como un festival o mes específico'}), 'mejor_epoca' DEBE reflejar exactamente ese rango de fechas o festividad (ej: "${defaultBestSeason}"). De lo contrario, indica "Todo el año" (siempre con 'ñ').`
 
-  // For tours with more than 7 stops, split into parallel chunks so multi-day tours finish in ~20-25s within Vercel limits
-  if (selectedPlaces.length > 7) {
-    const mid = Math.ceil(selectedPlaces.length / 2)
-    const chunk1 = selectedPlaces.slice(0, mid)
-    const chunk2 = selectedPlaces.slice(mid)
+  // For tours with more than 5 stops, split into dynamic parallel chunks of max 5 places so generation completes in ~15-20s regardless of stops count
+  if (selectedPlaces.length > 5) {
+    const CHUNK_SIZE = 5
+    const chunks = []
+    for (let i = 0; i < selectedPlaces.length; i += CHUNK_SIZE) {
+      chunks.push(selectedPlaces.slice(i, i + CHUNK_SIZE))
+    }
 
     try {
-      const [res1, res2] = await Promise.all([
-        fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-          body: JSON.stringify(buildOpenAiPayload({
-            modelConfig: getFastOpenAiModelConfig(),
-            messages: [
-              { role: 'system', content: system },
-              {
-                role: 'user',
-                content: `Genera la primera parte del tour para ${cleanCity}, ${targetCountry}.
-Fechas / Época: ${datesContext || 'Todo el año'}
-Evento o Festival: ${specialEventContext || 'No especificado'}
-Lugares obligatorios (Parte 1): ${JSON.stringify(chunk1)}`
-              }
-            ],
-            temperature: 0.3,
-            response_format: { type: 'json_object' },
-            reasoning_effort: 'low'
-          }))
-        }),
-        fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-          body: JSON.stringify(buildOpenAiPayload({
-            modelConfig: getFastOpenAiModelConfig(),
-            messages: [
-              { role: 'system', content: system },
-              {
-                role: 'user',
-                content: `Genera la segunda parte del tour para ${cleanCity}, ${targetCountry}.
-Fechas / Época: ${datesContext || 'Todo el año'}
-Evento o Festival: ${specialEventContext || 'No especificado'}
-Lugares obligatorios (Parte 2): ${JSON.stringify(chunk2)}`
-              }
-            ],
-            temperature: 0.3,
-            response_format: { type: 'json_object' },
-            reasoning_effort: 'low'
-          }))
-        })
-      ])
+      const chunkPromises = chunks.map((chunk, idx) => {
+        const isFirstChunk = idx === 0
+        const chunkSystem = isFirstChunk
+          ? system
+          : `Eres Tour Planner AI 🤖, el motor oficial de itinerarios de VibeTours.
+Tu tarea es generar ÚNICAMENTE el bloque ${idx + 1} de paradas del itinerario para ${cleanCity}, ${targetCountry}.
+Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
+{
+  "itinerario": [
+    {
+      "dia": 1,
+      "parada": 1,
+      "nombre": "Nombre exacto del lugar recibido",
+      "descripcion": "Guía de voz inmersiva de 60 a 90 palabras escrita como guía turístico apasionado, joven y extrovertido para narración TTS.",
+      "duracion_estimada": "45 minutos",
+      "actividades": ["Actividad recomendada 1", "Actividad 2"],
+      "datos_curiosos": ["Dato curioso específico del lugar"],
+      "consejos": ["Consejo práctico del guía"],
+      "ubicacion": {
+        "nombre_lugar": "Nombre exacto del lugar recibido",
+        "direccion": "",
+        "ciudad": "${cleanCity}",
+        "region": "",
+        "pais": "${targetCountry}",
+        "latitud": 0.0,
+        "longitud": 0.0,
+        "place_id": "",
+        "url_mapa": ""
+      },
+      "imagenes": []
+    }
+  ]
+}`
 
-      if (res1.ok) {
-        const json1 = await res1.json()
-        const parsed1 = cleanAndParseJson(json1.choices?.[0]?.message?.content, null)
-        if (parsed1 && res2.ok) {
-          const json2 = await res2.json()
-          const parsed2 = cleanAndParseJson(json2.choices?.[0]?.message?.content, null)
-          if (parsed2 && Array.isArray(parsed2.itinerario)) {
-            parsed1.itinerario = [
-              ...(Array.isArray(parsed1.itinerario) ? parsed1.itinerario : []),
-              ...parsed2.itinerario
-            ]
+        return fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify(buildOpenAiPayload({
+            modelConfig: getFastOpenAiModelConfig(),
+            messages: [
+              { role: 'system', content: chunkSystem },
+              {
+                role: 'user',
+                content: `Genera las paradas obligatorias del bloque ${idx + 1} para ${cleanCity}, ${targetCountry}.
+Fechas / Época: ${datesContext || 'Todo el año'}
+Evento o Festival: ${specialEventContext || 'No especificado'}
+Lugares obligatorios de este bloque: ${JSON.stringify(chunk)}`
+              }
+            ],
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
+            reasoning_effort: 'low'
+          }))
+        }).then(async res => {
+          if (!res.ok) return null
+          const data = await res.json()
+          return cleanAndParseJson(data.choices?.[0]?.message?.content, null)
+        }).catch(() => null)
+      })
+
+      const results = await Promise.all(chunkPromises)
+      const basePlan = results[0]
+      if (basePlan && typeof basePlan === 'object') {
+        const mergedItinerario = []
+        for (const res of results) {
+          if (res && Array.isArray(res.itinerario)) {
+            mergedItinerario.push(...res.itinerario)
           }
         }
-        if (parsed1 && Array.isArray(parsed1.itinerario) && parsed1.itinerario.length >= 2) {
-          return parsed1
+        if (mergedItinerario.length >= 2) {
+          basePlan.itinerario = mergedItinerario
+          basePlan.orden_paradas = mergedItinerario.map(s => s.nombre || s.name).filter(Boolean)
+          return basePlan
         }
       }
     } catch (err) {
-      console.warn('[planWithOpenAI] Parallel chunks error, falling back to single call:', err?.message || err)
+      console.warn('[planWithOpenAI] Dynamic parallel chunks error, falling back to single call:', err?.message || err)
     }
   }
 

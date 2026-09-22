@@ -2154,7 +2154,7 @@ aiRouter.post('/tours/hotels', async (req, res, next) => {
   }
 })
 
-async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
+export async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
   const isSync = !jobId
   const updateJob = (updates) => {
     if (isSync) return
@@ -2204,7 +2204,7 @@ async function processTourBuild(jobId, input, confirmedPlaces, plannerContext) {
         durationHours: input.durationHours,
         stopTarget: confirmedPlaces.length,
         pace: input.touristPace,
-        hasProfile: Boolean(input.touristProfileSummary || input.touristInterests.length),
+        hasProfile: Boolean(input.touristProfileSummary || input.touristInterests?.length),
       }
     }
 
