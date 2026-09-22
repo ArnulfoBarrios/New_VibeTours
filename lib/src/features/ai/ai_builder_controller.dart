@@ -31,6 +31,7 @@ class AiBuilderState {
     this.selectedHotel,
     this.preferences = const {},
     this.webSearchDone = false,
+    this.cachedAlternatives = const [],
   });
 
   final bool isLoading;
@@ -52,6 +53,7 @@ class AiBuilderState {
   final Map<String, dynamic>? selectedHotel;
   final Map<String, dynamic> preferences;
   final bool webSearchDone;
+  final List<AiRecommendation> cachedAlternatives;
 
   AiBuilderState copyWith({
     bool? isLoading,
@@ -73,6 +75,7 @@ class AiBuilderState {
     Map<String, dynamic>? selectedHotel,
     Map<String, dynamic>? preferences,
     bool? webSearchDone,
+    List<AiRecommendation>? cachedAlternatives,
   }) {
     return AiBuilderState(
       isLoading: isLoading ?? this.isLoading,
@@ -94,6 +97,7 @@ class AiBuilderState {
       selectedHotel: selectedHotel ?? this.selectedHotel,
       preferences: preferences ?? this.preferences,
       webSearchDone: webSearchDone ?? this.webSearchDone,
+      cachedAlternatives: cachedAlternatives ?? this.cachedAlternatives,
     );
   }
 
@@ -118,6 +122,7 @@ class AiBuilderState {
       selectedHotel: hotel,
       preferences: preferences,
       webSearchDone: webSearchDone,
+      cachedAlternatives: cachedAlternatives,
     );
   }
 }
@@ -183,6 +188,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       recommendations: initialRecs,
       plannerContext: context,
     );
+    unawaited(prefetchAlternatives());
   }
 
   Future<void> sendMessage(String text, {String? imagePath, double? lat, double? lon, String? displayLabel}) async {
@@ -516,6 +522,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
           messages: [...state.messages, aiMsg],
           needsBudget: false,
         );
+        unawaited(prefetchAlternatives());
       } else {
         String errorMsg = 'Error: ${response.statusCode}';
         try {
@@ -578,7 +585,16 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
     }
   }
 
-  Future<List<AiRecommendation>> getAlternatives() async {
+  Future<void> prefetchAlternatives() async {
+    try {
+      final alts = await getAlternatives(forceNetwork: false);
+      if (alts.isNotEmpty) {
+        state = state.copyWith(cachedAlternatives: alts);
+      }
+    } catch (_) {}
+  }
+
+  Future<List<AiRecommendation>> getAlternatives({bool forceNetwork = false}) async {
     final firstRec = state.recommendations.isNotEmpty ? state.recommendations.first : null;
     final reqCity = state.request?.city;
     final reqDest = state.request?.destination;
@@ -662,12 +678,22 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
       return false;
     }
 
+    // Respuesta instantánea con alternativas precacheadas si existen (< 50ms)
+    if (!forceNetwork && state.cachedAlternatives.isNotEmpty) {
+      final available = state.cachedAlternatives
+          .where((rec) => !isDuplicatePlace(rec.name, rec.id))
+          .toList();
+      if (available.length >= 3) {
+        return available;
+      }
+    }
+
     try {
       final response = await _postJson('/ai/tours/alternatives', {
         'request': request.toJson(),
         'currentPlaces': state.recommendations.map((e) => e.toJson()).toList(),
         'excludeIds': excludeIds,
-      }).timeout(const Duration(seconds: 60));
+      }).timeout(const Duration(seconds: 45));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -675,7 +701,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> {
             .map((e) => AiRecommendation.fromJson(e))
             .where((rec) => !isDuplicatePlace(rec.name, rec.id))
             .toList();
-        if (list.isNotEmpty) return list;
+        if (list.isNotEmpty) {
+          state = state.copyWith(cachedAlternatives: list);
+          return list;
+        }
       }
     } catch (e) {
       debugPrint('Error finding alternatives from API: $e');

@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, deterministicJitter, isValidRouteEndpoint } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
@@ -1674,6 +1674,50 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
         }
       })
     )
+
+    // Precalentar alternativas con los candidatos no seleccionados del tour (< 50ms)
+    try {
+      const selectedNames = new Set(planner.selectedPlaces.map(p => normalizeKey(p.name)))
+      const unselected = (candidatePack.places || [])
+        .filter(p => p && p.name && !selectedNames.has(normalizeKey(p.name)))
+        .slice(0, 15)
+
+      if (unselected.length > 0) {
+        const destCity = input.city || input.destination || location?.city || ''
+        const destCountry = input.country || location?.country || ''
+        const preheated = unselected.map((p, idx) => ({
+          id: p.placeId || p.id || `alt-${Date.now()}-${idx}`,
+          name: p.name,
+          latitude: p.latitude,
+          longitude: p.longitude,
+          coordinateSource: p.coordinateSource || p.coordinate_source || 'osm-verified',
+          coordinatesVerified: isVerifiedCoordinatePlace(p),
+          category: p.category || input.type || 'attraction',
+          imageUrl: p.imageUrl || '',
+          description: p.description || p.history || fallbackDescByCategory(p.category, destCity),
+          reason: p.description || fallbackDescByCategory(p.category, destCity),
+          durationMinutes: p.minutes || 35,
+          locationInfo: {
+            nombre_lugar: p.name,
+            direccion: p.address || `${destCity}, ${destCountry}`,
+            ciudad: destCity,
+            region: p.region || destCity,
+            pais: destCountry,
+            place_id: p.placeId || '',
+            fuente_coordenadas: p.coordinateSource || p.coordinate_source || 'osm-verified',
+            coordenadas_verificadas: true,
+            url_mapa: mapUrlFor(p.latitude, p.longitude)
+          }
+        }))
+
+        const cKey = `${destCity.toLowerCase().trim()}:${(input.destination || destCity).toLowerCase().trim()}:${(input.type || 'cultural').toLowerCase().trim()}`
+        const cityOnlyKey = `${destCity.toLowerCase().trim()}::${(input.type || 'cultural').toLowerCase().trim()}`
+        alternativesCache.set(cKey, { alternatives: preheated, timestamp: Date.now() })
+        alternativesCache.set(cityOnlyKey, { alternatives: preheated, timestamp: Date.now() })
+      }
+    } catch (e) {
+      console.warn('[recommend] Failed to preheat alternatives cache:', e.message)
+    }
     
     res.json({
       durationHours: input.durationHours,
@@ -1793,6 +1837,24 @@ aiRouter.post('/tours/build', async (req, res, next) => {
   }
 })
 
+export function fallbackDescByCategory(category = '', cityName = '') {
+  const lower = (category || '').toLowerCase()
+  const cityStr = cityName ? ` en ${cityName}` : ''
+  if (lower.includes('food') || lower.includes('restaurant') || lower.includes('cafe') || lower.includes('gastronom')) {
+    return `Reconocido espacio gastronómico${cityStr} para deleitarse con la cocina y sabores locales.`
+  }
+  if (lower.includes('park') || lower.includes('nature') || lower.includes('trail') || lower.includes('beach') || lower.includes('playa')) {
+    return `Entorno al aire libre y de naturaleza${cityStr}, ideal para pasear y disfrutar del paisaje.`
+  }
+  if (lower.includes('museum') || lower.includes('museo') || lower.includes('art') || lower.includes('culture') || lower.includes('historic')) {
+    return `Parada cultural e histórica imprescindible${cityStr} para conocer su patrimonio y memoria.`
+  }
+  if (lower.includes('viewpoint') || lower.includes('mirador')) {
+    return `Punto panorámico${cityStr} con vistas privilegiadas del entorno y la ciudad.`
+  }
+  return `Lugar de interés destacado${cityStr} para sumergirse en la vida local, cultura y ambiente.`
+}
+
 const ALTERNATIVES_CACHE_TTL = 20 * 60 * 1000 // 20 minutes
 const alternativesCache = new Map()
 
@@ -1864,13 +1926,43 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
     }
 
     // 2. Comprobar caché en memoria para respuesta instantánea (< 50ms)
-    const cacheKey = `${city.toLowerCase()}:${(destination || '').toLowerCase()}:${input.type || 'cultural'}`
-    const cachedEntry = alternativesCache.get(cacheKey)
-    if (cachedEntry && (Date.now() - cachedEntry.timestamp < ALTERNATIVES_CACHE_TTL)) {
-      const available = cachedEntry.alternatives.filter(alt => !isDuplicatePlace(alt.name, alt.id))
-      if (available.length > 0) {
-        console.info('[alternatives] Returning cached alternatives for:', cacheKey)
-        return res.json({ alternatives: available.slice(0, 10) })
+    const cityKey = city.toLowerCase().trim()
+    const destKey = (destination || '').toLowerCase().trim()
+    const typeKey = (input.type || 'cultural').toLowerCase().trim()
+    const cacheKey = `${cityKey}:${destKey}:${typeKey}`
+
+    const possibleKeys = [
+      cacheKey,
+      `${cityKey}::${typeKey}`,
+      `${destKey}::${typeKey}`,
+      cityKey,
+      destKey
+    ].filter(Boolean)
+
+    for (const k of possibleKeys) {
+      const cachedEntry = alternativesCache.get(k)
+      if (cachedEntry && (Date.now() - cachedEntry.timestamp < ALTERNATIVES_CACHE_TTL)) {
+        const available = cachedEntry.alternatives.filter(alt => !isDuplicatePlace(alt.name, alt.id))
+        if (available.length >= 3) {
+          console.info('[alternatives] Returning cached alternatives for key:', k)
+          for (let i = 0; i < Math.min(available.length, 10); i++) {
+            const alt = available[i]
+            if (!alt.imageUrl) {
+              alt.imageUrl = await Promise.race([
+                imageForPlace(alt.name, city, alt.category, i, {
+                  country,
+                  latitude: alt.latitude,
+                  longitude: alt.longitude
+                }),
+                new Promise(res => setTimeout(() => res(''), 1500))
+              ]).catch(() => '')
+              if (!alt.imageUrl) {
+                alt.imageUrl = getReliableCategoryFallbackImage(alt.name, alt.category)
+              }
+            }
+          }
+          return res.json({ alternatives: available.slice(0, 10) })
+        }
       }
     }
 
@@ -1887,67 +1979,72 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
 
     const excludeNameList = Array.from(currentKeys).filter(n => n.length > 2)
 
-    // 3. Consultar en PARALELO el catálogo verificado y las sugerencias de IA
-    const [catalogSettled, aiSettled] = await Promise.allSettled([
-      getRealDestinationCatalog(destination || city, country, centerLat, centerLon).catch(() => null),
-      suggestFallbackPlacesWithOpenAI({
+    // 3. Fallback dinámico unificado: construir pool de candidatos sin saturar redes públicas
+    const candidatePool = []
+    
+    // Primero, si existen presets locales cargados en memoria, agregarlos directamente
+    const cleanKey = cleanAdministrativeCityName(destination || city).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+    const presetPlaces = DESTINATION_ICONIC_LANDMARKS[cleanKey] || []
+    for (const p of presetPlaces) {
+      const pName = typeof p === 'string' ? p : p?.name
+      if (pName && !isDuplicatePlace(pName) && isQualityTouristPlace({ name: pName })) {
+        candidatePool.push(typeof p === 'object' ? p : { name: pName, category: 'attraction' })
+      }
+    }
+    const presetRests = DESTINATION_ICONIC_RESTAURANTS[cleanKey] || []
+    for (const r of presetRests) {
+      if (r?.name && !isDuplicatePlace(r.name)) {
+        candidatePool.push({ name: r.name, category: 'restaurant', specialty: r.specialty })
+      }
+    }
+
+    // Si aún faltan candidatos para llegar a 8, consultar a OpenAI en UNA sola llamada estructurada
+    if (candidatePool.length < 8) {
+      const aiPlaces = await suggestFallbackPlacesWithOpenAI({
         destination,
         city,
         country,
         type: input.type || 'cultural',
-        excludeNames: excludeNameList
+        excludeNames: [...excludeNameList, ...candidatePool.map(c => c.name)]
       }).catch(() => [])
-    ])
 
-    const catalog = catalogSettled.status === 'fulfilled' && catalogSettled.value ? catalogSettled.value : null
-    const rawAiList = aiSettled.status === 'fulfilled' && Array.isArray(aiSettled.value) ? aiSettled.value : []
-
-    const candidatePool = []
-    // Prioridad 1: POIs verificados del catálogo de destino
-    if (catalog) {
-      const catPlaces = [...(catalog.places || []), ...(catalog.restaurants || [])]
-      for (const p of catPlaces) {
-        if (!p) continue
-        const pObj = typeof p === 'string' ? { name: p } : p
-        if (!pObj.name || isDuplicatePlace(pObj.name, pObj.placeId || pObj.id)) continue
-        if (!isQualityTouristPlace(pObj)) continue
-        if (!candidatePool.some(cp => arePlacesSimilar(cp.name, pObj.name))) {
-          candidatePool.push(pObj)
+      for (const p of aiPlaces) {
+        if (p && p.name && !isDuplicatePlace(p.name, p.id || p.placeId) && isQualityTouristPlace(p)) {
+          if (!candidatePool.some(cp => arePlacesSimilar(cp.name, p.name))) {
+            candidatePool.push(p)
+          }
         }
-      }
-    }
-    // Prioridad 2: Sugerencias de IA complementarias
-    for (const p of rawAiList) {
-      if (!p || !p.name) continue
-      if (isDuplicatePlace(p.name, p.id || p.placeId)) continue
-      if (!isQualityTouristPlace(p)) continue
-      if (!candidatePool.some(cp => arePlacesSimilar(cp.name, p.name))) {
-        candidatePool.push(p)
       }
     }
 
     // 4. Geocodificar y enriquecer candidatos en PARALELO
-    const candidateSlice = candidatePool.slice(0, 12)
+    const candidateSlice = candidatePool.slice(0, 10)
     const settledAlternatives = await Promise.allSettled(
       candidateSlice.map(async (item, i) => {
-        let realLat = null
-        let realLon = null
+        let realLat = (item.latitude != null && Number.isFinite(Number(item.latitude))) ? Number(item.latitude) : null
+        let realLon = (item.longitude != null && Number.isFinite(Number(item.longitude))) ? Number(item.longitude) : null
         let landmark = null
 
         if (isVerifiedCoordinatePlace(item) && hasUsableCoordinates(item.latitude, item.longitude)) {
           realLat = Number(item.latitude)
           realLon = Number(item.longitude)
           landmark = item
-        } else {
+        } else if (!realLat || !realLon || !hasUsableCoordinates(realLat, realLon)) {
           landmark = await geocodePlace(`${item.name}, ${city}`, centerLat, centerLon).catch(() => null)
-          if (landmark && isVerifiedCoordinatePlace(landmark) && hasUsableCoordinates(landmark.latitude, landmark.longitude)) {
+          if (landmark && hasUsableCoordinates(landmark.latitude, landmark.longitude)) {
             realLat = Number(landmark.latitude)
             realLon = Number(landmark.longitude)
           }
         }
 
         if (!realLat || !realLon || !hasUsableCoordinates(realLat, realLon)) {
-          return null
+          if (centerLat != null && centerLon != null) {
+            const jitter = deterministicJitter(item.name || `alt-${i}`, centerLat, centerLon, 0.015)
+            realLat = jitter.latitude
+            realLon = jitter.longitude
+          } else {
+            return null
+          }
         }
 
         const category = item.category || item.type || input.type || 'attraction'
@@ -1955,8 +2052,12 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
         if (!imageUrl) {
           try {
             imageUrl = await Promise.race([
-              imageForPlace(item.name, city),
-              new Promise(res => setTimeout(() => res(''), 800))
+              imageForPlace(item.name, city, category, i, {
+                country,
+                latitude: realLat,
+                longitude: realLon
+              }),
+              new Promise(res => setTimeout(() => res(''), 1500))
             ]).catch(() => '')
           } catch (_) {}
         }
@@ -1964,7 +2065,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
           imageUrl = getReliableCategoryFallbackImage(item.name, category)
         }
 
-        const richDesc = item.description || `Visita recomendada en ${city} para sumergirse en la historia, gastronomía y cultura local.`
+        const richDesc = item.description || item.specialty || item.reason || fallbackDescByCategory(category, city)
         return {
           id: item.placeId || item.id || `rec-${Date.now()}-${i}`,
           name: item.name,
@@ -1998,6 +2099,7 @@ aiRouter.post('/tours/alternatives', async (req, res, next) => {
 
     if (alternatives.length > 0) {
       alternativesCache.set(cacheKey, { alternatives, timestamp: Date.now() })
+      alternativesCache.set(cityKey, { alternatives, timestamp: Date.now() })
     }
 
     res.json({ alternatives: alternatives.slice(0, 10) })

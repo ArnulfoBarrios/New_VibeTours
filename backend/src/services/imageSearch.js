@@ -11,13 +11,13 @@ const KNOWN_LANDMARK_IMAGES = {
   'paseo maritimo covenas': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80',
   'paseo maritimo': 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80',
   // Barranquilla
-  'ventana de campeones': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Ventanacampeones.jpg/800px-Ventanacampeones.jpg',
-  'aleta del tiburon': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Ventanacampeones.jpg/800px-Ventanacampeones.jpg',
-  'aleta de tiburon': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Ventanacampeones.jpg/800px-Ventanacampeones.jpg',
-  'ventana al mundo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Ventanalmundo.jpg/800px-Ventanalmundo.jpg',
-  'gran malecon del rio': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/AspectoGranMalecon.jpg/800px-AspectoGranMalecon.jpg',
-  'gran malecon': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/AspectoGranMalecon.jpg/800px-AspectoGranMalecon.jpg',
-  'malecon del rio': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/AspectoGranMalecon.jpg/800px-AspectoGranMalecon.jpg',
+  'ventana de campeones': 'https://upload.wikimedia.org/wikipedia/commons/5/5e/Ventanacampeones.jpg',
+  'aleta del tiburon': 'https://upload.wikimedia.org/wikipedia/commons/5/5e/Ventanacampeones.jpg',
+  'aleta de tiburon': 'https://upload.wikimedia.org/wikipedia/commons/5/5e/Ventanacampeones.jpg',
+  'ventana al mundo': 'https://upload.wikimedia.org/wikipedia/commons/f/f1/Ventanalmundo.jpg',
+  'gran malecon del rio': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/AspectoGranMalecon.jpg',
+  'gran malecon': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/AspectoGranMalecon.jpg',
+  'malecon del rio': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/AspectoGranMalecon.jpg',
   // Santa Marta
   'bahia de santa marta': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
   'playa el rodadero': 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=1200&q=80',
@@ -54,8 +54,8 @@ export function isImageSemanticallyCompatible(imageUrl = '', placeName = '', cat
     lowerCat === 'nature' || lowerCat === 'trail'
   )
   const isFood = !isBeach && !isNature && (
-    lowerCat === 'restaurant' || lowerCat === 'food' || lowerCat === 'cafe' ||
-    /\b(restaurante|comida|asador|bistro|caf[ée]|bar|gastronom[íi]a|taquer[íi]a|pizzer[íi]a)\b/i.test(lowerPlace)
+    lowerCat === 'restaurant' || lowerCat === 'food' || lowerCat === 'cafe' || lowerCat === 'bar' ||
+    /\b(restaurante|restaurantes|comida|asador|asadores|bistro|caf[ée]|cafes|bar|bares|pub|gourmet|gastronom[íi]a|taquer[íi]a|pizzer[íi]a|cocina|fog[oó]n|parrilla|marisquer[íi]a|mariscos|cebicher[íi]a|cevicher[íi]a|saz[oó]n|helader[íi]a|panader[íi]a)\b/i.test(lowerPlace)
   )
 
   // 0. Universal: Prohibir PDFs, páginas escaneadas de libros y documentos
@@ -86,13 +86,29 @@ export function isImageSemanticallyCompatible(imageUrl = '', placeName = '', cat
     }
   }
 
-  // 3. Gastronomía: Prohibidas iglesias, monumentos o aeropuertos
+  // 3. Gastronomía: Prohibidas iglesias, monumentos, hospitales, árboles o fauna no culinaria
   if (isFood) {
     const forbiddenForFood = [
       'catedral', 'iglesia', 'parroquia', 'monumento', 'estatua', 'castillo',
-      'aeropuerto', 'estadio', 'playa'
+      'aeropuerto', 'estadio', 'playa', 'hospital', 'clinica', 'cl[íi]nica',
+      'arbol', 'tree', 'planta', 'fruit', 'fruta', 'animal', 'ave',
+      'bird', 'veleta', 'colina', 'portrait', 'retrato', 'rostro',
+      'palo_de', 'tronco', 'botanica', 'botanical', 'plant', 'flora', 'fauna'
     ]
     if (forbiddenForFood.some(term => lowerUrl.includes(term))) {
+      return false
+    }
+  }
+
+  // 4. Arquitectura y POIs: Prohibidos retratos, personas, headshots para lugares
+  const isPoiPlace = /\b(museo|museum|monumento|monument|parque|park|plaza|square|estadio|stadium|teatro|theatre|theater|catedral|cathedral|iglesia|church|bas[íi]lica|templo|castillo|castle|fortaleza|mirador|viewpoint|biblioteca|library|palacio|palace|muelle|pier|puente|bridge|estaci[oó]n|aeropuerto)\b/i.test(lowerPlace) ||
+    ['attraction', 'culture', 'historic', 'architecture', 'monument', 'museum'].includes(lowerCat)
+  if (isPoiPlace) {
+    const forbiddenForPoi = [
+      'portrait', 'retrato', 'rostro', 'headshot', 'face', 'autor', 'escritor',
+      'biografia', 'biography', 'politico', 'general', 'persona', 'human'
+    ]
+    if (forbiddenForPoi.some(term => lowerUrl.includes(term))) {
       return false
     }
   }
@@ -105,6 +121,16 @@ export function isWikiTitleRelevant(articleTitle, placeName, city = '') {
   const artClean = articleTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const placeClean = placeName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const cityClean = (city || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+
+  const poiTypePattern = /\b(museo|museum|monumento|monument|parque|park|plaza|square|estadio|stadium|teatro|theatre|theater|catedral|cathedral|iglesia|church|bas[íi]lica|biblioteca|library|castillo|castle|mirador|viewpoint|palacio|palace|muelle|pier|puente|bridge|aeropuerto|airport|estaci[oó]n|station)\b/i
+  const placeHasPoiType = poiTypePattern.test(placeClean)
+  const artHasPoiType = poiTypePattern.test(artClean) || /\((monumento|museo|parque|estadio|teatro|edificio|obra|escultura|plaza|atractivo)\)/i.test(artClean)
+
+  // Si el lugar especifica una tipología (ej. museo, parque, monumento) y el artículo NO la tiene,
+  // rechazar si el artículo coincide con un nombre personal que omite la tipología (ej. "Gabriel García Márquez" vs "Museo del Caribe Gabriel García Márquez")
+  if (placeHasPoiType && !artHasPoiType) {
+    return false
+  }
 
   // Exact or subset match
   if (placeClean.includes(artClean) || artClean.includes(placeClean)) {
@@ -161,8 +187,9 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
 
   const isLandmarkOrCultural = /\b(catedral|iglesia|bas[íi]lica|templo|museo|monumento|parque|malec[óo]n|playa|plaza|castillo|fortaleza|mirador|puente|teatro|jard[íi]n|cerro|colina|zool[oó]gico|zoo|acuario|carnaval|estadio|ecoparque|biblioteca|ci[ée]naga|laguna|reserva|bot[aá]nico)\b/i.test(placeName)
   const isFoodOrDrink = !isLandmarkOrCultural && (
-    normalizedCategory === 'restaurant' || normalizedCategory === 'food' || normalizedCategory === 'cafe' ||
-    /\b(restaurante|restaurantes|comida|asador|asadores|bistro|bistr[oó]|gourmet|caf[ée]|cafes|caf[ée]s|bar|bares|pub|pubs|pizzer[íi]a|pizzerias|chifa|gastronom[íi]a|taquer[íi]a)\b/i.test(placeName)
+    normalizedCategory === 'restaurant' || normalizedCategory === 'food' || normalizedCategory === 'cafe' || normalizedCategory === 'bar' ||
+    options?.isFood === true || options?.category === 'restaurant' ||
+    /\b(restaurante|restaurantes|comida|asador|asadores|bistro|bistr[oó]|gourmet|caf[ée]|cafes|caf[ée]s|bar|bares|pub|pubs|pizzer[íi]a|pizzerias|chifa|gastronom[íi]a|taquer[íi]a|cocina|fog[oó]n|parrilla|marisquer[íi]a|mariscos|cebicher[íi]a|cevicher[íi]a|saz[oó]n|reposter[íi]a|helader[íi]a|panader[íi]a)\b/i.test(placeName)
   )
 
   function isValidDistinct(url) {
@@ -276,6 +303,9 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
   const cleanCity = String(city || '').replace(/_/g, ' ').trim()
   const cleanCountry = String(country || '').replace(/_/g, ' ').trim()
 
+  const isPoiPlace = /\b(museo|museum|monumento|monument|parque|park|plaza|square|estadio|stadium|teatro|catedral|iglesia|biblioteca|castillo|mirador|palacio|muelle|puente|aeropuerto)\b/i.test(placeName)
+  const isPersonBioText = (text) => /\b(escritor|escritora|pol[íi]tico|pol[íi]tica|militar|futbolista|cantante|compositor|compositora|actor|actriz|pintor|pintora|poeta|presidente|presidenta|general|pr[óo]cer|abogado|abogada|religioso|santo|santa|fue un|fue una|nacido en|nacida en)\b/i.test(text || '')
+
   // 1. Search in Spanish Wikipedia with full destination context
   try {
     const searchQuery = `${cleaned} ${cleanCity} ${cleanCountry}`.trim()
@@ -284,24 +314,30 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
     if (sRes.ok) {
       const sJson = await sRes.json()
       const searchHits = (sJson?.query?.search || []).slice(0, 5)
-      const topHit = searchHits.find(hit => hit?.title && isWikiTitleRelevant(hit.title, cleaned, cleanCity))
-      if (topHit && topHit.title) {
-        const slug = encodeURIComponent(topHit.title.replace(/\s+/g, '_'))
+      for (const hit of searchHits) {
+        if (!hit?.title || !isWikiTitleRelevant(hit.title, cleaned, cleanCity)) continue
+        const slug = encodeURIComponent(hit.title.replace(/\s+/g, '_'))
         const sumUrl = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
         const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
-        if (sumRes.ok) {
-          const sumJson = await sumRes.json()
-          const imageUrl = sumJson.thumbnail?.source || sumJson.originalimage?.source
-          if (imageUrl) {
-            const lower = imageUrl.toLowerCase()
-            const isUnusable = [
-              '.svg', 'flag', 'bandera', 'escudo', 'coat_of_arms', 'coat of arms', 'blason', 'stemma',
-              'seal', 'logo', 'icon', 'symbol', 'map', 'mapa', 'location', 'diagram', 'chart',
-              'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_'
-            ].some(k => lower.includes(k))
-            if (!isUnusable && isImageSemanticallyCompatible(imageUrl, placeName)) {
-              return imageUrl
-            }
+        if (!sumRes.ok) continue
+        const sumJson = await sumRes.json()
+
+        // Anti-biography check: if looking for a museum or park, reject if article is a person's biography
+        const descAndExtract = `${sumJson.description || ''} ${sumJson.extract || ''}`
+        if (isPoiPlace && isPersonBioText(descAndExtract) && !/\b(museo|monumento|parque|plaza|estadio|teatro|edificio|obra|escultura)\b/i.test(sumJson.title)) {
+          continue
+        }
+
+        const imageUrl = sumJson.thumbnail?.source || sumJson.originalimage?.source
+        if (imageUrl) {
+          const lower = imageUrl.toLowerCase()
+          const isUnusable = [
+            '.svg', 'flag', 'bandera', 'escudo', 'coat_of_arms', 'coat of arms', 'blason', 'stemma',
+            'seal', 'logo', 'icon', 'symbol', 'map', 'mapa', 'location', 'diagram', 'chart',
+            'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_'
+          ].some(k => lower.includes(k))
+          if (!isUnusable && isImageSemanticallyCompatible(imageUrl, placeName)) {
+            return imageUrl
           }
         }
       }
@@ -322,6 +358,10 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
       if (!response.ok) continue
       const json = await response.json()
       if (json.type === 'standard' || json.type === 'normal') {
+        const descAndExtract = `${json.description || ''} ${json.extract || ''}`
+        if (isPoiPlace && isPersonBioText(descAndExtract) && !/\b(museo|monumento|parque|plaza|estadio|teatro|edificio|obra|escultura)\b/i.test(json.title)) {
+          continue
+        }
         const imageUrl = json.thumbnail?.source || json.originalimage?.source
         if (imageUrl) {
           const lower = imageUrl.toLowerCase()

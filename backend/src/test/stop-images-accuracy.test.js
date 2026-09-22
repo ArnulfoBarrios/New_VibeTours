@@ -45,4 +45,21 @@ describe('Stop Images Accuracy and Semantic Compatibility Tests', () => {
     assert.ok(!lower.includes('.pdf'), 'Must not be a PDF')
     assert.equal(isImageSemanticallyCompatible(result.url, 'Ciénaga de la Caimanera', 'nature'), true)
   })
+
+  it('should reject person biography Wikipedia articles for cultural venues and monuments', () => {
+    assert.equal(isWikiTitleRelevant('Gabriel García Márquez', 'Museo del Caribe Gabriel García Márquez'), false)
+    assert.equal(isWikiTitleRelevant('Joe Arroyo', 'Monumento a Joe Arroyo'), false)
+    assert.equal(isWikiTitleRelevant('Simón Bolívar', 'Plaza de Bolívar'), false)
+    assert.equal(isWikiTitleRelevant('Frida Kahlo', 'Museo Frida Kahlo'), false)
+    assert.equal(isWikiTitleRelevant('Francisco de Paula Santander', 'Parque Santander'), false)
+    assert.equal(isWikiTitleRelevant('Museo del Caribe (Colombia)', 'Museo del Caribe Gabriel García Márquez'), true)
+  })
+
+  it('should reject hospital kitchens, trees and medical images for restaurants', () => {
+    assert.equal(isImageSemanticallyCompatible('https://commons.wikimedia.org/Cocina_hospital_colina.jpg', 'Cocina 33', 'restaurant'), false)
+    assert.equal(isImageSemanticallyCompatible('https://commons.wikimedia.org/Palo_de_mango.jpg', 'Palo de Mango', 'restaurant'), false)
+    assert.equal(isImageSemanticallyCompatible('https://commons.wikimedia.org/clinica_norte.jpg', 'Restaurante Gourmet', 'restaurant'), false)
+    assert.equal(isImageSemanticallyCompatible('https://images.unsplash.com/photo-dining.jpg', 'Cocina 33', 'restaurant'), true)
+    assert.equal(isImageSemanticallyCompatible('https://images.unsplash.com/photo-food.jpg', 'Palo de Mango', 'restaurant'), true)
+  })
 })

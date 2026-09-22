@@ -46,30 +46,33 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
         .toList();
     final labels = state.recommendations.map((r) => r.name).toList();
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: const BackButton(),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_location_alt_rounded),
-            tooltip: 'Añadir parada',
-            onPressed: () => _showAddStopSheet(context),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: LiquidButton(
-              label: state.isBuilding ? 'Generando...' : 'Finalizar',
-              icon: state.isBuilding
-                  ? Icons.hourglass_top_rounded
-                  : Icons.check_circle_outline,
-              onPressed: state.isBuilding ? null : _handleFinalizeTour,
-            ),
-          ),
-        ],
-      ),
+    return PopScope(
+      canPop: !state.isBuilding,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          automaticallyImplyLeading: !state.isBuilding,
+          leading: state.isBuilding ? const SizedBox.shrink() : const BackButton(),
+          actions: state.isBuilding
+              ? null
+              : [
+                  IconButton(
+                    icon: const Icon(Icons.add_location_alt_rounded),
+                    tooltip: 'Añadir parada',
+                    onPressed: () => _showAddStopSheet(context),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: LiquidButton(
+                      label: 'Finalizar',
+                      icon: Icons.check_circle_outline,
+                      onPressed: _handleFinalizeTour,
+                    ),
+                  ),
+                ],
+        ),
       body: Stack(
         children: [
           // Mapa de fondo
@@ -312,38 +315,46 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
           
           if (state.isBuilding)
             Positioned.fill(
-              child: Container(
-                color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.8),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Diseñando tu viaje...',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      const _AnimatedLoaderText(),
-                      const SizedBox(height: 24),
-                      const NativeAdBanner(
-                        customTitle: 'Patrocinador VibeTours',
-                        padding: EdgeInsets.symmetric(horizontal: 24),
-                      ),
-                    ],
+              child: AbsorbPointer(
+                child: Container(
+                  color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.85),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Diseñando tu viaje...',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        const _AnimatedLoaderText(),
+                        const SizedBox(height: 24),
+                        const NativeAdBanner(
+                          customTitle: 'Patrocinador VibeTours',
+                          padding: EdgeInsets.symmetric(horizontal: 24),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   void _showChangeStopSheet(BuildContext context, int index) {
+    final state = ref.read(aiBuilderProvider);
     final controller = ref.read(aiBuilderProvider.notifier);
-    final currentStop = ref.read(aiBuilderProvider).recommendations[index];
+    final currentStop = state.recommendations[index];
+
+    final cached = state.cachedAlternatives
+        .where((rec) => !state.recommendations.any((r) => r.id == rec.id || r.name.toLowerCase().trim() == rec.name.toLowerCase().trim()))
+        .toList();
 
     final alternativesFuture = controller.getAlternatives();
 
@@ -360,6 +371,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
         padding: const EdgeInsets.all(20),
         child: FutureBuilder<List<AiRecommendation>>(
           future: alternativesFuture,
+          initialData: cached.isNotEmpty ? cached : null,
           builder: (context, snapshot) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,7 +443,7 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                 ),
                 const SizedBox(height: 8),
                 Expanded(
-                  child: snapshot.connectionState == ConnectionState.waiting
+                  child: (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData)
                       ? const Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -471,8 +483,24 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                                     leading: ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
                                       child: alt.imageUrl.isNotEmpty
-                                          ? Image.network(alt.imageUrl, width: 54, height: 54, fit: BoxFit.cover)
-                                          : Container(width: 54, height: 54, color: Colors.grey.shade200, child: const Icon(Icons.place)),
+                                          ? Image.network(
+                                              alt.imageUrl,
+                                              width: 54,
+                                              height: 54,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) => Container(
+                                                width: 54,
+                                                height: 54,
+                                                color: Colors.grey.shade200,
+                                                child: const Icon(Icons.place, color: Colors.grey),
+                                              ),
+                                            )
+                                          : Container(
+                                              width: 54,
+                                              height: 54,
+                                              color: Colors.grey.shade200,
+                                              child: const Icon(Icons.place, color: Colors.grey),
+                                            ),
                                     ),
                                     title: Text(alt.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                                     subtitle: Text(
@@ -557,6 +585,10 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
     final totalDays = maxDay > 1 ? maxDay : 1;
     int selectedTargetDay = defaultDay ?? 1;
 
+    final cached = state.cachedAlternatives
+        .where((rec) => !state.recommendations.any((r) => r.id == rec.id || r.name.toLowerCase().trim() == rec.name.toLowerCase().trim()))
+        .toList();
+
     final alternativesFuture = controller.getAlternatives();
 
     showModalBottomSheet(
@@ -623,8 +655,9 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
               Expanded(
                 child: FutureBuilder<List<AiRecommendation>>(
                   future: alternativesFuture,
+                  initialData: cached.isNotEmpty ? cached : null,
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
+                    if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                       return const Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -666,8 +699,24 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
                             leading: ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: alt.imageUrl.isNotEmpty
-                                  ? Image.network(alt.imageUrl, width: 54, height: 54, fit: BoxFit.cover)
-                                  : Container(width: 54, height: 54, color: Colors.grey.shade200, child: const Icon(Icons.place)),
+                                  ? Image.network(
+                                      alt.imageUrl,
+                                      width: 54,
+                                      height: 54,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) => Container(
+                                        width: 54,
+                                        height: 54,
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(Icons.place, color: Colors.grey),
+                                      ),
+                                    )
+                                  : Container(
+                                      width: 54,
+                                      height: 54,
+                                      color: Colors.grey.shade200,
+                                      child: const Icon(Icons.place, color: Colors.grey),
+                                    ),
                             ),
                             title: Text(alt.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                             subtitle: Text(
