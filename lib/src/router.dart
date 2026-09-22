@@ -27,9 +27,16 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'state/app_state.dart';
 
+final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+final shellNavigatorKeyHome = GlobalKey<NavigatorState>(debugLabel: 'shellHome');
+final shellNavigatorKeyCreator = GlobalKey<NavigatorState>(debugLabel: 'shellCreator');
+final shellNavigatorKeyTours = GlobalKey<NavigatorState>(debugLabel: 'shellTours');
+final shellNavigatorKeyProfile = GlobalKey<NavigatorState>(debugLabel: 'shellProfile');
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final client = ref.watch(supabaseClientProvider);
+  final client = ref.read(supabaseClientProvider);
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     observers: [
       if (Firebase.apps.isNotEmpty)
@@ -53,6 +60,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, navigationShell) => MainShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
+            navigatorKey: shellNavigatorKeyHome,
             routes: [
               GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
               GoRoute(path: '/ai', builder: (context, state) => const AiPlannerScreen()),
@@ -60,6 +68,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: shellNavigatorKeyCreator,
             routes: [
               GoRoute(path: '/creator', builder: (context, state) => const AiPlannerScreen()),
               GoRoute(path: '/creator/manual', builder: (context, state) => const RequireAuth(child: TourCreatorScreen())),
@@ -67,11 +76,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: shellNavigatorKeyTours,
             routes: [
               GoRoute(path: '/tours', builder: (context, state) => const ToursScreen()),
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: shellNavigatorKeyProfile,
             routes: [
               GoRoute(path: '/profile', builder: (context, state) => const RequireAuth(child: ProfileScreen())),
             ],

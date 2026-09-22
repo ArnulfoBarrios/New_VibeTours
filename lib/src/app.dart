@@ -42,7 +42,7 @@ class _VibeToursAppState extends ConsumerState<VibeToursApp> {
       } else if (payload.startsWith('screen:')) {
         final screen = payload.replaceFirst('screen:', '');
         if (screen.isNotEmpty) {
-          router.push(screen);
+          router.go(screen);
         }
       } else if (payload.startsWith('live:')) {
         final tourId = payload.replaceFirst('live:', '');

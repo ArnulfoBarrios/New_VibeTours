@@ -924,7 +924,8 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         );
         state = state.copyWith(isBuilding: false, error: errorMsg);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[AiBuilderController] buildTour error: $e\n$stackTrace');
       await NotificationService.instance.dismissAiTourProgressNotification();
       await NotificationService.instance.showAiTourErrorNotification(
         title: 'Error al generar tour',
@@ -942,16 +943,26 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
     
     final List<TourStop> stops = [];
     final rawStops = (tourData['itinerario'] as List).asMap().entries.map((entry) {
-      final s = entry.value;
+      final s = entry.value is Map ? (entry.value as Map) : <String, dynamic>{};
+      final ubicacion = s['ubicacion'] is Map ? (s['ubicacion'] as Map) : <String, dynamic>{};
+      final lat = (ubicacion['latitud'] as num?)?.toDouble() ??
+          (ubicacion['latitude'] as num?)?.toDouble() ??
+          0.0;
+      final lon = (ubicacion['longitud'] as num?)?.toDouble() ??
+          (ubicacion['longitude'] as num?)?.toDouble() ??
+          0.0;
+      final images = s['imagenes'] is List ? (s['imagenes'] as List) : [];
+      final firstImage = images.isNotEmpty ? images.first.toString() : '';
+
       return TourStop(
         id: 'stop_${entry.key}',
-        name: s['nombre'],
+        name: s['nombre']?.toString() ?? 'Parada ${entry.key + 1}',
         location: GeoPoint(
-          latitude: s['ubicacion']['latitud'] ?? 0,
-          longitude: s['ubicacion']['longitud'] ?? 0,
+          latitude: lat,
+          longitude: lon,
         ),
-        imageUrl: (s['imagenes'] as List?)?.first ?? '',
-        description: s['descripcion'],
+        imageUrl: firstImage,
+        description: s['descripcion']?.toString() ?? '',
         activities: List<String>.from(s['actividades'] ?? []),
         tips: List<String>.from(s['consejos'] ?? []),
         suggestedMinutes: int.tryParse(s['duracion_estimada'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 25,
@@ -999,7 +1010,9 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
       reviewCount: 0,
       likes: 0,
       difficulty: TourDifficulty.moderate,
-      language: (tourData['idiomas_disponibles'] as List?)?.first ?? 'es',
+      language: ((tourData['idiomas_disponibles'] as List?)?.isNotEmpty ?? false)
+          ? (tourData['idiomas_disponibles'] as List).first.toString()
+          : 'es',
       tags: List<String>.from(tourData['etiquetas'] ?? []),
       stops: stops,
       shortSummary: tourData['resumen_corto']?.toString() ?? '',
@@ -1055,6 +1068,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
       builtTour: tour,
       messages: [...state.messages, aiMsg],
     );
+    ref.read(selectedTourProvider.notifier).state = tour;
 
     unawaited(SharedPreferences.getInstance().then((p) => p.remove(_pendingJobIdKey)));
 
