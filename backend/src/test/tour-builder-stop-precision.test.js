@@ -66,8 +66,8 @@ test('normalizeStop overrides OpenAI hallucinated coordinates with authentic lan
   }
   const normCucayo = await normalizeStop(stopCucayo, 5, input, null, [])
   assert.ok(normCucayo?.publicStop?.ubicacion, 'Cucayo stop must be normalized')
-  const distCucayo = haversineMeters(normCucayo.publicStop.ubicacion.latitud, normCucayo.publicStop.ubicacion.longitud, 11.0118, -74.8213)
-  assert.ok(distCucayo < 100, `Cucayo resolved at ${distCucayo}m from Cra 53 # 85-33 (must be < 100m)`)
+  const distCucayo = haversineMeters(normCucayo.publicStop.ubicacion.latitud, normCucayo.publicStop.ubicacion.longitud, 11.0074, -74.8174)
+  assert.ok(distCucayo < 100, `Cucayo resolved at ${distCucayo}m from Calle 85 # 52-153 (must be < 100m)`)
 
   // 4. Muelle de Puerto Colombia with hallucinated open-sea coordinates
   const stopMuelle = {

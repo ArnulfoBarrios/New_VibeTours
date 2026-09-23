@@ -42,7 +42,7 @@ async function queryMapboxGeocoding({ query, cityLat, cityLon, maxDistanceKm }) 
     url.searchParams.set('access_token', token)
     url.searchParams.set('limit', '5')
     url.searchParams.set('language', 'es')
-    url.searchParams.set('types', 'poi,address,neighborhood,locality')
+    url.searchParams.set('types', 'poi,address')
 
     if (cityLat != null && cityLon != null && Number.isFinite(Number(cityLat)) && Number.isFinite(Number(cityLon))) {
       url.searchParams.set('proximity', `${cityLon},${cityLat}`)
@@ -61,6 +61,12 @@ async function queryMapboxGeocoding({ query, cityLat, cityLon, maxDistanceKm }) 
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
 
       if (!isWithinCityBounds(lat, lon, cityLat, cityLon, maxDistanceKm)) continue
+
+      // Reject generic city centroids, countries, or regions
+      const placeTypes = Array.isArray(feat.place_type) ? feat.place_type : []
+      if (placeTypes.length > 0 && placeTypes.every(t => ['place', 'locality', 'country', 'region', 'district'].includes(t))) {
+        continue
+      }
 
       const featName = feat.text || feat.place_name || ''
       return {
@@ -113,6 +119,12 @@ async function queryGeoapifyGeocoding({ query, cityLat, cityLon, maxDistanceKm }
       if (!isWithinCityBounds(lat, lon, cityLat, cityLon, maxDistanceKm)) continue
 
       const props = feat.properties || {}
+      // Reject generic city centroids or non-specific boundaries
+      const resultType = props.result_type || ''
+      if (['city', 'country', 'state', 'county', 'postcode'].includes(resultType)) {
+        continue
+      }
+
       return {
         name: props.name || props.formatted || query,
         address: props.formatted || '',

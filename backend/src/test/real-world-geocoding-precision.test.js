@@ -69,9 +69,9 @@ test('geocodePlace resolves verified real GPS coordinates for the 10 reported pl
     assert.ok(dist <= maxMeters, `Expected ${p.name} to be within ${maxMeters}m of ${lat}, ${lon}, got ${dist.toFixed(0)}m`)
   }
 
-  // 1. Cucayo (Cra 53 # 85-33, not Pepe Anca)
+  // 1. Cucayo (Calle 85 # 52-153, not Pepe Anca)
   const cucayo = await geocodePlace('Restaurante Cucayo', bqLat, bqLon)
-  isNearby(cucayo, 11.0118, -74.8213, 500)
+  isNearby(cucayo, 11.0074, -74.8174, 500)
 
   // 2. Zoológico de Barranquilla (Barrio La Concepción)
   const zoo = await geocodePlace('Zoológico de Barranquilla', bqLat, bqLon)

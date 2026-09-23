@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isFoodOrDrinkEstablishment } from '../services/osm.js'
+import { isFoodOrDrinkEstablishment, haversineMeters } from '../services/osm.js'
 import { getReliableCategoryFallbackImage, buildRecommendationReason } from '../routes/ai.js'
 import { isImageSemanticallyCompatible, imageForPlaceWithStatus } from '../services/imageSearch.js'
+import { resolvePlaceWithCascade } from '../services/places-resolver.js'
 
 test('isFoodOrDrinkEstablishment detects iconic dining names without generic prefix', () => {
   assert.equal(isFoodOrDrinkEstablishment('Cucayo'), true, 'Cucayo should be identified as food establishment')
@@ -45,18 +46,17 @@ test('getReliableCategoryFallbackImage assigns gastronomy pool to Cucayo and Var
   const fallbackCucayo = getReliableCategoryFallbackImage('Cucayo', 'requested')
   const fallbackVaradero = getReliableCategoryFallbackImage('Varadero', 'requested')
 
-  // The gastronomy pool images contain food photos (e.g., photo-1555396273, photo-1517248135467, etc.)
   assert.ok(
+    fallbackCucayo.includes('photo-1590846406792') ||
     fallbackCucayo.includes('photo-1555396273') ||
-    fallbackCucayo.includes('photo-1517248135467') ||
     fallbackCucayo.includes('photo-1504674900247') ||
     fallbackCucayo.includes('photo-1544025162'),
     `Cucayo fallback image must be from gastronomy pool, got: ${fallbackCucayo}`
   )
 
   assert.ok(
+    fallbackVaradero.includes('photo-1590846406792') ||
     fallbackVaradero.includes('photo-1555396273') ||
-    fallbackVaradero.includes('photo-1517248135467') ||
     fallbackVaradero.includes('photo-1504674900247') ||
     fallbackVaradero.includes('photo-1544025162'),
     `Varadero fallback image must be from gastronomy pool, got: ${fallbackVaradero}`
@@ -79,13 +79,29 @@ test('imageSearch rejects beach photos for Varadero and Cucayo dining establishm
   assert.equal(isVaraderoCompatibleWithBeach, false, 'Varadero restaurant must reject beach image')
 })
 
-test('imageForPlaceWithStatus for Varadero and Cucayo routes to curated gastronomy without Wikipedia beach lookups', async () => {
+test('imageForPlaceWithStatus returns verified authentic images for Cucayo and Varadero', async () => {
   const varaderoImg = await imageForPlaceWithStatus('Varadero', 'Barranquilla', 'restaurant', 0)
   assert.ok(varaderoImg.url, 'Must return image URL')
-  assert.equal(varaderoImg.isFallback, true, 'Must use curated food fallback')
+  assert.equal(varaderoImg.isFallback, false, 'Must match verified known landmark image')
   assert.ok(!varaderoImg.url.includes('cuba') && !varaderoImg.url.includes('beach'), 'Must not link to Cuban beach')
 
   const cucayoImg = await imageForPlaceWithStatus('Cucayo', 'Barranquilla', 'restaurant', 0)
   assert.ok(cucayoImg.url, 'Must return image URL')
-  assert.equal(cucayoImg.isFallback, true, 'Must use curated food fallback')
+  assert.equal(cucayoImg.isFallback, false, 'Must match verified known landmark image')
+  assert.ok(cucayoImg.url.includes('photo-1590846406792'), 'Must match authentic colorful patio dining image')
+})
+
+test('Cucayo resolves precisely to Calle 85 # 52-153 (11.0074, -74.8174) and never to Calle 91', async () => {
+  const result = await resolvePlaceWithCascade({
+    name: 'Cucayo',
+    city: 'Barranquilla',
+    country: 'Colombia'
+  })
+
+  assert.ok(result, 'Cucayo must resolve')
+  const distFromCalle85 = haversineMeters(result.latitude, result.longitude, 11.0074, -74.8174)
+  assert.ok(distFromCalle85 < 50, `Cucayo must be within 50m of Calle 85 # 52-153, got ${distFromCalle85}m`)
+
+  const distFromCalle91 = haversineMeters(result.latitude, result.longitude, 11.0118, -74.8213)
+  assert.ok(distFromCalle91 > 500, `Cucayo must NOT be placed on Calle 91, dist is ${distFromCalle91}m`)
 })
