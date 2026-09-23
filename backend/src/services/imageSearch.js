@@ -1,3 +1,5 @@
+import { isFoodOrDrinkEstablishment } from './osm.js'
+
 const KNOWN_LANDMARK_IMAGES = {
   // Coveñas & Golfo de Morrosquillo
   'playa blanca covenas': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
@@ -47,15 +49,18 @@ export function isImageSemanticallyCompatible(imageUrl = '', placeName = '', cat
   const lowerPlace = (placeName || '').toLowerCase()
   const lowerCat = (category || '').toLowerCase()
 
-  const isBeach = /\b(playa|playas|beach|beaches|costa|balneario|litoral|mar[íi]timo|maritimo|isla|archipi[ée]lago|cayo|bah[íi]a|bahia|cala)\b/i.test(lowerPlace) ||
-                  lowerCat === 'beach'
-  const isNature = !isBeach && (
+  const isFood = (
+    lowerCat === 'restaurant' || lowerCat === 'food' || lowerCat === 'cafe' || lowerCat === 'bar' ||
+    isFoodOrDrinkEstablishment(lowerPlace) ||
+    /\b(restaurante|restaurantes|comida|asador|asadores|bistro|caf[ée]|cafes|bar|bares|pub|gourmet|gastronom[íi]a|taquer[íi]a|pizzer[íi]a|cocina|fog[oó]n|parrilla|marisquer[íi]a|mariscos|cebicher[íi]a|cevicher[íi]a|saz[oó]n|helader[íi]a|panader[íi]a)\b/i.test(lowerPlace)
+  )
+  const isBeach = !isFood && (
+    /\b(playa|playas|beach|beaches|costa|balneario|litoral|mar[íi]timo|maritimo|isla|archipi[ée]lago|cayo|bah[íi]a|bahia|cala)\b/i.test(lowerPlace) ||
+    lowerCat === 'beach'
+  )
+  const isNature = !isFood && !isBeach && (
     /\b(ci[ée]naga|cienaga|laguna|parque|reserva|ecoparque|manglar|r[íi]o|rio|bosque|sendero|humedal)\b/i.test(lowerPlace) ||
     lowerCat === 'nature' || lowerCat === 'trail'
-  )
-  const isFood = !isBeach && !isNature && (
-    lowerCat === 'restaurant' || lowerCat === 'food' || lowerCat === 'cafe' || lowerCat === 'bar' ||
-    /\b(restaurante|restaurantes|comida|asador|asadores|bistro|caf[ée]|cafes|bar|bares|pub|gourmet|gastronom[íi]a|taquer[íi]a|pizzer[íi]a|cocina|fog[oó]n|parrilla|marisquer[íi]a|mariscos|cebicher[íi]a|cevicher[íi]a|saz[oó]n|helader[íi]a|panader[íi]a)\b/i.test(lowerPlace)
   )
 
   // 0. Universal: Prohibir PDFs, páginas escaneadas de libros y documentos
@@ -185,12 +190,13 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   const contextualQuery = [placeName, city, country].filter(Boolean).join(', ')
   const assignedUrls = options?.assignedUrls instanceof Set ? options.assignedUrls : null
 
-  const isLandmarkOrCultural = /\b(catedral|iglesia|bas[íi]lica|templo|museo|monumento|parque|malec[óo]n|playa|plaza|castillo|fortaleza|mirador|puente|teatro|jard[íi]n|cerro|colina|zool[oó]gico|zoo|acuario|carnaval|estadio|ecoparque|biblioteca|ci[ée]naga|laguna|reserva|bot[aá]nico)\b/i.test(placeName)
-  const isFoodOrDrink = !isLandmarkOrCultural && (
+  const isFoodOrDrink = (
     normalizedCategory === 'restaurant' || normalizedCategory === 'food' || normalizedCategory === 'cafe' || normalizedCategory === 'bar' ||
     options?.isFood === true || options?.category === 'restaurant' ||
+    isFoodOrDrinkEstablishment(placeName) ||
     /\b(restaurante|restaurantes|comida|asador|asadores|bistro|bistr[oó]|gourmet|caf[ée]|cafes|caf[ée]s|bar|bares|pub|pubs|pizzer[íi]a|pizzerias|chifa|gastronom[íi]a|taquer[íi]a|cocina|fog[oó]n|parrilla|marisquer[íi]a|mariscos|cebicher[íi]a|cevicher[íi]a|saz[oó]n|reposter[íi]a|helader[íi]a|panader[íi]a)\b/i.test(placeName)
   )
+  const isLandmarkOrCultural = !isFoodOrDrink && /\b(catedral|iglesia|bas[íi]lica|templo|museo|monumento|parque|malec[óo]n|playa|plaza|castillo|fortaleza|mirador|puente|teatro|jard[íi]n|cerro|colina|zool[oó]gico|zoo|acuario|carnaval|estadio|ecoparque|biblioteca|ci[ée]naga|laguna|reserva|bot[aá]nico)\b/i.test(placeName)
 
   function isValidDistinct(url) {
     if (!url || typeof url !== 'string') return false

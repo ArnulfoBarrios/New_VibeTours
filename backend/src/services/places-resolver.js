@@ -178,34 +178,7 @@ export async function resolvePlaceWithCascade({
   const citySearchQuery = cleanCity ? `${cleanName}, ${cleanCity}` : cleanName
 
   // -------------------------------------------------------------
-  // Tier 2: OpenStreetMap / Photon / Nominatim
-  // -------------------------------------------------------------
-  const osmResult = await geocodePlace(fullSearchQuery, cityLat, cityLon, {
-    city: cleanCity,
-    destination: cleanCity,
-    ...options
-  }).catch(() => null)
-
-  if (osmResult && Number.isFinite(osmResult.latitude) && Number.isFinite(osmResult.longitude)) {
-    if (isWithinCityBounds(osmResult.latitude, osmResult.longitude, cityLat, cityLon, maxDistanceKm)) {
-      const resolved = {
-        name: cleanName,
-        city: cleanCity,
-        address: osmResult.address || osmResult.name || '',
-        latitude: Number(osmResult.latitude),
-        longitude: Number(osmResult.longitude),
-        placeId: osmResult.placeId || osmResult.place_id || '',
-        place_id: osmResult.placeId || osmResult.place_id || '',
-        coordinateSource: osmResult.coordinateSource || 'osm',
-        coordinatesVerified: true
-      }
-      saveCachedPlace({ ...resolved, source: 'osm' }).catch(() => {})
-      return resolved
-    }
-  }
-
-  // -------------------------------------------------------------
-  // Tier 3: Mapbox Search / Geocoding API
+  // Tier 2: Mapbox Search / Geocoding API (Live commercial POIs & addresses)
   // -------------------------------------------------------------
   const mapboxResult = await queryMapboxGeocoding({
     query: fullSearchQuery,
@@ -231,7 +204,7 @@ export async function resolvePlaceWithCascade({
   }
 
   // -------------------------------------------------------------
-  // Tier 4: Geoapify Places API
+  // Tier 3: Geoapify Places API (Live commercial backup)
   // -------------------------------------------------------------
   const geoapifyResult = await queryGeoapifyGeocoding({
     query: fullSearchQuery,
@@ -254,6 +227,34 @@ export async function resolvePlaceWithCascade({
     }
     saveCachedPlace({ ...resolved, source: 'geoapify' }).catch(() => {})
     return resolved
+  }
+
+  // -------------------------------------------------------------
+  // Tier 4: OpenStreetMap / Photon / Nominatim
+  // -------------------------------------------------------------
+  const osmResult = await geocodePlace(fullSearchQuery, cityLat, cityLon, {
+    city: cleanCity,
+    destination: cleanCity,
+    preferLiveProviders: true,
+    ...options
+  }).catch(() => null)
+
+  if (osmResult && Number.isFinite(osmResult.latitude) && Number.isFinite(osmResult.longitude)) {
+    if (isWithinCityBounds(osmResult.latitude, osmResult.longitude, cityLat, cityLon, maxDistanceKm)) {
+      const resolved = {
+        name: cleanName,
+        city: cleanCity,
+        address: osmResult.address || osmResult.name || '',
+        latitude: Number(osmResult.latitude),
+        longitude: Number(osmResult.longitude),
+        placeId: osmResult.placeId || osmResult.place_id || '',
+        place_id: osmResult.placeId || osmResult.place_id || '',
+        coordinateSource: osmResult.coordinateSource || 'osm',
+        coordinatesVerified: true
+      }
+      saveCachedPlace({ ...resolved, source: 'osm' }).catch(() => {})
+      return resolved
+    }
   }
 
   // -------------------------------------------------------------

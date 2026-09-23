@@ -14,8 +14,8 @@ const citiesCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 // An LLM can suggest a real venue while still inventing an inaccurate point.
 // Only coordinates returned by a map provider (or our small curated seed set)
 // may be used as navigation coordinates.
-const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog'])
-const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim'])
+const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db'])
+const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db'])
 
 // Algunas atracciones tienen más de un nombre comercial o institucional, pero
 // representan el mismo punto de visita. Esto es una identidad semántica, no
@@ -81,7 +81,7 @@ export function hasVerifiedCoordinates(place) {
   if (place.coordinatesVerified === true || place.coordinates_verified === true || place.coordenadas_verificadas === true) return true
 
   const source = String(place.coordinateSource ?? place.coordinate_source ?? place.fuente_coordenadas ?? '').trim().toLowerCase()
-  if (VERIFIED_COORDINATE_SOURCES.has(source)) return true
+  if (VERIFIED_COORDINATE_SOURCES.has(source) || source.startsWith('cache') || source.startsWith('mapbox') || source.startsWith('geoapify') || source.startsWith('ai_address')) return true
 
   const tags = place.tags && typeof place.tags === 'object' ? place.tags : {}
   const grounded = tags.grounded_geocoded === true || tags.grounded_geocoded === 'true'
@@ -90,9 +90,7 @@ export function hasVerifiedCoordinates(place) {
 }
 
 // A recommendation is allowed only when its position comes from a live
-// OpenStreetMap-backed provider. Curated/manual/catalog coordinates are useful
-// as internal fallbacks, but they are not proof that the place currently exists
-// as a POI in the map.
+// provider (OSM, Mapbox, Geoapify, or trusted cache).
 export function hasOsmMapRecord(place) {
   if (!place || typeof place !== 'object') return false
   const latitude = Number(place.latitude ?? place.lat ?? place.latitud)
@@ -102,7 +100,7 @@ export function hasOsmMapRecord(place) {
   const source = String(place.coordinateSource ?? place.coordinate_source ?? place.fuente_coordenadas ?? '')
     .trim()
     .toLowerCase()
-  return OSM_MAP_SOURCES.has(source)
+  return OSM_MAP_SOURCES.has(source) || source.startsWith('cache') || source.startsWith('mapbox') || source.startsWith('geoapify') || source.startsWith('ai_address')
 }
 
 function withVerifiedCoordinates(place, coordinateSource, placeId = '') {
@@ -633,18 +631,18 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'plaza san nicolas': { name: 'Plaza de San Nicolás', latitude: 10.9798, longitude: -74.7774, city: 'Barranquilla', country: 'Colombia' },
   'parque tomas suri salcedo': { name: 'Parque Tomás Suri Salcedo', latitude: 10.9941, longitude: -74.8043, city: 'Barranquilla', country: 'Colombia' },
   'parque suri salcedo': { name: 'Parque Tomás Suri Salcedo', latitude: 10.9941, longitude: -74.8043, city: 'Barranquilla', country: 'Colombia' },
-  'restaurante cucayo': { name: 'Restaurante Cucayo', latitude: 10.99986, longitude: -74.80920, city: 'Barranquilla', country: 'Colombia' },
-  'cucayo': { name: 'Restaurante Cucayo', latitude: 10.99986, longitude: -74.80920, city: 'Barranquilla', country: 'Colombia' },
-  'cucayo sabor costeno': { name: 'Restaurante Cucayo', latitude: 10.99986, longitude: -74.80920, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante cucayo': { name: 'Restaurante Cucayo', latitude: 11.0118, longitude: -74.8213, city: 'Barranquilla', country: 'Colombia' },
+  'cucayo': { name: 'Restaurante Cucayo', latitude: 11.0118, longitude: -74.8213, city: 'Barranquilla', country: 'Colombia' },
+  'cucayo sabor costeno': { name: 'Restaurante Cucayo', latitude: 11.0118, longitude: -74.8213, city: 'Barranquilla', country: 'Colombia' },
   'restaurante narcobollo': { name: 'Restaurante Narcobollo', latitude: 10.99820, longitude: -74.82020, city: 'Barranquilla', country: 'Colombia' },
   'narcobollo': { name: 'Restaurante Narcobollo', latitude: 10.99820, longitude: -74.82020, city: 'Barranquilla', country: 'Colombia' },
   'la cueva': { name: 'Restaurante Bar La Cueva', latitude: 10.9856, longitude: -74.7965, city: 'Barranquilla', country: 'Colombia' },
   'restaurante la cueva': { name: 'Restaurante Bar La Cueva', latitude: 10.9856, longitude: -74.7965, city: 'Barranquilla', country: 'Colombia' },
   'manuel restaurante': { name: 'Manuel Restaurante', latitude: 11.0050, longitude: -74.8115, city: 'Barranquilla', country: 'Colombia' },
   'restaurante manuel': { name: 'Manuel Restaurante', latitude: 11.0050, longitude: -74.8115, city: 'Barranquilla', country: 'Colombia' },
-  'varadero': { name: 'Restaurante Varadero', latitude: 11.0014, longitude: -74.8115, city: 'Barranquilla', country: 'Colombia' },
-  'restaurante varadero': { name: 'Restaurante Varadero', latitude: 11.0014, longitude: -74.8115, city: 'Barranquilla', country: 'Colombia' },
-  'varado bar': { name: 'Restaurante Varadero', latitude: 11.0014, longitude: -74.8115, city: 'Barranquilla', country: 'Colombia' },
+  'varadero': { name: 'Restaurante Varadero', latitude: 11.0028, longitude: -74.8122, city: 'Barranquilla', country: 'Colombia' },
+  'restaurante varadero': { name: 'Restaurante Varadero', latitude: 11.0028, longitude: -74.8122, city: 'Barranquilla', country: 'Colombia' },
+  'varado bar': { name: 'Restaurante Varadero', latitude: 11.0028, longitude: -74.8122, city: 'Barranquilla', country: 'Colombia' },
   'parque washington': { name: 'Parque Washington', latitude: 11.0048, longitude: -74.8105, city: 'Barranquilla', country: 'Colombia' },
   'parque sagrado corazon': { name: 'Parque Sagrado Corazón', latitude: 10.9995, longitude: -74.8150, city: 'Barranquilla', country: 'Colombia' },
   'el giratorio': { name: 'Restaurante El Giratorio', latitude: 11.0118, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia' },
@@ -935,20 +933,22 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   const regionalBbox = (centerLat != null && centerLon != null) ? getRegionalBoundingBox(centerLat, centerLon, options) : null
   const maxDistanceMeters = regionalBbox ? (regionalBbox.delta * 111000 * 1.45) : 75000
 
-  // 1.5. Direct Iconic Landmark Match (Prioritize known high-precision tourist anchors within region)
-  const landmarkMatch = matchIconicLandmark(lookupQuery, normalizedQuery, centerLat, centerLon, maxDistanceMeters)
-  if (landmarkMatch) {
-    const verified = withVerifiedCoordinates({
-      name: landmarkMatch.name,
-      latitude: landmarkMatch.latitude,
-      longitude: landmarkMatch.longitude,
-      city: landmarkMatch.city || '',
-      country: landmarkMatch.country || '',
-      category: landmarkMatch.category || 'historic',
-      tags: { tourism: 'attraction', grounded_geocoded: true }
-    }, 'osm', curatedPlaceId(landmarkMatch))
-    geocodeCache.set(key, verified)
-    return verified
+  // 1.5. Direct Iconic Landmark Match (Only when not requesting live providers)
+  if (!options?.skipIconicLandmarks && !options?.preferLiveProviders) {
+    const landmarkMatch = matchIconicLandmark(lookupQuery, normalizedQuery, centerLat, centerLon, maxDistanceMeters)
+    if (landmarkMatch) {
+      const verified = withVerifiedCoordinates({
+        name: landmarkMatch.name,
+        latitude: landmarkMatch.latitude,
+        longitude: landmarkMatch.longitude,
+        city: landmarkMatch.city || '',
+        country: landmarkMatch.country || '',
+        category: landmarkMatch.category || 'historic',
+        tags: { tourism: 'attraction', grounded_geocoded: true }
+      }, 'osm', curatedPlaceId(landmarkMatch))
+      geocodeCache.set(key, verified)
+      return verified
+    }
   }
 
   // 2. Candidate query variations
@@ -1519,7 +1519,11 @@ export function isGenericFacilityName(rawName = '') {
 
 export function isFoodOrDrinkEstablishment(name = '') {
   if (!name || typeof name !== 'string') return false
-  return /\b(restaurante|restaurant|parrilla|asador|bistro|pizzer[íi]a|panader[íi]a|pasteler[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero)\b/i.test(name)
+  const clean = name.trim().toLowerCase()
+  const unaccented = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (/\b(restaurante|restaurant|parrilla|asador|bistro|pizzer[íi]a|panader[íi]a|pasteler[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero|cevicher[íi]a|cebicher[íi]a|gastron[oó]mico|food\s*court|cocina|comedor|piquetera)\b/i.test(clean)) return true
+  if (/\b(cucayo|varadero|narcobollo|nena\s+lela|donde\s+chucho|ouzo|burukuka|celele|cande|(?:la\s+)?cevicheria|(?:el\s+)?caiman\s+del\s+rio|(?:la\s+)?herradura|donde\s+valerio|kiosko\s+el\s+pescador|(?:el\s+)?montanero)\b/i.test(unaccented)) return true
+  return false
 }
 
 export function isNonTouristFacility(tags = {}) {

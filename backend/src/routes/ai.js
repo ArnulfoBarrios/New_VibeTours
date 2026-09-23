@@ -4102,14 +4102,14 @@ export function getReliableCategoryFallbackImage(name = '', category = '') {
   const normName = (name || '').toLowerCase()
 
   let poolKey = 'general'
-  if (normCat.includes('beach') || normCat.includes('island') || normCat.includes('playa') || normCat.includes('isla') || normName.includes('isla') || normName.includes('cayo') || normName.includes('playa') || normName.includes('bahia')) {
+  if (normCat.includes('restaurant') || normCat.includes('cafe') || normCat.includes('gastronomy') || normCat.includes('food') || normName.includes('restaurante') || normName.includes('mercado') || normName.includes('bar') || isFoodOrDrinkEstablishment(name)) {
+    poolKey = 'gastronomy'
+  } else if (normCat.includes('beach') || normCat.includes('island') || normCat.includes('playa') || normCat.includes('isla') || /\b(isla|islas|cayos?|playa|playas|bahia|bah[íi]a)\b/i.test(normName)) {
     poolKey = 'beach_island'
   } else if (normCat.includes('historic') || normCat.includes('museum') || normCat.includes('church') || normCat.includes('monument') || normName.includes('catedral') || normName.includes('museo') || normName.includes('castillo') || normName.includes('plaza')) {
     poolKey = 'historic'
   } else if (normCat.includes('nature') || normCat.includes('park') || normCat.includes('garden') || normName.includes('parque') || normName.includes('jardin') || normName.includes('bosque')) {
     poolKey = 'nature'
-  } else if (normCat.includes('restaurant') || normCat.includes('cafe') || normCat.includes('gastronomy') || normName.includes('restaurante') || normName.includes('mercado') || normName.includes('bar')) {
-    poolKey = 'gastronomy'
   } else if (normCat.includes('viewpoint') || normCat.includes('mirador') || normName.includes('mirador') || normName.includes('malecon')) {
     poolKey = 'viewpoint'
   }
@@ -4141,7 +4141,12 @@ export function buildRecommendationReason(place, input = {}, aiReason = null) {
   const normCat = category.toLowerCase()
   const normName = placeName.toLowerCase()
 
-  if (normCat.includes('island') || normCat.includes('beach') || normName.includes('isla') || normName.includes('cayo') || normName.includes('playa')) {
+  const isDining = normCat.includes('restaurant') || normCat.includes('cafe') || normCat.includes('food') || normName.includes('restaurante') || isFoodOrDrinkEstablishment(placeName)
+  if (isDining) {
+    return `${placeName} es un referente culinario reconocido para deleitarse con la auténtica gastronomía y sazón tradicional de ${city}.`
+  }
+
+  if (normCat.includes('island') || normCat.includes('beach') || /\b(isla|islas|cayos?|playa|playas|bahia|bah[íi]a)\b/i.test(normName)) {
     return `${placeName} destaca por sus paisajes costeros, aguas cristalinas y atmósfera marina única para relajarse.`
   }
 
@@ -4159,10 +4164,6 @@ export function buildRecommendationReason(place, input = {}, aiReason = null) {
 
   if (normCat.includes('nature') || normCat.includes('park') || normName.includes('parque')) {
     return `${placeName} brinda un entorno natural y sombreado ideal para pasear al aire libre y conectar con la biodiversidad local.`
-  }
-
-  if (normCat.includes('restaurant') || normCat.includes('cafe') || normName.includes('restaurante')) {
-    return `${placeName} es un referente culinario reconocido para deleitarse con la auténtica gastronomía y sazón tradicional de ${city}.`
   }
 
   return `${placeName} es una parada emblemática de ${city}, elegida para enriquecer tu recorrido con historia, cultura y autenticidad local.`
@@ -6128,14 +6129,28 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        // 4. Fast single-pass geocoding with strict 1500ms timeout
+        // 4. Cascade geocoding (Cache -> Mapbox -> Geoapify -> OSM -> AI Physical Address)
         if (!geo) {
           const cleanPName = cleanPlacePhysicalName(placeName) || placeName
-          const searchQuery = `${cleanPName}, ${city}`.trim()
-          geo = await Promise.race([
-            geocodePlace(searchQuery, destLat, destLon, regionalOpts).catch(() => null),
-            new Promise(resolve => setTimeout(() => resolve(null), 1500))
-          ])
+          const rawAddress = (typeof rawPlace === 'object' ? (rawPlace.address || rawPlace.direccion || rawPlace.ubicacion?.direccion) : '') || ''
+          geo = await resolvePlaceWithCascade({
+            name: cleanPName,
+            city,
+            country: country || 'Colombia',
+            address: rawAddress,
+            cityLat: destLat,
+            cityLon: destLon,
+            maxDistanceKm: geoScope.maxDistanceKm,
+            options: regionalOpts
+          }).catch(() => null)
+
+          if (!geo) {
+            const searchQuery = `${cleanPName}, ${city}`.trim()
+            geo = await Promise.race([
+              geocodePlace(searchQuery, destLat, destLon, regionalOpts).catch(() => null),
+              new Promise(resolve => setTimeout(() => resolve(null), 1500))
+            ])
+          }
           if (geo && !hasOsmMapRecord(geo)) {
             geo = null
           }
@@ -6255,12 +6270,26 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        // 2. Single fast geocoding attempt with tight 1200ms timeout
+        // 2. Cascade geocoding attempt (Cache -> Mapbox -> Geoapify -> OSM -> AI Physical Address)
         if (!directGeo) {
-          directGeo = await Promise.race([
-            geocodePlace(`${cleanPName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null),
-            new Promise(resolve => setTimeout(() => resolve(null), 1200))
-          ])
+          const rawAddress = (typeof raw === 'object' ? (raw.address || raw.direccion || raw.ubicacion?.direccion) : '') || ''
+          directGeo = await resolvePlaceWithCascade({
+            name: cleanPName,
+            city,
+            country: country || 'Colombia',
+            address: rawAddress,
+            cityLat: destLat,
+            cityLon: destLon,
+            maxDistanceKm: geoScope.maxDistanceKm,
+            options: regionalOpts
+          }).catch(() => null)
+
+          if (!directGeo) {
+            directGeo = await Promise.race([
+              geocodePlace(`${cleanPName}, ${city}`.trim(), destLat, destLon, regionalOpts).catch(() => null),
+              new Promise(resolve => setTimeout(() => resolve(null), 1200))
+            ])
+          }
         }
 
         if (directGeo && !hasOsmMapRecord(directGeo)) {
