@@ -2336,8 +2336,13 @@ export async function processTourBuild(jobId, input, confirmedPlaces, plannerCon
     const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1), maxPlannedDay)
     
     const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
-    const hasRichAiDescriptions = Array.isArray(sourceTour?.itinerario) && sourceTour.itinerario.length > 0 &&
-      plannedStops.every(p => p && typeof p.descripcion === 'string' && p.descripcion.trim().length > 30)
+    const hasRichAiDescriptions = !fallbackReason &&
+      Array.isArray(sourceTour?.itinerario) &&
+      sourceTour.itinerario.length > 0 &&
+      plannedStops.every(p => {
+        const desc = p?.descripcion || p?.description
+        return typeof desc === 'string' && desc.trim().length > 30 && !isGenericDescription(desc, p?.name || p?.nombre)
+      })
 
     const richDescriptionsMap = hasRichAiDescriptions
       ? {}
@@ -2659,8 +2664,13 @@ async function processTourGeneration(jobId, input) {
       const totalDays = Math.max(1, Number(input.durationDays || Math.ceil(input.durationHours / 24) || 1), maxPlannedDay)
       
       const plannedPlaceNames = plannedStops.map(p => typeof p === 'string' ? p : (p?.name || p?.nombre || '')).filter(Boolean)
-      const hasRichAiDescriptions = Array.isArray(sourceTour?.itinerario) && sourceTour.itinerario.length > 0 &&
-        plannedStops.every(p => p && typeof p.descripcion === 'string' && p.descripcion.trim().length > 30)
+      const hasRichAiDescriptions = !fallbackReason &&
+        Array.isArray(sourceTour?.itinerario) &&
+        sourceTour.itinerario.length > 0 &&
+        plannedStops.every(p => {
+          const desc = p?.descripcion || p?.description
+          return typeof desc === 'string' && desc.trim().length > 30 && !isGenericDescription(desc, p?.name || p?.nombre)
+        })
 
       const richDescriptionsMap = hasRichAiDescriptions
         ? {}
@@ -4409,11 +4419,64 @@ export function validateTourQuality(tour, planner, input) {
   return tour
 }
 
+export function isGenericDescription(desc, name = '') {
+  if (!desc || typeof desc !== 'string') return true
+  const clean = desc.trim()
+  if (clean.length < 25) return true
+  if (name && clean.toLowerCase() === String(name).trim().toLowerCase()) return true
+  const genericPatterns = [
+    'un punto de gran interés recomendado',
+    'gran valor patrimonial de',
+    'identidad auténtica',
+    'conectar a los viajeros con la historia viva',
+    'Espacio emblemático de enriquecimiento cultural',
+    'Punto de interés emblemático',
+    'Destacado atractivo en',
+    'Reconocido establecimiento culinario',
+    'es un lugar emblemático de gran interés',
+    'es un destacado establecimiento gastronómico',
+    'es una parada emblemática de',
+    'elegida para enriquecer tu recorrido',
+    'autenticidad local',
+    'funciona como parada de respaldo',
+    'destaca por sus paisajes costeros',
+    'tesoro arquitectónico y cultural imprescindible',
+    'resguarda la memoria, el arte y el legado',
+    'brinda un entorno natural y sombreado',
+    'referente culinario reconocido para deleitarse',
+    'panorámica excepcional de',
+    'posee una notable relevancia histórica',
+    'parada destacada para conocer',
+    'sorprende por sus espejos de agua serenos',
+    'es un hito conmemorativo y visual icónico',
+    'ofrece un atractivo recorrido',
+    'es un punto de notable interés',
+    'conocer este lugar enriquece la visita'
+  ]
+  return genericPatterns.some(p => clean.toLowerCase().includes(p.toLowerCase()))
+}
+
 function generateDynamicDescription(name, category, city) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
   const loc = city ? `en ${city}` : 'en la zona'
   const seed = Math.abs(cleanName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
 
+  if (/bocas?\s+de\s+ceniza|tajamar|desembocadura/i.test(cleanName)) {
+    const variants = [
+      `${cleanName} es el imponente tajamar ${loc} donde convergen la fuerza del río Magdalena y el mar Caribe, ofreciendo un paisaje agreste único y vistas panorámicas del océano.`,
+      `En ${cleanName}, los visitantes son testigos directos del choque de aguas del río más importante de Colombia al desembocar en el Caribe, con brisa marina constante y horizonte abierto.`,
+      `${cleanName} ofrece una experiencia paisajística memorable ${loc}, ideal para sentir el viento oceánico, observar barcos de gran calado y apreciar la confluencia entre río y mar.`
+    ]
+    return variants[seed % variants.length]
+  }
+  if (/shakira|arroyo|pibe|escalona|botero|garc[ií]a\s+m[aá]rquez/i.test(cleanName)) {
+    const variants = [
+      `${cleanName} es un vibrante tributo artístico ${loc}, que rinde homenaje a una de las figuras más queridas y trascendentes de la cultura y la música colombiana a nivel mundial.`,
+      `Ubicado en un entorno animado ${loc}, ${cleanName} celebra el talento, ritmo y legado de un ícono cultural imprescindible, atrayendo a admiradores y viajeros de todo el mundo.`,
+      `${cleanName} destaca como uno de los puntos fotográficos y culturales más alegres ${loc}, inmortalizando el orgullo artístico regional en una escultura llena de dinamismo.`
+    ]
+    return variants[seed % variants.length]
+  }
   if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom/i.test(cleanName) || /food|restaurant|gastronom/i.test(category)) {
     const variants = [
       `${cleanName} es un referente culinario ${loc}, donde destacan recetas tradicionales, ingredientes frescos y una esmerada sazón local.`,
@@ -4446,7 +4509,7 @@ function generateDynamicDescription(name, category, city) {
     ]
     return variants[seed % variants.length]
   }
-  if (/boca|bocas|ceniza|ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna|pantano/i.test(cleanName)) {
+  if (/ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna|pantano/i.test(cleanName)) {
     const variants = [
       `${cleanName} es un valioso humedal y enclave ecológico ${loc}, hogar de avifauna acuática y bosques de manglar de gran importancia ambiental.`,
       `En ${cleanName} convergen corrientes acuáticas que sustentan una rica biodiversidad ${loc}, ofreciendo recorridos en canoa y avistamiento de fauna.`,
@@ -4456,9 +4519,9 @@ function generateDynamicDescription(name, category, city) {
   }
   if (/monumento|estatua|escultura|hito|memorial|aleta|ventana/i.test(cleanName)) {
     const variants = [
-      `${cleanName} es un hito conmemorativo y visual icónico ${loc}, creado para homenajear la identidad, cultura y legado de la comunidad.`,
+      `${cleanName} es un hito escultórico y visual icónico ${loc}, creado para celebrar la identidad, cultura y legado de la comunidad.`,
       `La arquitectura y significado de ${cleanName} lo sitúan entre los puntos más fotografiados y emblemáticos de ${city || 'la zona'}.`,
-      `${cleanName} rinde tributo a la historia y personajes ilustres ${loc}, convirtiéndose en un símbolo contemporáneo de encuentro e identidad.`
+      `${cleanName} rinde tributo a la historia y expresiones creativas ${loc}, convirtiéndose en un símbolo contemporáneo de encuentro e identidad.`
     ]
     return variants[seed % variants.length]
   }
@@ -4491,6 +4554,18 @@ function generateDynamicTips(name, category, city) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
   const seed = cleanName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
 
+  if (/bocas?\s+de\s+ceniza|tajamar|desembocadura/i.test(cleanName)) {
+    return [
+      `Llevar calzado cerrado y cómodo con buen agarre, protector solar e hidratación para caminar por ${cleanName}.`,
+      `Aprovechar las horas de la mañana o el final de la tarde para disfrutar de la brisa marina y capturar las mejores fotos del encuentro entre río y mar.`
+    ]
+  }
+  if (/shakira|arroyo|pibe|escalona|botero|aleta|ventana/i.test(cleanName)) {
+    return [
+      `Aprovechar la luz de la mañana o el atardecer para capturar las mejores fotos frente al monumento de ${cleanName}.`,
+      `Combinar la visita con un agradable paseo por el malecón o la plazoleta peatonal para disfrutar del ambiente local.`
+    ]
+  }
   if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada|costa/i.test(cleanName) || /beach|playa|coastal/i.test(category)) {
     return [
       `Llevar protección solar, toalla e hidratación para disfrutar de ${cleanName}.`,
@@ -4512,7 +4587,7 @@ function generateDynamicTips(name, category, city) {
   }
   if (isMonumentOrHeritage) {
     return [
-      `Apreciar con calma los detalles arquitectónicos, placas conmemorativas y simbolismos históricos en ${cleanName}.`,
+      `Apreciar con calma los detalles artísticos, placas conmemorativas y simbolismos históricos en ${cleanName}.`,
       `Aprovechar la luz de la mañana o el atardecer para capturar las mejores fotografías del monumento.`
     ]
   }
@@ -4593,8 +4668,8 @@ function generateDynamicTips(name, category, city) {
   }
   if (/estatua|libertad|statue|monumento|memorial|plaza|catedral|iglesia|fuerte|castillo/i.test(cleanName)) {
     return [
-      `Apreciar los detalles arquitectónicos y placas conmemorativas de ${cleanName}.`,
-      `Iniciar el recorrido por la mañana para obtener fotografías con óptima iluminación natural.`
+      `Apreciar los detalles artísticos y placas conmemorativas de ${cleanName}.`,
+      `Iniciar el recorrido con buena luz natural para obtener óptimas fotografías.`
     ]
   }
   if (/opera|teatro|theatre/i.test(cleanName)) {
@@ -4619,6 +4694,28 @@ function generateDynamicActivities(name, category) {
   const cleanName = String(name || '').replace(/_/g, ' ').trim()
   const seed = Math.abs(cleanName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
 
+  if (/bocas?\s+de\s+ceniza|tajamar|desembocadura/i.test(cleanName)) {
+    const bocasVariants = [
+      [
+        `Recorrer el tajamar y contemplar la desembocadura del río Magdalena en el mar Caribe`,
+        `Observar el choque de corrientes, el oleaje y el paso de embarcaciones costeras`,
+        `Tomar fotografías panorámicas del horizonte marítimo y la brisa en ${cleanName}`
+      ],
+      [
+        `Caminar por el sendero del tajamar sintiendo la brisa oceánica y fluvial`,
+        `Apreciar la biodiversidad marina, aves costeras y la faena de pescadores artesanales`,
+        `Disfrutar de bebidas refrescantes y postales únicas del paisaje litoral`
+      ]
+    ]
+    return bocasVariants[seed % bocasVariants.length]
+  }
+  if (/shakira|arroyo|pibe|escalona|botero/i.test(cleanName)) {
+    return [
+      `Fotografiarse junto a la emblemática escultura de ${cleanName}`,
+      `Conocer la historia, trayectoria y homenaje cultural que representa este ícono`,
+      `Disfrutar del paseo por el malecón y contemplar las vistas y la brisa del entorno`
+    ]
+  }
   if (/playa|beach|bah[íi]a|cala|cabo|ensenada/i.test(cleanName)) {
     const beachVariants = [
       [
@@ -4778,11 +4875,20 @@ function generateDynamicActivities(name, category) {
     ]
     return parkVariants[seed % parkVariants.length]
   }
-  return [
-    `Conocer de cerca la historia y características singulares de ${cleanName}`,
-    `Recorrer los puntos de mayor interés visual y patrimonial del lugar`,
-    `Apreciar la atmósfera y vida cotidiana que distinguen a ${cleanName}`
+
+  const genericVariants = [
+    [
+      `Conocer de cerca la historia y características de ${cleanName}`,
+      `Recorrer los puntos de mayor interés visual y patrimonial`,
+      `Apreciar la atmósfera y el dinamismo cotidiano del lugar`
+    ],
+    [
+      `Pasear por los alrededores y disfrutar del entorno de ${cleanName}`,
+      `Tomar fotos panorámicas y detalles representativos del sitio`,
+      `Interactuar con la comunidad y conocer anécdotas de la zona`
+    ]
   ]
+  return genericVariants[seed % genericVariants.length]
 }
 
 async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lon = null, targetCityCoords = null, options = {}) {
@@ -4942,37 +5048,19 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
   let description = richObj?.descripcion || (typeof richData === 'string' ? richData : '') || source.descripcion || source.description || ''
   description = description.replace(/^(Atracci[oó]n(\s*\/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*/i, '').trim()
 
-  const isGenericDesc = !description || 
-                         description.trim().length < 25 || 
-                         (description.toLowerCase() === resolvedName.toLowerCase()) ||
-                         description.includes('un punto de gran interés recomendado') ||
-                         description.includes('gran valor patrimonial de') ||
-                         description.includes('identidad auténtica') ||
-                         description.includes('conectar a los viajeros con la historia viva') ||
-                         description.includes('Espacio emblemático de enriquecimiento cultural') ||
-                         description.includes('Punto de interés emblemático') ||
-                         description.includes('Destacado atractivo en') ||
-                         description.includes('Reconocido establecimiento culinario') ||
-                         description.includes('es un lugar emblemático de gran interés') ||
-                         description.includes('es un destacado establecimiento gastronómico') ||
-                         description.includes('es una parada emblemática de') ||
-                         description.includes('elegida para enriquecer tu recorrido') ||
-                         description.includes('autenticidad local') ||
-                         description.includes('funciona como parada de respaldo') ||
-                         description.includes('destaca por sus paisajes costeros') ||
-                         description.includes('tesoro arquitectónico y cultural imprescindible') ||
-                         description.includes('resguarda la memoria, el arte y el legado') ||
-                         description.includes('brinda un entorno natural y sombreado') ||
-                         description.includes('referente culinario reconocido para deleitarse') ||
-                         description.includes('panorámica excepcional de');
+  const isGenericDesc = isGenericDescription(description, resolvedName)
 
   if (isGenericDesc) {
-    const wikiText = await wikipediaSummaryText(resolvedName, input.city || input.destination, input.country).catch(() => null)
-    if (wikiText && wikiText.length > 30) {
-      description = wikiText
+    if (richObj?.descripcion && !isGenericDescription(richObj.descripcion, resolvedName)) {
+      description = richObj.descripcion
     } else {
-      const rawCat = matchedPlace?.category || candidateFallback?.category || source.categoria || source.category || source.type || 'lugar'
-      description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
+      const wikiText = await wikipediaSummaryText(resolvedName, input.city || input.destination, input.country).catch(() => null)
+      if (wikiText && wikiText.length > 30) {
+        description = wikiText
+      } else {
+        const rawCat = matchedPlace?.category || candidateFallback?.category || source.categoria || source.category || source.type || 'lugar'
+        description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
+      }
     }
   }
   

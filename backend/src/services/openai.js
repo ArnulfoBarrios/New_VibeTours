@@ -134,6 +134,7 @@ export function isLodgingRecommendationInquiry(message = '', lastAssistantMsg = 
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
   if (!userText) return false
+  if (/\b(informacion|detalles?|saber\s+mas|cuentame)\b/i.test(userText)) return false
 
   // 1. Direct inquiry about hotels or lodging options
   const isDirectInquiry = /\b(recomiendame\s+hoteles|recomienda\s+hoteles|opciones\s+de\s+(?:hotel|hoteles|hospedaje|alojamiento)|que\s+hoteles|cuales\s+hoteles|que\s+hotel|buscar\s+hotel|donde\s+(?:nos\s+vamos\s+a\s+|me\s+voy\s+a\s+|vamos\s+a\s+)?quedar|quedarn?os|quedarme|dame\s+recomendaciones\s+de\s+hotel|recomiendas?\s+un\s+hotel|hoteles\s+recomendados)\b/i.test(userText) ||
@@ -3110,7 +3111,8 @@ Lugares obligatorios de este bloque: ${JSON.stringify(chunk)}`
             temperature: 0.3,
             response_format: { type: 'json_object' },
             reasoning_effort: 'low'
-          }))
+          })),
+          signal: AbortSignal.timeout(18000)
         }).then(async res => {
           if (!res.ok) return null
           const data = await res.json()
@@ -3600,6 +3602,20 @@ function buildFallbackActivitiesForPlace(name, city = '') {
   const clean = String(name || '').trim()
   const seed = Math.abs(clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
 
+  if (/bocas?\s+de\s+ceniza|tajamar|desembocadura/i.test(clean)) {
+    const bocasOptions = [
+      [`Recorrer el tajamar y contemplar la desembocadura del río Magdalena en el mar Caribe`, `Observar el choque de corrientes, el oleaje y el paso de embarcaciones costeras`, `Tomar fotografías panorámicas del horizonte marítimo y sentir la brisa en ${clean}`],
+      [`Caminar por el sendero del tajamar sintiendo la brisa oceánica y fluvial`, `Apreciar la biodiversidad marina, aves costeras y la faena de pescadores artesanales`, `Disfrutar de bebidas refrescantes y postales únicas del paisaje litoral`]
+    ]
+    return bocasOptions[seed % bocasOptions.length]
+  }
+  if (/shakira|arroyo|pibe|escalona|botero/i.test(clean)) {
+    return [
+      `Fotografiarse junto a la emblemática escultura de ${clean}`,
+      `Conocer la historia, trayectoria y homenaje cultural que representa este ícono`,
+      `Disfrutar del paseo por el malecón y contemplar las vistas y la brisa del entorno`
+    ]
+  }
   if (/playa|beach|bah[íi]a|cabo|cala|ensenada|costa/i.test(clean)) {
     const beachOptions = [
       [`Caminar por la orilla y relajarse frente al mar en ${clean}`, `Bañarse en las aguas templadas y contemplar el horizonte marino`, `Degustar bebidas refrescantes y pasabocas típicos en kioscos playeros`],
@@ -3615,7 +3631,7 @@ function buildFallbackActivitiesForPlace(name, city = '') {
     ]
     return promOptions[seed % promOptions.length]
   }
-  if (/boca|bocas|ceniza|ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna/i.test(clean)) {
+  if (/ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna/i.test(clean)) {
     const natureOptions = [
       [`Realizar un recorrido en canoa o lancha por los canales de ${clean}`, `Avistar aves acuáticas y fauna nativa del ecosistema de manglar`, `Aprender sobre la pesca artesanal y conservación ambiental con guías locales`],
       [`Caminar por los muelles de madera y miradores ecológicos de ${clean}`, `Observar los espejos de agua en calma y raíces de mangle`, `Registrar fotografías del paisaje silvestre del humedal`]
@@ -3655,6 +3671,16 @@ function buildFallbackCuriositiesForPlace(name, city = '') {
   const loc = city ? `en ${city}` : 'en la región'
   const seed = Math.abs(clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
 
+  if (/bocas?\s+de\s+ceniza|tajamar|desembocadura/i.test(clean)) {
+    const facts = [
+      `Es la imponente obra de ingeniería marítima y fluvial que canaliza el río Magdalena hacia el océano Atlántico a lo largo de varios kilómetros de tajamar.`,
+      `En este punto exacto convergen las aguas dulces del río más caudaloso de Colombia con la inmensidad salina del mar Caribe.`
+    ]
+    return [facts[seed % facts.length]]
+  }
+  if (/shakira/i.test(clean)) {
+    return [`La imponente escultura de más de 6 metros de altura en bronce y aluminio celebra el talento y proyección internacional de la artista barranquillera.`]
+  }
   if (/playa|beach|bah[íi]a|cabo|cala|costa/i.test(clean)) {
     const facts = [
       `Sus arenas y oleaje suave son apreciados por locales como un refugio de tranquilidad costera ${loc}.`,
@@ -3690,6 +3716,20 @@ function buildFallbackTipsForPlace(name, city = '') {
   const clean = String(name || '').trim()
   const seed = Math.abs(clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
 
+  if (/bocas?\s+de\s+ceniza|tajamar|desembocadura/i.test(clean)) {
+    const tips = [
+      `Llevar calzado con buen agarre, protección solar e hidratación para recorrer el tajamar sin contratiempos.`,
+      `Aprovechar la mañana o el atardecer para disfrutar de la mejor iluminación fotográfica y brisa fresca.`
+    ]
+    return [tips[seed % tips.length]]
+  }
+  if (/shakira|arroyo|pibe|botero|monumento|ventana|aleta/i.test(clean)) {
+    const tips = [
+      `Aprovechar la luz de la mañana o el atardecer para capturar las mejores fotos con el monumento de ${clean}.`,
+      `Complementar la visita con un recorrido por el malecón o la plazoleta peatonal para disfrutar del ambiente.`
+    ]
+    return [tips[seed % tips.length]]
+  }
   if (/playa|beach|bah[íi]a|costa/i.test(clean)) {
     const tips = [
       `Llevar protector solar, sombrero e hidratación para disfrutar cómodamente de la estancia.`,
@@ -3697,7 +3737,7 @@ function buildFallbackTipsForPlace(name, city = '') {
     ]
     return [tips[seed % tips.length]]
   }
-  if (/malec[óo]n|paseo|monumento|ventana|aleta/i.test(clean)) {
+  if (/malec[óo]n|paseo/i.test(clean)) {
     const tips = [
       `Visitar al final de la tarde o al anochecer para capturar las mejores fotografías con la iluminación del sitio.`,
       `Usar calzado cómodo para recorrer todo el trayecto peatonal sin prisas.`
@@ -3714,6 +3754,24 @@ function buildRichFallbackDescription(name, city = '') {
   const clean = String(name || '').trim()
   const loc = city ? `en ${city}` : 'en la región'
   const seed = Math.abs(clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
+
+  const isBocasDeCeniza = /\b(bocas?\s+de\s+ceniza|tajamar|desembocadura)\b/i.test(clean)
+  if (isBocasDeCeniza) {
+    const bocasVariants = [
+      `${clean} es el imponente tajamar ${loc} donde convergen la fuerza del río Magdalena y el mar Caribe, ofreciendo un paisaje agreste único y vistas panorámicas del océano.`,
+      `En ${clean}, los visitantes son testigos directos de la majestuosa desembocadura del río más importante de Colombia en el Caribe, con brisa oceánica constante y horizonte abierto.`
+    ]
+    return bocasVariants[seed % bocasVariants.length]
+  }
+
+  const isCulturalIcon = /shakira|arroyo|pibe|escalona|botero|garc[ií]a\s+m[aá]rquez/i.test(clean)
+  if (isCulturalIcon) {
+    const iconVariants = [
+      `${clean} es un vibrante tributo artístico ${loc}, que rinde homenaje a una de las figuras más queridas y trascendentes de la cultura y la música colombiana a nivel mundial.`,
+      `Ubicado en un entorno animado ${loc}, ${clean} celebra el talento, ritmo y legado de un ícono cultural imprescindible, atrayendo a admiradores y viajeros de todo el mundo.`
+    ]
+    return iconVariants[seed % iconVariants.length]
+  }
 
   const isChurch = /\b(catedral|iglesia|bas[íi]lica|templo|santuario|parroquia)\b/i.test(clean)
   if (isChurch) {
@@ -3738,7 +3796,7 @@ function buildRichFallbackDescription(name, city = '') {
     return museumVariants[seed % museumVariants.length]
   }
 
-  const isEstuaryOrNature = /\b(boca|bocas|ceniza|ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna|pantano)\b/i.test(clean)
+  const isEstuaryOrNature = /\b(ci[eé]naga|manglar|delta|r[íi]o|estuario|laguna|pantano)\b/i.test(clean)
   if (isEstuaryOrNature) {
     const natureVariants = [
       `${clean} es un imponente enclave natural ${loc}, donde confluyen corrientes fluviales y marinas ofreciendo vistas panorámicas excepcionales y una rica biodiversidad.`,
