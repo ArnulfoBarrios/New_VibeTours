@@ -2936,7 +2936,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
       "consejos": ["Consejo práctico del guía"],
       "ubicacion": {
         "nombre_lugar": "Nombre del lugar",
-        "direccion": "",
+        "direccion": "Dirección física o cruce de calles (ej: Cra. 49C # 76-80 o Calle 72 con Cra 53)",
         "ciudad": "${cleanCity}",
         "region": "",
         "pais": "${targetCountry}",
@@ -2978,7 +2978,8 @@ REGLAS DE CALIDAD:
 5. NO agregues hoteles ni alojamientos como paradas de actividad dentro del itinerario.
 6. Para cada parada, redacta una narración de guía de voz inmersiva de 60 a 90 palabras, con la voz de una guía turística apasionada, joven, extrovertida y cálida, con ritmo fluido, pausas naturales y emoción genuina para narración de audio en vivo (TTS).
 7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.
-8. REGLA ESTRICTA PARA 'mejor_epoca': Si el viaje cuenta con fechas o evento especial indicado (${defaultBestSeason !== 'Todo el año' ? `"${defaultBestSeason}"` : 'como un festival o mes específico'}), 'mejor_epoca' DEBE reflejar exactamente ese rango de fechas o festividad (ej: "${defaultBestSeason}"). De lo contrario, indica "Todo el año" (siempre con 'ñ').`
+8. REGLA ESTRICTA PARA 'mejor_epoca': Si el viaje cuenta con fechas o evento especial indicado (${defaultBestSeason !== 'Todo el año' ? `"${defaultBestSeason}"` : 'como un festival o mes específico'}), 'mejor_epoca' DEBE reflejar exactamente ese rango de fechas o festividad (ej: "${defaultBestSeason}"). De lo contrario, indica "Todo el año" (siempre con 'ñ').
+9. REGLA OBLIGATORIA PARA 'ubicacion.direccion': Para cada parada (especialmente restaurantes, locales gastronómicos, tiendas y cafés), DEBES proporcionar la dirección física real o el cruce de calles (ej: 'Cra. 49C # 76-80', 'Calle 72 con Cra. 53') para garantizar su correcta georreferenciación en la cartografía.`
 
   // For tours with more than 4 stops, split into dynamic parallel chunks of max 4 places so generation completes in ~12-16s regardless of stops count
   if (selectedPlaces.length > 4) {
@@ -3009,7 +3010,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
       "consejos": ["Consejo práctico del guía"],
       "ubicacion": {
         "nombre_lugar": "Nombre exacto del lugar recibido",
-        "direccion": "",
+        "direccion": "Dirección física o cruce de calles (ej: Cra. 49C # 76-80)",
         "ciudad": "${cleanCity}",
         "region": "",
         "pais": "${targetCountry}",

@@ -9,6 +9,7 @@ import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName, FALLBACK_DESTINATION_CENTROIDS } from '../services/destinationService.js'
+import { resolvePlaceWithCascade } from '../services/places-resolver.js'
 
 export const aiRouter = Router()
 
@@ -5179,15 +5180,30 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
     }
   }
 
-  // 3. GEOCODIFICACIÓN ESTRICTA EN CARTOGRAFÍA REAL (OSM / Photon / Nominatim / KNOWN_ICONIC_LANDMARKS)
+  // 3. GEOCODIFICACIÓN EN CASCADA (Supabase Cache -> OSM/Photon -> Mapbox -> Geoapify -> AI Physical Address)
   const cleanName = cleanPlacePhysicalName(name) || name
-  const searchQuery = `${cleanName}, ${cleanCity}, ${input.country || ''}`.trim().replace(/,\s*$/, '')
-  let geocoded = await geocodePlace(searchQuery, destLat, destLon, geocodeOpts).catch(() => null)
-  if (!geocoded && cleanCity && !cleanName.toLowerCase().includes(cleanCity.toLowerCase())) {
-    geocoded = await geocodePlace(`${cleanName}, ${cleanCity}`, destLat, destLon, geocodeOpts).catch(() => null)
-  }
-  if (!geocoded && destLat && destLon) {
-    geocoded = await geocodePlace(cleanName, destLat, destLon, geocodeOpts).catch(() => null)
+  const sourceAddress = sourceLocation.direccion || sourceLocation.address || source.direccion || source.address || ''
+
+  let geocoded = await resolvePlaceWithCascade({
+    name: cleanName,
+    city: cleanCity,
+    country: input.country || 'Colombia',
+    address: sourceAddress,
+    cityLat: destLat,
+    cityLon: destLon,
+    maxDistanceKm: geoScope.maxDistanceKm,
+    options: geocodeOpts
+  }).catch(() => null)
+
+  if (!geocoded) {
+    const searchQuery = `${cleanName}, ${cleanCity}, ${input.country || ''}`.trim().replace(/,\s*$/, '')
+    geocoded = await geocodePlace(searchQuery, destLat, destLon, geocodeOpts).catch(() => null)
+    if (!geocoded && cleanCity && !cleanName.toLowerCase().includes(cleanCity.toLowerCase())) {
+      geocoded = await geocodePlace(`${cleanName}, ${cleanCity}`, destLat, destLon, geocodeOpts).catch(() => null)
+    }
+    if (!geocoded && destLat && destLon) {
+      geocoded = await geocodePlace(cleanName, destLat, destLon, geocodeOpts).catch(() => null)
+    }
   }
 
   if (geocoded && hasUsableCoordinates(geocoded.latitude, geocoded.longitude)) {
@@ -5200,7 +5216,7 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
         placeId: geocoded.placeId || geocoded.place_id || '',
         coordinateSource: geocoded.coordinateSource || geocoded.coordinate_source || '',
         coordinatesVerified: true,
-        address: geocoded.address || geocoded.name || ''
+        address: geocoded.address || geocoded.name || sourceAddress || ''
       }
     }
   }
