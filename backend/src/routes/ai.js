@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
@@ -912,11 +912,13 @@ aiRouter.post('/chat', async (req, res, next) => {
     const isOnlyInquiringHotel = /\b(m[aá]s informaci[oó]n|informaci[oó]n del?|informaci[oó]n sobre|detalles del?|cu[eé]ntame m[aá]s|cu[eé]ntame sobre|c[oó]mo es el|qu[eé] tal es el|precios? del?|servicios del?)\b/i.test(message)
     const isChoosingHotel = isExplicitlyChoosingHotel(message)
     const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(message)
+    const lastAssistantMsgForLodging = [...(history || [])].reverse().find(h => h && (h.role === 'assistant' || h.role === 'bot'))?.content || ''
+    const isNegatedOrAskingLodging = isLodgingNegationOrUncertainty(message) || isLodgingRecommendationInquiry(message, lastAssistantMsgForLodging)
 
     // Check for ordinal choice mapping to previously offered hotels
     const ordinalMatch = message.trim().match(/^(?:(?:ok\s+|perfecto\s+|listo\s+)?(?:el\s+(primero|segundo|tercero)|la\s+(primera|segunda|tercera)(?:\s+opci[oó]n)?|opci[oó]n\s*([1-3])|([1-3])))\b/i)
-    if (ordinalMatch && !isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus)) {
-      const lastAssistantMsg = [...(history || [])].reverse().find(h => h && h.role === 'assistant')?.content || ''
+    if (ordinalMatch && !isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus) && !isNegatedOrAskingLodging) {
+      const lastAssistantMsg = lastAssistantMsgForLodging
       if (lastAssistantMsg) {
         let targetIndex = 0
         const word = (ordinalMatch[1] || ordinalMatch[2] || ordinalMatch[3] || ordinalMatch[4] || '').toLowerCase()
@@ -948,13 +950,16 @@ aiRouter.post('/chat', async (req, res, next) => {
         .trim()
     }
 
-    if (isChoosingHotel && updatedPreferences.selectedHotel?.name) {
+    if (isChoosingHotel && updatedPreferences.selectedHotel?.name && !isNegatedOrAskingLodging) {
       updatedPreferences.accommodationStatus = 'Hotel elegido'
     }
 
     if (isHomeOrLocalLodging) {
       updatedPreferences.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
       updatedPreferences.accommodationStatus = 'Casa propia / familiar'
+    } else if (isNegatedOrAskingLodging) {
+      delete updatedPreferences.selectedHotel
+      updatedPreferences.accommodationStatus = 'Recomiéndame hoteles'
     } else if (isOnlyInquiringHotel && !isChoosingHotel) {
       if (!currentPreferences.selectedHotel) {
         delete updatedPreferences.selectedHotel
@@ -1254,7 +1259,10 @@ aiRouter.post('/chat', async (req, res, next) => {
           if (k === 'selectedHotel' || k === 'accommodationStatus') {
             const hVal = k === 'selectedHotel' ? v : (aiResponse.extractedPreferences.selectedHotel || updatedPreferences.selectedHotel)
             const sVal = k === 'accommodationStatus' ? v : (aiResponse.extractedPreferences.accommodationStatus || updatedPreferences.accommodationStatus)
-            if (isLodgingExplicitlyConfirmed(hVal, sVal)) {
+            if (isNegatedOrAskingLodging) {
+              delete updatedPreferences.selectedHotel
+              updatedPreferences.accommodationStatus = 'Recomiéndame hoteles'
+            } else if (isLodgingExplicitlyConfirmed(hVal, sVal)) {
               updatedPreferences[k] = v
               if (k === 'selectedHotel' && (!updatedPreferences.accommodationStatus || updatedPreferences.accommodationStatus === 'Por definir')) {
                 updatedPreferences.accommodationStatus = 'Hotel elegido'
@@ -1265,6 +1273,11 @@ aiRouter.post('/chat', async (req, res, next) => {
           }
         }
       })
+    }
+
+    if (isNegatedOrAskingLodging) {
+      delete updatedPreferences.selectedHotel
+      updatedPreferences.accommodationStatus = 'Recomiéndame hoteles'
     }
 
     // SSOT: Ensure durationDays matches the maximum day specified in any extracted itinerary places

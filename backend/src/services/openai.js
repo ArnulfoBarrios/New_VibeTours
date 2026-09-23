@@ -112,8 +112,51 @@ export const GENERIC_LODGING_TERMS = new Set([
 export function isLodgingCategoryOrGeneric(text) {
   if (!text || typeof text !== 'string') return false
   const clean = text.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
+  if (isLodgingNegationOrUncertainty(clean)) return false
   if (GENERIC_LODGING_TERMS.has(clean)) return true
   return /^(?:un|una|unos|unas|el|la|los|las)?\s*(?:villa(?:\s+privada)?|resort(?:\s+de\s+lujo|\s+frente\s+al\s+mar)?|hotel(?:\s+boutique|\s+economico|\s+centrico|\s+frente\s+al\s+mar)?|caba[nñ]a|hostal|posada|apartamento|airbnb|alojamiento|hospedaje|glamping)(?:\s+(?:esta\s+bien|estaria\s+bien|prefiero|de\s+playa|de\s+lujo))?$/i.test(clean)
+}
+
+export function isLodgingNegationOrUncertainty(message = '') {
+  const text = String(message || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!text) return false
+  return /\b(no\s+(?:tengo|tenemos|hay|hemos|se|sabemos)|sin\s+hotel|sin\s+alojamiento|sin\s+hospedaje|aún\s+no|aun\s+no|todavia\s+no|todav[ií]a\s+no|donde\s+(?:nos\s+vamos\s+a\s+|me\s+voy\s+a\s+|vamos\s+a\s+)?quedar|quedarn?os|quedarme|que\s+recomiendas?|dame\s+recomendaciones|recomiendame|opciones\s+de\s+(?:hotel|hoteles|hospedaje|alojamiento)|buscar\s+hotel)\b/i.test(text)
+}
+
+export function isLodgingRecommendationInquiry(message = '', lastAssistantMsg = '') {
+  const userText = String(message || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!userText) return false
+
+  // 1. Direct inquiry about hotels or lodging options
+  const isDirectInquiry = /\b(recomiendame\s+hoteles|recomienda\s+hoteles|opciones\s+de\s+(?:hotel|hoteles|hospedaje|alojamiento)|que\s+hoteles|cuales\s+hoteles|que\s+hotel|buscar\s+hotel|donde\s+(?:nos\s+vamos\s+a\s+|me\s+voy\s+a\s+|vamos\s+a\s+)?quedar|quedarn?os|quedarme|dame\s+recomendaciones\s+de\s+hotel|recomiendas?\s+un\s+hotel|hoteles\s+recomendados)\b/i.test(userText) ||
+    (/\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(userText) && /\b(recomiend|opcion|opciones|sugier|sugerencia|buscar|cual|cuales|que|dame|sin|no\s+tengo|no\s+tenemos|definido)\b/i.test(userText)) ||
+    (/\bdame\s+recomendaciones\b/i.test(userText) && !/\b(comida|restaurante|sitios|lugares|atracciones)\b/i.test(userText))
+
+  if (isDirectInquiry) return true
+
+  // 2. Contextual reply: if the assistant's last message asked about lodging/hotel and user responds asking for advice or expressing uncertainty
+  const assistantText = String(lastAssistantMsg || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  const assistantAskedLodging = /\b(hotel|alojamiento|hospedaje|hospedaran|donde\s+se\s+hospedaran|casa\s+propia)\b/i.test(assistantText)
+
+  if (assistantAskedLodging) {
+    const isUncertainOrAsking = /\b(no\s+se|no\s+sabemos|que\s+recomiendas?|recomiendanos|dame\s+recomendaciones|recomiendame|cuales|que\s+opciones|que\s+hay|no\s+tengo\s+idea|aún\s+no|aun\s+no|todavia\s+no|ni\s+idea|sugerencias?)\b/i.test(userText) ||
+      /^\s*(?:no\s+sabemos|no\s+se|que\s+recomiendas\??|dame\s+recomendaciones)\s*$/i.test(userText)
+    if (isUncertainOrAsking) return true
+  }
+
+  return false
 }
 
 export function isLodgingExplicitlyConfirmed(hotel, status) {
@@ -649,6 +692,7 @@ export function isExplicitlyChoosingHotel(message = '') {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+  if (isLodgingNegationOrUncertainty(text)) return false
   return /\b(confirmar|confirmo|confirmado|elegir|elijo|elegi|ya\s+elegi|escoger|escojo|escogi|seleccionar|selecciono|seleccione|me\s+quedo\s+(?:en|con)|quiero\s+hospedarme\s+en|me\s+hospedo\s+en|este\s+hotel|ese\s+hotel|esta\s+bien|me\s+parece\s+bien|me\s+gusta(?:\s+el)?|vamos\s+con\s+(?:el\s+)?|el\s+primero|la\s+primera(?:\s+opcion)?|opcion\s*1|el\s+segundo|la\s+segunda(?:\s+opcion)?|opcion\s*2|la\s+tercera(?:\s+opcion)?|el\s+tercero|opcion\s*3)\b/i.test(text)
 }
 
@@ -1199,6 +1243,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const userCurrency = String(known.currency || currentPreferences.currency || 'cop').toLowerCase()
   const history = state.history || []
   const lastUserMsg = state.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
+  const lastAssistantMsg = (history || []).slice().reverse().find(m => m.role === 'assistant' || m.role === 'bot')?.content || ''
 
   // Normalize already-confirmed stops before they reach the prompt, fallback
   // itinerary, or structured response. This prevents an old chat state that
@@ -1256,7 +1301,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       realCatalog = cached
     } else {
       const isExplicitItineraryRequest = /\b(itinerario|itinerarios|plan de viaje|cómo va el itinerario|mostrar el itinerario|muéstrame el itinerario|ver el itinerario|detalles del d[íi]a|ver d[íi]a|d[íi]a\s*\d+)\b/i.test(lastUserMsg)
-      const isExplicitHotelInquiry = /\b(recomi[eé]ndame hoteles|qu[eé] hoteles|opciones de hotel|d[oó]nde hospedarm[eé]|d[oó]nde quedarm[eé]|recomiendas alg[uú]n hotel|informaci[oó]n del? hotel)\b/i.test(lastUserMsg)
+      const isExplicitHotelInquiry = isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
       const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(lastUserMsg)
       const isLodgingConfirmed = isLodgingExplicitlyConfirmed(known.selectedHotel, known.accommodationStatus)
       const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(lastUserMsg)
@@ -1301,13 +1346,16 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   }
 
   const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
+  const isNegatedLodgingTurn = isLodgingNegationOrUncertainty(lastUserMsg) || isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
   if (isHomeOrLocalLodging) {
     known.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
     known.accommodationStatus = 'Casa propia / familiar'
-  } else if (isLodgingCategoryOrGeneric(lastUserMsg)) {
+  } else if (isLodgingCategoryOrGeneric(lastUserMsg) || isNegatedLodgingTurn) {
     delete known.selectedHotel
-    known.accommodationStatus = 'Por definir'
-    known.lodgingTypePreference = lastUserMsg.trim()
+    known.accommodationStatus = isNegatedLodgingTurn ? 'Recomiéndame hoteles' : 'Por definir'
+    if (isLodgingCategoryOrGeneric(lastUserMsg)) {
+      known.lodgingTypePreference = lastUserMsg.trim()
+    }
   } else {
     const hotelMatch = lastUserMsg.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en|eleg[íi]\s+(?:el\s+)?|elijo\s+(?:el\s+)?|escog[íi]\s+(?:el\s+)?|ok\s+(?:el\s+)?|perfecto\s+(?:el\s+)?|vamos\s+con\s+(?:el\s+)?)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
     if (hotelMatch) {
@@ -1321,7 +1369,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
   }
 
-  const isUserConfirmingLodging = /\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar|en\s+el\s+hotel|el\s+primero|la\s+primera(?:\s+opci[oó]n)?|opci[oó]n\s*1|el\s+segundo|la\s+segunda(?:\s+opci[oó]n)?|opci[oó]n\s*2|el\s+tercero|la\s+tercera(?:\s+opci[oó]n)?|opci[oó]n\s*3)\b/i.test(lastUserMsg)
+  const isUserConfirmingLodging = !isNegatedLodgingTurn && /\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar|en\s+el\s+hotel|el\s+primero|la\s+primera(?:\s+opci[oó]n)?|opci[oó]n\s*1|el\s+segundo|la\s+segunda(?:\s+opci[oó]n)?|opci[oó]n\s*2|el\s+tercero|la\s+tercera(?:\s+opci[oó]n)?|opci[oó]n\s*3)\b/i.test(lastUserMsg)
   if (isUserConfirmingLodging && (!known.selectedHotel || isLodgingCategoryOrGeneric(known.selectedHotel?.name || known.selectedHotel))) {
     const prevBotMsg = (history || []).slice().reverse().find(m => m.role === 'assistant' || m.role === 'bot')?.content || ''
     const ordinalMatch = lastUserMsg.match(/\b(el\s+primero|la\s+primera(?:\s+opci[oó]n)?|opci[oó]n\s*1|el\s+segundo|la\s+segunda(?:\s+opci[oó]n)?|opci[oó]n\s*2|el\s+tercero|la\s+tercera(?:\s+opci[oó]n)?|opci[oó]n\s*3)\b/i)
@@ -1386,12 +1434,14 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = '¡Hola! Soy Tour Planner AI 🤖. Cuéntame: ¿a qué ciudad o destino te gustaría viajar hoy?'
       }
     } else {
-      const preset = realCatalog || await getRealDestinationCatalog(
-        known.city || 'Destino',
-        known.country || 'Local',
-        known.latitude,
-        known.longitude
-      ).catch(() => ({ places: [], restaurants: [], hotels: [] }))
+      const preset = (realCatalog?.hotels?.length > 0 || realCatalog?.places?.length > 0)
+        ? realCatalog
+        : await getRealDestinationCatalog(
+            known.city || 'Destino',
+            known.country || 'Local',
+            known.latitude,
+            known.longitude
+          ).catch(() => ({ places: [], restaurants: [], hotels: [] }))
       const fbHasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
@@ -1439,7 +1489,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             `• 💰 **Tarifa estimada**: ${formatHotelPriceRange(100, 180, userCurrency)}.\n\n` +
             `¿Deseas confirmar este hospedaje?`
         }
-      } else if (hasCity && isLodgingCategoryOrGeneric(lastUserMsg)) {
+      } else if (hasCity && !isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg) && isLodgingCategoryOrGeneric(lastUserMsg)) {
         const lodgingPref = lastUserMsg.trim()
         const optHotels = (preset.hotels && preset.hotels.length > 0)
           ? preset.hotels.slice(0, 3).map(h => `• 🏨 **${h.name}**`).join('\n')
@@ -1541,17 +1591,28 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = `¡Restaurantes y platos recomendados en ${destName}! 🍽️\n\n` +
           foodList.map(r => `• **${r.name || r}**: ${r.specialty || r.cuisine || `Platos típicos y especialidad gastronómica de ${destName}`}.`).join('\n') +
           `\n\n¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
-      } else if (!fbHasLodging && /\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastUserMsg) && !isExplicitlyChoosingHotel(lastUserMsg)) {
-        const hotelList = (realCatalog?.hotels && realCatalog.hotels.length > 0)
-          ? realCatalog.hotels.slice(0, 3)
-          : (preset.hotels || []).slice(0, 3)
-        fallbackMsg = `¡Opciones de hospedaje en ${destName}! 🏨\n\n` +
+      } else if (!fbHasLodging && isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg) && !isExplicitlyChoosingHotel(lastUserMsg)) {
+        const rawHotels = (realCatalog?.hotels && realCatalog.hotels.length > 0)
+          ? realCatalog.hotels
+          : (preset?.hotels && preset.hotels.length > 0)
+            ? preset.hotels
+            : (DESTINATION_ICONIC_HOTELS[destName.toLowerCase()] || [])
+        const hotelList = rawHotels.slice(0, 3)
+        const hotelIntro = (fbHasTransport && fbHasBudget)
+          ? `¡Perfecto! Ya registré tu transporte y presupuesto. Para tu hospedaje en ${destName}, ¡aquí tienes excelentes opciones recomendadas! 🏨\n\n`
+          : `¡Opciones de hospedaje en ${destName}! 🏨\n\n`
+        fallbackMsg = hotelIntro +
           hotelList.map(h => `• **${h.name}**: ${h.desc || `Alojamiento destacado en ${destName}`} (${getHotelPriceDisplay(h, userCurrency)}).`).join('\n') +
           `\n\n¿Cuál de estos te gustaría elegir?`
+        fallbackChips = hotelList.map(h => h.name)
+        if (!fallbackChips.some(c => /casa propia|familiar/i.test(c))) {
+          fallbackChips.push('Tengo casa propia / familiar')
+        }
       } else if (!hasCompanions && !fbHasLodging) {
         fallbackMsg = `¡Excelente! ¿Viajas solo, en pareja, con amigos o en familia con niños a ${destName}?`
       } else if (!fbHasLodging && hasBudget && hasTransport) {
         fallbackMsg = `¡Perfecto! Ya tenemos transporte y presupuesto. ¿En qué hotel o alojamiento se hospedarán en ${destName}? (o indícame si te quedas en casa propia / familiar).`
+        fallbackChips = ['🏨 Recomiéndame hoteles', 'Tengo casa propia / familiar']
       } else if (!hasBudget || !hasTransport || !fbHasLodging) {
         const missing = []
         if (!hasTransport) missing.push('tu medio de transporte')
@@ -1973,7 +2034,12 @@ REGLAS PARA "accommodationStatus":
     const parsedExtracted = parsed.extractedPreferences || {}
 
     // Preservar o auto-promover hotel si es un nombre real comercial
-    if (parsedExtracted.selectedHotel) {
+    const isNegatedLodgingCall = isLodgingNegationOrUncertainty(lastUserMsg) || isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
+    if (isNegatedLodgingCall) {
+      delete parsedExtracted.selectedHotel
+      delete known.selectedHotel
+      parsedExtracted.accommodationStatus = 'Recomiéndame hoteles'
+    } else if (parsedExtracted.selectedHotel) {
       const hName = typeof parsedExtracted.selectedHotel === 'string'
         ? parsedExtracted.selectedHotel
         : (parsedExtracted.selectedHotel?.name || '')
@@ -2771,7 +2837,8 @@ export function extractChatInformationFallback(prompt) {
   }
 
   const isHotelInquiryOnly = /\b(informaci[óo]n|detalles?|saber\s+m[aá]s|cu[ée]ntame)\s+(?:sobre|de|del)?\b/i.test(text)
-  if (!isHotelInquiryOnly) {
+  const isNegatedOrAskingLodging = isLodgingNegationOrUncertainty(text) || isLodgingRecommendationInquiry(text)
+  if (!isHotelInquiryOnly && !isNegatedOrAskingLodging) {
     const hotelMatch = text.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en|eleg[íi]\s+(?:el\s+)?|elijo\s+(?:el\s+)?|escog[íi]\s+(?:el\s+)?|ok\s+(?:el\s+)?|perfecto\s+(?:el\s+)?|vamos\s+con\s+(?:el\s+)?)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
     if (hotelMatch) {
       let rawHotel = `${hotelMatch[1]} ${hotelMatch[2]}`.trim()
@@ -2784,11 +2851,12 @@ export function extractChatInformationFallback(prompt) {
     }
   }
 
-  if (/\b(recomi[eé]ndame hoteles|hoteles|opciones de hotel|buscar hotel|sin hotel|no tengo hotel)\b/i.test(text)) {
+  if (isNegatedOrAskingLodging || /\b(recomi[eé]ndame hoteles|hoteles|opciones de hotel|buscar hotel|sin hotel|no tengo hotel|no tenemos hotel|dame recomendaciones)\b/i.test(text)) {
+    delete res.selectedHotel
     res.accommodationStatus = 'Recomiéndame hoteles'
   } else if (/\b(casa propia|mi casa|casa familiar|tengo hospedaje|tengo hotel|ya tengo hotel|tengo donde quedarme)\b/i.test(text)) {
     res.accommodationStatus = 'Casa propia / familiar'
-  } else if (/\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar)\b/i.test(text)) {
+  } else if (!isNegatedOrAskingLodging && /\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar)\b/i.test(text)) {
     res.accommodationStatus = 'Hotel elegido'
   }
 
