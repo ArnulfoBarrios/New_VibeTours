@@ -262,13 +262,19 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
       'role': m.isUser ? 'user' : 'assistant',
       'content': _compactHistoryEntry(m.text),
     }).toList();
+    final currency = ref.read(currencyProvider).name;
+    final preferencesWithCurrency = {
+      ...state.preferences,
+      'currency': currency,
+    };
     final requestSequence = ++_chatRequestSequence;
 
     try {
       final response = await _postJson('/ai/chat', {
         'message': text,
         'history': history,
-        'currentPreferences': state.preferences,
+        'currentPreferences': preferencesWithCurrency,
+        'currency': currency,
         // ignore: use_null_aware_elements
         if (lat != null) 'latitude': lat,
         // ignore: use_null_aware_elements
@@ -586,10 +592,12 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
       final centerLat = state.recommendations.first.latitude;
       final centerLon = state.recommendations.first.longitude;
       
+      final currency = ref.read(currencyProvider).name;
       final response = await _postJson('/ai/tours/hotels', {
         'latitude': centerLat,
         'longitude': centerLon,
         'budget': 'moderate',
+        'currency': currency,
       });
 
       if (response.statusCode == 200) {

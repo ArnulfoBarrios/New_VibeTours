@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
@@ -684,9 +684,12 @@ aiRouter.post('/chat', async (req, res, next) => {
       history: z.array(z.object({ role: z.string(), content: z.string() })).optional().default([]),
       currentPreferences: z.record(z.any()).optional().default({}),
       latitude: z.number().optional(),
-      longitude: z.number().optional()
+      longitude: z.number().optional(),
+      currency: z.string().optional().default('cop')
     })
-    const { message, history, currentPreferences, latitude, longitude } = chatSchema.parse(req.body)
+    const { message, history, currentPreferences, latitude, longitude, currency } = chatSchema.parse(req.body)
+    const effectiveCurrency = (currency || currentPreferences.currency || 'cop').toLowerCase()
+    currentPreferences.currency = effectiveCurrency
 
     // Filtro inmediato de consultas no turísticas: congelar estado, no generar tarjetas ni avanzar tour
     if (isNonTouristicInput(message)) {
@@ -906,13 +909,52 @@ aiRouter.post('/chat', async (req, res, next) => {
     delete updatedPreferences.isAmbiguousInput
 
     const isOnlyInquiringHotel = /\b(m[aá]s informaci[oó]n|informaci[oó]n del?|informaci[oó]n sobre|detalles del?|cu[eé]ntame m[aá]s|cu[eé]ntame sobre|c[oó]mo es el|qu[eé] tal es el|precios? del?|servicios del?)\b/i.test(message)
-    const isExplicitlyChoosingHotel = /\b(confirmar|confirmo|elegir|elijo|escoger|escojo|seleccionar|selecciono|me quedo en|quiero hospedarme en|me hospedo en|este hotel)\b/i.test(message)
+    const isChoosingHotel = isExplicitlyChoosingHotel(message)
     const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(message)
+
+    // Check for ordinal choice mapping to previously offered hotels
+    const ordinalMatch = message.trim().match(/^(?:(?:ok\s+|perfecto\s+|listo\s+)?(?:el\s+(primero|segundo|tercero)|la\s+(primera|segunda|tercera)(?:\s+opci[oó]n)?|opci[oó]n\s*([1-3])|([1-3])))\b/i)
+    if (ordinalMatch && !isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus)) {
+      const lastAssistantMsg = [...(history || [])].reverse().find(h => h && h.role === 'assistant')?.content || ''
+      if (lastAssistantMsg) {
+        let targetIndex = 0
+        const word = (ordinalMatch[1] || ordinalMatch[2] || ordinalMatch[3] || ordinalMatch[4] || '').toLowerCase()
+        if (word === 'primero' || word === 'primera' || word === '1') targetIndex = 0
+        else if (word === 'segundo' || word === 'segunda' || word === '2') targetIndex = 1
+        else if (word === 'tercero' || word === 'tercera' || word === '3') targetIndex = 2
+
+        const hotelOptions = []
+        const bulletMatches = lastAssistantMsg.matchAll(/(?:^[•\-\*]|\d+\.)\s*(?:\*\*)?([^\n:\*]+?)(?:\*\*)?\s*:/gm)
+        for (const m of bulletMatches) {
+          const candidate = m[1]?.trim()
+          if (candidate && candidate.length > 2 && candidate.length < 60 && !/^(d[íi]a|itinerario|mañana|tarde|noche|nota|precio)/i.test(candidate)) {
+            hotelOptions.push(candidate)
+          }
+        }
+        if (hotelOptions[targetIndex]) {
+          updatedPreferences.selectedHotel = { name: hotelOptions[targetIndex] }
+          updatedPreferences.accommodationStatus = 'Hotel elegido'
+        }
+      }
+    }
+
+    if (typeof updatedPreferences.selectedHotel === 'string' && updatedPreferences.selectedHotel.trim()) {
+      updatedPreferences.selectedHotel = { name: updatedPreferences.selectedHotel.trim() }
+    }
+    if (updatedPreferences.selectedHotel?.name) {
+      updatedPreferences.selectedHotel.name = updatedPreferences.selectedHotel.name
+        .replace(/\s+(?:est[aá]\s+bien|me\s+parece\s+bien|me\s+gusta|por\s+favor|gracias|porfa|listo)$/i, '')
+        .trim()
+    }
+
+    if (isChoosingHotel && updatedPreferences.selectedHotel?.name) {
+      updatedPreferences.accommodationStatus = 'Hotel elegido'
+    }
 
     if (isHomeOrLocalLodging) {
       updatedPreferences.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
       updatedPreferences.accommodationStatus = 'Casa propia / familiar'
-    } else if (isOnlyInquiringHotel && !isExplicitlyChoosingHotel) {
+    } else if (isOnlyInquiringHotel && !isChoosingHotel) {
       if (!currentPreferences.selectedHotel) {
         delete updatedPreferences.selectedHotel
         delete updatedPreferences.accommodationStatus
@@ -930,6 +972,8 @@ aiRouter.post('/chat', async (req, res, next) => {
       delete updatedPreferences.selectedHotel
       updatedPreferences.accommodationStatus = 'Por definir'
     }
+
+    updatedPreferences.currency = effectiveCurrency
 
     if (!updatedPreferences.companions && /\b(nos\s+vamos|nos\s+quedamos|nos\s+hospedamos|tenemos|vamos\s+con|viajamos|somos)\b/i.test(message)) {
       updatedPreferences.companions = 'En grupo'
@@ -2120,9 +2164,10 @@ aiRouter.post('/tours/hotels', async (req, res, next) => {
     const hotelSchema = z.object({
       latitude: z.number(),
       longitude: z.number(),
-      budget: z.string().optional().default('moderate')
+      budget: z.string().optional().default('moderate'),
+      currency: z.string().optional().default('cop')
     })
-    const { latitude, longitude, budget } = hotelSchema.parse(req.body)
+    const { latitude, longitude, budget, currency } = hotelSchema.parse(req.body)
     
     let hotels = await overpassHotels(latitude, longitude, budget, 15000)
     
@@ -2146,7 +2191,10 @@ aiRouter.post('/tours/hotels', async (req, res, next) => {
     })
 
     res.json({
-      hotels: hotels.slice(0, 5),
+      hotels: hotels.slice(0, 5).map(h => ({
+        ...h,
+        priceDisplay: getHotelPriceDisplay(h, currency)
+      })),
       hasVerifiedResults: true
     })
   } catch (error) {

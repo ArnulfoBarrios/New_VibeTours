@@ -610,29 +610,71 @@ export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
   ]
 })
 
+export function formatHotelPriceRange(minUsd, maxUsd, currency = 'cop') {
+  const curr = String(currency || 'cop').toLowerCase()
+  if (curr === 'cop') {
+    const minCop = Math.round((minUsd * 4100) / 10000) * 10000
+    const maxCop = Math.round((maxUsd * 4100) / 10000) * 10000
+    const fmt = num => num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    return `~$${fmt(minCop)} - $${fmt(maxCop)} COP/noche`
+  } else if (curr === 'eur') {
+    const minEur = Math.round(minUsd * 0.93)
+    const maxEur = Math.round(maxUsd * 0.93)
+    return `~€${minEur} - €${maxEur}/noche`
+  } else {
+    return `~$${minUsd} - $${maxUsd} USD/noche`
+  }
+}
+
+export function getHotelPriceDisplay(hotel, currency = 'cop') {
+  if (!hotel) return formatHotelPriceRange(80, 150, currency)
+  if (hotel.minUsd != null && hotel.maxUsd != null) {
+    return formatHotelPriceRange(hotel.minUsd, hotel.maxUsd, currency)
+  }
+  if (typeof hotel.price === 'string') {
+    const m = hotel.price.match(/\$?(\d+)\s*-\s*\$?(\d+)/)
+    if (m) {
+      const min = parseInt(m[1], 10)
+      const max = parseInt(m[2], 10)
+      return formatHotelPriceRange(min, max, currency)
+    }
+    return hotel.price
+  }
+  return formatHotelPriceRange(80, 150, currency)
+}
+
+export function isExplicitlyChoosingHotel(message = '') {
+  const text = String(message || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  return /\b(confirmar|confirmo|confirmado|elegir|elijo|elegi|ya\s+elegi|escoger|escojo|escogi|seleccionar|selecciono|seleccione|me\s+quedo\s+(?:en|con)|quiero\s+hospedarme\s+en|me\s+hospedo\s+en|este\s+hotel|ese\s+hotel|esta\s+bien|me\s+parece\s+bien|me\s+gusta(?:\s+el)?|vamos\s+con\s+(?:el\s+)?|el\s+primero|la\s+primera(?:\s+opcion)?|opcion\s*1|el\s+segundo|la\s+segunda(?:\s+opcion)?|opcion\s*2|la\s+tercera(?:\s+opcion)?|el\s+tercero|opcion\s*3)\b/i.test(text)
+}
+
 export const DESTINATION_ICONIC_HOTELS = Object.freeze({
   'barranquilla': [
-    { name: 'Hotel Dann Carlton Barranquilla', desc: 'Hotel de alta categoría ubicado frente al centro comercial Buenavista', price: '~$90 - $140 USD/noche' },
-    { name: 'Hotel El Prado', desc: 'Monumento arquitectónico y hotel patrimonial de estilo republicano en El Prado', price: '~$80 - $120 USD/noche' },
-    { name: 'GHL Hotel Grand Barranquilla', desc: 'Hotel moderno con excelente conectividad en el norte', price: '~$70 - $110 USD/noche' },
-    { name: 'Crowne Plaza Barranquilla', desc: 'Alojamiento contemporáneo con vistas panorámicas', price: '~$95 - $150 USD/noche' }
+    { name: 'Hotel Dann Carlton Barranquilla', desc: 'Hotel de alta categoría ubicado frente al centro comercial Buenavista en el norte', price: '~$90 - $140 USD/noche', minUsd: 90, maxUsd: 140 },
+    { name: 'Hotel El Prado', desc: 'Monumento arquitectónico y hotel patrimonial de estilo republicano en el tradicional barrio El Prado', price: '~$80 - $120 USD/noche', minUsd: 80, maxUsd: 120 },
+    { name: 'GHL Hotel Grand Barranquilla', desc: 'Hotel moderno con excelente conectividad cerca de centros gastronómicos del norte', price: '~$70 - $110 USD/noche', minUsd: 70, maxUsd: 110 },
+    { name: 'Crowne Plaza Barranquilla', desc: 'Alojamiento contemporáneo con vistas panorámicas cerca del corredor comercial', price: '~$95 - $150 USD/noche', minUsd: 95, maxUsd: 150 }
   ],
   'cartagena': [
-    { name: 'Hotel Casa La Fe', desc: 'Hotel boutique en la Plaza Fernández de Madrid en el Centro Histórico', price: '~$90 - $130 USD/noche' },
-    { name: 'Hotel Santa Clara', desc: 'Convento colonial icónico de lujo en el Centro Amurallado', price: '~$250 - $400 USD/noche' },
-    { name: 'Hotel Casa Isabel', desc: 'Hotel boutique en Getsemaní con terraza hacia la laguna', price: '~$80 - $120 USD/noche' }
+    { name: 'Hotel Casa La Fe', desc: 'Hotel boutique en la Plaza Fernández de Madrid en el Centro Histórico amurallado', price: '~$90 - $130 USD/noche', minUsd: 90, maxUsd: 130 },
+    { name: 'Hotel Santa Clara', desc: 'Convento colonial icónico de lujo en el Centro Amurallado cerca de Las Bóvedas', price: '~$250 - $400 USD/noche', minUsd: 250, maxUsd: 400 },
+    { name: 'Hotel Casa Isabel', desc: 'Hotel boutique en Getsemaní con terraza hacia la laguna y ambiente bohemio', price: '~$80 - $120 USD/noche', minUsd: 80, maxUsd: 120 }
   ],
   'santa marta': [
-    { name: 'Hotel Boutique Don Pepe', desc: 'Hotel boutique colonial en el Centro Histórico de Santa Marta', price: '~$100 - $160 USD/noche' },
-    { name: 'Santa Marta Marriott Resort Playa Dormida', desc: 'Resort frente al mar con acceso directo a la playa', price: '~$120 - $180 USD/noche' }
+    { name: 'Hotel Boutique Don Pepe', desc: 'Hotel boutique colonial en el Centro Histórico, ideal para estar cerca de la Catedral, el Parque de los Novios y restaurantes', price: '~$100 - $160 USD/noche', minUsd: 100, maxUsd: 160 },
+    { name: 'Santa Marta Marriott Resort Playa Dormida', desc: 'Resort frente al mar con acceso directo a la playa y piscina en el sector de Bello Horizonte', price: '~$120 - $180 USD/noche', minUsd: 120, maxUsd: 180 }
   ],
   'covenas': [
-    { name: 'Hotel Palma Linda', desc: 'Hotel de playa en la Primera Ensenada de Coveñas', price: '~$60 - $95 USD/noche' },
-    { name: 'Hotel Punta de Piedra', desc: 'Alojamiento frente al mar en el sector de Punta de Piedra', price: '~$70 - $110 USD/noche' }
+    { name: 'Hotel Palma Linda', desc: 'Hotel de playa frente al mar en la Primera Ensenada de Coveñas', price: '~$60 - $95 USD/noche', minUsd: 60, maxUsd: 95 },
+    { name: 'Hotel Punta de Piedra', desc: 'Alojamiento frente al mar con acceso a la playa en el sector de Punta de Piedra', price: '~$70 - $110 USD/noche', minUsd: 70, maxUsd: 110 }
   ],
   'coveñas': [
-    { name: 'Hotel Palma Linda', desc: 'Hotel de playa en la Primera Ensenada de Coveñas', price: '~$60 - $95 USD/noche' },
-    { name: 'Hotel Punta de Piedra', desc: 'Alojamiento frente al mar en el sector de Punta de Piedra', price: '~$70 - $110 USD/noche' }
+    { name: 'Hotel Palma Linda', desc: 'Hotel de playa frente al mar en la Primera Ensenada de Coveñas', price: '~$60 - $95 USD/noche', minUsd: 60, maxUsd: 95 },
+    { name: 'Hotel Punta de Piedra', desc: 'Alojamiento frente al mar con acceso a la playa en el sector de Punta de Piedra', price: '~$70 - $110 USD/noche', minUsd: 70, maxUsd: 110 }
   ]
 })
 
@@ -1154,6 +1196,7 @@ export function isNonTouristicInput(text = '') {
 
 export async function generateChatResponse(state, backendInstruction = '', webSearchSummary = '', currentPreferences = {}, nearbyFoodPlaces = []) {
   const known = { ...(currentPreferences || {}) }
+  const userCurrency = String(known.currency || currentPreferences.currency || 'cop').toLowerCase()
   const history = state.history || []
   const lastUserMsg = state.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
 
@@ -1266,9 +1309,10 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     known.accommodationStatus = 'Por definir'
     known.lodgingTypePreference = lastUserMsg.trim()
   } else {
-    const hotelMatch = lastUserMsg.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
+    const hotelMatch = lastUserMsg.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en|eleg[íi]\s+(?:el\s+)?|elijo\s+(?:el\s+)?|escog[íi]\s+(?:el\s+)?|ok\s+(?:el\s+)?|perfecto\s+(?:el\s+)?|vamos\s+con\s+(?:el\s+)?)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
     if (hotelMatch) {
-      const rawHotel = `${hotelMatch[1]} ${hotelMatch[2]}`.trim()
+      let rawHotel = `${hotelMatch[1]} ${hotelMatch[2]}`.trim()
+      rawHotel = rawHotel.replace(/\s+(?:est[aá]\s+bien|me\s+parece\s+bien|me\s+gusta|por\s+favor|gracias|porfa|listo)$/i, '').trim()
       if (!isLodgingCategoryOrGeneric(rawHotel) && rawHotel.length >= 4) {
         const cleanHotel = rawHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
         known.selectedHotel = cleanHotel
@@ -1277,16 +1321,31 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
   }
 
-  const isUserConfirmingLodging = /\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar|en\s+el\s+hotel)\b/i.test(lastUserMsg)
+  const isUserConfirmingLodging = /\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar|en\s+el\s+hotel|el\s+primero|la\s+primera(?:\s+opci[oó]n)?|opci[oó]n\s*1|el\s+segundo|la\s+segunda(?:\s+opci[oó]n)?|opci[oó]n\s*2|el\s+tercero|la\s+tercera(?:\s+opci[oó]n)?|opci[oó]n\s*3)\b/i.test(lastUserMsg)
   if (isUserConfirmingLodging && (!known.selectedHotel || isLodgingCategoryOrGeneric(known.selectedHotel?.name || known.selectedHotel))) {
     const prevBotMsg = (history || []).slice().reverse().find(m => m.role === 'assistant' || m.role === 'bot')?.content || ''
-    const prevHotelMatch = prevBotMsg.match(/\b(hotel|hostal|hostel|resort|posada)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:como\s+alojamiento|\?|\.|\,))/i)
-    if (prevHotelMatch) {
-      const rawPrevHotel = `${prevHotelMatch[1]} ${prevHotelMatch[2]}`.trim()
-      if (!isLodgingCategoryOrGeneric(rawPrevHotel) && rawPrevHotel.length >= 4) {
-        const cleanPrevHotel = rawPrevHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-        known.selectedHotel = cleanPrevHotel
-        known.accommodationStatus = 'Hotel elegido'
+    const ordinalMatch = lastUserMsg.match(/\b(el\s+primero|la\s+primera(?:\s+opci[oó]n)?|opci[oó]n\s*1|el\s+segundo|la\s+segunda(?:\s+opci[oó]n)?|opci[oó]n\s*2|el\s+tercero|la\s+tercera(?:\s+opci[oó]n)?|opci[oó]n\s*3)\b/i)
+    if (ordinalMatch) {
+      let idx = 0
+      if (/segund|2/i.test(ordinalMatch[1])) idx = 1
+      if (/tercer|3/i.test(ordinalMatch[1])) idx = 2
+      const hotelBullets = prevBotMsg.split('\n').filter(l => /^\s*•\s*\*\*?[^*:]+\*\*?:/.test(l))
+      if (hotelBullets[idx]) {
+        const m = hotelBullets[idx].match(/^\s*•\s*\*\*?([^*:]+)\*\*?:/)
+        if (m && m[1]) {
+          known.selectedHotel = m[1].trim()
+          known.accommodationStatus = 'Hotel elegido'
+        }
+      }
+    } else {
+      const prevHotelMatch = prevBotMsg.match(/\b(hotel|hostal|hostel|resort|posada)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:como\s+alojamiento|\?|\.|\,))/i)
+      if (prevHotelMatch) {
+        const rawPrevHotel = `${prevHotelMatch[1]} ${prevHotelMatch[2]}`.trim()
+        if (!isLodgingCategoryOrGeneric(rawPrevHotel) && rawPrevHotel.length >= 4) {
+          const cleanPrevHotel = rawPrevHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+          known.selectedHotel = cleanPrevHotel
+          known.accommodationStatus = 'Hotel elegido'
+        }
       }
     }
   }
@@ -1369,7 +1428,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             `• 📍 **Ubicación**: Ubicado en la Plaza Fernández de Madrid en el Centro Histórico.\n` +
             `• 🏊 **Instalaciones**: Piscina en la azotea con solárium y vistas panorámicas.\n` +
             `• 🍳 **Servicios**: Desayuno gourmet incluido, Wi-Fi de alta velocidad y aire acondicionado.\n` +
-            `• 💰 **Tarifa estimada**: ~$90 - $130 USD/noche.\n\n` +
+            `• 💰 **Tarifa estimada**: ${formatHotelPriceRange(90, 130, userCurrency)}.\n\n` +
             `¿Deseas confirmar el Hotel Casa La Fe como tu hospedaje?`
         } else {
           const hotelName = (preset.hotels && preset.hotels[0]?.name) || `Hotel Central de ${destName}`
@@ -1377,7 +1436,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             `• 📍 **Ubicación**: Ubicado en el corazón de ${destName}.\n` +
             `• 🏊 **Instalaciones**: Instalaciones modernas, vistas panorámicas y áreas de descanso.\n` +
             `• 🍳 **Servicios**: Desayuno incluido, Wi-Fi de alta velocidad y recepción 24 horas.\n` +
-            `• 💰 **Tarifa estimada**: ~$100 - $180 USD/noche.\n\n` +
+            `• 💰 **Tarifa estimada**: ${formatHotelPriceRange(100, 180, userCurrency)}.\n\n` +
             `¿Deseas confirmar este hospedaje?`
         }
       } else if (hasCity && isLodgingCategoryOrGeneric(lastUserMsg)) {
@@ -1482,12 +1541,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = `¡Restaurantes y platos recomendados en ${destName}! 🍽️\n\n` +
           foodList.map(r => `• **${r.name || r}**: ${r.specialty || r.cuisine || `Platos típicos y especialidad gastronómica de ${destName}`}.`).join('\n') +
           `\n\n¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
-      } else if (/\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastUserMsg)) {
+      } else if (!fbHasLodging && /\b(hotel|hoteles|alojamiento|hospedaje)\b/i.test(lastUserMsg) && !isExplicitlyChoosingHotel(lastUserMsg)) {
         const hotelList = (realCatalog?.hotels && realCatalog.hotels.length > 0)
           ? realCatalog.hotels.slice(0, 3)
           : (preset.hotels || []).slice(0, 3)
         fallbackMsg = `¡Opciones de hospedaje en ${destName}! 🏨\n\n` +
-          hotelList.map(h => `• **${h.name}**: ${h.desc || `Alojamiento destacado en ${destName}`} (${h.price || 'Tarifa variable'}).`).join('\n') +
+          hotelList.map(h => `• **${h.name}**: ${h.desc || `Alojamiento destacado en ${destName}`} (${getHotelPriceDisplay(h, userCurrency)}).`).join('\n') +
           `\n\n¿Cuál de estos te gustaría elegir?`
       } else if (!hasCompanions && !fbHasLodging) {
         fallbackMsg = `¡Excelente! ¿Viajas solo, en pareja, con amigos o en familia con niños a ${destName}?`
@@ -1498,7 +1557,11 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         if (!hasTransport) missing.push('tu medio de transporte')
         if (!hasBudget) missing.push('tu presupuesto')
         if (!fbHasLodging) missing.push('tu hotel o alojamiento')
-        fallbackMsg = `¡Genial! Para continuar planificando tu viaje a ${destName}, ¿podrías indicarme: ${missing.join(', ')}?`
+        const hotelNameDisplay = typeof known.selectedHotel === 'string' ? known.selectedHotel : (known.selectedHotel?.name || '')
+        const prefix = (fbHasLodging && hotelNameDisplay)
+          ? `¡Genial! Registré **${hotelNameDisplay}** como tu hospedaje. Para continuar planificando tu viaje a ${destName}, `
+          : `¡Genial! Para continuar planificando tu viaje a ${destName}, `
+        fallbackMsg = `${prefix}¿podrías indicarme: ${missing.join(', ')}?`
       } else if (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging)) {
         const numDays = Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))
         const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
@@ -1596,6 +1659,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
 
   const systemPrompt = `Eres Tour Planner AI 🤖, el asistente virtual y organizador experto de tours de VibeTours.
 Tu estilo es CÁLIDO, AMABLE, DIRECTO, CONCISO Y PROFESIONAL.
+
+DIVISA PREFERIDA DEL VIAJERO: ${userCurrency.toUpperCase()}
+- Toda tarifa estimada, rango de precios de hotel o gasto turístico que menciones DEBE expresarse en ${userCurrency.toUpperCase()} (ejemplo si es COP: ~$410.000 - $650.000 COP/noche; si es USD: ~$100 - $160 USD/noche; si es EUR: ~€90 - €150/noche).
 
 MISIÓN Y TRATO CON EL VIAJERO:
 - Tu misión es asesorar y diseñar tours personalizados adaptados a las necesidades y preferencias del usuario.
@@ -1720,8 +1786,15 @@ ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
   * Tu respuesta debe ser MÁXIMO de 1 o 2 oraciones breves y directas, reconociendo amablemente los datos recibidos y preguntando ÚNICAMENTE por el hotel o alojamiento (o si se hospedarán en casa propia / familiar).
   * Si el usuario pide recomendaciones de hotel/alojamiento o indica una preferencia de categoría (ej: "¿qué recomiendas?", "recomiéndame hoteles", "una villa privada está bien", "busco resort"):
     - Si eligió categoría o estilo (ej: "una villa privada", "un resort"), el hospedaje SIGUE PENDIENTE. Sugiérele 2 o 3 opciones reales con nombre propio o pregúntale si tiene alguna reservada.
-    - Si pide opciones generales, presenta de inmediato 3 o 4 opciones de hoteles reales con nombre propio ubicados en ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}, con 1 línea concisa de cada uno, e invítalo a elegir uno.
+    - Si pide opciones de hoteles, presenta de inmediato 2 o 3 opciones de hoteles reales con nombre propio ubicados en ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}.
+      FORMATO OBLIGATORIO Y EQUILIBRADO PARA HOTELES (MÁXIMO 1 O 2 LÍNEAS POR OPCIÓN):
+      • [Nombre del Hotel]: [Ubicación clara con referencia de zona o atractivos cercanos] (~[Rango de precio estimado] ${userCurrency.toUpperCase()}/noche).
+      (Ejemplo: • Hotel Boutique Don Pepe: Opción colonial en el Centro Histórico cerca de la Catedral y restaurantes (~$410.000 - $650.000 COP/noche).)
+      CERO párrafos largos ni rodeos innecesarios.
     - PROHIBIDO presentar el itinerario definitivo ni activar "readyToBuild" mientras el hospedaje siga como PENDIENTE.
+  * Si el usuario acaba de seleccionar o confirmar un hotel (ej: "Ok el Hotel X está bien", "Ya elegí el Hotel X", "El primero", "Me quedo con el Hotel X"):
+    - Valida su elección inmediatamente con entusiasmo ("¡Excelente elección quedarse en [Hotel]!") y pregunta en 1 sola línea por los datos que sigan PENDIENTES (por ejemplo, el medio de transporte o presupuesto).
+    - ESTRICTAMENTE PROHIBIDO volver a mostrarle la lista de hoteles ni volver a preguntarle qué hotel prefiere.
   NUNCA des consejos genéricos como "buscar en plataformas" ni vuelvas a preguntar por datos que ya estén CONFIRMADOS (presupuesto, transporte, fechas).
 - Si faltan datos de transporte, presupuesto o alojamiento:
   Pregunta en 1 sola línea directa ÚNICAMENTE por los campos que figuren como PENDIENTE en el ESTADO ACTUAL DE DATOS.
@@ -2699,9 +2772,10 @@ export function extractChatInformationFallback(prompt) {
 
   const isHotelInquiryOnly = /\b(informaci[óo]n|detalles?|saber\s+m[aá]s|cu[ée]ntame)\s+(?:sobre|de|del)?\b/i.test(text)
   if (!isHotelInquiryOnly) {
-    const hotelMatch = text.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
+    const hotelMatch = text.match(/\b(?:en el|al|en|hospedar(?:nos)?\s+en|quedar(?:nos)?\s+en|eleg[íi]\s+(?:el\s+)?|elijo\s+(?:el\s+)?|escog[íi]\s+(?:el\s+)?|ok\s+(?:el\s+)?|perfecto\s+(?:el\s+)?|vamos\s+con\s+(?:el\s+)?)?\s*(hotel|hostal|hostel|resort|posada|caba[ñn]a)\s+([a-záéíóúñ0-9\s]{2,40}?)(?:$|\s+(?:y\s+|con\s+|para\s+|del\s+|de\s+|\.|\,))/i)
     if (hotelMatch) {
-      const rawHotel = `${hotelMatch[1]} ${hotelMatch[2]}`.trim()
+      let rawHotel = `${hotelMatch[1]} ${hotelMatch[2]}`.trim()
+      rawHotel = rawHotel.replace(/\s+(?:est[aá]\s+bien|me\s+parece\s+bien|me\s+gusta|por\s+favor|gracias|porfa|listo)$/i, '').trim()
       if (!isLodgingCategoryOrGeneric(rawHotel) && rawHotel.length >= 4) {
         const cleanHotel = rawHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
         res.selectedHotel = cleanHotel

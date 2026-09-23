@@ -22,10 +22,13 @@ import '../../core/tour/tour_controller.dart';
 import '../../core/tour/tour_phase.dart';
 import '../../data/discovery_repository.dart';
 import '../../domain/models.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/utils/image_utils.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import '../../state/live_tour_state.dart';
 import 'tour_rating_dialog.dart';
+import 'widgets/destination_preview_sheet.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,6 +152,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   final _aiAssistantKey = GlobalKey();
   final _nextStopKey = GlobalKey();
   bool _tourChecked = false;
+  String? _dismissedApproachingStopId;
 
   int _calculateMaxDays(Tour tour) {
     if (tour.stops.isEmpty) return 1;
@@ -178,6 +182,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         _liveRouteStopIndex = null;
         _isOffRoute = false;
         _selectedVoicePlace = null;
+        _dismissedApproachingStopId = null;
       });
       _saveProgress(targetIndex);
       _recalculateRoute(tour, force: true);
@@ -2605,6 +2610,182 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     );
   }
 
+  void _openDestinationPreview(TourStop stop) {
+    final tour = _navigationTour;
+    if (tour == null) return;
+    final remainingMeters = _remainingRouteDistanceMeters(_liveRoute) ??
+        (_currentPoint != null
+            ? Geolocator.distanceBetween(
+                _currentPoint!.latitude,
+                _currentPoint!.longitude,
+                stop.location.latitude,
+                stop.location.longitude,
+              )
+            : null);
+    final dayStops = tour.stops.where((s) => s.day == _selectedDay).toList();
+    final stopIdxInDay = dayStops.indexWhere((s) => s.id == stop.id);
+    final stopIndex = stopIdxInDay != -1 ? stopIdxInDay : _activeStop;
+
+    DestinationPreviewSheet.show(
+      context: context,
+      stop: stop,
+      stopIndex: stopIndex,
+      totalStops: dayStops.isNotEmpty ? dayStops.length : tour.stops.length,
+      day: _selectedDay,
+      remainingDistanceMeters: remainingMeters,
+      onArrived: () => _enterAtStopMode(stop),
+    );
+  }
+
+  Widget _buildApproachingDestinationCard(
+    BuildContext context,
+    TourStop stop,
+    double remainingMeters,
+  ) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final imageUrl = stop.displayImageUrl.trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: isDark ? const Color(0xFF232733) : const Color(0xFFF0F5FF),
+        border: Border.all(
+          color: AppTheme.primary.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openDestinationPreview(stop),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.near_me_rounded, size: 12, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text(
+                            '¡Estás llegando! (${remainingMeters < 1000 ? "${remainingMeters.round()} m" : "${(remainingMeters / 1000).toStringAsFixed(1)} km"})',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Ver fachada',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.primary),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _dismissedApproachingStopId = stop.id),
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 16,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: imageUrl.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: optimizeImageUrl(imageUrl, width: 160, quality: 75),
+                                fit: BoxFit.cover,
+                                errorWidget: (context, url, error) => Container(
+                                  color: AppTheme.primary.withValues(alpha: 0.1),
+                                  child: const Icon(Icons.place_rounded, color: AppTheme.primary),
+                                ),
+                              )
+                            : Container(
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                child: const Icon(Icons.place_rounded, color: AppTheme.primary),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stop.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            stop.tips.isNotEmpty
+                                ? stop.tips.first
+                                : 'Busca la fachada principal y la entrada al aproximarte.',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildStandardNavigationPanel(
     BuildContext context,
     Tour tour,
@@ -2622,40 +2803,109 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final isVoicePlaying = ref.watch(liveTourPlaybackProvider).isPlaying;
     final isLastStop = _activeStop == tour.stops.length - 1;
 
+    final remainingMeters = _remainingRouteDistanceMeters(liveRoute) ??
+        (_currentPoint != null
+            ? Geolocator.distanceBetween(
+                _currentPoint!.latitude,
+                _currentPoint!.longitude,
+                stop.location.latitude,
+                stop.location.longitude,
+              )
+            : null);
+    final isApproaching = remainingMeters != null &&
+        remainingMeters <= 400 &&
+        remainingMeters > 0 &&
+        _dismissedApproachingStopId != stop.id;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Row 1: Header (Stop Name & Badge)
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                stop.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                stopCounterText,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+        if (isApproaching)
+          _buildApproachingDestinationCard(context, stop, remainingMeters),
+        // Row 1: Header (Stop Image Thumbnail + Stop Name & Badge + Tap to Preview)
+        InkWell(
+          onTap: () => _openDestinationPreview(stop),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: stop.displayImageUrl.trim().isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: optimizeImageUrl(stop.displayImageUrl, width: 140, quality: 75),
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                              child: const Icon(Icons.image_outlined, size: 20),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                              child: const Icon(Icons.pin_drop_rounded, size: 20, color: AppTheme.primary),
+                            ),
+                          )
+                        : Container(
+                            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                            child: const Icon(Icons.pin_drop_rounded, size: 20, color: AppTheme.primary),
+                          ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        stop.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, size: 12, color: AppTheme.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Toca para ver cómo luce',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    stopCounterText,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 4),
         // Row 1 Subtitle: Integrated Telemetry Strip
@@ -2859,13 +3109,71 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           ],
         ),
         const SizedBox(height: 8),
-        Text(
-          stop.name,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+        InkWell(
+          onTap: () => _openDestinationPreview(stop),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: stop.displayImageUrl.trim().isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: optimizeImageUrl(stop.displayImageUrl, width: 140, quality: 75),
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                              child: const Icon(Icons.image_outlined, size: 20),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                              child: const Icon(Icons.pin_drop_rounded, size: 20, color: AppTheme.primary),
+                            ),
+                          )
+                        : Container(
+                            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                            child: const Icon(Icons.pin_drop_rounded, size: 20, color: AppTheme.primary),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        stop.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(Icons.photo_library_outlined, size: 12, color: AppTheme.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Ver fotos y referencias',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
         if (stop.activities.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -3014,6 +3322,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       _hasUserManuallyToggledTracking = false;
       _voiceFoodPlaces = [];
       _selectedVoicePlace = null;
+      _dismissedApproachingStopId = null;
     });
     _saveProgress(nextIndex);
     ref.read(voiceGuideProvider).precacheTourStops(
