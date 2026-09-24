@@ -168,13 +168,13 @@ async function initInteractiveGlobe() {
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     const isDark = currentTheme === 'dark';
 
-    // High Contrast Clean Travel Configuration
-    const darkFactor = isDark ? 1 : 0;
-    const baseColor = isDark ? [0.14, 0.18, 0.28] : [0.76, 0.81, 0.89];
-    const markerColor = [0.0, 0.40, 1.0]; // VibeTours Ocean Blue (#0066FF)
-    const glowColor = isDark ? [0.0, 0.35, 0.9] : [0.70, 0.82, 0.98];
-    const arcColor = [0.05, 0.58, 0.53]; // Refined Teal (#0D9488)
-    const mapBrightness = isDark ? 7.8 : 5.8;
+    // High Contrast Clean Travel Configuration (tuned for both Dark and Light themes)
+    const darkFactor = isDark ? 1 : 0.22;
+    const baseColor = isDark ? [0.14, 0.20, 0.32] : [0.46, 0.64, 0.90];
+    const markerColor = isDark ? [0.22, 0.74, 0.97] : [0.0, 0.32, 0.95];
+    const glowColor = isDark ? [0.0, 0.38, 0.92] : [0.25, 0.54, 0.96];
+    const arcColor = isDark ? [0.22, 0.74, 0.97] : [0.0, 0.38, 0.95];
+    const mapBrightness = isDark ? 8.2 : 9.6;
 
     // IMPORTANT: width passed to createGlobe is the dimension (cobe applies devicePixelRatio internally)
     globeInstance = createGlobe(globeCanvas, {
@@ -184,8 +184,8 @@ async function initInteractiveGlobe() {
       phi: 0,
       theta: 0.15,
       dark: darkFactor,
-      diffuse: 1.4,
-      mapSamples: 20000,
+      diffuse: isDark ? 1.45 : 1.85,
+      mapSamples: 24000,
       mapBrightness: mapBrightness,
       baseColor: baseColor,
       markerColor: markerColor,
@@ -194,9 +194,9 @@ async function initInteractiveGlobe() {
       markers: VIBETOURS_MARKERS,
       arcs: VIBETOURS_ARCS,
       arcColor: arcColor,
-      arcWidth: 0.7,
+      arcWidth: 0.75,
       arcHeight: 0.28,
-      opacity: 0.94,
+      opacity: 1,
       onRender: (state) => {
         if (!isGlobePaused) {
           if (isGlidingToCity) {
