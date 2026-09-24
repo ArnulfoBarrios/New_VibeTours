@@ -7,7 +7,8 @@ import {
   isValidHotelCandidate,
   overpassAttractions,
   overpassHotels,
-  overpassNearbyFood
+  overpassNearbyFood,
+  resolveCanonicalPlaceIdentity
 } from './osm.js'
 import { normalizePlaceNameKey } from './places-cache-service.js'
 import {
@@ -44,10 +45,9 @@ const GEOAPIFY_CATEGORIES = Object.freeze({
   attraction: [
     'tourism.sights',
     'tourism.attraction',
-    'tourism.museum',
     'tourism.viewpoint',
     'leisure.park',
-    'natural.beach'
+    'natural'
   ],
   restaurant: [
     'catering.restaurant',
@@ -168,9 +168,12 @@ function providerSignals(candidate) {
 }
 
 function canonicalCandidateId(candidate, category) {
+  const canonicalAlias = resolveCanonicalPlaceIdentity(candidate?.name, candidate?.city || '')?.id
+  if (canonicalAlias) return `canonical:${canonicalAlias}`
+
   const source = normalizeSource(candidate?.coordinateSource || candidate?.source)
-  const placeId = candidateSourceId(candidate)
-  if (placeId) return `${source || 'provider'}:${placeId}`
+  const providerIdentity = getProviderIdentity(candidate, source)
+  if (providerIdentity.key) return providerIdentity.key
   return `${source || 'provider'}:${category}:${candidateNameKey(candidate?.name)}:${Number(candidate?.latitude).toFixed(5)},${Number(candidate?.longitude).toFixed(5)}`
 }
 
@@ -287,6 +290,23 @@ function candidateSourceId(raw) {
   return String(raw?.placeId ?? raw?.place_id ?? raw?.osmId ?? raw?.osm_id ?? raw?.id ?? '').trim()
 }
 
+export function getProviderIdentity(raw, sourceHint = '') {
+  const rawSource = normalizeSource(raw?.coordinateSource ?? raw?.coordinate_source ?? raw?.source, sourceHint)
+  const rawId = candidateSourceId(raw)
+  if (!rawId) return { source: rawSource, id: '', key: '' }
+
+  const prefix = rawId.match(/^([a-z0-9_]+):(.+)$/i)
+  const source = rawSource || prefix?.[1]?.toLowerCase() || ''
+  const id = prefix && prefix[1].toLowerCase() === source
+    ? prefix[2]
+    : rawId
+  return {
+    source,
+    id,
+    key: source && id ? `${source}:${id}` : ''
+  }
+}
+
 /**
  * Returns the identifier that may be sent across the AI/planner boundary.
  * Names are deliberately not used as identifiers. When a provider does not
@@ -335,6 +355,17 @@ function isCandidateAllowed(candidate, category) {
   if (!name || isGenericFacilityName(name)) return false
   const tags = { ...(candidate.tags || {}), name }
   if (isNonTouristFacility(tags)) return false
+
+  const providerType = normalizeIdentityText(candidate.providerType)
+  const providerPlace = normalizeIdentityText(tags.place || tags.place_type || tags.result_type)
+  if (['administrative', 'city', 'town', 'village', 'municipality', 'district', 'suburb', 'neighbourhood', 'quarter'].includes(providerType) ||
+      ['administrative', 'city', 'town', 'village', 'municipality', 'district', 'suburb', 'neighbourhood', 'quarter'].includes(providerPlace)) {
+    return false
+  }
+
+  if (category === 'attraction' && /^(?:comuna|barrio|sector|vereda|corregimiento|per[ií]metro urbano|zona|[aá]rea|cancha|campo deportivo|gimnasio|[áa]rbol|tree|arbusto|bush)\b/i.test(name)) {
+    return false
+  }
 
   if (category === 'attraction') {
     if (isFoodOrDrinkEstablishment(name)) return false
@@ -397,6 +428,13 @@ export function normalizeRealCandidate(raw, {
     relevance: Number(raw?.relevance ?? raw?.score ?? 0)
   }
 
+  const providerIdentity = getProviderIdentity(raw, source)
+  candidate.providerId = providerIdentity.id
+  candidate.providerKey = providerIdentity.key
+  candidate.providerIds = providerIdentity.source && providerIdentity.id
+    ? { [providerIdentity.source]: providerIdentity.id }
+    : {}
+
   if (!candidateDistanceWithin(candidate, centerLat, centerLon, radiusKm)) return null
   if (!isCandidateAllowed(candidate, category)) return null
 
@@ -410,7 +448,7 @@ export function normalizeRealCandidate(raw, {
   })
   if (!validation.ok) return null
 
-  const sourceId = candidate.placeId || `${source}:${candidateNameKey(name)}:${latitude.toFixed(5)},${longitude.toFixed(5)}`
+  const sourceId = candidate.providerKey || candidate.placeId || `${source}:${candidateNameKey(name)}:${latitude.toFixed(5)},${longitude.toFixed(5)}`
   const distanceMeters = centerLat == null || centerLon == null
     ? null
     : Math.round(haversineMeters(centerLat, centerLon, latitude, longitude))
@@ -421,6 +459,9 @@ export function normalizeRealCandidate(raw, {
     candidateId: sourceId,
     canonicalId: validation.canonicalId,
     sourceIds: candidate.placeId ? [candidate.placeId] : [],
+    providerId: candidate.providerId,
+    providerKey: candidate.providerKey,
+    providerIds: candidate.providerIds,
     sources: [source],
     providerEvidence: [{
       source,
@@ -444,10 +485,10 @@ export function normalizeRealCandidate(raw, {
   }
 }
 
-function candidatesReferToSamePlace(left, right) {
+export function candidatesReferToSamePlace(left, right) {
   if (!left || !right || left.category !== right.category) return false
-  const leftSourceId = left.placeId || left.sourceIds?.[0]
-  const rightSourceId = right.placeId || right.sourceIds?.[0]
+  const leftSourceId = left.providerKey || left.placeId || left.sourceIds?.[0]
+  const rightSourceId = right.providerKey || right.placeId || right.sourceIds?.[0]
   if (left.sources?.[0] === right.sources?.[0] && leftSourceId && rightSourceId && leftSourceId !== rightSourceId) {
     return false
   }
@@ -461,6 +502,8 @@ function candidatesReferToSamePlace(left, right) {
   const distanceMeters = haversineMeters(left.latitude, left.longitude, right.latitude, right.longitude)
   if (!Number.isFinite(distanceMeters)) return false
   if (left.nameKey === right.nameKey) return distanceMeters <= 250
+  // Different provider IDs are allowed to merge only when both the physical
+  // distance and the semantic name match. Similar words alone are not enough.
   return distanceMeters <= 180 && arePlacesSimilar(left.name, right.name)
 }
 
@@ -486,6 +529,9 @@ function mergeCandidateRecords(left, right) {
     price: primary.price || secondary.price || '',
     sources,
     sourceIds,
+    providerId: primary.providerId || secondary.providerId || '',
+    providerKey: primary.providerKey || secondary.providerKey || '',
+    providerIds: { ...(secondary.providerIds || {}), ...(primary.providerIds || {}) },
     providerEvidence,
     sourceCount,
     canonicalId: primary.canonicalId || secondary.canonicalId,
@@ -545,7 +591,16 @@ function asCandidateArray(value) {
 
 function providerQueries(destination, country, category) {
   const target = `${destination}${country ? `, ${country}` : ''}`.trim()
-  return (MAPBOX_QUERIES[category] || []).map(term => `${term} ${target}`.trim())
+  const terms = MAPBOX_QUERIES[category] || []
+  const localized = category === 'attraction'
+    ? ['atracción turística', 'lugares turísticos', 'monumento']
+    : category === 'restaurant'
+      ? ['restaurante', 'comida local', 'cafetería']
+      : ['hotel', 'alojamiento', 'hostal']
+  return [...new Set([...terms, ...localized].flatMap(term => [
+    `${term} ${target}`.trim(),
+    `${target} ${term}`.trim()
+  ]))]
 }
 
 async function resolveSeedCandidates(seedList, category, context) {
@@ -666,13 +721,16 @@ export async function createUnifiedCandidateCatalog({
   radiusKm = 35,
   existing = {},
   seeds = {},
-  discoverOsm = false
+  discoverOsm = false,
+  discoverProviders = true
 } = {}) {
   const context = { destination, country, centerLat, centerLon, radiusKm }
   const osmCandidates = discoverOsm
     ? await discoverOsmCandidates(context)
     : { attraction: [], restaurant: [], hotel: [] }
-  const providerCandidates = await discoverProviderCandidates(context)
+  const providerCandidates = discoverProviders
+    ? await discoverProviderCandidates(context)
+    : { attraction: [], restaurant: [], hotel: [] }
 
   const existingByCategory = {
     attraction: asCandidateArray(existing.attractions || existing.places),

@@ -13,9 +13,12 @@ import { chatRouter } from './routes/chat.js'
 import { discoveryRouter } from './routes/discovery.js'
 import { toursRouter } from './routes/tours.js'
 import { routesRouter } from './routes/routes.js'
+import { getProviderStatus, logProviderStatus } from './services/provider-config.js'
 
 const app = express()
 const port = Number(process.env.PORT ?? 3000)
+
+logProviderStatus()
 
 app.use(
   helmet({
@@ -42,6 +45,7 @@ app.get(['/health', '/api/health'], (req, res) => {
     ok: true,
     name: 'VIBETOURS API',
     version: '1.2.2',
+    providers: getProviderStatus(),
     now: new Date().toISOString()
   })
 })

@@ -169,13 +169,13 @@ async function initInteractiveGlobe() {
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     const isDark = currentTheme === 'dark';
 
-    // High Contrast Luxury Theme Configuration
+    // High Contrast Clean Travel Configuration
     const darkFactor = isDark ? 1 : 0;
-    const baseColor = isDark ? [0.15, 0.20, 0.32] : [0.72, 0.78, 0.88];
-    const markerColor = [0.0, 0.48, 1.0]; // VibeTours Primary Blue (#007AFF)
-    const glowColor = isDark ? [0.0, 0.4, 1.0] : [0.65, 0.78, 0.98];
-    const arcColor = [0.68, 0.32, 0.87]; // AI Purple (#AF52DE)
-    const mapBrightness = isDark ? 8.2 : 6.0;
+    const baseColor = isDark ? [0.14, 0.18, 0.28] : [0.76, 0.81, 0.89];
+    const markerColor = [0.0, 0.40, 1.0]; // VibeTours Ocean Blue (#0066FF)
+    const glowColor = isDark ? [0.0, 0.35, 0.9] : [0.70, 0.82, 0.98];
+    const arcColor = [0.05, 0.58, 0.53]; // Refined Teal (#0D9488)
+    const mapBrightness = isDark ? 7.8 : 5.8;
 
     // IMPORTANT: width passed to createGlobe is the dimension (cobe applies devicePixelRatio internally)
     globeInstance = createGlobe(globeCanvas, {
@@ -1587,231 +1587,125 @@ function initBentoAudioWidget() {
    -------------------------------------------------------------------------- */
 const landingTranslations = {
   es: {
-    navFeatures: 'Características',
-    navGenerator: 'Simulador App',
-    navHow: '¿Cómo Funciona?',
-    navTestimonials: 'Opiniones',
-    navFaq: 'FAQ',
+    navFeatures: 'Ventajas',
+    navGenerator: 'Demo en Vivo',
     navRegister: 'Empezar Gratis',
 
-    heroBadge: '✨ Tu Guía Personal con Inteligencia Artificial',
-    heroTitle: 'El mundo a tu propio ritmo. <span class="gradient-text">Tu guía al oído.</span>',
-    heroDesc: 'Dile adiós a los tours rígidos y caros. VibeTours crea rutas a tu medida y reproduce audioguías inmersivas justo cuando llegas a cada monumento.',
-    heroSocialProofSub: 'Más de 1,200 viajeros explorando el mundo',
-    heroCtaPrimary: 'Probar Gratis Ahora',
-    heroCtaSecondary: 'Ver Demo en Vivo',
-    heroMicroTrust: '✓ Sin tarjeta de crédito • 50+ destinos verificados • Pruébalo en tu navegador',
+    heroBadge: 'Audioguías GPS • Rutas a tu medida',
+    heroTitle: 'Camina a tu ritmo. <span class="gradient-text">Tu guía al oído.</span>',
+    heroDesc: 'Crea rutas personalizadas en segundos y escucha la historia de cada lugar automáticamente al llegar.',
+    heroCtaPrimary: 'Empezar Gratis',
+    heroCtaSecondary: 'Probar Demo Interactiva',
 
-    floatVoiceTitle: 'Audioguía en Vivo',
+    floatVoiceTitle: 'Audio en Proximidad',
     floatVoiceSub: 'Torre del Reloj',
-    floatGpsTitle: 'GPS Satelital Activo',
+    floatGpsTitle: 'Ruta Verificada',
     floatGpsSub: '6 Paradas • 2.4 km',
 
-    bentoSubtitle: 'Turismo de Nueva Generación',
-    bentoTitle: 'Diseñado para Viajar Libre, No en Manada',
-    bentoDesc: 'La combinación perfecta entre inteligencia artificial, mapas satelitales y libertad absoluta en cada paso.',
-    bentoPillAudio: 'Audioguías GPS',
-    bentoAudioTitle: 'La historia empieza al llegar',
-    bentoAudioDesc: 'Ponte los audífonos y camina. El GPS detecta tu ubicación y reproduce la narración automáticamente al llegar a cada monumento o plaza.',
+    bentoTitle: 'Viaja libre, sin grupos ni horarios',
+    bentoPillAudio: 'Audio Automático',
+    bentoAudioTitle: 'Se activa al llegar',
+    bentoAudioDesc: 'Guarda el teléfono. El GPS detecta tu cercanía y reproduce la historia en tus audífonos automáticamente.',
     bentoAudioProximity: 'A 12 metros • Torre del Reloj',
-    bentoPillAi: 'IA Adaptativa',
-    bentoAiTitle: 'Itinerarios a tu medida',
-    bentoAiDesc: 'Dile tus gustos, tiempo y ritmo de caminata. La IA traza una ruta optimizada sin lugares ficticios ni desvíos comerciales.',
-    bentoPillSavings: 'Ahorro Real',
-    bentoSavingsTitle: 'Ahorra más del 85%',
-    bentoSavingsDesc: 'Tours ilimitados por una fracción de lo que cobra una agencia tradicional. Sin tarifas abusivas por persona.',
-    bentoPillFreedom: 'Libertad Total',
-    bentoFreedomTitle: 'A tu propio paso',
-    bentoFreedomDesc: 'Haz pausas para descansar, almorzar o tomar fotos. Tu tour se reanuda exactamente donde lo dejaste sin prisas.',
-    bentoPillMap: 'Cartografía Verificada',
-    bentoMapTitle: 'Navegación sin Pérdidas',
-    bentoMapDesc: 'Coordenadas satelitales paso a paso calle por calle. Camina con la seguridad de saber siempre cuál es tu siguiente parada.',
+    bentoPillAi: 'Rutas al Instante',
+    bentoAiTitle: 'Hechas para tu tiempo',
+    bentoAiDesc: 'Indica cuánto tiempo tienes y qué te interesa. Obtén un recorrido real en el mapa en segundos.',
+    bentoPillSavings: '100% a tu Ritmo',
+    bentoSavingsTitle: 'Pausa cuando quieras',
+    bentoSavingsDesc: 'Detente a tomar fotos o almorzar sin perder al grupo, y ahorra lo que cuesta una agencia tradicional.',
 
-    simSubtitle: 'Experiencia Interactiva',
-    simTitle: 'Prueba la App desde tu Navegador',
-    simDesc: 'Interactúa con la interfaz real de VibeTours: navega el mapa GPS, conversa con la IA y reproduce audioguías.',
-    simCockpitBadge: 'Simulador Interactivo en Vivo',
-    simCockpitTitle: 'Explora las 4 Funciones Clave',
-    simCockpitDesc: 'Haz clic en cada paso o haz scroll para ver cómo reacciona el smartphone en tiempo real.',
-    simLblCity: 'Ciudad de Demostración:',
-    simStep1Label: 'Explorar',
-    simStep2Label: 'Chat IA',
-    simStep3Label: 'Live Tour',
-    simStep4Label: 'Perfil',
-    btnSwitchToExplore: '🧭 Explorar',
-    btnSwitchToChat: '💬 Chat IA',
-    btnSwitchToMap: '🏖️ Live Tour',
-    btnSwitchToProfile: '👤 Perfil',
+    simTitle: 'Pruébala aquí mismo',
+    simDesc: 'Toca las pantallas del teléfono o cambia de ciudad para probar la experiencia real.',
+    simCockpitBadge: 'Demo en Vivo',
+    simCockpitTitle: 'Explora la interfaz',
+    simCockpitDesc: 'Selecciona una ciudad y alterna entre el catálogo, el planificador, el mapa GPS y el audio.',
+    simLblCity: 'Destino:',
+    simLblScreens: 'Pantalla de la App:',
+    btnSwitchToExplore: '1. Explorar',
+    btnSwitchToChat: '2. Crear Ruta',
+    btnSwitchToMap: '3. Mapa GPS',
+    btnSwitchToProfile: '4. Perfil',
     pnavExplore: 'Explorar',
     pnavChat: 'Chat IA',
     pnavTours: 'Tours',
     pnavProfile: 'Perfil',
     simWalkBtnText: 'Simular Paso',
 
-    howSubtitle: 'Fácil y Rápido',
-    howTitle: 'Tu Viaje en Tres Pasos',
-    howDesc: 'Empieza a explorar cualquier ciudad de forma autónoma en cuestión de minutos.',
-    step1Title: 'Elige tu Destino & Estilo',
-    step1Desc: 'Define tu ritmo de caminata, presupuesto y gustos: historia colonial, gastronomía, arte urbano o miradores.',
-    step2Title: 'La IA Diseña tu Recorrido',
-    step2Desc: 'Pide un tour personalizado por chat o selecciona uno del catálogo verificado. Tu itinerario se organiza al instante.',
-    step3Title: 'Recorre con Audioguía en Vivo',
-    step3Desc: 'Sigue la navegación en el mapa. Al llegar a cada parada, la narración de audio se reproduce sola al oído.',
+    bannerTitle: 'Empieza tu próximo recorrido hoy',
+    bannerDesc: 'Explora sin horarios ni grupos. Pruébalo gratis desde tu navegador.',
+    bannerBtnRegister: 'Empezar Gratis',
+    bannerBtnDemo: 'Entrar en Modo Demo',
 
-    testSubtitle: 'Experiencias Reales',
-    testTitle: 'Lo que Dicen los Exploradores',
-    testDesc: 'Viajeros que cambiaron los tours tradicionales por la libertad de VibeTours.',
-    testQ1: '"Viajé solo a Cartagena y sentí que tenía a un historiador privado al oído. La precisión del audio al llegar a las murallas fue impecable."',
-    testC1: 'Cartagena • Viajero Solitario',
-    testQ2: '"Ahorramos más de $160 USD en París entre mi pareja y yo. Caminamos a nuestro ritmo sin seguir un paraguas con 30 personas."',
-    testC2: 'París • Viaje en Pareja',
-    testQ3: '"Le pedí a la IA una ruta de cafés de especialidad y miradores en Roma. En 5 segundos tenía el mejor recorrido que he hecho jamás."',
-    testC3: 'Roma • Exploradora Cultural',
-
-    faqSubtitle: 'Dudas Frecuentes',
-    faqTitle: 'Preguntas Frecuentes',
-    faqDesc: 'Respuestas directas sobre el funcionamiento de VibeTours.',
-    faq1Q: '¿Cómo evita la IA inventar lugares ficticios?',
-    faq1A: 'Cada parada se valida contra coordenadas satelitales reales y fuentes verificadas. Los lugares inexistentes se descartan automáticamente antes de armar tu ruta.',
-    faq2Q: '¿Puedo usar la aplicación sin registrarme?',
-    faq2A: 'Sí. El Modo Demo permite explorar inmediatamente el catálogo de tours y el mapa interactivo sin necesidad de crear cuenta.',
-    faq3Q: '¿Las audioguías se activan solas al caminar?',
-    faq3A: 'Sí. En Live Tour, el GPS detecta tu cercanía a cada monumento y reproduce la narración de audio automáticamente al oído.',
-    faq4Q: '¿Puedo crear mis propios recorridos?',
-    faq4A: 'Sí. Con el Creador de Tours puedes fijar puntos en el mapa, añadir tus fotografías y compartir tu ruta con otros viajeros.',
-
-    bannerTag: 'Acceso Inmediato',
-    bannerTitle: '¿Listo para redescubrir el mundo?',
-    bannerDesc: 'Únete a cientos de exploradores y vive cada ciudad a tu propio ritmo con inteligencia artificial.',
-    bannerBtnRegister: 'Comenzar Gratis',
-    bannerBtnDemo: 'Probar Modo Demo',
-
-    footerDesc: 'Tu compañero de viaje inteligente con rutas personalizadas, navegación satelital y audioguías en vivo.',
-    footerCol1Title: 'Navegación',
-    footerLinkFeatures: 'Características',
-    footerLinkGenerator: 'Simulador App',
-    footerLinkHow: '¿Cómo Funciona?',
-    footerLinkTestimonials: 'Opiniones',
-    footerLinkFaq: 'Preguntas Frecuentes',
-    footerCol2Title: 'Portal Legal',
+    footerDesc: 'Rutas a tu medida y audioguías GPS que se activan al caminar.',
+    footerCol1Title: 'Producto',
+    footerLinkFeatures: 'Ventajas',
+    footerLinkGenerator: 'Demo en Vivo',
+    footerLinkRegister: 'Crear Cuenta',
+    footerCol2Title: 'Legal',
     footerLinkTerms: 'Términos de Servicio',
     footerLinkPrivacy: 'Política de Privacidad',
-    footerLinkLegal: 'Información de Seguridad',
-    footerLinkRegister: 'Registro de Usuario',
+    footerLinkLegal: 'Seguridad',
     footerCopyRights: 'Todos los derechos reservados.'
   },
   en: {
-    navFeatures: 'Features',
-    navGenerator: 'App Simulator',
-    navHow: 'How it Works',
-    navTestimonials: 'Reviews',
-    navFaq: 'FAQ',
+    navFeatures: 'Benefits',
+    navGenerator: 'Live Demo',
     navRegister: 'Start Free',
 
-    heroBadge: '✨ Your Personal Guide Powered by AI',
-    heroTitle: 'The world at your own pace. <span class="gradient-text">Your guide in your ear.</span>',
-    heroDesc: 'Say goodbye to rigid, overpriced tours. VibeTours crafts custom routes and triggers immersive audio stories right as you arrive at each landmark.',
-    heroSocialProofSub: 'Over 1,200 travelers exploring worldwide',
-    heroCtaPrimary: 'Try Free Now',
-    heroCtaSecondary: 'See Live Demo',
-    heroMicroTrust: '✓ No credit card required • 50+ verified destinations • Try in your browser',
+    heroBadge: 'GPS Audio Guides • Tailored Routes',
+    heroTitle: 'Walk at your pace. <span class="gradient-text">Your guide in your ear.</span>',
+    heroDesc: 'Build custom walking routes in seconds and hear the story of each landmark automatically as you arrive.',
+    heroCtaPrimary: 'Start Free',
+    heroCtaSecondary: 'Try Interactive Demo',
 
-    floatVoiceTitle: 'Live Audio Guide',
+    floatVoiceTitle: 'Proximity Audio',
     floatVoiceSub: 'Clock Tower',
-    floatGpsTitle: 'Active Satellite GPS',
+    floatGpsTitle: 'Verified Route',
     floatGpsSub: '6 Stops • 2.4 km',
 
-    bentoSubtitle: 'Next-Gen Tourism',
-    bentoTitle: 'Designed to Travel Free, Not in Herds',
-    bentoDesc: 'The perfect blend of artificial intelligence, verified satellite maps, and total freedom in every step.',
-    bentoPillAudio: 'GPS Audio Guides',
-    bentoAudioTitle: 'The story starts when you arrive',
-    bentoAudioDesc: 'Put on your headphones and walk. GPS detects your location and plays the narrative automatically as you approach each landmark.',
+    bentoTitle: 'Travel free, no crowds or schedules',
+    bentoPillAudio: 'Automatic Audio',
+    bentoAudioTitle: 'Plays when you arrive',
+    bentoAudioDesc: 'Keep your phone in your pocket. GPS detects your proximity and plays the story in your headphones.',
     bentoAudioProximity: '12 meters away • Clock Tower',
-    bentoPillAi: 'Adaptive AI',
-    bentoAiTitle: 'Routes tailored to you',
-    bentoAiDesc: 'Share your interests, walking pace, and available time. AI maps an optimized route with no fake spots or tourist traps.',
-    bentoPillSavings: 'Real Savings',
-    bentoSavingsTitle: 'Save over 85%',
-    bentoSavingsDesc: 'Unlimited city tours for a fraction of agency prices. No marked-up per-person fees.',
-    bentoPillFreedom: 'Total Freedom',
-    bentoFreedomTitle: '100% At Your Own Pace',
-    bentoFreedomDesc: 'Stop for coffee, grab lunch, or take photos. Your tour pauses and resumes exactly where you left off with zero hurry.',
-    bentoPillMap: 'Verified Satellite Maps',
-    bentoMapTitle: 'Wander Without Getting Lost',
-    bentoMapDesc: 'Turn-by-turn verified coordinates street by street. Walk with confidence knowing your exact route at all times.',
+    bentoPillAi: 'Instant Routes',
+    bentoAiTitle: 'Built for your time',
+    bentoAiDesc: 'Share how much time you have and what you like. Get a verified walking route on the map in seconds.',
+    bentoPillSavings: '100% Your Pace',
+    bentoSavingsTitle: 'Pause anytime',
+    bentoSavingsDesc: 'Stop for photos or coffee without losing the group, and save the cost of traditional agencies.',
 
-    simSubtitle: 'Interactive Experience',
-    simTitle: 'Test the App Directly in Your Browser',
-    simDesc: 'Experience the real VibeTours interface: explore routes, chat with the AI planner, and listen to GPS audio guides.',
-    simCockpitBadge: 'Live Interactive Simulator',
-    simCockpitTitle: 'Explore the 4 Key Features',
-    simCockpitDesc: 'Click on each step or scroll through to see the smartphone simulator respond in real time.',
-    simLblCity: 'Demo City:',
-    simStep1Label: 'Explore',
-    simStep2Label: 'AI Chat',
-    simStep3Label: 'Live Tour',
-    simStep4Label: 'Profile',
-    btnSwitchToExplore: '🧭 Explore',
-    btnSwitchToChat: '💬 AI Chat',
-    btnSwitchToMap: '🏖️ Live Tour',
-    btnSwitchToProfile: '👤 Profile',
+    simTitle: 'Try it right here',
+    simDesc: 'Tap the phone screens or switch cities to test the real experience.',
+    simCockpitBadge: 'Live Demo',
+    simCockpitTitle: 'Explore the interface',
+    simCockpitDesc: 'Select a city and switch between catalog, planner, live GPS map, and audio.',
+    simLblCity: 'Destination:',
+    simLblScreens: 'App Screen:',
+    btnSwitchToExplore: '1. Explore',
+    btnSwitchToChat: '2. Plan Route',
+    btnSwitchToMap: '3. GPS Map',
+    btnSwitchToProfile: '4. Profile',
     pnavExplore: 'Explore',
     pnavChat: 'AI Chat',
     pnavTours: 'Tours',
     pnavProfile: 'Profile',
     simWalkBtnText: 'Simulate Step',
 
-    howSubtitle: 'Quick & Simple',
-    howTitle: 'Your Trip in Three Steps',
-    howDesc: 'Start exploring any city autonomously in a matter of minutes.',
-    step1Title: 'Set Your Destination & Style',
-    step1Desc: 'Define your walking pace, budget, and tastes: colonial history, local foodie spots, street art, or scenic viewpoints.',
-    step2Title: 'AI Designs Your Route',
-    step2Desc: 'Ask the AI chat for a tailored tour or choose from curated routes. Your day is organized instantly.',
-    step3Title: 'Explore with Hands-Free Audio',
-    step3Desc: 'Follow turn-by-turn map navigation. Upon arriving at each landmark, your audio guide begins playing automatically.',
-
-    testSubtitle: 'Real Experiences',
-    testTitle: 'What Explorers Are Saying',
-    testDesc: 'Travelers who ditched traditional bus tours for the freedom of VibeTours.',
-    testQ1: '"I traveled solo to Cartagena and felt like I had a private historian speaking in my ear. The GPS precision was spot on."',
-    testC1: 'Cartagena • Solo Traveler',
-    testQ2: '"We saved over $160 USD in Paris as a couple. We walked completely at our own pace without following an umbrella crowd of 30 people."',
-    testC2: 'Paris • Couple Trip',
-    testQ3: '"I asked the AI for a route of specialty coffee shops and viewpoints in Rome. In 5 seconds I had the best walking tour ever."',
-    testC3: 'Rome • Cultural Explorer',
-
-    faqSubtitle: 'Clear Answers',
-    faqTitle: 'Frequently Asked Questions',
-    faqDesc: 'Straightforward answers about how VibeTours works.',
-    faq1Q: 'How does VibeTours prevent the AI from inventing fake places?',
-    faq1A: 'Every stop is verified against real OpenStreetMap coordinates and satellite databases. Non-existent locations are discarded automatically.',
-    faq2Q: 'Can I use the app without signing up?',
-    faq2A: 'Yes! Demo Mode allows you to immediately browse pre-loaded city tours and the interactive map with no registration required.',
-    faq3Q: 'Does audio trigger automatically while walking?',
-    faq3A: 'Yes. In Live Tour mode, GPS detects when you approach a monument and automatically begins playing the narration into your headphones.',
-    faq4Q: 'Can I design my own custom tours?',
-    faq4A: 'Yes. The Tour Creator lets you pin stops on the map, attach personal photos, and share your favorite routes with the community.',
-
-    bannerTag: 'Immediate Access',
-    bannerTitle: 'Ready to rediscover the world?',
-    bannerDesc: 'Join hundreds of explorers and experience each city on your own terms with artificial intelligence.',
+    bannerTitle: 'Start your next walk today',
+    bannerDesc: 'Explore with zero schedules or crowds. Try it free in your browser.',
     bannerBtnRegister: 'Start Free',
-    bannerBtnDemo: 'Try Demo Mode',
+    bannerBtnDemo: 'Enter Demo Mode',
 
-    footerDesc: 'Your intelligent travel companion with personalized routes, satellite navigation, and hands-free audio guides.',
-    footerCol1Title: 'Navigation',
-    footerLinkFeatures: 'Features',
-    footerLinkGenerator: 'App Simulator',
-    footerLinkHow: 'How it Works',
-    footerLinkTestimonials: 'Reviews',
-    footerLinkFaq: 'FAQ',
-    footerCol2Title: 'Legal Portal',
+    footerDesc: 'Tailored routes and GPS audio guides that play as you walk.',
+    footerCol1Title: 'Product',
+    footerLinkFeatures: 'Benefits',
+    footerLinkGenerator: 'Live Demo',
+    footerLinkRegister: 'Create Account',
+    footerCol2Title: 'Legal',
     footerLinkTerms: 'Terms of Service',
     footerLinkPrivacy: 'Privacy Policy',
-    footerLinkLegal: 'Security Info',
-    footerLinkRegister: 'User Registration',
+    footerLinkLegal: 'Security',
     footerCopyRights: 'All rights reserved.'
   }
 };
@@ -1831,29 +1725,22 @@ window.setLandingLanguage = function(lang) {
   // Navigation
   updateText('#nav-features', t.navFeatures);
   updateText('#nav-generator', t.navGenerator);
-  updateText('#nav-how', t.navHow);
-  updateText('#nav-testimonials', t.navTestimonials);
-  updateText('#nav-faq', t.navFaq);
   updateText('#nav-btn-register', t.navRegister);
 
   // Hero
   updateText('#hero-badge', t.heroBadge);
   updateHTML('#hero-title', t.heroTitle);
   updateText('#hero-desc', t.heroDesc);
-  updateText('#hero-social-proof-sub', t.heroSocialProofSub);
   updateText('#hero-cta-primary span', t.heroCtaPrimary);
   updateText('#hero-cta-secondary span', t.heroCtaSecondary);
-  updateText('#hero-micro-trust', t.heroMicroTrust);
 
   updateText('#float-voice-title', t.floatVoiceTitle);
   updateText('#float-voice-sub', t.floatVoiceSub);
   updateText('#float-gps-title', t.floatGpsTitle);
   updateText('#float-gps-sub', t.floatGpsSub);
 
-  // Bento Grid
-  updateText('#bento-subtitle', t.bentoSubtitle);
+  // Bento Grid (3 Cards)
   updateText('#bento-title', t.bentoTitle);
-  updateText('#bento-desc', t.bentoDesc);
   updateText('#bento-pill-audio', t.bentoPillAudio);
   updateText('#bento-audio-title', t.bentoAudioTitle);
   updateText('#bento-audio-desc', t.bentoAudioDesc);
@@ -1864,21 +1751,15 @@ window.setLandingLanguage = function(lang) {
   updateText('#bento-pill-savings', t.bentoPillSavings);
   updateText('#bento-savings-title', t.bentoSavingsTitle);
   updateText('#bento-savings-desc', t.bentoSavingsDesc);
-  updateText('#bento-pill-freedom', t.bentoPillFreedom);
-  updateText('#bento-freedom-title', t.bentoFreedomTitle);
-  updateText('#bento-freedom-desc', t.bentoFreedomDesc);
-  updateText('#bento-pill-map', t.bentoPillMap);
-  updateText('#bento-map-title', t.bentoMapTitle);
-  updateText('#bento-map-desc', t.bentoMapDesc);
 
   // Simulator
-  updateText('#sim-subtitle', t.simSubtitle);
   updateText('#sim-title', t.simTitle);
   updateText('#sim-desc', t.simDesc);
   updateText('#sim-cockpit-badge', t.simCockpitBadge);
   updateText('#sim-cockpit-title', t.simCockpitTitle);
   updateText('#sim-cockpit-desc', t.simCockpitDesc);
   updateText('#sim-lbl-city', t.simLblCity);
+  updateText('#sim-lbl-screens', t.simLblScreens);
   updateText('#btnSwitchToExplore', t.btnSwitchToExplore);
   updateText('#btnSwitchToChat', t.btnSwitchToChat);
   updateText('#btnSwitchToMap', t.btnSwitchToMap);
@@ -1888,50 +1769,10 @@ window.setLandingLanguage = function(lang) {
   updateText('#pnav-tours', t.pnavTours);
   updateText('#pnav-profile', t.pnavProfile);
   updateText('#simWalkBtnText', t.simWalkBtnText);
-  updateText('#sim-step1-label', t.simStep1Label);
-  updateText('#sim-step2-label', t.simStep2Label);
-  updateText('#sim-step3-label', t.simStep3Label);
-  updateText('#sim-step4-label', t.simStep4Label);
   updateText('#detail-back-label', lang === 'es' ? 'Explorar' : 'Explore');
   updateText('#detail-start-label', lang === 'es' ? 'Iniciar Tour con GPS' : 'Start Tour with GPS');
 
-  // How it Works
-  updateText('#how-subtitle', t.howSubtitle);
-  updateText('#how-title', t.howTitle);
-  updateText('#how-desc', t.howDesc);
-  updateText('#step1-title', t.step1Title);
-  updateText('#step1-desc', t.step1Desc);
-  updateText('#step2-title', t.step2Title);
-  updateText('#step2-desc', t.step2Desc);
-  updateText('#step3-title', t.step3Title);
-  updateText('#step3-desc', t.step3Desc);
-
-  // Testimonials
-  updateText('#test-subtitle', t.testSubtitle);
-  updateText('#test-title', t.testTitle);
-  updateText('#test-desc', t.testDesc);
-  updateText('#test-q1', t.testQ1);
-  updateText('#test-c1', t.testC1);
-  updateText('#test-q2', t.testQ2);
-  updateText('#test-c2', t.testC2);
-  updateText('#test-q3', t.testQ3);
-  updateText('#test-c3', t.testC3);
-
-  // FAQ
-  updateText('#faq-subtitle', t.faqSubtitle);
-  updateText('#faq-title', t.faqTitle);
-  updateText('#faq-desc', t.faqDesc);
-  updateText('#faq1-q', t.faq1Q);
-  updateText('#faq1-a', t.faq1A);
-  updateText('#faq2-q', t.faq2Q);
-  updateText('#faq2-a', t.faq2A);
-  updateText('#faq3-q', t.faq3Q);
-  updateText('#faq3-a', t.faq3A);
-  updateText('#faq4-q', t.faq4Q);
-  updateText('#faq4-a', t.faq4A);
-
   // Banner
-  updateText('#banner-tag', t.bannerTag);
   updateText('#banner-title', t.bannerTitle);
   updateText('#banner-desc', t.bannerDesc);
   updateText('#banner-btn-register', t.bannerBtnRegister);
@@ -1942,14 +1783,11 @@ window.setLandingLanguage = function(lang) {
   updateText('#footer-col1-title', t.footerCol1Title);
   updateText('#footer-link-features', t.footerLinkFeatures);
   updateText('#footer-link-generator', t.footerLinkGenerator);
-  updateText('#footer-link-how', t.footerLinkHow);
-  updateText('#footer-link-testimonials', t.footerLinkTestimonials);
-  updateText('#footer-link-faq', t.footerLinkFaq);
+  updateText('#footer-link-register', t.footerLinkRegister);
   updateText('#footer-col2-title', t.footerCol2Title);
   updateText('#footer-link-terms', t.footerLinkTerms);
   updateText('#footer-link-privacy', t.footerLinkPrivacy);
   updateText('#footer-link-legal', t.footerLinkLegal);
-  updateText('#footer-link-register', t.footerLinkRegister);
   updateText('#footer-copy-rights', t.footerCopyRights);
 };
 

@@ -1,3 +1,5 @@
+import { fetchWithProviderRetry } from './provider-http.js'
+
 const ROUTE_TIMEOUT_MS = 8000
 
 function finiteNumber(value) {
@@ -100,11 +102,13 @@ export function parseGeoapifyRouteResponse(payload) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url, {
+  const response = await fetchWithProviderRetry(url, {
     headers: { Accept: 'application/json', 'User-Agent': 'VibeTours/1.0' },
-    signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS)
+  }, {
+    attempts: 3,
+    timeoutMs: ROUTE_TIMEOUT_MS
   })
-  if (!response.ok) return null
+  if (!response?.ok) return null
   return response.json().catch(() => null)
 }
 

@@ -5285,7 +5285,10 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
     durationDays: input.durationDays,
     maxDistanceKm: geoScope.maxDistanceKm,
     city: cleanCity,
-    destination: input.destination
+    destination: input.destination,
+    // Prefer a verified canonical identity when one exists, then fall back
+    // to Mapbox/Geoapify/OSM discovery for places unknown to the catalog.
+    preferCanonical: true
   }
 
   // 1. A candidate from the confirmed places list is safe to reuse when it has usable coordinates and not marked as AI-geocoded.

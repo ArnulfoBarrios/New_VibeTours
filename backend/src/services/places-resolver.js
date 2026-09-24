@@ -1,9 +1,30 @@
 import { lookupCachedPlace, saveCachedPlace, normalizePlaceNameKey } from './places-cache-service.js'
 import { geocodePlace, isDistinctNameMatch } from './osm.js'
 import { haversineDistanceKm, cleanAdministrativeCityName } from './destinationService.js'
+import { fetchWithProviderRetry } from './provider-http.js'
 
 const DEFAULT_MAX_DISTANCE_KM = 50
 const HTTP_TIMEOUT_MS = 4000
+
+/**
+ * Builds progressively broader provider queries. Precise variants are tried
+ * first; broader variants are only used when no usable feature is found.
+ */
+export function buildProgressiveSearchQueries({ name = '', city = '', country = '', address = '' } = {}) {
+  const cleanName = String(name || '').trim()
+  const cleanCity = cleanAdministrativeCityName(city || '').trim()
+  const cleanCountry = String(country || '').trim()
+  const cleanAddress = String(address || '').trim()
+  const values = [
+    [cleanName, cleanCity, cleanCountry].filter(Boolean).join(', '),
+    [cleanName, cleanCity].filter(Boolean).join(', '),
+    [cleanName, cleanCountry].filter(Boolean).join(', '),
+    cleanName,
+    cleanAddress && [cleanAddress, cleanCity, cleanCountry].filter(Boolean).join(', '),
+    cleanAddress && [cleanAddress, cleanCity].filter(Boolean).join(', ')
+  ]
+  return [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))]
+}
 
 /**
  * Validates whether resolved coordinates are within reasonable proximity to the target city.
@@ -30,62 +51,184 @@ export function hasPhysicalAddressPattern(address) {
   return /\b(calle|cll|cra|carrera|kra|av|avenida|diagonal|diag|transversal|transv|autopista|v[íi]a|km|manzana|mz|#|no\.?|con|esquina)\b/i.test(lower)
 }
 
+function cachedProviderIdentityMatches(cached, requestedName) {
+  const source = String(cached?.source || '').toLowerCase()
+  const providerName = String(cached?.metadata?.providerName || '').trim()
+  if (providerName) return isDistinctNameMatch(requestedName, providerName)
+
+  // Older commercial cache rows did not retain the provider's display name.
+  // Do not trust them for a new identity lookup; they can otherwise turn a
+  // weak provider fallback into a permanent false positive.
+  if (source.includes('mapbox') || source.includes('geoapify')) return false
+  return true
+}
+
+/**
+ * Resolves a destination centroid through commercial geocoding when OSM is
+ * unavailable or temporarily circuit-broken. This is intentionally limited
+ * to city/locality entities; it must not turn an arbitrary POI into the
+ * destination center.
+ */
+export async function resolveProviderDestinationCenter({ destination = '', country = '' } = {}) {
+  const cleanDestination = String(destination || '').trim()
+  const cleanCountry = String(country || '').trim()
+  if (!cleanDestination) return null
+
+  const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN?.trim()
+  if (mapboxToken) {
+    const queries = [...new Set([
+      [cleanDestination, cleanCountry].filter(Boolean).join(', '),
+      cleanDestination
+    ])]
+    for (const query of queries) {
+      try {
+        const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`)
+        url.searchParams.set('access_token', mapboxToken)
+        url.searchParams.set('limit', '5')
+        url.searchParams.set('language', 'es')
+        url.searchParams.set('types', 'place,locality,region')
+
+        const response = await fetchWithProviderRetry(url.toString(), {}, {
+          attempts: 3,
+          timeoutMs: HTTP_TIMEOUT_MS
+        })
+        if (!response?.ok) continue
+        const data = await response.json()
+        for (const feature of Array.isArray(data.features) ? data.features : []) {
+          const [longitude, latitude] = feature.center || []
+          const featureName = feature.text || feature.place_name || ''
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+              !isDistinctNameMatch(cleanDestination, featureName) &&
+              !isDistinctNameMatch(cleanDestination, feature.place_name || '')) {
+            continue
+          }
+          return {
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+            name: featureName || cleanDestination,
+            address: feature.place_name || '',
+            source: 'mapbox'
+          }
+        }
+      } catch (err) {
+        console.warn('[places-resolver] Mapbox destination center error:', err.message)
+      }
+    }
+  }
+
+  const geoapifyKey = process.env.GEOAPIFY_API_KEY?.trim()
+  if (geoapifyKey) {
+    const queries = [...new Set([
+      [cleanDestination, cleanCountry].filter(Boolean).join(', '),
+      cleanDestination
+    ])]
+    for (const query of queries) {
+      try {
+        const url = new URL('https://api.geoapify.com/v1/geocode/search')
+        url.searchParams.set('text', query)
+        url.searchParams.set('apiKey', geoapifyKey)
+        url.searchParams.set('limit', '5')
+        url.searchParams.set('lang', 'es')
+
+        const response = await fetchWithProviderRetry(url.toString(), {}, {
+          attempts: 3,
+          timeoutMs: HTTP_TIMEOUT_MS
+        })
+        if (!response?.ok) continue
+        const data = await response.json()
+        for (const feature of Array.isArray(data.features) ? data.features : []) {
+          const [longitude, latitude] = feature.geometry?.coordinates || []
+          const props = feature.properties || {}
+          const featureName = props.name || props.city || props.formatted || ''
+          const resultType = String(props.result_type || '').toLowerCase()
+          const isLocality = ['city', 'town', 'village', 'municipality', 'locality', 'county'].includes(resultType)
+          if (!isLocality || !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+              !isDistinctNameMatch(cleanDestination, featureName) &&
+              !isDistinctNameMatch(cleanDestination, props.formatted || '')) {
+            continue
+          }
+          return {
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+            name: featureName || cleanDestination,
+            address: props.formatted || '',
+            source: 'geoapify'
+          }
+        }
+      } catch (err) {
+        console.warn('[places-resolver] Geoapify destination center error:', err.message)
+      }
+    }
+  }
+
+  return null
+}
+
 /**
  * Queries Mapbox Geocoding & Search API.
  */
-async function queryMapboxGeocoding({ query, cityLat, cityLon, maxDistanceKm }) {
+async function queryMapboxGeocoding({ query, expectedName = '', cityLat, cityLon, maxDistanceKm }) {
   const token = process.env.MAPBOX_ACCESS_TOKEN?.trim()
   if (!token) return null
 
-  try {
-    const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`)
-    url.searchParams.set('access_token', token)
-    url.searchParams.set('limit', '5')
-    url.searchParams.set('language', 'es')
-    url.searchParams.set('types', 'poi,address')
+  const queries = Array.isArray(query) ? query : [query]
+  for (const currentQuery of [...new Set(queries.map(value => String(value || '').trim()).filter(Boolean))]) {
+    try {
+      const url = new URL(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(currentQuery)}.json`)
+      url.searchParams.set('access_token', token)
+      url.searchParams.set('limit', '5')
+      url.searchParams.set('language', 'es')
+      url.searchParams.set('types', 'poi,address')
 
-    if (cityLat != null && cityLon != null && Number.isFinite(Number(cityLat)) && Number.isFinite(Number(cityLon))) {
-      url.searchParams.set('proximity', `${cityLon},${cityLat}`)
-    }
-
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) })
-    if (!res.ok) return null
-
-    const data = await res.json()
-    const features = Array.isArray(data.features) ? data.features : []
-    if (features.length === 0) return null
-
-    // Find best feature matching query and within city proximity
-    for (const feat of features) {
-      const [lon, lat] = feat.center || []
-      if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
-
-      if (!isWithinCityBounds(lat, lon, cityLat, cityLon, maxDistanceKm)) continue
-
-      // Reject generic city centroids, countries, or regions
-      const placeTypes = Array.isArray(feat.place_type) ? feat.place_type : []
-      if (placeTypes.length > 0 && placeTypes.every(t => ['place', 'locality', 'country', 'region', 'district'].includes(t))) {
-        continue
+      if (cityLat != null && cityLon != null && Number.isFinite(Number(cityLat)) && Number.isFinite(Number(cityLon))) {
+        url.searchParams.set('proximity', `${cityLon},${cityLat}`)
       }
 
-      const featName = feat.text || feat.place_name || ''
-      return {
-        name: featName,
-        address: feat.place_name || '',
-        latitude: Number(lat),
-        longitude: Number(lon),
-        placeId: `mapbox:${feat.id || ''}`,
-        source: 'mapbox',
-        confidence: Number(feat.relevance ?? 0.9),
-        providerType: placeTypes[0] || '',
-        tags: {
-          mapboxPlaceTypes: placeTypes,
-          mapboxCategory: feat.properties?.category || ''
+      const res = await fetchWithProviderRetry(url.toString(), {}, {
+        attempts: 3,
+        timeoutMs: HTTP_TIMEOUT_MS
+      })
+      if (!res?.ok) continue
+
+      const data = await res.json()
+      const features = Array.isArray(data.features) ? data.features : []
+
+      // Find best feature matching query and within city proximity.
+      for (const feat of features) {
+        const [lon, lat] = feat.center || []
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
+
+        if (!isWithinCityBounds(lat, lon, cityLat, cityLon, maxDistanceKm)) continue
+
+        // Reject generic city centroids, countries, or regions.
+        const placeTypes = Array.isArray(feat.place_type) ? feat.place_type : []
+        if (placeTypes.length > 0 && placeTypes.every(t => ['place', 'locality', 'country', 'region', 'district'].includes(t))) {
+          continue
+        }
+
+        const featName = feat.text || feat.place_name || ''
+        if (expectedName && !isDistinctNameMatch(expectedName, featName) && !isDistinctNameMatch(expectedName, feat.place_name || '')) {
+          continue
+        }
+        return {
+          name: featName,
+          address: feat.place_name || '',
+          latitude: Number(lat),
+          longitude: Number(lon),
+          placeId: `mapbox:${feat.id || ''}`,
+          source: 'mapbox',
+          confidence: Number(feat.relevance ?? 0.9),
+          providerType: placeTypes[0] || '',
+          tags: {
+            mapboxPlaceTypes: placeTypes,
+            mapboxCategory: feat.properties?.category || '',
+            query: currentQuery
+          }
         }
       }
+    } catch (err) {
+      console.warn('[places-resolver] Mapbox query error:', err.message)
     }
-  } catch (err) {
-    console.warn('[places-resolver] Mapbox query error:', err.message)
   }
   return null
 }
@@ -118,8 +261,11 @@ export async function searchMapboxPlaces({
         url.searchParams.set('proximity', `${cityLon},${cityLat}`)
       }
 
-      const response = await fetch(url.toString(), { signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) })
-      if (!response.ok) return []
+      const response = await fetchWithProviderRetry(url.toString(), {}, {
+        attempts: 3,
+        timeoutMs: HTTP_TIMEOUT_MS
+      })
+      if (!response?.ok) return []
       const data = await response.json()
       return (Array.isArray(data.features) ? data.features : []).map(feature => {
         const [longitude, latitude] = feature.center || []
@@ -169,58 +315,68 @@ export async function searchMapboxPlaces({
 /**
  * Queries Geoapify Geocoding & Places API.
  */
-async function queryGeoapifyGeocoding({ query, cityLat, cityLon, maxDistanceKm }) {
+async function queryGeoapifyGeocoding({ query, expectedName = '', cityLat, cityLon, maxDistanceKm }) {
   const apiKey = process.env.GEOAPIFY_API_KEY?.trim()
   if (!apiKey) return null
 
-  try {
-    const url = new URL('https://api.geoapify.com/v1/geocode/search')
-    url.searchParams.set('text', query)
-    url.searchParams.set('apiKey', apiKey)
-    url.searchParams.set('limit', '5')
-    url.searchParams.set('lang', 'es')
+  const queries = Array.isArray(query) ? query : [query]
+  for (const currentQuery of [...new Set(queries.map(value => String(value || '').trim()).filter(Boolean))]) {
+    try {
+      const url = new URL('https://api.geoapify.com/v1/geocode/search')
+      url.searchParams.set('text', currentQuery)
+      url.searchParams.set('apiKey', apiKey)
+      url.searchParams.set('limit', '5')
+      url.searchParams.set('lang', 'es')
 
-    if (cityLat != null && cityLon != null && Number.isFinite(Number(cityLat)) && Number.isFinite(Number(cityLon))) {
-      url.searchParams.set('bias', `proximity:${cityLon},${cityLat}`)
-    }
-
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) })
-    if (!res.ok) return null
-
-    const data = await res.json()
-    const features = Array.isArray(data.features) ? data.features : []
-    if (features.length === 0) return null
-
-    for (const feat of features) {
-      const coords = feat.geometry?.coordinates || []
-      const lon = coords[0]
-      const lat = coords[1]
-      if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
-
-      if (!isWithinCityBounds(lat, lon, cityLat, cityLon, maxDistanceKm)) continue
-
-      const props = feat.properties || {}
-      // Reject generic city centroids or non-specific boundaries
-      const resultType = props.result_type || ''
-      if (['city', 'country', 'state', 'county', 'postcode'].includes(resultType)) {
-        continue
+      if (cityLat != null && cityLon != null && Number.isFinite(Number(cityLat)) && Number.isFinite(Number(cityLon))) {
+        url.searchParams.set('bias', `proximity:${cityLon},${cityLat}`)
       }
 
-      return {
-        name: props.name || props.formatted || query,
-        address: props.formatted || '',
-        latitude: Number(lat),
-        longitude: Number(lon),
-        placeId: `geoapify:${props.place_id || ''}`,
-        source: 'geoapify',
-        confidence: Number(props.rank?.confidence ?? 0.85),
-        providerType: props.result_type || '',
-        providerCategory: Array.isArray(props.categories) ? props.categories.join(',') : '',
-        tags: props
+      const res = await fetchWithProviderRetry(url.toString(), {}, {
+        attempts: 3,
+        timeoutMs: HTTP_TIMEOUT_MS
+      })
+      if (!res?.ok) continue
+
+      const data = await res.json()
+      const features = Array.isArray(data.features) ? data.features : []
+
+      for (const feat of features) {
+        const coords = feat.geometry?.coordinates || []
+        const lon = coords[0]
+        const lat = coords[1]
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
+
+        if (!isWithinCityBounds(lat, lon, cityLat, cityLon, maxDistanceKm)) continue
+
+        const props = feat.properties || {}
+        // Reject generic city centroids or non-specific boundaries.
+        const resultType = props.result_type || ''
+        if (['city', 'country', 'state', 'county', 'postcode'].includes(resultType)) {
+          continue
+        }
+
+        const featureName = props.name || props.formatted || ''
+        if (expectedName && !isDistinctNameMatch(expectedName, featureName) && !isDistinctNameMatch(expectedName, props.formatted || '')) {
+          continue
+        }
+
+        return {
+          name: featureName || currentQuery,
+          address: props.formatted || '',
+          latitude: Number(lat),
+          longitude: Number(lon),
+          placeId: `geoapify:${props.place_id || ''}`,
+          source: 'geoapify',
+          confidence: Number(props.rank?.confidence ?? 0.85),
+          providerType: props.result_type || '',
+          providerCategory: Array.isArray(props.categories) ? props.categories.join(',') : '',
+          tags: { ...props, query: currentQuery }
+        }
       }
+    } catch (err) {
+      console.warn('[places-resolver] Geoapify query error:', err.message)
     }
-  } catch (err) {
-    console.warn('[places-resolver] Geoapify query error:', err.message)
   }
   return null
 }
@@ -250,8 +406,11 @@ export async function searchGeoapifyPlaces({
     url.searchParams.set('lang', 'es')
     url.searchParams.set('apiKey', apiKey)
 
-    const response = await fetch(url.toString(), { signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) })
-    if (!response.ok) return []
+    const response = await fetchWithProviderRetry(url.toString(), {}, {
+      attempts: 3,
+      timeoutMs: HTTP_TIMEOUT_MS
+    })
+    if (!response?.ok) return []
     const data = await response.json()
     return (Array.isArray(data.features) ? data.features : []).map(feature => {
       const [longitude, latitude] = feature.geometry?.coordinates || []
@@ -311,8 +470,9 @@ export async function resolvePlaceWithCascade({
   // Tier 1: Supabase / Memory Cache Lookup
   // -------------------------------------------------------------
   const cached = await lookupCachedPlace(cleanName, cleanCity)
-  if (cached && Number.isFinite(cached.latitude) && Number.isFinite(cached.longitude) && !(cached.latitude === 0 && cached.longitude === 0)) {
-    if (isWithinCityBounds(cached.latitude, cached.longitude, cityLat, cityLon, maxDistanceKm)) {
+  if (!options.preferCanonical && cached && Number.isFinite(cached.latitude) && Number.isFinite(cached.longitude) && !(cached.latitude === 0 && cached.longitude === 0)) {
+    if (cachedProviderIdentityMatches(cached, cleanName) &&
+        isWithinCityBounds(cached.latitude, cached.longitude, cityLat, cityLon, maxDistanceKm)) {
       return {
         name: cached.name || cleanName,
         city: cleanCity,
@@ -327,15 +487,53 @@ export async function resolvePlaceWithCascade({
     }
   }
 
-  // Common search strings
-  const fullSearchQuery = cleanCity ? `${cleanName}, ${cleanCity}, ${country}` : `${cleanName}, ${country}`
-  const citySearchQuery = cleanCity ? `${cleanName}, ${cleanCity}` : cleanName
+  // Common search strings, ordered from precise to progressively broader.
+  const progressiveQueries = buildProgressiveSearchQueries({
+    name: cleanName,
+    city: cleanCity,
+    country,
+    address
+  })
+  const fullSearchQuery = progressiveQueries[0] || cleanName
+
+  // When a place has a known canonical identity, use the curated/OSM
+  // identity before commercial providers. This is deliberately opt-in:
+  // discovery for unknown places still follows the provider cascade below,
+  // while known landmarks keep their verified physical point.
+  if (options.preferCanonical) {
+    const canonicalResult = await geocodePlace(fullSearchQuery, cityLat, cityLon, {
+      city: cleanCity,
+      destination: cleanCity,
+      ...options,
+      preferLiveProviders: false,
+      skipNominatim: true
+    }).catch(() => null)
+
+    if (canonicalResult && Number.isFinite(canonicalResult.latitude) && Number.isFinite(canonicalResult.longitude) &&
+        isWithinCityBounds(canonicalResult.latitude, canonicalResult.longitude, cityLat, cityLon, maxDistanceKm)) {
+      return {
+        name: cleanName,
+        city: cleanCity,
+        address: canonicalResult.address || canonicalResult.name || '',
+        latitude: Number(canonicalResult.latitude),
+        longitude: Number(canonicalResult.longitude),
+        placeId: canonicalResult.placeId || canonicalResult.place_id || '',
+        place_id: canonicalResult.placeId || canonicalResult.place_id || '',
+        coordinateSource: canonicalResult.coordinateSource || canonicalResult.coordinate_source || 'osm',
+        coordinatesVerified: true,
+        providerType: canonicalResult.type || '',
+        providerCategory: canonicalResult.category || '',
+        tags: canonicalResult.tags || {}
+      }
+    }
+  }
 
   // -------------------------------------------------------------
   // Tier 2: Mapbox Search / Geocoding API (Live commercial POIs & addresses)
   // -------------------------------------------------------------
   const mapboxResult = await queryMapboxGeocoding({
-    query: fullSearchQuery,
+    query: progressiveQueries,
+    expectedName: cleanName,
     cityLat,
     cityLon,
     maxDistanceKm
@@ -356,7 +554,11 @@ export async function resolvePlaceWithCascade({
       providerCategory: mapboxResult.providerCategory || '',
       tags: mapboxResult.tags || {}
     }
-    saveCachedPlace({ ...resolved, source: 'mapbox' }).catch(() => {})
+    saveCachedPlace({
+      ...resolved,
+      source: 'mapbox',
+      metadata: { providerName: mapboxResult.name, providerId: mapboxResult.placeId }
+    }).catch(() => {})
     return resolved
   }
 
@@ -364,7 +566,8 @@ export async function resolvePlaceWithCascade({
   // Tier 3: Geoapify Places API (Live commercial backup)
   // -------------------------------------------------------------
   const geoapifyResult = await queryGeoapifyGeocoding({
-    query: fullSearchQuery,
+    query: progressiveQueries,
+    expectedName: cleanName,
     cityLat,
     cityLon,
     maxDistanceKm
@@ -385,7 +588,11 @@ export async function resolvePlaceWithCascade({
       providerCategory: geoapifyResult.providerCategory || '',
       tags: geoapifyResult.tags || {}
     }
-    saveCachedPlace({ ...resolved, source: 'geoapify' }).catch(() => {})
+    saveCachedPlace({
+      ...resolved,
+      source: 'geoapify',
+      metadata: { providerName: geoapifyResult.name, providerId: geoapifyResult.placeId }
+    }).catch(() => {})
     return resolved
   }
 
@@ -428,7 +635,8 @@ export async function resolvePlaceWithCascade({
 
     // 5a. Mapbox address lookup
     const mapboxAddress = await queryMapboxGeocoding({
-      query: addressQuery,
+      query: buildProgressiveSearchQueries({ name: cleanName, city: cleanCity, country, address }),
+      expectedName: address || cleanName,
       cityLat,
       cityLon,
       maxDistanceKm
@@ -448,13 +656,18 @@ export async function resolvePlaceWithCascade({
         providerCategory: mapboxAddress.providerCategory || '',
         tags: mapboxAddress.tags || {}
       }
-      saveCachedPlace({ ...resolved, source: 'ai_address' }).catch(() => {})
+      saveCachedPlace({
+        ...resolved,
+        source: 'ai_address',
+        metadata: { providerName: mapboxAddress.name, providerId: mapboxAddress.placeId }
+      }).catch(() => {})
       return resolved
     }
 
     // 5b. Geoapify address lookup
     const geoapifyAddress = await queryGeoapifyGeocoding({
-      query: addressQuery,
+      query: buildProgressiveSearchQueries({ name: cleanName, city: cleanCity, country, address }),
+      expectedName: address || cleanName,
       cityLat,
       cityLon,
       maxDistanceKm
@@ -474,7 +687,11 @@ export async function resolvePlaceWithCascade({
         providerCategory: geoapifyAddress.providerCategory || '',
         tags: geoapifyAddress.tags || {}
       }
-      saveCachedPlace({ ...resolved, source: 'ai_address' }).catch(() => {})
+      saveCachedPlace({
+        ...resolved,
+        source: 'ai_address',
+        metadata: { providerName: geoapifyAddress.name, providerId: geoapifyAddress.placeId }
+      }).catch(() => {})
       return resolved
     }
 

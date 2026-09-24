@@ -8,7 +8,10 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "seed": "node src/scripts/seed.js",
-    "test": "node --test src/test/*.test.js"
+    "test": "node --import dotenv/config --test src/test/*.test.js",
+    "test:dynamic": "node --import dotenv/config --test tests/*.test.js",
+    "check:providers": "node --import dotenv/config src/scripts/check-providers.js",
+    "check:providers:live": "node --import dotenv/config src/scripts/check-providers.js --live"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.0",

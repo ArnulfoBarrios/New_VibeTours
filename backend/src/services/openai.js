@@ -3,7 +3,9 @@ import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds } from './osm.js'
-import { createUnifiedCandidateCatalog, getCandidateId } from './candidate-catalog.js'
+import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate } from './candidate-catalog.js'
+import { resolvePlaceWithCascade, resolveProviderDestinationCenter, searchGeoapifyPlaces, searchMapboxPlaces } from './places-resolver.js'
+import { fetchWithProviderRetry } from './provider-http.js'
 import { generateSpeechAudio } from './ttsService.js'
 
 export { generateSpeechAudio }
@@ -332,6 +334,23 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
     return geo
   }
 
+  // OSM may not contain a valid POI even when the unified commercial
+  // catalog already verified the place. Use the same provider cascade used
+  // by the planner before removing the itinerary bullet.
+  const providerGeo = await resolvePlaceWithCascade({
+    name,
+    city,
+    country,
+    cityLat: centerLat,
+    cityLon: centerLon,
+    maxDistanceKm: 35,
+    options: { preferCanonical: true }
+  }).catch(() => null)
+  if (providerGeo && Number.isFinite(Number(providerGeo.latitude)) && Number.isFinite(Number(providerGeo.longitude)) &&
+      isWithinCoastalCorridorBounds(providerGeo.latitude, providerGeo.longitude, city)) {
+    return providerGeo
+  }
+
   return null
 }
 
@@ -407,17 +426,25 @@ async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = 
   return lines.filter((_, index) => checks[index]).join('\n')
 }
 
-export async function sanitizeChatItineraryTextWithOsm(text, city = '', country = '', selectedHotel = null) {
+export async function sanitizeChatItineraryTextWithOsm(text, city = '', country = '', selectedHotel = null, trustedPlaces = []) {
   const sanitized = sanitizeChatItineraryText(text, city, selectedHotel)
   if (!/itinerario\s+de\s+viaje|\bD[ií]a\s+\d+\s*:/i.test(sanitized)) {
     return sanitizeChatRecommendationTextWithOsm(sanitized, city, country)
   }
 
   const lines = sanitized.split(/\r?\n/)
+  const trustedNames = (Array.isArray(trustedPlaces) ? trustedPlaces : [])
+    .map(place => typeof place === 'string' ? place : place?.name)
+    .map(name => String(name || '').trim())
+    .filter(Boolean)
   const checks = await Promise.all(lines.map(async line => {
     if (!/^\s*(?:[•●▪◦*-]|\d+[.)])\s+/.test(line)) return true
     const candidate = itineraryBulletPlaceName(line)
     if (!candidate || isChatHotelStop(candidate, selectedHotel)) return false
+    // These names already passed the unified real-candidate catalog. OSM can
+    // still omit a valid place, so do not discard a verified provider result
+    // merely because the second OSM-only check has no node for it.
+    if (trustedNames.some(trusted => arePlacesSimilar(trusted, candidate))) return true
     return Boolean(await resolveOsmBackedChatPlace(candidate, city, country, selectedHotel))
   }))
 
@@ -764,6 +791,93 @@ function verifiedCatalogEntries(entries, city, country, limit, centerLat = null,
   return verifyCatalogEntriesOnOsm(entries, city, country, limit, centerLat, centerLon, category)
 }
 
+async function resolveDestinationCenter({ destination = '', country = '', userLat = null, userLon = null } = {}) {
+  if (Number.isFinite(Number(userLat)) && Number.isFinite(Number(userLon)) && Number(userLat) !== 0 && Number(userLon) !== 0) {
+    return { latitude: Number(userLat), longitude: Number(userLon), source: 'user' }
+  }
+
+  const osmGeo = await geocodePlace(`${destination}, ${country}`.trim(), null, null, {
+    city: destination,
+    destination,
+    country
+  }).catch(() => null)
+  if (Number.isFinite(Number(osmGeo?.latitude)) && Number.isFinite(Number(osmGeo?.longitude)) &&
+      Number(osmGeo.latitude) !== 0 && Number(osmGeo.longitude) !== 0) {
+    return { latitude: Number(osmGeo.latitude), longitude: Number(osmGeo.longitude), source: osmGeo.coordinateSource || 'osm' }
+  }
+
+  const providerGeo = await resolveProviderDestinationCenter({ destination, country }).catch(() => null)
+  if (providerGeo && Number.isFinite(Number(providerGeo.latitude)) && Number.isFinite(Number(providerGeo.longitude)) &&
+      Number(providerGeo.latitude) !== 0 && Number(providerGeo.longitude) !== 0) {
+    return { latitude: Number(providerGeo.latitude), longitude: Number(providerGeo.longitude), source: providerGeo.source || 'provider' }
+  }
+
+  const normalizedDestination = String(destination || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+  const centroid = Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([key]) => {
+    const normalizedKey = String(key).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    return normalizedKey === normalizedDestination
+  })?.[1]
+  if (centroid && Number.isFinite(Number(centroid.latitude)) && Number.isFinite(Number(centroid.longitude))) {
+    return { latitude: Number(centroid.latitude), longitude: Number(centroid.longitude), source: 'destination-centroid' }
+  }
+
+  return null
+}
+
+export async function discoverProviderFallbackCandidates({ destination, country, category, limit = 8 }) {
+  const center = await resolveDestinationCenter({ destination, country })
+  const centerLat = Number(center?.latitude)
+  const centerLon = Number(center?.longitude)
+  if (!Number.isFinite(centerLat) || !Number.isFinite(centerLon)) return []
+
+  const queries = category === 'attraction'
+    ? ['tourism', 'museum', 'park', 'viewpoint', 'atracción turística'].map(term => `${term} ${destination}, ${country}`)
+    : category === 'hotel'
+      ? ['hotel', 'hostel', 'accommodation'].map(term => `${term} ${destination}, ${country}`)
+      : ['restaurant', 'local cuisine', 'cafe'].map(term => `${term} ${destination}, ${country}`)
+  const categories = category === 'attraction'
+    ? ['tourism.sights', 'tourism.attraction', 'leisure.park', 'natural']
+    : category === 'hotel'
+      ? ['accommodation.hotel', 'accommodation.hostel', 'accommodation.guest_house']
+      : ['catering.restaurant', 'catering.cafe', 'catering.fast_food']
+
+  let [mapbox, geoapify] = await Promise.all([
+    searchMapboxPlaces({ queries, cityLat: centerLat, cityLon: centerLon, maxDistanceKm: 35 }).catch(() => []),
+    searchGeoapifyPlaces({ categories, cityLat: centerLat, cityLon: centerLon, radiusMeters: 35000, limit: Math.max(limit * 2, 12) }).catch(() => [])
+  ])
+
+  let rawCandidates = [...mapbox, ...geoapify]
+  if (rawCandidates.length === 0) {
+    // A provider may return an empty page transiently after a burst of
+    // requests. Retry discovery once with the commercial city center, which
+    // also avoids depending on a Photon circuit-breaker state.
+    const providerCenter = await resolveProviderDestinationCenter({ destination, country }).catch(() => null)
+    if (providerCenter && Number.isFinite(Number(providerCenter.latitude)) && Number.isFinite(Number(providerCenter.longitude))) {
+      ;[mapbox, geoapify] = await Promise.all([
+        searchMapboxPlaces({ queries, cityLat: Number(providerCenter.latitude), cityLon: Number(providerCenter.longitude), maxDistanceKm: 35 }).catch(() => []),
+        searchGeoapifyPlaces({ categories, cityLat: Number(providerCenter.latitude), cityLon: Number(providerCenter.longitude), radiusMeters: 35000, limit: Math.max(limit * 2, 12) }).catch(() => [])
+      ])
+      rawCandidates = [...mapbox, ...geoapify]
+    }
+  }
+
+  return rawCandidates
+    .map(candidate => normalizeRealCandidate(candidate, {
+      category,
+      destination,
+      country,
+      centerLat,
+      centerLon,
+      radiusKm: 35
+    }))
+    .filter(Boolean)
+    .slice(0, limit)
+}
+
 export function isMalformedItinerary(text) {
   if (!text || typeof text !== 'string') return false
   return (
@@ -789,8 +903,15 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
     : String(entry?.name || '').trim()
   if (!name || isUnmappedOrClosedVenue(name)) return null
 
-  const query = [name, city, country].filter(Boolean).join(', ')
-  const geo = await geocodePlace(query, centerLat, centerLon, { city, country }).catch(() => null)
+  const geo = await resolvePlaceWithCascade({
+    name,
+    city,
+    country,
+    cityLat: centerLat,
+    cityLon: centerLon,
+    maxDistanceKm: 65,
+    options: { preferLiveProviders: true }
+  }).catch(() => null)
   if (!hasOsmMapRecord(geo)) return null
 
   if (!isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) return null
@@ -838,7 +959,6 @@ export async function suggestPlacesWithOpenAI({ destination = '', country = '', 
   if (!cleanDest) return []
 
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return []
 
   const targetDest = `${cleanDest}${country ? `, ${country}` : ''}`.trim()
   const system = `Eres un asistente experto en turismo global de VibeTours.
@@ -854,8 +974,8 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
   ]
 }`
 
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  if (apiKey) try {
+    const response = await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -870,7 +990,9 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
         temperature: 0.3,
         response_format: { type: 'json_object' }
       })),
-      signal: AbortSignal.timeout(12000)
+    }, {
+      attempts: 3,
+      timeoutMs: 12000
     })
 
     if (response.ok) {
@@ -889,6 +1011,16 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
   } catch (err) {
     console.warn('[suggestPlacesWithOpenAI] Error:', err?.message || err)
   }
+
+  // OpenAI is optional for discovery. Commercial providers can supply the
+  // real, ID-backed candidates even when the model quota is unavailable.
+  const providerPlaces = await discoverProviderFallbackCandidates({
+    destination: cleanDest,
+    country,
+    category: 'attraction',
+    limit: count
+  }).catch(() => [])
+  if (providerPlaces.length > 0) return providerPlaces
 
   const fallbackIconics = await fetchCityIconicLandmarks(cleanDest, country).catch(() => [])
   if (Array.isArray(fallbackIconics) && fallbackIconics.length > 0) {
@@ -932,7 +1064,6 @@ export async function suggestHotelsWithOpenAI({ destination = '', country = '', 
   if (!cleanDest) return []
 
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return []
 
   const targetDest = `${cleanDest}${country ? `, ${country}` : ''}`.trim()
   const system = `Eres un asistente experto en viajes de VibeTours.
@@ -949,8 +1080,8 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
   ]
 }`
 
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  if (apiKey) try {
+    const response = await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -966,7 +1097,9 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
         response_format: { type: 'json_object' },
         reasoning_effort: 'low'
       })),
-      signal: AbortSignal.timeout(5000)
+    }, {
+      attempts: 3,
+      timeoutMs: 5000
     })
 
     if (response.ok) {
@@ -984,6 +1117,20 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
     }
   } catch (err) {
     console.warn('[suggestHotelsWithOpenAI] Error:', err?.message || err)
+  }
+
+  const providerHotels = await discoverProviderFallbackCandidates({
+    destination: cleanDest,
+    country,
+    category: 'hotel',
+    limit: 3
+  }).catch(() => [])
+  if (providerHotels.length > 0) {
+    return providerHotels.map(hotel => ({
+      ...hotel,
+      desc: hotel.description || `Alojamiento verificado ubicado en ${cleanDest}`,
+      stars: hotel.stars || '4'
+    }))
   }
 
   const [hotelsRes, hostalsRes] = await Promise.all([
@@ -1028,10 +1175,10 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   let lat = userLat
   let lon = userLon
   if (!lat || !lon) {
-    const geo = await geocodePlace(`${clean} ${countryName}`.trim()).catch(() => null)
-    if (geo && Number.isFinite(geo.latitude)) {
-      lat = geo.latitude
-      lon = geo.longitude
+    const center = await resolveDestinationCenter({ destination: destName, country: countryName })
+    if (center) {
+      lat = center.latitude
+      lon = center.longitude
     }
   }
 
@@ -1256,7 +1403,23 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     return { places: [], restaurants: [], hotels: [] }
   })
 
-  const cleanPlaces = (unifiedCatalog.places || []).map(candidate => candidate.name)
+  const catalogPlaceCandidates = unifiedCatalog.places || []
+  const prioritizedPlaceCandidates = []
+  const prioritizedIds = new Set()
+  for (const iconicName of presetIconics) {
+    const match = catalogPlaceCandidates.find(candidate =>
+      !prioritizedIds.has(candidate.id || candidate.candidateId || candidate.name) &&
+      arePlacesSimilar(candidate.name, iconicName)
+    )
+    if (match) {
+      prioritizedPlaceCandidates.push(match)
+      prioritizedIds.add(match.id || match.candidateId || match.name)
+    }
+  }
+  const cleanPlaces = [
+    ...prioritizedPlaceCandidates,
+    ...catalogPlaceCandidates.filter(candidate => !prioritizedIds.has(candidate.id || candidate.candidateId || candidate.name))
+  ].map(candidate => candidate.name)
   const cleanHotels = (unifiedCatalog.hotels || []).map(candidate => ({
     ...candidate,
     desc: candidate.description || `Alojamiento verificado ubicado en ${capitalCity}.`,
@@ -1598,6 +1761,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     let fallbackChips = getDefaultActionChips(known, lastUserMsg)
     let fallbackMsg = ''
     let effectiveReadyToBuild = false
+    let trustedFallbackPlaces = []
 
     if (!hasCity) {
       if (/playa|playas|mar|costa|aventura/i.test(lastUserMsg)) {
@@ -1616,6 +1780,10 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             known.latitude,
             known.longitude
           ).catch(() => ({ places: [], restaurants: [], hotels: [] }))
+      trustedFallbackPlaces = [
+        ...(preset?.places || []),
+        ...(preset?.restaurants || [])
+      ]
       const fbHasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
@@ -1881,7 +2049,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg,
         destName,
         destCountry,
-        known.selectedHotel
+        known.selectedHotel,
+        trustedFallbackPlaces
       ),
       actionChips: fallbackChips,
       extractedPreferences: { ...known, specificPlaces: fallbackSpecificPlaces },
@@ -2508,11 +2677,19 @@ REGLAS PARA "accommodationStatus":
       let attrCursor = 0
       let restCursor = 0
 
+      // A small destination may have fewer verified attractions than the
+      // ideal two per day. Keep the itinerary complete by allocating one
+      // real attraction per day and one real restaurant, instead of
+      // exhausting the catalog and leaving later days empty.
+      const attractionsPerDay = uniqueAttractions.length >= totalPlacesNeeded
+        ? perDayPlacesCount
+        : Math.min(perDayPlacesCount, Math.max(1, Math.floor(uniqueAttractions.length / Math.max(daysCount, 1))))
+
       for (let d = 1; d <= daysCount; d++) {
         reconstructed += `Día ${d}: ${dName}\n`
         const dayUsed = new Set()
 
-        for (let s = 0; s < perDayPlacesCount; s++) {
+        for (let s = 0; s < attractionsPerDay; s++) {
           let chosenPlace = null
           while (attrCursor < uniqueAttractions.length) {
             const candidate = uniqueAttractions[attrCursor++]
@@ -2752,7 +2929,7 @@ export async function extractChatInformation(userMessage, currentData = {}, hist
   const lowerMsg = cleanMsg.toLowerCase()
 
   // 0. Fast-path (Short-circuit): Resolver en 0ms para mensajes breves de control, confirmación o navegación
-  const isDirectConfirmation = /^(s[íi]|dale|perfecto|listo|adelante|genera(r)?|hazlo|construye|est[aá] bien|vale|me gusta|de acuerdo|bueno|ok|okay|genial|excelente|procede|claro|vamos|vamos a generar|procede a generar|todo listo|est[aá] perfecto)\b/i.test(lowerMsg)
+  const isDirectConfirmation = /^(?:s[íi]|dale|perfecto|listo|adelante|genera(?:r)?|hazlo|construye|est[aá] bien|vale|me gusta|de acuerdo|bueno|ok(?:ay)?|genial|excelente|procede|claro|vamos)(?:\s*[,;:]?\s*(?:a|con|para|el|la|tu|mi|todo|tour|ruta|itinerario|genera(?:r)?|crea(?:r)?|construye|procede(?:r)?|me|parece|bien))*\s*$/i.test(lowerMsg)
   const isDirectAddStops = /^(agrega|a[ñn]ade|m[aá]s paradas|m[aá]s lugares|agrega m[aá]s paradas|a[ñn]ade m[aá]s paradas|quiero m[aá]s paradas)\b/i.test(lowerMsg)
   const isDirectHomeLodging = /^(en mi casa|mi casa|casa de un familiar|familiar|particular|alojamiento propio|ya tengo hotel|ya tengo hospedaje)\b/i.test(lowerMsg)
   const isOptionNumber = /^(opci[oó]n\s*[1-9]|[1-9]|el\s*(primero|segundo|tercero)|la\s*(primera|segunda|tercera))\b/i.test(lowerMsg)
@@ -3659,7 +3836,7 @@ export async function fetchCityIconicLandmarks(cityInput, countryInput = '') {
   const apiKey = process.env.OPENAI_API_KEY
   if (apiKey) {
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3690,7 +3867,9 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
           temperature: 0.3,
           reasoning_effort: 'none'
         })),
-        signal: AbortSignal.timeout(25000)
+      }, {
+        attempts: 3,
+        timeoutMs: 25000
       })
 
       if (response.ok) {
@@ -4327,16 +4506,34 @@ export async function geocodePlacesWithOpenAI({ city = '', country = '', places 
   const placeNames = places.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
   if (placeNames.length === 0) return {}
 
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
+  const resolveWithProviders = async (requestedNames = placeNames) => {
     const fallbackResults = {}
-    for (const p of placeNames) {
-      const geo = await geocodePlace(`${p}, ${city}`, centerLat, centerLon).catch(() => null)
-      if (geo && Number.isFinite(geo.latitude) && Number.isFinite(geo.longitude)) {
-        fallbackResults[p] = { latitude: geo.latitude, longitude: geo.longitude, address: geo.city || city }
+    for (const placeName of requestedNames) {
+      const geo = await resolvePlaceWithCascade({
+        name: placeName,
+        city,
+        country,
+        cityLat: centerLat,
+        cityLon: centerLon,
+        options: { preferCanonical: true }
+      }).catch(() => null)
+      if (geo && Number.isFinite(Number(geo.latitude)) && Number.isFinite(Number(geo.longitude)) &&
+          Number(geo.latitude) !== 0 && Number(geo.longitude) !== 0) {
+        fallbackResults[placeName] = {
+          latitude: Number(geo.latitude),
+          longitude: Number(geo.longitude),
+          address: geo.address || geo.name || city,
+          placeId: geo.placeId || geo.place_id || '',
+          coordinateSource: geo.coordinateSource || geo.coordinate_source || 'provider'
+        }
       }
     }
     return fallbackResults
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    return resolveWithProviders()
   }
 
   try {
@@ -4401,9 +4598,20 @@ ${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
         Object.assign(merged, res.value)
       }
     }
+
+    // OpenAI can be configured correctly but temporarily unavailable (for
+    // example, quota exhausted). Fill missing entries from the same verified
+    // provider cascade instead of returning an empty geocoder result.
+    const missingNames = placeNames.filter(placeName => {
+      const value = merged[placeName]
+      return !value || !Number.isFinite(Number(value.latitude)) || !Number.isFinite(Number(value.longitude))
+    })
+    if (missingNames.length > 0) {
+      Object.assign(merged, await resolveWithProviders(missingNames))
+    }
     return merged
   } catch (err) {
     console.warn('[openai] geocodePlacesWithOpenAI failed:', err.message)
-    return {}
+    return resolveWithProviders()
   }
 }
