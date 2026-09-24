@@ -26,8 +26,7 @@ function initThemeToggle() {
   const themeIcon = document.getElementById('themeIcon');
   const brandLogoImg = document.getElementById('brandLogoImg');
 
-  const savedTheme = localStorage.getItem('vibetours_theme') || 
-    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const savedTheme = localStorage.getItem('vibetours_theme') || 'dark';
   
   setTheme(savedTheme);
 
@@ -281,22 +280,12 @@ function initCityDockControls() {
    4. SCROLL EFFECTS: INSTANT 1:1 TICKER, 3D PARALLAX & STICKY SIMULATOR
    -------------------------------------------------------------------------- */
 function initScrollEffects() {
-  const progressBar = document.getElementById('scrollProgress');
-  const orb1 = document.getElementById('ambientOrb1');
-  const orb2 = document.getElementById('ambientOrb2');
-  const orb3 = document.getElementById('ambientOrb3');
-
-  // Hero Parallax Elements
-  const heroSection = document.querySelector('.hero-section');
-  const heroCardTop = document.querySelector('.floating-top-left');
-  const heroCardBottom = document.querySelector('.floating-bottom-right');
+  const mainHeader = document.getElementById('mainHeader');
+  const heroSection = document.getElementById('hero-start');
   const heroVisualStage = document.querySelector('.globe-hud-stage');
+  const rightNavLinks = document.querySelectorAll('.right-nav-link');
+  const trackedSections = ['hero-start', 'step-01', 'step-02', 'step-03', 'simulador'];
 
-  // Simulator Sticky Track
-  const simTrack = document.getElementById('simulatorStickyTrack');
-  let currentScrolledTab = 'tabContentExplore';
-
-  // Observe Hero visibility to pause globe rendering when far away
   if (heroSection) {
     const heroObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
@@ -312,67 +301,47 @@ function initScrollEffects() {
 
   function updateScrollVisuals() {
     const scrollY = window.scrollY;
-    const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
-    const progress = totalHeight > 0 ? (scrollY / totalHeight) * 100 : 0;
 
-    // 1. Top Scroll Progress Bar (Instant 1:1)
-    if (progressBar) {
-      progressBar.style.width = `${progress}%`;
+    // 1. Header background blur on scroll
+    if (mainHeader) {
+      if (scrollY > 40) {
+        mainHeader.classList.add('scrolled');
+      } else {
+        mainHeader.classList.remove('scrolled');
+      }
     }
 
-    // 2. Ambient Orbs Parallax (Instant 1:1 Transform)
-    if (orb1) orb1.style.transform = `translate3d(0, ${scrollY * 0.08}px, 0)`;
-    if (orb2) orb2.style.transform = `translate3d(0, ${-scrollY * 0.06}px, 0)`;
-    if (orb3) orb3.style.transform = `translate3d(0, ${scrollY * 0.04}px, 0)`;
-
-    // 3. Hero Parallax & Dynamic 3D Globe Spin
-    if (scrollY < window.innerHeight * 1.5) {
-      globeScrollPhi = scrollY * 0.0022;
-      if (heroCardTop) {
-        heroCardTop.style.transform = `translate3d(${scrollY * -0.06}px, ${scrollY * -0.15}px, 0) rotate(${scrollY * -0.01}deg)`;
-      }
-      if (heroCardBottom) {
-        heroCardBottom.style.transform = `translate3d(${scrollY * 0.06}px, ${scrollY * 0.14}px, 0) rotate(${scrollY * 0.01}deg)`;
-      }
+    // 2. Hero Planet Parallax & Rotation on Scroll (MNTN Depth Effect)
+    if (scrollY < window.innerHeight * 1.3) {
+      globeScrollPhi = scrollY * 0.0024;
       if (heroVisualStage) {
-        const scaleVal = Math.max(0.92, 1 - scrollY * 0.00012);
-        heroVisualStage.style.transform = `translate3d(0, ${scrollY * 0.05}px, 0) scale(${scaleVal})`;
+        heroVisualStage.style.transform = `translate3d(0, ${45 + scrollY * 0.18}px, 0)`;
       }
     }
 
-    // 4. Simulator Sticky Track Walkthrough
-    if (simTrack && window.innerWidth > 1024 && simulatorInstance) {
-      const rect = simTrack.getBoundingClientRect();
-      const trackHeight = simTrack.offsetHeight - window.innerHeight;
-      if (trackHeight > 0) {
-        const simProgress = -rect.top / trackHeight;
-        if (simProgress >= -0.05 && simProgress <= 1.05) {
-          handleSimulatorProgress(simProgress);
+    // 3. MNTN Right-Side Navigation Progress Tracker
+    let activeSectionId = 'hero-start';
+    const triggerLine = window.innerHeight * 0.42;
+
+    trackedSections.forEach(secId => {
+      const el = document.getElementById(secId);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= triggerLine) {
+          activeSectionId = secId;
         }
       }
-    }
+    });
+
+    rightNavLinks.forEach(link => {
+      if (link.dataset.section === activeSectionId) {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    });
 
     ticking = false;
-  }
-
-  function handleSimulatorProgress(p) {
-    if (simulatorInstance.isManualOverride) return;
-
-    let targetTab = 'tabContentExplore';
-    if (p < 0.22) {
-      targetTab = 'tabContentExplore';
-    } else if (p >= 0.22 && p < 0.52) {
-      targetTab = 'tabContentChat';
-    } else if (p >= 0.52 && p < 0.80) {
-      targetTab = 'tabContentMap';
-    } else {
-      targetTab = 'tabContentProfile';
-    }
-
-    if (targetTab !== currentScrolledTab) {
-      currentScrolledTab = targetTab;
-      simulatorInstance.switchTab(targetTab, false);
-    }
   }
 
   window.addEventListener('scroll', () => {
@@ -382,7 +351,6 @@ function initScrollEffects() {
     }
   }, { passive: true });
 
-  // Initial call
   updateScrollVisuals();
 
   // Reveal On Scroll Observer
@@ -1587,60 +1555,58 @@ function initBentoAudioWidget() {
    -------------------------------------------------------------------------- */
 const landingTranslations = {
   es: {
-    navFeatures: 'Ventajas',
-    navGenerator: 'Demo en Vivo',
+    navStep1: '01. Rutas',
+    navStep2: '02. Audio GPS',
+    navStep3: '03. Libertad',
+    navGenerator: 'Prueba Interactiva',
     navRegister: 'Empezar Gratis',
 
-    heroBadge: 'Audioguías GPS • Rutas a tu medida',
-    heroTitle: 'Camina a tu ritmo. <span class="gradient-text">Tu guía al oído.</span>',
-    heroDesc: 'Crea rutas personalizadas en segundos y escucha la historia de cada lugar automáticamente al llegar.',
+    heroBadge: 'TU GUÍA PERSONAL CON IA',
+    heroTitle: 'El mundo a tu propio ritmo.<br><span class="editorial-italic">Tu guía al oído.</span>',
+    heroDesc: 'Crea rutas personalizadas en segundos y escucha la historia de cada monumento automáticamente al llegar.',
     heroCtaPrimary: 'Empezar Gratis',
-    heroCtaSecondary: 'Probar Demo Interactiva',
+    heroCtaSecondary: 'Explorar abajo',
+    heroDockLabel: 'Girar planeta a:',
 
-    floatVoiceTitle: 'Audio en Proximidad',
-    floatVoiceSub: 'Torre del Reloj',
-    floatGpsTitle: 'Ruta Verificada',
-    floatGpsSub: '6 Paradas • 2.4 km',
+    s1Eyebrow: 'RUTAS AL INSTANTE',
+    s1Title: 'Hechas para tu tiempo y tus gustos',
+    s1Desc: 'Indica cuántas horas tienes libres y qué quieres descubrir. El asistente traza un recorrido real en el mapa en segundos, sin perder horas buscando en blogs.',
+    s1Link: 'Probar el planificador en vivo',
 
-    bentoTitle: 'Viaja libre, sin grupos ni horarios',
-    bentoPillAudio: 'Audio Automático',
-    bentoAudioTitle: 'Se activa al llegar',
-    bentoAudioDesc: 'Guarda el teléfono. El GPS detecta tu cercanía y reproduce la historia en tus audífonos automáticamente.',
-    bentoAudioProximity: 'A 12 metros • Torre del Reloj',
-    bentoPillAi: 'Rutas al Instante',
-    bentoAiTitle: 'Hechas para tu tiempo',
-    bentoAiDesc: 'Indica cuánto tiempo tienes y qué te interesa. Obtén un recorrido real en el mapa en segundos.',
-    bentoPillSavings: '100% a tu Ritmo',
-    bentoSavingsTitle: 'Pausa cuando quieras',
-    bentoSavingsDesc: 'Detente a tomar fotos o almorzar sin perder al grupo, y ahorra lo que cuesta una agencia tradicional.',
+    s2Eyebrow: 'AUDIO AUTOMÁTICO POR GPS',
+    s2Title: 'La historia empieza sola cuando llegas',
+    s2Desc: 'Guarda el teléfono en el bolsillo y camina tranquilo. El GPS detecta tu cercanía a cada plaza o monumento y reproduce la narración automáticamente en tus audífonos.',
+    bentoAudioProximity: 'Torre del Reloj • A 12 metros',
+    s2AudioSub: 'Haz clic para escuchar cómo suena tu guía',
 
-    simTitle: 'Pruébala aquí mismo',
-    simDesc: 'Toca las pantallas del teléfono o cambia de ciudad para probar la experiencia real.',
-    simCockpitBadge: 'Demo en Vivo',
-    simCockpitTitle: 'Explora la interfaz',
-    simCockpitDesc: 'Selecciona una ciudad y alterna entre el catálogo, el planificador, el mapa GPS y el audio.',
-    simLblCity: 'Destino:',
-    simLblScreens: 'Pantalla de la App:',
+    s3Eyebrow: '100% A TU RITMO',
+    s3Title: 'Sin grupos, sin horarios y sin pagar de más',
+    s3Desc: 'Detente a tomar fotos o almorzar cuando te apetezca sin miedo a perder al guía. Tu recorrido se pausa contigo y ahorras lo que cobran las agencias tradicionales.',
+    s3OldLbl: 'Tour de Agencia',
+    s3NewVal: 'Gratis',
+
+    simCockpitBadge: 'PRUEBA EN VIVO',
+    simTitle: 'Interactúa con la app desde aquí',
+    simDesc: 'Elige una ciudad, navega el mapa GPS real o simula tus pasos para activar el audio por proximidad.',
+    simLblCity: 'Destino de prueba:',
+    simLblScreens: 'Pantallas de la App:',
     btnSwitchToExplore: '1. Explorar',
     btnSwitchToChat: '2. Crear Ruta',
     btnSwitchToMap: '3. Mapa GPS',
     btnSwitchToProfile: '4. Perfil',
     pnavExplore: 'Explorar',
     pnavChat: 'Chat IA',
-    pnavTours: 'Tours',
+    pnavTours: 'Mapa',
     pnavProfile: 'Perfil',
     simWalkBtnText: 'Simular Paso',
 
-    bannerTitle: 'Empieza tu próximo recorrido hoy',
-    bannerDesc: 'Explora sin horarios ni grupos. Pruébalo gratis desde tu navegador.',
-    bannerBtnRegister: 'Empezar Gratis',
-    bannerBtnDemo: 'Entrar en Modo Demo',
-
-    footerDesc: 'Rutas a tu medida y audioguías GPS que se activan al caminar.',
-    footerCol1Title: 'Producto',
-    footerLinkFeatures: 'Ventajas',
-    footerLinkGenerator: 'Demo en Vivo',
-    footerLinkRegister: 'Crear Cuenta',
+    footerDesc: 'Sal a descubrir tu próximo destino con rutas a tu medida y audioguías GPS al oído.',
+    footerCol1Title: 'Explorar',
+    footerLinkFeatures: '01. Rutas a Medida',
+    footerLinkAudio: '02. Audio GPS',
+    footerLinkFreedom: '03. Libertad',
+    footerLinkGenerator: 'Prueba Interactiva',
+    footerLinkRegister: 'Empezar Gratis',
     footerCol2Title: 'Legal',
     footerLinkTerms: 'Términos de Servicio',
     footerLinkPrivacy: 'Política de Privacidad',
@@ -1648,60 +1614,58 @@ const landingTranslations = {
     footerCopyRights: 'Todos los derechos reservados.'
   },
   en: {
-    navFeatures: 'Benefits',
-    navGenerator: 'Live Demo',
+    navStep1: '01. Routes',
+    navStep2: '02. GPS Audio',
+    navStep3: '03. Freedom',
+    navGenerator: 'Interactive Demo',
     navRegister: 'Start Free',
 
-    heroBadge: 'GPS Audio Guides • Tailored Routes',
-    heroTitle: 'Walk at your pace. <span class="gradient-text">Your guide in your ear.</span>',
+    heroBadge: 'YOUR PERSONAL AI GUIDE',
+    heroTitle: 'The world at your own pace.<br><span class="editorial-italic">Your guide in your ear.</span>',
     heroDesc: 'Build custom walking routes in seconds and hear the story of each landmark automatically as you arrive.',
     heroCtaPrimary: 'Start Free',
-    heroCtaSecondary: 'Try Interactive Demo',
+    heroCtaSecondary: 'Scroll down',
+    heroDockLabel: 'Spin planet to:',
 
-    floatVoiceTitle: 'Proximity Audio',
-    floatVoiceSub: 'Clock Tower',
-    floatGpsTitle: 'Verified Route',
-    floatGpsSub: '6 Stops • 2.4 km',
+    s1Eyebrow: 'INSTANT ROUTES',
+    s1Title: 'Tailored to your time and tastes',
+    s1Desc: 'Tell the assistant how many hours you have and what you want to discover. Get a verified walking route on the map in seconds.',
+    s1Link: 'Try the live planner',
 
-    bentoTitle: 'Travel free, no crowds or schedules',
-    bentoPillAudio: 'Automatic Audio',
-    bentoAudioTitle: 'Plays when you arrive',
-    bentoAudioDesc: 'Keep your phone in your pocket. GPS detects your proximity and plays the story in your headphones.',
-    bentoAudioProximity: '12 meters away • Clock Tower',
-    bentoPillAi: 'Instant Routes',
-    bentoAiTitle: 'Built for your time',
-    bentoAiDesc: 'Share how much time you have and what you like. Get a verified walking route on the map in seconds.',
-    bentoPillSavings: '100% Your Pace',
-    bentoSavingsTitle: 'Pause anytime',
-    bentoSavingsDesc: 'Stop for photos or coffee without losing the group, and save the cost of traditional agencies.',
+    s2Eyebrow: 'AUTOMATIC GPS AUDIO',
+    s2Title: 'The story starts right when you arrive',
+    s2Desc: 'Keep your phone in your pocket and walk freely. GPS detects your proximity to each square or monument and plays the audio automatically.',
+    bentoAudioProximity: 'Clock Tower • 12 meters away',
+    s2AudioSub: 'Click to preview how your guide sounds',
 
-    simTitle: 'Try it right here',
-    simDesc: 'Tap the phone screens or switch cities to test the real experience.',
-    simCockpitBadge: 'Live Demo',
-    simCockpitTitle: 'Explore the interface',
-    simCockpitDesc: 'Select a city and switch between catalog, planner, live GPS map, and audio.',
-    simLblCity: 'Destination:',
-    simLblScreens: 'App Screen:',
+    s3Eyebrow: '100% YOUR PACE',
+    s3Title: 'No crowds, no schedules, zero overpriced fees',
+    s3Desc: 'Pause for photos or grab coffee whenever you want without losing the group. Your route waits for you while saving agency costs.',
+    s3OldLbl: 'Agency Tour',
+    s3NewVal: 'Free',
+
+    simCockpitBadge: 'LIVE INTERACTIVE DEMO',
+    simTitle: 'Interact with the app right here',
+    simDesc: 'Pick a city, browse the real GPS map, or simulate walking steps to trigger proximity audio.',
+    simLblCity: 'Demo Destination:',
+    simLblScreens: 'App Screens:',
     btnSwitchToExplore: '1. Explore',
     btnSwitchToChat: '2. Plan Route',
     btnSwitchToMap: '3. GPS Map',
     btnSwitchToProfile: '4. Profile',
     pnavExplore: 'Explore',
     pnavChat: 'AI Chat',
-    pnavTours: 'Tours',
+    pnavTours: 'Map',
     pnavProfile: 'Profile',
     simWalkBtnText: 'Simulate Step',
 
-    bannerTitle: 'Start your next walk today',
-    bannerDesc: 'Explore with zero schedules or crowds. Try it free in your browser.',
-    bannerBtnRegister: 'Start Free',
-    bannerBtnDemo: 'Enter Demo Mode',
-
-    footerDesc: 'Tailored routes and GPS audio guides that play as you walk.',
-    footerCol1Title: 'Product',
-    footerLinkFeatures: 'Benefits',
-    footerLinkGenerator: 'Live Demo',
-    footerLinkRegister: 'Create Account',
+    footerDesc: 'Discover your next destination with custom walking routes and hands-free GPS audio guides.',
+    footerCol1Title: 'Explore',
+    footerLinkFeatures: '01. Custom Routes',
+    footerLinkAudio: '02. GPS Audio',
+    footerLinkFreedom: '03. Total Freedom',
+    footerLinkGenerator: 'Interactive Demo',
+    footerLinkRegister: 'Start Free',
     footerCol2Title: 'Legal',
     footerLinkTerms: 'Terms of Service',
     footerLinkPrivacy: 'Privacy Policy',
@@ -1723,7 +1687,9 @@ window.setLandingLanguage = function(lang) {
   const t = landingTranslations[lang] || landingTranslations['es'];
 
   // Navigation
-  updateText('#nav-features', t.navFeatures);
+  updateText('#nav-step1', t.navStep1);
+  updateText('#nav-step2', t.navStep2);
+  updateText('#nav-step3', t.navStep3);
   updateText('#nav-generator', t.navGenerator);
   updateText('#nav-btn-register', t.navRegister);
 
@@ -1733,31 +1699,32 @@ window.setLandingLanguage = function(lang) {
   updateText('#hero-desc', t.heroDesc);
   updateText('#hero-cta-primary span', t.heroCtaPrimary);
   updateText('#hero-cta-secondary span', t.heroCtaSecondary);
+  updateText('#hero-dock-label', t.heroDockLabel);
 
-  updateText('#float-voice-title', t.floatVoiceTitle);
-  updateText('#float-voice-sub', t.floatVoiceSub);
-  updateText('#float-gps-title', t.floatGpsTitle);
-  updateText('#float-gps-sub', t.floatGpsSub);
+  // 01. Routes
+  updateText('#s1-eyebrow', t.s1Eyebrow);
+  updateText('#s1-title', t.s1Title);
+  updateText('#s1-desc', t.s1Desc);
+  updateText('#s1-link', t.s1Link);
 
-  // Bento Grid (3 Cards)
-  updateText('#bento-title', t.bentoTitle);
-  updateText('#bento-pill-audio', t.bentoPillAudio);
-  updateText('#bento-audio-title', t.bentoAudioTitle);
-  updateText('#bento-audio-desc', t.bentoAudioDesc);
+  // 02. GPS Audio
+  updateText('#s2-eyebrow', t.s2Eyebrow);
+  updateText('#s2-title', t.s2Title);
+  updateText('#s2-desc', t.s2Desc);
   updateText('#bento-audio-proximity', t.bentoAudioProximity);
-  updateText('#bento-pill-ai', t.bentoPillAi);
-  updateText('#bento-ai-title', t.bentoAiTitle);
-  updateText('#bento-ai-desc', t.bentoAiDesc);
-  updateText('#bento-pill-savings', t.bentoPillSavings);
-  updateText('#bento-savings-title', t.bentoSavingsTitle);
-  updateText('#bento-savings-desc', t.bentoSavingsDesc);
+  updateText('#s2-audio-sub', t.s2AudioSub);
 
-  // Simulator
+  // 03. Freedom
+  updateText('#s3-eyebrow', t.s3Eyebrow);
+  updateText('#s3-title', t.s3Title);
+  updateText('#s3-desc', t.s3Desc);
+  updateText('#s3-old-lbl', t.s3OldLbl);
+  updateText('#s3-new-val', t.s3NewVal);
+
+  // 04. Simulator
+  updateText('#sim-cockpit-badge', t.simCockpitBadge);
   updateText('#sim-title', t.simTitle);
   updateText('#sim-desc', t.simDesc);
-  updateText('#sim-cockpit-badge', t.simCockpitBadge);
-  updateText('#sim-cockpit-title', t.simCockpitTitle);
-  updateText('#sim-cockpit-desc', t.simCockpitDesc);
   updateText('#sim-lbl-city', t.simLblCity);
   updateText('#sim-lbl-screens', t.simLblScreens);
   updateText('#btnSwitchToExplore', t.btnSwitchToExplore);
@@ -1772,16 +1739,12 @@ window.setLandingLanguage = function(lang) {
   updateText('#detail-back-label', lang === 'es' ? 'Explorar' : 'Explore');
   updateText('#detail-start-label', lang === 'es' ? 'Iniciar Tour con GPS' : 'Start Tour with GPS');
 
-  // Banner
-  updateText('#banner-title', t.bannerTitle);
-  updateText('#banner-desc', t.bannerDesc);
-  updateText('#banner-btn-register', t.bannerBtnRegister);
-  updateText('#banner-btn-demo', t.bannerBtnDemo);
-
   // Footer
   updateText('#footer-desc', t.footerDesc);
   updateText('#footer-col1-title', t.footerCol1Title);
   updateText('#footer-link-features', t.footerLinkFeatures);
+  updateText('#footer-link-audio', t.footerLinkAudio);
+  updateText('#footer-link-freedom', t.footerLinkFreedom);
   updateText('#footer-link-generator', t.footerLinkGenerator);
   updateText('#footer-link-register', t.footerLinkRegister);
   updateText('#footer-col2-title', t.footerCol2Title);

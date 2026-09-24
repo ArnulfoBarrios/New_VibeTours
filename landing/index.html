@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VibeTours - Tu Guía Turístico Inteligente con IA | Viaja a tu Ritmo</title>
-  <meta name="description" content="Descubre el turismo libre e inteligente con VibeTours. Itinerarios a tu medida generados con IA, navegación satelital verificada y audioguías automáticas al oído mientras caminas.">
+  <title>VibeTours — Tu Guía Personal con IA | Viaja a tu Ritmo</title>
+  <meta name="description" content="Descubre el turismo libre con VibeTours. Rutas a tu medida creadas en segundos y audioguías GPS que se activan solas al llegar a cada monumento.">
   <link rel="icon" type="image/png" href="assets/images/logo_light.png">
   
-  <!-- Apple & Inter Modern Typography -->
+  <!-- Editorial Serif (Playfair Display) + Clean UI Sans (Inter) like MNTN -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&display=swap" rel="stylesheet">
   
   <!-- Leaflet Map CSS for Interactive Smartphone Simulator -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -20,24 +20,40 @@
 </head>
 <body>
 
-  <!-- Ambient Light Orbs (Subtle & Clean) -->
-  <div class="ambient-glow orb-1" id="ambientOrb1"></div>
-  <div class="ambient-glow orb-2" id="ambientOrb2"></div>
+  <!-- ==========================================================================
+       MNTN FIXED LEFT RAIL & RIGHT SECTION PROGRESS NAVIGATION
+       ========================================================================== -->
+  <aside class="mntn-left-rail" aria-hidden="true">
+    <span class="rail-label">VIBETOURS • GPS AUDIO</span>
+    <span class="rail-line"></span>
+  </aside>
+
+  <nav class="mntn-right-nav" aria-label="Progreso de lectura">
+    <ul>
+      <li><a href="#hero-start" class="right-nav-link active" data-section="hero-start">Start</a></li>
+      <li><a href="#step-01" class="right-nav-link" data-section="step-01">01</a></li>
+      <li><a href="#step-02" class="right-nav-link" data-section="step-02">02</a></li>
+      <li><a href="#step-03" class="right-nav-link" data-section="step-03">03</a></li>
+      <li><a href="#simulador" class="right-nav-link" data-section="simulador">Demo</a></li>
+    </ul>
+  </nav>
 
   <!-- ==========================================================================
-       HEADER & NAVIGATION (CLEAN FLOATING PILL NAVBAR)
+       EDGE-TO-EDGE EDITORIAL HEADER (MNTN STYLE)
        ========================================================================== -->
-  <header class="header">
-    <div class="nav-container">
-      <a href="index.html" class="brand-logo">
-        <img id="brandLogoImg" src="assets/images/logo_light.png" alt="VibeTours Logo">
+  <header class="mntn-header" id="mainHeader">
+    <div class="mntn-nav-container">
+      <a href="#hero-start" class="brand-logo">
+        <img id="brandLogoImg" src="assets/images/logo_dark.png" alt="VibeTours Logo">
         <span class="brand-name">VibeTours</span>
       </a>
 
       <nav>
         <ul class="nav-menu">
-          <li><a href="#caracteristicas" class="nav-link" id="nav-features">Ventajas</a></li>
-          <li><a href="#simulador" class="nav-link" id="nav-generator">Demo en Vivo</a></li>
+          <li><a href="#step-01" class="nav-link" id="nav-step1">01. Rutas</a></li>
+          <li><a href="#step-02" class="nav-link" id="nav-step2">02. Audio GPS</a></li>
+          <li><a href="#step-03" class="nav-link" id="nav-step3">03. Libertad</a></li>
+          <li><a href="#simulador" class="nav-link" id="nav-generator">Prueba Interactiva</a></li>
         </ul>
       </nav>
 
@@ -61,524 +77,520 @@
   </header>
 
   <!-- ==========================================================================
-       1. HERO SECTION: DIRECT & CONCISE
+       HERO SECTION (MNTN FULL-SCREEN VIEW WITH 3D PLANET BACKGROUND + FADE)
        ========================================================================== -->
-  <section class="hero-section">
-    <div class="hero-content reveal-on-scroll">
-      <div class="hero-badge">
-        <span class="badge-dot"></span>
-        <span id="hero-badge">Audioguías GPS • Rutas a tu medida</span>
+  <section id="hero-start" class="mntn-hero">
+    <!-- Background 3D Planet Stage -->
+    <div class="mntn-hero-planet-bg" id="globeWrapper">
+      <div class="planet-ambient-glow"></div>
+      <div class="globe-hud-stage">
+        <canvas id="cobeGlobeCanvas" class="globe-canvas"></canvas>
       </div>
-
-      <h1 class="hero-title" id="hero-title">
-        Camina a tu ritmo. <span class="gradient-text">Tu guía al oído.</span>
-      </h1>
-
-      <p class="hero-description" id="hero-desc">
-        Crea rutas personalizadas en segundos y escucha la historia de cada lugar automáticamente al llegar.
-      </p>
-
-      <div class="hero-buttons">
-        <a href="register.html" id="hero-cta-primary" class="btn btn-primary btn-large">
-          <span>Empezar Gratis</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </a>
-        <a href="#simulador" id="hero-cta-secondary" class="btn btn-glass btn-large">
-          <span>Probar Demo Interactiva</span>
-        </a>
-      </div>
+      <!-- MNTN Bottom Gradient Fade into Page Body -->
+      <div class="mntn-hero-fade"></div>
     </div>
 
-    <!-- Interactive Visual Stage (Cobe Globe & Minimal Live Cards) -->
-    <div class="hero-visual-wrapper reveal-on-scroll delay-1">
-      
-      <!-- Floating Card 1: Live Voice Guide -->
-      <div class="floating-card floating-top-left glass-card">
-        <div class="floating-icon-box bg-blue">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-        </div>
-        <div class="floating-info">
-          <span class="floating-title" id="float-voice-title">Audio en Proximidad</span>
-          <span class="floating-sub" id="float-voice-sub">Torre del Reloj</span>
-        </div>
-        <div class="floating-wave">
-          <div class="bar"></div>
-          <div class="bar"></div>
-          <div class="bar"></div>
-          <div class="bar"></div>
-        </div>
+    <!-- Center Editorial Content Overlay -->
+    <div class="mntn-hero-content reveal-on-scroll">
+      <div class="mntn-eyebrow">
+        <span class="eyebrow-line"></span>
+        <span class="eyebrow-text" id="hero-badge">TU GUÍA PERSONAL CON IA</span>
       </div>
 
-      <!-- Globe Stage -->
-      <div class="globe-hud-stage">
-        <div class="globe-container" id="globeWrapper">
-          <div class="globe-halo"></div>
-          <canvas id="cobeGlobeCanvas" class="globe-canvas"></canvas>
-        </div>
+      <h1 class="mntn-hero-title" id="hero-title">
+        El mundo a tu propio ritmo.<br>
+        <span class="editorial-italic">Tu guía al oído.</span>
+      </h1>
+
+      <p class="mntn-hero-desc" id="hero-desc">
+        Crea rutas personalizadas en segundos y escucha la historia de cada monumento automáticamente al llegar.
+      </p>
+
+      <div class="mntn-hero-actions">
+        <a href="register.html" id="hero-cta-primary" class="btn btn-primary btn-large">
+          <span>Empezar Gratis</span>
+        </a>
+        <a href="#step-01" class="mntn-scroll-prompt" id="hero-cta-secondary">
+          <span>Explorar abajo</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+        </a>
       </div>
 
-      <!-- Quick City Selectors -->
+      <!-- Interactive City Switcher for Background Planet -->
       <div class="globe-city-dock">
+        <span class="dock-label" id="hero-dock-label">Girar planeta a:</span>
         <button class="city-dock-btn active" data-phi="0" data-theta="0.15" data-city="cartagena">Cartagena</button>
         <button class="city-dock-btn" data-phi="4.7" data-theta="0.25" data-city="tokio">Tokio</button>
         <button class="city-dock-btn" data-phi="1.5" data-theta="0.3" data-city="paris">París</button>
         <button class="city-dock-btn" data-phi="0.2" data-theta="0.28" data-city="newyork">Nueva York</button>
         <button class="city-dock-btn" data-phi="1.7" data-theta="0.28" data-city="roma">Roma</button>
       </div>
-
-      <!-- Floating Card 2: GPS Route Status -->
-      <div class="floating-card floating-bottom-right glass-card">
-        <div class="floating-icon-box bg-green">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-        </div>
-        <div class="floating-info">
-          <span class="floating-title" id="float-gps-title">Ruta Verificada</span>
-          <span class="floating-sub" id="float-gps-sub">6 Paradas • 2.4 km</span>
-        </div>
-      </div>
     </div>
   </section>
 
   <!-- ==========================================================================
-       2. VENTAJAS CLAVE (3 TARJETAS CONCISAS SIN RELLENO)
+       MAIN EDITORIAL CONTENT STREAM (MNTN 01 / 02 / 03 ZIG-ZAG SECTIONS)
        ========================================================================== -->
-  <section id="caracteristicas" class="section">
-    <div class="section-header reveal-on-scroll">
-      <h2 class="section-title" id="bento-title">Viaja libre, sin grupos ni horarios</h2>
-    </div>
+  <main class="mntn-main-stream">
 
-    <div class="bento-grid bento-grid-3 reveal-on-scroll delay-1">
-      
-      <!-- Card 1: Proximity Audio -->
-      <div class="glass-card bento-card">
-        <div class="bento-content">
-          <span class="bento-pill bg-blue" id="bento-pill-audio">Audio Automático</span>
-          <h3 class="bento-title" id="bento-audio-title">Se activa al llegar</h3>
-          <p class="bento-desc" id="bento-audio-desc">
-            Guarda el teléfono. El GPS detecta tu cercanía y reproduce la historia en tus audífonos automáticamente.
+    <!-- ================= 01. RUTAS A TU MEDIDA ================= -->
+    <section id="step-01" class="mntn-story-section">
+      <div class="mntn-story-row reveal-on-scroll">
+        <div class="mntn-story-text">
+          <span class="mntn-giant-number" aria-hidden="true">01</span>
+          <div class="mntn-eyebrow">
+            <span class="eyebrow-line"></span>
+            <span class="eyebrow-text" id="s1-eyebrow">RUTAS AL INSTANTE</span>
+          </div>
+          <h2 class="mntn-story-title" id="s1-title">Hechas para tu tiempo y tus gustos</h2>
+          <p class="mntn-story-desc" id="s1-desc">
+            Indica cuántas horas tienes libres y qué quieres descubrir. El asistente traza un recorrido real en el mapa en segundos, sin perder horas buscando en blogs.
           </p>
-          <div class="bento-audio-player glass-subcard">
-            <div class="player-pulse-indicator">
-              <span class="pulse-dot"></span>
-              <span id="bento-audio-proximity">A 12 metros • Torre del Reloj</span>
+          <a href="#simulador" class="mntn-read-more" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentChat', true)">
+            <span id="s1-link">Probar el planificador en vivo</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+
+        <div class="mntn-story-visual">
+          <div class="mntn-image-frame">
+            <img
+              src="assets/screenshots/Modo oscuro/Chat de IA.jpeg"
+              data-claro="assets/screenshots/Modo claro/Chat de IA recomendando ciudades.jpeg"
+              data-oscuro="assets/screenshots/Modo oscuro/Chat de IA.jpeg"
+              alt="Planificador de rutas con IA"
+              class="showcase-img mntn-photo"
+              loading="lazy">
+            <div class="mntn-floating-overlay">
+              <div class="bento-bubble user">"Tengo 2h, quiero historia y buen café"</div>
+              <div class="bento-bubble ai">Ruta de 4 paradas y 2 cafés lista en el mapa.</div>
             </div>
-            <div class="player-controls-row">
-              <div class="audio-badge-play">▶</div>
-              <div class="player-meta">
-                <strong>Murallas Coloniales</strong>
-                <small>Demo de voz • 30s</small>
-              </div>
-              <div class="mini-waveform">
-                <span></span><span></span><span></span><span></span><span></span>
-              </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 02. AUDIOGUÍA POR PROXIMIDAD (REVERSED) ================= -->
+    <section id="step-02" class="mntn-story-section">
+      <div class="mntn-story-row row-reverse reveal-on-scroll">
+        <div class="mntn-story-text">
+          <span class="mntn-giant-number" aria-hidden="true">02</span>
+          <div class="mntn-eyebrow">
+            <span class="eyebrow-line"></span>
+            <span class="eyebrow-text" id="s2-eyebrow">AUDIO AUTOMÁTICO POR GPS</span>
+          </div>
+          <h2 class="mntn-story-title" id="s2-title">La historia empieza sola cuando llegas</h2>
+          <p class="mntn-story-desc" id="s2-desc">
+            Guarda el teléfono en el bolsillo y camina tranquilo. El GPS detecta tu cercanía a cada plaza o monumento y reproduce la narración automáticamente en tus audífonos.
+          </p>
+
+          <!-- Interactive Audio Demo Trigger inside Section 02 -->
+          <div class="mntn-audio-demo-box">
+            <button class="audio-badge-play" title="Escuchar demo de voz">▶</button>
+            <div class="player-meta">
+              <strong id="bento-audio-proximity">Torre del Reloj • A 12 metros</strong>
+              <small id="s2-audio-sub">Haz clic para escuchar cómo suena tu guía</small>
+            </div>
+            <div class="mini-waveform">
+              <span></span><span></span><span></span><span></span><span></span>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Card 2: Custom Routes -->
-      <div class="glass-card bento-card">
-        <div class="bento-content">
-          <span class="bento-pill bg-blue" id="bento-pill-ai">Rutas al Instante</span>
-          <h3 class="bento-title" id="bento-ai-title">Hechas para tu tiempo</h3>
-          <p class="bento-desc" id="bento-ai-desc">
-            Indica cuánto tiempo tienes y qué te interesa. Obtén un recorrido real en el mapa en segundos.
+        <div class="mntn-story-visual">
+          <div class="mntn-image-frame">
+            <img
+              src="assets/screenshots/Modo oscuro/Tour iniciado.jpeg"
+              data-claro="assets/screenshots/Modo claro/Tour iniciado.jpeg"
+              data-oscuro="assets/screenshots/Modo oscuro/Tour iniciado.jpeg"
+              alt="Navegación GPS y Audioguía en vivo"
+              class="showcase-img mntn-photo"
+              loading="lazy">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 03. LIBERTAD Y AHORRO REAL ================= -->
+    <section id="step-03" class="mntn-story-section">
+      <div class="mntn-story-row reveal-on-scroll">
+        <div class="mntn-story-text">
+          <span class="mntn-giant-number" aria-hidden="true">03</span>
+          <div class="mntn-eyebrow">
+            <span class="eyebrow-line"></span>
+            <span class="eyebrow-text" id="s3-eyebrow">100% A TU RITMO</span>
+          </div>
+          <h2 class="mntn-story-title" id="s3-title">Sin grupos, sin horarios y sin pagar de más</h2>
+          <p class="mntn-story-desc" id="s3-desc">
+            Detente a tomar fotos o almorzar cuando te apetezca sin miedo a perder al guía. Tu recorrido se pausa contigo y ahorras lo que cobran las agencias tradicionales.
           </p>
+
+          <div class="mntn-comparison-strip">
+            <div class="comp-item">
+              <span class="comp-label" id="s3-old-lbl">Tour de Agencia</span>
+              <span class="comp-val old">$60 USD</span>
+            </div>
+            <div class="comp-divider">vs</div>
+            <div class="comp-item">
+              <span class="comp-label">VibeTours</span>
+              <span class="comp-val free" id="s3-new-val">Gratis</span>
+            </div>
+          </div>
         </div>
-        <div class="bento-chat-preview glass-subcard">
-          <div class="bento-bubble user">"Tengo 2h, quiero historia y buen café"</div>
-          <div class="bento-bubble ai">
-            <span>Ruta de 4 paradas y 2 cafés lista en el mapa.</span>
+
+        <div class="mntn-story-visual">
+          <div class="mntn-image-frame">
+            <img
+              src="assets/screenshots/Modo oscuro/Explorar 1.jpeg"
+              data-claro="assets/screenshots/Modo claro/Explorar 1.jpeg"
+              data-oscuro="assets/screenshots/Modo oscuro/Explorar 1.jpeg"
+              alt="Catálogo de destinos libres"
+              class="showcase-img mntn-photo"
+              loading="lazy">
           </div>
         </div>
       </div>
+    </section>
 
-      <!-- Card 3: Freedom & Zero Cost -->
-      <div class="glass-card bento-card">
-        <div class="bento-content">
-          <span class="bento-pill bg-green" id="bento-pill-savings">100% a tu Ritmo</span>
-          <h3 class="bento-title" id="bento-savings-title">Pausa cuando quieras</h3>
-          <p class="bento-desc" id="bento-savings-desc">
-            Detente a tomar fotos o almorzar sin perder al grupo, y ahorra lo que cuesta una agencia tradicional.
-          </p>
-        </div>
-        <div class="bento-savings-metric glass-subcard">
-          <div class="savings-col old">
-            <span class="sav-lbl">Tour Agencia</span>
-            <span class="sav-val">$60 USD</span>
-          </div>
-          <div class="savings-vs">vs</div>
-          <div class="savings-col new">
-            <span class="sav-lbl">VibeTours</span>
-            <span class="sav-val text-green">Gratis</span>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- ==========================================================================
-       3. SIMULADOR INTERACTIVO DE LA APP
-       ========================================================================== -->
-  <section id="simulador" class="section simulator-section">
-    <div class="section-header reveal-on-scroll">
-      <h2 class="section-title" id="sim-title">Pruébala aquí mismo</h2>
-      <p class="section-description" id="sim-desc">
-        Toca las pantallas del teléfono o cambia de ciudad para probar la experiencia real.
-      </p>
-    </div>
-
-    <div class="simulator-sticky-track" id="simulatorStickyTrack">
-      <div class="smartphone-simulator-container" id="simulatorStickyContainer">
-        
-        <!-- Left Side: Clean & Minimal Controls -->
-        <div class="simulator-control-panel glass-card">
-          <div class="cockpit-header">
-            <span class="cockpit-badge" id="sim-cockpit-badge">Demo en Vivo</span>
-            <h3 class="cockpit-title" id="sim-cockpit-title">Explora la interfaz</h3>
-            <p class="cockpit-desc" id="sim-cockpit-desc">
-              Selecciona una ciudad y alterna entre el catálogo, el planificador, el mapa GPS y el audio.
+    <!-- ================= 04. SIMULADOR INTERACTIVO DE LA APP ================= -->
+    <section id="simulador" class="mntn-story-section simulator-section">
+      <div class="simulator-sticky-track" id="simulatorStickyTrack">
+        <div class="smartphone-simulator-container reveal-on-scroll" id="simulatorStickyContainer">
+          
+          <!-- Left Side: MNTN Editorial Framing + Clean Controls -->
+          <div class="simulator-control-panel">
+            <span class="mntn-giant-number" aria-hidden="true">04</span>
+            <div class="mntn-eyebrow">
+              <span class="eyebrow-line"></span>
+              <span class="eyebrow-text" id="sim-cockpit-badge">PRUEBA EN VIVO</span>
+            </div>
+            <h2 class="mntn-story-title" id="sim-title">Interactúa con la app desde aquí</h2>
+            <p class="mntn-story-desc" id="sim-desc">
+              Elige una ciudad, navega el mapa GPS real o simula tus pasos para activar el audio por proximidad.
             </p>
-          </div>
 
-          <!-- City Selector -->
-          <div class="cockpit-group">
-            <label class="cockpit-label" id="sim-lbl-city">Destino:</label>
-            <div class="cockpit-chips" id="simCityChips">
-              <button class="cockpit-chip active" data-sim-city="cartagena">Cartagena</button>
-              <button class="cockpit-chip" data-sim-city="paris">París</button>
-              <button class="cockpit-chip" data-sim-city="tokio">Tokio</button>
-              <button class="cockpit-chip" data-sim-city="roma">Roma</button>
-              <button class="cockpit-chip" data-sim-city="newyork">Nueva York</button>
-            </div>
-          </div>
-
-          <!-- Single Clean Screen Switcher -->
-          <div class="cockpit-group">
-            <label class="cockpit-label" id="sim-lbl-screens">Pantalla de la App:</label>
-            <div class="cockpit-actions">
-              <button id="btnSwitchToExplore" class="btn btn-glass btn-small active-sim-mode">
-                1. Explorar
-              </button>
-              <button id="btnSwitchToChat" class="btn btn-glass btn-small">
-                2. Crear Ruta
-              </button>
-              <button id="btnSwitchToMap" class="btn btn-glass btn-small">
-                3. Mapa GPS
-              </button>
-              <button id="btnSwitchToProfile" class="btn btn-glass btn-small">
-                4. Perfil
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right Side: Smartphone Hardware Frame (High Fidelity) -->
-        <div class="phone-mockup-wrapper">
-          <div class="smartphone-hardware">
-            
-            <!-- Dynamic Island / Speaker Notch -->
-            <div class="phone-dynamic-island" id="phoneIsland">
-              <div class="island-camera"></div>
-              <div class="island-sensor"></div>
-              <div class="island-live-indicator" id="islandLiveStatus">
-                <span class="island-wave-bar"></span>
-                <span class="island-wave-bar"></span>
-                <span class="island-wave-bar"></span>
+            <!-- City Selector -->
+            <div class="cockpit-group">
+              <label class="cockpit-label" id="sim-lbl-city">Destino de prueba:</label>
+              <div class="cockpit-chips" id="simCityChips">
+                <button class="cockpit-chip active" data-sim-city="cartagena">Cartagena</button>
+                <button class="cockpit-chip" data-sim-city="paris">París</button>
+                <button class="cockpit-chip" data-sim-city="tokio">Tokio</button>
+                <button class="cockpit-chip" data-sim-city="roma">Roma</button>
+                <button class="cockpit-chip" data-sim-city="newyork">Nueva York</button>
               </div>
             </div>
 
-            <!-- Phone Screen Viewport -->
-            <div class="phone-screen-viewport">
+            <!-- Single Clean Screen Switcher -->
+            <div class="cockpit-group">
+              <label class="cockpit-label" id="sim-lbl-screens">Pantallas de la App:</label>
+              <div class="cockpit-actions">
+                <button id="btnSwitchToExplore" class="btn btn-glass btn-small active-sim-mode">
+                  1. Explorar
+                </button>
+                <button id="btnSwitchToChat" class="btn btn-glass btn-small">
+                  2. Crear Ruta
+                </button>
+                <button id="btnSwitchToMap" class="btn btn-glass btn-small">
+                  3. Mapa GPS
+                </button>
+                <button id="btnSwitchToProfile" class="btn btn-glass btn-small">
+                  4. Perfil
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Side: Smartphone Hardware Frame (High Fidelity) -->
+          <div class="phone-mockup-wrapper">
+            <div class="smartphone-hardware">
               
-              <!-- Status Bar -->
-              <div class="phone-status-bar">
-                <span class="phone-clock" id="phoneLiveClock">09:41</span>
-                <div class="phone-status-icons">
-                  <span class="status-icon">5G</span>
-                  <span class="status-icon">📶</span>
-                  <span class="status-icon">🔋 100%</span>
+              <!-- Dynamic Island / Speaker Notch -->
+              <div class="phone-dynamic-island" id="phoneIsland">
+                <div class="island-camera"></div>
+                <div class="island-sensor"></div>
+                <div class="island-live-indicator" id="islandLiveStatus">
+                  <span class="island-wave-bar"></span>
+                  <span class="island-wave-bar"></span>
+                  <span class="island-wave-bar"></span>
                 </div>
               </div>
 
-              <!-- ================= SCREEN 1: EXPLORAR ================= -->
-              <div class="phone-tab-content active" id="tabContentExplore">
-                <div class="flutter-appbar">
-                  <div class="appbar-user-greeting">
-                    <div class="greeting-avatar">VB</div>
-                    <div>
-                      <span class="greeting-subtitle">Hola, Viajero 👋</span>
-                      <h4 class="greeting-title" id="simHomeCityName">Cartagena de Indias</h4>
+              <!-- Phone Screen Viewport -->
+              <div class="phone-screen-viewport">
+                
+                <!-- Status Bar -->
+                <div class="phone-status-bar">
+                  <span class="phone-clock" id="phoneLiveClock">09:41</span>
+                  <div class="phone-status-icons">
+                    <span class="status-icon">5G</span>
+                    <span class="status-icon">📶</span>
+                    <span class="status-icon">🔋 100%</span>
+                  </div>
+                </div>
+
+                <!-- ================= SCREEN 1: EXPLORAR ================= -->
+                <div class="phone-tab-content active" id="tabContentExplore">
+                  <div class="flutter-appbar">
+                    <div class="appbar-user-greeting">
+                      <div class="greeting-avatar">VB</div>
+                      <div>
+                        <span class="greeting-subtitle">Hola, Viajero</span>
+                        <h4 class="greeting-title" id="simHomeCityName">Cartagena de Indias</h4>
+                      </div>
+                    </div>
+                    <div class="appbar-weather-chip" id="simHomeWeatherChip">
+                      <span>28°C</span>
                     </div>
                   </div>
-                  <div class="appbar-weather-chip" id="simHomeWeatherChip">
-                    <span>☀️ 28°C</span>
+
+                  <div class="flutter-scroll-body" data-lenis-prevent>
+                    <div class="flutter-search-bar">
+                      <span class="search-icon">🔍</span>
+                      <input type="text" placeholder="Buscar paradas, museos, cafés..." readonly onclick="simulatorInstance && simulatorInstance.switchTab('tabContentChat', true)">
+                    </div>
+
+                    <div class="flutter-category-chips">
+                      <button class="cat-pill active">Historia</button>
+                      <button class="cat-pill">Gastronomía</button>
+                      <button class="cat-pill">Arte</button>
+                      <button class="cat-pill">Miradores</button>
+                    </div>
+
+                    <div class="featured-tour-card" id="simFeaturedTourCard" onclick="simulatorInstance && simulatorInstance.openTourDetail()">
+                      <img class="featured-cover-img" id="simFeaturedImg" src="https://images.unsplash.com/photo-1583997052103-b4a1cb974ce3?w=600&auto=format&fit=crop&q=80" alt="Featured Tour">
+                      <div class="featured-overlay">
+                        <div class="featured-badge">Destacado</div>
+                        <h4 class="featured-title" id="simFeaturedTitle">Cartagena Colonial: Murallas y Plazas</h4>
+                        <div class="featured-meta-row">
+                          <span id="simFeaturedDuration">2h 30m</span>
+                          <span id="simFeaturedDistance">2.4 km</span>
+                          <span class="featured-rating">★ 4.9</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="flutter-section-title-row">
+                      <h5>Tours Populares</h5>
+                      <span class="see-all-link" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentChat', true)">Ver todos</span>
+                    </div>
+
+                    <div class="popular-tours-list" id="simPopularToursList"></div>
                   </div>
                 </div>
 
-                <div class="flutter-scroll-body" data-lenis-prevent>
-                  <div class="flutter-search-bar">
-                    <span class="search-icon">🔍</span>
-                    <input type="text" placeholder="Buscar paradas, museos, cafés..." readonly onclick="simulatorInstance && simulatorInstance.switchTab('tabContentChat', true)">
-                    <span class="filter-icon">⚙️</span>
+                <!-- ================= SCREEN 1B: DETALLE DEL TOUR ================= -->
+                <div class="phone-tab-content" id="tabContentDetail">
+                  <div class="detail-appbar">
+                    <button class="detail-back-btn" id="simDetailBackBtn" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentExplore', true)">
+                      ← <span id="detail-back-label">Explorar</span>
+                    </button>
+                    <span class="detail-header-city" id="simDetailHeaderCity">Cartagena</span>
+                    <span class="detail-share-icon">📍</span>
                   </div>
 
-                  <div class="flutter-category-chips">
-                    <button class="cat-pill active">🏛️ Historia</button>
-                    <button class="cat-pill">🍷 Gastronomía</button>
-                    <button class="cat-pill">🎨 Arte</button>
-                    <button class="cat-pill">🌿 Naturaleza</button>
-                  </div>
+                  <div class="flutter-scroll-body" data-lenis-prevent>
+                    <div class="detail-hero-banner">
+                      <img id="simDetailImg" class="detail-cover-img" src="https://images.unsplash.com/photo-1583997052103-b4a1cb974ce3?w=600&auto=format&fit=crop&q=80" alt="Tour Cover">
+                      <div class="detail-hero-gradient"></div>
+                      <div class="detail-badge-pill" id="simDetailBadge">Ruta Verificada</div>
+                    </div>
 
-                  <div class="featured-tour-card" id="simFeaturedTourCard" onclick="simulatorInstance && simulatorInstance.openTourDetail()">
-                    <img class="featured-cover-img" id="simFeaturedImg" src="https://images.unsplash.com/photo-1583997052103-b4a1cb974ce3?w=600&auto=format&fit=crop&q=80" alt="Featured Tour">
-                    <div class="featured-overlay">
-                      <div class="featured-badge">✨ Recomendado por IA</div>
-                      <h4 class="featured-title" id="simFeaturedTitle">Cartagena Colonial: Murallas y Plazas</h4>
-                      <div class="featured-meta-row">
-                        <span id="simFeaturedDuration">⏱️ 2h 30m</span>
-                        <span id="simFeaturedDistance">🚶 2.4 km</span>
-                        <span class="featured-rating">⭐ 4.9</span>
+                    <div class="detail-main-info">
+                      <h3 class="detail-title" id="simDetailTitle">Cartagena Colonial: Murallas y Plazas</h3>
+                      
+                      <div class="detail-meta-pills">
+                        <span class="meta-pill" id="simDetailDuration">2h 30m</span>
+                        <span class="meta-pill" id="simDetailDistance">2.4 km</span>
+                        <span class="meta-pill" id="simDetailRating">★ 4.9 (128)</span>
+                        <span class="meta-pill pill-cyan">Audio GPS</span>
+                      </div>
+
+                      <p class="detail-desc" id="simDetailDesc">
+                        Ruta histórica por fortalezas coloniales, plazas emblemáticas y baluartes con audioguía GPS contextual.
+                      </p>
+
+                      <div class="detail-stops-header">
+                        <h5 id="simDetailStopsTitle">Itinerario de Paradas (4)</h5>
+                        <span class="detail-audioguide-tag">Audio incluido</span>
+                      </div>
+
+                      <div class="detail-stops-timeline" id="simDetailStopsList"></div>
+                    </div>
+
+                    <div class="detail-action-footer">
+                      <button class="btn-start-tour" id="btnStartTourFromDetail" onclick="simulatorInstance && simulatorInstance.startTourFromDetail()">
+                        <span id="detail-start-label">Iniciar Tour con GPS</span>
+                        <span class="btn-arrow">→</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ================= SCREEN 2: CHAT IA ================= -->
+                <div class="phone-tab-content" id="tabContentChat">
+                  <div class="flutter-appbar chat-appbar">
+                    <div class="chat-header-user">
+                      <div class="ai-sparkle-badge">AI</div>
+                      <div>
+                        <h4 class="greeting-title">Vibe Planner AI</h4>
+                        <span class="ai-online-sub"><span class="green-dot"></span> En línea</span>
                       </div>
                     </div>
                   </div>
 
-                  <div class="flutter-section-title-row">
-                    <h5>Tours Populares</h5>
-                    <span class="see-all-link" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentChat', true)">Ver todos</span>
-                  </div>
-
-                  <div class="popular-tours-list" id="simPopularToursList"></div>
-                </div>
-              </div>
-
-              <!-- ================= SCREEN 1B: DETALLE DEL TOUR ================= -->
-              <div class="phone-tab-content" id="tabContentDetail">
-                <div class="detail-appbar">
-                  <button class="detail-back-btn" id="simDetailBackBtn" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentExplore', true)">
-                    ← <span id="detail-back-label">Explorar</span>
-                  </button>
-                  <span class="detail-header-city" id="simDetailHeaderCity">Cartagena</span>
-                  <span class="detail-share-icon">📍</span>
-                </div>
-
-                <div class="flutter-scroll-body" data-lenis-prevent>
-                  <div class="detail-hero-banner">
-                    <img id="simDetailImg" class="detail-cover-img" src="https://images.unsplash.com/photo-1583997052103-b4a1cb974ce3?w=600&auto=format&fit=crop&q=80" alt="Tour Cover">
-                    <div class="detail-hero-gradient"></div>
-                    <div class="detail-badge-pill" id="simDetailBadge">✨ Itinerario Verificado</div>
-                  </div>
-
-                  <div class="detail-main-info">
-                    <h3 class="detail-title" id="simDetailTitle">Cartagena Colonial: Murallas y Plazas</h3>
-                    
-                    <div class="detail-meta-pills">
-                      <span class="meta-pill" id="simDetailDuration">⏱️ 2h 30m</span>
-                      <span class="meta-pill" id="simDetailDistance">🚶 2.4 km</span>
-                      <span class="meta-pill" id="simDetailRating">⭐ 4.9 (128)</span>
-                      <span class="meta-pill pill-cyan">🎧 Audio GPS</span>
+                  <div class="phone-chat-scroll" id="simChatScroll" data-lenis-prevent>
+                    <div class="chat-msg bot-msg">
+                      <div class="msg-bubble">
+                        ¡Hola! Soy tu asistente VibeTours. ¿Qué tipo de recorrido te gustaría hacer hoy?
+                      </div>
+                      <span class="msg-time">09:40</span>
                     </div>
-
-                    <p class="detail-desc" id="simDetailDesc">
-                      Ruta histórica por fortalezas coloniales, plazas emblemáticas y baluartes con audioguía GPS contextual.
-                    </p>
-
-                    <div class="detail-stops-header">
-                      <h5 id="simDetailStopsTitle">Itinerario de Paradas (4)</h5>
-                      <span class="detail-audioguide-tag">Audio incluido</span>
-                    </div>
-
-                    <div class="detail-stops-timeline" id="simDetailStopsList"></div>
                   </div>
 
-                  <div class="detail-action-footer">
-                    <button class="btn-start-tour" id="btnStartTourFromDetail" onclick="simulatorInstance && simulatorInstance.startTourFromDetail()">
-                      <span id="detail-start-label">Iniciar Tour con GPS</span>
-                      <span class="btn-arrow">🚶 →</span>
+                  <div class="phone-quick-prompts">
+                    <button class="prompt-chip" data-prompt="Quiero una ruta histórica de 2h con vistas al mar">Ruta Histórica</button>
+                    <button class="prompt-chip" data-prompt="Recomiéndame los mejores cafés y comida callejera">Gastronomía Local</button>
+                    <button class="prompt-chip" data-prompt="¿Dónde ver el mejor atardecer y tomar fotos?">Mejores Vistas</button>
+                  </div>
+
+                  <form class="phone-input-bar" id="simChatForm">
+                    <input type="text" id="simChatInputField" class="phone-text-input" placeholder="Escribe lo que quieres explorar..." autocomplete="off">
+                    <button type="submit" class="phone-send-btn" title="Enviar Mensaje">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                    </button>
+                  </form>
+                </div>
+
+                <!-- ================= SCREEN 3: TOURS / LIVE MAP ================= -->
+                <div class="phone-tab-content" id="tabContentMap">
+                  <div class="flutter-map-appbar">
+                    <div>
+                      <h4 class="app-header-title" id="simMapHeaderTitle">Cartagena Colonial</h4>
+                      <span class="app-status-text" id="simMapHeaderSubtitle">4 Paradas • 2.1 km</span>
+                    </div>
+                    <button id="simStepWalkBtn" class="phone-action-btn">
+                      <span id="simWalkBtnText">Simular Paso</span>
                     </button>
                   </div>
-                </div>
-              </div>
 
-              <!-- ================= SCREEN 2: CHAT IA ================= -->
-              <div class="phone-tab-content" id="tabContentChat">
-                <div class="flutter-appbar chat-appbar">
-                  <div class="chat-header-user">
-                    <div class="ai-sparkle-badge">✨</div>
-                    <div>
-                      <h4 class="greeting-title">Vibe Planner AI</h4>
-                      <span class="ai-online-sub"><span class="green-dot"></span> Asistente Activo</span>
+                  <div id="simLeafletMap" class="phone-map-canvas" data-lenis-prevent></div>
+                </div>
+
+                <!-- ================= SCREEN 4: PERFIL ================= -->
+                <div class="phone-tab-content" id="tabContentProfile">
+                  <div class="flutter-appbar">
+                    <h4 class="greeting-title">Mi Perfil</h4>
+                  </div>
+
+                  <div class="flutter-scroll-body" data-lenis-prevent>
+                    <div class="profile-card-header">
+                      <div class="profile-avatar-large">VB</div>
+                      <h4 class="profile-name">Viajero VibeTours</h4>
+                      <span class="profile-badge">Explorador Libre</span>
+                    </div>
+
+                    <div class="profile-stats-grid">
+                      <div class="profile-stat-box">
+                        <span class="stat-num">3</span>
+                        <span class="stat-lbl">Tours</span>
+                      </div>
+                      <div class="profile-stat-box">
+                        <span class="stat-num">14.2</span>
+                        <span class="stat-lbl">km</span>
+                      </div>
+                      <div class="profile-stat-box">
+                        <span class="stat-num">12</span>
+                        <span class="stat-lbl">Audios</span>
+                      </div>
+                    </div>
+
+                    <div class="profile-settings-list">
+                      <div class="settings-row">
+                        <span>Ritmo preferido</span>
+                        <strong>Moderado</strong>
+                      </div>
+                      <div class="settings-row">
+                        <span>Interés principal</span>
+                        <strong>Historia & Arte</strong>
+                      </div>
+                      <div class="settings-row">
+                        <span>Precisión GPS</span>
+                        <strong class="text-green">Activa</strong>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div class="phone-chat-scroll" id="simChatScroll" data-lenis-prevent>
-                  <div class="chat-msg bot-msg">
-                    <div class="msg-bubble">
-                      ¡Hola! 🌴 Soy tu asistente VibeTours. ¿Qué tipo de ruta te gustaría explorar hoy?
+                <!-- FLOATING AUDIO MINI-PLAYER -->
+                <div class="flutter-audio-mini-player" id="flutterAudioMiniPlayer">
+                  <div class="mini-player-left">
+                    <button id="phoneAudioToggleBtn" class="audio-play-circle">▶</button>
+                    <div class="audio-track-info" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentMap', true)">
+                      <h5 id="phoneAudioStopTitle">1. Torre del Reloj</h5>
+                      <p id="phoneAudioStopSub">Audioguía GPS por proximidad (12m)</p>
                     </div>
-                    <span class="msg-time">09:40</span>
+                  </div>
+                  <div class="audio-waveform-mini" id="phoneWaveform">
+                    <span></span><span></span><span></span><span></span><span></span>
                   </div>
                 </div>
 
-                <div class="phone-quick-prompts">
-                  <button class="prompt-chip" data-prompt="Quiero una ruta histórica de 2h con vistas al mar">🏛️ Ruta Histórica</button>
-                  <button class="prompt-chip" data-prompt="Recomiéndame los mejores cafés y comida callejera">🍷 Gastronomía Local</button>
-                  <button class="prompt-chip" data-prompt="¿Dónde ver el mejor atardecer y tomar fotos?">📸 Mejores Fotos</button>
-                </div>
-
-                <form class="phone-input-bar" id="simChatForm">
-                  <input type="text" id="simChatInputField" class="phone-text-input" placeholder="Pregunta algo sobre tu viaje..." autocomplete="off">
-                  <button type="submit" class="phone-send-btn" title="Enviar Mensaje">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                <!-- BOTTOM NAVBAR -->
+                <div class="phone-bottom-navbar">
+                  <button class="phone-nav-item active" data-target-tab="tabContentExplore">
+                    <span class="nav-icon">🧭</span>
+                    <span class="nav-label" id="pnav-explore">Explorar</span>
                   </button>
-                </form>
-              </div>
-
-              <!-- ================= SCREEN 3: TOURS / LIVE MAP ================= -->
-              <div class="phone-tab-content" id="tabContentMap">
-                <div class="flutter-map-appbar">
-                  <div>
-                    <h4 class="app-header-title" id="simMapHeaderTitle">Cartagena Colonial</h4>
-                    <span class="app-status-text" id="simMapHeaderSubtitle">4 Paradas • 2.1 km</span>
-                  </div>
-                  <button id="simStepWalkBtn" class="phone-action-btn">
-                    🚶 <span id="simWalkBtnText">Simular Paso</span>
+                  <button class="phone-nav-item" data-target-tab="tabContentChat">
+                    <span class="nav-icon">💬</span>
+                    <span class="nav-label" id="pnav-chat">Chat IA</span>
+                  </button>
+                  <button class="phone-nav-item" data-target-tab="tabContentMap">
+                    <span class="nav-icon">🗺️</span>
+                    <span class="nav-label" id="pnav-tours">Mapa</span>
+                  </button>
+                  <button class="phone-nav-item" data-target-tab="tabContentProfile">
+                    <span class="nav-icon">👤</span>
+                    <span class="nav-label" id="pnav-profile">Perfil</span>
                   </button>
                 </div>
 
-                <div id="simLeafletMap" class="phone-map-canvas" data-lenis-prevent></div>
               </div>
-
-              <!-- ================= SCREEN 4: PERFIL ================= -->
-              <div class="phone-tab-content" id="tabContentProfile">
-                <div class="flutter-appbar">
-                  <h4 class="greeting-title">Mi Perfil</h4>
-                </div>
-
-                <div class="flutter-scroll-body" data-lenis-prevent>
-                  <div class="profile-card-header">
-                    <div class="profile-avatar-large">VB</div>
-                    <h4 class="profile-name">Viajero VibeTours</h4>
-                    <span class="profile-badge">Nivel 2 • Explorador Libre</span>
-                  </div>
-
-                  <div class="profile-stats-grid">
-                    <div class="profile-stat-box">
-                      <span class="stat-num">3</span>
-                      <span class="stat-lbl">Tours Hechos</span>
-                    </div>
-                    <div class="profile-stat-box">
-                      <span class="stat-num">14.2</span>
-                      <span class="stat-lbl">km Caminados</span>
-                    </div>
-                    <div class="profile-stat-box">
-                      <span class="stat-num">12</span>
-                      <span class="stat-lbl">Audioguías</span>
-                    </div>
-                  </div>
-
-                  <div class="profile-settings-list">
-                    <div class="settings-row">
-                      <span>🚶 Ritmo preferido</span>
-                      <strong>Moderado</strong>
-                    </div>
-                    <div class="settings-row">
-                      <span>🏛️ Interés principal</span>
-                      <strong>Historia & Arte</strong>
-                    </div>
-                    <div class="settings-row">
-                      <span>📡 Precisión GPS</span>
-                      <strong class="text-green">Activa</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- FLOATING AUDIO MINI-PLAYER -->
-              <div class="flutter-audio-mini-player" id="flutterAudioMiniPlayer">
-                <div class="mini-player-left">
-                  <button id="phoneAudioToggleBtn" class="audio-play-circle">▶</button>
-                  <div class="audio-track-info" onclick="simulatorInstance && simulatorInstance.switchTab('tabContentMap', true)">
-                    <h5 id="phoneAudioStopTitle">1. Torre del Reloj</h5>
-                    <p id="phoneAudioStopSub">Audioguía GPS por proximidad (12m)</p>
-                  </div>
-                </div>
-                <div class="audio-waveform-mini" id="phoneWaveform">
-                  <span></span><span></span><span></span><span></span><span></span>
-                </div>
-              </div>
-
-              <!-- BOTTOM NAVBAR -->
-              <div class="phone-bottom-navbar">
-                <button class="phone-nav-item active" data-target-tab="tabContentExplore">
-                  <span class="nav-icon">🧭</span>
-                  <span class="nav-label" id="pnav-explore">Explorar</span>
-                </button>
-                <button class="phone-nav-item" data-target-tab="tabContentChat">
-                  <span class="nav-icon">💬</span>
-                  <span class="nav-label" id="pnav-chat">Chat IA</span>
-                </button>
-                <button class="phone-nav-item" data-target-tab="tabContentMap">
-                  <span class="nav-icon">🏖️</span>
-                  <span class="nav-label" id="pnav-tours">Tours</span>
-                </button>
-                <button class="phone-nav-item" data-target-tab="tabContentProfile">
-                  <span class="nav-icon">👤</span>
-                  <span class="nav-label" id="pnav-profile">Perfil</span>
-                </button>
-              </div>
-
             </div>
           </div>
+
         </div>
-
       </div>
-    </div>
-  </section>
+    </section>
+
+  </main>
 
   <!-- ==========================================================================
-       4. BANNER FINAL CTA
+       EDITORIAL FOOTER (MNTN LAYOUT)
        ========================================================================== -->
-  <section class="section cta-section">
-    <div class="glass-card cta-banner reveal-on-scroll">
-      <h2 class="cta-title" id="banner-title">Empieza tu próximo recorrido hoy</h2>
-      <p class="cta-description" id="banner-desc">
-        Explora sin horarios ni grupos. Pruébalo gratis desde tu navegador.
-      </p>
-      
-      <div class="cta-actions">
-        <a href="register.html" id="banner-btn-register" class="btn btn-primary btn-large">
-          Empezar Gratis
-        </a>
-        <a href="register.html?demo=true" id="banner-btn-demo" class="btn btn-glass btn-large">
-          Entrar en Modo Demo
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <!-- ==========================================================================
-       5. FOOTER
-       ========================================================================== -->
-  <footer class="footer">
+  <footer class="mntn-footer">
     <div class="footer-container">
       <div class="footer-col-brand">
-        <a href="#" class="brand-logo">
+        <a href="#hero-start" class="brand-logo">
           <span class="brand-name">VibeTours</span>
         </a>
         <p class="footer-desc" id="footer-desc">
-          Rutas a tu medida y audioguías GPS que se activan al caminar.
+          Sal a descubrir tu próximo destino con rutas a tu medida y audioguías GPS al oído.
+        </p>
+        <p class="footer-copy">
+          &copy; 2026 VibeTours. <span id="footer-copy-rights">Todos los derechos reservados.</span>
         </p>
       </div>
 
       <div>
-        <h4 class="footer-col-title" id="footer-col1-title">Producto</h4>
+        <h4 class="footer-col-title" id="footer-col1-title">Explorar</h4>
         <ul class="footer-links">
-          <li><a href="#caracteristicas" id="footer-link-features">Ventajas</a></li>
-          <li><a href="#simulador" id="footer-link-generator">Demo en Vivo</a></li>
-          <li><a href="register.html" id="footer-link-register">Crear Cuenta</a></li>
+          <li><a href="#step-01" id="footer-link-features">01. Rutas a Medida</a></li>
+          <li><a href="#step-02" id="footer-link-audio">02. Audio GPS</a></li>
+          <li><a href="#step-03" id="footer-link-freedom">03. Libertad</a></li>
+          <li><a href="#simulador" id="footer-link-generator">Prueba Interactiva</a></li>
+          <li><a href="register.html" id="footer-link-register">Empezar Gratis</a></li>
         </ul>
       </div>
 
@@ -590,10 +602,6 @@
           <li><a href="legal.html" id="footer-link-legal">Seguridad</a></li>
         </ul>
       </div>
-    </div>
-
-    <div class="footer-bottom">
-      <p>&copy; 2026 VibeTours. <span id="footer-copy-rights">Todos los derechos reservados.</span></p>
     </div>
   </footer>
 
