@@ -3,6 +3,7 @@ import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds } from './osm.js'
+import { createUnifiedCandidateCatalog, getCandidateId } from './candidate-catalog.js'
 import { generateSpeechAudio } from './ttsService.js'
 
 export { generateSpeechAudio }
@@ -752,6 +753,17 @@ export function isUnmappedOrClosedVenue(name) {
   return false
 }
 
+/**
+ * A catalog label is only safe to expose as a place when it has gone through
+ * the map-backed verification path.  This helper intentionally does not try
+ * to guess whether a name is real from its wording: a real venue may contain
+ * words such as "Central", "Plaza" or "Boutique".  The source of truth is
+ * the verification result, not the language model's confidence.
+ */
+function verifiedCatalogEntries(entries, city, country, limit, centerLat = null, centerLon = null, category = 'attraction') {
+  return verifyCatalogEntriesOnOsm(entries, city, country, limit, centerLat, centerLon, category)
+}
+
 export function isMalformedItinerary(text) {
   if (!text || typeof text !== 'string') return false
   return (
@@ -759,6 +771,9 @@ export function isMalformedItinerary(text) {
     /\b(?:Nordest[aã]o|Cal\s+Bandarra|Vers[aá]\s+Gastronomia|Albertu's)\b/i.test(text) ||
     /\bPlaza\s+(?:descanso(?:\s*\d+)?|hospital)\b/i.test(text) ||
     /\bdescanso\s*\d+\b/i.test(text) ||
+    /\bHotel\s+Central\s+de\b/i.test(text) ||
+    /\bGastronom[ií]a\s+Local(?:\s+de|\s+en)?\b/i.test(text) ||
+    /\bRestaurante\s+(?:T[ií]pico|Local|por\s+d[ií]a)\b/i.test(text) ||
     /\bParque\s+(?:Principal\s+de\s+)?Coveñas\b/i.test(text) ||
     /\bRestaurante\s+La\s+Fragata\b/i.test(text) ||
     /\bRestaurante\s+El\s+Gran\s+Pez\b/i.test(text) ||
@@ -804,6 +819,11 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
     placeId: geo.placeId || entry?.placeId || '',
     coordinateSource: geo.coordinateSource,
     coordinatesVerified: true,
+    type: geo.type || entry?.type || '',
+    category: geo.category || entry?.category || '',
+    tags: geo.tags || entry?.tags || {},
+    catalogCategoryEvidence: category,
+    catalogNameVerified: true,
   }
 }
 
@@ -813,18 +833,106 @@ async function verifyCatalogEntriesOnOsm(entries, city, country, limit = 16, cen
   return verified.filter(Boolean)
 }
 
+export async function suggestPlacesWithOpenAI({ destination = '', country = '', count = 8 }) {
+  const cleanDest = String(destination || '').trim()
+  if (!cleanDest) return []
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) return []
+
+  const targetDest = `${cleanDest}${country ? `, ${country}` : ''}`.trim()
+  const system = `Eres un asistente experto en turismo global de VibeTours.
+Tu tarea es retornar los lugares turísticos, plazas, monumentos, parques y sitios históricos más conocidos, reales e imperdibles en cualquier ciudad del mundo.
+
+Devuelve ÚNICAMENTE un JSON con este formato exacto:
+{
+  "places": [
+    {
+      "name": "Nombre exacto y real del atractivo o sitio turístico",
+      "category": "historic | culture | nature | viewpoint | park | beach"
+    }
+  ]
+}`
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(buildOpenAiPayload({
+        modelConfig: getFastOpenAiModelConfig(),
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: `Retorna los ${count} lugares turísticos y atracciones emblemáticas más conocidos y reales en ${targetDest}.` }
+        ],
+        temperature: 0.3,
+        response_format: { type: 'json_object' }
+      })),
+      signal: AbortSignal.timeout(12000)
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      const parsed = cleanAndParseJson(data.choices?.[0]?.message?.content, null)
+      const rawPlaces = Array.isArray(parsed) ? parsed : (parsed?.places || parsed?.lugares || [])
+      if (Array.isArray(rawPlaces) && rawPlaces.length > 0) {
+        const candidates = rawPlaces.filter(p => p && (typeof p === 'string' || p.name || p.nombre)).map(p => ({
+          name: String(typeof p === 'string' ? p : (p.name || p.nombre)).trim(),
+          category: String(typeof p === 'object' && p.category ? p.category : 'historic')
+        }))
+        const verified = await verifiedCatalogEntries(candidates, cleanDest, country, count, null, null, 'attraction')
+        if (verified.length > 0) return verified
+      }
+    }
+  } catch (err) {
+    console.warn('[suggestPlacesWithOpenAI] Error:', err?.message || err)
+  }
+
+  const fallbackIconics = await fetchCityIconicLandmarks(cleanDest, country).catch(() => [])
+  if (Array.isArray(fallbackIconics) && fallbackIconics.length > 0) {
+    const verified = await verifiedCatalogEntries(
+      fallbackIconics,
+      cleanDest,
+      country,
+      count,
+      null,
+      null,
+      'attraction'
+    )
+    if (verified.length > 0) return verified
+  }
+
+  const [parks, attractions, museums] = await Promise.all([
+    photonSearch(`parque ${cleanDest}`, count, null, null, null, null, country).catch(() => []),
+    photonSearch(`turismo ${cleanDest}`, count, null, null, null, null, country).catch(() => []),
+    photonSearch(`museo ${cleanDest}`, count, null, null, null, null, country).catch(() => [])
+  ])
+  const combined = [...parks, ...attractions, ...museums]
+    .filter(p => p && p.name && !isGenericFacilityName(p.name) && !isFoodOrDrinkEstablishment(p.name))
+  const seen = new Set()
+  const uniquePhoton = []
+  for (const item of combined) {
+    const k = item.name.toLowerCase().trim()
+    if (!seen.has(k)) {
+      seen.add(k)
+      uniquePhoton.push({ name: item.name, category: 'historic' })
+    }
+  }
+  if (uniquePhoton.length > 0) {
+    return verifiedCatalogEntries(uniquePhoton, cleanDest, country, count, null, null, 'attraction')
+  }
+
+  return []
+}
+
 export async function suggestHotelsWithOpenAI({ destination = '', country = '', budget = 'Moderado' }) {
   const cleanDest = String(destination || '').trim()
   if (!cleanDest) return []
 
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    return [
-      { name: `Hotel Boutique ${cleanDest}`, desc: `Alojamiento confortable en zona céntrica y tranquila de ${cleanDest}`, stars: '4' },
-      { name: `Hotel Plaza ${cleanDest}`, desc: `Excelente ubicación y servicios completos para tu estadía en ${cleanDest}`, stars: '4' },
-      { name: `Gran Hotel ${cleanDest}`, desc: `Instalaciones modernas, ambiente acogedor y excelente atención en ${cleanDest}`, stars: '4' }
-    ]
-  }
+  if (!apiKey) return []
 
   const targetDest = `${cleanDest}${country ? `, ${country}` : ''}`.trim()
   const system = `Eres un asistente experto en viajes de VibeTours.
@@ -865,22 +973,43 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
       const data = await response.json()
       const parsed = cleanAndParseJson(data.choices?.[0]?.message?.content, null)
       if (parsed && Array.isArray(parsed.hotels) && parsed.hotels.length > 0) {
-        return parsed.hotels.filter(h => h && (h.name || h.nombre)).map(h => ({
+        const candidates = parsed.hotels.filter(h => h && (h.name || h.nombre)).map(h => ({
           name: h.name || h.nombre,
           desc: h.desc || h.descripcion || `Alojamiento destacado en ${cleanDest}`,
           stars: String(h.stars || h.estrellas || '4')
         })).slice(0, 3)
+        const verified = await verifiedCatalogEntries(candidates, cleanDest, country, 3, null, null, 'hotel')
+        if (verified.length > 0) return verified
       }
     }
   } catch (err) {
     console.warn('[suggestHotelsWithOpenAI] Error:', err?.message || err)
   }
 
-  return [
-    { name: `Hotel Boutique ${cleanDest}`, desc: `Alojamiento confortable en zona céntrica y tranquila de ${cleanDest}`, stars: '4' },
-    { name: `Hotel Plaza ${cleanDest}`, desc: `Excelente ubicación y servicios completos para tu estadía en ${cleanDest}`, stars: '4' },
-    { name: `Gran Hotel ${cleanDest}`, desc: `Instalaciones modernas, ambiente acogedor y excelente atención en ${cleanDest}`, stars: '4' }
-  ]
+  const [hotelsRes, hostalsRes] = await Promise.all([
+    photonSearch(`hotel ${cleanDest}`, 5, null, null, null, null, country).catch(() => []),
+    photonSearch(`hostal ${cleanDest}`, 5, null, null, null, null, country).catch(() => [])
+  ])
+  const combinedHotels = [...hotelsRes, ...hostalsRes]
+    .filter(h => h && h.name && !isGenericFacilityName(h.name))
+  const seenH = new Set()
+  const uniqueH = []
+  for (const item of combinedHotels) {
+    const k = item.name.toLowerCase().trim()
+    if (!seenH.has(k)) {
+      seenH.add(k)
+      uniqueH.push({
+        name: item.name,
+        desc: `Alojamiento verificado ubicado en ${cleanDest}`,
+        stars: '4'
+      })
+    }
+  }
+  if (uniqueH.length > 0) {
+    return verifiedCatalogEntries(uniqueH, cleanDest, country, 3, null, null, 'hotel')
+  }
+
+  return []
 }
 
 /**
@@ -922,7 +1051,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     const verifiedIconics = await verifyCatalogEntriesOnOsm(presetIconics, clean, targetCountry, presetIconics.length, lat, lon)
     for (const vi of verifiedIconics) {
       if (!realPlaces.some(rp => arePlacesSimilar(rp, vi.name))) {
-        realPlaces.push(vi.name)
+        realPlaces.push(vi)
       }
     }
   }
@@ -932,7 +1061,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, 14, lat, lon)
     for (const vd of verifiedDynamic) {
       if (!realPlaces.some(rp => arePlacesSimilar(rp, vd.name))) {
-        realPlaces.push(vd.name)
+        realPlaces.push(vd)
       }
     }
   }
@@ -1005,7 +1134,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
     for (const fp of fetchedPlaces) {
       if (!realPlaces.some(rp => arePlacesSimilar(rp, fp.name))) {
-        realPlaces.push(fp.name)
+        realPlaces.push(fp)
       }
     }
 
@@ -1030,7 +1159,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
       for (const p of additional) {
         if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
-          realPlaces.push(p.name)
+          realPlaces.push(p)
         }
       }
     }
@@ -1045,16 +1174,16 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         const verifiedProfilePlaces = await verifyCatalogEntriesOnOsm(dynamicProfile.places || [], clean, targetCountry, 12, lat, lon)
         for (const p of verifiedProfilePlaces) {
           if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
-            realPlaces.push(p.name)
+            realPlaces.push(p)
           }
         }
-        const verifiedProfileRestaurants = await verifyCatalogEntriesOnOsm(dynamicProfile.restaurants || [], clean, targetCountry, 12, lat, lon)
+        const verifiedProfileRestaurants = await verifyCatalogEntriesOnOsm(dynamicProfile.restaurants || [], clean, targetCountry, 12, lat, lon, 'restaurant')
         for (const r of verifiedProfileRestaurants) {
           if (!realRests.some(existing => arePlacesSimilar(existing.name || existing, r.name))) {
             realRests.push(r)
           }
         }
-        const verifiedProfileHotels = await verifyCatalogEntriesOnOsm(dynamicProfile.hotels || [], clean, targetCountry, 8, lat, lon)
+        const verifiedProfileHotels = await verifyCatalogEntriesOnOsm(dynamicProfile.hotels || [], clean, targetCountry, 8, lat, lon, 'hotel')
         for (const h of verifiedProfileHotels) {
           if (!realHotels.some(existing => arePlacesSimilar(existing.name || existing, h.name))) {
             realHotels.push(h)
@@ -1083,17 +1212,12 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  const rawCleanPlaces = realPlaces
-    .map(p => (typeof p === 'string' ? p : p?.name) || '')
-    .filter(p => p.trim().length > 0 && !isGenericFacilityName(p) && !isNonTouristFacility({ name: p }) && !isFoodOrDrinkEstablishment(p) && !isUnmappedOrClosedVenue(p))
-
-  const seenCleanPlaces = new Set()
-  const cleanPlaces = []
-  for (const cp of rawCleanPlaces) {
-    const k = cp.toLowerCase().trim()
-    if (!seenCleanPlaces.has(k)) {
-      seenCleanPlaces.add(k)
-      cleanPlaces.push(cp)
+  if (realPlaces.filter(place => place?.name || typeof place === 'string').length < 6) {
+    const aiPlaces = await suggestPlacesWithOpenAI({ destination: capitalCity, country: targetCountry, count: 8 }).catch(() => [])
+    for (const ap of aiPlaces) {
+      if (ap?.name && !realPlaces.some(cp => arePlacesSimilar(cp, ap.name))) {
+        realPlaces.push(ap)
+      }
     }
   }
 
@@ -1104,79 +1228,59 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  const rawCleanHotels = realHotels
-    .filter(h => h && h.name && !isGenericFacilityName(h.name) && !isNonTouristFacility({ name: h.name }))
-    .map(h => ({
-      name: h.name,
-      desc: h.desc || `Alojamiento verificado ubicado en ${capitalCity}.`,
-      price: h.price || '~$75 - $140 USD/noche'
-    }))
+  const unifiedRadiusKm = /\b(cove[nñ]as|tol[uú]|san\s+antero|golfo\s+de\s+morrosquillo)\b/i.test(clean)
+    ? 65
+    : 35
 
-  const seenCleanHotels = new Set()
-  const cleanHotels = []
-  for (const ch of rawCleanHotels) {
-    const k = ch.name.toLowerCase().trim()
-    if (!seenCleanHotels.has(k)) {
-      seenCleanHotels.add(k)
-      cleanHotels.push(ch)
-    }
-  }
+  const unifiedCatalog = await createUnifiedCandidateCatalog({
+    destination: clean,
+    country: targetCountry,
+    centerLat: lat,
+    centerLon: lon,
+    radiusKm: unifiedRadiusKm,
+    existing: {
+      places: realPlaces,
+      restaurants: realRests,
+      hotels: realHotels
+    },
+    seeds: {
+      places: presetIconics,
+      restaurants: presetRests,
+      hotels: presetHotels
+    },
+    // The existing collection above already queries OSM/Photon. The catalog
+    // enriches it with the commercial providers without duplicating requests.
+    discoverOsm: false
+  }).catch(error => {
+    console.warn('[candidate-catalog] Unified catalog build failed:', error?.message || error)
+    return { places: [], restaurants: [], hotels: [] }
+  })
+
+  const cleanPlaces = (unifiedCatalog.places || []).map(candidate => candidate.name)
+  const cleanHotels = (unifiedCatalog.hotels || []).map(candidate => ({
+    ...candidate,
+    desc: candidate.description || `Alojamiento verificado ubicado en ${capitalCity}.`,
+    price: candidate.price || '~$75 - $140 USD/noche'
+  }))
+  const cleanRests = (unifiedCatalog.restaurants || []).map(candidate => ({
+    ...candidate,
+    specialty: candidate.specialty || (candidate.tags?.cuisine
+      ? `Especialidad en cocina ${candidate.tags.cuisine}`
+      : '')
+  }))
 
   const coordinatesMap = {}
-  for (const p of realPlaces) {
-    const pName = typeof p === 'string' ? p : p?.name
-    const pLat = Number(p?.lat ?? p?.latitude)
-    const pLon = Number(p?.lon ?? p?.longitude)
-    if (pName && Number.isFinite(pLat) && Number.isFinite(pLon)) {
-      coordinatesMap[pName.toLowerCase().trim()] = {
-        latitude: pLat,
-        longitude: pLon,
-        coordinateSource: 'osm',
-        coordinatesVerified: true
+  for (const candidate of unifiedCatalog.all || []) {
+    if (candidate?.name && Number.isFinite(candidate.latitude) && Number.isFinite(candidate.longitude)) {
+      coordinatesMap[candidate.name.toLowerCase().trim()] = {
+        latitude: candidate.latitude,
+        longitude: candidate.longitude,
+        coordinateSource: candidate.coordinateSource,
+        coordinatesVerified: true,
+        sources: candidate.sources || [],
+        placeId: candidate.placeId || candidate.id || '',
+        candidateId: getCandidateId(candidate)
       }
-    }
-  }
-
-  const rawCleanRests = realRests
-    .filter(r => r && r.name && !isGenericFacilityName(r.name) && !isNonTouristFacility({ name: r.name }) && !isUnmappedOrClosedVenue(r.name))
-    .map(r => {
-      const rLat = Number(r.lat ?? r.latitude)
-      const rLon = Number(r.lon ?? r.longitude)
-      const hasCoords = Number.isFinite(rLat) && Number.isFinite(rLon)
-      if (hasCoords) {
-        coordinatesMap[r.name.toLowerCase().trim()] = {
-          latitude: rLat,
-          longitude: rLon,
-          coordinateSource: 'osm',
-          coordinatesVerified: true
-        }
-      }
-      return {
-        name: r.name,
-        specialty: r.cuisine ? `Especialidad en cocina ${r.cuisine}` : `Gastronomía local en ${capitalCity}`,
-        ...(hasCoords ? {
-          latitude: rLat,
-          longitude: rLon,
-          coordinateSource: 'osm',
-          coordinatesVerified: true
-        } : {})
-      }
-    })
-
-  const seenCleanRests = new Set()
-  const cleanRests = []
-  for (const cr of rawCleanRests) {
-    const k = cr.name.toLowerCase().trim()
-    if (!seenCleanRests.has(k)) {
-      seenCleanRests.add(k)
-      cleanRests.push(cr)
-    }
-  }
-
-  if (cleanPlaces.length < 2) {
-    const preset = getDestinationPresets(capitalCity, targetCountry)
-    for (const p of preset.places) {
-      if (!cleanPlaces.includes(p)) cleanPlaces.push(p)
     }
   }
 
@@ -1187,6 +1291,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     restaurants: cleanRests,
     places: cleanPlaces,
     coordinatesMap,
+    candidateCatalog: unifiedCatalog,
+    catalogSources: unifiedCatalog.sources || [],
     events: realEvents || []
   }
 
@@ -1200,20 +1306,9 @@ export function getDestinationPresets(destName = '', countryName = '') {
   return {
     name: capitalCity,
     country: countryName || 'Local',
-    hotels: [
-      { name: `Hotel Central de ${capitalCity}`, desc: `Alojamiento céntrico en ${capitalCity}.`, price: '~$70 - $120 USD/noche' },
-      { name: `Boutique Hotel ${capitalCity}`, desc: `Alojamiento boutique con encanto en ${capitalCity}.`, price: '~$90 - $150 USD/noche' }
-    ],
-    restaurants: [
-      { name: `Restaurante Típico de ${capitalCity}`, specialty: `Especialidades culinarias tradicionales de ${capitalCity}` },
-      { name: `Mercado Gastronómico de ${capitalCity}`, specialty: `Platos locales y comida representativa de ${capitalCity}` }
-    ],
-    places: [
-      `Centro Histórico de ${capitalCity}`,
-      `Plaza Mayor de ${capitalCity}`,
-      `Mirador de ${capitalCity}`,
-      `Parque Principal de ${capitalCity}`
-    ],
+    hotels: [],
+    restaurants: [],
+    places: [],
     events: []
   }
 }
@@ -1380,10 +1475,11 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     } else {
       const isExplicitItineraryRequest = /\b(itinerario|itinerarios|plan de viaje|cómo va el itinerario|mostrar el itinerario|muéstrame el itinerario|ver el itinerario|detalles del d[íi]a|ver d[íi]a|d[íi]a\s*\d+)\b/i.test(lastUserMsg)
       const isExplicitHotelInquiry = isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
+      const isExplicitRestaurantInquiry = /\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|carta|platos)\b/i.test(lastUserMsg)
       const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(lastUserMsg)
       const isLodgingConfirmed = isLodgingExplicitlyConfirmed(known.selectedHotel, known.accommodationStatus)
       const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(lastUserMsg)
-      const needsImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitAttractionInquiry || isLodgingConfirmed || isExplicitBuildRequest
+      const needsImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitRestaurantInquiry || isExplicitAttractionInquiry || isLodgingConfirmed || isExplicitBuildRequest
 
       if (needsImmediate) {
         realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude)
@@ -1559,13 +1655,14 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             `• 💰 **Tarifa estimada**: ${formatHotelPriceRange(90, 130, userCurrency)}.\n\n` +
             `¿Deseas confirmar el Hotel Casa La Fe como tu hospedaje?`
         } else {
-          const hotelName = (preset.hotels && preset.hotels[0]?.name) || `Hotel Central de ${destName}`
-          fallbackMsg = `¡Con mucho gusto! Aquí tienes los detalles del **${hotelName}** en ${destName}: 🏨✨\n\n` +
-            `• 📍 **Ubicación**: Ubicado en el corazón de ${destName}.\n` +
-            `• 🏊 **Instalaciones**: Instalaciones modernas, vistas panorámicas y áreas de descanso.\n` +
-            `• 🍳 **Servicios**: Desayuno incluido, Wi-Fi de alta velocidad y recepción 24 horas.\n` +
-            `• 💰 **Tarifa estimada**: ${formatHotelPriceRange(100, 180, userCurrency)}.\n\n` +
-            `¿Deseas confirmar este hospedaje?`
+          const verifiedHotel = preset.hotels && preset.hotels[0]
+          fallbackMsg = verifiedHotel?.name
+            ? `¡Con mucho gusto! Aquí tienes los detalles del **${verifiedHotel.name}** en ${destName}: 🏨✨\n\n` +
+              `• 📍 **Ubicación**: ${verifiedHotel.address || `Alojamiento verificado en ${destName}`}.\n` +
+              `• 🏨 **Descripción**: ${verifiedHotel.desc || `Alojamiento verificado en ${destName}`}.\n` +
+              `• 💰 **Tarifa estimada**: ${getHotelPriceDisplay(verifiedHotel, userCurrency)}.\n\n` +
+              `¿Deseas confirmar este hospedaje?`
+            : `No encontré información verificada de ese alojamiento en ${destName}. Puedo buscar hoteles reales en la zona o puedes indicarme el nombre y la dirección de tu hospedaje.`
         }
       } else if (hasCity && !isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg) && isLodgingCategoryOrGeneric(lastUserMsg)) {
         const lodgingPref = lastUserMsg.trim()
@@ -1642,9 +1739,6 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
               (!p2 || !arePlacesSimilar(p2, cName))
             ) || (rawPresetRests.length > 0 ? rawPresetRests[(d - 1) % rawPresetRests.length] : null)
 
-            if (!r) {
-              r = `Gastronomía Local ${destName}`
-            }
             if (r) usedGlobal.add(r.toLowerCase())
             const dayLines = [p1, p2, r].filter(Boolean).map(place => ` • ${place}`)
             if (dayLines.length > 0) {
@@ -1674,14 +1768,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           ? realCatalog.hotels
           : (preset?.hotels && preset.hotels.length > 0)
             ? preset.hotels
-            : (DESTINATION_ICONIC_HOTELS[destName.toLowerCase()] || [])
-
-        if (rawHotels.length === 0) {
-          const fallbackAiHotels = await suggestHotelsWithOpenAI({ destination: destName, country: destCountry, budget: known.budget || 'Moderado' }).catch(() => [])
-          if (fallbackAiHotels.length > 0) {
-            rawHotels = fallbackAiHotels
-          }
-        }
+            : []
 
         const hotelList = rawHotels.slice(0, 3)
         if (hotelList.length > 0) {
@@ -1883,11 +1970,11 @@ REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
      * Todos los atractivos y restaurantes recomendados DEBEN estar ubicados DENTRO del municipio o área metropolitana inmediata de "${destName || 'el destino'}".
      * ESTRICTAMENTE PROHIBIDO sugerir lugares que pertenezcan a OTRA ciudad vecina o distante. Cada ciudad tiene sus propios restaurantes y atractivos emblemáticos; usa únicamente los nombres presentes en el catálogo verificado.
    - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o cadenas de hipermercados/supermercados cotidianos (como Alkosto, Éxito, Olímpica, Carulla, Jumbo, Makro, Ara, D1, Homecenter, etc.) como paradas turísticas.
-   - REGLA CRÍTICA DE CARTOGRAFÍA EN OPENSTREETMAP / OPENFREEMAP:
-     * El tour y tus recomendaciones deben estar anclados al 100% en lugares reales existentes en OpenFreeMap / OpenStreetMap.
-     * ESTRICTAMENTE PROHIBIDO inventar plazas, parques o malecones que no existan en el mapa (por ejemplo, en Coveñas NO existe "Parque Principal de Coveñas", no lo menciones ni recomiendes jamás).
-     * ESTRICTAMENTE PROHIBIDO sugerir lugares que estén cerrados permanentemente (por ejemplo, en Barranquilla el Museo Romántico cerró permanentemente en 2018 y no existe en OpenFreeMap) o establecimientos que no cuenten con registro / nodo en OpenStreetMap.
-     * Si un lugar no aparece en OpenFreeMap, NO lo recomiendes en el chat ni en el tour. Prioriza siempre los atractivos y restaurantes emblemáticos verificados provistos en el catálogo.
+    - REGLA CRÍTICA DE CARTOGRAFÍA Y FUENTES:
+      * El tour y tus recomendaciones deben estar anclados al 100% en lugares reales presentes en el catálogo verificado por las fuentes cartográficas configuradas.
+      * ESTRICTAMENTE PROHIBIDO inventar plazas, parques, malecones, restaurantes u hoteles que no estén en ese catálogo.
+      * ESTRICTAMENTE PROHIBIDO sugerir lugares cerrados, genéricos, de otra ciudad o que solo aparezcan en tu memoria.
+      * Si un lugar no aparece en el catálogo verificado, NO lo recomiendes ni lo agregues al tour.
 2. CONTROL TOTAL DEL VIAJERO Y AMPLIACIÓN DE PARADAS:
    - Por defecto, sugiere un ritmo equilibrado de atractivos destacados y parada gastronómica.
    - Si el usuario solicita agregar más paradas, incluir más atractivos, vida nocturna o actividades ("agrega más paradas", "añade más lugares", "¿puedes agregar más paradas?", etc.):
@@ -1911,8 +1998,9 @@ CATÁLOGO VERIFICADO DE ${destName.toUpperCase()} (${destCountry || 'DESTINO'}):
 • Atractivos y patrimonio: ${realCatalog.places?.join(', ') || 'N/A'}
 ` : ''}
 
-REGLA DE NATURALIDAD Y CERO FUGAS TÉCNICAS:
-- ESTRICTAMENTE PROHIBIDO emitir advertencias técnicas o disculpas al usuario como "no tengo atractivos ni restaurantes verificados en el catálogo actual" o "¿deseas que genere el tour usando únicamente lugares del mapa?". Si algún catálogo está en N/A o con pocos datos para destinos emergentes, recomienda con total naturalidad y conocimiento los atractivos geográficos, playas o lugares más icónicos y reales de ${destName || 'la zona'}.
+REGLA DE NATURALIDAD Y CERO INVENCIONES:
+- Si el catálogo tiene pocos resultados o está vacío, dilo de forma natural y breve. No inventes nombres para completar la respuesta.
+- Puedes ofrecer ampliar el radio de búsqueda, consultar una ciudad cercana o continuar sin una parada gastronómica específica.
 
 ESTADO ACTUAL DE DATOS:
 • DESTINO: ${hasCity ? `CONFIRMADO (${destName})` : 'PENDIENTE'}
@@ -1938,7 +2026,7 @@ ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
   * Tu respuesta debe ser MÁXIMO de 1 o 2 oraciones breves y directas, reconociendo amablemente los datos recibidos y preguntando ÚNICAMENTE por el hotel o alojamiento (o si se hospedarán en casa propia / familiar).
   * Si el usuario pide recomendaciones de hotel/alojamiento o indica una preferencia de categoría (ej: "¿qué recomiendas?", "recomiéndame hoteles", "una villa privada está bien", "busco resort"):
     - Si eligió categoría o estilo (ej: "una villa privada", "un resort"), el hospedaje SIGUE PENDIENTE. Sugiérele 2 o 3 opciones reales con nombre propio o pregúntale si tiene alguna reservada.
-    - Si pide opciones de hoteles, presenta de inmediato 2 o 3 opciones de hoteles reales con nombre propio ubicados en ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}.
+     - Si pide opciones de hoteles, presenta únicamente opciones que aparezcan en el catálogo verificado de ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}. Si no hay opciones verificadas, informa que no se encontraron alojamientos confirmados y ofrece buscar en un radio mayor.
       FORMATO OBLIGATORIO Y EQUILIBRADO PARA HOTELES (MÁXIMO 1 O 2 LÍNEAS POR OPCIÓN):
       • [Nombre del Hotel]: [Ubicación clara con referencia de zona o atractivos cercanos] (~[Rango de precio estimado] ${userCurrency.toUpperCase()}/noche).
       (Ejemplo: • Hotel Boutique Don Pepe: Opción colonial en el Centro Histórico cerca de la Catedral y restaurantes (~$410.000 - $650.000 COP/noche).)
@@ -1982,8 +2070,9 @@ REGLAS CRÍTICAS DEL ITINERARIO:
      Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas emblemáticas, arquitectura, parques y gastronomía local usando únicamente los POI del catálogo verificado.
    - En destinos con vocación balnearia o micro-destinos (ej: Coveñas, San Andrés, Cancún): Las playas, islas, ciénagas y actividades ecoturísticas del corredor son los atractivos centrales.
    - REGLA DE BALANCE DIARIO OBLIGATORIO:
-     * Cada día DEBE tener exactamente 2 atractivos turísticos en las primeras viñetas y como MÁXIMO 1 parada gastronómica en la última viñeta del día.
-     * ESTRICTAMENTE PROHIBIDO llenar un día con 2 o 3 restaurantes y 0 atractivos turísticos. Los días son para descubrir atractivos, no para ir de restaurante en restaurante sin visitar lugares.
+      * Cada día puede tener hasta 2 atractivos turísticos y como MÁXIMO 1 parada gastronómica, únicamente si existen candidatos verificados disponibles.
+      * Si no hay suficientes candidatos verificados, reduce la cantidad de paradas de ese día y explícalo brevemente. Nunca rellenes el día con nombres genéricos o inventados.
+      * ESTRICTAMENTE PROHIBIDO llenar un día con 2 o 3 restaurantes y 0 atractivos turísticos. Los días son para descubrir atractivos, no para ir de restaurante en restaurante sin visitar lugares.
 6. REGLA ESTRICTA DE UNICIDAD GLOBAL INTER-DÍAS (CERO PARADAS REPETIDAS):
    - Cada atractivo turístico, monumento, museo, parque o restaurante debe aparecer exactamente UNA SOLA VEZ en TODO el itinerario completo (Día 1 a Día N).
    - PROHIBIDO TERMINANTEMENTE repetir el mismo lugar en dos días distintos. Si ya visitaron Gran Malecón del Río o Ventana al Mundo el Día 1, NO puede volver a aparecer en el Día 5, 6 ni 7. Cada día DEBE tener lugares nuevos, diferentes y auténticos.
@@ -2323,7 +2412,12 @@ REGLAS PARA "accommodationStatus":
                 if (d > 25000) continue
               }
               if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, ef.name))) {
-                uniqueRests.push({ name: ef.name })
+                uniqueRests.push({
+                  ...ef,
+                  name: ef.name,
+                  coordinateSource: ef.coordinateSource || 'photon',
+                  coordinatesVerified: true
+                })
               }
             }
           }
@@ -2331,11 +2425,20 @@ REGLAS PARA "accommodationStatus":
       }
       if (uniqueRests.length < daysCount) {
         const dynamicProfile = await fetchDynamicDestinationProfile(dName, destCountry).catch(() => null)
-        for (const dr of (dynamicProfile?.restaurants || [])) {
+        const verifiedProfileRestaurants = await verifiedCatalogEntries(
+          dynamicProfile?.restaurants || [],
+          dName,
+          destCountry,
+          12,
+          known.latitude || null,
+          known.longitude || null,
+          'restaurant'
+        )
+        for (const dr of verifiedProfileRestaurants) {
           const drName = typeof dr === 'string' ? dr : (dr?.name || '')
           if (drName && !isGenericFacilityName(drName) && !isNonTouristFacility({ name: drName }) && !isUnmappedOrClosedVenue(drName)) {
             if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, drName))) {
-              uniqueRests.push(typeof dr === 'string' ? { name: dr } : dr)
+              uniqueRests.push(dr)
             }
           }
         }
@@ -2351,8 +2454,18 @@ REGLAS PARA "accommodationStatus":
       if (catPlaces.length < totalPlacesNeeded) {
         const cleanKey = dName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
         const corridorPlaces = DESTINATION_ICONIC_LANDMARKS[cleanKey] || []
-        for (const cp of corridorPlaces) {
-          if (!catPlaces.some(existing => arePlacesSimilar(existing, cp)) && !uniqueRests.some(r => arePlacesSimilar(r.name, cp))) {
+        const verifiedCorridorPlaces = await verifiedCatalogEntries(
+          corridorPlaces,
+          dName,
+          destCountry,
+          corridorPlaces.length,
+          known.latitude || null,
+          known.longitude || null,
+          'attraction'
+        )
+        for (const cp of verifiedCorridorPlaces) {
+          const cpName = typeof cp === 'string' ? cp : cp?.name
+          if (cpName && !catPlaces.some(existing => arePlacesSimilar(typeof existing === 'string' ? existing : existing?.name, cpName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, cpName))) {
             catPlaces.push(cp)
           }
         }
@@ -2573,6 +2686,19 @@ REGLAS PARA "accommodationStatus":
       }
     } else if (effectiveReadyToBuild && /\b(aún necesito|necesito que me indiques|dónde planeas hospedarte|cómo prefieres moverte|tienes algún presupuesto)\b/i.test(responseMessage)) {
       responseMessage = `¡Excelente! Procedo a generar tu tour personalizado en ${destName} en el mapa. ¡Prepárate para disfrutar tu viaje!`
+    }
+
+    // Phase 1 guard: an empty verified catalog must never be replaced by
+    // names invented in the free-form model response.
+    const isHotelOptionsRequest = isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg) && !isExplicitlyChoosingHotel(lastUserMsg)
+    const isRestaurantOptionsRequest = /\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|carta|platos)\b/i.test(lastUserMsg)
+    const isItineraryRequest = /\b(itinerario|itinerarios|plan de viaje|mostrar el itinerario|muéstrame el itinerario|detalles del d[íi]a|ver d[íi]a|d[íi]a\s*\d+)\b/i.test(lastUserMsg)
+    if (hasCity && realCatalog && isHotelOptionsRequest && Array.isArray(realCatalog.hotels) && realCatalog.hotels.length === 0) {
+      responseMessage = `No encontré alojamientos verificados en ${destName}. Puedo ampliar el radio de búsqueda o puedes indicarme el nombre y la dirección de tu hospedaje.`
+      actionChips = ['🏨 Buscar en un radio mayor', 'Tengo casa propia / familiar']
+    } else if (hasCity && realCatalog && isRestaurantOptionsRequest && !isItineraryRequest && Array.isArray(realCatalog.restaurants) && realCatalog.restaurants.length === 0) {
+      responseMessage = `No encontré restaurantes verificados en ${destName}. Puedo ampliar el radio de búsqueda o continuar el plan sin una parada gastronómica específica.`
+      actionChips = ['🍽️ Ampliar radio de búsqueda', 'Continuar sin restaurante']
     }
 
     const destinationSuggestions = (!hasCity && !parsedExtracted.city)
@@ -3011,9 +3137,78 @@ export function extractChatInformationFallback(prompt) {
   return res
 }
 
+function readAiCandidateId(stop) {
+  if (!stop || typeof stop !== 'object') return ''
+  return String(
+    stop.candidateId ||
+    stop.candidate_id ||
+    stop.ubicacion?.candidateId ||
+    stop.ubicacion?.candidate_id ||
+    stop.locationInfo?.candidateId ||
+    stop.locationInfo?.candidate_id ||
+    ''
+  ).trim()
+}
+
+/**
+ * The model may write prose, but it cannot choose a place by prose. Every
+ * itinerary stop must reference one of the verified planner candidates.
+ */
+export function validateAiPlanCandidateIds(plan, candidates = []) {
+  if (!plan || typeof plan !== 'object' || !Array.isArray(candidates) || candidates.length === 0) return false
+  const allowedIds = new Set(candidates.map(getCandidateId).filter(Boolean))
+  if (allowedIds.size === 0) return false
+
+  if (Array.isArray(plan.itinerario)) {
+    return plan.itinerario.length > 0 && plan.itinerario.every(stop => allowedIds.has(readAiCandidateId(stop)))
+  }
+
+  if (Array.isArray(plan.itinerario_dias)) {
+    const stops = plan.itinerario_dias.flatMap(day => Array.isArray(day?.paradas) ? day.paradas : [])
+    return stops.length > 0 && stops.every(stop => allowedIds.has(readAiCandidateId(stop)))
+  }
+
+  return false
+}
+
+function hydrateAiPlanCandidateIds(plan, candidates) {
+  if (!validateAiPlanCandidateIds(plan, candidates)) return null
+  const candidatesById = new Map(candidates.map(candidate => [getCandidateId(candidate), candidate]))
+  const hydrateStop = stop => {
+    const candidateId = readAiCandidateId(stop)
+    const candidate = candidatesById.get(candidateId)
+    if (!candidate) return stop
+    return {
+      ...stop,
+      candidateId,
+      nombre: stop.nombre || stop.name || candidate.name,
+      ubicacion: {
+        ...(stop.ubicacion || {}),
+        candidateId,
+        place_id: candidateId,
+        nombre_lugar: stop.ubicacion?.nombre_lugar || candidate.name
+      }
+    }
+  }
+
+  if (Array.isArray(plan.itinerario)) {
+    plan.itinerario = plan.itinerario.map(hydrateStop)
+  }
+  if (Array.isArray(plan.itinerario_dias)) {
+    plan.itinerario_dias = plan.itinerario_dias.map(day => ({
+      ...day,
+      paradas: Array.isArray(day?.paradas) ? day.paradas.map(hydrateStop) : day?.paradas
+    }))
+  }
+  if (Array.isArray(plan.itinerario)) {
+    plan.orden_paradas = plan.itinerario.map(stop => readAiCandidateId(stop)).filter(Boolean)
+  }
+  return plan
+}
+
 /**
  * Official Tour Planner AI Plan Generator
- * Matches the exact requested JSON schema with OSM coordinates and rich stops.
+ * Matches the exact requested JSON schema with provider-backed candidate IDs.
  */
 export async function planWithOpenAI({
   destination,
@@ -3037,12 +3232,18 @@ export async function planWithOpenAI({
   const targetCountry = country || 'Colombia'
 
   const totalDays = Math.max(1, Number(userPreferences?.durationDays || Math.ceil((durationHours || 24) / 24) || 1))
-  const selectedPlaces = places.map((p, i) => ({
+  const selectedPlaces = places.slice(0, 30).map((p, i) => ({
+    candidateId: getCandidateId(p),
     name: p.name,
     dia: Number(p.dia || p.day || (Math.floor((i * totalDays) / places.length) + 1)),
     category: p.category || 'historic',
     description: p.description || ''
-  })).slice(0, 30)
+  }))
+
+  if (selectedPlaces.length < 2 || selectedPlaces.some(place => !place.candidateId)) {
+    console.warn('[planWithOpenAI] Refusing AI plan because one or more candidates lack a stable ID')
+    return null
+  }
 
   const datesContext = userPreferences?.datesSeason || userPreferences?.dates || ''
   const specialEventContext = userPreferences?.specialEvent || ''
@@ -3087,6 +3288,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
     {
       "dia": 1,
       "parada": 1,
+      "candidateId": "ID EXACTO DE UN CANDIDATO RECIBIDO (obligatorio)",
       "nombre": "Nombre real del lugar o restaurante",
       "descripcion": "Guía de voz inmersiva de 60 a 90 palabras escrita como guía experto hablando al oído del turista, con historia, arquitectura y qué observar.",
       "duracion_estimada": "45 minutos",
@@ -3094,6 +3296,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
       "datos_curiosos": ["Dato curioso real 1", "Dato curioso real 2"],
       "consejos": ["Consejo práctico del guía"],
       "ubicacion": {
+        "candidateId": "Repite el candidateId exacto de esta parada",
         "nombre_lugar": "Nombre del lugar",
         "direccion": "Dirección física o cruce de calles (ej: Cra. 49C # 76-80 o Calle 72 con Cra 53)",
         "ciudad": "${cleanCity}",
@@ -3107,7 +3310,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
       "imagenes": []
     }
   ],
-  "orden_paradas": ["Parada 1", "Parada 2"],
+  "orden_paradas": ["candidate-id-1", "candidate-id-2"],
   "incluye": ["Guía interactivo con voz GPS", "Itinerario optimizado"],
   "no_incluye": ["Entradas a recintos privados", "Alimentos no especificados"],
   "recomendaciones": ["Usar calzado cómodo", "Llevar protector solar e hidratación"],
@@ -3130,15 +3333,15 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
 }
 
 REGLAS DE CALIDAD:
-1. Utiliza exactamente la lista de lugares seleccionados recibida (${selectedPlaces.map((item, i) => `${i + 1}. ${item.name} (Día ${item.dia})`).join(', ')}). Respeta fielmente su orden secuencial y asigna cada parada a su día indicado en el itinerario ("dia": 1..${totalDays}).
-2. Cada parada del itinerario debe corresponder a un lugar físico real de la lista.
+1. Utiliza exactamente los candidateId de la lista recibida (${selectedPlaces.map((item, i) => `${i + 1}. candidateId=${item.candidateId}; nombre de contexto=${item.name} (Día ${item.dia})`).join(', ')}). Respeta fielmente su orden secuencial y asigna cada parada a su día indicado en el itinerario ("dia": 1..${totalDays}).
+2. Cada parada debe incluir un candidateId exacto de esa lista. El nombre es solo texto visible; nunca lo uses para crear, sustituir o inferir la identidad del lugar.
 3. El tour dura ${totalDays} días. Debes estructurar el itinerario distribuyendo las paradas según los días indicados, asegurando que existan paradas para cada uno de los ${totalDays} días ("dia": 1..${totalDays}).
 4. El título "nombre_tour" DEBE ser original, evocador, cautivador y con identidad temática única sobre ${cleanCity} (ej: "Joyas y Leyendas de ${cleanCity}", "Sabores y Brisas: De El Prado al Río", "Ruta Secreta de Arquitectura y Tradición en ${cleanCity}"). PROHIBIDO usar títulos planos y repetitivos como "Tour Cultural por ${cleanCity}" o "Tour Personalizado por ${cleanCity}". Tampoco nombres el tour con el nombre de una sola parada.
 5. NO agregues hoteles ni alojamientos como paradas de actividad dentro del itinerario.
 6. Para cada parada, redacta una narración de guía de voz inmersiva de 60 a 90 palabras, con la voz de una guía turística apasionada, joven, extrovertida y cálida, con ritmo fluido, pausas naturales y emoción genuina para narración de audio en vivo (TTS).
 7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.
 8. REGLA ESTRICTA PARA 'mejor_epoca': Si el viaje cuenta con fechas o evento especial indicado (${defaultBestSeason !== 'Todo el año' ? `"${defaultBestSeason}"` : 'como un festival o mes específico'}), 'mejor_epoca' DEBE reflejar exactamente ese rango de fechas o festividad (ej: "${defaultBestSeason}"). De lo contrario, indica "Todo el año" (siempre con 'ñ').
-9. REGLA OBLIGATORIA PARA 'ubicacion.direccion': Para cada parada (especialmente restaurantes, locales gastronómicos, tiendas y cafés), DEBES proporcionar la dirección física real o el cruce de calles (ej: 'Cra. 49C # 76-80', 'Calle 72 con Cra. 53') para garantizar su correcta georreferenciación en la cartografía.`
+9. REGLA OBLIGATORIA PARA 'ubicacion.direccion': Para cada parada (especialmente restaurantes, locales gastronómicos, tiendas y cafés), DEBES proporcionar la dirección física real o el cruce de calles (ej: 'Cra. 49C # 76-80', 'Calle 72 con Cra. 53'). La identidad y las coordenadas finales serán tomadas por el backend desde el candidateId, no desde estos campos.`
 
   // For tours with more than 4 stops, split into dynamic parallel chunks of max 4 places so generation completes in ~12-16s regardless of stops count
   if (selectedPlaces.length > 4) {
@@ -3161,6 +3364,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
     {
       "dia": 1,
       "parada": 1,
+      "candidateId": "ID EXACTO DE UN CANDIDATO RECIBIDO (obligatorio)",
       "nombre": "Nombre exacto del lugar recibido",
       "descripcion": "Guía de voz inmersiva de 60 a 90 palabras escrita como guía turístico apasionado, joven y extrovertido para narración TTS.",
       "duracion_estimada": "45 minutos",
@@ -3168,6 +3372,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
       "datos_curiosos": ["Dato curioso específico del lugar"],
       "consejos": ["Consejo práctico del guía"],
       "ubicacion": {
+        "candidateId": "Repite el candidateId exacto de esta parada",
         "nombre_lugar": "Nombre exacto del lugar recibido",
         "direccion": "Dirección física o cruce de calles (ej: Cra. 49C # 76-80)",
         "ciudad": "${cleanCity}",
@@ -3220,9 +3425,11 @@ Lugares obligatorios de este bloque: ${JSON.stringify(chunk)}`
           }
         }
         if (mergedItinerario.length >= 2) {
-          basePlan.itinerario = mergedItinerario
-          basePlan.orden_paradas = mergedItinerario.map(s => s.nombre || s.name).filter(Boolean)
-          return basePlan
+          const hydratedPlan = hydrateAiPlanCandidateIds({
+            ...basePlan,
+            itinerario: mergedItinerario
+          }, selectedPlaces)
+          if (hydratedPlan) return hydratedPlan
         }
       }
     } catch (err) {
@@ -3257,7 +3464,10 @@ Lugares obligatorios: ${JSON.stringify(selectedPlaces)}`
 
     if (response.ok) {
       const data = await response.json()
-      return cleanAndParseJson(data.choices?.[0]?.message?.content, null)
+      return hydrateAiPlanCandidateIds(
+        cleanAndParseJson(data.choices?.[0]?.message?.content, null),
+        selectedPlaces
+      )
     }
   } catch (err) {
     console.error('[planWithOpenAI] Error:', err)

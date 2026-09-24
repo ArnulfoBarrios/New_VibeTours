@@ -591,6 +591,75 @@ out center tags 10;
         continue;
       }
     }
+
+    // Keep the existing OSRM/OpenStreetMap geometry as the primary route so
+    // the current map drawing remains unchanged. Commercial providers are a
+    // server-side fallback for places where the public routing graph cannot
+    // resolve the leg; their credentials never reach the mobile app.
+    return _fetchBackendRoute(
+      start,
+      end,
+      travelMode: travelMode,
+    );
+  }
+
+  Future<_DrivingRoute?> _fetchBackendRoute(
+    GeoPoint start,
+    GeoPoint end, {
+    required RouteTravelMode travelMode,
+  }) async {
+    final payload = jsonEncode({
+      'points': [
+        {'latitude': start.latitude, 'longitude': start.longitude},
+        {'latitude': end.latitude, 'longitude': end.longitude},
+      ],
+      'mode': travelMode.name,
+    });
+
+    for (final configuredBase in AppConfig.apiBaseUrls) {
+      final baseUrl = configuredBase.replaceFirst(RegExp(r'/+$'), '');
+      if (baseUrl.isEmpty) continue;
+      try {
+        final response = await _client
+            .post(
+              Uri.parse('$baseUrl/routes/calculate'),
+              headers: const {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+              },
+              body: payload,
+            )
+            .timeout(const Duration(seconds: 5));
+        if (response.statusCode < 200 || response.statusCode >= 300) continue;
+
+        final decoded = jsonDecode(response.body);
+        if (decoded is! Map<String, dynamic>) continue;
+        final rawGeometry = decoded['geometry'];
+        if (rawGeometry is! List) continue;
+        final geometry = <GeoPoint>[];
+        for (final rawPoint in rawGeometry) {
+          if (rawPoint is! Map<String, dynamic>) continue;
+          final latitude = (rawPoint['latitude'] as num?)?.toDouble();
+          final longitude = (rawPoint['longitude'] as num?)?.toDouble();
+          if (latitude == null || longitude == null) continue;
+          geometry.add(GeoPoint(latitude: latitude, longitude: longitude));
+        }
+        if (geometry.length < 2) continue;
+
+        return _DrivingRoute(
+          geometry: geometry,
+          distanceMeters:
+              (decoded['distanceMeters'] as num?)?.toDouble() ??
+              _geometryDistanceMeters(geometry),
+          travelTimeSeconds: (decoded['travelTimeSeconds'] as num?)?.round(),
+          trafficDelaySeconds: null,
+          usesLiveTraffic: decoded['usesLiveTraffic'] == true,
+          hasFerrySegment: decoded['hasFerrySegment'] == true,
+        );
+      } on Object {
+        continue;
+      }
+    }
     return null;
   }
 

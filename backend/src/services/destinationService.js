@@ -158,7 +158,7 @@ export async function resolveCanonicalDestination(query, options = {}) {
   const normKey = cleaned.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const immediateFallback = FALLBACK_DESTINATION_CENTROIDS[normKey] ||
     FALLBACK_DESTINATION_CENTROIDS[cleaned.toLowerCase().trim()] ||
-    Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([k]) => normKey === k || (k.length >= 4 && (normKey === k || normKey.startsWith(k) || k.startsWith(normKey))))?.[1]
+    Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([k]) => normKey === k || (k.length >= 4 && (normKey === k || normKey.startsWith(k) || k.startsWith(normKey) || normKey.includes(k))))?.[1]
 
   if (immediateFallback) {
     const result = {

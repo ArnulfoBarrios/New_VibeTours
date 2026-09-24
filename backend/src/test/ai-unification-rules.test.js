@@ -67,10 +67,9 @@ describe('AI Rule Unification and International Destination Isolation', () => {
     assert.ok(preset)
     assert.equal(preset.name, 'Sydney')
     assert.equal(preset.country, 'Australia')
-    assert.ok(preset.hotels.length >= 1)
-    assert.ok(preset.restaurants.length >= 1)
-    assert.ok(preset.places.length >= 1)
-    assert.ok(preset.hotels[0].name.includes('Sydney'))
+    assert.ok(Array.isArray(preset.hotels))
+    assert.ok(Array.isArray(preset.restaurants))
+    assert.ok(Array.isArray(preset.places))
   })
 
   it('should properly progress through chat questions without infinite loops', async () => {

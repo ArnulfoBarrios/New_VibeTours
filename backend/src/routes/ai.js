@@ -10,8 +10,22 @@ import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.j
 import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName, FALLBACK_DESTINATION_CENTROIDS } from '../services/destinationService.js'
 import { resolvePlaceWithCascade } from '../services/places-resolver.js'
+import { getCandidateId } from '../services/candidate-catalog.js'
 
 export const aiRouter = Router()
+
+function readPlanCandidateId(stop) {
+  if (!stop || typeof stop !== 'object') return ''
+  return String(
+    stop.candidateId ||
+    stop.candidate_id ||
+    stop.ubicacion?.candidateId ||
+    stop.ubicacion?.candidate_id ||
+    stop.locationInfo?.candidateId ||
+    stop.locationInfo?.candidate_id ||
+    ''
+  ).trim()
+}
 
 const handleSpeech = async (req, res, next) => {
   try {
@@ -1749,8 +1763,9 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
       if (unselected.length > 0) {
         const destCity = input.city || input.destination || location?.city || ''
         const destCountry = input.country || location?.country || ''
-        const preheated = unselected.map((p, idx) => ({
-          id: p.placeId || p.id || `alt-${Date.now()}-${idx}`,
+      const preheated = unselected.map((p, idx) => ({
+          id: getCandidateId(p),
+          candidateId: getCandidateId(p),
           name: p.name,
           latitude: p.latitude,
           longitude: p.longitude,
@@ -1767,7 +1782,8 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
             ciudad: destCity,
             region: p.region || destCity,
             pais: destCountry,
-            place_id: p.placeId || '',
+            candidateId: getCandidateId(p),
+            place_id: getCandidateId(p),
             fuente_coordenadas: p.coordinateSource || p.coordinate_source || 'osm-verified',
             coordenadas_verificadas: true,
             url_mapa: mapUrlFor(p.latitude, p.longitude)
@@ -2312,6 +2328,9 @@ export async function processTourBuild(jobId, input, confirmedPlaces, plannerCon
       ? planner.selectedPlaces.map((p) => {
           if (Array.isArray(sourceTour?.itinerario)) {
             const matchedAiStop = sourceTour.itinerario.find((aiS) => {
+              const placeCandidateId = getCandidateId(p)
+              const aiCandidateId = readPlanCandidateId(aiS)
+              if (placeCandidateId || aiCandidateId) return Boolean(placeCandidateId && aiCandidateId && placeCandidateId === aiCandidateId)
               const aiName = aiS.nombre || aiS.name || ''
               return arePlacesSimilar(aiName, p.name) ||
                      normalizePlaceKey(aiName) === normalizePlaceKey(p.name) ||
@@ -2479,7 +2498,7 @@ export async function processTourBuild(jobId, input, confirmedPlaces, plannerCon
         ...normalizeList(sourceTour.galeria_tour, [])
       ]).slice(0, 8),
       itinerario: publicStops,
-      orden_paradas: publicStops.map(s => s.nombre),
+      orden_paradas: publicStops.map(s => s.candidateId).filter(Boolean),
       incluye: normalizeList(sourceTour.incluye, defaultIncludes(input.type)),
       no_incluye: normalizeList(sourceTour.no_incluye, defaultExcludes()),
       recomendaciones: normalizeList(sourceTour.recomendaciones, defaultRecommendations()),
@@ -2638,9 +2657,12 @@ async function processTourGeneration(jobId, input) {
 
       const plannedStops = hasConfirmedPlaces
         ? planner.selectedPlaces.map((p) => {
-            if (Array.isArray(sourceTour?.itinerario)) {
-              const matchedAiStop = sourceTour.itinerario.find((aiS) => {
-                const aiName = aiS.nombre || aiS.name || ''
+              if (Array.isArray(sourceTour?.itinerario)) {
+                const matchedAiStop = sourceTour.itinerario.find((aiS) => {
+                  const placeCandidateId = getCandidateId(p)
+                  const aiCandidateId = readPlanCandidateId(aiS)
+                  if (placeCandidateId || aiCandidateId) return Boolean(placeCandidateId && aiCandidateId && placeCandidateId === aiCandidateId)
+                  const aiName = aiS.nombre || aiS.name || ''
                 return arePlacesSimilar(aiName, p.name) ||
                        normalizePlaceKey(aiName) === normalizePlaceKey(p.name) ||
                        aiName.toLowerCase().includes(p.name.toLowerCase()) ||
@@ -2808,7 +2830,7 @@ async function processTourGeneration(jobId, input) {
           ...(normalizeList(sourceTour.galeria_tour, [])),
         ]).slice(0, 8),
         itinerario: stops,
-        orden_paradas: stops.map((stop) => stop.nombre),
+        orden_paradas: stops.map((stop) => stop.candidateId).filter(Boolean),
         incluye: normalizeList(sourceTour.incluye, defaultIncludes(input.type)),
         no_incluye: normalizeList(sourceTour.no_incluye, defaultExcludes()),
         recomendaciones: normalizeList(sourceTour.recomendaciones, defaultRecommendations()),
@@ -2884,27 +2906,31 @@ async function processTourGeneration(jobId, input) {
 function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
   const city = input.city || input.destination || 'Destino'
   const country = input.country || 'Global'
-  const templates = typeFallbackLabels(input.type, city)
   const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
-  const stops = templates.map((label, index) => ({
-    dia: Math.floor((index * totalDays) / templates.length) + 1,
+  const selectedPlaces = Array.isArray(planner.selectedPlaces) ? planner.selectedPlaces : []
+  const stops = selectedPlaces.map((place, index) => ({
+    dia: Math.floor((index * totalDays) / Math.max(1, selectedPlaces.length)) + 1,
     parada: index + 1,
-    nombre: label.name,
-    descripcion: `${label.name} funciona como parada de respaldo mientras se recupera la IA.`,
+    candidateId: getCandidateId(place),
+    nombre: place.name,
+    descripcion: buildStopDescription(place, input),
     duracion_estimada: `${25 + (index * 10)} minutos`,
-    actividades: buildActivities({ name: label.name }, input.type),
-    datos_curiosos: buildCuriousFacts({ name: label.name }, input.type),
-    consejos: buildTips({ name: label.name }, input.type),
+    actividades: buildActivities(place, input.type),
+    datos_curiosos: buildCuriousFacts(place, input.type),
+    consejos: buildTips(place, input.type),
     ubicacion: {
-      nombre_lugar: label.name,
-      direccion: city,
-      ciudad: city,
-      region: '',
-      pais: country,
-      place_id: `${normalizeKey(label.name)}-fallback`,
-      url_mapa: '',
+      nombre_lugar: place.name,
+      direccion: place.address || city,
+      ciudad: place.city || city,
+      region: place.region || '',
+      pais: place.country || country,
+      candidateId: getCandidateId(place),
+      place_id: getCandidateId(place) || place.placeId || place.id || '',
+      latitud: place.latitude,
+      longitud: place.longitude,
+      url_mapa: mapUrlFor(place.latitude, place.longitude),
     },
-    imagenes: [fallbackCover(label.name)],
+    imagenes: place.images || [],
   }))
   return {
     id: `ai-emergency-${Date.now()}`,
@@ -2927,7 +2953,7 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
     imagen_portada: fallbackCover(input.destination),
     galeria_tour: stops.flatMap((stop) => stop.imagenes).slice(0, 8),
     itinerario: stops,
-    orden_paradas: stops.map((stop) => stop.nombre),
+    orden_paradas: stops.map((stop) => stop.candidateId).filter(Boolean),
     incluye: defaultIncludes(input.type),
     no_incluye: defaultExcludes(),
     recomendaciones: defaultRecommendations(),
@@ -2955,6 +2981,7 @@ async function buildFallbackTour(planner, input) {
   const itinerary = planner.selectedPlaces.map((place, index) => ({
     dia: Math.floor(index / stopsPerDay) + 1,
     parada: index + 1,
+    candidateId: getCandidateId(place),
     nombre: place.name,
     descripcion: buildStopDescription(place, input),
     duracion_estimada: `${place.minutes} minutos`,
@@ -2967,7 +2994,8 @@ async function buildFallbackTour(planner, input) {
       ciudad: place.city ?? input.city ?? '',
       region: place.region ?? '',
       pais: place.country ?? input.country ?? '',
-      place_id: place.placeId,
+      candidateId: getCandidateId(place),
+      place_id: getCandidateId(place) || place.placeId || place.id || '',
       url_mapa: mapUrlFor(place.latitude, place.longitude),
     },
     imagenes: place.images,
@@ -2993,7 +3021,7 @@ async function buildFallbackTour(planner, input) {
     imagen_portada: coverUrl,
     galeria_tour: gallery,
     itinerario: itinerary,
-    orden_paradas: itinerary.map((stop) => stop.nombre),
+    orden_paradas: itinerary.map((stop) => stop.candidateId).filter(Boolean),
     incluye: defaultIncludes(input.type),
     no_incluye: defaultExcludes(),
     recomendaciones: defaultRecommendations(),
@@ -3326,7 +3354,13 @@ function normalizeCandidate(place, index, input, origin) {
     country: place.country,
     region: place.region,
     address: place.address ?? '',
-    placeId: place.placeId ?? place.id ?? place.name ?? `${name}-${index}`,
+    placeId: place.placeId ?? place.place_id ?? place.id ?? '',
+    candidateId: getCandidateId({
+      ...place,
+      placeId: place.placeId ?? place.place_id ?? place.id ?? '',
+      latitude,
+      longitude
+    }),
     coordinateSource: place.coordinateSource ?? place.coordinate_source ?? '',
     coordinatesVerified: isVerifiedCoordinatePlace(place),
     coordinates_verified: isVerifiedCoordinatePlace(place),
@@ -4381,6 +4415,10 @@ function isValidTourPlan(value) {
 
 export function validateTourQuality(tour, planner, input) {
   if (!tour || !Array.isArray(tour.itinerario)) return tour
+  const allowedCandidateIds = new Set(
+    (planner?.selectedPlaces || []).map(getCandidateId).filter(Boolean)
+  )
+  const enforceCandidateIds = allowedCandidateIds.size > 0
 
   tour.itinerario = tour.itinerario.map((stop, index) => {
     let description = String(stop.descripcion || '').trim()
@@ -4407,9 +4445,11 @@ export function validateTourQuality(tour, planner, input) {
   // Detectar y eliminar paradas no válidas (metadatos/encabezados de días) y repetidas en todo el itinerario
   const seenKeys = new Set()
   tour.itinerario = tour.itinerario.filter((stop) => {
+    const candidateId = readPlanCandidateId(stop)
+    if (enforceCandidateIds && (!candidateId || !allowedCandidateIds.has(candidateId))) return false
     const name = stop.nombre || stop.name || ''
     if (!isValidSpecificPlace(name)) return false
-    let key = normalizePlaceKey(name) || normalizeKey(name)
+    let key = candidateId ? `candidate:${candidateId}` : (normalizePlaceKey(name) || normalizeKey(name))
     key = key.replace(/\b(septiembre|september|9\s*11|11\s*s)\b/g, '911memorial')
     if (!key || seenKeys.has(key)) return false
     seenKeys.add(key)
@@ -4960,7 +5000,17 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
   const isGenericPlaceholder = !rawName || /parada \d+/i.test(rawName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(rawName)
   const sourceName = isGenericPlaceholder ? (candidateFallback?.name ?? `${input.destination} ${index + 1}`) : rawName
 
-  const matchedPlace = findCandidatePlace(sourceName, candidatePlaces)
+  const sourceCandidateId = readPlanCandidateId(source)
+  const idMatchedPlace = sourceCandidateId
+    ? candidatePlaces.find(candidate => getCandidateId(candidate) === sourceCandidateId)
+    : null
+  if (sourceCandidateId && !idMatchedPlace) {
+    const error = new Error(`La parada referencia un candidateId desconocido: "${sourceCandidateId}".`)
+    error.code = 'UNKNOWN_CANDIDATE_ID'
+    error.candidateId = sourceCandidateId
+    throw error
+  }
+  const matchedPlace = idMatchedPlace || findCandidatePlace(sourceName, candidatePlaces)
   const startPlace = candidatePlaces[0] ?? null
   const endPlace = candidatePlaces[candidatePlaces.length - 1] ?? null
   let coordinates = await resolveStopCoordinates({
@@ -4977,8 +5027,8 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
       coordinates = {
         latitude: Number(candidateFallback.latitude),
         longitude: Number(candidateFallback.longitude),
-        placeId: candidateFallback.placeId || candidateFallback.id || '',
-        place_id: candidateFallback.placeId || candidateFallback.id || '',
+        placeId: getCandidateId(candidateFallback) || candidateFallback.placeId || candidateFallback.id || '',
+        place_id: getCandidateId(candidateFallback) || candidateFallback.placeId || candidateFallback.id || '',
         coordinatesVerified: true,
         coordinateSource: 'candidate-fallback'
       }
@@ -5158,6 +5208,7 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
   const publicStop = {
     parada: index + 1,
     dia: stopDay,
+    candidateId: getCandidateId(matchedPlace) || sourceCandidateId || getCandidateId(candidateFallback),
     nombre: resolvedName,
     isFallbackImage: isFallbackImg,
     descripcion: description,
@@ -5173,7 +5224,8 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
       pais: matchedPlace?.country ?? ubicacion.pais ?? input.country ?? "",
       latitud: coordinates.latitude,
       longitud: coordinates.longitude,
-      place_id: coordinates.placeId ?? coordinates.place_id ?? matchedPlace?.placeId ?? matchedPlace?.place_id ?? ubicacion.place_id ?? placeIdFor(resolvedName, coordinates.latitude, coordinates.longitude),
+      candidateId: getCandidateId(matchedPlace) || sourceCandidateId || getCandidateId(candidateFallback),
+      place_id: coordinates.placeId ?? coordinates.place_id ?? getCandidateId(matchedPlace) ?? matchedPlace?.placeId ?? matchedPlace?.place_id ?? ubicacion.place_id ?? placeIdFor(resolvedName, coordinates.latitude, coordinates.longitude),
       fuente_coordenadas: coordinates.coordinateSource || coordinates.coordinate_source || matchedPlace?.coordinateSource || matchedPlace?.coordinate_source || '',
       coordenadas_verificadas: coordinates.coordinatesVerified === true,
       url_mapa: matchedPlace?.urlMapa ?? ubicacion.url_mapa ?? mapUrlFor(coordinates.latitude, coordinates.longitude),
@@ -5182,6 +5234,7 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
   }
   const routeStop = {
     name: resolvedName,
+    candidateId: getCandidateId(matchedPlace) || sourceCandidateId || getCandidateId(candidateFallback),
     latitude: coordinates.latitude,
     longitude: coordinates.longitude,
     coordinateSource: coordinates.coordinateSource || coordinates.coordinate_source || '',
@@ -5245,8 +5298,8 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
       return {
         latitude: Number(matchedPlace.latitude),
         longitude: Number(matchedPlace.longitude),
-        place_id: matchedPlace.placeId || matchedPlace.place_id || matchedPlace.id || '',
-        placeId: matchedPlace.placeId || matchedPlace.place_id || matchedPlace.id || '',
+        place_id: getCandidateId(matchedPlace) || matchedPlace.placeId || matchedPlace.place_id || matchedPlace.id || '',
+        placeId: getCandidateId(matchedPlace) || matchedPlace.placeId || matchedPlace.place_id || matchedPlace.id || '',
         coordinateSource: matchedPlace.coordinateSource || matchedPlace.coordinate_source || 'osm',
         coordinatesVerified: true
       }

@@ -12,6 +12,7 @@ import { aiRouter } from './routes/ai.js'
 import { chatRouter } from './routes/chat.js'
 import { discoveryRouter } from './routes/discovery.js'
 import { toursRouter } from './routes/tours.js'
+import { routesRouter } from './routes/routes.js'
 
 const app = express()
 const port = Number(process.env.PORT ?? 3000)
@@ -46,6 +47,7 @@ app.get(['/health', '/api/health'], (req, res) => {
 })
 
 app.use('/api/tours', toursRouter)
+app.use('/api/routes', routesRouter)
 app.use('/api/ai', aiRouter)
 app.use('/api/chat', chatRouter)
 app.use('/api/discovery', discoveryRouter)
