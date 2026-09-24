@@ -463,7 +463,7 @@ class _HeaderSection extends StatelessWidget {
         bottom: 12,
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Text(

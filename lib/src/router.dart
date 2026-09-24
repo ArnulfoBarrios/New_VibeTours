@@ -13,6 +13,7 @@ import 'features/home/home_screen.dart';
 import 'features/home/place_route_screen.dart';
 import 'features/legal/legal_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
+import 'features/profile/achievements_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/profile/public_profile_screen.dart';
 import 'features/profile/tourist_preferences_screen.dart';
@@ -174,6 +175,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/achievements',
+        builder: (context, state) => const AchievementsScreen(),
       ),
     ],
   );

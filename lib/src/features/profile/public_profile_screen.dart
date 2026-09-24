@@ -9,6 +9,8 @@ import '../../core/design/premium_components.dart';
 import '../../domain/models.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
+import 'achievements_screen.dart';
+import 'achievements_service.dart';
 
 class PublicProfileScreen extends ConsumerWidget {
   const PublicProfileScreen({
@@ -74,6 +76,8 @@ class PublicProfileScreen extends ConsumerWidget {
                     _PublicDigitalPassportSection(
                       userName: fullName,
                       stats: stats,
+                      hasCustomBio: bio.trim().isNotEmpty,
+                      hasCustomAvatar: avatarUrl.trim().isNotEmpty,
                     ),
                     const SizedBox(height: 32),
 
@@ -345,88 +349,64 @@ class _PublicDigitalPassportSection extends StatelessWidget {
   const _PublicDigitalPassportSection({
     required this.userName,
     required this.stats,
+    this.hasCustomBio = false,
+    this.hasCustomAvatar = false,
   });
 
   final String userName;
   final Map<String, dynamic> stats;
+  final bool hasCustomBio;
+  final bool hasCustomAvatar;
+
+  void _openAchievementsScreen(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AchievementsScreen(
+          customStats: stats,
+          customHasBio: hasCustomBio,
+          customHasAvatar: hasCustomAvatar,
+          userName: userName.split(' ').first,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     final createdCount = (stats['createdTours'] as num?)?.toInt() ?? 0;
     final ratedCount = (stats['toursRated'] as num?)?.toInt() ?? 0;
-    final participantsCount = (stats['participants'] as num?)?.toInt() ?? 0;
     final totalStopsExplored = (createdCount * 4) + (ratedCount * 3) + 5;
     final totalKmWalked = (totalStopsExplored * 0.8).toStringAsFixed(1);
 
-    final badges = [
-      _PublicBadgeData(
-        icon: Icons.map_rounded,
-        title: l10n.badgeRouteCreatorTitle,
-        subtitle: l10n.badgeRouteCreatorSubtitle(createdCount),
-        isUnlocked: createdCount > 0,
-      ),
-      _PublicBadgeData(
-        icon: Icons.star_rate_rounded,
-        title: l10n.badgeTouristCriticTitle,
-        subtitle: l10n.badgeTouristCriticSubtitle(ratedCount),
-        isUnlocked: ratedCount > 0,
-      ),
-      _PublicBadgeData(
-        icon: Icons.groups_rounded,
-        title: l10n.badgeCommunityGuideTitle,
-        subtitle: l10n.badgeCommunityGuideSubtitle(participantsCount),
-        isUnlocked: participantsCount > 0,
-      ),
-      _PublicBadgeData(
-        icon: Icons.verified_user_rounded,
-        title: l10n.badgeVibeExplorerTitle,
-        subtitle: l10n.badgeVibeExplorerSubtitle,
-        isUnlocked: true,
-      ),
-    ];
+    final badges = AchievementsService.buildAchievements(
+      l10n: l10n,
+      stats: stats,
+      hasCustomBio: hasCustomBio,
+      hasCustomAvatar: hasCustomAvatar,
+    );
 
     final unlockedCount = badges.where((b) => b.isUnlocked).length;
+    final progressValue = badges.isEmpty ? 0.0 : unlockedCount / badges.length;
+
+    final previewBadges = [...badges]..sort((a, b) {
+        if (a.isUnlocked == b.isUnlocked) return 0;
+        return a.isUnlocked ? -1 : 1;
+      });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              l10n.digitalPassportTitle,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.verified_rounded, size: 14, color: AppTheme.primary),
-                  const SizedBox(width: 4),
-                  Text(
-                    l10n.explorerLevel,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        Text(
+          l10n.digitalPassportTitle,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const SizedBox(height: 12),
         GlassPanel(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(22),
           radius: 24,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,92 +416,249 @@ class _PublicDigitalPassportSection extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.flight_takeoff_rounded,
-                          color: AppTheme.primary, size: 22),
-                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.flight_takeoff_rounded,
+                          color: AppTheme.primary,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Text(
                         'VIBETOURS PASSPORT',
                         style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.6),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                           fontSize: 11,
-                          letterSpacing: 1.5,
+                          letterSpacing: 1.6,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ],
                   ),
-                  Text(
-                    '#VT-2026',
-                    style: TextStyle(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.5),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '#VT-2026',
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
+              Text(
+                'TITULAR DEL PASAPORTE',
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
               Text(
                 userName.toUpperCase(),
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontSize: 18,
+                  color: theme.colorScheme.onSurface,
+                  fontSize: 20,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.4,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
               Divider(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.1)),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _PassportStatItem(
-                    icon: Icons.directions_walk_rounded,
-                    value: '$totalKmWalked km',
-                    label: l10n.statsTravelled,
+                height: 1,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+              ),
+              const SizedBox(height: 18),
+              IntrinsicHeight(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Expanded(
+                      child: _PassportStatItem(
+                        icon: Icons.directions_walk_rounded,
+                        accentColor: AppTheme.primary,
+                        value: '$totalKmWalked km',
+                        label: l10n.statsTravelled,
+                      ),
+                    ),
+                    VerticalDivider(
+                      width: 1,
+                      thickness: 1,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                    ),
+                    Expanded(
+                      child: _PassportStatItem(
+                        icon: Icons.place_rounded,
+                        accentColor: AppTheme.violet,
+                        value: '$totalStopsExplored',
+                        label: l10n.statsStops,
+                      ),
+                    ),
+                    VerticalDivider(
+                      width: 1,
+                      thickness: 1,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => _openAchievementsScreen(context),
+                        child: _PassportStatItem(
+                          icon: Icons.workspace_premium_rounded,
+                          accentColor: Colors.amber.shade700,
+                          value: '$unlockedCount / ${badges.length}',
+                          label: l10n.statsBadges,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _openAchievementsScreen(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  _PassportStatItem(
-                    icon: Icons.place_rounded,
-                    value: '$totalStopsExplored',
-                    label: l10n.statsStops,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Progreso de medallas ($unlockedCount/${badges.length})',
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                '${(progressValue * 100).round()}%',
+                                style: const TextStyle(
+                                  color: AppTheme.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                size: 16,
+                                color: AppTheme.primary,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: progressValue,
+                          minHeight: 6,
+                          backgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                        ),
+                      ),
+                    ],
                   ),
-                  _PassportStatItem(
-                    icon: Icons.workspace_premium_rounded,
-                    value: '$unlockedCount / ${badges.length}',
-                    label: l10n.statsBadges,
-                  ),
-                ],
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 18),
-        Text(
-          l10n.achievementBadges,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              l10n.achievementBadges,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
               ),
+            ),
+            TextButton.icon(
+              onPressed: () => _openAchievementsScreen(context),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: const Icon(Icons.grid_view_rounded, size: 15, color: AppTheme.primary),
+              label: Text(
+                'Ver los ${badges.length} logros',
+                style: const TextStyle(
+                  color: AppTheme.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              for (int i = 0; i < badges.length; i++) ...[
+              for (int i = 0; i < previewBadges.take(6).length; i++) ...[
                 if (i > 0) const SizedBox(width: 10),
-                _PublicBadgeChip(badge: badges[i]),
+                _PublicBadgeChip(
+                  badge: previewBadges[i],
+                  onTap: () => _openAchievementsScreen(context),
+                ),
               ],
+              const SizedBox(width: 10),
+              InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => _openAchievementsScreen(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.arrow_forward_rounded, size: 18, color: AppTheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Ver todos (${badges.length})',
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -533,29 +670,46 @@ class _PublicDigitalPassportSection extends StatelessWidget {
 class _PassportStatItem extends StatelessWidget {
   const _PassportStatItem({
     required this.icon,
+    required this.accentColor,
     required this.value,
     required this.label,
   });
 
   final IconData icon;
+  final Color accentColor;
   final String value;
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: AppTheme.primary, size: 20),
-        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: accentColor.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: accentColor, size: 18),
+        ),
+        const SizedBox(height: 8),
         Text(
           value,
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+          style: TextStyle(
+            color: theme.colorScheme.onSurface,
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+          ),
         ),
+        const SizedBox(height: 2),
         Text(
           label,
           style: TextStyle(
-            fontSize: 10,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
       ],
@@ -563,74 +717,92 @@ class _PassportStatItem extends StatelessWidget {
   }
 }
 
-class _PublicBadgeData {
-  const _PublicBadgeData({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.isUnlocked,
+class _PublicBadgeChip extends StatelessWidget {
+  const _PublicBadgeChip({
+    required this.badge,
+    required this.onTap,
   });
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool isUnlocked;
-}
-
-class _PublicBadgeChip extends StatelessWidget {
-  const _PublicBadgeChip({required this.badge});
-
-  final _PublicBadgeData badge;
+  final AchievementItem badge;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final opacity = badge.isUnlocked ? 1.0 : 0.45;
-    return Opacity(
-      opacity: opacity,
+    final theme = Theme.of(context);
+    final isUnlocked = badge.isUnlocked;
+    final activeColor = badge.accentColor;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: badge.isUnlocked
-              ? AppTheme.primary.withValues(alpha: 0.1)
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
+          color: isUnlocked
+              ? activeColor.withValues(alpha: 0.08)
+              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: badge.isUnlocked
-                ? AppTheme.primary.withValues(alpha: 0.3)
-                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
+            color: isUnlocked
+                ? activeColor.withValues(alpha: 0.28)
+                : theme.colorScheme.onSurface.withValues(alpha: 0.08),
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              badge.icon,
-              size: 20,
-              color: badge.isUnlocked ? AppTheme.primary : Colors.grey,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isUnlocked
+                    ? activeColor.withValues(alpha: 0.15)
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                badge.icon,
+                size: 18,
+                color: isUnlocked
+                    ? activeColor
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  badge.title,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: badge.isUnlocked
-                        ? Theme.of(context).colorScheme.onSurface
-                        : Colors.grey,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      badge.title,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isUnlocked
+                            ? theme.colorScheme.onSurface
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      isUnlocked ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
+                      size: 13,
+                      color: isUnlocked
+                          ? activeColor
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 2),
                 Text(
                   badge.subtitle,
                   style: TextStyle(
                     fontSize: 10,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
+                    fontWeight: FontWeight.w700,
+                    color: isUnlocked
+                        ? activeColor
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.45),
                   ),
                 ),
               ],
