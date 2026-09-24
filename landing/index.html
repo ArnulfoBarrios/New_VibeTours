@@ -28,14 +28,17 @@
     <span class="rail-line"></span>
   </aside>
 
-  <nav class="mntn-right-nav" aria-label="Progreso de lectura">
+  <nav class="mntn-right-nav" id="mntnRightNav" aria-label="Progreso de lectura">
     <ul>
-      <li><a href="#hero-start" class="right-nav-link active" data-section="hero-start">Start</a></li>
-      <li><a href="#step-01" class="right-nav-link" data-section="step-01">01</a></li>
-      <li><a href="#step-02" class="right-nav-link" data-section="step-02">02</a></li>
-      <li><a href="#step-03" class="right-nav-link" data-section="step-03">03</a></li>
-      <li><a href="#simulador" class="right-nav-link" data-section="simulador">Demo</a></li>
+      <li><a href="#hero-start" class="right-nav-link active" data-section="hero-start" data-index="0">Start</a></li>
+      <li><a href="#step-01" class="right-nav-link" data-section="step-01" data-index="1">01</a></li>
+      <li><a href="#step-02" class="right-nav-link" data-section="step-02" data-index="2">02</a></li>
+      <li><a href="#step-03" class="right-nav-link" data-section="step-03" data-index="3">03</a></li>
+      <li><a href="#simulador" class="right-nav-link" data-section="simulador" data-index="4">Demo</a></li>
     </ul>
+    <div class="section-indicator-bar">
+      <div class="section-indicator" id="mntnSectionIndicator"></div>
+    </div>
   </nav>
 
   <!-- ==========================================================================
@@ -80,18 +83,19 @@
        HERO SECTION (MNTN FULL-SCREEN VIEW WITH 3D PLANET BACKGROUND + FADE)
        ========================================================================== -->
   <section id="hero-start" class="mntn-hero">
-    <!-- Background 3D Planet Stage -->
+    <!-- Background 3D Planet Stage with 3 MNTN Parallax Depth Layers -->
     <div class="mntn-hero-planet-bg" id="globeWrapper">
-      <div class="planet-ambient-glow"></div>
-      <div class="globe-hud-stage">
+      <div class="planet-ambient-glow" id="heroLayerSky"></div>
+      <div class="globe-hud-stage" id="heroLayerPlanet">
         <canvas id="cobeGlobeCanvas" class="globe-canvas"></canvas>
       </div>
-      <!-- MNTN Bottom Gradient Fade into Page Body -->
+      <!-- Foreground Horizon Mist + MNTN Bottom Gradient Fade into Page Body -->
+      <div class="mntn-hero-horizon-mist" id="heroLayerHorizon"></div>
       <div class="mntn-hero-fade"></div>
     </div>
 
     <!-- Center Editorial Content Overlay -->
-    <div class="mntn-hero-content reveal-on-scroll">
+    <div class="mntn-hero-content" id="heroContentBlock">
       <div class="mntn-eyebrow">
         <span class="eyebrow-line"></span>
         <span class="eyebrow-text" id="hero-badge">TU GUÍA PERSONAL CON IA</span>

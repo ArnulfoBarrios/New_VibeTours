@@ -156,13 +156,15 @@ a {
   top: 50%;
   transform: translateY(-50%);
   z-index: 90;
+  display: flex;
+  align-items: stretch;
+  transition: opacity 250ms linear;
 }
 
 .mntn-right-nav ul {
   list-style: none;
   display: flex;
   flex-direction: column;
-  border-right: 2px solid var(--border-subtle);
 }
 
 .right-nav-link {
@@ -172,9 +174,7 @@ a {
   font-weight: 700;
   color: var(--text-tertiary);
   text-align: right;
-  border-right: 3px solid transparent;
-  margin-right: -2.5px;
-  transition: all 0.25s ease;
+  transition: color 0.25s ease, transform 0.25s ease;
 }
 
 .right-nav-link:hover {
@@ -183,7 +183,24 @@ a {
 
 .right-nav-link.active {
   color: var(--primary);
-  border-right-color: var(--primary);
+}
+
+.section-indicator-bar {
+  width: 3px;
+  background: var(--border-subtle);
+  position: relative;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.section-indicator {
+  width: 100%;
+  height: calc(100% / 5);
+  background: var(--primary);
+  box-shadow: 0 0 10px var(--primary-glow);
+  transition: transform 300ms linear;
+  transform: translateY(0%);
+  border-radius: 3px;
 }
 
 /* --------------------------------------------------------------------------
@@ -431,13 +448,28 @@ a {
   cursor: grabbing;
 }
 
+/* Foreground Horizon Mist Layer (MNTN Layer 3 Depth) */
+.mntn-hero-horizon-mist {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: -60px;
+  height: 46vh;
+  background:
+    radial-gradient(ellipse 65% 55% at 50% 85%, var(--primary-glow) 0%, transparent 72%),
+    linear-gradient(180deg, transparent 0%, var(--bg-page) 88%);
+  pointer-events: none;
+  z-index: 2;
+  will-change: transform;
+}
+
 /* Signature MNTN Bottom Fade into the Main Page Stream */
 .mntn-hero-fade {
   position: absolute;
   inset: 0;
   background: var(--hero-vignette), var(--hero-fade);
   pointer-events: none;
-  z-index: 2;
+  z-index: 3;
 }
 
 /* Editorial Center Hero Typography */
@@ -450,6 +482,7 @@ a {
   flex-direction: column;
   align-items: flex-start;
   pointer-events: none;
+  will-change: opacity, transform;
 }
 
 .mntn-hero-content a,
@@ -465,10 +498,12 @@ a {
 }
 
 .eyebrow-line {
-  width: 56px;
+  width: 72px;
+  max-width: 72px;
   height: 2px;
   background: var(--primary);
   display: inline-block;
+  will-change: max-width;
 }
 
 .eyebrow-text {
@@ -640,6 +675,7 @@ a {
   user-select: none;
   pointer-events: none;
   z-index: -1;
+  will-change: transform;
 }
 
 .mntn-story-title {
@@ -649,6 +685,7 @@ a {
   line-height: 1.16;
   color: var(--text-main);
   margin-bottom: 20px;
+  will-change: transform, opacity;
 }
 
 .mntn-story-desc {
@@ -657,6 +694,11 @@ a {
   line-height: 1.72;
   margin-bottom: 26px;
   max-width: 490px;
+  will-change: transform, opacity;
+}
+
+.mntn-story-visual {
+  will-change: transform, opacity;
 }
 
 .mntn-read-more {

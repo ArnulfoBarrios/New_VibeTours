@@ -277,32 +277,181 @@ function initCityDockControls() {
 }
 
 /* --------------------------------------------------------------------------
-   4. SCROLL EFFECTS: INSTANT 1:1 TICKER, 3D PARALLAX & STICKY SIMULATOR
+   4. MNTN CONTINUOUS SCROLL ENGINE (100-THRESHOLD PARALLAX & SCRUBBING)
    -------------------------------------------------------------------------- */
 function initScrollEffects() {
   const mainHeader = document.getElementById('mainHeader');
   const heroSection = document.getElementById('hero-start');
-  const heroVisualStage = document.querySelector('.globe-hud-stage');
+  const heroContentBlock = document.getElementById('heroContentBlock');
+  const heroLayerSky = document.getElementById('heroLayerSky');
+  const heroLayerPlanet = document.getElementById('heroLayerPlanet');
+  const heroLayerHorizon = document.getElementById('heroLayerHorizon');
+  const rightSideNav = document.getElementById('mntnRightNav');
+  const sectionIndicator = document.getElementById('mntnSectionIndicator');
   const rightNavLinks = document.querySelectorAll('.right-nav-link');
   const trackedSections = ['hero-start', 'step-01', 'step-02', 'step-03', 'simulador'];
+  const storySections = document.querySelectorAll('#step-01, #step-02, #step-03, #simulador');
 
+  // Build 100 fine-grained thresholds [0.00, 0.01, ..., 1.00] like MNTN main.js
+  const thresholds = [];
+  for (let i = 0; i <= 100; i++) {
+    thresholds.push(i / 100);
+  }
+
+  // Right-side navigation auto-fade behavior (shows on scroll/hover, dims after 2.5s)
+  let rightSideNavOpacityTimeout = null;
+  function pulseRightSideNav() {
+    if (!rightSideNav) return;
+    if (rightSideNavOpacityTimeout) {
+      clearTimeout(rightSideNavOpacityTimeout);
+    }
+    rightSideNav.style.opacity = '1';
+    rightSideNavOpacityTimeout = setTimeout(() => {
+      rightSideNav.style.opacity = '0.28';
+    }, 2500);
+  }
+
+  if (rightSideNav) {
+    rightSideNav.addEventListener('mouseenter', () => {
+      if (rightSideNavOpacityTimeout) clearTimeout(rightSideNavOpacityTimeout);
+      rightSideNav.style.opacity = '1';
+    });
+    rightSideNav.addEventListener('mouseleave', () => {
+      rightSideNavOpacityTimeout = setTimeout(() => {
+        rightSideNav.style.opacity = '0.28';
+      }, 1500);
+    });
+  }
+
+  function setActiveNavIndex(index) {
+    if (sectionIndicator) {
+      sectionIndicator.style.transform = `translateY(${index * 100}%)`;
+    }
+    rightNavLinks.forEach((link, idx) => {
+      if (idx === index) {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    });
+  }
+
+  // 1. MNTN Hero 100-Threshold Observer (Multi-layer parallax + Hero text opacity fade)
   if (heroSection) {
     const heroObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (!pointerInteracting && !isGlidingToCity) {
           isGlobePaused = !entry.isIntersecting;
         }
+        if (entry.isIntersecting) {
+          const ratio = entry.intersectionRatio;
+          if (heroContentBlock) {
+            heroContentBlock.style.opacity = Math.max(0, Math.pow(ratio, 1.15)).toFixed(3);
+            heroContentBlock.style.transform = `translate3d(0, ${(1 - ratio) * -42}px, 0)`;
+          }
+          if (heroLayerSky) {
+            heroLayerSky.style.transform = `translateY(-${(150 - 150 * ratio).toFixed(1)}px)`;
+          }
+          if (heroLayerPlanet) {
+            heroLayerPlanet.style.transform = `translate3d(0, ${(45 - 115 * (1 - ratio)).toFixed(1)}px, 0) scale(${(1 + (1 - ratio) * 0.07).toFixed(3)})`;
+          }
+          if (heroLayerHorizon) {
+            heroLayerHorizon.style.transform = `translateY(-${(55 - 55 * ratio).toFixed(1)}px)`;
+          }
+          if (ratio > 0.55) {
+            setActiveNavIndex(0);
+          }
+        }
       });
-    }, { threshold: 0.05 });
+    }, {
+      root: null,
+      rootMargin: '0px',
+      threshold: thresholds
+    });
     heroObserver.observe(heroSection);
   }
 
+  // 2. MNTN Story Sections (01, 02, 03, 04) Continuous Scroll Scrubbing Observer
+  function applyCardScrollRatio(sectionEl, index, ratio, fromBottom) {
+    const visualEl = sectionEl.querySelector('.mntn-story-visual, .mntn-simulator-body');
+    const eyebrowLine = sectionEl.querySelector('.eyebrow-line');
+    const titleEl = sectionEl.querySelector('.mntn-story-title');
+    const descEl = sectionEl.querySelector('.mntn-story-desc');
+    const readMoreEl = sectionEl.querySelector('.mntn-read-more');
+    const giantNumberEl = sectionEl.querySelector('.mntn-giant-number');
+
+    // Clamp effective ratio so that once a section reaches 65% visibility it locks cleanly at 1.0
+    const normalizedRatio = Math.min(1, Math.max(0, ratio / 0.65));
+
+    if (fromBottom) {
+      // Horizontal slide-in + opacity on the visual card (Odd: from right, Even: from left)
+      if (visualEl) {
+        const isOddCard = (index % 2 === 0); // index 0 is #step-01 (odd), index 1 is #step-02 (even)
+        const offsetX = (52 - normalizedRatio * 52).toFixed(2);
+        visualEl.style.transform = isOddCard
+          ? `translateX(${offsetX}px)`
+          : `translateX(-${offsetX}px)`;
+        visualEl.style.opacity = (0.28 + normalizedRatio * 0.72).toFixed(3);
+      }
+
+      // Expanding Eyebrow Horizontal Line (0px -> 72px)
+      if (eyebrowLine) {
+        const lineMax = Math.min(72 * ((normalizedRatio * 100) + 25) / 100, 72);
+        eyebrowLine.style.maxWidth = `${lineMax.toFixed(1)}px`;
+      }
+
+      // Staggered vertical slide-up on Title, Description, and Action Link
+      const slideY = (22 - 22 * normalizedRatio).toFixed(2);
+      const textOpacity = (0.3 + normalizedRatio * 0.7).toFixed(3);
+      if (titleEl) {
+        titleEl.style.transform = `translateY(${slideY}px)`;
+        titleEl.style.opacity = textOpacity;
+      }
+      if (descEl) {
+        descEl.style.transform = `translateY(${slideY}px)`;
+        descEl.style.opacity = textOpacity;
+      }
+      if (readMoreEl) {
+        readMoreEl.style.transform = `translateY(${slideY}px)`;
+      }
+      if (giantNumberEl) {
+        giantNumberEl.style.transform = `translateY(${((1 - normalizedRatio) * -36).toFixed(1)}px)`;
+      }
+    }
+  }
+
+  if (storySections.length > 0) {
+    const cardsObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const sectionIndex = Array.from(storySections).indexOf(entry.target);
+          const ratio = entry.intersectionRatio;
+          const fromBottom = entry.boundingClientRect.top >= -40;
+
+          applyCardScrollRatio(entry.target, sectionIndex, ratio, fromBottom);
+
+          if (ratio > 0.38 && sectionIndex !== -1) {
+            setActiveNavIndex(sectionIndex + 1);
+          }
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: '0px',
+      threshold: thresholds
+    });
+
+    storySections.forEach(sec => cardsObserver.observe(sec));
+  }
+
+  // 3. Scroll Listener for Header Blur, Globe Spin, & Active Section Fallback
   let ticking = false;
 
   function updateScrollVisuals() {
     const scrollY = window.scrollY;
+    pulseRightSideNav();
 
-    // 1. Header background blur on scroll
+    // Header background blur on scroll
     if (mainHeader) {
       if (scrollY > 40) {
         mainHeader.classList.add('scrolled');
@@ -311,35 +460,24 @@ function initScrollEffects() {
       }
     }
 
-    // 2. Hero Planet Parallax & Rotation on Scroll (MNTN Depth Effect)
-    if (scrollY < window.innerHeight * 1.3) {
-      globeScrollPhi = scrollY * 0.0024;
-      if (heroVisualStage) {
-        heroVisualStage.style.transform = `translate3d(0, ${45 + scrollY * 0.18}px, 0)`;
-      }
+    // Continuous 3D Planet rotation on scroll
+    if (scrollY < window.innerHeight * 1.4) {
+      globeScrollPhi = scrollY * 0.0028;
     }
 
-    // 3. MNTN Right-Side Navigation Progress Tracker
-    let activeSectionId = 'hero-start';
-    const triggerLine = window.innerHeight * 0.42;
-
-    trackedSections.forEach(secId => {
+    // Keep right-side sliding indicator synced with viewport center
+    let activeIdx = 0;
+    const triggerLine = window.innerHeight * 0.45;
+    trackedSections.forEach((secId, idx) => {
       const el = document.getElementById(secId);
       if (el) {
         const rect = el.getBoundingClientRect();
         if (rect.top <= triggerLine) {
-          activeSectionId = secId;
+          activeIdx = idx;
         }
       }
     });
-
-    rightNavLinks.forEach(link => {
-      if (link.dataset.section === activeSectionId) {
-        link.classList.add('active');
-      } else {
-        link.classList.remove('active');
-      }
-    });
+    setActiveNavIndex(activeIdx);
 
     ticking = false;
   }
@@ -353,7 +491,7 @@ function initScrollEffects() {
 
   updateScrollVisuals();
 
-  // Reveal On Scroll Observer
+  // Reveal On Scroll Observer for supplementary elements
   const revealElements = document.querySelectorAll('.reveal-on-scroll');
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
