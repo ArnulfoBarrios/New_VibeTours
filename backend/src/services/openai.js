@@ -8,7 +8,15 @@ import { resolvePlaceWithCascade, resolveProviderDestinationCenter, searchGeoapi
 import { fetchWithProviderRetry } from './provider-http.js'
 import { generateSpeechAudio } from './ttsService.js'
 
-import { enrichPlaceWithOpenData, buildDeterministicStopDetails } from './open-tourism-service.js'
+import {
+  enrichPlaceWithOpenData,
+  buildDeterministicStopDetails,
+  discoverDynamicCityLandmarks,
+  rankAndFilterTouristAttractions,
+  rankAndFilterTouristRestaurants,
+  isLowQualityOrFastFoodVenue,
+  isNeighborhoodOrMinorPark
+} from './open-tourism-service.js'
 
 export { generateSpeechAudio }
 
@@ -980,7 +988,7 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
     : String(entry?.name || '').trim()
   if (!name || isUnmappedOrClosedVenue(name)) return null
 
-  const geo = await resolvePlaceWithCascade({
+  let geo = await resolvePlaceWithCascade({
     name,
     city,
     country,
@@ -989,6 +997,38 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
     maxDistanceKm: 65,
     options: { preferLiveProviders: true }
   }).catch(() => null)
+
+  if (!hasOsmMapRecord(geo)) {
+    const simplifiedName = name
+      .replace(/\s+(en|del|de|sobre)\s+(el|la|los|las)\s+r[íi]o\s+.*$/i, '')
+      .replace(/\s*\([^)]*\)\s*/g, ' ')
+      .trim()
+    if (simplifiedName && simplifiedName !== name && simplifiedName.length >= 6) {
+      geo = await resolvePlaceWithCascade({
+        name: simplifiedName,
+        city,
+        country,
+        cityLat: centerLat,
+        cityLon: centerLon,
+        maxDistanceKm: 65,
+        options: { preferLiveProviders: true }
+      }).catch(() => null)
+    }
+  }
+
+  if (!hasOsmMapRecord(geo) && typeof entry === 'object' && Number.isFinite(entry?.latitude) && Number.isFinite(entry?.longitude)) {
+    geo = {
+      name,
+      latitude: entry.latitude,
+      longitude: entry.longitude,
+      coordinateSource: entry.source || 'wikipedia-geosearch',
+      placeId: `wiki:${name.toLowerCase().replace(/\s+/g, '_')}`,
+      type: entry.category || 'attraction',
+      category: entry.category || 'attraction',
+      tags: { wikipedia: name, tourism: 'attraction' }
+    }
+  }
+
   if (!hasOsmMapRecord(geo)) return null
 
   if (!isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) return null
@@ -1027,7 +1067,17 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
 
 async function verifyCatalogEntriesOnOsm(entries, city, country, limit = 16, centerLat = null, centerLon = null, category = 'attraction') {
   const candidates = (Array.isArray(entries) ? entries : []).slice(0, limit)
-  const verified = await Promise.all(candidates.map(entry => verifyCatalogEntryOnOsm(entry, city, country, centerLat, centerLon, category)))
+  const verified = []
+  const batchSize = 4
+  for (let i = 0; i < candidates.length; i += batchSize) {
+    const chunk = candidates.slice(i, i + batchSize)
+    const chunkResults = await Promise.all(
+      chunk.map(entry => verifyCatalogEntryOnOsm(entry, city, country, centerLat, centerLon, category))
+    )
+    for (const item of chunkResults) {
+      if (item) verified.push(item)
+    }
+  }
   return verified.filter(Boolean)
 }
 
@@ -1118,8 +1168,8 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
     photonSearch(`turismo ${cleanDest}`, count, null, null, null, null, country).catch(() => []),
     photonSearch(`museo ${cleanDest}`, count, null, null, null, null, country).catch(() => [])
   ])
-  const combined = [...parks, ...attractions, ...museums]
-    .filter(p => p && p.name && !isGenericFacilityName(p.name) && !isFoodOrDrinkEstablishment(p.name))
+  const combined = [...attractions, ...museums, ...parks]
+    .filter(p => p && p.name && !isGenericFacilityName(p.name) && !isFoodOrDrinkEstablishment(p.name) && !isNeighborhoodOrMinorPark(p.name, p.tags))
   const seen = new Set()
   const uniquePhoton = []
   for (const item of combined) {
@@ -1280,8 +1330,9 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
+  let dynamicIconics = []
   if (realPlaces.length < 8) {
-    const dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry).catch(() => [])
+    dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry, lat, lon).catch(() => [])
     const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, 14, lat, lon)
     for (const vd of verifiedDynamic) {
       if (!realPlaces.some(rp => arePlacesSimilar(rp, vd.name))) {
@@ -1315,7 +1366,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   // 1.3 Query live OpenStreetMap POIs (Overpass and Photon) only when complements are needed
   const needsOsmComplement = (realPlaces.length < 10 || realRests.length < 4 || realHotels.length < 2) && lat && lon
   if (needsOsmComplement) {
-    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 2000))
+    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 5000))
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
       realHotels.length < 2
         ? Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise])
@@ -1423,7 +1474,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   if (realRests.length < 10 && lat && lon) {
     const extraFood = await photonSearch(`restaurante ${clean}`, 12, lat, lon, null, 30000, targetCountry).catch(() => [])
     for (const ef of extraFood) {
-      if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name)) {
+      if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name) && !isLowQualityOrFastFoodVenue(ef.name, ef.tags)) {
         if (targetCountry && ef.country && !isCountryMatch(targetCountry, ef.country)) continue
         if (ef.latitude != null && ef.longitude != null) {
           const d = haversineMeters(lat, lon, ef.latitude, ef.longitude)
@@ -1452,6 +1503,13 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
+  const allPriorityIconics = [
+    ...presetIconics,
+    ...(Array.isArray(dynamicIconics) ? dynamicIconics.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean) : [])
+  ]
+  realPlaces = rankAndFilterTouristAttractions(realPlaces, allPriorityIconics)
+  realRests = rankAndFilterTouristRestaurants(realRests)
+
   const unifiedRadiusKm = /\b(cove[nñ]as|tol[uú]|san\s+antero|golfo\s+de\s+morrosquillo)\b/i.test(clean)
     ? 65
     : 35
@@ -1468,7 +1526,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       hotels: realHotels
     },
     seeds: {
-      places: presetIconics,
+      places: allPriorityIconics,
       restaurants: presetRests,
       hotels: presetHotels
     },
@@ -1483,7 +1541,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const catalogPlaceCandidates = unifiedCatalog.places || []
   const prioritizedPlaceCandidates = []
   const prioritizedIds = new Set()
-  for (const iconicName of presetIconics) {
+  for (const iconicName of allPriorityIconics) {
     const match = catalogPlaceCandidates.find(candidate =>
       !prioritizedIds.has(candidate.id || candidate.candidateId || candidate.name) &&
       arePlacesSimilar(candidate.name, iconicName)
@@ -3894,7 +3952,7 @@ Formato JSON obligatorio:
 
 const cityLandmarksCache = new Map()
 
-export async function fetchCityIconicLandmarks(cityInput, countryInput = '') {
+export async function fetchCityIconicLandmarks(cityInput, countryInput = '', lat = null, lon = null) {
   let city = ''
   let country = countryInput || ''
   if (typeof cityInput === 'object' && cityInput !== null) {
@@ -3973,6 +4031,13 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
     } catch (err) {
       console.warn('[fetchCityIconicLandmarks] Dynamic OpenAI call failed:', err.message)
     }
+  }
+
+  // Fallback to dynamic Open-Source Tourism discovery (Wikipedia Turismo/Cultura sections + GeoSearch)
+  const wikiLandmarks = await discoverDynamicCityLandmarks(clean, country, lat, lon).catch(() => [])
+  if (Array.isArray(wikiLandmarks) && wikiLandmarks.length > 0) {
+    cityLandmarksCache.set(cacheKey, wikiLandmarks)
+    return wikiLandmarks
   }
 
   // Fallback to Photon POIs without circular call

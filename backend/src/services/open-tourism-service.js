@@ -3,6 +3,15 @@ import { GeoCache } from './geoCache.js'
 const USER_AGENT = 'VIBETOURS/1.0 (https://vibetours.app; ops@vibetours.app)'
 const placeEnrichmentCache = new GeoCache(24 * 60 * 60 * 1000, 600)
 const cityGuideCache = new GeoCache(24 * 60 * 60 * 1000, 200)
+const cityLandmarksDiscoveryCache = new GeoCache(24 * 60 * 60 * 1000, 300)
+
+const ICONIC_TOURIST_PARK_KEYWORDS = /\b(ronda|lineal|malec[oó]n|sim[oó]n\s+bol[ií]var|bol[ií]var|principal|central|mayor|nacional|natural|ecol[oó]gico|cultural|bot[aá]nico|arqueol[oó]gico|hist[oó]rico|museo|mirador|centenario|fundadores|santander|nari[nñ]o|caldas|sucre|c[oó]rdoba|del\s+agua|de\s+los\s+novios|de\s+la\s+paz|del\s+r[ií]o|tayrona|esp[ií]ritu\s+del\s+manglar|bicentenario|alameda)\b/i
+
+const NEIGHBORHOOD_PARK_MARKERS = /\b(biosaludable|infantil|polideportivo|cancha|urbanizaci[oó]n|conjunto|etapa|manzana|lote|barrio|comuna|vereda|glorieta|separador|parqueadero|zona\s+verde|circunvalar|\d+\s+con\s+[a-záéíóúñ0-9]+|calle\s+\d+|carrera\s+\d+|cra\.?\s*\d+|cll\.?\s*\d+|las\s+golondrinas|de\s+los\s+sue[nñ]os|balboa|brizalia)\b/i
+
+const HIGH_VALUE_LANDMARK_KEYWORDS = /\b(ronda\s+del|malec[oó]n|muelle\s+tur[ií]stico|muelle|catedral|bas[ií]lica|santuario|museo|monumento|castillo|fuerte|muralla|mirador|pueblito|plaza\s+cultural|pasaje\s+del\s+sol|pasaje\s+comercial|pasaje\s+de\s+las\s+flores|centro\s+hist[oó]rico|puente\s+met[aá]lico|puente\s+segundo\s+centenario|jard[ií]n\s+bot[aá]nico|teatro|palacio|acueducto|telef[eé]rico|acantilado|volc[aá]n|ci[eé]naga|bah[ií]a|isla|playa)\b/i
+
+const LOW_QUALITY_FOOD_MARKERS = /\b(comidas?\s+r[aá]pidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|salchipapas?|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|panader[ií]a|reposter[ií]a|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro)\b/i
 
 function sanitizeVoiceText(text = '') {
   return String(text || '')
@@ -17,6 +26,357 @@ function splitIntoSentences(text = '') {
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence.length > 18)
+}
+
+function normalizeTextKey(text = '') {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function isNeighborhoodOrMinorPark(name = '', tags = {}, wikipediaTrusted = false) {
+  const cleanName = String(name || '').trim()
+  if (!cleanName) return true
+  if (NEIGHBORHOOD_PARK_MARKERS.test(cleanName)) return true
+
+  const mergedTags = { ...(tags || {}) }
+  const hasDedicatedWikidata = Boolean(mergedTags.wikidata || mergedTags['brand:wikidata'])
+  if (HIGH_VALUE_LANDMARK_KEYWORDS.test(cleanName)) return false
+
+  const isParkNamed = /^(parque|plazoleta|zona\s+recreativa)\b/i.test(cleanName) || String(mergedTags.leisure || '').toLowerCase() === 'park'
+  if (isParkNamed) {
+    if (ICONIC_TOURIST_PARK_KEYWORDS.test(cleanName) || hasDedicatedWikidata) return false
+    return true
+  }
+
+  if (wikipediaTrusted) return false
+  const hasTourismTag = ['attraction', 'museum', 'viewpoint', 'theme_park', 'zoo', 'aquarium', 'gallery', 'artwork'].includes(
+    String(mergedTags.tourism || '').toLowerCase()
+  )
+  const hasHistoricTag = Boolean(mergedTags.historic)
+  if (hasTourismTag || hasHistoricTag) return false
+  return false
+}
+
+export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
+  const cleanName = String(name || '').trim()
+  if (!cleanName) return true
+  if (LOW_QUALITY_FOOD_MARKERS.test(cleanName)) return true
+  const amenity = String(tags?.amenity || '').toLowerCase()
+  if (amenity === 'fast_food') return true
+  return false
+}
+
+export function scoreTouristAttraction(place = {}, wikipediaKeySet = new Set()) {
+  const name = String(place.name || place.nombre || '').trim()
+  if (!name) return -1000
+  const tags = { ...(place.tags || {}), ...(place.rawTags || {}) }
+  const normName = normalizeTextKey(name)
+
+  const isWikiMatched =
+    place.fromWikipediaDiscovery === true ||
+    wikipediaKeySet.has(normName) ||
+    Array.from(wikipediaKeySet).some((wk) => wk.length >= 6 && (normName.includes(wk) || wk.includes(normName)))
+
+  if (isNeighborhoodOrMinorPark(name, tags, isWikiMatched)) {
+    return -120
+  }
+
+  let score = 10
+  if (isWikiMatched) score += 120
+  if (tags.wikidata || tags.wikipedia) score += 90
+  if (HIGH_VALUE_LANDMARK_KEYWORDS.test(name)) score += 75
+
+  const tourism = String(tags.tourism || '').toLowerCase()
+  const historic = String(tags.historic || '').toLowerCase()
+  const amenity = String(tags.amenity || '').toLowerCase()
+  if (['attraction', 'museum', 'viewpoint', 'theme_park', 'zoo', 'gallery'].includes(tourism)) score += 65
+  if (['monument', 'memorial', 'cathedral', 'castle', 'fort', 'archaeological_site', 'heritage'].includes(historic)) score += 65
+  if (['arts_centre', 'theatre', 'ferry_terminal'].includes(amenity)) score += 45
+  if (ICONIC_TOURIST_PARK_KEYWORDS.test(name)) score += 50
+  if (tags.opening_hours || tags.website || tags.image || tags.wikimedia_commons) score += 20
+
+  return score
+}
+
+export function rankAndFilterTouristAttractions(places = [], wikipediaLandmarks = []) {
+  const wikiSet = new Set(
+    (wikipediaLandmarks || []).map((item) => normalizeTextKey(typeof item === 'string' ? item : item?.name || '')).filter(Boolean)
+  )
+
+  const scored = (places || [])
+    .filter((p) => p && (p.name || p.nombre))
+    .map((p) => ({
+      ...p,
+      touristScore: scoreTouristAttraction(p, wikiSet)
+    }))
+
+  const highQuality = scored.filter((p) => p.touristScore > 0)
+  const sourceList = highQuality.length >= 3 ? highQuality : scored.filter((p) => !NEIGHBORHOOD_PARK_MARKERS.test(p.name || ''))
+
+  return sourceList.sort((a, b) => b.touristScore - a.touristScore)
+}
+
+export function scoreTouristRestaurant(rest = {}) {
+  const name = String(rest.name || rest.nombre || '').trim()
+  if (!name || isLowQualityOrFastFoodVenue(name, rest.tags || rest.rawTags)) return -200
+  const tags = { ...(rest.tags || {}), ...(rest.rawTags || {}) }
+
+  let score = 20
+  if (tags.cuisine) score += 35
+  if (tags.website || tags['contact:website'] || tags['contact:instagram']) score += 25
+  if (tags.opening_hours) score += 20
+  if (/\b(restaurante|parrilla|asados|marisquer[ií]a|cevicher[ií]a|gastrobar|bistro|cocina|campestre|mercado\s+gastron[oó]mico|terraza|caim[aá]n|pasaje\s+del\s+sol)\b/i.test(name)) {
+    score += 25
+  }
+  return score
+}
+
+export function rankAndFilterTouristRestaurants(restaurants = []) {
+  return (restaurants || [])
+    .filter((r) => r && (r.name || r.nombre) && !isLowQualityOrFastFoodVenue(r.name || r.nombre, r.tags || r.rawTags))
+    .map((r) => ({ ...r, culinaryScore: scoreTouristRestaurant(r) }))
+    .filter((r) => r.culinaryScore > 0)
+    .sort((a, b) => b.culinaryScore - a.culinaryScore)
+}
+
+function cleanExtractedLandmarkCandidate(raw = '', city = '') {
+  let cleaned = String(raw || '')
+    .replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, '')
+    .replace(/<ref[^/]*\/>/gi, '')
+    .replace(/\{\{[^}]+\}\}/g, '')
+    .replace(/\[\[(?:Archivo|File|Imagen|Image|Categoría|Category):[^\]]+\]\]/gi, '')
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/'''/g, '')
+    .replace(/''/g, '')
+    .replace(/^[\s*•\-–—:;,.]+/, '')
+    .trim()
+
+  cleaned = cleaned
+    .split(/\s*(?:,\s*(?:ubicad|situad|zona\s+rosa|donde|el\s+cual|la\s+cual|es\s+un|es\s+el|es\s+la|sede\s+de|conocid)|;\s*|\.\s+|\s+en\s+el\s+barrio)/i)[0]
+    .replace(/^(?:el|la|los|las|un|una)\s+/i, (match) => {
+      return /^(?:el\s+puente|la\s+ronda|la\s+catedral|el\s+muelle|el\s+malec[oó]n)/i.test(cleaned)
+        ? ''
+        : match
+    })
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/[.;:,]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (cleaned.length < 5 || cleaned.length > 68) return ''
+  const normCity = normalizeTextKey(city)
+  const normCleaned = normalizeTextKey(cleaned)
+  if (!normCleaned || normCleaned === normCity) return ''
+
+  if (/\b(municipio|departamento|colombia|habitantes|kil[oó]metros|temperatura|universidad|colegio|cl[ií]nica|hospital|aeropuerto|terminal\s+de\s+transporte|alcald[ií]a|gobernaci[oó]n|peri[oó]dico|emisora|canal|elecciones|dane| siglo\s+[ivx]+|am[eé]rica\s+latina)\b/i.test(cleaned)) {
+    return ''
+  }
+
+  const hasLandmarkPrefix = /^(ronda\b|parque\b|catedral\b|iglesia\b|bas[ií]lica\b|muelle\b|malec[oó]n\b|mirador\b|museo\b|monumento\b|plaza\b|plazoleta\b|puente\b|pasaje\b|pueblito\b|avenida\s+primera\b|centro\s+hist[oó]rico\b|centro\s+cultural\b|castillo\b|fuerte\b|jard[ií]n\b|teatro\b|antiguo\s+mercado\b|mercado\s+p[uú]blico\b)/i.test(cleaned)
+  if (!hasLandmarkPrefix && !HIGH_VALUE_LANDMARK_KEYWORDS.test(cleaned)) {
+    return ''
+  }
+
+  if (NEIGHBORHOOD_PARK_MARKERS.test(cleaned)) return ''
+  return cleaned
+}
+
+function classifyDiscoveredLandmark(name = '') {
+  const lower = String(name).toLowerCase()
+  if (/\b(museo|centro\s+cultural|pueblito|plaza\s+cultural|teatro)\b/.test(lower)) return 'culture'
+  if (/\b(ronda|parque|jard[ií]n|ci[eé]naga|reserva|ecoparque)\b/.test(lower)) return 'park'
+  if (/\b(mirador|muelle|malec[oó]n|puente|avenida\s+primera)\b/.test(lower)) return 'viewpoint'
+  if (/\b(playa|isla|bah[ií]a)\b/.test(lower)) return 'beach'
+  return 'historic'
+}
+
+function capitalizeFirstLetter(str = '') {
+  const trimmed = String(str || '').trim()
+  if (!trimmed) return ''
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+}
+
+export function parseLandmarksFromWikitext(wikitext = '', city = '') {
+  if (!wikitext) return []
+  const candidates = []
+
+  const sectionRegex = /==+\s*(Turismo|Sitios de inter[eé]s|Lugares de inter[eé]s|Atractivos tur[ií]sticos|Patrimonio|Cultura|Religi[oó]n|Arquitectura|Parques|Monumentos)\s*==+([\s\S]*?)(?=\n==[^=]|$)/gi
+  let match
+  const targetBlocks = []
+  while ((match = sectionRegex.exec(wikitext)) !== null) {
+    targetBlocks.push({ title: match[1].toLowerCase(), body: match[2] })
+  }
+  targetBlocks.sort((a, b) => {
+    const aIsTourism = /turismo|sitios|lugares|atractivos|patrimonio/.test(a.title) ? 0 : 1
+    const bIsTourism = /turismo|sitios|lugares|atractivos|patrimonio/.test(b.title) ? 0 : 1
+    return aIsTourism - bIsTourism
+  })
+
+  const combinedText = targetBlocks.length > 0
+    ? targetBlocks.map((b) => b.body).join('\n')
+    : wikitext.slice(0, 18000)
+
+  const inlinePattern = /\b((?:[Pp]arque(?:\s+[Ll]ineal)?|[Rr]onda|[Mm]alec[oó]n|[Mm]uelle(?:\s+[Tt]ur[ií]stico)?|[Cc]atedral|[Bb]as[ií]lica|[Mm]useo|[Mm]onumento|[Pp]laza(?:\s+[Cc]ultural)?|[Mm]irador|[Pp]asaje|[Pp]ueblito|[Cc]astillo|[Ff]uerte|[Pp]uente(?:\s+[Mm]et[aá]lico|\s+[Ss]egundo\s+[Cc]entenario)?|[Aa]venida\s+Primera|[Aa]ntiguo\s+[Mm]ercado\s+[Pp][uú]blico)\s+(?:de\s+|del\s+|la\s+|las\s+|los\s+|al\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s]{2,42})/g
+  let inlineMatch
+  while ((inlineMatch = inlinePattern.exec(combinedText)) !== null) {
+    const cleaned = cleanExtractedLandmarkCandidate(capitalizeFirstLetter(inlineMatch[1]), city)
+    if (cleaned) candidates.push(capitalizeFirstLetter(cleaned))
+  }
+
+  const bulletLines = combinedText.match(/^\s*[*•]\s*.+$/gm) || []
+  for (const line of bulletLines) {
+    const cleaned = cleanExtractedLandmarkCandidate(line, city)
+    if (cleaned) candidates.push(capitalizeFirstLetter(cleaned))
+  }
+
+  return candidates
+}
+
+async function fetchCityWikipediaWikitext(city = '', country = '', lang = 'es') {
+  const queries = [
+    country ? `${city} (${country})` : '',
+    city
+  ].filter(Boolean)
+
+  for (const q of queries) {
+    try {
+      const searchUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&srlimit=3&format=json&origin=*`
+      const searchRes = await fetch(searchUrl, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(3500)
+      })
+      if (!searchRes.ok) continue
+      const searchData = await searchRes.json()
+      const hit = (searchData?.query?.search || []).find((item) => {
+        const normTitle = normalizeTextKey(item.title)
+        const normTarget = normalizeTextKey(city)
+        return normTitle === normTarget || normTitle.startsWith(`${normTarget} `)
+      }) || searchData?.query?.search?.[0]
+
+      if (!hit?.title) continue
+
+      const parseUrl = `https://${lang}.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(hit.title)}&prop=wikitext&format=json&origin=*`
+      const parseRes = await fetch(parseUrl, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(4000)
+      })
+      if (!parseRes.ok) continue
+      const parseData = await parseRes.json()
+      const wikitext = parseData?.parse?.wikitext?.['*']
+      if (wikitext) return wikitext
+    } catch {
+      // Try next query
+    }
+  }
+  return ''
+}
+
+async function fetchWikipediaGeoSearchLandmarks(lat, lon, city = '', lang = 'es') {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) return []
+  try {
+    const url = `https://${lang}.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${Number(lat)}|${Number(lon)}&gsradius=10000&gslimit=35&format=json&origin=*`
+    const res = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(3500)
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data?.query?.geosearch || [])
+      .map((item) => {
+        const cleaned = cleanExtractedLandmarkCandidate(item.title, city)
+        if (!cleaned) return null
+        return {
+          name: cleaned,
+          latitude: Number(item.lat),
+          longitude: Number(item.lon),
+          source: 'wikipedia-geosearch'
+        }
+      })
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+export async function discoverDynamicCityLandmarks(city = '', country = '', lat = null, lon = null, lang = 'es') {
+  const cleanCity = String(city || '').trim()
+  if (!cleanCity) return []
+
+  const cacheKey = `wiki_landmarks_${lang}_${normalizeTextKey(cleanCity)}_${normalizeTextKey(country)}`
+  const cached = cityLandmarksDiscoveryCache.get(cacheKey)
+  if (cached) return cached
+
+  const [wikitext, geoItems] = await Promise.all([
+    fetchCityWikipediaWikitext(cleanCity, country, lang),
+    fetchWikipediaGeoSearchLandmarks(lat, lon, cleanCity, lang)
+  ])
+
+  const geoMap = new Map()
+  for (const g of geoItems) {
+    geoMap.set(normalizeTextKey(g.name), g)
+  }
+
+  const parsedFromArticle = parseLandmarksFromWikitext(wikitext, cleanCity)
+  const combinedRaw = [...parsedFromArticle, ...geoItems.map((g) => g.name)]
+
+  const hasCenterCoords = Number.isFinite(Number(lat)) && Number.isFinite(Number(lon))
+  const seen = new Set()
+  const rawList = []
+  let idx = 0
+  for (const name of combinedRaw) {
+    if (isNeighborhoodOrMinorPark(name, {}, false)) continue
+    const key = normalizeTextKey(name)
+    if (!key || seen.has(key)) continue
+    const isDuplicate = Array.from(seen).some((existing) => existing.includes(key) || key.includes(existing))
+    if (isDuplicate) continue
+    seen.add(key)
+
+    const matchedGeo = geoMap.get(key)
+    const angle = (idx * 137.5 * Math.PI) / 180
+    const radiusDeg = 0.0022 + (idx % 4) * 0.0008
+    const fallbackLat = hasCenterCoords ? Number((Number(lat) + Math.cos(angle) * radiusDeg).toFixed(6)) : null
+    const fallbackLon = hasCenterCoords ? Number((Number(lon) + Math.sin(angle) * radiusDeg).toFixed(6)) : null
+    idx++
+
+    const item = {
+      name,
+      category: classifyDiscoveredLandmark(name),
+      fromWikipediaDiscovery: true,
+      latitude: matchedGeo?.latitude ?? fallbackLat,
+      longitude: matchedGeo?.longitude ?? fallbackLon,
+      source: matchedGeo ? 'wikipedia-geosearch' : 'wikipedia-tourism'
+    }
+    item.priorityScore = scoreTouristAttraction(item) + (/\b(ronda\s+del|malec[oó]n|catedral|muelle|museo|sim[oó]n\s+bol[ií]var|plaza\s+cultural|pasaje\s+del\s+sol|pueblito|castillo)\b/i.test(name) ? 45 : 0)
+    rawList.push(item)
+  }
+
+  rawList.sort((a, b) => b.priorityScore - a.priorityScore)
+
+  // Diversify so parks don't monopolize the top slots before cathedrals, piers, and museums
+  const landmarks = []
+  const categoryCount = {}
+  const deferred = []
+  for (const item of rawList) {
+    const count = categoryCount[item.category] || 0
+    if (item.category === 'park' && count >= 2) {
+      deferred.push(item)
+    } else {
+      categoryCount[item.category] = count + 1
+      landmarks.push(item)
+    }
+  }
+  landmarks.push(...deferred)
+
+  if (landmarks.length > 0) {
+    cityLandmarksDiscoveryCache.set(cacheKey, landmarks)
+  }
+  return landmarks
 }
 
 function extractOsmMetadata(place = {}) {

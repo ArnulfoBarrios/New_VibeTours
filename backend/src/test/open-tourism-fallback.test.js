@@ -10,7 +10,10 @@ import {
 } from '../services/openai.js'
 import {
   composeDeterministicTourGuideScript,
-  buildDeterministicStopDetails
+  buildDeterministicStopDetails,
+  rankAndFilterTouristAttractions,
+  rankAndFilterTouristRestaurants,
+  parseLandmarksFromWikitext
 } from '../services/open-tourism-service.js'
 import { buildTourPlanner, buildFallbackTour } from '../routes/ai.js'
 import { generateSpeechAudio, resetOpenAiTtsCircuitBreaker } from '../services/ttsService.js'
@@ -164,3 +167,69 @@ test('should synthesize an MP3 audio buffer using free neural TTS when OpenAI TT
   assert.ok(Buffer.isBuffer(audioBuffer))
   assert.ok(audioBuffer.length > 500, `Expected non-empty MP3 buffer, got ${audioBuffer.length} bytes`)
 })
+
+test('should reject neighborhood parks and rank iconic attractions at the top when scoring city POIs', () => {
+  const rawPois = [
+    { name: 'Parque Balboa', tags: { leisure: 'park' } },
+    { name: 'Parque Brizalia', tags: { leisure: 'park' } },
+    { name: 'Parque Biosaludable 35 con Circunvalar', tags: { leisure: 'park' } },
+    { name: 'Parque las Golondrinas', tags: { leisure: 'park' } },
+    { name: 'Ronda del Sinú', tags: { leisure: 'park', tourism: 'attraction', wikidata: 'Q6111942' } },
+    { name: 'Catedral de San Jerónimo', tags: { historic: 'cathedral', wikidata: 'Q5758565' } },
+    { name: 'Museo Zenú de Arte Contemporáneo', tags: { tourism: 'museum' } },
+    { name: 'Muelle turístico en el río Sinú', tags: { man_made: 'pier', tourism: 'attraction' } },
+    { name: 'Parque Simón Bolívar', tags: { leisure: 'park', historic: 'memorial' } }
+  ]
+  const wikiLandmarks = [
+    'Ronda del Sinú',
+    'Museo Zenú de Arte Contemporáneo',
+    'Catedral de San Jerónimo',
+    'Muelle turístico en el río Sinú',
+    'Parque Simón Bolívar'
+  ]
+
+  const ranked = rankAndFilterTouristAttractions(rawPois, wikiLandmarks)
+  const names = ranked.map((item) => item.name)
+
+  assert.ok(!names.includes('Parque Balboa'))
+  assert.ok(!names.includes('Parque Brizalia'))
+  assert.ok(!names.includes('Parque Biosaludable 35 con Circunvalar'))
+  assert.ok(!names.includes('Parque las Golondrinas'))
+  assert.ok(names.includes('Ronda del Sinú'))
+  assert.ok(names.includes('Catedral de San Jerónimo'))
+  assert.ok(names.includes('Museo Zenú de Arte Contemporáneo'))
+  assert.ok(names.includes('Muelle turístico en el río Sinú'))
+  assert.ok(names.includes('Parque Simón Bolívar'))
+})
+
+test('should reject fast-food stalls and rank authentic culinary restaurants when scoring food venues', () => {
+  const rawFood = [
+    { name: 'Restaurante Comidas Rápidas el Lobo', tags: { amenity: 'fast_food' } },
+    { name: 'Minuto de Dios Restaurante Maritza', tags: { amenity: 'restaurant' } },
+    { name: 'Restaurante Brasa Caribe', tags: { amenity: 'restaurant', cuisine: 'regional;steak_house', opening_hours: '11:30-22:00' } },
+    { name: 'RUTA 29 PARRILLA RESTAURANTE', tags: { amenity: 'restaurant', cuisine: 'grill' } }
+  ]
+
+  const ranked = rankAndFilterTouristRestaurants(rawFood)
+  const names = ranked.map((r) => r.name)
+
+  assert.ok(!names.includes('Restaurante Comidas Rápidas el Lobo'))
+  assert.ok(!names.includes('Minuto de Dios Restaurante Maritza'))
+  assert.equal(names[0], 'Restaurante Brasa Caribe')
+  assert.ok(names.includes('RUTA 29 PARRILLA RESTAURANTE'))
+})
+
+test('should extract iconic tourist landmarks from city Wikipedia wikitext sections when parsing article', () => {
+  const sampleWikitext = `
+== Turismo ==
+El principal atractivo es el '''[[Parque Ronda del Sinú]]''', junto al '''Muelle turístico en el río Sinú'''.
+También destacan el '''Museo Zenú de Arte Contemporáneo''', la '''[[Catedral de San Jerónimo]]''', el '''Pueblito Cordobés''' y el '''Pasaje del Sol'''.
+`
+  const extracted = parseLandmarksFromWikitext(sampleWikitext, 'Montería')
+  assert.ok(extracted.some((item) => /Ronda del Sinú/i.test(item)))
+  assert.ok(extracted.some((item) => /Museo Zenú de Arte Contemporáneo/i.test(item)))
+  assert.ok(extracted.some((item) => /Catedral de San Jerónimo/i.test(item)))
+  assert.ok(extracted.some((item) => /Pueblito Cordobés/i.test(item)))
+  assert.ok(extracted.some((item) => /Pasaje del Sol/i.test(item)))
+})
+

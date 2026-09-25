@@ -26,7 +26,9 @@ const TRUSTED_SOURCES = new Set([
   'curated',
   'cache',
   'cache_memory',
-  'cache_db'
+  'cache_db',
+  'wikipedia-geosearch',
+  'wikipedia-tourism'
 ])
 
 const CATEGORY_LIMITS = Object.freeze({

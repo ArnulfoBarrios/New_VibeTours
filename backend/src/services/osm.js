@@ -1,5 +1,6 @@
 import { GeoCache } from './geoCache.js'
 import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS } from './destinationService.js'
+import { rankAndFilterTouristAttractions, isNeighborhoodOrMinorPark, isLowQualityOrFastFoodVenue } from './open-tourism-service.js'
 
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
 
@@ -14,8 +15,8 @@ const citiesCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 // An LLM can suggest a real venue while still inventing an inaccurate point.
 // Only coordinates returned by a map provider (or our small curated seed set)
 // may be used as navigation coordinates.
-const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db'])
-const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db'])
+const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-tourism'])
+const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-tourism'])
 
 // Algunas atracciones tienen más de un nombre comercial o institucional, pero
 // representan el mismo punto de visita. Esto es una identidad semántica, no
@@ -1287,7 +1288,7 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
     return results
   } catch (err) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError' || err.code === 'UND_ERR_CONNECT_TIMEOUT') {
-      tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 10000)
+      tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 1500 : 2500)
     }
     return []
   }
@@ -1299,10 +1300,13 @@ const OVERPASS_SERVERS = [
   'https://overpass.private.coffee/api/interpreter'
 ]
 
+let overpassServerCursor = 0
 const attractionsCache = new GeoCache(30 * 60 * 1000, 300)
 
 async function fetchOverpassWithMirrors(query, timeoutMs = 4000) {
-  for (const serverUrl of OVERPASS_SERVERS) {
+  const startIndex = overpassServerCursor++ % OVERPASS_SERVERS.length
+  for (let i = 0; i < OVERPASS_SERVERS.length; i++) {
+    const serverUrl = OVERPASS_SERVERS[(startIndex + i) % OVERPASS_SERVERS.length]
     try {
       const response = await fetch(serverUrl, {
         method: 'POST',
@@ -1324,7 +1328,8 @@ async function fetchOverpassWithMirrors(query, timeoutMs = 4000) {
 }
 
 export async function overpassAttractions(latitude, longitude, radius = 8000) {
-  const effectiveRadius = Math.min(Math.max(radius, 8000), 52000)
+  const effectiveRadius = Math.min(Math.max(radius, 8000), 15000)
+  const parkRadius = Math.min(effectiveRadius, 9000)
   const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${effectiveRadius}`
   const cached = attractionsCache.get(cacheKey)
   if (cached) {
@@ -1332,32 +1337,21 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
   }
 
   const query = `
-    [out:json][timeout:10];
+    [out:json][timeout:8];
     (
-      node(around:${effectiveRadius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
-      node(around:${effectiveRadius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
-      node(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre|ferry_terminal"];
-      node(around:${effectiveRadius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
-      node(around:${effectiveRadius},${latitude},${longitude})["natural"~"beach|water"];
-      node(around:${effectiveRadius},${latitude},${longitude})["place"~"island|islet"];
-      node(around:${effectiveRadius},${latitude},${longitude})["boundary"="national_park"];
-      way(around:${effectiveRadius},${latitude},${longitude})["tourism"~"museum|gallery|viewpoint|attraction|theme_park|zoo|aquarium"];
-      way(around:${effectiveRadius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"];
-      way(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|marketplace|restaurant|cafe|pub|bar|nightclub|theatre|ferry_terminal"];
-      way(around:${effectiveRadius},${latitude},${longitude})["leisure"~"park|garden|nature_reserve"];
-      way(around:${effectiveRadius},${latitude},${longitude})["natural"~"beach|water"];
-      way(around:${effectiveRadius},${latitude},${longitude})["place"~"island|islet"];
-      way(around:${effectiveRadius},${latitude},${longitude})["boundary"="national_park"];
-      relation(around:${effectiveRadius},${latitude},${longitude})["place"~"island|islet"];
-      relation(around:${effectiveRadius},${latitude},${longitude})["boundary"="national_park"];
+      nwr(around:${effectiveRadius},${latitude},${longitude})["tourism"~"attraction|museum|viewpoint|gallery|theme_park|zoo|aquarium|artwork"]["name"];
+      nwr(around:${effectiveRadius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"]["name"];
+      nwr(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|theatre|ferry_terminal"]["name"];
+      nwr(around:${parkRadius},${latitude},${longitude})["man_made"="pier"]["name"];
+      nwr(around:${parkRadius},${latitude},${longitude})["leisure"~"park|nature_reserve|garden"]["name"];
     );
-    out center tags 80;
+    out center tags 120;
   `
   try {
-    const json = await fetchOverpassWithMirrors(query, 3500)
+    const json = await fetchOverpassWithMirrors(query, 4500)
     let results = []
     if (json && json.elements) {
-      results = json.elements
+      const mapped = json.elements
         .map((element) => {
           const lat = element.lat ?? element.center?.lat
           const lon = element.lon ?? element.center?.lon
@@ -1382,29 +1376,32 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
           }
         })
         .filter(Boolean)
-        .slice(0, 60)
+
+      results = rankAndFilterTouristAttractions(mapped).slice(0, 60)
     }
 
     if (results.length === 0) {
       console.warn('[osm] overpassAttractions returned empty or timed out, using multi-category Photon fallback...')
-      const [generalTourism, museums, parks] = await Promise.all([
-        photonSearch('turismo', 8, latitude, longitude).catch(() => []),
-        photonSearch('museo', 6, latitude, longitude).catch(() => []),
-        photonSearch('parque', 6, latitude, longitude).catch(() => [])
+      const [cathedrals, museums, piers, monuments] = await Promise.all([
+        photonSearch('catedral', 5, latitude, longitude, null, 20000).catch(() => []),
+        photonSearch('museo', 6, latitude, longitude, null, 20000).catch(() => []),
+        photonSearch('muelle', 5, latitude, longitude, null, 20000).catch(() => []),
+        photonSearch('monumento', 5, latitude, longitude, null, 20000).catch(() => [])
       ])
       const combined = [
-        ...generalTourism,
+        ...cathedrals,
         ...museums,
-        ...parks
+        ...piers,
+        ...monuments
       ]
       const seen = new Set()
-      results = []
+      const rawFallback = []
       for (const item of combined) {
-        if (!item || !item.name || isNonTouristFacility(item.tags) || isNonTouristFacility({ name: item.name }) || isFoodOrDrinkEstablishment(item.name)) continue
+        if (!item || !item.name || isGenericFacilityName(item.name) || isNonTouristFacility(item.tags) || isNonTouristFacility({ name: item.name }) || isFoodOrDrinkEstablishment(item.name)) continue
         const k = item.name.toLowerCase().trim()
         if (!seen.has(k)) {
           seen.add(k)
-          results.push({
+          rawFallback.push({
             id: item.placeId || item.place_id || item.id || '',
             name: item.name,
             latitude: item.latitude,
@@ -1421,6 +1418,7 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
           })
         }
       }
+      results = rankAndFilterTouristAttractions(rawFallback)
     }
 
     if (results.length > 0) {
@@ -1509,7 +1507,8 @@ export function isGenericFacilityName(rawName = '') {
     'restaurante', 'restaurant', 'bar', 'café', 'cafe', 'cafetería', 'cafeteria',
     'comidas rápidas', 'comidas rapidas', 'fast food', 'hotel', 'hostal', 'hostel',
     'posada', 'alojamiento', 'atractivo', 'monumento', 'parque', 'plaza', 'mirador',
-    'tienda', 'panadería', 'panaderia', 'kiosko', 'kiosco', 'puesto', 'estadero'
+    'tienda', 'panadería', 'panaderia', 'kiosko', 'kiosco', 'puesto', 'estadero',
+    'museo', 'catedral', 'iglesia', 'parroquia', 'capilla', 'muelle', 'malecon', 'malecón', 'turismo'
   ]
   if (genericList.includes(clean)) return true
   if (/^(restaurante|restaurant|bar|café|cafe|hotel|hostal|atractivo)\s*#?\d*$/i.test(clean)) return true
@@ -1548,6 +1547,7 @@ export function isNonTouristFacility(tags = {}) {
     return true
   }
   if (isGenericFacilityName(rawName) || isGenericFacilityName(name)) return true
+  if (/\b(biosaludable|parque\s+infantil|polideportivo|cancha\s+multiple|urbanizaci[oó]n|\d+\s+con\s+circunvalar)\b/i.test(rawName)) return true
   if (
     /\b(plaza|parque|plazoleta|zona|area)\s+(?:descanso(?:\s*\d+)?|hospital|salud|clinica|ips|eps)\b/i.test(name) ||
     /\bdescanso\s*\d+\b/i.test(name) ||
@@ -1691,16 +1691,16 @@ export async function overpassHotels(latitude, longitude, budget = 'moderate', r
  * Used by the voice route assistant for the SEARCH_RESTAURANTS action.
  */
 export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
+  const effectiveRadius = Math.min(Number(radius) || 5000, 8000)
   const query = `
     [out:json][timeout:15];
     (
-      node(around:${radius},${latitude},${longitude})["amenity"~"restaurant|cafe|fast_food|food_court|bar|pub"];
-      way(around:${radius},${latitude},${longitude})["amenity"~"restaurant|cafe|fast_food|food_court|bar|pub"];
+      nwr(around:${effectiveRadius},${latitude},${longitude})["amenity"~"restaurant|cafe|bar"]["name"];
     );
-    out center tags 20;
+    out center tags 45;
   `
   try {
-    const json = await fetchOverpassWithMirrors(query, 1500)
+    const json = await fetchOverpassWithMirrors(query, 4500)
     if (json && json.elements && json.elements.length > 0) {
       const results = (json.elements ?? [])
         .map((element) => {
@@ -1729,7 +1729,7 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
         .filter(r => {
           const n = r.name.toLowerCase()
           if (/\b(chino|chifa|hong\s*kung|asia|oriental|confucio)\b/i.test(n)) return false
-          if (/\b(comida r[áa]pida|frituras|panader[íi]a|asadero de pollo|pollo broaster|arepas|hamburguesas el|salchipapas|perros calientes)\b/i.test(n)) return false
+          if (isLowQualityOrFastFoodVenue(r.name, r.tags)) return false
           if (isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name })) return false
           return true
         })
