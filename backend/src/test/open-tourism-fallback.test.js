@@ -17,7 +17,9 @@ import {
   arePlaceNamesSemanticallySame,
   estimateRealisticStopDurationMinutes,
   inferStopSubcategory,
-  enrichPlaceWithOpenData
+  enrichPlaceWithOpenData,
+  clusterStopsIntoCoherentDays,
+  areStopsCompatibleInSameDay
 } from '../services/open-tourism-service.js'
 import { buildTourPlanner, buildFallbackTour } from '../routes/ai.js'
 import { generateSpeechAudio, resetOpenAiTtsCircuitBreaker } from '../services/ttsService.js'
@@ -360,5 +362,97 @@ test('should assign realistic and varied stop durations based on venue subcatego
     'Expected tip duration to match stop durationMinutes exactly'
   )
 })
+
+test('should cluster stops geographically by day and never mix distant excursions like Tayrona and Minca on the same day', () => {
+  const santaMartaAttractions = [
+    { name: 'Quinta de San Pedro Alejandrino', latitude: 11.2286, longitude: -74.1772 },
+    { name: 'Catedral Basílica de Santa Marta', latitude: 11.2442, longitude: -74.2116 },
+    { name: 'Museo del Oro Tairona', latitude: 11.2458, longitude: -74.2141 },
+    { name: 'Parque de Los Novios', latitude: 11.2421, longitude: -74.2128 },
+    { name: 'Playa El Rodadero', latitude: 11.2045, longitude: -74.2268 },
+    { name: 'Bahía de Taganga', latitude: 11.2667, longitude: -74.1917 },
+    { name: 'Parque Nacional Natural Tayrona', latitude: 11.3145, longitude: -73.9562 },
+    { name: 'Minca, Sierra Nevada', latitude: 11.1436, longitude: -74.1169 },
+    { name: 'Playa Blanca, Santa Marta', latitude: 11.2192, longitude: -74.2389 },
+    { name: 'Museo Bolivariano de Arte Contemporáneo', latitude: 11.2289, longitude: -74.1769 },
+    { name: 'Museo del Cacao y la Fábrica Artesanal de Chocolate de Minca', latitude: 11.1441, longitude: -74.1162 },
+    { name: 'Museo Chairama', latitude: 11.3082, longitude: -73.9315 }
+  ]
+
+  const santaMartaRestaurants = [
+    { name: 'Frutoss Restaurante Vegetariano', latitude: 11.2425, longitude: -74.2119 },
+    { name: 'La Popular Restaurante', latitude: 11.2419, longitude: -74.2132 },
+    { name: 'Restaurante el Paraiso', latitude: 11.2051, longitude: -74.2261 },
+    { name: 'Boca Del Monte', latitude: 11.2431, longitude: -74.2111 },
+    { name: 'Josefina La Co', latitude: 11.2412, longitude: -74.2121 },
+    { name: 'Mil Carnes', latitude: 11.2295, longitude: -74.1812 },
+    { name: 'Postres Y Ponques Don Jacobo', latitude: 11.2399, longitude: -74.2085 }
+  ]
+
+  const cityCenter = { latitude: 11.2435, longitude: -74.2119 }
+
+  assert.equal(
+    areStopsCompatibleInSameDay(
+      { name: 'Parque Nacional Natural Tayrona', latitude: 11.3145, longitude: -73.9562 },
+      { name: 'Minca, Sierra Nevada', latitude: 11.1436, longitude: -74.1169 },
+      cityCenter,
+      'Santa Marta'
+    ),
+    false
+  )
+  assert.equal(
+    areStopsCompatibleInSameDay(
+      { name: 'Playa El Rodadero', latitude: 11.2045, longitude: -74.2268 },
+      { name: 'Bahía de Taganga', latitude: 11.2667, longitude: -74.1917 },
+      cityCenter,
+      'Santa Marta'
+    ),
+    false
+  )
+
+  const days = clusterStopsIntoCoherentDays(santaMartaAttractions, santaMartaRestaurants, {
+    numDays: 7,
+    city: 'Santa Marta',
+    cityCenter
+  })
+
+  assert.equal(days.length, 7)
+
+  const findDayOf = (targetName) => {
+    const found = days.find((d) => d.stops.some((s) => s.name === targetName))
+    return found ? found.day : null
+  }
+
+  const dayTayrona = findDayOf('Parque Nacional Natural Tayrona')
+  const dayMinca = findDayOf('Minca, Sierra Nevada')
+  const dayCacaoMinca = findDayOf('Museo del Cacao y la Fábrica Artesanal de Chocolate de Minca')
+  const dayChairama = findDayOf('Museo Chairama')
+  const dayQuinta = findDayOf('Quinta de San Pedro Alejandrino')
+  const dayBolivariano = findDayOf('Museo Bolivariano de Arte Contemporáneo')
+  const dayRodadero = findDayOf('Playa El Rodadero')
+  const dayPlayaBlanca = findDayOf('Playa Blanca, Santa Marta')
+  const dayTaganga = findDayOf('Bahía de Taganga')
+
+  // Never mix Tayrona and Minca on the same day
+  assert.notEqual(dayTayrona, dayMinca)
+  // Group Minca and Museo del Cacao de Minca on the exact same day
+  assert.equal(dayMinca, dayCacaoMinca)
+  // Group Parque Tayrona and Museo Chairama on the exact same day
+  assert.equal(dayTayrona, dayChairama)
+  // Group Quinta de San Pedro Alejandrino and Museo Bolivariano on the exact same day
+  assert.equal(dayQuinta, dayBolivariano)
+  // Group Playa El Rodadero and Playa Blanca on the exact same day, separate from Taganga
+  assert.equal(dayRodadero, dayPlayaBlanca)
+  assert.notEqual(dayRodadero, dayTaganga)
+
+  // Every single day (Day 1 to Day 7) must have at least 1 real tourist attraction (not just a bakery)
+  for (const dayPlan of days) {
+    assert.ok(
+      dayPlan.attractions.length >= 1,
+      `Expected Day ${dayPlan.day} to have at least 1 tourist attraction, got ${dayPlan.attractions.length}`
+    )
+  }
+})
+
 
 

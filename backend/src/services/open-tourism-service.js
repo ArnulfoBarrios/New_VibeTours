@@ -1220,3 +1220,350 @@ export function buildDeterministicStopDetails(place = {}, context = {}) {
   }
 }
 
+export function calculateHaversineKm(lat1, lon1, lat2, lon2) {
+  const nLat1 = Number(lat1)
+  const nLon1 = Number(lon1)
+  const nLat2 = Number(lat2)
+  const nLon2 = Number(lon2)
+  if (!Number.isFinite(nLat1) || !Number.isFinite(nLon1) || !Number.isFinite(nLat2) || !Number.isFinite(nLon2)) {
+    return null
+  }
+  if (nLat1 === 0 && nLon1 === 0) return null
+  if (nLat2 === 0 && nLon2 === 0) return null
+
+  const R = 6371
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const dLat = toRad(nLat2 - nLat1)
+  const dLon = toRad(nLon2 - nLon1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(nLat1)) * Math.cos(toRad(nLat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+export function inferPlaceMicroSector(place = {}, cityCenter = null, city = '') {
+  const rawName = String(typeof place === 'string' ? place : (place?.name || place?.nombre || '')).trim()
+  const rawAddress = String(typeof place === 'object' ? (place?.address || place?.direccion || '') : '').trim()
+  const normText = normalizeTextKey(`${rawName} ${rawAddress}`)
+  const normCity = normalizeTextKey(city)
+
+  let sectorTag = null
+
+  if (/\b(tayrona|chairama|cabo\s+san\s+juan|canaveral|arrecifes|neguanje|bahia\s+concha|playa\s+cristal|pueblito\s+tairona)\b/.test(normText)) {
+    sectorTag = 'tayrona'
+  } else if (/\b(minca|pozo\s+azul|marinka|sierra\s+nevada|campano)\b/.test(normText)) {
+    sectorTag = 'minca'
+  } else if (/\b(san\s+pedro\s+alejandrino|museo\s+bolivariano|quinta\s+de\s+san\s+pedro)\b/.test(normText)) {
+    sectorTag = 'san_pedro_alejandrino'
+  } else if (/\b(rodadero|playa\s+blanca|acuario\s+y\s+museo\s+del\s+mar|inca\s+inca|gaira)\b/.test(normText)) {
+    sectorTag = 'rodadero_corridor'
+  } else if (/\b(taganga|playa\s+grande|dumbira)\b/.test(normText)) {
+    sectorTag = 'taganga'
+  } else if (/\b(islas\s+del\s+rosario|isla\s+grande|oceanario|isla\s+del\s+encanto)\b/.test(normText)) {
+    sectorTag = 'islas_del_rosario'
+  } else if (/\b(isla\s+baru|playa\s+blanca\s+baru|cholon|aviario\s+nacional)\b/.test(normText)) {
+    sectorTag = 'baru'
+  } else if (/\b(islas\s+de\s+san\s+bernardo|isla\s+mucura|isla\s+tintipan|santa\s+cruz\s+del\s+islote|isla\s+palma)\b/.test(normText)) {
+    sectorTag = 'san_bernardo'
+  } else if (/\b(guatape|piedra\s+del\s+penol|penol)\b/.test(normText)) {
+    sectorTag = 'guatape_penol'
+  } else if (/\b(canon\s+del\s+chicamocha|panachi|parque\s+nacional\s+del\s+chicamocha|mesa\s+de\s+los\s+santos)\b/.test(normText)) {
+    sectorTag = 'chicamocha'
+  } else {
+    // Universal sub-locality detector: e.g. "Museo ... de [Sublocality]" or "[Place], [Sublocality]"
+    const commaParts = rawName.split(',').map((s) => normalizeTextKey(s)).filter(Boolean)
+    if (commaParts.length >= 2) {
+      const suffix = commaParts[commaParts.length - 1]
+      if (suffix && suffix.length >= 4 && suffix !== normCity && !normCity.includes(suffix)) {
+        sectorTag = `sub_${suffix.replace(/\s+/g, '_')}`
+      }
+    }
+  }
+
+  const lat = Number(place?.latitude ?? place?.lat)
+  const lon = Number(place?.longitude ?? place?.lon)
+  const centerLat = Number(cityCenter?.latitude ?? cityCenter?.lat)
+  const centerLon = Number(cityCenter?.longitude ?? cityCenter?.lon)
+
+  const distFromCenterKm = calculateHaversineKm(centerLat, centerLon, lat, lon)
+
+  const isPeripheralByKeywords =
+    Boolean(sectorTag && !['san_pedro_alejandrino', 'rodadero_corridor'].includes(sectorTag)) ||
+    /\b(parque\s+nacional|pnn|reserva\s+natural|sierra\s+nevada|isla|islas|archipielago|canon|volcan|nevado|paramo|cascada|cataratas|corregimiento|vereda)\b/.test(normText)
+
+  const isPeripheralExcursion =
+    isPeripheralByKeywords || (distFromCenterKm != null && distFromCenterKm > 8.0)
+
+  return {
+    sectorTag,
+    distFromCenterKm,
+    isPeripheralExcursion
+  }
+}
+
+export function areStopsCompatibleInSameDay(stopA, stopB, cityCenter = null, city = '') {
+  if (!stopA || !stopB) return false
+  const infoA = inferPlaceMicroSector(stopA, cityCenter, city)
+  const infoB = inferPlaceMicroSector(stopB, cityCenter, city)
+
+  // 1. If both belong to the exact same named micro-sector or complex (e.g. Minca + Museo del Cacao de Minca,
+  // Tayrona + Museo Chairama, Quinta de San Pedro + Museo Bolivariano, Rodadero + Playa Blanca), they ARE compatible!
+  if (infoA.sectorTag && infoB.sectorTag && infoA.sectorTag === infoB.sectorTag) {
+    return true
+  }
+
+  // 2. If they belong to DIFFERENT named sectors (e.g. Tayrona vs Minca, Rodadero vs Taganga, Playa Blanca vs Museo Bolivariano),
+  // they CANNOT be combined on the same day.
+  if (infoA.sectorTag && infoB.sectorTag && infoA.sectorTag !== infoB.sectorTag) {
+    return false
+  }
+
+  // 3. If either stop is a peripheral excursion (e.g. Tayrona, Minca, Taganga, Islas) and the other does NOT share
+  // its micro-sector tag, verify strict physical proximity (<= 4.5 km); otherwise reject.
+  const distKm = calculateHaversineKm(
+    stopA?.latitude ?? stopA?.lat,
+    stopA?.longitude ?? stopA?.lon,
+    stopB?.latitude ?? stopB?.lat,
+    stopB?.longitude ?? stopB?.lon
+  )
+
+  if (infoA.isPeripheralExcursion || infoB.isPeripheralExcursion) {
+    if (distKm != null) {
+      return distKm <= 4.5
+    }
+    return false
+  }
+
+  // 4. If one has a specific sub-sector tag (like san_pedro_alejandrino or rodadero_corridor) and the other is far
+  if ((infoA.sectorTag || infoB.sectorTag) && distKm != null && distKm > 4.0) {
+    return false
+  }
+
+  // 5. Urban stops: require <= 5.5 km between stops on the same day
+  if (distKm != null) {
+    return distKm <= 5.5
+  }
+
+  return true
+}
+
+export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [], options = {}) {
+  const numDays = Math.max(1, Number(options.numDays || 1))
+  const city = String(options.city || options.destination || '').trim()
+  const coordsMap = options.coordinatesMap || {}
+  const candidatePool = Array.isArray(options.candidatePlaces) ? options.candidatePlaces : []
+
+  function enrichWithCoords(rawItem, defaultType = 'attraction') {
+    if (!rawItem) return null
+    const name = String(typeof rawItem === 'string' ? rawItem : (rawItem.name || rawItem.nombre || '')).trim()
+    if (!name) return null
+
+    let lat = Number(rawItem?.latitude ?? rawItem?.lat)
+    let lon = Number(rawItem?.longitude ?? rawItem?.lon)
+    let address = String(rawItem?.address || rawItem?.direccion || '').trim()
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) {
+      const lower = name.toLowerCase().trim()
+      const direct = coordsMap[lower]
+      if (direct && Number.isFinite(Number(direct.latitude)) && Number.isFinite(Number(direct.longitude))) {
+        lat = Number(direct.latitude)
+        lon = Number(direct.longitude)
+      } else {
+        const match = candidatePool.find(
+          (c) => c?.name && arePlaceNamesSemanticallySame(c.name, name, city) && Number.isFinite(Number(c.latitude))
+        )
+        if (match) {
+          lat = Number(match.latitude)
+          lon = Number(match.longitude)
+          address = address || match.address || ''
+        }
+      }
+    }
+
+    return {
+      ...(typeof rawItem === 'object' ? rawItem : {}),
+      name,
+      latitude: Number.isFinite(lat) && lat !== 0 ? lat : null,
+      longitude: Number.isFinite(lon) && lon !== 0 ? lon : null,
+      address,
+      entityType: defaultType
+    }
+  }
+
+  // Deduplicate attractions while preserving order
+  const cleanAttractions = []
+  for (const raw of attractions) {
+    const item = enrichWithCoords(raw, 'attraction')
+    if (!item) continue
+    if (cleanAttractions.some((existing) => arePlaceNamesSemanticallySame(existing.name, item.name, city))) {
+      continue
+    }
+    cleanAttractions.push(item)
+  }
+
+  const cleanRestaurants = []
+  for (const raw of restaurants) {
+    const item = enrichWithCoords(raw, 'restaurant')
+    if (!item) continue
+    if (cleanAttractions.some((a) => arePlaceNamesSemanticallySame(a.name, item.name, city))) continue
+    if (cleanRestaurants.some((r) => arePlaceNamesSemanticallySame(r.name, item.name, city))) continue
+    cleanRestaurants.push(item)
+  }
+
+  // Sort restaurants so full meal venues appear before pure pastry/cake/ice-cream shops
+  cleanRestaurants.sort((a, b) => {
+    const isDessertA = /\b(postres|ponques|reposteria|pasteleria|heladeria|dulceria)\b/i.test(normalizeTextKey(a.name))
+    const isDessertB = /\b(postres|ponques|reposteria|pasteleria|heladeria|dulceria)\b/i.test(normalizeTextKey(b.name))
+    if (isDessertA !== isDessertB) return isDessertA ? 1 : -1
+    return 0
+  })
+
+  // Resolve urban center using passed cityCenter or median of valid attraction coordinates
+  let cityCenter = options.cityCenter
+  if (!cityCenter || !Number.isFinite(Number(cityCenter.latitude)) || !Number.isFinite(Number(cityCenter.longitude))) {
+    const withCoords = cleanAttractions.filter((a) => a.latitude != null && a.longitude != null)
+    if (withCoords.length > 0) {
+      const sortedLats = withCoords.map((a) => a.latitude).sort((x, y) => x - y)
+      const sortedLons = withCoords.map((a) => a.longitude).sort((x, y) => x - y)
+      const mid = Math.floor(withCoords.length / 2)
+      cityCenter = { latitude: sortedLats[mid], longitude: sortedLons[mid] }
+    }
+  }
+
+  const usedIndices = new Set()
+  const clusters = []
+
+  // Pass 1: Lock together attractions that share the exact same named micro-sector or complex
+  // (e.g. Minca + Museo del Cacao de Minca; Tayrona + Museo Chairama; Quinta de San Pedro + Museo Bolivariano; Rodadero + Playa Blanca)
+  for (let i = 0; i < cleanAttractions.length; i++) {
+    if (usedIndices.has(i)) continue
+    const stopA = cleanAttractions[i]
+    const infoA = inferPlaceMicroSector(stopA, cityCenter, city)
+    if (!infoA.sectorTag) continue
+
+    let partnerIdx = -1
+    for (let j = i + 1; j < cleanAttractions.length; j++) {
+      if (usedIndices.has(j)) continue
+      const stopB = cleanAttractions[j]
+      const infoB = inferPlaceMicroSector(stopB, cityCenter, city)
+      if (infoB.sectorTag === infoA.sectorTag) {
+        partnerIdx = j
+        break
+      }
+    }
+
+    if (partnerIdx !== -1) {
+      usedIndices.add(i)
+      usedIndices.add(partnerIdx)
+      clusters.push([stopA, cleanAttractions[partnerIdx]])
+    }
+  }
+
+  // Calculate how many additional pairs we can form without starving any of the numDays days of at least 1 attraction
+  const remainingCount = cleanAttractions.length - usedIndices.size
+  const currentTotalClusters = clusters.length + remainingCount
+  let maxExtraPairs = Math.max(0, currentTotalClusters - numDays)
+
+  // Pass 2: Pair remaining urban/compatible attractions by minimum distance (<= 5.5 km) while respecting maxExtraPairs
+  for (let i = 0; i < cleanAttractions.length; i++) {
+    if (usedIndices.has(i)) continue
+    const stopA = cleanAttractions[i]
+    usedIndices.add(i)
+
+    if (maxExtraPairs <= 0) {
+      clusters.push([stopA])
+      continue
+    }
+
+    let bestPartnerIdx = -1
+    let bestDistKm = Infinity
+
+    for (let j = i + 1; j < cleanAttractions.length; j++) {
+      if (usedIndices.has(j)) continue
+      const stopB = cleanAttractions[j]
+      if (!areStopsCompatibleInSameDay(stopA, stopB, cityCenter, city)) continue
+
+      const distKm = calculateHaversineKm(stopA.latitude, stopA.longitude, stopB.latitude, stopB.longitude)
+      const effectiveDist = distKm != null ? distKm : 2.5
+      if (effectiveDist < bestDistKm) {
+        bestDistKm = effectiveDist
+        bestPartnerIdx = j
+      }
+    }
+
+    if (bestPartnerIdx !== -1) {
+      usedIndices.add(bestPartnerIdx)
+      maxExtraPairs--
+      clusters.push([stopA, cleanAttractions[bestPartnerIdx]])
+    } else {
+      clusters.push([stopA])
+    }
+  }
+
+  // If same-sector pairing produced fewer clusters than numDays, split urban 2-stop clusters before ever leaving a day empty
+  while (clusters.length < numDays) {
+    const splittableIdx = clusters.findIndex((c) => {
+      if (c.length < 2) return false
+      const info0 = inferPlaceMicroSector(c[0], cityCenter, city)
+      return !info0.isPeripheralExcursion
+    })
+    if (splittableIdx === -1) break
+    const [first, second] = clusters[splittableIdx]
+    clusters.splice(splittableIdx, 1, [first], [second])
+  }
+
+  // Build final day plans (1..numDays) and assign the closest restaurant to each day's cluster centroid
+  const usedRests = new Set()
+  const days = []
+
+  for (let d = 1; d <= numDays; d++) {
+    const dayAttractions = clusters[d - 1] || []
+    let dayLat = null
+    let dayLon = null
+    const coordsInDay = dayAttractions.filter((a) => a.latitude != null && a.longitude != null)
+    if (coordsInDay.length > 0) {
+      dayLat = coordsInDay.reduce((acc, a) => acc + a.latitude, 0) / coordsInDay.length
+      dayLon = coordsInDay.reduce((acc, a) => acc + a.longitude, 0) / coordsInDay.length
+    } else if (cityCenter) {
+      dayLat = cityCenter.latitude
+      dayLon = cityCenter.longitude
+    }
+
+    let chosenRest = null
+    let bestRestDist = Infinity
+    for (const rest of cleanRestaurants) {
+      const restKey = rest.name.toLowerCase()
+      if (usedRests.has(restKey)) continue
+      if (dayAttractions.some((a) => arePlaceNamesSemanticallySame(a.name, rest.name, city))) continue
+
+      const dist = calculateHaversineKm(dayLat, dayLon, rest.latitude, rest.longitude)
+      const scoreDist = dist != null ? dist : 15
+      if (scoreDist < bestRestDist) {
+        bestRestDist = scoreDist
+        chosenRest = rest
+      }
+    }
+
+    if (chosenRest) {
+      usedRests.add(chosenRest.name.toLowerCase())
+    }
+
+    const allDayStops = [...dayAttractions, ...(chosenRest ? [chosenRest] : [])].map((stop) => ({
+      ...stop,
+      dia: d,
+      day: d
+    }))
+
+    days.push({
+      day: d,
+      attractions: dayAttractions,
+      restaurant: chosenRest,
+      stops: allDayStops
+    })
+  }
+
+  return days
+}
+
+

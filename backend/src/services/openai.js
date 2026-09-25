@@ -15,7 +15,9 @@ import {
   rankAndFilterTouristAttractions,
   rankAndFilterTouristRestaurants,
   isLowQualityOrFastFoodVenue,
-  isNeighborhoodOrMinorPark
+  isNeighborhoodOrMinorPark,
+  clusterStopsIntoCoherentDays,
+  areStopsCompatibleInSameDay
 } from './open-tourism-service.js'
 
 export { generateSpeechAudio }
@@ -1920,6 +1922,26 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         ...(preset?.restaurants || [])
       ]
       const fbHasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
+      const buildCoherentChatDayBlocks = (numDays, basePool) => {
+        const clustered = clusterStopsIntoCoherentDays(basePool, preset.restaurants || [], {
+          numDays,
+          city: destName,
+          cityCenter: (known.latitude && known.longitude) ? { latitude: known.latitude, longitude: known.longitude } : null,
+          coordinatesMap: preset.coordinatesMap || {},
+          candidatePlaces: preset.candidateCatalog?.places || []
+        })
+        known.specificPlaces = clustered.flatMap(dp =>
+          dp.stops.map(s => ({
+            name: s.name,
+            dia: dp.day,
+            day: dp.day,
+            ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {})
+          }))
+        )
+        return clustered
+          .filter(dp => dp.stops.length > 0)
+          .map(dp => `Día ${dp.day}: ${destName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`)
+      }
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
       const fbHasCompanions = hasValidValue(known.companions)
@@ -1998,7 +2020,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             : []
           const rawPresetRests = (preset.restaurants || []).map(r => typeof r === 'string' ? r : r.name).filter(Boolean)
           const pool = deduplicateChatSpecificPlaces(
-            [...rawSpecifics, ...(preset.places || [])],
+            [...rawSpecifics, ...(preset.places || []), ...((preset.candidateCatalog?.places || []).map(p => p?.name || p).filter(Boolean))],
             destName
           ).map(p => typeof p === 'string' ? p : p.name)
            .filter(p => !rawPresetRests.some(r => arePlacesSimilar(r, p)))
@@ -2049,7 +2071,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             }
           }
 
-          fallbackMsg = `Itinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
+          dayBlocks = buildCoherentChatDayBlocks(numDays, pool); fallbackMsg = `Itinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
             (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.') +
             `\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está listo para generar el tour?`
         } else {
@@ -2111,7 +2133,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           : []
         const rawPresetRests = (preset.restaurants || []).map(r => typeof r === 'string' ? r : r.name).filter(Boolean)
         const pool = deduplicateChatSpecificPlaces(
-          [...rawSpecifics, ...(preset.places || [])],
+          [...rawSpecifics, ...(preset.places || []), ...((preset.candidateCatalog?.places || []).map(p => p?.name || p).filter(Boolean))],
           destName
         ).map(p => typeof p === 'string' ? p : p.name)
          .filter(p => !rawPresetRests.some(r => arePlacesSimilar(r, p)))
@@ -2153,7 +2175,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           }
         }
 
-        fallbackMsg = `¡Perfecto! Con tu hospedaje confirmado en ${known.selectedHotel?.name || 'tu estancia'} y movilidad definida, aquí tienes tu plan:\n\nItinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
+        dayBlocks = buildCoherentChatDayBlocks(numDays, pool); fallbackMsg = `¡Perfecto! Con tu hospedaje confirmado en ${known.selectedHotel?.name || 'tu estancia'} y movilidad definida, aquí tienes tu plan:\n\nItinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
           (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.') +
           `\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
       } else if (hasDurationOrDates) {
@@ -2900,6 +2922,7 @@ REGLAS PARA "accommodationStatus":
         })
       }
 
+      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [] }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))) }
       reconstructed += isUserAskingForMoreStops
         ? '¿Qué te parece este itinerario ampliado? ¿Deseas hacer algún otro ajuste o procedemos a generar el tour en el mapa?'
         : '¿Qué te parece este itinerario? ¿Deseas hacer algún ajuste o procedemos a generar el tour en el mapa?'

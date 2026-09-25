@@ -18,7 +18,7 @@ import {
   buildDeterministicStopDetails,
   arePlaceNamesSemanticallySame,
   estimateRealisticStopDurationMinutes,
-  inferStopSubcategory
+  inferStopSubcategory, clusterStopsIntoCoherentDays, areStopsCompatibleInSameDay
 } from '../services/open-tourism-service.js'
 
 export const aiRouter = Router()
@@ -3276,7 +3276,7 @@ export function buildTourPlanner(input, location = null, places = []) {
           reorderedByDay.push(...dayPlaces)
         }
       }
-      selectedPlaces = reorderedByDay
+      const hasIncompatibleIntraDay = totalDays > 1 && Array.from(daysMap.values()).some(dp => { const attrs = dp.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); return attrs.length >= 2 && !areStopsCompatibleInSameDay(attrs[0], attrs[1], origin, input.city || input.destination) }); if (hasIncompatibleIntraDay) { const attrs = reorderedByDay.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); const rests = reorderedByDay.filter(p => getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe'); const clustered = clusterStopsIntoCoherentDays(attrs, rests, { numDays: totalDays, city: input.city || input.destination, cityCenter: origin }); selectedPlaces = clustered.flatMap(dp => dp.stops) } else { selectedPlaces = reorderedByDay }
     } else {
       scored.sort((a, b) => b.score - a.score)
       selectedPlaces = selectPlaces(scored, stopTarget, input)
@@ -3329,7 +3329,7 @@ export function buildTourPlanner(input, location = null, places = []) {
             chunked.push(...sortPlacesByProximity(chunk, d === 0 ? origin : null))
           }
         }
-        selectedPlaces = chunked.length > 0 ? chunked : selectedPlaces
+        const attrs = selectedPlaces.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); const rests = selectedPlaces.filter(p => getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe'); const clustered = clusterStopsIntoCoherentDays(attrs, rests, { numDays: totalDays, city: input.city || input.destination, cityCenter: origin }); const clusteredFlat = clustered.flatMap(dp => sortPlacesByProximity(dp.stops, dp.day === 1 ? origin : null)); selectedPlaces = clusteredFlat.length > 0 ? clusteredFlat : (chunked.length > 0 ? chunked : selectedPlaces)
       }
     }
   }
