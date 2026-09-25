@@ -5,7 +5,7 @@ import { extractChatInformation, generateChatResponse, planWithOpenAI } from '..
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, reverseGeocodeLocation } from '../services/osm.js'
 import { getWikipediaContext } from '../services/wikipedia.js'
 import { optimizeRoute } from '../services/tomtom.js'
-import { collectTourCandidates } from './ai.js'
+import { collectTourCandidates, buildTourPlanner, buildFallbackTour } from './ai.js'
 import { resolveCanonicalDestination, cleanAdministrativeCityName } from '../services/destinationService.js'
 
 export const chatRouter = Router()
@@ -170,7 +170,7 @@ chatRouter.post('/message', async (req, res, next) => {
 
       case 'GENERATE_JSON': {
         const durHours = state.collectedData.durationHours || (state.collectedData.durationDays ? state.collectedData.durationDays * 24 : 8)
-        const finalTour = await planWithOpenAI({
+        const planInput = {
           destination: state.collectedData.destination || state.collectedData.city,
           city: state.collectedData.city,
           country: state.collectedData.country,
@@ -179,8 +179,14 @@ chatRouter.post('/message', async (req, res, next) => {
           language: 'es',
           places: state.places,
           selectedHotel: state.collectedData.selectedHotel,
-          userPreferences: state.collectedData
-        })
+          userPreferences: state.collectedData,
+          touristInterests: state.collectedData.interests || []
+        }
+        let finalTour = await planWithOpenAI(planInput)
+        if (!finalTour) {
+          const planner = buildTourPlanner(planInput, state.collectedData.canonicalDestination || null, state.places)
+          finalTour = await buildFallbackTour(planner, planInput)
+        }
         state.finalTour = finalTour
         state.currentState = 'FINISHED'
         responseText = "¡Tu tour ha sido generado con éxito!"

@@ -55,6 +55,13 @@ export async function fetchWithProviderRetry(input, init = {}, {
         return response
       }
 
+      if (response.status === 429 && typeof response.clone === 'function') {
+        const bodyText = await response.clone().text().catch(() => '')
+        if (/insufficient_quota|billing_not_active|quota_exceeded|exceeded your current quota/i.test(bodyText)) {
+          return response
+        }
+      }
+
       const delay = retryDelay(attempt, response)
       onRetry?.({ attempt: attempt + 1, status: response.status, delay })
       await wait(delay)

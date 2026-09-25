@@ -129,6 +129,8 @@ class VoiceGuideService {
 
   // In-memory cache for synthesized speech MP3 bytes
   static final Map<String, Uint8List> _speechMemoryCache = {};
+  static bool _openAiQuotaExhausted = false;
+  static bool _elevenLabsQuotaExhausted = false;
 
   double get currentMultiplier => _currentMultiplier;
   String get selectedOpenAiVoice => _selectedOpenAiVoice;
@@ -432,9 +434,9 @@ class VoiceGuideService {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return null;
 
-    // 1. Intentar llamada directa a ElevenLabs si API Key está configurada en la app
+    // 1. Intentar llamada directa a ElevenLabs si API Key está configurada y con saldo
     final elevenLabsKey = AppConfig.elevenLabsApiKey;
-    if (elevenLabsKey.isNotEmpty) {
+    if (elevenLabsKey.isNotEmpty && !_elevenLabsQuotaExhausted) {
       try {
         final voiceId = AppConfig.elevenLabsVoiceId;
         final uri = Uri.parse('https://api.elevenlabs.io/v1/text-to-speech/$voiceId');
@@ -461,6 +463,9 @@ class VoiceGuideService {
           _speechMemoryCache[cacheKey] = response.bodyBytes;
           return response.bodyBytes;
         } else {
+          if (response.statusCode == 401 || response.statusCode == 402 || response.statusCode == 429) {
+            _elevenLabsQuotaExhausted = true;
+          }
           debugPrint('[VoiceGuide] ElevenLabs HTTP ${response.statusCode}: ${response.body}');
         }
       } catch (e) {
@@ -468,9 +473,9 @@ class VoiceGuideService {
       }
     }
 
-    // 2. Intentar llamada directa ultra-rápida si OpenAI API Key está configurada en la app
+    // 2. Intentar llamada directa ultra-rápida si OpenAI API Key está configurada y con saldo
     final openAiKey = AppConfig.openAiApiKey;
-    if (openAiKey.isNotEmpty) {
+    if (openAiKey.isNotEmpty && !_openAiQuotaExhausted) {
       try {
         final uri = Uri.parse('https://api.openai.com/v1/audio/speech');
         final response = await http.post(
@@ -492,6 +497,9 @@ class VoiceGuideService {
           _speechMemoryCache[cacheKey] = response.bodyBytes;
           return response.bodyBytes;
         } else {
+          if (response.statusCode == 401 || response.statusCode == 402 || response.statusCode == 429) {
+            _openAiQuotaExhausted = true;
+          }
           debugPrint('[VoiceGuide] OpenAI TTS HTTP ${response.statusCode}: ${response.body}');
         }
       } catch (e) {

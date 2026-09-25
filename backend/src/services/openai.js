@@ -8,7 +8,84 @@ import { resolvePlaceWithCascade, resolveProviderDestinationCenter, searchGeoapi
 import { fetchWithProviderRetry } from './provider-http.js'
 import { generateSpeechAudio } from './ttsService.js'
 
+import { enrichPlaceWithOpenData, buildDeterministicStopDetails } from './open-tourism-service.js'
+
 export { generateSpeechAudio }
+
+const OPENAI_CIRCUIT_COOLDOWN_MS = 30 * 60 * 1000
+let openAiCircuitOpenUntil = 0
+let openAiCircuitReason = ''
+
+export function isOpenAiCircuitOpen() {
+  if (!openAiCircuitOpenUntil) return false
+  if (Date.now() >= openAiCircuitOpenUntil) {
+    openAiCircuitOpenUntil = 0
+    openAiCircuitReason = ''
+    return false
+  }
+  return true
+}
+
+export function getOpenAiCircuitStatus() {
+  return {
+    isOpen: isOpenAiCircuitOpen(),
+    openUntil: openAiCircuitOpenUntil,
+    reason: openAiCircuitReason
+  }
+}
+
+export function tripOpenAiCircuitBreaker(reason = 'insufficient_quota', cooldownMs = OPENAI_CIRCUIT_COOLDOWN_MS) {
+  openAiCircuitOpenUntil = Date.now() + Math.max(1000, Number(cooldownMs) || OPENAI_CIRCUIT_COOLDOWN_MS)
+  openAiCircuitReason = String(reason || 'insufficient_quota')
+  console.warn(`[openai] Circuit breaker tripped (${openAiCircuitReason}). Switching to Open-Source Tourism fallback.`)
+}
+
+export function resetOpenAiCircuitBreaker() {
+  openAiCircuitOpenUntil = 0
+  openAiCircuitReason = ''
+}
+
+export function getActiveOpenAiKey() {
+  if (isOpenAiCircuitOpen()) return ''
+  return process.env.OPENAI_API_KEY || ''
+}
+
+async function inspectOpenAiResponseForQuotaFailure(response) {
+  if (!response) return
+  if (response.status === 401 || response.status === 402) {
+    tripOpenAiCircuitBreaker(`http_${response.status}`)
+    return
+  }
+  if (response.status === 429) {
+    let bodyText = ''
+    try {
+      bodyText = typeof response.clone === 'function'
+        ? await response.clone().text()
+        : await response.text()
+    } catch {
+      bodyText = ''
+    }
+    if (/insufficient_quota|billing_not_active|quota_exceeded|exceeded your current quota|rate_limit/i.test(bodyText) || !bodyText) {
+      tripOpenAiCircuitBreaker('insufficient_quota')
+    }
+  }
+}
+
+export async function fetchOpenAiChatCompletion(init = {}, retryOptions = null) {
+  if (isOpenAiCircuitOpen()) {
+    return new Response(JSON.stringify({ error: { code: 'circuit_breaker_open', message: openAiCircuitReason } }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+  const response = retryOptions
+    ? await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', init, retryOptions)
+    : await fetch('https://api.openai.com/v1/chat/completions', init)
+  if (response && !response.ok) {
+    await inspectOpenAiResponseForQuotaFailure(response)
+  }
+  return response
+}
 
 export function cleanAndParseJson(rawContent, fallback = null) {
   if (!rawContent || typeof rawContent !== 'string') return fallback
@@ -958,7 +1035,7 @@ export async function suggestPlacesWithOpenAI({ destination = '', country = '', 
   const cleanDest = String(destination || '').trim()
   if (!cleanDest) return []
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
 
   const targetDest = `${cleanDest}${country ? `, ${country}` : ''}`.trim()
   const system = `Eres un asistente experto en turismo global de VibeTours.
@@ -975,7 +1052,7 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
 }`
 
   if (apiKey) try {
-    const response = await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchOpenAiChatCompletion({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1063,7 +1140,7 @@ export async function suggestHotelsWithOpenAI({ destination = '', country = '', 
   const cleanDest = String(destination || '').trim()
   if (!cleanDest) return []
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
 
   const targetDest = `${cleanDest}${country ? `, ${country}` : ''}`.trim()
   const system = `Eres un asistente experto en viajes de VibeTours.
@@ -1081,7 +1158,7 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
 }`
 
   if (apiKey) try {
-    const response = await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchOpenAiChatCompletion({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2060,7 +2137,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
   if (!apiKey) {
     return await runFallbackChatResponse()
   }
@@ -2324,7 +2401,7 @@ REGLAS PARA "accommodationStatus":
       content: String(m.content || '')
     }))
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchOpenAiChatCompletion({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2939,7 +3016,7 @@ export async function extractChatInformation(userMessage, currentData = {}, hist
     return extractChatInformationFallback(userMessage)
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
   if (!apiKey) {
     return extractChatInformationFallback(userMessage)
   }
@@ -3011,7 +3088,7 @@ Devuelve ÚNICAMENTE un JSON con:
 - "specificPlaces": lista de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Cabo San Juan", "dia": 1 }, { "name": "Playa Cristal", "dia": 2 }]). NUNCA incluir actividades genéricas ("Llegada", "Despedida", "Tiempo libre", "Día libre").`
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchOpenAiChatCompletion({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3402,7 +3479,7 @@ export async function planWithOpenAI({
   userPreferences = {},
   selectedHotel = null
 }) {
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
   if (!apiKey) return null
 
   const cleanCity = cleanAdministrativeCityName(city || destination || '')
@@ -3565,7 +3642,7 @@ Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
   ]
 }`
 
-        return fetch('https://api.openai.com/v1/chat/completions', {
+        return fetchOpenAiChatCompletion({
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
           body: JSON.stringify(buildOpenAiPayload({
@@ -3615,7 +3692,7 @@ Lugares obligatorios de este bloque: ${JSON.stringify(chunk)}`
   }
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchOpenAiChatCompletion({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3654,12 +3731,12 @@ Lugares obligatorios: ${JSON.stringify(selectedPlaces)}`
 }
 
 export async function suggestFallbackPlacesWithOpenAI({ destination, city, country, type, excludeNames = [] }) {
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
   if (!apiKey) return []
   const targetLocation = `${city || destination || ''} ${country || ''}`.trim()
   const excludeStr = Array.isArray(excludeNames) && excludeNames.length > 0 ? `\nLugares que YA están en el tour (NO repetir): ${excludeNames.join(', ')}` : ''
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchOpenAiChatCompletion({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify(buildOpenAiPayload({
@@ -3718,11 +3795,11 @@ export async function fetchDynamicDestinationProfile(cityInput, countryInput = '
     return destinationCatalogCache.get(cacheKey)
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
   if (!apiKey) return null
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchOpenAiChatCompletion({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3833,10 +3910,10 @@ export async function fetchCityIconicLandmarks(cityInput, countryInput = '') {
     return cityLandmarksCache.get(cacheKey)
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
   if (apiKey) {
     try {
-      const response = await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', {
+      const response = await fetchOpenAiChatCompletion({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3912,7 +3989,7 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
 
 export async function generateRichPlaceDescriptionsBatch({ destination = '', city = '', country = '', places = [], prompt = '' }) {
   if (!places || places.length === 0) return {}
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
 
   const placeNames = places.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
   if (placeNames.length === 0) return {}
@@ -3952,7 +4029,7 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
     try {
       const chunkResults = await Promise.allSettled(
         chunks.map(async (chunk) => {
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          const response = await fetchOpenAiChatCompletion({
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -4052,18 +4129,22 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
     }
   }
 
-  // Fallback rico e individualizado por categoría en caso de desconexión
+  // Open-Source Tourism Fallback (OSM + Wikidata + Wikipedia + Deterministic Voice Composer)
   const fallbackResults = await Promise.allSettled(
-    placeNames.map(async (name) => {
-      const wikiText = await wikipediaSummaryText(name, destination || city, 'Colombia').catch(() => null)
-      const desc = (wikiText && wikiText.length > 30) ? wikiText : buildRichFallbackDescription(name, destination || city)
+    places.map(async (rawPlace, index) => {
+      const placeObj = typeof rawPlace === 'string' ? { name: rawPlace } : { ...rawPlace }
+      const name = String(placeObj.name || placeObj.nombre || '').trim()
+      if (!name) return null
+      const targetCity = city || destination || ''
+      const enriched = await enrichPlaceWithOpenData(placeObj, targetCity, 'es').catch(() => placeObj)
+      const details = buildDeterministicStopDetails(enriched, { city: targetCity, destination, stopIndex: index })
       return {
         name,
         data: {
-          descripcion: desc,
-          actividades: buildFallbackActivitiesForPlace(name, destination || city),
-          datos_curiosos: buildFallbackCuriositiesForPlace(name, destination || city),
-          consejos: buildFallbackTipsForPlace(name, destination || city)
+          descripcion: details.description || buildRichFallbackDescription(name, targetCity),
+          actividades: buildFallbackActivitiesForPlace(name, targetCity),
+          datos_curiosos: details.curiousFacts?.length > 0 ? details.curiousFacts : buildFallbackCuriositiesForPlace(name, targetCity),
+          consejos: details.tips?.length > 0 ? details.tips : buildFallbackTipsForPlace(name, targetCity)
         }
       }
     })
@@ -4341,7 +4422,7 @@ function buildRichFallbackDescription(name, city = '') {
 }
 
 export async function generateCustomPlaceReasons(arg1 = [], arg2 = '', arg3 = '') {
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
   let places = []
   let destination = ''
   let city = ''
@@ -4401,7 +4482,7 @@ Devuelve ÚNICAMENTE un objeto JSON donde cada clave es el nombre exacto del lug
           extra: { max_tokens: 1500 }
         })
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetchOpenAiChatCompletion({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -4531,7 +4612,7 @@ export async function geocodePlacesWithOpenAI({ city = '', country = '', places 
     return fallbackResults
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = getActiveOpenAiKey()
   if (!apiKey) {
     return resolveWithProviders()
   }
@@ -4573,7 +4654,7 @@ ${chunk.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
           reasoning_effort: 'none'
         })
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetchOpenAiChatCompletion({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

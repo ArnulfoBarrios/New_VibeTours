@@ -12,6 +12,8 @@ import { resolveCanonicalDestination, validateCandidateLocation, haversineDistan
 import { resolvePlaceWithCascade } from '../services/places-resolver.js'
 import { getCandidateId } from '../services/candidate-catalog.js'
 
+import { enrichPlaceWithOpenData, fetchWikivoyageCityGuide, buildDeterministicStopDetails } from '../services/open-tourism-service.js'
+
 export const aiRouter = Router()
 
 function readPlanCandidateId(stop) {
@@ -34,7 +36,7 @@ const handleSpeech = async (req, res, next) => {
       voice: z.string().optional().default('nova'),
       speed: z.number().min(0.25).max(4.0).optional().default(1.06),
       model: z.string().optional().default('tts-1'),
-      provider: z.enum(['auto', 'elevenlabs', 'openai']).optional().default('auto')
+      provider: z.enum(['auto', 'elevenlabs', 'openai', 'edge', 'free']).optional().default('auto')
     })
     const { text, voice, speed, model, provider } = speechSchema.parse(req.body)
     const audioBuffer = await generateSpeechAudio({ text, voice, speed, model, provider })
@@ -2972,7 +2974,33 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
   }
 }
 
-async function buildFallbackTour(planner, input) {
+export async function buildFallbackTour(planner, input) {
+  const targetCity = input.city || input.destination || ''
+  const targetLang = input.language || 'es'
+  const [enrichedPlaces, cityGuide] = await Promise.all([
+    Promise.all(
+      (planner.selectedPlaces || []).map((place, index) =>
+        enrichPlaceWithOpenData(place, targetCity, targetLang)
+          .then((enriched) => {
+            const openDetails = buildDeterministicStopDetails(enriched, {
+              city: targetCity,
+              destination: input.destination,
+              stopIndex: index
+            })
+            return {
+              ...place,
+              ...enriched,
+              openDescription: openDetails.description,
+              openCuriousFacts: openDetails.curiousFacts,
+              openTips: openDetails.tips
+            }
+          })
+          .catch(() => place)
+      )
+    ),
+    fetchWikivoyageCityGuide(targetCity, input.country || '', targetLang).catch(() => null)
+  ])
+  planner.selectedPlaces = enrichedPlaces
   const coverUrl = planner.selectedPlaces[0]?.imageUrl ?? fallbackCover(input.destination)
   const gallery = unique(planner.selectedPlaces.flatMap((place) => place.images)).slice(0, 8)
   const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
@@ -2983,11 +3011,11 @@ async function buildFallbackTour(planner, input) {
     parada: index + 1,
     candidateId: getCandidateId(place),
     nombre: place.name,
-    descripcion: buildStopDescription(place, input),
+    descripcion: place.openDescription || buildStopDescription(place, input),
     duracion_estimada: `${place.minutes} minutos`,
     actividades: buildActivities(place, input.type),
-    datos_curiosos: buildCuriousFacts(place, input.type),
-    consejos: buildTips(place, input.type),
+    datos_curiosos: place.openCuriousFacts?.length > 0 ? place.openCuriousFacts : buildCuriousFacts(place, input.type),
+    consejos: place.openTips?.length > 0 ? place.openTips : buildTips(place, input.type),
     ubicacion: {
       nombre_lugar: place.name,
       direccion: place.address,
@@ -2996,6 +3024,8 @@ async function buildFallbackTour(planner, input) {
       pais: place.country ?? input.country ?? '',
       candidateId: getCandidateId(place),
       place_id: getCandidateId(place) || place.placeId || place.id || '',
+      latitud: Number(place.latitude || 0),
+      longitud: Number(place.longitude || 0),
       url_mapa: mapUrlFor(place.latitude, place.longitude),
     },
     imagenes: place.images,
@@ -3008,8 +3038,8 @@ async function buildFallbackTour(planner, input) {
     subcategorias: planner.subcategorias,
     descripcion_tour: buildTourDescription(input, planner),
     experiencia_destacada: buildFeaturedExperience(input, planner),
-    historia_del_lugar: planner.selectedPlaces[0]?.history ?? '',
-    contexto_cultural: buildCulturalContext(input, planner),
+    historia_del_lugar: cityGuide?.cityHistory || planner.selectedPlaces[0]?.history || '',
+    contexto_cultural: cityGuide?.culturalContext || buildCulturalContext(input, planner),
     duracion_estimada: `${input.durationHours} horas`,
     distancia_total: `${planner.distanceKm.toFixed(1)} km`,
     nivel_dificultad: planner.difficulty,
@@ -3024,7 +3054,7 @@ async function buildFallbackTour(planner, input) {
     orden_paradas: itinerary.map((stop) => stop.candidateId).filter(Boolean),
     incluye: defaultIncludes(input.type),
     no_incluye: defaultExcludes(),
-    recomendaciones: defaultRecommendations(),
+    recomendaciones: cityGuide?.recommendations?.length > 0 ? cityGuide.recommendations : defaultRecommendations(),
     que_llevar: defaultWhatToBring(input.type),
     normas_del_tour: defaultRules(),
     etiquetas: ['AI Planner', typeLabel(input.type), input.city || input.destination],
