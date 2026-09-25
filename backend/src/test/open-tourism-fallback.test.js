@@ -454,5 +454,87 @@ test('should cluster stops geographically by day and never mix distant excursion
   }
 })
 
+test('should assign 3 stops per day across all 7 days in Barranquilla and classify Ostras El Yayo as restaurant while rejecting Frisby', () => {
+  const cityCenter = { latitude: 10.9965, longitude: -74.7960 }
+  const barranquillaPoolStrings = [
+    'Gran Malecón del Río',
+    'Monumento Ventana al Mundo',
+    'Aleta del Tiburón (Ventana de Campeones)',
+    'Museo del Caribe',
+    'Catedral Metropolitana María Reina',
+    'Museo del Carnaval',
+    'Zoológico de Barranquilla',
+    'Plaza de la Paz',
+    'Castillo de Salgar',
+    'Ciénaga de Mallorquín',
+    'Barrio El Prado',
+    'Monumento a Shakira',
+    'Muelle de Puerto Colombia',
+    'Iglesia de San Nicolás de Tolentino',
+    'Plaza de la Aduana'
+  ]
+
+  const candidateCatalogAll = [
+    { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895 },
+    { name: 'Monumento Ventana al Mundo', latitude: 11.03316, longitude: -74.83143 },
+    { name: 'Ventana de Campeones', latitude: 10.9983, longitude: -74.7728 },
+    { name: 'Museo Cultural del Caribe', latitude: 10.9863, longitude: -74.7784 },
+    { name: 'Catedral Metropolitana María Reina', latitude: 10.9885, longitude: -74.7906 },
+    { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876 },
+    { name: 'Zoológico de Barranquilla', latitude: 11.0110, longitude: -74.7980 },
+    { name: 'Plaza de la Paz', latitude: 10.98802, longitude: -74.78901 },
+    { name: 'Castillo de Salgar', latitude: 11.0182, longitude: -74.9417 },
+    { name: 'Ecoparque Ciénaga de Mallorquín', latitude: 11.0350, longitude: -74.8445 },
+    { name: 'Barrio El Prado', latitude: 10.9985, longitude: -74.7960 },
+    { name: 'Monumento a Shakira', latitude: 11.0205, longitude: -74.7938 },
+    { name: 'Antiguo Muelle de Puerto Colombia', latitude: 10.9893, longitude: -74.9612 },
+    { name: 'Iglesia de San Nicolás de Tolentino', latitude: 10.9801, longitude: -74.7780 },
+    { name: 'Plaza de la Aduana', latitude: 10.9888, longitude: -74.7791 }
+  ]
+
+  const rawRestaurants = [
+    { name: 'Frisby', latitude: 11.0050, longitude: -74.8050, tags: { amenity: 'restaurant' } },
+    { name: 'Restaurante Cucayo', latitude: 11.0074, longitude: -74.8174, tags: { amenity: 'restaurant' } },
+    { name: 'Restaurante El Celler', latitude: 11.0022, longitude: -74.8075, tags: { amenity: 'restaurant' } },
+    { name: 'Nancy Cabrera Restaurante y Repostería', latitude: 11.0149, longitude: -74.8267, tags: { amenity: 'restaurant' } },
+    { name: 'Restaurante y Refresquería Las 5 Mentiritas', latitude: 11.0014, longitude: -74.8128, tags: { amenity: 'restaurant' } },
+    { name: 'Restaurante Jardines De Confucio', latitude: 11.0025, longitude: -74.8039, tags: { amenity: 'restaurant' } },
+    { name: 'Ostras El Yayo', latitude: 10.9910, longitude: -74.9580, tags: { amenity: 'restaurant' } },
+    { name: 'La Negra del Sabor', latitude: 10.9920, longitude: -74.7885, tags: { amenity: 'restaurant' } }
+  ]
+
+  const rankedRestaurants = rankAndFilterTouristRestaurants(rawRestaurants)
+  assert.ok(!rankedRestaurants.some((r) => r.name === 'Frisby'), 'Expected Frisby fast-food chain to be rejected')
+
+  const days = clusterStopsIntoCoherentDays(barranquillaPoolStrings, rankedRestaurants, {
+    numDays: 7,
+    city: 'Barranquilla',
+    cityCenter,
+    candidatePlaces: candidateCatalogAll
+  })
+
+  assert.equal(days.length, 7)
+
+  // Every single day (Day 1 to Day 7) must have 2 attractions + 1 restaurant = 3 stops
+  for (const dp of days) {
+    assert.equal(dp.attractions.length, 2, `Expected Day ${dp.day} to have 2 attractions, got ${dp.attractions.length}`)
+    assert.ok(dp.restaurant, `Expected Day ${dp.day} to have 1 restaurant`)
+    assert.equal(dp.stops.length, 3, `Expected Day ${dp.day} to have 3 total stops, got ${dp.stops.length}`)
+  }
+
+  // Gran Malecón del Río and Monumento a Shakira must be paired together on the same day
+  const dayMalecon = days.find((d) => d.stops.some((s) => s.name === 'Gran Malecón del Río'))?.day
+  const dayShakira = days.find((d) => d.stops.some((s) => s.name === 'Monumento a Shakira'))?.day
+  assert.equal(dayMalecon, dayShakira)
+
+  // Ostras El Yayo and La Negra del Sabor must be classified as 'restaurant', never as monument/plaza
+  const ostrasStop = days.flatMap((d) => d.stops).find((s) => s.name === 'Ostras El Yayo')
+  assert.ok(ostrasStop)
+  assert.equal(inferStopSubcategory(ostrasStop), 'restaurant')
+  const ostrasDetails = buildDeterministicStopDetails(ostrasStop, { city: 'Barranquilla', stopIndex: 2 })
+  assert.ok(!/suelo hist[oó]rico/i.test(ostrasDetails.description))
+})
+
+
 
 

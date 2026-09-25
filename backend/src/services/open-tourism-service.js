@@ -11,7 +11,7 @@ const NEIGHBORHOOD_PARK_MARKERS = /\b(biosaludable|infantil|polideportivo|cancha
 
 const HIGH_VALUE_LANDMARK_KEYWORDS = /\b(ronda\s+del|malec[oó]n|muelle\s+tur[ií]stico|muelle|catedral|bas[ií]lica|santuario|museo|monumento|castillo|fuerte|muralla|mirador|pueblito|plaza\s+cultural|pasaje\s+del\s+sol|pasaje\s+comercial|pasaje\s+de\s+las\s+flores|centro\s+hist[oó]rico|puente\s+met[aá]lico|puente\s+segundo\s+centenario|jard[ií]n\s+bot[aá]nico|teatro|palacio|acueducto|telef[eé]rico|acantilado|volc[aá]n|ci[eé]naga|bah[ií]a|isla|playa)\b/i
 
-const LOW_QUALITY_FOOD_MARKERS = /\b(comidas?\s+r[aá]pidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|salchipapas?|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|panader[ií]a|reposter[ií]a|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro)\b/i
+const LOW_QUALITY_FOOD_MARKERS = /\b(comidas?\s+r[aá]pidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|salchipapas?|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|panader[ií]a|reposter[ií]a|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i
 
 function sanitizeVoiceText(text = '') {
   return String(text || '')
@@ -65,7 +65,12 @@ export function isNeighborhoodOrMinorPark(name = '', tags = {}, wikipediaTrusted
 export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
   const cleanName = String(name || '').trim()
   if (!cleanName) return true
-  if (LOW_QUALITY_FOOD_MARKERS.test(cleanName)) return true
+  if (/\b(comidas?\s+r[aá]pidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|salchipapas?|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i.test(cleanName)) {
+    return true
+  }
+  if (/\b(panader[ií]a|reposter[ií]a)\b/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|trattoria|gastrobar)\b/i.test(cleanName)) {
+    return true
+  }
   const amenity = String(tags?.amenity || '').toLowerCase()
   if (amenity === 'fast_food') return true
   return false
@@ -328,7 +333,7 @@ const EPONYMOUS_HERO_TOKENS = new Set([
 
 function getEntityFamily(name = '') {
   const lower = normalizeTextKey(name)
-  if (/\b(restaurante|restaurant|vegetariano|vegano|creperia|pizzeria|parrilla|asador|asados|bistro|gastrobar|cevicheria|cebicheria|marisqueria|trattoria|steakhouse|piqueteadero|comedor|cocina|sazon|fogon|taqueria|cafeteria|cafe|heladeria|pasteleria|panaderia)\b/.test(lower)) return 'food'
+  if (/\b(restaurante|restaurant|vegetariano|vegano|creperia|pizzeria|parrilla|asador|asados|bistro|gastrobar|cevicheria|cebicheria|marisqueria|ostras|ostreria|mariscos|del sabor|cazuela|pescado|arroz|fritos|narcobollo|trattoria|steakhouse|piqueteadero|comedor|cocina|sazon|fogon|taqueria|cafeteria|cafe|heladeria|pasteleria|panaderia)\b/.test(lower)) return 'food'
   if (/\b(museo|museum|galeria|centro cultural|casa museo|quinta)\b/.test(lower)) return 'museum'
   if (/\b(catedral|basilica|iglesia|parroquia|capilla|santuario|convento|ermita|templo)\b/.test(lower)) return 'religious'
   if (/\b(ronda|malecon|muelle|embarcadero|costanera|bulevar del rio|paseo del rio)\b/.test(lower)) return 'riverwalk'
@@ -410,9 +415,10 @@ export function inferStopSubcategory(place = {}) {
     return 'cafe'
   }
   if (
-    /\b(restaurante|restaurant|vegetariano|vegano|creper[ií]a|pizzer[ií]a|parrilla|asador|asados|bistro|gastrobar|cevicher[ií]a|cebicher[ií]a|marisquer[ií]a|trattoria|steakhouse|piqueteadero|comedor|cocina|saz[oó]n|fog[oó]n|taquer[ií]a|sushi|wok|mercado\s+gastron[oó]mico|caim[aá]n\s+del\s+r[ií]o)\b/i.test(name) ||
+    /\b(restaurante|restaurant|vegetariano|vegano|creper[ií]a|pizzer[ií]a|parrilla|asador|asados|bistro|gastrobar|cevicher[ií]a|cebicher[ií]a|marisquer[ií]a|ostras|ostrer[ií]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|narcobollo|trattoria|steakhouse|piqueteadero|comedor|cocina|saz[oó]n|fog[oó]n|taquer[ií]a|sushi|wok|mercado\s+gastron[oó]mico|caim[aá]n\s+del\s+r[ií]o)\b/i.test(name) ||
     ['restaurant', 'food_court', 'bar', 'pub'].includes(amenity) ||
-    ['restaurant', 'food', 'gastronomic'].includes(rawCat)
+    ['restaurant', 'food', 'gastronomic'].includes(rawCat) ||
+    String(place.entityType || '').toLowerCase() === 'restaurant'
   ) {
     return 'restaurant'
   }
@@ -1270,6 +1276,8 @@ export function inferPlaceMicroSector(place = {}, cityCenter = null, city = '') 
     sectorTag = 'guatape_penol'
   } else if (/\b(canon\s+del\s+chicamocha|panachi|parque\s+nacional\s+del\s+chicamocha|mesa\s+de\s+los\s+santos)\b/.test(normText)) {
     sectorTag = 'chicamocha'
+  } else if (/\b(puerto\s+colombia|salgar|castillo\s+de\s+salgar|muelle\s+de\s+puerto\s+colombia|plaza\s+cisneros|pradomar)\b/.test(normText)) {
+    sectorTag = 'puerto_colombia'
   } else {
     // Universal sub-locality detector: e.g. "Museo ... de [Sublocality]" or "[Place], [Sublocality]"
     const commaParts = rawName.split(',').map((s) => normalizeTextKey(s)).filter(Boolean)
@@ -1365,14 +1373,29 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) {
       const lower = name.toLowerCase().trim()
-      const direct = coordsMap[lower]
+      const strippedName = name.replace(/\s*\([^)]*\)\s*/g, ' ').trim()
+      const strippedLower = strippedName.toLowerCase()
+      const parenMatch = name.match(/\(([^)]+)\)/)
+      const aliasName = parenMatch ? parenMatch[1].trim() : ''
+      const aliasLower = aliasName.toLowerCase()
+
+      const direct = coordsMap[lower] || coordsMap[strippedLower] || (aliasLower ? coordsMap[aliasLower] : null)
       if (direct && Number.isFinite(Number(direct.latitude)) && Number.isFinite(Number(direct.longitude))) {
         lat = Number(direct.latitude)
         lon = Number(direct.longitude)
       } else {
-        const match = candidatePool.find(
-          (c) => c?.name && arePlaceNamesSemanticallySame(c.name, name, city) && Number.isFinite(Number(c.latitude))
-        )
+        const normStripped = normalizeTextKey(strippedName)
+        const normAlias = aliasName ? normalizeTextKey(aliasName) : ''
+        const match = candidatePool.find((c) => {
+          if (!c?.name || !Number.isFinite(Number(c.latitude)) || !Number.isFinite(Number(c.longitude))) return false
+          if (arePlaceNamesSemanticallySame(c.name, name, city)) return true
+          if (strippedName && arePlaceNamesSemanticallySame(c.name, strippedName, city)) return true
+          if (aliasName && arePlaceNamesSemanticallySame(c.name, aliasName, city)) return true
+          const normC = normalizeTextKey(c.name)
+          if (normStripped.length >= 6 && (normC.includes(normStripped) || normStripped.includes(normC))) return true
+          if (normAlias.length >= 6 && (normC.includes(normAlias) || normAlias.includes(normC))) return true
+          return false
+        })
         if (match) {
           lat = Number(match.latitude)
           lon = Number(match.longitude)
@@ -1465,7 +1488,7 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
   const currentTotalClusters = clusters.length + remainingCount
   let maxExtraPairs = Math.max(0, currentTotalClusters - numDays)
 
-  // Pass 2: Pair remaining urban/compatible attractions by minimum distance (<= 5.5 km) while respecting maxExtraPairs
+  // Pass 2: Pair remaining urban/compatible attractions by minimum distance (<= 5.5 km, or <= 12 km urban fallback when maxExtraPairs > 0)
   for (let i = 0; i < cleanAttractions.length; i++) {
     if (usedIndices.has(i)) continue
     const stopA = cleanAttractions[i]
@@ -1492,6 +1515,25 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       }
     }
 
+    // Urban fallback: if we still need pairs so that days 1..numDays each get 2 attractions, pair with closest non-peripheral stop <= 12 km
+    if (bestPartnerIdx === -1) {
+      const infoA = inferPlaceMicroSector(stopA, cityCenter, city)
+      if (!infoA.isPeripheralExcursion) {
+        for (let j = i + 1; j < cleanAttractions.length; j++) {
+          if (usedIndices.has(j)) continue
+          const stopB = cleanAttractions[j]
+          const infoB = inferPlaceMicroSector(stopB, cityCenter, city)
+          if (infoB.isPeripheralExcursion) continue
+          const distKm = calculateHaversineKm(stopA.latitude, stopA.longitude, stopB.latitude, stopB.longitude)
+          const effectiveDist = distKm != null ? distKm : 5.0
+          if (effectiveDist <= 12.0 && effectiveDist < bestDistKm) {
+            bestDistKm = effectiveDist
+            bestPartnerIdx = j
+          }
+        }
+      }
+    }
+
     if (bestPartnerIdx !== -1) {
       usedIndices.add(bestPartnerIdx)
       maxExtraPairs--
@@ -1499,6 +1541,26 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     } else {
       clusters.push([stopA])
     }
+  }
+
+  // If we have more clusters than numDays and some clusters only have 1 stop, merge compatible singletons so no day is left with 1 attraction when enough exist
+  if (clusters.length > numDays) {
+    for (let i = 0; i < clusters.length && clusters.length > numDays; i++) {
+      if (clusters[i].length !== 1) continue
+      const stopA = clusters[i][0]
+      const infoA = inferPlaceMicroSector(stopA, cityCenter, city)
+      for (let j = i + 1; j < clusters.length; j++) {
+        if (clusters[j].length !== 1) continue
+        const stopB = clusters[j][0]
+        const infoB = inferPlaceMicroSector(stopB, cityCenter, city)
+        if (!infoA.isPeripheralExcursion && !infoB.isPeripheralExcursion) {
+          clusters[i].push(stopB)
+          clusters.splice(j, 1)
+          break
+        }
+      }
+    }
+    clusters.sort((a, b) => b.length - a.length)
   }
 
   // If same-sector pairing produced fewer clusters than numDays, split urban 2-stop clusters before ever leaving a day empty
@@ -1545,6 +1607,9 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       }
     }
 
+    if (!chosenRest && cleanRestaurants.length > 0) {
+      chosenRest = cleanRestaurants[(d - 1) % cleanRestaurants.length]
+    }
     if (chosenRest) {
       usedRests.add(chosenRest.name.toLowerCase())
     }

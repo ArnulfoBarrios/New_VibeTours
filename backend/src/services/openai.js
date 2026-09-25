@@ -1333,9 +1333,11 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   }
 
   let dynamicIconics = []
-  if (realPlaces.length < 8) {
+  if (realPlaces.length < 16) {
     dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry, lat, lon).catch(() => [])
-    const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, 14, lat, lon)
+    const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, 20, lat, lon)
+
+
     for (const vd of verifiedDynamic) {
       if (!realPlaces.some(rp => arePlacesSimilar(rp, vd.name))) {
         realPlaces.push(vd)
@@ -1366,17 +1368,20 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   }
 
   // 1.3 Query live OpenStreetMap POIs (Overpass and Photon) only when complements are needed
-  const needsOsmComplement = (realPlaces.length < 10 || realRests.length < 4 || realHotels.length < 2) && lat && lon
+  const needsOsmComplement = (realPlaces.length < 16 || realRests.length < 8 || realHotels.length < 2) && lat && lon
   if (needsOsmComplement) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 5000))
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
       realHotels.length < 2
         ? Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise])
         : Promise.resolve([]),
-      realRests.length < 4
+      realRests.length < 8
         ? Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise])
         : Promise.resolve([]),
-      realPlaces.length < 10
+
+
+
+      realPlaces.length < 16
         ? Promise.race([overpassAttractions(lat, lon, 35000).catch(() => []), timeoutPromise])
         : Promise.resolve([])
     ])
@@ -1391,7 +1396,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         if (d > 25000) return false
       }
       return true
-    }).slice(0, 14)
+    }).slice(0, 16)
     const fetchedPlaces = (osmAttractions || []).filter(p => {
       if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
       if (p.name.toLowerCase().includes('perímetro urbano')) return false
@@ -1401,7 +1406,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         if (d > 35000) return false
       }
       return true
-    }).slice(0, 14)
+    }).slice(0, 24)
 
     if (realHotels.length === 0) realHotels = fetchedHotels
     for (const fr of fetchedRests) {
@@ -1928,13 +1933,16 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           city: destName,
           cityCenter: (known.latitude && known.longitude) ? { latitude: known.latitude, longitude: known.longitude } : null,
           coordinatesMap: preset.coordinatesMap || {},
-          candidatePlaces: preset.candidateCatalog?.places || []
+          candidatePlaces: [...(preset.candidateCatalog?.all || []), ...(preset.candidateCatalog?.places || []), ...(preset.restaurants || [])]
         })
         known.specificPlaces = clustered.flatMap(dp =>
           dp.stops.map(s => ({
             name: s.name,
             dia: dp.day,
             day: dp.day,
+            category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction',
+            type: s.entityType === 'restaurant' ? 'food' : 'cultural',
+            entityType: s.entityType || 'attraction',
             ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {})
           }))
         )

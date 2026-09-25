@@ -2918,7 +2918,7 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
   const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
   const selectedPlaces = Array.isArray(planner.selectedPlaces) ? planner.selectedPlaces : []
   const stops = selectedPlaces.map((place, index) => ({
-    dia: Math.floor((index * totalDays) / Math.max(1, selectedPlaces.length)) + 1,
+    dia: Number(place.dia || place.day || (Math.floor((index * totalDays) / Math.max(1, selectedPlaces.length)) + 1)),
     parada: index + 1,
     candidateId: getCandidateId(place),
     nombre: place.name,
@@ -3014,7 +3014,7 @@ export async function buildFallbackTour(planner, input) {
   const stopsPerDay = Math.ceil(planner.selectedPlaces.length / totalDays)
 
   const itinerary = planner.selectedPlaces.map((place, index) => ({
-    dia: Math.floor(index / stopsPerDay) + 1,
+    dia: Number(place.dia || place.day || (Math.floor(index / stopsPerDay) + 1)),
     parada: index + 1,
     candidateId: getCandidateId(place),
     nombre: place.name,
@@ -3276,7 +3276,7 @@ export function buildTourPlanner(input, location = null, places = []) {
           reorderedByDay.push(...dayPlaces)
         }
       }
-      const hasIncompatibleIntraDay = totalDays > 1 && Array.from(daysMap.values()).some(dp => { const attrs = dp.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); return attrs.length >= 2 && !areStopsCompatibleInSameDay(attrs[0], attrs[1], origin, input.city || input.destination) }); if (hasIncompatibleIntraDay) { const attrs = reorderedByDay.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); const rests = reorderedByDay.filter(p => getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe'); const clustered = clusterStopsIntoCoherentDays(attrs, rests, { numDays: totalDays, city: input.city || input.destination, cityCenter: origin }); selectedPlaces = clustered.flatMap(dp => dp.stops) } else { selectedPlaces = reorderedByDay }
+      const hasPeripheralConflict = totalDays > 1 && Array.from(daysMap.values()).some(dp => { const attrs = dp.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); if (attrs.length < 2) return false; const sec0 = inferPlaceMicroSector(attrs[0], origin, input.city || input.destination); const sec1 = inferPlaceMicroSector(attrs[1], origin, input.city || input.destination); return (sec0.isPeripheralExcursion || sec1.isPeripheralExcursion) && !areStopsCompatibleInSameDay(attrs[0], attrs[1], origin, input.city || input.destination) }); if (hasPeripheralConflict) { const attrs = reorderedByDay.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); const rests = reorderedByDay.filter(p => getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe'); const clustered = clusterStopsIntoCoherentDays(attrs, rests, { numDays: totalDays, city: input.city || input.destination, cityCenter: origin }); selectedPlaces = clustered.flatMap(dp => dp.stops) } else { selectedPlaces = reorderedByDay }
     } else {
       scored.sort((a, b) => b.score - a.score)
       selectedPlaces = selectPlaces(scored, stopTarget, input)
@@ -3608,14 +3608,14 @@ function stopCountForDuration(durationHours) {
   if (durationHours <= 24) return 8
   if (durationHours <= 48) return 12
   if (durationHours <= 72) return 16
-  return 20
+  return Math.max(24, Math.ceil((durationHours || 24) / 24) * 3)
 }
 
 function normalizeCategory(place) {
   const category = String(place.category ?? place.type ?? '').toLowerCase()
   const name = String(place.name ?? '').toLowerCase()
   const tags = normalizeTags(place.tags)
-  const isExplicitDiningName = /\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|bistro|caf[ée]|cafeter[íi]a|bar|gastrobar|pizzer[íi]a|asador|asados|parrilla|taquer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a|marisquer[íi]a|cevicher[íi]a|cebicher[íi]a|trattoria|steakhouse|piqueteadero|comedor|saz[oó]n|fog[oó]n)\b/i.test(name)
+  const isExplicitDiningName = category === 'restaurant' || category === 'food' || String(place.entityType || '').toLowerCase() === 'restaurant' || /\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|bistro|caf[ée]|cafeter[íi]a|bar|gastrobar|pizzer[íi]a|asador|asados|parrilla|taquer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|cevicher[íi]a|cebicher[íi]a|trattoria|steakhouse|piqueteadero|comedor|saz[oó]n|fog[oó]n)\b/i.test(name)
   if (isExplicitDiningName && !/\b(museo|parque|plaza|catedral|iglesia|monumento)\b/i.test(name)) {
     return /\b(caf[ée]|cafeter[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a)\b/i.test(name) ? 'cafe' : 'restaurant'
   }
@@ -6450,7 +6450,7 @@ export async function collectTourCandidates(input, location) {
         if (!placeName || !isValidSpecificPlace(placeName) || isNonTouristFacility({ name: placeName })) continue
 
         const cleanPName = cleanPlacePhysicalName(placeName) || placeName
-        let directGeo = null
+        let directGeo = (raw && typeof raw === 'object' && Number.isFinite(Number(raw.latitude)) && Number.isFinite(Number(raw.longitude)) && raw.coordinatesVerified) ? { name: placeName, latitude: Number(raw.latitude), longitude: Number(raw.longitude), city, country, address: raw.address || `${placeName}, ${city}`, coordinateSource: raw.coordinateSource || 'osm', coordinatesVerified: true } : null
 
         // 1. Fast check against preloaded catalog coordinatesMap (0 network calls)
         if (catalog?.coordinatesMap) {
@@ -6646,7 +6646,7 @@ export async function collectTourCandidates(input, location) {
         }
 
         if (finalLat != null && finalLon != null) {
-          const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
+          const isExplicitDining = (typeof raw === 'object' && (raw.category === 'restaurant' || raw.type === 'food' || raw.entityType === 'restaurant')) || isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(placeName)
           const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
           const isRestaurant = isExplicitDining && !isCulturalVenue
           geocodedSpecifics.push({
