@@ -13,7 +13,11 @@ import {
   buildDeterministicStopDetails,
   rankAndFilterTouristAttractions,
   rankAndFilterTouristRestaurants,
-  parseLandmarksFromWikitext
+  parseLandmarksFromWikitext,
+  arePlaceNamesSemanticallySame,
+  estimateRealisticStopDurationMinutes,
+  inferStopSubcategory,
+  enrichPlaceWithOpenData
 } from '../services/open-tourism-service.js'
 import { buildTourPlanner, buildFallbackTour } from '../routes/ai.js'
 import { generateSpeechAudio, resetOpenAiTtsCircuitBreaker } from '../services/ttsService.js'
@@ -232,4 +236,129 @@ También destacan el '''Museo Zenú de Arte Contemporáneo''', la '''[[Catedral 
   assert.ok(extracted.some((item) => /Pueblito Cordobés/i.test(item)))
   assert.ok(extracted.some((item) => /Pasaje del Sol/i.test(item)))
 })
+
+test('should detect semantic duplicate place names with modifier variations across any city', () => {
+  assert.equal(
+    arePlaceNamesSemanticallySame(
+      'Puente Metálico Gustavo Rojas Pinilla',
+      'Puente Gustavo Rojas Pinilla',
+      'Bucaramanga'
+    ),
+    true
+  )
+  assert.equal(
+    arePlaceNamesSemanticallySame(
+      'Parque Bolívar',
+      'Museo Casa Bolívar Bucaramanga',
+      'Bucaramanga'
+    ),
+    true
+  )
+  assert.equal(
+    arePlaceNamesSemanticallySame(
+      'Parque Bolívar',
+      'Parque Simón Bolívar',
+      'Bucaramanga'
+    ),
+    true
+  )
+  assert.equal(
+    arePlaceNamesSemanticallySame(
+      'Ronda del Sinú',
+      'Parque Ronda del Sinú Norte',
+      'Montería'
+    ),
+    true
+  )
+  assert.equal(
+    arePlaceNamesSemanticallySame(
+      'Museo de Arte Moderno de Bucaramanga',
+      'Catedral de la Sagrada Familia',
+      'Bucaramanga'
+    ),
+    false
+  )
+})
+
+test('should block generic city Wikipedia summaries from contaminating stop descriptions and produce distinct narratives', async () => {
+  const originalFetch = global.fetch
+  try {
+    global.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          title: 'Bucaramanga',
+          description: 'Capital del departamento de Santander, Colombia',
+          extract:
+            'Bucaramanga es un municipio colombiano, capital del departamento de Santander.Está ubicada al noreste del país sobre la Cordillera Oriental.'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+
+    const stopA = await enrichPlaceWithOpenData(
+      { name: 'Museo de Arte Religioso', category: 'museum', city: 'Bucaramanga' },
+      'Bucaramanga',
+      'es'
+    )
+    const stopB = await enrichPlaceWithOpenData(
+      { name: 'Museo de Arte Moderno de Bucaramanga', category: 'museum', city: 'Bucaramanga' },
+      'Bucaramanga',
+      'es'
+    )
+    const stopC = await enrichPlaceWithOpenData(
+      { name: 'Parque Bolívar', category: 'park', city: 'Bucaramanga' },
+      'Bucaramanga',
+      'es'
+    )
+
+    const detailsA = buildDeterministicStopDetails(stopA, { city: 'Bucaramanga', stopIndex: 0 })
+    const detailsB = buildDeterministicStopDetails(stopB, { city: 'Bucaramanga', stopIndex: 1 })
+    const detailsC = buildDeterministicStopDetails(stopC, { city: 'Bucaramanga', stopIndex: 2 })
+
+    assert.ok(!detailsA.description.includes('Bucaramanga es un municipio colombiano'))
+    assert.ok(!detailsB.description.includes('Bucaramanga es un municipio colombiano'))
+    assert.ok(!detailsC.description.includes('Bucaramanga es un municipio colombiano'))
+    assert.notEqual(detailsA.description, detailsB.description)
+    assert.notEqual(detailsB.description, detailsC.description)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('should assign realistic and varied stop durations based on venue subcategory and classify restaurants accurately', () => {
+  const restaurantPlace = { name: "Vegetariano D' Pacha Mama", city: 'Bucaramanga', tags: {} }
+  const museumPlace = { name: 'Museo de Arte Moderno de Bucaramanga', category: 'museum', city: 'Bucaramanga' }
+  const riverwalkPlace = { name: 'Ronda del Sinú', category: 'park', city: 'Montería' }
+  const viewpointPlace = { name: 'Mirador Palonegro', category: 'viewpoint', city: 'Bucaramanga' }
+
+  assert.equal(inferStopSubcategory(restaurantPlace), 'restaurant')
+  assert.equal(inferStopSubcategory(museumPlace), 'museum')
+  assert.equal(inferStopSubcategory(riverwalkPlace), 'riverwalk')
+  assert.equal(inferStopSubcategory(viewpointPlace), 'viewpoint')
+
+  const restaurantMins = estimateRealisticStopDurationMinutes(restaurantPlace, 0)
+  const museumMins = estimateRealisticStopDurationMinutes(museumPlace, 1)
+  const riverwalkMins = estimateRealisticStopDurationMinutes(riverwalkPlace, 2)
+  const viewpointMins = estimateRealisticStopDurationMinutes(viewpointPlace, 3)
+
+  assert.ok(restaurantMins >= 60 && restaurantMins <= 75, `Expected 60-75 min for restaurant, got ${restaurantMins}`)
+  assert.ok(museumMins >= 70 && museumMins <= 90, `Expected 70-90 min for museum, got ${museumMins}`)
+  assert.ok(riverwalkMins >= 55 && riverwalkMins <= 70, `Expected 55-70 min for riverwalk, got ${riverwalkMins}`)
+  assert.ok(viewpointMins >= 25 && viewpointMins <= 40, `Expected 25-40 min for viewpoint, got ${viewpointMins}`)
+
+  const restaurantDetails = buildDeterministicStopDetails(restaurantPlace, { city: 'Bucaramanga', stopIndex: 0 })
+  assert.equal(restaurantDetails.category, 'restaurant')
+  assert.ok(
+    restaurantDetails.activities.some((act) => /menú|plato|sazón|degustar|culinari/i.test(act)),
+    'Expected restaurant activities to be gastronomic'
+  )
+  assert.ok(
+    !restaurantDetails.activities.some((act) => /patrimonial|arquitectónicos/i.test(act)),
+    'Expected restaurant activities not to mention patrimonial architecture'
+  )
+  assert.ok(
+    restaurantDetails.tips.some((tip) => tip.includes(`${restaurantDetails.durationMinutes} minutos`)),
+    'Expected tip duration to match stop durationMinutes exactly'
+  )
+})
+
 

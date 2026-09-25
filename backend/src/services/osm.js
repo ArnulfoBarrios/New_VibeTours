@@ -1,6 +1,6 @@
 import { GeoCache } from './geoCache.js'
 import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS } from './destinationService.js'
-import { rankAndFilterTouristAttractions, isNeighborhoodOrMinorPark, isLowQualityOrFastFoodVenue } from './open-tourism-service.js'
+import { rankAndFilterTouristAttractions, isNeighborhoodOrMinorPark, isLowQualityOrFastFoodVenue, arePlaceNamesSemanticallySame } from './open-tourism-service.js'
 
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
 
@@ -1521,7 +1521,7 @@ export function isFoodOrDrinkEstablishment(name = '') {
   if (!name || typeof name !== 'string') return false
   const clean = name.trim().toLowerCase()
   const unaccented = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  if (/\b(restaurante|restaurant|parrilla|asador|bistro|pizzer[íi]a|panader[íi]a|pasteler[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero|cevicher[íi]a|cebicher[íi]a|gastron[oó]mico|food\s*court|cocina|comedor|piquetera)\b/i.test(clean)) return true
+  if (/\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|parrilla|asador|asados|bistro|pizzer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero|cevicher[íi]a|cebicher[íi]a|gastron[oó]mico|food\s*court|cocina|comedor|piquetera|trattoria|steakhouse|saz[oó]n|fog[oó]n|dulcer[íi]a)\b/i.test(clean)) return true
   if (/\b(cucayo|varadero|narcobollo|nena\s+lela|donde\s+chucho|ouzo|burukuka|celele|cande|(?:la\s+)?cevicheria|(?:el\s+)?caiman\s+del\s+rio|(?:la\s+)?herradura|donde\s+valerio|kiosko\s+el\s+pescador|(?:el\s+)?montanero)\b/i.test(unaccented)) return true
   return false
 }
@@ -1903,6 +1903,11 @@ export function arePlacesSimilar(a, b) {
     if (common.length >= 2 && (common.length / Math.min(tokensA.length, tokensB.length) >= 0.75)) {
       return true
     }
+  }
+
+  const cityHint = (typeof a === 'object' && a?.city) ? a.city : ((typeof b === 'object' && b?.city) ? b.city : '')
+  if (arePlaceNamesSemanticallySame(strA, strB, cityHint)) {
+    return true
   }
 
   return false

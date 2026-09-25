@@ -4207,9 +4207,11 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
         name,
         data: {
           descripcion: details.description || buildRichFallbackDescription(name, targetCity),
-          actividades: buildFallbackActivitiesForPlace(name, targetCity),
+          actividades: details.activities?.length > 0 ? details.activities : buildFallbackActivitiesForPlace(name, targetCity),
           datos_curiosos: details.curiousFacts?.length > 0 ? details.curiousFacts : buildFallbackCuriositiesForPlace(name, targetCity),
-          consejos: details.tips?.length > 0 ? details.tips : buildFallbackTipsForPlace(name, targetCity)
+          consejos: details.tips?.length > 0 ? details.tips : buildFallbackTipsForPlace(name, targetCity),
+          duracion_estimada: details.durationText,
+          suggestedMinutes: details.durationMinutes
         }
       }
     })

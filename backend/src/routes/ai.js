@@ -12,7 +12,14 @@ import { resolveCanonicalDestination, validateCandidateLocation, haversineDistan
 import { resolvePlaceWithCascade } from '../services/places-resolver.js'
 import { getCandidateId } from '../services/candidate-catalog.js'
 
-import { enrichPlaceWithOpenData, fetchWikivoyageCityGuide, buildDeterministicStopDetails } from '../services/open-tourism-service.js'
+import {
+  enrichPlaceWithOpenData,
+  fetchWikivoyageCityGuide,
+  buildDeterministicStopDetails,
+  arePlaceNamesSemanticallySame,
+  estimateRealisticStopDurationMinutes,
+  inferStopSubcategory
+} from '../services/open-tourism-service.js'
 
 export const aiRouter = Router()
 
@@ -425,7 +432,7 @@ export function deduplicatePlacesByName(places = []) {
         const wordsA = key.split(' ').filter(w => w.length >= 3)
         const wordsB = existingKey.split(' ').filter(w => w.length >= 3)
         if (wordsA.length > 1 && wordsB.length > 1) {
-          if (key.includes(existingKey) || existingKey.includes(key)) return true
+          if (key.includes(existingKey) || existingKey.includes(key) || arePlaceNamesSemanticallySame(name, existingName)) return true
         }
       }
       return false
@@ -2992,7 +2999,7 @@ export async function buildFallbackTour(planner, input) {
               ...enriched,
               openDescription: openDetails.description,
               openCuriousFacts: openDetails.curiousFacts,
-              openTips: openDetails.tips
+              openTips: openDetails.tips, openActivities: openDetails.activities, openDurationText: openDetails.durationText
             }
           })
           .catch(() => place)
@@ -3012,8 +3019,8 @@ export async function buildFallbackTour(planner, input) {
     candidateId: getCandidateId(place),
     nombre: place.name,
     descripcion: place.openDescription || buildStopDescription(place, input),
-    duracion_estimada: `${place.minutes} minutos`,
-    actividades: buildActivities(place, input.type),
+    duracion_estimada: place.openDurationText || `${place.minutes} minutos`,
+    actividades: place.openActivities?.length > 0 ? place.openActivities : buildActivities(place, input.type),
     datos_curiosos: place.openCuriousFacts?.length > 0 ? place.openCuriousFacts : buildCuriousFacts(place, input.type),
     consejos: place.openTips?.length > 0 ? place.openTips : buildTips(place, input.type),
     ubicacion: {
@@ -3495,7 +3502,7 @@ function selectPlaces(scoredPlaces, targetCount, input) {
     const pool = mustPreferAligned ? aligned : scoredPlaces
     for (const candidate of pool) {
       const key = normalizeKey(candidate.name)
-      if (seen.has(key)) continue
+      if (seen.has(key) || selected.some(s => arePlaceNamesSemanticallySame(s.name, candidate.name, input.city || input.destination))) continue
       const contextualScore = contextualScoreFor(candidate, selected, input)
       if (contextualScore > bestScore) {
         best = candidate
@@ -3559,6 +3566,7 @@ function estimateRouteDistance(selectedPlaces, origin) {
 }
 
 function estimateStopMinutes(place, durationHours, totalStops, index) {
+  return estimateRealisticStopDurationMinutes(place, index)
   const isDining = place?.category === 'restaurant' || isFoodOrDrinkEstablishment(place?.name || '')
   if (isDining) {
     if (durationHours <= 3.5) return 45
@@ -3607,7 +3615,10 @@ function normalizeCategory(place) {
   const category = String(place.category ?? place.type ?? '').toLowerCase()
   const name = String(place.name ?? '').toLowerCase()
   const tags = normalizeTags(place.tags)
-  const isExplicitDiningName = /\b(restaurante|restaurant|bistro|caf[ée]|bar|gastrobar|pizzer[íi]a|asador|parrilla|taquer[íi]a|panader[íi]a|helader[íi]a)\b/i.test(name)
+  const isExplicitDiningName = /\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|bistro|caf[ée]|cafeter[íi]a|bar|gastrobar|pizzer[íi]a|asador|asados|parrilla|taquer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a|marisquer[íi]a|cevicher[íi]a|cebicher[íi]a|trattoria|steakhouse|piqueteadero|comedor|saz[oó]n|fog[oó]n)\b/i.test(name)
+  if (isExplicitDiningName && !/\b(museo|parque|plaza|catedral|iglesia|monumento)\b/i.test(name)) {
+    return /\b(caf[ée]|cafeter[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a)\b/i.test(name) ? 'cafe' : 'restaurant'
+  }
   const isCulturalPOI = /\b(zool[óo]gico|zoologico|zoo|acuario|museo|museum|galer[íi]a|catedral|cathedral|iglesia|church|templo|temple|bas[íi]lica|parque|park|plaza|monumento|monument|malec[óo]n|malecon|teatro|theatre|carnaval|estadio|stadium|sendero|playa|mirador)\b/i.test(name)
 
   const merged = (category + ' ' + name + ' ' + tags.join(' ')).toLowerCase()
@@ -5144,7 +5155,8 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     }
   }
   
-  let durationText = source.duracion_estimada ?? `${source.suggestedMinutes ?? 25} minutos`
+  const realisticMinutes = Number(richObj?.suggestedMinutes) || estimateRealisticStopDurationMinutes({ name: resolvedName, category: matchedPlace?.category || candidateFallback?.category || source.categoria || source.category, tags: source.tags || matchedPlace?.tags }, index)
+  let durationText = richObj?.duracion_estimada ?? ((source.duracion_estimada && !/^(25|45)\s*minutos$/i.test(String(source.duracion_estimada).trim())) ? source.duracion_estimada : `${realisticMinutes} minutos`)
   let minutes = minutesFromLabel(durationText)
   const isMuseumOrGallery = /museo|palacio|galer[ií]a|fuerte|castillo|inquisici[oó]n|naval/i.test(resolvedName)
   if (isMuseumOrGallery && minutes < 45) {
@@ -5537,7 +5549,7 @@ function fuzzyNormalizeKey(name) {
 }
 
 function uniqueByName(values) {
-  const seen = new Set()
+  const seen = new Set(); const kept = []
   return values.filter((value) => {
     if (!value || !value.name) return false
     const rawType = (value.type || value.category || '').toLowerCase()
@@ -5545,8 +5557,8 @@ function uniqueByName(values) {
     const typePrefix = isFood ? 'food' : 'attraction'
     const key = `${typePrefix}_${canonicalPlaceKey(value.name, value.city || '')}`
     const fuzzyKey = `${typePrefix}_${fuzzyNormalizeKey(value.name)}`
-    if (seen.has(key) || (fuzzyKey.length > 5 && seen.has(fuzzyKey))) return false
-    seen.add(key)
+    if (seen.has(key) || (fuzzyKey.length > 5 && seen.has(fuzzyKey)) || kept.some(k => arePlaceNamesSemanticallySame(k.name, value.name, value.city || k.city || ''))) return false
+    seen.add(key); kept.push(value)
     if (fuzzyKey.length > 5) seen.add(fuzzyKey)
     return true
   })
@@ -6787,7 +6799,7 @@ export async function collectTourCandidates(input, location) {
         }
 
         // 2. Coincidencia exacta de clave de nombre
-        if (pKey === itemKey) return true
+        if (pKey === itemKey || arePlaceNamesSemanticallySame(p.name, item.name, city)) return true
         if (pKey.length >= 5 && itemKey.length >= 5 && (pKey.includes(itemKey) || itemKey.includes(pKey))) {
           return true
         }
