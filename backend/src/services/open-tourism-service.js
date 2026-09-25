@@ -65,7 +65,15 @@ export function isNeighborhoodOrMinorPark(name = '', tags = {}, wikipediaTrusted
 export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
   const cleanName = String(name || '').trim()
   if (!cleanName) return true
-  if (/\b(comidas?\s+r[aá]pidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|salchipapas?|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i.test(cleanName)) {
+  if (/\b(comidas?\s+r[aá]pidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|hot\s*dogs?|choriperros?|salchipapas?|hamburguesas?|hamburgueser[ií]a|burguer|burger|rapi\s*burg\w*|alitas|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i.test(cleanName)) {
+    return true
+  }
+  // Reject street-address nodes mislabeled as restaurants on OSM (e.g. "Carrera 22", "Transversal 45", "Calle 30")
+  if (/\b(calle|carrera|cra\.?|cll\.?|transversal|tv\.?|diagonal|dg\.?|avenida|autopista|manzana|lote)\s*\d+/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|parrilla|marisquer[ií]a|cevicher[ií]a)\b/i.test(cleanName)) {
+    return true
+  }
+  // Reject bare neighborhood/sector names without any culinary identifier (e.g. "El Prado", "Bocagrande", "Manga")
+  if (/^(?:el\s+prado|la\s+popa|pie\s+de\s+la\s+popa|manga|bocagrande|castillo\s+grande|getseman[ií]|centro|torices|crespo|marbella|barrio\s+.+|sector\s+.+|urbanizaci[oó]n\s+.+)$/i.test(cleanName)) {
     return true
   }
   if (/\b(panader[ií]a|reposter[ií]a)\b/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|trattoria|gastrobar)\b/i.test(cleanName)) {
@@ -1429,6 +1437,7 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
   for (const raw of restaurants) {
     const item = enrichWithCoords(raw, 'restaurant')
     if (!item) continue
+    if (isLowQualityOrFastFoodVenue(item.name, item.tags)) continue
     if (cleanAttractions.some((a) => arePlaceNamesSemanticallySame(a.name, item.name, city))) continue
     if (cleanRestaurants.some((r) => arePlaceNamesSemanticallySame(r.name, item.name, city))) continue
     cleanRestaurants.push(item)

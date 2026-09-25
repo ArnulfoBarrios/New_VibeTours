@@ -765,9 +765,16 @@ export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
   'cartagena': [
     { name: 'Restaurante La Cevicheria', specialty: 'Ceviches frescos y frutos del mar en el Centro Histórico' },
     { name: 'Restaurante Celele', specialty: 'Cocina contemporánea del Caribe colombiano' },
-    { name: 'Restaurante Candé', specialty: 'Gastronomía 100% cartagenera y caribeña tradicional' }
+    { name: 'Restaurante Candé', specialty: 'Gastronomía 100% cartagenera y caribeña tradicional' },
+    { name: 'Restaurante El Boliche Cebichería', specialty: 'Ceviches artesanales y cocina costera en Getsemaní' },
+    { name: 'Restaurante Carmen', specialty: 'Alta cocina contemporánea colombiana en el Centro Amurallado' },
+    { name: 'Café del Mar', specialty: 'Terraza gastronómica y coctelería sobre el Baluarte de Santo Domingo' },
+    { name: 'Restaurante Nuevo Asia', specialty: 'Cocina fusión asiática y mariscos frescos' },
+    { name: 'Parrilla Don Héctor', specialty: 'Cortes de carne a la parrilla y cocina tradicional' }
   ]
 })
+
+
 
 export function formatHotelPriceRange(minUsd, maxUsd, currency = 'cop') {
   const curr = String(currency || 'cop').toLowerCase()
@@ -1296,7 +1303,7 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
 export async function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null) {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
   const normalizedCountry = String(countryName || '').trim().toLowerCase()
-  const cacheKey = `catalog_osm_v2_${clean}_${normalizedCountry}`
+  const cacheKey = `catalog_osm_v3_${clean}_${normalizedCountry}`
   const cached = destinationCatalogCache.get(cacheKey)
   if (cached) return cached
 
@@ -1567,7 +1574,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     desc: candidate.description || `Alojamiento verificado ubicado en ${capitalCity}.`,
     price: candidate.price || '~$75 - $140 USD/noche'
   }))
-  const cleanRests = (unifiedCatalog.restaurants || []).map(candidate => ({
+  const cleanRests = rankAndFilterTouristRestaurants(unifiedCatalog.restaurants || []).map(candidate => ({
     ...candidate,
     specialty: candidate.specialty || (candidate.tags?.cuisine
       ? `Especialidad en cocina ${candidate.tags.cuisine}`

@@ -18,7 +18,7 @@ import {
   buildDeterministicStopDetails,
   arePlaceNamesSemanticallySame,
   estimateRealisticStopDurationMinutes,
-  inferStopSubcategory, clusterStopsIntoCoherentDays, areStopsCompatibleInSameDay
+  inferStopSubcategory, clusterStopsIntoCoherentDays, areStopsCompatibleInSameDay, inferPlaceMicroSector
 } from '../services/open-tourism-service.js'
 
 export const aiRouter = Router()
