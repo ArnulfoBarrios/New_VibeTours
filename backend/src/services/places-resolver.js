@@ -602,7 +602,7 @@ export async function resolvePlaceWithCascade({
   const osmResult = await geocodePlace(fullSearchQuery, cityLat, cityLon, {
     city: cleanCity,
     destination: cleanCity,
-    preferLiveProviders: true,
+    preferLiveProviders: options.preferLiveProviders ?? false,
     ...options
   }).catch(() => null)
 

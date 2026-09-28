@@ -6,7 +6,8 @@ import {
   tripOpenAiCircuitBreaker,
   resetOpenAiCircuitBreaker,
   getActiveOpenAiKey,
-  fetchOpenAiChatCompletion
+  fetchOpenAiChatCompletion,
+  getRealDestinationCatalog
 } from '../services/openai.js'
 import {
   composeDeterministicTourGuideScript,
@@ -534,6 +535,101 @@ test('should assign 3 stops per day across all 7 days in Barranquilla and classi
   const ostrasDetails = buildDeterministicStopDetails(ostrasStop, { city: 'Barranquilla', stopIndex: 2 })
   assert.ok(!/suelo hist[oó]rico/i.test(ostrasDetails.description))
 })
+
+test('should reject verb phrases and truncated sentences from wikitext while preserving clean landmark names when parsing wikitext', () => {
+  const sampleWikitext = `
+== Atractivos turísticos ==
+* El Gran Malecón del Río es el principal punto de encuentro ciudadano.
+* El Malecón del Suroriente comienza a tomar forma con la socialización de las obras públicas.
+* Fue declarado Monumento Nacional por el Ministerio de Cultura en 1995.
+* La Catedral Metropolitana María Reina se destaca en el centro de la ciudad.
+* Castillo de Salgar ofrece vistas al mar Caribe.
+`
+  const parsed = parseLandmarksFromWikitext(sampleWikitext, 'Barranquilla')
+
+  // Must include valid proper nouns
+  assert.ok(parsed.some(item => /Gran Malecón del Río/i.test(item)))
+  assert.ok(parsed.some(item => /Catedral Metropolitana María Reina/i.test(item)))
+  assert.ok(parsed.some(item => /Castillo de Salgar/i.test(item)))
+
+  // Must NOT include truncated verb fragments or mid-sentence clauses
+  for (const item of parsed) {
+    assert.ok(!/comienza|tomar\s+forma|con\s+la/i.test(item), `Found verb fragment in landmark: "${item}"`)
+    assert.ok(!/por\s+el/i.test(item), `Found sentence connector in landmark: "${item}"`)
+  }
+})
+
+test('should never classify iconic attractions like Zoologico de Barranquilla as restaurant even when category or entityType is restaurant', () => {
+  const zooStop = {
+    name: 'Zoológico de Barranquilla',
+    category: 'restaurant',
+    entityType: 'restaurant',
+    type: 'food'
+  }
+  const subcat = inferStopSubcategory(zooStop)
+  assert.equal(subcat, 'nature_park', `Expected 'nature_park', got '${subcat}'`)
+
+  const details = buildDeterministicStopDetails(zooStop, { city: 'Barranquilla', stopIndex: 2 })
+  assert.ok(!/consentir\s+el\s+paladar/i.test(details.description), 'Zoologico should never get restaurant opening hook')
+  assert.ok(!/parada\s+gastron[oó]mica/i.test(details.description), 'Zoologico should never get food narrative')
+})
+
+test('should preserve 100% of chat days and stops in buildTourPlanner when requested places are provided', () => {
+  const chatPlaces = [
+    { name: 'Gran Malecón del Río', dia: 1, day: 1, latitude: 11.0167, longitude: -74.7895 },
+    { name: 'Monumento a Shakira', dia: 1, day: 1, latitude: 11.0180, longitude: -74.7910 },
+    { name: 'El Caimán del Río', dia: 1, day: 1, latitude: 11.0231, longitude: -74.7960, category: 'restaurant' },
+    { name: 'Ventana al Mundo', dia: 2, day: 2, latitude: 11.0331, longitude: -74.8314 },
+    { name: 'Ecoparque Ciénaga de Mallorquín', dia: 2, day: 2, latitude: 11.0350, longitude: -74.8445 },
+    { name: 'Restaurante Cucayo', dia: 2, day: 2, latitude: 11.0074, longitude: -74.8174, category: 'restaurant' },
+    { name: 'Bocas de Ceniza', dia: 3, day: 3, latitude: 11.1065, longitude: -74.8547 },
+    { name: 'Casa del Carnaval', dia: 3, day: 3, latitude: 10.9928, longitude: -74.7876 },
+    { name: 'Restaurante La Cueva', dia: 3, day: 3, latitude: 10.9856, longitude: -74.7965, category: 'restaurant' }
+  ]
+
+  const planner = buildTourPlanner(
+    { destination: 'Barranquilla', city: 'Barranquilla', durationHours: 72, specificPlaces: chatPlaces },
+    { latitude: 10.9685, longitude: -74.7813 },
+    chatPlaces
+  )
+
+  // Must preserve 3 stops per day and exact day assignments
+  assert.equal(planner.selectedPlaces.length, 9)
+  const day1Places = planner.selectedPlaces.filter(p => Number(p.dia || p.day) === 1).map(p => p.name)
+  const day2Places = planner.selectedPlaces.filter(p => Number(p.dia || p.day) === 2).map(p => p.name)
+  const day3Places = planner.selectedPlaces.filter(p => Number(p.dia || p.day) === 3).map(p => p.name)
+
+  assert.equal(day1Places.length, 3)
+  assert.equal(day2Places.length, 3)
+  assert.equal(day3Places.length, 3)
+
+  assert.ok(day1Places.includes('Gran Malecón del Río'))
+  assert.ok(day1Places.includes('Monumento a Shakira'))
+  assert.ok(day2Places.includes('Ventana al Mundo'))
+  assert.ok(day2Places.includes('Ecoparque Ciénaga de Mallorquín'))
+  assert.ok(day3Places.includes('Bocas de Ceniza'))
+  assert.ok(day3Places.includes('Casa del Carnaval'))
+})
+
+test('should resolve Barranquilla iconic presets immediately without timing out', async () => {
+  const catalog = await getRealDestinationCatalog('Barranquilla', 'Colombia')
+
+  assert.ok(catalog.places.length >= 10, `Expected at least 10 places, got ${catalog.places.length}`)
+  assert.ok(catalog.restaurants.length >= 4, `Expected at least 4 restaurants, got ${catalog.restaurants.length}`)
+
+  // Must contain the verified iconic presets
+  const placeNames = catalog.places.map(p => typeof p === 'string' ? p : p.name)
+  assert.ok(placeNames.some(n => /Gran Malecón/i.test(n)), 'Missing Gran Malecón')
+  assert.ok(placeNames.some(n => /Ventana al Mundo/i.test(n)), 'Missing Ventana al Mundo')
+  assert.ok(placeNames.some(n => /Catedral/i.test(n)), 'Missing Catedral Metropolitana')
+  assert.ok(placeNames.some(n => /Castillo de Salgar/i.test(n)), 'Missing Castillo de Salgar')
+
+  const restNames = catalog.restaurants.map(r => r.name)
+  assert.ok(restNames.some(n => /Cucayo/i.test(n)), 'Missing Cucayo')
+  assert.ok(restNames.some(n => /Varadero/i.test(n)), 'Missing Varadero')
+})
+
+
 
 
 

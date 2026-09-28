@@ -180,7 +180,7 @@ function cleanExtractedLandmarkCandidate(raw = '', city = '') {
     .trim()
 
   cleaned = cleaned
-    .split(/\s*(?:,\s*(?:ubicad|situad|zona\s+rosa|donde|el\s+cual|la\s+cual|es\s+un|es\s+el|es\s+la|sede\s+de|conocid)|;\s*|\.\s+|\s+en\s+el\s+barrio)/i)[0]
+    .split(/\s*(?:,\s*(?:ubicad|situad|zona\s+rosa|donde|el\s+cual|la\s+cual|es\s+un|es\s+el|es\s+la|sede\s+de|conocid)|;\s*|\.\s+|\s+en\s+el\s+barrio|\s+(?:comienza|comenz[oó]|inicia|inici[oó]|cuenta\s+con|tiene|fue\s+declarad|declarad[oa]\s+por|por\s+el|por\s+la|para\s+el|para\s+la|con\s+la|con\s+el)\b)/i)[0]
     .replace(/^(?:el|la|los|las|un|una)\s+/i, (match) => {
       return /^(?:el\s+puente|la\s+ronda|la\s+catedral|el\s+muelle|el\s+malec[oó]n)/i.test(cleaned)
         ? ''
@@ -188,6 +188,7 @@ function cleanExtractedLandmarkCandidate(raw = '', city = '') {
     })
     .replace(/\s*\([^)]*\)\s*/g, ' ')
     .replace(/[.;:,]+$/, '')
+    .replace(/\s+(?:de|del|la|las|los|el|al|a|en|por|con|para|sobre|hacia|desde|y|o|que|su|sus)$/i, '')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -197,6 +198,10 @@ function cleanExtractedLandmarkCandidate(raw = '', city = '') {
   if (!normCleaned || normCleaned === normCity) return ''
 
   if (/\b(municipio|departamento|colombia|habitantes|kil[oó]metros|temperatura|universidad|colegio|cl[ií]nica|hospital|aeropuerto|terminal\s+de\s+transporte|alcald[ií]a|gobernaci[oó]n|peri[oó]dico|emisora|canal|elecciones|dane| siglo\s+[ivx]+|am[eé]rica\s+latina)\b/i.test(cleaned)) {
+    return ''
+  }
+
+  if (/\b(comienza|comenz[oó]|inicia|inici[oó]|tomar|forma|cuenta\s+con|tiene|declarad[oa]|por\s+el|por\s+la|para\s+el|para\s+la|con\s+la|con\s+el|sobre\s+el|sobre\s+la|hacia\s+el|hacia\s+la|desde\s+el|desde\s+la)\b/i.test(cleaned)) {
     return ''
   }
 
@@ -244,7 +249,7 @@ export function parseLandmarksFromWikitext(wikitext = '', city = '') {
     ? targetBlocks.map((b) => b.body).join('\n')
     : wikitext.slice(0, 18000)
 
-  const inlinePattern = /\b((?:[Pp]arque(?:\s+[Ll]ineal)?|[Rr]onda|[Mm]alec[oó]n|[Mm]uelle(?:\s+[Tt]ur[ií]stico)?|[Cc]atedral|[Bb]as[ií]lica|[Mm]useo|[Mm]onumento|[Pp]laza(?:\s+[Cc]ultural)?|[Mm]irador|[Pp]asaje|[Pp]ueblito|[Cc]astillo|[Ff]uerte|[Pp]uente(?:\s+[Mm]et[aá]lico|\s+[Ss]egundo\s+[Cc]entenario)?|[Aa]venida\s+Primera|[Aa]ntiguo\s+[Mm]ercado\s+[Pp][uú]blico)\s+(?:de\s+|del\s+|la\s+|las\s+|los\s+|al\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s]{2,42})/g
+  const inlinePattern = /\b((?:[Pp]arque(?:\s+[Ll]ineal)?|[Rr]onda|[Mm]alec[oó]n|[Mm]uelle(?:\s+[Tt]ur[ií]stico)?|[Cc]atedral|[Bb]as[ií]lica|[Mm]useo|[Mm]onumento|[Pp]laza(?:\s+[Cc]ultural)?|[Mm]irador|[Pp]asaje|[Pp]ueblito|[Cc]astillo|[Ff]uerte|[Pp]uente(?:\s+[Mm]et[aá]lico|\s+[Ss]egundo\s+[Cc]entenario)?|[Aa]venida\s+Primera|[Aa]ntiguo\s+[Mm]ercado\s+[Pp][uú]blico)(?:\s+(?:de\s+la\s+|de\s+los\s+|de\s+las\s+|de\s+|del\s+|al\s+|a\s+|y\s+|en\s+|el\s+|la\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ0-9]+){1,5})/g
   let inlineMatch
   while ((inlineMatch = inlinePattern.exec(combinedText)) !== null) {
     const cleaned = cleanExtractedLandmarkCandidate(capitalizeFirstLetter(inlineMatch[1]), city)
@@ -415,18 +420,23 @@ export function inferStopSubcategory(place = {}) {
   const leisure = String(tags.leisure || '').toLowerCase()
   const lower = normalizeTextKey(name)
 
+  // Explicit landmark & attraction keywords MUST NOT be misclassified as food or cafes
+  const isStrictAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla)\b/i.test(name)
+
   if (
-    /\b(caf[ée]|cafeter[ií]a|panader[ií]a|pasteler[ií]a|reposter[ií]a|helader[ií]a|postres|dulcer[ií]a|chocolater[ií]a)\b/i.test(name) ||
+    !isStrictAttraction &&
+    (/\b(caf[ée]|cafeter[ií]a|panader[ií]a|pasteler[ií]a|reposter[ií]a|helader[ií]a|postres|dulcer[ií]a|chocolater[ií]a)\b/i.test(name) ||
     amenity === 'cafe' ||
-    rawCat === 'cafe'
+    rawCat === 'cafe')
   ) {
     return 'cafe'
   }
   if (
-    /\b(restaurante|restaurant|vegetariano|vegano|creper[ií]a|pizzer[ií]a|parrilla|asador|asados|bistro|gastrobar|cevicher[ií]a|cebicher[ií]a|marisquer[ií]a|ostras|ostrer[ií]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|narcobollo|trattoria|steakhouse|piqueteadero|comedor|cocina|saz[oó]n|fog[oó]n|taquer[ií]a|sushi|wok|mercado\s+gastron[oó]mico|caim[aá]n\s+del\s+r[ií]o)\b/i.test(name) ||
+    !isStrictAttraction &&
+    (/\b(restaurante|restaurant|vegetariano|vegano|creper[ií]a|pizzer[ií]a|parrilla|asador|asados|bistro|gastrobar|cevicher[ií]a|cebicher[ií]a|marisquer[ií]a|ostras|ostrer[ií]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|narcobollo|trattoria|steakhouse|piqueteadero|comedor|cocina|saz[oó]n|fog[oó]n|taquer[ií]a|sushi|wok|mercado\s+gastron[oó]mico|caim[aá]n\s+del\s+r[ií]o)\b/i.test(name) ||
     ['restaurant', 'food_court', 'bar', 'pub'].includes(amenity) ||
     ['restaurant', 'food', 'gastronomic'].includes(rawCat) ||
-    String(place.entityType || '').toLowerCase() === 'restaurant'
+    String(place.entityType || '').toLowerCase() === 'restaurant')
   ) {
     return 'restaurant'
   }

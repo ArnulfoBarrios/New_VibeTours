@@ -3258,10 +3258,16 @@ export function buildTourPlanner(input, location = null, places = []) {
         if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
           // Si un restaurante/gastronomía fue colocado en medio de atracciones no-gastronómicas, moverlo al cierre del día
           const lastPlace = dayPlaces[dayPlaces.length - 1]
-          const isLastFood = getPlaceEntityType(lastPlace.name) === 'food'
+          const isFoodStop = (p) => {
+            if (!p || !p.name) return false
+            const isAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla)\b/i.test(p.name)
+            if (isAttraction) return false
+            return getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe' || p.type === 'food'
+          }
+          const isLastFood = isFoodStop(lastPlace)
 
           if (!isLastFood) {
-            const foodIdx = dayPlaces.findIndex((p, idx) => idx > 0 && getPlaceEntityType(p.name) === 'food')
+            const foodIdx = dayPlaces.findIndex((p, idx) => idx > 0 && isFoodStop(p))
             if (foodIdx !== -1) {
               const reordered = [...dayPlaces]
               const [foodItem] = reordered.splice(foodIdx, 1)
@@ -3276,7 +3282,8 @@ export function buildTourPlanner(input, location = null, places = []) {
           reorderedByDay.push(...dayPlaces)
         }
       }
-      const hasPeripheralConflict = totalDays > 1 && Array.from(daysMap.values()).some(dp => { const attrs = dp.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); if (attrs.length < 2) return false; const sec0 = inferPlaceMicroSector(attrs[0], origin, input.city || input.destination); const sec1 = inferPlaceMicroSector(attrs[1], origin, input.city || input.destination); return (sec0.isPeripheralExcursion || sec1.isPeripheralExcursion) && !areStopsCompatibleInSameDay(attrs[0], attrs[1], origin, input.city || input.destination) }); if (hasPeripheralConflict) { const attrs = reorderedByDay.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); const rests = reorderedByDay.filter(p => getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe'); const clustered = clusterStopsIntoCoherentDays(attrs, rests, { numDays: totalDays, city: input.city || input.destination, cityCenter: origin }); selectedPlaces = clustered.flatMap(dp => dp.stops) } else { selectedPlaces = reorderedByDay }
+      // Preservar fielmente el orden y la distribución de días acordados en el chat
+      selectedPlaces = reorderedByDay
     } else {
       scored.sort((a, b) => b.score - a.score)
       selectedPlaces = selectPlaces(scored, stopTarget, input)
@@ -3615,11 +3622,11 @@ function normalizeCategory(place) {
   const category = String(place.category ?? place.type ?? '').toLowerCase()
   const name = String(place.name ?? '').toLowerCase()
   const tags = normalizeTags(place.tags)
-  const isExplicitDiningName = category === 'restaurant' || category === 'food' || String(place.entityType || '').toLowerCase() === 'restaurant' || /\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|bistro|caf[ée]|cafeter[íi]a|bar|gastrobar|pizzer[íi]a|asador|asados|parrilla|taquer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|cevicher[íi]a|cebicher[íi]a|trattoria|steakhouse|piqueteadero|comedor|saz[oó]n|fog[oó]n)\b/i.test(name)
-  if (isExplicitDiningName && !/\b(museo|parque|plaza|catedral|iglesia|monumento)\b/i.test(name)) {
+  const isCulturalPOI = /\b(zool[óo]gico|zoologico|zoo|acuario|bioparque|museo|museum|galer[íi]a|catedral|cathedral|iglesia|church|templo|temple|bas[íi]lica|parque|park|plaza|monumento|monument|malec[óo]n|malecon|teatro|theatre|carnaval|estadio|stadium|sendero|playa|mirador)\b/i.test(name)
+  const isExplicitDiningName = !isCulturalPOI && (category === 'restaurant' || category === 'food' || String(place.entityType || '').toLowerCase() === 'restaurant' || /\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|bistro|caf[ée]|cafeter[íi]a|bar|gastrobar|pizzer[íi]a|asador|asados|parrilla|taquer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|cevicher[íi]a|cebicher[íi]a|trattoria|steakhouse|piqueteadero|comedor|saz[oó]n|fog[oó]n)\b/i.test(name))
+  if (isExplicitDiningName) {
     return /\b(caf[ée]|cafeter[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a)\b/i.test(name) ? 'cafe' : 'restaurant'
   }
-  const isCulturalPOI = /\b(zool[óo]gico|zoologico|zoo|acuario|museo|museum|galer[íi]a|catedral|cathedral|iglesia|church|templo|temple|bas[íi]lica|parque|park|plaza|monumento|monument|malec[óo]n|malecon|teatro|theatre|carnaval|estadio|stadium|sendero|playa|mirador)\b/i.test(name)
 
   const merged = (category + ' ' + name + ' ' + tags.join(' ')).toLowerCase()
   if (/(stadium|sports_centre|sport|pitch|arena|track|fitness|cancha|estadio|deporte|running|ciclismo)/.test(merged)) return 'sports'

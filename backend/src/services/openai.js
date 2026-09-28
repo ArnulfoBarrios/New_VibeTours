@@ -464,6 +464,8 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
       placeId: geo.placeId || place.placeId || place.id || '',
       coordinateSource: geo.coordinateSource || 'osm',
       coordinatesVerified: true,
+      category: place.category || geo.category || '',
+      type: place.type || geo.type || '',
       isReferentialLocation: Boolean(geo.isReferentialLocation)
     }
   }))
@@ -890,6 +892,19 @@ async function resolveDestinationCenter({ destination = '', country = '', userLa
     return { latitude: Number(userLat), longitude: Number(userLon), source: 'user' }
   }
 
+  const normalizedDestination = String(destination || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+  const centroid = Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([key]) => {
+    const normalizedKey = String(key).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    return normalizedKey === normalizedDestination
+  })?.[1]
+  if (centroid && Number.isFinite(Number(centroid.latitude)) && Number.isFinite(Number(centroid.longitude))) {
+    return { latitude: Number(centroid.latitude), longitude: Number(centroid.longitude), source: 'destination-centroid' }
+  }
+
   const osmGeo = await geocodePlace(`${destination}, ${country}`.trim(), null, null, {
     city: destination,
     destination,
@@ -904,19 +919,6 @@ async function resolveDestinationCenter({ destination = '', country = '', userLa
   if (providerGeo && Number.isFinite(Number(providerGeo.latitude)) && Number.isFinite(Number(providerGeo.longitude)) &&
       Number(providerGeo.latitude) !== 0 && Number(providerGeo.longitude) !== 0) {
     return { latitude: Number(providerGeo.latitude), longitude: Number(providerGeo.longitude), source: providerGeo.source || 'provider' }
-  }
-
-  const normalizedDestination = String(destination || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-  const centroid = Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([key]) => {
-    const normalizedKey = String(key).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-    return normalizedKey === normalizedDestination
-  })?.[1]
-  if (centroid && Number.isFinite(Number(centroid.latitude)) && Number.isFinite(Number(centroid.longitude))) {
-    return { latitude: Number(centroid.latitude), longitude: Number(centroid.longitude), source: 'destination-centroid' }
   }
 
   return null
@@ -1004,7 +1006,7 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
     cityLat: centerLat,
     cityLon: centerLon,
     maxDistanceKm: 65,
-    options: { preferLiveProviders: true }
+    options: { preferCanonical: true, preferLiveProviders: false }
   }).catch(() => null)
 
   if (!hasOsmMapRecord(geo)) {
@@ -1020,7 +1022,7 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
         cityLat: centerLat,
         cityLon: centerLon,
         maxDistanceKm: 65,
-        options: { preferLiveProviders: true }
+        options: { preferCanonical: true, preferLiveProviders: false }
       }).catch(() => null)
     }
   }
@@ -1303,7 +1305,7 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
 export async function getRealDestinationCatalog(destName = '', countryName = '', userLat = null, userLon = null) {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
   const normalizedCountry = String(countryName || '').trim().toLowerCase()
-  const cacheKey = `catalog_osm_v3_${clean}_${normalizedCountry}`
+  const cacheKey = `catalog_osm_v4_${clean}_${normalizedCountry}`
   const cached = destinationCatalogCache.get(cacheKey)
   if (cached) return cached
 
@@ -1339,10 +1341,11 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
+  const minLandmarksTarget = presetIconics.length > 0 ? Math.min(presetIconics.length, 12) : 12
   let dynamicIconics = []
-  if (realPlaces.length < 16) {
+  if (realPlaces.length < minLandmarksTarget) {
     dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry, lat, lon).catch(() => [])
-    const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, 20, lat, lon)
+    const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, 14, lat, lon)
 
 
     for (const vd of verifiedDynamic) {
@@ -1375,20 +1378,21 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   }
 
   // 1.3 Query live OpenStreetMap POIs (Overpass and Photon) only when complements are needed
-  const needsOsmComplement = (realPlaces.length < 16 || realRests.length < 8 || realHotels.length < 2) && lat && lon
+  const minRestsTarget = presetRests.length > 0 ? Math.min(presetRests.length, 6) : 6
+  const needsOsmComplement = (realPlaces.length < minLandmarksTarget || realRests.length < minRestsTarget || realHotels.length < 2) && lat && lon
   if (needsOsmComplement) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 5000))
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
       realHotels.length < 2
         ? Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise])
         : Promise.resolve([]),
-      realRests.length < 8
+      realRests.length < minRestsTarget
         ? Promise.race([overpassNearbyFood(lat, lon, 10000).catch(() => []), timeoutPromise])
         : Promise.resolve([]),
 
 
 
-      realPlaces.length < 16
+      realPlaces.length < minLandmarksTarget
         ? Promise.race([overpassAttractions(lat, lon, 35000).catch(() => []), timeoutPromise])
         : Promise.resolve([])
     ])
@@ -1780,7 +1784,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   // Grounding Data: Instant cache retrieval or non-blocking background pre-warming
   let realCatalog = null
   if (hasCity) {
-    const cacheKey = `catalog_osm_v2_${destName.toLowerCase()}_${(destCountry || '').toLowerCase()}`
+    const cacheKey = `catalog_osm_v4_${destName.toLowerCase()}_${(destCountry || '').toLowerCase()}`
     const cached = destinationCatalogCache.get(cacheKey)
     if (cached) {
       realCatalog = cached
@@ -2937,7 +2941,7 @@ REGLAS PARA "accommodationStatus":
         })
       }
 
-      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [] }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))) }
+      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [] }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction', ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))) }
       reconstructed += isUserAskingForMoreStops
         ? '¿Qué te parece este itinerario ampliado? ¿Deseas hacer algún otro ajuste o procedemos a generar el tour en el mapa?'
         : '¿Qué te parece este itinerario? ¿Deseas hacer algún ajuste o procedemos a generar el tour en el mapa?'
