@@ -12,13 +12,13 @@ import 'features/creator/tour_creator_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/home/place_route_screen.dart';
 import 'features/legal/legal_screen.dart';
-import 'features/onboarding/onboarding_screen.dart';
 import 'features/profile/achievements_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/profile/public_profile_screen.dart';
 import 'features/profile/tourist_preferences_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/shell/main_shell.dart';
+import 'features/splash/splash_screen.dart';
 import 'features/support/help_center_screen.dart';
 import 'features/support/pqrs_screen.dart';
 import 'features/tour_live/live_tour_screen.dart';
@@ -55,7 +55,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/', builder: (context, state) => const _StartupRoute()),
+      GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => MainShell(navigationShell: navigationShell),
@@ -183,45 +183,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
-class _StartupRoute extends ConsumerStatefulWidget {
-  const _StartupRoute();
-  @override
-  ConsumerState<_StartupRoute> createState() => _StartupRouteState();
-}
-
-class _StartupRouteState extends ConsumerState<_StartupRoute> {
-  @override
-  void initState() {
-    super.initState();
-    _checkOnboarding();
-  }
-
-  Future<void> _checkOnboarding() async {
-    try {
-      final complete = await ref.read(onboardingCompleteProvider.future);
-      if (mounted && complete) {
-        context.go('/home');
-      }
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final onboarding = ref.watch(onboardingCompleteProvider);
-
-    return onboarding.when(
-      data: (complete) {
-        if (complete) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        return const OnboardingScreen();
-      },
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (error, stackTrace) => const OnboardingScreen(),
-    );
-  }
-}
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {

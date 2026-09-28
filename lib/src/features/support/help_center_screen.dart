@@ -697,7 +697,7 @@ class _GuideItemWidget extends StatelessWidget {
                             item.tip!,
                             style: TextStyle(
                               fontSize: 12.5,
-                              color: isDark ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF0056B3),
+                              color: isDark ? Colors.white.withValues(alpha: 0.9) : AppTheme.primaryDeep,
                               fontWeight: FontWeight.w500,
                               height: 1.4,
                             ),

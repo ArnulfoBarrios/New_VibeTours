@@ -18,7 +18,7 @@ class VibeLogoMark extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF2B8CFF), Color(0xFF7FB1FF)],
+            colors: [AppTheme.primary, Color(0xFF7FC2FF)],
           ),
           borderRadius: BorderRadius.circular(size * 0.24),
           boxShadow: [

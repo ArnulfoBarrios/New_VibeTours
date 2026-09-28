@@ -919,9 +919,9 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
             CircleOptions(
               geometry: points[i],
               circleRadius: i == activeIndex ? 11 : 8,
-              circleColor: i == activeIndex ? '#007AFF' : '#FFFFFF',
+              circleColor: i == activeIndex ? '#3B9BF5' : '#FFFFFF',
               circleOpacity: 0.98,
-              circleStrokeColor: '#007AFF',
+              circleStrokeColor: '#3B9BF5',
               circleStrokeWidth: i == activeIndex ? 4 : 2.5,
             ),
           );
@@ -931,8 +931,8 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
                 geometry: points[i],
                 textField: '${i + 1}',
                 textSize: i == activeIndex ? 13 : 11,
-                textColor: i == activeIndex ? '#FFFFFF' : '#007AFF',
-                textHaloColor: i == activeIndex ? '#007AFF' : '#FFFFFF',
+                textColor: i == activeIndex ? '#FFFFFF' : '#3B9BF5',
+                textHaloColor: i == activeIndex ? '#3B9BF5' : '#FFFFFF',
                 textHaloWidth: 1.2,
               ),
             );
@@ -964,7 +964,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
           final line = await controller.addLine(
             LineOptions(
               geometry: segmentPoints,
-              lineColor: '#60A5FA',
+              lineColor: '#6DB4F8',
               lineWidth: 4,
               lineOpacity: 0.90,
               lineJoin: 'round',
@@ -1345,8 +1345,8 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     final isActive = (activeIndex >= 0 && index == activeIndex) || isSinglePoint;
     final finalRadius = isSinglePoint ? 14.0 : (isActive ? 11.0 : 8.0);
     final finalStrokeWidth = isSinglePoint ? 4.0 : (isActive ? 4.0 : 2.5);
-    final circleColor = isSinglePoint ? '#FF3B30' : (isActive ? '#007AFF' : '#FFFFFF');
-    final strokeColor = isSinglePoint ? '#FFFFFF' : '#007AFF';
+    final circleColor = isSinglePoint ? '#FF3B30' : (isActive ? '#3B9BF5' : '#FFFFFF');
+    final strokeColor = isSinglePoint ? '#FFFFFF' : '#3B9BF5';
 
     Circle? circle;
     try {
@@ -1406,7 +1406,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
             geometry: location,
             textField: label,
             textSize: isSinglePoint ? 14.0 : (isActive ? 13.0 : 11.0),
-            textColor: isSinglePoint ? '#FF3B30' : (isActive ? '#FFFFFF' : '#007AFF'),
+            textColor: isSinglePoint ? '#FF3B30' : (isActive ? '#FFFFFF' : '#3B9BF5'),
             textHaloColor: '#FFFFFF',
             textHaloWidth: 2.0,
             textOffset: const Offset(0, 1.2),
@@ -1500,6 +1500,6 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
   }
 
   String _routeColor(RoadRouteResult route) {
-    return '#007AFF';
+    return '#3B9BF5';
   }
 }

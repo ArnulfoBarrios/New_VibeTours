@@ -2627,7 +2627,7 @@ class _PeakHoursBarChart extends StatelessWidget {
                     end: Alignment.topCenter,
                     colors: isPeak
                         ? const [Colors.orange, Colors.redAccent]
-                        : const [AppTheme.primary, Color(0xFF60A5FA)],
+                        : const [AppTheme.primary, Color(0xFF6DB4F8)],
                   ),
                 ),
               ),

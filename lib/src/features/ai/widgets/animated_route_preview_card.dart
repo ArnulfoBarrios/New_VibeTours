@@ -174,12 +174,12 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
                   decoration: BoxDecoration(
                     color: isDark
                         ? const Color(0xFF00E5FF).withValues(alpha: 0.15)
-                        : const Color(0xFF2563EB).withValues(alpha: 0.12),
+                        : const Color(0xFF3B9BF5).withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: isDark
                           ? const Color(0xFF00E5FF).withValues(alpha: 0.3)
-                          : const Color(0xFF2563EB).withValues(alpha: 0.25),
+                          : const Color(0xFF3B9BF5).withValues(alpha: 0.25),
                     ),
                   ),
                   child: Icon(
@@ -187,7 +187,7 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
                     size: 16,
                     color: isDark
                         ? const Color(0xFF00E5FF)
-                        : const Color(0xFF2563EB),
+                        : const Color(0xFF3B9BF5),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -226,7 +226,7 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
                     size: 20,
                     color: isDark
                         ? const Color(0xFF38BDF8)
-                        : const Color(0xFF2563EB),
+                        : const Color(0xFF3B9BF5),
                   ),
                   onPressed: _replayAnimation,
                 ),
@@ -457,8 +457,8 @@ class _AnimatedRoutePreviewCardState extends State<AnimatedRoutePreviewCard>
                                   const Color(0xFF0284C7)
                                 ]
                               : [
-                                  const Color(0xFF2563EB),
-                                  const Color(0xFF1D4ED8)
+                                  const Color(0xFF3B9BF5),
+                                  const Color(0xFF1768B8)
                                 ],
                         ),
                         shape: BoxShape.circle,
@@ -650,14 +650,14 @@ class RouteCanvasPainter extends CustomPainter {
     final pulsePaint = Paint()
       ..color = isDark
           ? const Color(0xFF00E5FF).withValues(alpha: pulseAlpha)
-          : const Color(0xFF2563EB).withValues(alpha: pulseAlpha)
+          : const Color(0xFF3B9BF5).withValues(alpha: pulseAlpha)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
 
     canvas.drawCircle(point, pulseRadius, pulsePaint);
 
     final nodeCore = Paint()
-      ..color = isDark ? const Color(0xFF00E5FF) : const Color(0xFF2563EB)
+      ..color = isDark ? const Color(0xFF00E5FF) : const Color(0xFF3B9BF5)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(point, 7.0, nodeCore);
 
@@ -825,7 +825,7 @@ class RouteCanvasPainter extends CustomPainter {
       canvas.drawPath(drawnPath, laserCorePaint);
     } else {
       final ambientGlowPaint = Paint()
-        ..color = const Color(0xFF3B82F6).withValues(alpha: 0.35)
+        ..color = const Color(0xFF3B9BF5).withValues(alpha: 0.35)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0)
         ..strokeWidth = 8.0
         ..style = PaintingStyle.stroke
@@ -834,7 +834,7 @@ class RouteCanvasPainter extends CustomPainter {
       canvas.drawPath(drawnPath, ambientGlowPaint);
 
       final laserCorePaint = Paint()
-        ..color = const Color(0xFF1D4ED8)
+        ..color = const Color(0xFF1768B8)
         ..strokeWidth = 3.5
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
@@ -878,11 +878,11 @@ class RouteCanvasPainter extends CustomPainter {
       canvas.drawCircle(pos, 3.5, centerPaint);
     } else {
       final auraPaint = Paint()
-        ..color = const Color(0xFF2563EB).withValues(alpha: 0.45)
+        ..color = const Color(0xFF3B9BF5).withValues(alpha: 0.45)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0);
       canvas.drawCircle(pos, 10.0, auraPaint);
 
-      final sparkPaint = Paint()..color = const Color(0xFF1D4ED8);
+      final sparkPaint = Paint()..color = const Color(0xFF1768B8);
       canvas.drawCircle(pos, 5.0, sparkPaint);
 
       final centerPaint = Paint()..color = Colors.white;
@@ -921,7 +921,7 @@ class RouteCanvasPainter extends CustomPainter {
       final wavePaint = Paint()
         ..color = isDark
             ? const Color(0xFF00E5FF).withValues(alpha: alpha)
-            : const Color(0xFF3B82F6).withValues(alpha: alpha)
+            : const Color(0xFF3B9BF5).withValues(alpha: alpha)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.6;
 
@@ -967,7 +967,7 @@ class RouteCanvasPainter extends CustomPainter {
       final ringPaint = Paint()
         ..color = isStart
             ? const Color(0xFF059669)
-            : (isEnd ? const Color(0xFFE11D48) : const Color(0xFF1D4ED8))
+            : (isEnd ? const Color(0xFFE11D48) : const Color(0xFF1768B8))
         ..style = PaintingStyle.fill;
       canvas.drawCircle(point, 8.5, ringPaint);
 
@@ -979,7 +979,7 @@ class RouteCanvasPainter extends CustomPainter {
       final centerDotPaint = Paint()
         ..color = isStart
             ? const Color(0xFF059669)
-            : (isEnd ? const Color(0xFFE11D48) : const Color(0xFF1D4ED8))
+            : (isEnd ? const Color(0xFFE11D48) : const Color(0xFF1768B8))
         ..style = PaintingStyle.fill;
       canvas.drawCircle(point, 3.2, centerDotPaint);
     }
@@ -987,7 +987,7 @@ class RouteCanvasPainter extends CustomPainter {
     final textSpan = TextSpan(
       text: '${index + 1}',
       style: TextStyle(
-        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF1D4ED8),
+        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF1768B8),
         fontSize: 9.0,
         fontWeight: FontWeight.w800,
       ),

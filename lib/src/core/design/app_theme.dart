@@ -51,8 +51,8 @@ class VibeColors extends ThemeExtension<VibeColors> {
 class AppTheme {
   const AppTheme._();
 
-  static const primary = Color(0xFF007AFF); // iOS Blue
-  static const primaryDeep = Color(0xFF0056B3);
+  static const primary = Color(0xFF3B9BF5); // Emotiva Blue
+  static const primaryDeep = Color(0xFF1768B8); // Emotiva Deep Blue
   static const indigo = Color(0xFF5856D6); // iOS Indigo
   static const violet = Color(0xFFAF52DE); // iOS Purple
   static const lightBackground = Color(0xFFF2F2F7); // iOS Grouped Background Light

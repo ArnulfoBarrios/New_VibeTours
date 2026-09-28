@@ -485,7 +485,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         color: isDark ? const Color(0xFF1E2638) : const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0xFF2E4068) : const Color(0xFFBFDBFE),
+          color: isDark ? const Color(0xFF2E4068) : const Color(0xFFCCE4FD),
           width: 1.2,
         ),
         boxShadow: [

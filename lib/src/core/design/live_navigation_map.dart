@@ -438,7 +438,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         CircleOptions(
           geometry: puckPos,
           circleRadius: 18,
-          circleColor: '#007AFF',
+          circleColor: '#3B9BF5',
           circleOpacity: 0.20,
         ),
       );
@@ -446,7 +446,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         CircleOptions(
           geometry: puckPos,
           circleRadius: 9,
-          circleColor: '#007AFF',
+          circleColor: '#3B9BF5',
           circleOpacity: 1.0,
           circleStrokeColor: '#FFFFFF',
           circleStrokeWidth: 3.5,
@@ -1020,7 +1020,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
           CircleOptions(
             geometry: destPos,
             circleRadius: 12,
-            circleColor: '#007AFF',
+            circleColor: '#3B9BF5',
             circleOpacity: 0.98,
             circleStrokeColor: '#FFFFFF',
             circleStrokeWidth: 3,
@@ -1032,14 +1032,14 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
         }
         _destinationCircle = destinationCircle;
         await controller.addSymbol(
-          SymbolOptions(
-            geometry: destPos,
-            textField: '1',
-            textSize: 12,
-            textColor: '#FFFFFF',
-            textHaloColor: '#007AFF',
-            textHaloWidth: 1.0,
-          ),
+           SymbolOptions(
+             geometry: destPos,
+             textField: '1',
+             textSize: 12,
+             textColor: '#FFFFFF',
+             textHaloColor: '#3B9BF5',
+             textHaloWidth: 1.0,
+           ),
         );
         final cleanDestName = widget.destinationName.trim();
         if (cleanDestName.isNotEmpty) {
@@ -1068,7 +1068,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
           final newLine = await controller.addLine(
             LineOptions(
               geometry: lineGeometry,
-              lineColor: '#007AFF',
+              lineColor: '#3B9BF5',
               lineWidth: 7,
               lineOpacity: 0.96,
               lineJoin: 'round',
@@ -1093,7 +1093,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
             final newLine = await controller.addLine(
               LineOptions(
                 geometry: lineGeometry,
-                lineColor: '#007AFF',
+                lineColor: '#3B9BF5',
                 lineWidth: 7,
                 lineOpacity: 0.96,
                 lineJoin: 'round',
@@ -1144,7 +1144,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
           final line = await controller.addLine(
             LineOptions(
               geometry: segmentPoints,
-              lineColor: '#60A5FA',
+              lineColor: '#6DB4F8',
               lineWidth: 4,
               lineOpacity: 0.90,
               lineJoin: 'round',
@@ -1159,7 +1159,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
                 CircleOptions(
                   geometry: dot,
                   circleRadius: 4.0,
-                  circleColor: '#0055FF',
+                  circleColor: '#3B9BF5',
                   circleOpacity: 1.0,
                   circleStrokeWidth: 1.0,
                   circleStrokeColor: '#FFFFFF',

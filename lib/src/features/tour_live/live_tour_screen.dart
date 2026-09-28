@@ -3498,10 +3498,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF007AFF),
+              color: AppTheme.primary,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF007AFF).withValues(alpha: 0.5),
+                  color: AppTheme.primary.withValues(alpha: 0.5),
                   blurRadius: 12 * _micPulseAnimation.value,
                   spreadRadius: 2 * _micPulseAnimation.value,
                 ),
