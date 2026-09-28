@@ -7,7 +7,9 @@ import {
   resetOpenAiCircuitBreaker,
   getActiveOpenAiKey,
   fetchOpenAiChatCompletion,
-  getRealDestinationCatalog
+  getRealDestinationCatalog,
+  extractChatInformationFallback,
+  generateChatResponse
 } from '../services/openai.js'
 import {
   composeDeterministicTourGuideScript,
@@ -659,6 +661,73 @@ test('should dynamically ensure at least 14 attractions and 7 restaurants for 7-
 
   assert.equal(usedRestaurants.size, 7, 'Must have 7 unique restaurants across 7 days')
 })
+
+test('should extract user-requested places to add in chat with day assignment and distinguish generic stop requests', () => {
+  const ext1 = extractChatInformationFallback('Agrega la Ventana al Mundo')
+  assert.ok(Array.isArray(ext1.specificPlaces), 'Must have specificPlaces array')
+  assert.equal(ext1.specificPlaces.length, 1)
+  assert.equal(ext1.specificPlaces[0].name, 'Ventana al Mundo')
+
+  const ext2 = extractChatInformationFallback('Quiero visitar el Castillo de Salgar para el día 2')
+  assert.ok(Array.isArray(ext2.specificPlaces), 'Must have specificPlaces array')
+  assert.equal(ext2.specificPlaces.length, 1)
+  assert.equal(ext2.specificPlaces[0].name, 'Castillo de Salgar')
+  assert.equal(ext2.specificPlaces[0].dia, 2)
+
+  const ext3 = extractChatInformationFallback('Incluye La Troja en el día 3')
+  assert.ok(Array.isArray(ext3.specificPlaces), 'Must have specificPlaces array')
+  assert.equal(ext3.specificPlaces.length, 1)
+  assert.equal(ext3.specificPlaces[0].name, 'La Troja')
+  assert.equal(ext3.specificPlaces[0].dia, 3)
+
+  // Generic requests for more stops must NOT produce fake places
+  const extGeneric = extractChatInformationFallback('Agrega más paradas por favor')
+  assert.ok(!extGeneric.specificPlaces || extGeneric.specificPlaces.length === 0, 'Generic request must not extract place')
+})
+
+test('should dynamically scale to 9 days in Barranquilla with 18 attractions, 9 restaurants, zero repetitions and iconic prioritization', async () => {
+  const catalog = await getRealDestinationCatalog('Barranquilla', 'Colombia', null, null, { requestedDays: 9 })
+
+  assert.ok(catalog.places.length >= 18, `Expected at least 18 places for 9 days, got ${catalog.places.length}`)
+  assert.ok(catalog.restaurants.length >= 9, `Expected at least 9 restaurants for 9 days, got ${catalog.restaurants.length}`)
+
+  // Must prioritize iconic restaurants at the front
+  const topRestNames = catalog.restaurants.slice(0, 6).map(r => r.name)
+  assert.ok(
+    topRestNames.some(n => /Cucayo/i.test(n)) || topRestNames.some(n => /Varadero/i.test(n)) || topRestNames.some(n => /La Cueva/i.test(n)),
+    'Iconic restaurants must appear in top positions'
+  )
+
+  // Must strictly reject non-culinary monuments and obscure shops from restaurants
+  const allRestNames = catalog.restaurants.map(r => r.name)
+  assert.ok(!allRestNames.some(n => /Virgen del Carmen/i.test(n)), 'Virgen del Carmen must not be in restaurants')
+  assert.ok(!allRestNames.some(n => /^el progreso$/i.test(n)), 'El progreso must not be in restaurants')
+  assert.ok(!allRestNames.some(n => /^el paye$/i.test(n)), 'El paye must not be in restaurants')
+
+  // Cluster the catalog into 9 days
+  const clusteredDays = clusterStopsIntoCoherentDays(catalog.places, catalog.restaurants, {
+    numDays: 9,
+    city: 'Barranquilla'
+  })
+
+  assert.equal(clusteredDays.length, 9, 'Must have exactly 9 days')
+
+  const usedRestaurants = new Set()
+  for (const day of clusteredDays) {
+    // Each day must have 2 attractions and 1 restaurant (total 3 stops)
+    assert.equal(day.attractions.length, 2, `Day ${day.day} must have exactly 2 attractions, got ${day.attractions.length}`)
+    assert.ok(day.restaurant, `Day ${day.day} must have a restaurant`)
+    assert.equal(day.stops.length, 3, `Day ${day.day} must have exactly 3 stops`)
+
+    // Restaurant must not be repeated across days
+    const restKey = day.restaurant.name.toLowerCase()
+    assert.ok(!usedRestaurants.has(restKey), `Restaurant "${day.restaurant.name}" was repeated on Day ${day.day}`)
+    usedRestaurants.add(restKey)
+  }
+
+  assert.equal(usedRestaurants.size, 9, 'Must have 9 unique restaurants across 9 days')
+})
+
 
 
 
