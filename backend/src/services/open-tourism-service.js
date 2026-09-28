@@ -65,7 +65,15 @@ export function isNeighborhoodOrMinorPark(name = '', tags = {}, wikipediaTrusted
 export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
   const cleanName = String(name || '').trim()
   if (!cleanName) return true
-  if (/\b(comidas?\s+r[aá]pidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|hot\s*dogs?|choriperros?|salchipapas?|hamburguesas?|hamburgueser[ií]a|burguer|burger|rapi\s*burg\w*|alitas|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|billares|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i.test(cleanName)) {
+  if (/\b(comidas?\s+r[aá]pidas?|comodas?\s+rapidas?|fast\s*food|frituras?|fritanga|perros?\s+calientes?|hot\s*dogs?|choriperros?|salchipapas?|hamburguesas?|hamburgueser[ií]a|burguer|burger|rapi\s*burg\w*|alitas|asadero\s+de\s+pollo|pollo\s+broaster|arepas?\s+rellenas?|empanadas?|helader[ií]a\s+de\s+barrio|kiosko|kiosco|puesto\s+de|billar|billares|estadero|tienda|granero|fruver|supermercado|minimercado|droguer[ií]a|cafeter[ií]a\s+escolar|el\s+lobo|minuto\s+de\s+dios|canta\s+claro|frisby|kfc|mcdonald'?s?|burger\s*king|subway|kokoriko|presto|domino'?s?|el\s+corral|ppc|papa\s+john'?s?|little\s+caesars?)\b/i.test(cleanName)) {
+    return true
+  }
+  // Reject religious shrines, monuments, statues, and recreational clubs misclassified as restaurants
+  if (/\b(virgen|santuario|monumento|escultura|estatua|busto|catedral|parroquia|iglesia|capilla|ermita|recreaciones\s+club|club\s+recreativ\w*)\b/i.test(cleanName) && !/\b(restaurante|restaurant|bistro|caf[ée]|bar|parrilla|asador|cocina)\b/i.test(cleanName)) {
+    return true
+  }
+  // Reject non-culinary ambiguous names or neighborhood shops
+  if (/^(?:el\s+progreso|el\s+paye|mi\s+talisman|el\s+vacilon|pollo\s+asado)$/i.test(cleanName)) {
     return true
   }
   // Reject street-address nodes mislabeled as restaurants on OSM (e.g. "Carrera 22", "Transversal 45", "Calle 30")
@@ -1580,6 +1588,15 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       }
     }
     clusters.sort((a, b) => b.length - a.length)
+
+    // Ensure no day is left with only 1 stop when enough attractions exist
+    while (clusters.length > numDays) {
+      const extraCluster = clusters.pop()
+      const underFilledIndex = clusters.findIndex(c => c.length < 2)
+      if (underFilledIndex !== -1) {
+        clusters[underFilledIndex].push(...extraCluster)
+      }
+    }
   }
 
   // If same-sector pairing produced fewer clusters than numDays, split urban 2-stop clusters before ever leaving a day empty

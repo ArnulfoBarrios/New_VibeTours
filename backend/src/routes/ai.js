@@ -781,7 +781,8 @@ aiRouter.post('/chat', async (req, res, next) => {
         canonical.city || canonical.entityName || preloadDestination,
         canonical.country || currentPreferences.country || 'Colombia',
         Number(canonical.latitude),
-        Number(canonical.longitude)
+        Number(canonical.longitude),
+        { requestedDays: Number(currentPreferences.durationDays || quickExtracted?.durationDays || 0) }
       ).catch(() => null)
     })
 
