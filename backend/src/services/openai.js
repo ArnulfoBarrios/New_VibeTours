@@ -711,7 +711,14 @@ export const DESTINATION_ICONIC_LANDMARKS = Object.freeze({
     'Bahía de Taganga',
     'Parque Nacional Natural Tayrona',
     'Minca, Sierra Nevada',
-    'Playa Blanca, Santa Marta'
+    'Playa Blanca, Santa Marta',
+    'Plaza de Bolívar de Santa Marta',
+    'Acuario y Museo del Mar del Rodadero',
+    'Sendero Peatonal El Ziruma',
+    'Playa Cristal',
+    'Cascadas de Marinka, Minca',
+    'Playa Grande, Taganga',
+    'Cañaveral, Parque Tayrona'
   ],
   'cartagena': [
     'Castillo San Felipe de Barajas',
@@ -762,7 +769,14 @@ export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
   'santa marta': [
     { name: 'Restaurante Donde Chucho', specialty: 'Pescados frescos, mariscos y cazuela caribeña' },
     { name: 'Restaurante Ouzo', specialty: 'Cocina mediterránea y griega con productos locales' },
-    { name: 'Restaurante Burukuka', specialty: 'Gastronomía caribeña y cócteles con vista al mar' }
+    { name: 'Restaurante Burukuka', specialty: 'Gastronomía caribeña y cócteles con vista al mar' },
+    { name: 'Lulo Café Bar', specialty: 'Cocina fusión caribeña, arepas gourmet y jugos naturales en el Centro' },
+    { name: 'Restaurante Agave Azul', specialty: 'Gastronomía mexicana auténtica y cócteles de autor' },
+    { name: 'MarMixtura', specialty: 'Frutos del mar, pescados a la parrilla y cocina de autor' },
+    { name: 'Restaurante Josefina', specialty: 'Cocina caribeña contemporánea y tapas locales' },
+    { name: 'Mahalo Chiringuito', specialty: 'Comida de playa, mariscos y ambiente relajado frente al mar' },
+    { name: 'Restaurante El Rodizio', specialty: 'Cortes de carne a la parrilla y cocina tradicional' },
+    { name: 'Restaurante Hemingway', specialty: 'Cocina internacional, mariscos frescos y coctelería' }
   ],
   'cartagena': [
     { name: 'Restaurante La Cevicheria', specialty: 'Ceviches frescos y frutos del mar en el Centro Histórico' },
@@ -1341,12 +1355,13 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  const minLandmarksTarget = presetIconics.length > 0 ? Math.min(presetIconics.length, 12) : 12
+  // Presets serve as initial priority seeds, NOT as an artificial ceiling.
+  // Ensure at least 14 attractions so any tour up to 7 days has 2 unique places per day.
+  const minLandmarksTarget = 14
   let dynamicIconics = []
   if (realPlaces.length < minLandmarksTarget) {
     dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry, lat, lon).catch(() => [])
     const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, 14, lat, lon)
-
 
     for (const vd of verifiedDynamic) {
       if (!realPlaces.some(rp => arePlacesSimilar(rp, vd.name))) {
@@ -1378,7 +1393,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   }
 
   // 1.3 Query live OpenStreetMap POIs (Overpass and Photon) only when complements are needed
-  const minRestsTarget = presetRests.length > 0 ? Math.min(presetRests.length, 6) : 6
+  // Ensure at least 8 unique restaurants so any tour up to 7 days has zero repetition.
+  const minRestsTarget = 8
   const needsOsmComplement = (realPlaces.length < minLandmarksTarget || realRests.length < minRestsTarget || realHotels.length < 2) && lat && lon
   if (needsOsmComplement) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 5000))
@@ -1603,6 +1619,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const result = {
     name: capitalCity,
     country: targetCountry,
+    latitude: lat,
+    longitude: lon,
     hotels: cleanHotels,
     restaurants: cleanRests,
     places: cleanPlaces,
@@ -2415,12 +2433,12 @@ REGLAS CRÍTICAS DEL ITINERARIO:
      Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas emblemáticas, arquitectura, parques y gastronomía local usando únicamente los POI del catálogo verificado.
    - En destinos con vocación balnearia o micro-destinos (ej: Coveñas, San Andrés, Cancún): Las playas, islas, ciénagas y actividades ecoturísticas del corredor son los atractivos centrales.
    - REGLA DE BALANCE DIARIO OBLIGATORIO:
-      * Cada día puede tener hasta 2 atractivos turísticos y como MÁXIMO 1 parada gastronómica, únicamente si existen candidatos verificados disponibles.
-      * Si no hay suficientes candidatos verificados, reduce la cantidad de paradas de ese día y explícalo brevemente. Nunca rellenes el día con nombres genéricos o inventados.
-      * ESTRICTAMENTE PROHIBIDO llenar un día con 2 o 3 restaurantes y 0 atractivos turísticos. Los días son para descubrir atractivos, no para ir de restaurante en restaurante sin visitar lugares.
+      * Cada día DEBE estructurarse con EXACTAMENTE 2 atractivos turísticos y EXACTAMENTE 1 restaurante o bar (3 paradas en total por día), manteniendo siempre el equilibrio entre sitios turísticos y gastronomía.
+      * Si el usuario pide o menciona un lugar o restaurante específico en la conversación, incorpóralo obligatoriamente en el día más adecuado a su recorrido.
+      * ESTRICTAMENTE PROHIBIDO llenar un día con 2 o 3 restaurantes y 0 atractivos turísticos.
 6. REGLA ESTRICTA DE UNICIDAD GLOBAL INTER-DÍAS (CERO PARADAS REPETIDAS):
    - Cada atractivo turístico, monumento, museo, parque o restaurante debe aparecer exactamente UNA SOLA VEZ en TODO el itinerario completo (Día 1 a Día N).
-   - PROHIBIDO TERMINANTEMENTE repetir el mismo lugar en dos días distintos. Si ya visitaron Gran Malecón del Río o Ventana al Mundo el Día 1, NO puede volver a aparecer en el Día 5, 6 ni 7. Cada día DEBE tener lugares nuevos, diferentes y auténticos.
+   - PROHIBIDO TERMINANTEMENTE repetir el mismo lugar o restaurante en dos días distintos. Si ya visitaron un restaurante o atractivo en días previos, NO puede volver a aparecer en los días posteriores. Cada día DEBE tener paradas nuevas, diferentes y auténticas.
 7. RESPUESTAS A CONSULTAS ESPECÍFICAS Y LUGARES OBLIGATORIOS:
    - Si el usuario pide información de un hotel (ej: "más información del Hotel Casa La Fe"):
      Inicia obligatoriamente con el nombre del hotel en negrita como encabezado o título (ej: 'Información sobre **Hotel Casa La Fe**:' o '**Hotel Casa La Fe** 🏨') y a continuación presenta la ficha técnica estructurada:
@@ -2744,17 +2762,24 @@ REGLAS PARA "accommodationStatus":
         }
       }
       if (uniqueRests.length < daysCount) {
-        const dLat = cat?.latitude || known.latitude || null
-        const dLon = cat?.longitude || known.longitude || null
+        let dLat = cat?.latitude || known.latitude || null
+        let dLon = cat?.longitude || known.longitude || null
+        if (!dLat || !dLon) {
+          const center = await resolveDestinationCenter({ destination: dName, country: destCountry }).catch(() => null)
+          if (center) {
+            dLat = center.latitude
+            dLon = center.longitude
+          }
+        }
         if (dLat && dLon) {
-          const extraFood = await photonSearch(`restaurante ${dName}`, 15, dLat, dLon, null, 25000, destCountry).catch(() => [])
+          const extraFood = await photonSearch(`restaurante ${dName}`, 20, dLat, dLon, null, 30000, destCountry).catch(() => [])
           for (const ef of extraFood) {
             if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name)) {
               if (destCountry && ef.country && !isCountryMatch(destCountry, ef.country)) continue
               if (ef.latitude != null && ef.longitude != null) {
                 if (!isWithinCoastalCorridorBounds(ef.latitude, ef.longitude, dName)) continue
                 const d = haversineMeters(dLat, dLon, ef.latitude, ef.longitude)
-                if (d > 25000) continue
+                if (d > 30000) continue
               }
               if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, ef.name))) {
                 uniqueRests.push({
@@ -2822,6 +2847,28 @@ REGLAS PARA "accommodationStatus":
           const diName = typeof di === 'string' ? di : (di?.name || '')
           if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(cp, diName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, diName))) {
             catPlaces.push(diName)
+          }
+        }
+      }
+      if (catPlaces.length < totalPlacesNeeded) {
+        let dLat = cat?.latitude || known.latitude || null
+        let dLon = cat?.longitude || known.longitude || null
+        if (!dLat || !dLon) {
+          const center = await resolveDestinationCenter({ destination: dName, country: destCountry }).catch(() => null)
+          if (center) {
+            dLat = center.latitude
+            dLon = center.longitude
+          }
+        }
+        if (dLat && dLon) {
+          const extraAttractions = await photonSearch(`turismo ${dName}`, totalPlacesNeeded, dLat, dLon, null, 35000, destCountry).catch(() => [])
+          for (const ea of extraAttractions) {
+            const eaName = ea?.name
+            if (eaName && !isGenericFacilityName(eaName) && !isUnmappedOrClosedVenue(eaName) && !isNonTouristFacility({ name: eaName }) && !isFoodOrDrinkEstablishment(eaName) && !isLodgingName(eaName)) {
+              if (!catPlaces.some(cp => arePlacesSimilar(typeof cp === 'string' ? cp : cp.name, eaName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, eaName))) {
+                catPlaces.push(eaName)
+              }
+            }
           }
         }
       }

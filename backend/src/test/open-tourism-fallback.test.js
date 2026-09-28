@@ -629,6 +629,38 @@ test('should resolve Barranquilla iconic presets immediately without timing out'
   assert.ok(restNames.some(n => /Varadero/i.test(n)), 'Missing Varadero')
 })
 
+test('should dynamically ensure at least 14 attractions and 7 restaurants for 7-day tour in Santa Marta with 3 stops per day and zero repeated restaurants', async () => {
+  const catalog = await getRealDestinationCatalog('Santa Marta', 'Colombia')
+
+  // The catalog must provide at least 14 attractions and 7 restaurants
+  assert.ok(catalog.places.length >= 14, `Expected at least 14 places in Santa Marta catalog, got ${catalog.places.length}`)
+  assert.ok(catalog.restaurants.length >= 7, `Expected at least 7 restaurants in Santa Marta catalog, got ${catalog.restaurants.length}`)
+
+  // Cluster the catalog into 7 days
+  const clusteredDays = clusterStopsIntoCoherentDays(catalog.places, catalog.restaurants, {
+    numDays: 7,
+    city: 'Santa Marta'
+  })
+
+  assert.equal(clusteredDays.length, 7, 'Must have exactly 7 days')
+
+  const usedRestaurants = new Set()
+  for (const day of clusteredDays) {
+    // Each day must have 2 attractions and 1 restaurant (total 3 stops)
+    assert.equal(day.attractions.length, 2, `Day ${day.day} must have exactly 2 attractions, got ${day.attractions.length}`)
+    assert.ok(day.restaurant, `Day ${day.day} must have a restaurant`)
+    assert.equal(day.stops.length, 3, `Day ${day.day} must have exactly 3 stops`)
+
+    // Restaurant must not be repeated across days
+    const restKey = day.restaurant.name.toLowerCase()
+    assert.ok(!usedRestaurants.has(restKey), `Restaurant "${day.restaurant.name}" was repeated on Day ${day.day}`)
+    usedRestaurants.add(restKey)
+  }
+
+  assert.equal(usedRestaurants.size, 7, 'Must have 7 unique restaurants across 7 days')
+})
+
+
 
 
 
