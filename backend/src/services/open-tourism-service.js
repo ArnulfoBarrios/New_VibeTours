@@ -343,13 +343,20 @@ const GENERIC_PLACE_MODIFIERS = new Set([
   'de', 'del', 'la', 'las', 'los', 'el', 'en', 'y', 'e', 'a', 'al', 'con', 'para', 'por', 'sobre', 'un', 'una',
   'metalico', 'turistico', 'turistica', 'principal', 'central', 'mayor', 'metropolitano', 'metropolitana',
   'municipal', 'distrital', 'nacional', 'departamental', 'regional', 'norte', 'sur', 'este', 'oeste', 'oriental', 'occidental',
-  'antiguo', 'antigua', 'nuevo', 'nueva', 'gran', 'pequeno', 'pequena', 'primer', 'primero', 'primera',
+  'antiguo', 'antigua', 'nuevo', 'nueva', 'gran', 'pequeno', 'pequena',
   'simon', 'general', 'libertador', 'doctor', 'san', 'santa', 'santo', 'nuestra', 'senora', 'ciudad', 'municipio'
 ])
 
 const EPONYMOUS_HERO_TOKENS = new Set([
   'bolivar', 'santander', 'narino', 'caldas', 'sucre', 'cordoba', 'mutis', 'rojas', 'pinilla',
   'garcia', 'rovira', 'jeronimo', 'sagrada', 'familia', 'chiquinquira', 'morrorico'
+])
+
+const FACILITY_TYPE_TOKENS = new Set([
+  'parque', 'plaza', 'museo', 'casa', 'puente', 'catedral', 'iglesia', 'pasaje', 'ronda',
+  'malecon', 'mirador', 'restaurante', 'arte', 'playa', 'centro', 'comercial', 'mall', 'shopping',
+  'barrio', 'teatro', 'estadio', 'coliseo', 'mercado', 'monumento', 'estatua',
+  'laguna', 'cienaga', 'isla', 'reserva'
 ])
 
 function getEntityFamily(name = '') {
@@ -393,21 +400,22 @@ export function arePlaceNamesSemanticallySame(nameA = '', nameB = '', city = '')
   const setB = new Set(tokensB)
   const intersection = tokensA.filter((t) => setB.has(t))
 
-  // 1. Exact token match after stripping intermediate modifiers (e.g. "Puente Metálico Gustavo Rojas Pinilla" vs "Puente Gustavo Rojas Pinilla", "Parque Simón Bolívar" vs "Parque Bolívar")
+  // 1. Exact token match after stripping intermediate modifiers
   if (intersection.length === Math.min(setA.size, setB.size)) {
-    const sameFamilyOrCompatible =
-      famA === famB ||
-      (famA === 'park' && famB === 'plaza') ||
-      (famA === 'plaza' && famB === 'park') ||
-      (famA === 'riverwalk' && famB === 'park') ||
-      (famA === 'park' && famB === 'riverwalk')
-    if (sameFamilyOrCompatible) return true
+    const nonTypeTokens = intersection.filter((t) => !FACILITY_TYPE_TOKENS.has(t))
+    if (nonTypeTokens.length > 0) {
+      const sameFamilyOrCompatible =
+        famA === famB ||
+        (famA === 'park' && famB === 'plaza') ||
+        (famA === 'plaza' && famB === 'park') ||
+        (famA === 'riverwalk' && famB === 'park') ||
+        (famA === 'park' && famB === 'riverwalk')
+      if (sameFamilyOrCompatible) return true
+    }
   }
 
   // 2. Shared 2+ non-generic proper tokens (e.g. "Gustavo Rojas Pinilla", "San Jerónimo", "Sagrada Familia")
-  const nonTypeIntersection = intersection.filter(
-    (t) => !['parque', 'plaza', 'museo', 'casa', 'puente', 'catedral', 'iglesia', 'pasaje', 'ronda', 'malecon', 'mirador', 'restaurante', 'arte'].includes(t)
-  )
+  const nonTypeIntersection = intersection.filter((t) => !FACILITY_TYPE_TOKENS.has(t))
   if (nonTypeIntersection.length >= 2) return true
 
   // 3. Shared eponymous hero/patron (e.g. "Parque Bolívar" and "Museo Casa Bolívar" or "Plaza Bolívar" in the same tour)
@@ -429,7 +437,13 @@ export function inferStopSubcategory(place = {}) {
   const lower = normalizeTextKey(name)
 
   // Explicit landmark & attraction keywords MUST NOT be misclassified as food or cafes
-  const isStrictAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla)\b/i.test(name)
+  const isStrictAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla|carnaval)\b/i.test(name)
+
+  const isMarkedAsRestaurant = String(place.entityType || '').toLowerCase() === 'restaurant' ||
+    String(place.category || '').toLowerCase() === 'restaurant' ||
+    String(place.type || '').toLowerCase() === 'restaurant' ||
+    String(place.type || '').toLowerCase() === 'food' ||
+    place.isRestaurant === true
 
   if (
     !isStrictAttraction &&
@@ -441,10 +455,12 @@ export function inferStopSubcategory(place = {}) {
   }
   if (
     !isStrictAttraction &&
-    (/\b(restaurante|restaurant|vegetariano|vegano|creper[ií]a|pizzer[ií]a|parrilla|asador|asados|bistro|gastrobar|cevicher[ií]a|cebicher[ií]a|marisquer[ií]a|ostras|ostrer[ií]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|narcobollo|trattoria|steakhouse|piqueteadero|comedor|cocina|saz[oó]n|fog[oó]n|taquer[ií]a|sushi|wok|mercado\s+gastron[oó]mico|caim[aá]n\s+del\s+r[ií]o)\b/i.test(name) ||
-    ['restaurant', 'food_court', 'bar', 'pub'].includes(amenity) ||
-    ['restaurant', 'food', 'gastronomic'].includes(rawCat) ||
-    String(place.entityType || '').toLowerCase() === 'restaurant')
+    (isMarkedAsRestaurant ||
+     /\b(restaurante|restaurant|asador|asados|parrilla|cevicheria|cebicheria|marisqueria|ostras|ostreria|mariscos|del sabor|cazuela|pescado|arroz|fritos|narcobollo|trattoria|steakhouse|piqueteadero|comedor|cocina|sazon|fogon|taqueria|bistro|gastrobar|vegetariano|vegano|creperia|pizzeria)\b/i.test(name) ||
+     amenity === 'restaurant' ||
+     amenity === 'fast_food' ||
+     rawCat === 'restaurant' ||
+     rawCat === 'food')
   ) {
     return 'restaurant'
   }
@@ -452,7 +468,7 @@ export function inferStopSubcategory(place = {}) {
     return 'fortress'
   }
   if (
-    /\b(museo|museum|casa\s+museo|galer[ií]a|centro\s+cultural|quinta\s+de|planetario|acuario)\b/i.test(name) ||
+    /\b(museo|museum|casa\s+museo|galer[ií]a|centro\s+cultural|quinta\s+de|planetario|acuario|carnaval)\b/i.test(name) ||
     ['museum', 'gallery', 'aquarium'].includes(tourism) ||
     rawCat === 'museum'
   ) {
@@ -1338,6 +1354,14 @@ export function inferPlaceMicroSector(place = {}, cityCenter = null, city = '') 
 
 export function areStopsCompatibleInSameDay(stopA, stopB, cityCenter = null, city = '') {
   if (!stopA || !stopB) return false
+
+  // Universal tourist balance: Never combine two religious worship places (churches/temples) on the same day in any city worldwide
+  const subcatA = inferStopSubcategory(stopA)
+  const subcatB = inferStopSubcategory(stopB)
+  if (subcatA === 'religious' && subcatB === 'religious') {
+    return false
+  }
+
   const infoA = inferPlaceMicroSector(stopA, cityCenter, city)
   const infoB = inferPlaceMicroSector(stopB, cityCenter, city)
 
@@ -1650,7 +1674,15 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       usedRests.add(chosenRest.name.toLowerCase())
     }
 
-    const allDayStops = [...dayAttractions, ...(chosenRest ? [chosenRest] : [])].map((stop) => ({
+    const restWithMeta = chosenRest ? {
+      ...chosenRest,
+      entityType: 'restaurant',
+      category: 'restaurant',
+      type: 'food',
+      isRestaurant: true
+    } : null
+
+    const allDayStops = [...dayAttractions, ...(restWithMeta ? [restWithMeta] : [])].map((stop) => ({
       ...stop,
       dia: d,
       day: d
@@ -1659,7 +1691,7 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     days.push({
       day: d,
       attractions: dayAttractions,
-      restaurant: chosenRest,
+      restaurant: restWithMeta,
       stops: allDayStops
     })
   }

@@ -16,6 +16,7 @@ import {
   rankAndFilterTouristRestaurants,
   isLowQualityOrFastFoodVenue,
   isNeighborhoodOrMinorPark,
+  scoreTouristAttraction,
   clusterStopsIntoCoherentDays,
   areStopsCompatibleInSameDay
 } from './open-tourism-service.js'
@@ -2811,12 +2812,22 @@ REGLAS PARA "accommodationStatus":
                 if (d > searchRadiusM) continue
               }
               if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, ef.name))) {
-                uniqueRests.push({
+                const restObj = {
                   ...ef,
                   name: ef.name,
                   coordinateSource: ef.coordinateSource || 'osm',
                   coordinatesVerified: true
-                })
+                }
+                uniqueRests.push(restObj)
+                if (cat?.coordinatesMap && ef.name && Number.isFinite(Number(ef.latitude)) && Number.isFinite(Number(ef.longitude))) {
+                  cat.coordinatesMap[ef.name.toLowerCase().trim()] = {
+                    latitude: Number(ef.latitude),
+                    longitude: Number(ef.longitude),
+                    coordinateSource: ef.coordinateSource || 'osm',
+                    coordinatesVerified: true,
+                    placeId: ef.placeId || ef.id || ''
+                  }
+                }
               }
             }
           }
@@ -2838,6 +2849,17 @@ REGLAS PARA "accommodationStatus":
           if (drName && !isGenericFacilityName(drName) && !isNonTouristFacility({ name: drName }) && !isUnmappedOrClosedVenue(drName)) {
             if (!uniqueRests.some(existing => arePlacesSimilar(existing.name, drName))) {
               uniqueRests.push(dr)
+              const drLat = Number(dr?.latitude)
+              const drLon = Number(dr?.longitude)
+              if (cat?.coordinatesMap && drName && Number.isFinite(drLat) && Number.isFinite(drLon)) {
+                cat.coordinatesMap[drName.toLowerCase().trim()] = {
+                  latitude: drLat,
+                  longitude: drLon,
+                  coordinateSource: dr.coordinateSource || 'osm',
+                  coordinatesVerified: true,
+                  placeId: dr.placeId || dr.id || ''
+                }
+              }
             }
           }
         }
@@ -2874,8 +2896,28 @@ REGLAS PARA "accommodationStatus":
         const verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
         for (const di of verifiedDynamicIconics) {
           const diName = typeof di === 'string' ? di : (di?.name || '')
-          if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(cp, diName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, diName))) {
-            catPlaces.push(diName)
+          if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(typeof cp === 'string' ? cp : cp.name, diName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, diName))) {
+            const diLat = Number(di?.latitude)
+            const diLon = Number(di?.longitude)
+            if (Number.isFinite(diLat) && Number.isFinite(diLon)) {
+              if (cat?.coordinatesMap) {
+                cat.coordinatesMap[diName.toLowerCase().trim()] = {
+                  latitude: diLat,
+                  longitude: diLon,
+                  coordinateSource: di.coordinateSource || 'osm',
+                  coordinatesVerified: true,
+                  placeId: di.placeId || di.id || ''
+                }
+              }
+              catPlaces.push(typeof di === 'object' ? di : {
+                name: diName,
+                latitude: diLat,
+                longitude: diLon,
+                coordinateSource: di.coordinateSource || 'osm',
+                coordinatesVerified: true,
+                placeId: di.placeId || di.id || ''
+              })
+            }
           }
         }
       }
@@ -2899,6 +2941,10 @@ REGLAS PARA "accommodationStatus":
           for (const ea of combinedAttractions) {
             const eaName = ea?.name
             if (eaName && !isGenericFacilityName(eaName) && !isUnmappedOrClosedVenue(eaName) && !isNonTouristFacility(ea.tags || { name: eaName }) && !isFoodOrDrinkEstablishment(eaName) && !isLodgingName(eaName)) {
+              // Universal quality filter: reject neighborhood park walkways, drainage corridors, or negative-scored venues
+              if (isNeighborhoodOrMinorPark(eaName, ea.tags)) continue
+              if (scoreTouristAttraction(ea) < 0) continue
+
               if (destCountry && ea.country && !isCountryMatch(destCountry, ea.country)) continue
               if (ea.latitude != null && ea.longitude != null) {
                 if (!isWithinCoastalCorridorBounds(ea.latitude, ea.longitude, dName)) continue
@@ -2906,7 +2952,27 @@ REGLAS PARA "accommodationStatus":
                 if (d > searchRadiusM) continue
               }
               if (!catPlaces.some(cp => arePlacesSimilar(typeof cp === 'string' ? cp : cp.name, eaName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, eaName))) {
-                catPlaces.push(eaName)
+                const eaLat = Number(ea?.latitude)
+                const eaLon = Number(ea?.longitude)
+                if (Number.isFinite(eaLat) && Number.isFinite(eaLon)) {
+                  if (cat?.coordinatesMap) {
+                    cat.coordinatesMap[eaName.toLowerCase().trim()] = {
+                      latitude: eaLat,
+                      longitude: eaLon,
+                      coordinateSource: ea.coordinateSource || 'osm',
+                      coordinatesVerified: true,
+                      placeId: ea.placeId || ea.id || ''
+                    }
+                  }
+                  catPlaces.push({
+                    name: eaName,
+                    latitude: eaLat,
+                    longitude: eaLon,
+                    coordinateSource: ea.coordinateSource || 'osm',
+                    coordinatesVerified: true,
+                    placeId: ea.placeId || ea.id || ''
+                  })
+                }
               }
             }
           }
@@ -3025,12 +3091,16 @@ REGLAS PARA "accommodationStatus":
         parsedExtracted.specificPlaces.push({
           name: chosenRest,
           dia: d,
+          day: d,
           type: 'food',
+          category: 'restaurant',
+          entityType: 'restaurant',
+          isRestaurant: true,
           ...(restCoords ? restCoords : {})
         })
       }
 
-      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [] }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction', ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))) }
+      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [] }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction', entityType: s.entityType || (s.entityType === 'restaurant' ? 'restaurant' : 'attraction'), isRestaurant: s.entityType === 'restaurant' || s.isRestaurant === true, ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))) }
       reconstructed += isUserAskingForMoreStops
         ? '¿Qué te parece este itinerario ampliado? ¿Deseas hacer algún otro ajuste o procedemos a generar el tour en el mapa?'
         : '¿Qué te parece este itinerario? ¿Deseas hacer algún ajuste o procedemos a generar el tour en el mapa?'
@@ -4181,7 +4251,7 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
           const list = []
           for (const p of rawPlaces) {
             const entry = typeof p === 'string' ? { name: p, category: 'historic' } : p
-            if (entry && entry.name && !isGenericFacilityName(entry.name) && !isNonTouristFacility({ name: entry.name }) && !isFoodOrDrinkEstablishment(entry.name)) {
+            if (entry && entry.name && !isGenericFacilityName(entry.name) && !isNonTouristFacility({ name: entry.name }) && !isFoodOrDrinkEstablishment(entry.name) && !isUnmappedOrClosedVenue(entry.name)) {
               if (!list.some(existing => arePlacesSimilar(existing.name, entry.name))) {
                 list.push(entry)
               }

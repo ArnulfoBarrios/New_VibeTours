@@ -1241,14 +1241,91 @@ aiRouter.post('/chat', async (req, res, next) => {
 
       if (isConfirmedItineraryMsg && confirmedPois.length >= 2) {
         // SSOT: El itinerario estructurado visible en el mensaje del chat es la verdad absoluta.
-        // Poblamos extractedFromMsg ÚNICAMENTE con los lugares del mensaje del chat para evitar lugares fantasma.
-        extractedFromMsg.push(...confirmedPois)
+        // Reconciliar confirmedPois con aiResponse.extractedPreferences.specificPlaces y el catálogo para conservar coordenadas y tipado de restaurante.
+        const chatCity = updatedPreferences.city || updatedPreferences.destination || ''
+        const chatCountry = updatedPreferences.country || ''
         const itineraryDays = confirmedPois.map(p => Number(p.dia || p.day || 1)).filter(d => d > 0)
         const maxDay = itineraryDays.length > 0 ? Math.max(...itineraryDays) : 0
         if (maxDay >= 1) {
           updatedPreferences.durationDays = maxDay
           updatedPreferences.durationHours = maxDay === 1 ? 8 : maxDay * 24
         }
+
+        const chatCatalog = chatCity ? await getRealDestinationCatalog(chatCity, chatCountry, updatedPreferences.latitude, updatedPreferences.longitude, { requestedDays: maxDay || 7 }).catch(() => null) : null
+        const aiSpecifics = Array.isArray(aiResponse.extractedPreferences?.specificPlaces)
+          ? aiResponse.extractedPreferences.specificPlaces
+          : []
+
+        // Agrupar paradas por día para identificar la parada gastronómica
+        const dayStopsMap = new Map()
+        for (const p of confirmedPois) {
+          const d = Number(p.dia || p.day || 1)
+          if (!dayStopsMap.has(d)) dayStopsMap.set(d, [])
+          dayStopsMap.get(d).push(p)
+        }
+
+        const enrichedPois = confirmedPois.map(poi => {
+          const poiName = (poi.name || '').trim()
+          const poiDay = Number(poi.dia || poi.day || 1)
+          const dayStops = dayStopsMap.get(poiDay) || []
+          const stopIndexInDay = dayStops.indexOf(poi)
+          const isLastStopInDay = stopIndexInDay === (dayStops.length - 1) && dayStops.length >= 3
+
+          const aiMatch = aiSpecifics.find(sp => {
+            const spName = typeof sp === 'object' ? (sp.name || '') : String(sp)
+            const spDay = typeof sp === 'object' ? Number(sp.dia || sp.day || 1) : null
+            return (spDay == null || spDay === poiDay) && arePlacesSimilar(spName, poiName)
+          }) || aiSpecifics.find(sp => {
+            const spName = typeof sp === 'object' ? (sp.name || '') : String(sp)
+            return arePlacesSimilar(spName, poiName)
+          })
+
+          let catalogCoords = null
+          if (chatCatalog?.coordinatesMap) {
+            const mapped = chatCatalog.coordinatesMap[poiName.toLowerCase().trim()]
+            if (mapped && Number.isFinite(Number(mapped.latitude)) && Number.isFinite(Number(mapped.longitude))) {
+              catalogCoords = {
+                latitude: Number(mapped.latitude),
+                longitude: Number(mapped.longitude),
+                coordinateSource: mapped.coordinateSource || 'osm',
+                coordinatesVerified: true
+              }
+            }
+          }
+
+          const isCatalogRestaurant = chatCatalog?.restaurants?.some(r => {
+            const rName = typeof r === 'string' ? r : (r?.name || '')
+            return arePlacesSimilar(rName, poiName)
+          })
+          const isFoodPattern = isFoodOrDrinkEstablishment(poiName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(poiName)
+          const isAiRestaurant = Boolean(aiMatch && (aiMatch.isRestaurant || aiMatch.type === 'food' || aiMatch.category === 'restaurant' || aiMatch.entityType === 'restaurant'))
+          const isNonDiningVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(poiName)
+
+          const isDining = (isAiRestaurant || isCatalogRestaurant || isFoodPattern || (isLastStopInDay && !isNonDiningVenue)) && (!isNonDiningVenue || isAiRestaurant || isCatalogRestaurant)
+
+          const resolvedLat = (aiMatch && Number.isFinite(Number(aiMatch.latitude))) ? Number(aiMatch.latitude) : catalogCoords?.latitude
+          const resolvedLon = (aiMatch && Number.isFinite(Number(aiMatch.longitude))) ? Number(aiMatch.longitude) : catalogCoords?.longitude
+
+          return {
+            ...poi,
+            ...(aiMatch && typeof aiMatch === 'object' ? aiMatch : {}),
+            name: poiName,
+            dia: poiDay,
+            day: poiDay,
+            type: isDining ? 'food' : (aiMatch?.type || 'cultural'),
+            category: isDining ? 'restaurant' : (aiMatch?.category || 'attraction'),
+            entityType: isDining ? 'restaurant' : (aiMatch?.entityType || 'attraction'),
+            isRestaurant: Boolean(isDining),
+            ...(Number.isFinite(resolvedLat) && Number.isFinite(resolvedLon) ? {
+              latitude: resolvedLat,
+              longitude: resolvedLon,
+              coordinateSource: aiMatch?.coordinateSource || catalogCoords?.coordinateSource || 'osm',
+              coordinatesVerified: true
+            } : {})
+          }
+        })
+
+        extractedFromMsg.push(...enrichedPois)
       } else {
         // Extraer lugares estructurados devueltos por OpenAI si están disponibles
         if (Array.isArray(aiResponse.extractedPreferences?.specificPlaces) && aiResponse.extractedPreferences.specificPlaces.length > 0) {
@@ -1256,7 +1333,11 @@ aiRouter.post('/chat', async (req, res, next) => {
             const spName = typeof sp === 'object' ? (sp.name || '') : String(sp)
             const spDay = typeof sp === 'object' ? (sp.dia || sp.day) : null
             if (isValidSpecificPlace(spName)) {
-              extractedFromMsg.push(spDay ? { name: spName, dia: Number(spDay), day: Number(spDay) } : spName)
+              extractedFromMsg.push(typeof sp === 'object' ? {
+                ...sp,
+                name: spName,
+                ...(spDay ? { dia: Number(spDay), day: Number(spDay) } : {})
+              } : spName)
             }
           }
         }
@@ -6277,9 +6358,9 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
+        const isExplicitDining = (rawPlace && typeof rawPlace === 'object' && (rawPlace.isRestaurant || rawPlace.type === 'food' || rawPlace.category === 'restaurant' || rawPlace.entityType === 'restaurant')) || isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(placeName)
         const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
-        const isRestaurant = isExplicitDining && !isCulturalVenue
+        const isRestaurant = isExplicitDining && (!isCulturalVenue || (rawPlace && typeof rawPlace === 'object' && rawPlace.isRestaurant))
         const destLat = canonicalDest?.latitude ?? cityCenterLat ?? null
         const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
 
@@ -6393,6 +6474,9 @@ export async function collectTourCandidates(input, location) {
             longitude: finalLon,
             type: isRestaurant ? 'restaurant' : 'tourism',
             category: isRestaurant ? 'restaurant' : 'requested',
+            subcategory: isRestaurant ? 'restaurant' : (rawPlace?.subcategory || undefined),
+            isRestaurant: Boolean(isRestaurant),
+            entityType: isRestaurant ? 'restaurant' : (rawPlace?.entityType || 'attraction'),
             dia: placeDay,
             day: placeDay,
             city: geo.city || city,
@@ -6516,173 +6600,41 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        // Zero-Drop policy: If an unlocatable venue still has no coordinates, pick a verified replacement from preloaded catalog
+        // Strict policy: Discard unlocatable venues without random synthetic replacements
         if (finalLat == null || finalLon == null) {
-          const isExplicitDining = isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub/i.test(placeName)
-          const pool = isExplicitDining ? (catalog?.restaurants || []) : (catalog?.places || [])
-          const usedInTour = new Set(
-            geocodedSpecifics.map(p => canonicalPlaceKey(p.name, p.city || city))
-          )
-
-          // 1. Priority 1: Check if candidate already has verified coordinates from catalog (0 network calls)
-          for (const replacementCandidate of pool.slice(0, 15)) {
-            const repName = typeof replacementCandidate === 'string'
-              ? replacementCandidate
-              : replacementCandidate?.name
-            if (!repName) continue
-
-            const replacementKey = canonicalPlaceKey(repName, city)
-            if (
-              usedInTour.has(replacementKey) ||
-              arePlacesSimilar(repName, placeName) ||
-              replacementKey === canonicalPlaceKey(placeName, city)
-            ) {
-              continue
-            }
-
-            const candLat = Number(replacementCandidate?.latitude ?? replacementCandidate?.lat)
-            const candLon = Number(replacementCandidate?.longitude ?? replacementCandidate?.lon)
-            if (Number.isFinite(candLat) && Number.isFinite(candLon) && isWithinCoastalCorridorBounds(candLat, candLon, city) && validateCandidateLocation({ latitude: candLat, longitude: candLon, name: repName }, canonicalDest, geoScope.maxDistanceKm)) {
-              finalLat = candLat
-              finalLon = candLon
-              address = replacementCandidate.address || `${repName}, ${city}`
-              placeName = repName
-              directGeo = {
-                name: repName,
-                latitude: candLat,
-                longitude: candLon,
-                city,
-                country,
-                address,
-                coordinateSource: replacementCandidate.coordinateSource || 'osm',
-                coordinatesVerified: true
-              }
-              console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified pre-geocoded "${repName}" on Day ${placeDay}.`)
-              break
-            }
-          }
-
-          // 2. Priority 2: Check catalog coordinatesMap (0 network calls)
-          if ((finalLat == null || finalLon == null) && catalog?.coordinatesMap) {
-            for (const replacementCandidate of pool.slice(0, 15)) {
-              const repName = typeof replacementCandidate === 'string' ? replacementCandidate : replacementCandidate?.name
-              if (!repName) continue
-              const replacementKey = canonicalPlaceKey(repName, city)
-              if (usedInTour.has(replacementKey) || arePlacesSimilar(repName, placeName) || replacementKey === canonicalPlaceKey(placeName, city)) continue
-              const mapped = catalog.coordinatesMap[repName.toLowerCase().trim()]
-              if (mapped && isWithinCoastalCorridorBounds(mapped.latitude, mapped.longitude, city) && validateCandidateLocation(mapped, canonicalDest, geoScope.maxDistanceKm)) {
-                finalLat = mapped.latitude
-                finalLon = mapped.longitude
-                address = `${repName}, ${city}`
-                placeName = repName
-                directGeo = {
-                  name: repName,
-                  latitude: finalLat,
-                  longitude: finalLon,
-                  city,
-                  country,
-                  address,
-                  coordinateSource: mapped.coordinateSource || 'osm',
-                  coordinatesVerified: true
-                }
-                console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified catalog map "${repName}" on Day ${placeDay}.`)
-                break
-              }
-            }
-          }
-
-          // 3. Priority 3: Fast geocode attempt for top candidate only (with tight 1500ms timeout)
-          if (finalLat == null || finalLon == null) {
-            for (const replacementCandidate of pool.slice(0, 2)) {
-              const repName = typeof replacementCandidate === 'string' ? replacementCandidate : replacementCandidate?.name
-              if (!repName) continue
-              const replacementKey = canonicalPlaceKey(repName, city)
-              if (usedInTour.has(replacementKey) || arePlacesSimilar(repName, placeName) || replacementKey === canonicalPlaceKey(placeName, city)) continue
-
-              const repGeo = await Promise.race([
-                geocodePlace(`${repName}, ${city}`, destLat, destLon, regionalOpts).catch(() => null),
-                new Promise(resolve => setTimeout(() => resolve(null), 1500))
-              ])
-              if (
-                repGeo &&
-                hasOsmMapRecord(repGeo) &&
-                Number.isFinite(repGeo.latitude) &&
-                Number.isFinite(repGeo.longitude) &&
-                isWithinCoastalCorridorBounds(repGeo.latitude, repGeo.longitude, city) &&
-                validateCandidateLocation(repGeo, canonicalDest, geoScope.maxDistanceKm)
-              ) {
-                finalLat = Number(repGeo.latitude)
-                finalLon = Number(repGeo.longitude)
-                address = repGeo.name || `${repName}, ${city}`
-                placeName = repName
-                directGeo = repGeo
-                console.info(`[collectTourCandidates] Zero-Drop: Replaced unlocatable candidate with verified "${repName}" on Day ${placeDay}.`)
-                break
-              }
-            }
-          }
-
-          // 4. Priority 4: Substitute with an available verified POI from pool if available
-          if (finalLat == null || finalLon == null) {
-            for (const rep of pool) {
-              const rName = typeof rep === 'string' ? rep : rep?.name
-              if (!rName) continue
-              const rKey = canonicalPlaceKey(rName, city)
-              if (usedInTour.has(rKey) || arePlacesSimilar(rName, placeName)) continue
-              const rLat = Number(rep.latitude ?? rep.lat)
-              const rLon = Number(rep.longitude ?? rep.lon)
-              if (Number.isFinite(rLat) && Number.isFinite(rLon) && isWithinCoastalCorridorBounds(rLat, rLon, city) && validateCandidateLocation({ latitude: rLat, longitude: rLon, name: rName }, canonicalDest, geoScope.maxDistanceKm)) {
-                finalLat = rLat
-                finalLon = rLon
-                address = rep.address || `${rName}, ${city}`
-                placeName = rName
-                directGeo = {
-                  name: rName,
-                  latitude: rLat,
-                  longitude: rLon,
-                  city,
-                  country,
-                  address,
-                  coordinateSource: rep.coordinateSource || 'catalog',
-                  coordinatesVerified: true
-                }
-                console.info(`[collectTourCandidates] Replaced unmapped candidate with verified pool POI "${rName}" on Day ${placeDay}.`)
-                break
-              }
-            }
-          }
-        }
-
-        if (finalLat != null && finalLon != null) {
-          const isExplicitDining = (typeof raw === 'object' && (raw.category === 'restaurant' || raw.type === 'food' || raw.entityType === 'restaurant')) || isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(placeName)
-          const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
-          const isRestaurant = isExplicitDining && !isCulturalVenue
-          geocodedSpecifics.push({
-            name: placeName,
-            latitude: finalLat,
-            longitude: finalLon,
-            type: isRestaurant ? 'restaurant' : 'tourism',
-            category: isRestaurant ? 'restaurant' : 'requested',
-            dia: placeDay,
-            day: placeDay,
-            city: directGeo?.city || city,
-            country: directGeo?.country || country,
-            address,
-            description: '',
-            placeId: directGeo?.placeId || directGeo?.place_id || directGeo?.id || '',
-            coordinateSource: directGeo?.coordinateSource || directGeo?.coordinate_source || tagSource,
-            coordinatesVerified: true,
-            tags: {
-              requested_place: 'true',
-              grounded_geocoded: 'true',
-              coordinates_verified: 'true',
-              coordinate_source: directGeo?.coordinateSource || directGeo?.coordinate_source || tagSource
-            }
-          })
+          console.warn(`[collectTourCandidates] Discarding unlocatable candidate "${placeName}" in ${city}. No dynamic replacement or synthetic coordinates allowed.`)
           continue
         }
 
-        console.warn(`[collectTourCandidates] Discarding unverified candidate "${placeName}" in ${city}. No synthetic or hallucinated coordinates allowed.`)
+        const isExplicitDining = (typeof raw === 'object' && (raw.isRestaurant || raw.category === 'restaurant' || raw.type === 'food' || raw.entityType === 'restaurant')) || isFoodOrDrinkEstablishment(placeName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(placeName)
+        const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
+        const isRestaurant = isExplicitDining && (!isCulturalVenue || (typeof raw === 'object' && raw.isRestaurant))
+        geocodedSpecifics.push({
+          name: placeName,
+          latitude: finalLat,
+          longitude: finalLon,
+          type: isRestaurant ? 'restaurant' : 'tourism',
+          category: isRestaurant ? 'restaurant' : 'requested',
+          subcategory: isRestaurant ? 'restaurant' : (raw?.subcategory || undefined),
+          isRestaurant: Boolean(isRestaurant),
+          entityType: isRestaurant ? 'restaurant' : (raw?.entityType || 'attraction'),
+          dia: placeDay,
+          day: placeDay,
+          city: directGeo?.city || city,
+          country: directGeo?.country || country,
+          address,
+          description: '',
+          placeId: directGeo?.placeId || directGeo?.place_id || directGeo?.id || '',
+          coordinateSource: directGeo?.coordinateSource || directGeo?.coordinate_source || tagSource,
+          coordinatesVerified: true,
+          tags: {
+            requested_place: 'true',
+            grounded_geocoded: 'true',
+            coordinates_verified: 'true',
+            coordinate_source: directGeo?.coordinateSource || directGeo?.coordinate_source || tagSource,
+            ...(isRestaurant ? { is_restaurant: 'true', category: 'restaurant' } : {})
+          }
+        })
       }
     }
 

@@ -421,8 +421,12 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
   }
 
   String _compactHistoryEntry(String text) {
-    const maxLength = 1200;
     final normalized = text.trim();
+    // Do not truncate messages containing structured daily itineraries
+    if (RegExp(r'\bd[íi]a\s*\d+\s*:', caseSensitive: false).hasMatch(normalized)) {
+      return normalized;
+    }
+    const maxLength = 2500;
     if (normalized.length <= maxLength) return normalized;
     return '${normalized.substring(0, maxLength)}…';
   }
