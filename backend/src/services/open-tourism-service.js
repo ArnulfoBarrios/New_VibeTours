@@ -409,7 +409,9 @@ export function arePlaceNamesSemanticallySame(nameA = '', nameB = '', city = '')
         (famA === 'park' && famB === 'plaza') ||
         (famA === 'plaza' && famB === 'park') ||
         (famA === 'riverwalk' && famB === 'park') ||
-        (famA === 'park' && famB === 'riverwalk')
+        (famA === 'park' && famB === 'riverwalk') ||
+        (famA === 'religious' && famB === 'plaza') ||
+        (famA === 'plaza' && famB === 'religious')
       if (sameFamilyOrCompatible) return true
     }
   }
@@ -418,7 +420,12 @@ export function arePlaceNamesSemanticallySame(nameA = '', nameB = '', city = '')
   const nonTypeIntersection = intersection.filter((t) => !FACILITY_TYPE_TOKENS.has(t))
   if (nonTypeIntersection.length >= 2) return true
 
-  // 3. Shared eponymous hero/patron (e.g. "Parque Bolívar" and "Museo Casa Bolívar" or "Plaza Bolívar" in the same tour)
+  // 3. Shared church & its facing plaza/atrium (e.g. "Iglesia de San Roque" and "Plaza de San Roque")
+  if (((famA === 'religious' && famB === 'plaza') || (famA === 'plaza' && famB === 'religious')) && nonTypeIntersection.length >= 1) {
+    return true
+  }
+
+  // 4. Shared eponymous hero/patron (e.g. "Parque Bolívar" and "Museo Casa Bolívar" or "Plaza Bolívar" in the same tour)
   if (nonTypeIntersection.length === 1 && EPONYMOUS_HERO_TOKENS.has(nonTypeIntersection[0])) {
     return true
   }
@@ -951,11 +958,6 @@ function buildFallbackCoreNarrative(placeName, subcategory, city, stopIndex = 0)
       `Rodeado de frondosos árboles, senderos adoquinados y edificios históricos, este parque es el escenario donde los habitantes de ${city} se reúnen a conversar y disfrutar de la brisa.`,
       `Sus zonas verdes, monumentos conmemorativos y bancas tradicionales invitan a bajar el ritmo del viaje y observar de cerca el pulso auténtico de la comunidad local.`
     ],
-    restaurant: [
-      `Su propuesta culinaria destaca por el cuidado en la selección de ingredientes frescos, ofreciendo recetas llenas de sabor y una atención cálida pensada para disfrutar sin prisas.`,
-      `Tanto residentes como viajeros visitan este establecimiento por su ambiente acogedor, la sazón auténtica de su cocina y el esmero en la presentación de cada plato.`,
-      `Es una parada ideal dentro del recorrido para sentarse a la mesa, degustar especialidades preparadas al momento y compartir una charla amena antes de continuar explorando ${city}.`
-    ],
     cafe: [
       `Sus preparaciones recién hechas, bebidas aromáticas y repostería tradicional lo convierten en una parada obligada para recargar energías a mitad de jornada.`
     ],
@@ -974,18 +976,59 @@ function buildFallbackCoreNarrative(placeName, subcategory, city, stopIndex = 0)
     ]
   }
 
+  if (subcategory === 'restaurant') {
+    return getCulinarySpecialtyNarrative(placeName, city, stopIndex)
+  }
+
   const pool = narrativesBySubcategory[subcategory] || narrativesBySubcategory.plaza
   const pickIdx = getDeterministicHash(placeName, stopIndex + 7) % pool.length
   return pool[pickIdx]
 }
 
+export function getCulinarySpecialtyNarrative(placeName = '', city = '', stopIndex = 0) {
+  const norm = normalizeTextKey(placeName)
+  if (/\b(lechona|lechoneria|serrano)\b/.test(norm)) {
+    return `Este establecimiento tradicional es célebre por su lechona horneada al punto, donde el cuero tostado y crocante recubre un sabroso relleno de carne de cerdo adobada con especias criollas y arroz con arveja amarilla.`
+  }
+  if (/\b(pan|panaderia|panificadora|reposteria|pasteleria|trigo|croissant|panes)\b/.test(norm)) {
+    return `Desde la entrada se percibe el inconfundible aroma a masa horneada del día, ofreciendo una tentadora variedad de panes calientes, amasijos tradicionales y bocados de repostería para acompañar con buen café recién colado.`
+  }
+  if (/\b(marisco|marisqueria|pescado|cevicheria|cebicheria|ostras|ostrer[íi]a|cazuela|pulpo|camaron|mariscos)\b/.test(norm)) {
+    return `Su carta es un homenaje directo a los sabores del mar, con cazuelas humeantes, pescados frescos preparados a la minuta y ceviches cítricos servidos con crocantes patacones costeños.`
+  }
+  if (/\b(asador|asados|parrilla|carne|steak|brasa|herradura|res|churrasco|parrillada)\b/.test(norm)) {
+    return `La especialidad de la casa son los cortes a la brasa y las preparaciones al carbón, logrando carnes jugosas con sello criollo acompañadas de guarniciones típicas y salsas artesanales de la casa.`
+  }
+  if (/\b(costeno|caribe|cucayo|sabor|tierra|criollo|abuela|fonda|fogon|sazon|narcobollo|caiman)\b/.test(norm)) {
+    return `Con una marcada identidad caribeña, este espacio rescata las mejores recetas de la cocina tradicional casera, combinando arroz con coco, carnes en cocción lenta, plátano dulce y la sazón auténtica de la región.`
+  }
+  if (/\b(cafe|cafeteria|bistro|gastrobar)\b/.test(norm)) {
+    return `Un espacio de atmósfera relajada donde el café especial de origen colombiano, las infusiones aromáticas y la repostería artesanal crean una pausa reconfortante a cualquier hora del día.`
+  }
+
+  const defaultCulinaryNarratives = [
+    `Conocido por su ambiente acogedor y su cocina esmerada, este establecimiento ofrece platos preparados con ingredientes locales frescos y un toque culinario distintivo en ${city}.`,
+    `Su cocina rescata las recetas más queridas de la región, brindando una experiencia gastronómica donde cada plato equilibra tradición, sabor casero y una atención cercana.`,
+    `Tanto residentes habituales como visitantes recomiendan este rincón culinario por la generosidad de sus porciones, sus sazones bien cuidadas y su servicio siempre atento en ${city}.`,
+    `Su propuesta gastronómica combina recetas típicas bien logradas con un servicio cálido, ideal para probar la sazón autóctona y compartir una grata comida en ${city}.`
+  ]
+  return defaultCulinaryNarratives[getDeterministicHash(placeName, stopIndex + 3) % defaultCulinaryNarratives.length]
+}
+
 function buildMetadataSentence(osmMeta = {}, shortDescription = '', subcategory = 'plaza') {
   const details = []
-  if (
-    shortDescription &&
-    !/\b(municipio\s+colombiano|capital\s+del\s+departamento|ciudad\s+de\s+colombia)\b/i.test(shortDescription)
-  ) {
-    details.push(`reconocido como ${shortDescription.toLowerCase()}`)
+  if (shortDescription) {
+    const cleanedShort = shortDescription
+      .replace(/\s*,?\s*(?:de\s+)?(?:barranquilla|santa\s+marta|cartagena|medell[íi]n|bogot[aá]|colombia)\b/gi, '')
+      .replace(/^como\s+/i, '')
+      .trim()
+    if (cleanedShort && !/\b(municipio\s+colombiano|capital\s+del\s+departamento|ciudad\s+de\s+colombia)\b/i.test(cleanedShort)) {
+      if (/\biglesia\s+cat[óo]lica\b/i.test(cleanedShort) || /\btemplo\s+cat[óo]lico\b/i.test(cleanedShort)) {
+        details.push('un emblemático templo católico de notable valor arquitectónico e histórico')
+      } else {
+        details.push(`un referente destacado como ${cleanedShort.toLowerCase()}`)
+      }
+    }
   }
   if (osmMeta.startDate) {
     details.push(`cuyos orígenes se remontan a ${osmMeta.startDate}`)
@@ -1000,13 +1043,32 @@ function buildMetadataSentence(osmMeta = {}, shortDescription = '', subcategory 
     details.push(`especializado en cocina ${osmMeta.cuisine}`)
   }
   if (details.length === 0) return ''
-  return `Este sitio destaca especialmente por ser un referente ${details.join(', ')}.`
+  return `Este sitio destaca especialmente por ser ${details.join(', ')}.`
 }
 
 function buildObservationClosing(placeName, subcategory, osmMeta = {}, city = '', durationMinutes = 45, stopIndex = 0) {
   const scheduleNote = osmMeta.openingHours
     ? `Recuerda que su horario habitual es ${osmMeta.openingHours}.`
     : ''
+
+  if (subcategory === 'restaurant') {
+    const norm = normalizeTextKey(placeName)
+    if (/\b(lechona|lechoneria|serrano)\b/.test(norm)) {
+      return `Aprovecha esta parada de ${durationMinutes} minutos para pedir una generosa porción de lechona con arepa y cuero bien crujiente. ${scheduleNote}`
+    }
+    if (/\b(pan|panaderia|reposteria|pasteleria)\b/.test(norm)) {
+      return `Tómate unos ${durationMinutes} minutos para disfrutar de una merienda recién horneada y un café aromático en un ambiente relajado. ${scheduleNote}`
+    }
+    if (/\b(marisco|pescado|cevicheria|marisqueria)\b/.test(norm)) {
+      return `Dedica unos ${durationMinutes} minutos a saborear la frescura de sus preparaciones marineras acompañadas de una bebida frutal. ${scheduleNote}`
+    }
+    const generalClosings = [
+      `Te sugiero dedicar unos ${durationMinutes} minutos para ordenar con tranquilidad, probar las recomendaciones de la casa y descansar un momento. ${scheduleNote}`,
+      `Disfruta de esta experiencia gastronómica durante unos ${durationMinutes} minutos; es el momento idóneo para recargar energías con la sazón local de ${city}. ${scheduleNote}`,
+      `Reserva cerca de ${durationMinutes} minutos para saborear tu comida sin afanes y compartir una sobremesa agradable antes de seguir la marcha. ${scheduleNote}`
+    ]
+    return generalClosings[getDeterministicHash(placeName, stopIndex + 5) % generalClosings.length]
+  }
 
   const closingsBySubcategory = {
     restaurant: [

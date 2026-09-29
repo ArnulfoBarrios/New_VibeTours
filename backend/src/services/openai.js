@@ -770,7 +770,13 @@ export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
     { name: 'Varadero', specialty: 'Pescados y mariscos al estilo cubano-caribeño' },
     { name: 'Nena Lela', specialty: 'Comida típica tradicional barranquillera' },
     { name: 'El Caimán del Río', specialty: 'Mercado gastronómico frente al río Magdalena' },
-    { name: 'Restaurante La Herradura', specialty: 'Carnes y asados tradicionales' }
+    { name: 'Restaurante La Herradura', specialty: 'Carnes y asados tradicionales' },
+    { name: 'Restaurante Narcobollo', specialty: 'Bollos limpios, de mazorca, queso costeño y recetas vernáculas' },
+    { name: 'Manuel Restaurante', specialty: 'Alta gastronomía colombiana contemporánea de autor' },
+    { name: 'Restaurante El Giratorio', specialty: 'Cocina internacional gourmet con vista panorámica a la ciudad' },
+    { name: 'Restaurante Palo de Mango', specialty: 'Cocina de autor con identidad del Caribe y técnicas de vanguardia' },
+    { name: 'Restaurante Pepe Anca', specialty: 'Cortes finos a la parrilla y carnes tradicionales' },
+    { name: 'Restaurante Sabina', specialty: 'Gastronomía mediterránea y española tradicional' }
   ],
   'santa marta': [
     { name: 'Restaurante Donde Chucho', specialty: 'Pescados frescos, mariscos y cazuela caribeña' },

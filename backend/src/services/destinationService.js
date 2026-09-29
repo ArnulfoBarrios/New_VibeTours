@@ -45,7 +45,7 @@ const COUNTRY_CODE_MAP = {
 
 export const FALLBACK_DESTINATION_CENTROIDS = {
   'cartagena': { displayName: 'Cartagena, Colombia', city: 'Cartagena', entityName: 'Cartagena', isMicroDestination: false, region: 'Bolívar', country: 'Colombia', countryCode: 'CO', latitude: 10.3997, longitude: -75.5144 },
-  'barranquilla': { displayName: 'Barranquilla, Colombia', city: 'Barranquilla', entityName: 'Barranquilla', isMicroDestination: false, region: 'Atlántico', country: 'Colombia', countryCode: 'CO', latitude: 10.9685, longitude: -74.7813 },
+  'barranquilla': { displayName: 'Barranquilla, Colombia', city: 'Barranquilla', entityName: 'Barranquilla', isMicroDestination: false, region: 'Atlántico', country: 'Colombia', countryCode: 'CO', latitude: 10.9878, longitude: -74.7889 },
   'santa marta': { displayName: 'Santa Marta, Colombia', city: 'Santa Marta', entityName: 'Santa Marta', isMicroDestination: false, region: 'Magdalena', country: 'Colombia', countryCode: 'CO', latitude: 11.2408, longitude: -74.1990 },
   'medellin': { displayName: 'Medellín, Colombia', city: 'Medellín', entityName: 'Medellín', isMicroDestination: false, region: 'Antioquia', country: 'Colombia', countryCode: 'CO', latitude: 6.2442, longitude: -75.5812 },
   'medellín': { displayName: 'Medellín, Colombia', city: 'Medellín', entityName: 'Medellín', isMicroDestination: false, region: 'Antioquia', country: 'Colombia', countryCode: 'CO', latitude: 6.2442, longitude: -75.5812 },

@@ -651,6 +651,12 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'parque sagrado corazon': { name: 'Parque Sagrado Corazón', latitude: 10.9995, longitude: -74.8150, city: 'Barranquilla', country: 'Colombia' },
   'el giratorio': { name: 'Restaurante El Giratorio', latitude: 11.0118, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia' },
   'restaurante el giratorio': { name: 'Restaurante El Giratorio', latitude: 11.0118, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia' },
+  'palo de mango': { name: 'Restaurante Palo de Mango', latitude: 11.0034, longitude: -74.8142, address: 'Carrera 55 # 75-67', city: 'Barranquilla', country: 'Colombia' },
+  'restaurante palo de mango': { name: 'Restaurante Palo de Mango', latitude: 11.0034, longitude: -74.8142, address: 'Carrera 55 # 75-67', city: 'Barranquilla', country: 'Colombia' },
+  'pepe anca': { name: 'Restaurante Pepe Anca', latitude: 11.0068, longitude: -74.8188, address: 'Calle 84 # 52-76', city: 'Barranquilla', country: 'Colombia' },
+  'restaurante pepe anca': { name: 'Restaurante Pepe Anca', latitude: 11.0068, longitude: -74.8188, address: 'Calle 84 # 52-76', city: 'Barranquilla', country: 'Colombia' },
+  'sabina': { name: 'Restaurante Sabina', latitude: 11.0058, longitude: -74.8185, address: 'Carrera 53 # 82-264', city: 'Barranquilla', country: 'Colombia' },
+  'restaurante sabina': { name: 'Restaurante Sabina', latitude: 11.0058, longitude: -74.8185, address: 'Carrera 53 # 82-264', city: 'Barranquilla', country: 'Colombia' },
   'museo romantico': { name: 'Museo Romántico', latitude: 10.99465, longitude: -74.79385, city: 'Barranquilla', country: 'Colombia' },
   'museo romantico de barranquilla': { name: 'Museo Romántico', latitude: 10.99465, longitude: -74.79385, city: 'Barranquilla', country: 'Colombia' },
   'iglesia de la inmaculada concepcion': { name: 'Iglesia de la Inmaculada Concepción', latitude: 10.99881, longitude: -74.79818, city: 'Barranquilla', country: 'Colombia' },
@@ -714,10 +720,25 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'restaurante la casa del marisco': { name: 'Restaurante La Casa del Marisco', latitude: 10.9975, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
   'casa del marisco': { name: 'Restaurante La Casa del Marisco', latitude: 10.9975, longitude: -74.8055, city: 'Barranquilla', country: 'Colombia' },
   'la troja': { name: 'La Troja', latitude: 10.9942, longitude: -74.8080, city: 'Barranquilla', country: 'Colombia' },
-  'monumento a shakira': { name: 'Estatua de Shakira', latitude: 11.0205, longitude: -74.7938, city: 'Barranquilla', country: 'Colombia' },
-  'estatua de shakira': { name: 'Estatua de Shakira', latitude: 11.0205, longitude: -74.7938, city: 'Barranquilla', country: 'Colombia' },
-  'shakira': { name: 'Estatua de Shakira', latitude: 11.0205, longitude: -74.7938, city: 'Barranquilla', country: 'Colombia' },
-  'museo del atlantico': { name: 'Museo del Atlántico', latitude: 10.9825, longitude: -74.7780, city: 'Barranquilla', country: 'Colombia' },
+  'monumento a shakira': { name: 'Estatua de Shakira', latitude: 11.0223, longitude: -74.7915, address: 'Gran Malecón del Río - Sector 3', city: 'Barranquilla', country: 'Colombia' },
+  'estatua de shakira': { name: 'Estatua de Shakira', latitude: 11.0223, longitude: -74.7915, address: 'Gran Malecón del Río - Sector 3', city: 'Barranquilla', country: 'Colombia' },
+  'shakira': { name: 'Estatua de Shakira', latitude: 11.0223, longitude: -74.7915, address: 'Gran Malecón del Río - Sector 3', city: 'Barranquilla', country: 'Colombia' },
+  'museo del atlantico': { name: 'Museo del Atlántico', latitude: 10.9788, longitude: -74.7818, address: 'Cra. 39 #35-21, Centro Histórico', city: 'Barranquilla', country: 'Colombia' },
+  'museo de antropologia': { name: 'Museo de Antropología', latitude: 10.9935, longitude: -74.7938, address: 'Cra. 53 #64-42, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'museo antropologico': { name: 'Museo de Antropología', latitude: 10.9935, longitude: -74.7938, address: 'Cra. 53 #64-42, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'museo antropologico y etnologico': { name: 'Museo de Antropología', latitude: 10.9935, longitude: -74.7938, address: 'Cra. 53 #64-42, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'museo de antropologia de la universidad del atlantico': { name: 'Museo de Antropología', latitude: 10.9935, longitude: -74.7938, address: 'Cra. 53 #64-42, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'parque los fundadores': { name: 'Parque Los Fundadores', latitude: 10.9972, longitude: -74.7975, address: 'Carrera 54 con Calle 59/64, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'parque fundadores': { name: 'Parque Los Fundadores', latitude: 10.9972, longitude: -74.7975, address: 'Carrera 54 con Calle 59/64, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'parque fundadores de la aviacion': { name: 'Parque Los Fundadores', latitude: 10.9972, longitude: -74.7975, address: 'Carrera 54 con Calle 59/64, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'monumento a los fundadores de la aviacion': { name: 'Parque Los Fundadores', latitude: 10.9972, longitude: -74.7975, address: 'Carrera 54 con Calle 59/64, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'plaza de la locomotora': { name: 'Plaza de la Locomotora - Monumento al Transporte', latitude: 10.9856, longitude: -74.7785, address: 'Cra. 50 #36-135, Barrio Abajo', city: 'Barranquilla', country: 'Colombia' },
+  'plaza de locomotora': { name: 'Plaza de la Locomotora - Monumento al Transporte', latitude: 10.9856, longitude: -74.7785, address: 'Cra. 50 #36-135, Barrio Abajo', city: 'Barranquilla', country: 'Colombia' },
+  'monumento al transporte': { name: 'Plaza de la Locomotora - Monumento al Transporte', latitude: 10.9856, longitude: -74.7785, address: 'Cra. 50 #36-135, Barrio Abajo', city: 'Barranquilla', country: 'Colombia' },
+  'plaza de la locomotora - monumento al transporte': { name: 'Plaza de la Locomotora - Monumento al Transporte', latitude: 10.9856, longitude: -74.7785, address: 'Cra. 50 #36-135, Barrio Abajo', city: 'Barranquilla', country: 'Colombia' },
+  'museo bibliografico de autores del caribe': { name: 'Museo Bibliográfico de Autores del Caribe', latitude: 10.9998, longitude: -74.7990, address: 'Calle 68 #53-56, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'museo bibliografico': { name: 'Museo Bibliográfico de Autores del Caribe', latitude: 10.9998, longitude: -74.7990, address: 'Calle 68 #53-56, El Prado', city: 'Barranquilla', country: 'Colombia' },
+  'autores del caribe': { name: 'Museo Bibliográfico de Autores del Caribe', latitude: 10.9998, longitude: -74.7990, address: 'Calle 68 #53-56, El Prado', city: 'Barranquilla', country: 'Colombia' },
   'hotel dann carlton barranquilla': { name: 'Hotel Dann Carlton Barranquilla', latitude: 11.0118, longitude: -74.8236, city: 'Barranquilla', country: 'Colombia' },
   'hotel dann carlton': { name: 'Hotel Dann Carlton Barranquilla', latitude: 11.0118, longitude: -74.8236, city: 'Barranquilla', country: 'Colombia' },
   'ghl hotel grand barranquilla': { name: 'GHL Hotel Grand Barranquilla', latitude: 11.0152, longitude: -74.8248, city: 'Barranquilla', country: 'Colombia' },
@@ -1549,6 +1570,9 @@ export function isGenericFacilityName(rawName = '') {
   if (/^(restaurante|restaurant|bar|café|cafe|hotel|hostal|atractivo)\s*#?\d*$/i.test(clean)) return true
   if (/^(?:plaza|parque|plazoleta|zona)\s+(?:descanso(?:\s*\d+)?|hospital|salud|clinica|ips|eps)$/i.test(clean)) return true
   if (/^descanso\s*\d+$/i.test(clean)) return true
+  // Filter out orphan administrative or generic heritage labels without a distinctive proper name (e.g. "Monumento Nacional")
+  if (/^(?:monumento|patrimonio|edificio|sitio|atractivo|bien)\s+(?:nacional|cultural|historico|histórico|turistico|turístico|distrital|municipal|de\s+la\s+nacion|de\s+la\s+nación)$/i.test(clean)) return true
+  if (/^(?:monumento\s+nacional|patrimonio\s+nacional|patrimonio\s+cultural)$/i.test(clean)) return true
   return false
 }
 

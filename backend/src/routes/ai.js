@@ -1808,7 +1808,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
           } catch (_) {}
         }
         if (!imageUrl) {
-          imageUrl = getReliableCategoryFallbackImage(place.name, place.category)
+          imageUrl = getReliableCategoryFallbackImage(place.name, place.category, assignedUrls)
         }
         assignedUrls.add(imageUrl)
 
@@ -4244,7 +4244,7 @@ function buildCuriousFacts(place, type) {
   ]).slice(0, 3)
 }
 
-const CATEGORY_IMAGE_POOLS = {
+export const CATEGORY_IMAGE_POOLS = {
   beach_island: [
     'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800&auto=format&fit=crop',
@@ -4269,6 +4269,21 @@ const CATEGORY_IMAGE_POOLS = {
     'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1544025162-d76694265947?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1558030006-450675393462?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=800&auto=format&fit=crop',
+  ],
+  bakery_cafe: [
+    'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1517433670267-08bbd4be890f?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1541167760496-1628856ab772?w=800&auto=format&fit=crop',
   ],
   viewpoint: [
     'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop',
@@ -4284,12 +4299,14 @@ const CATEGORY_IMAGE_POOLS = {
   ]
 }
 
-export function getReliableCategoryFallbackImage(name = '', category = '') {
+export function getReliableCategoryFallbackImage(name = '', category = '', assignedUrls = null) {
   const normCat = (category || '').toLowerCase()
   const normName = (name || '').toLowerCase()
 
   let poolKey = 'general'
-  if (normCat.includes('restaurant') || normCat.includes('cafe') || normCat.includes('gastronomy') || normCat.includes('food') || normName.includes('restaurante') || normName.includes('mercado') || normName.includes('bar') || isFoodOrDrinkEstablishment(name)) {
+  if (normName.includes('panader') || normName.includes('pan') || normName.includes('bakery') || normName.includes('pasteler') || normName.includes('reposter')) {
+    poolKey = 'bakery_cafe'
+  } else if (normCat.includes('restaurant') || normCat.includes('cafe') || normCat.includes('gastronomy') || normCat.includes('food') || normName.includes('restaurante') || normName.includes('mercado') || normName.includes('bar') || isFoodOrDrinkEstablishment(name)) {
     poolKey = 'gastronomy'
   } else if (normCat.includes('beach') || normCat.includes('island') || normCat.includes('playa') || normCat.includes('isla') || /\b(isla|islas|cayos?|playa|playas|bahia|bah[íi]a)\b/i.test(normName)) {
     poolKey = 'beach_island'
@@ -4303,7 +4320,17 @@ export function getReliableCategoryFallbackImage(name = '', category = '') {
 
   const pool = CATEGORY_IMAGE_POOLS[poolKey] || CATEGORY_IMAGE_POOLS.general
   const seed = (name + category).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  return pool[seed % pool.length]
+  let selected = pool[seed % pool.length]
+  if (assignedUrls && assignedUrls.has(selected)) {
+    for (let offset = 1; offset < pool.length; offset++) {
+      const candidate = pool[(seed + offset) % pool.length]
+      if (!assignedUrls.has(candidate)) {
+        selected = candidate
+        break
+      }
+    }
+  }
+  return selected
 }
 
 export function buildRecommendationReason(place, input = {}, aiReason = null) {

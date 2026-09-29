@@ -222,24 +222,34 @@ class _DestinationPreviewSheetState extends State<DestinationPreviewSheet> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: widget.stop.activities.map((activity) {
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.check_rounded, size: 14, color: AppTheme.primary),
-                              const SizedBox(width: 5),
-                              Text(
-                                activity,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Icon(Icons.check_rounded, size: 14, color: AppTheme.primary),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  activity,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.35,
+                                  ),
+                                ),
                               ),
                             ],
                           ),

@@ -20,6 +20,21 @@ const KNOWN_LANDMARK_IMAGES = {
   'gran malecon del rio': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/AspectoGranMalecon.jpg',
   'gran malecon': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/AspectoGranMalecon.jpg',
   'malecon del rio': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/AspectoGranMalecon.jpg',
+  'monumento a shakira': 'https://upload.wikimedia.org/wikipedia/commons/7/7e/EstatuaShakiraMalecon.jpg',
+  'estatua de shakira': 'https://upload.wikimedia.org/wikipedia/commons/7/7e/EstatuaShakiraMalecon.jpg',
+  'museo del atlantico': 'https://upload.wikimedia.org/wikipedia/commons/7/7e/Bquilla_-_17_ago_2007_227.jpg',
+  'catedral metropolitana maria reina': 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Barranquilla_Catedral.jpg',
+  'catedral maria reina': 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Barranquilla_Catedral.jpg',
+  'catedral metropolitana': 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Barranquilla_Catedral.jpg',
+  'plaza de la paz': 'https://upload.wikimedia.org/wikipedia/commons/5/53/Plaza_de_la_Paz_y_catedral_Barranquilla.jpg',
+  'plaza de la paz juan pablo ii': 'https://upload.wikimedia.org/wikipedia/commons/5/53/Plaza_de_la_Paz_y_catedral_Barranquilla.jpg',
+  'parque fundadores': 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Barranquilla_parque_de_los_Fundadores_2.jpg',
+  'parque fundadores de la aviacion': 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Barranquilla_parque_de_los_Fundadores_2.jpg',
+  'parque los fundadores': 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Barranquilla_parque_de_los_Fundadores_2.jpg',
+  'museo bibliografico de autores del caribe': 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1200&q=80',
+  'museo de antropologia': 'https://images.unsplash.com/photo-1566121318594-a4f65f3a4c12?auto=format&fit=crop&w=1200&q=80',
+  'museo antropologico y etnologico': 'https://images.unsplash.com/photo-1566121318594-a4f65f3a4c12?auto=format&fit=crop&w=1200&q=80',
+  'plaza de la locomotora': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/AspectoGranMalecon.jpg',
   // Barranquilla Restaurants & Iconic Gastronomy
   'cucayo': 'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?auto=format&fit=crop&w=1200&q=80',
   'restaurante cucayo': 'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?auto=format&fit=crop&w=1200&q=80',
@@ -116,14 +131,20 @@ export function isImageSemanticallyCompatible(imageUrl = '', placeName = '', cat
     }
   }
 
-  // 4. Arquitectura y POIs: Prohibidos retratos, personas, headshots para lugares
+  // 4. Arquitectura y POIs: Prohibidos retratos, personas, vehículos deportivos para lugares culturales
   const isPoiPlace = /\b(museo|museum|monumento|monument|parque|park|plaza|square|estadio|stadium|teatro|theatre|theater|catedral|cathedral|iglesia|church|bas[íi]lica|templo|castillo|castle|fortaleza|mirador|viewpoint|biblioteca|library|palacio|palace|muelle|pier|puente|bridge|estaci[oó]n|aeropuerto)\b/i.test(lowerPlace) ||
     ['attraction', 'culture', 'historic', 'architecture', 'monument', 'museum'].includes(lowerCat)
   if (isPoiPlace) {
     const forbiddenForPoi = [
       'portrait', 'retrato', 'rostro', 'headshot', 'face', 'autor', 'escritor',
-      'biografia', 'biography', 'politico', 'general', 'persona', 'human'
+      'biografia', 'biography', 'politico', 'general', 'persona', 'human',
+      'nissan', 'gt-r', 'gtr', 'drift', 'racing', 'ferrari', 'lamborghini', 'porsche',
+      'bmw', 'mercedes', 'highway', 'speedway', 'motorcycle', 'moto', 'truck'
     ]
+    const isAutoPoi = /\b(autom[oó]vil|transporte|coche|carro|auto|motor)\b/i.test(lowerPlace)
+    if (!isAutoPoi) {
+      forbiddenForPoi.push('car', 'coche', 'auto', 'vehiculo', 'automovil', 'sports_car', 'sportscar')
+    }
     if (forbiddenForPoi.some(term => lowerUrl.includes(term))) {
       return false
     }
@@ -724,9 +745,19 @@ function curatedImage(seed, category, indexSeed = 0) {
       'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80'
+      'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1541544741938-0af808871cc0?auto=format&fit=crop&w=800&q=80'
     ],
     cafe: [
+      'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1517433670267-08bbd4be890f?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1445116572660-236099ec97a0?auto=format&fit=crop&w=600&q=75',
@@ -805,7 +836,9 @@ function curatedImage(seed, category, indexSeed = 0) {
     targetCategory = 'trail'
   } else if (/ci[ée]naga|cienaga|laguna|manglar|r[íi]o|rio|reserva|humedal/i.test(seedLower)) {
     targetCategory = 'nature'
-  } else if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom/i.test(seedLower)) {
+  } else if (/panader[íi]a|\bpan\b|bakery|pasteler[íi]a|reposter[íi]a/i.test(seedLower)) {
+    targetCategory = 'cafe'
+  } else if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom|lechon|lecher/i.test(seedLower)) {
     targetCategory = 'restaurant'
   }
 

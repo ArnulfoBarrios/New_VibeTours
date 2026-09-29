@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { isFoodOrDrinkEstablishment, haversineMeters } from '../services/osm.js'
-import { getReliableCategoryFallbackImage, buildRecommendationReason } from '../routes/ai.js'
+import { getReliableCategoryFallbackImage, buildRecommendationReason, CATEGORY_IMAGE_POOLS } from '../routes/ai.js'
 import { isImageSemanticallyCompatible, imageForPlaceWithStatus } from '../services/imageSearch.js'
 import { resolvePlaceWithCascade } from '../services/places-resolver.js'
 
@@ -47,18 +47,12 @@ test('getReliableCategoryFallbackImage assigns gastronomy pool to Cucayo and Var
   const fallbackVaradero = getReliableCategoryFallbackImage('Varadero', 'requested')
 
   assert.ok(
-    fallbackCucayo.includes('photo-1590846406792') ||
-    fallbackCucayo.includes('photo-1555396273') ||
-    fallbackCucayo.includes('photo-1504674900247') ||
-    fallbackCucayo.includes('photo-1544025162'),
+    CATEGORY_IMAGE_POOLS.gastronomy.includes(fallbackCucayo),
     `Cucayo fallback image must be from gastronomy pool, got: ${fallbackCucayo}`
   )
 
   assert.ok(
-    fallbackVaradero.includes('photo-1590846406792') ||
-    fallbackVaradero.includes('photo-1555396273') ||
-    fallbackVaradero.includes('photo-1504674900247') ||
-    fallbackVaradero.includes('photo-1544025162'),
+    CATEGORY_IMAGE_POOLS.gastronomy.includes(fallbackVaradero),
     `Varadero fallback image must be from gastronomy pool, got: ${fallbackVaradero}`
   )
 })
