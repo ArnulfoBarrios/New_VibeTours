@@ -411,8 +411,8 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
     final current = _currentPoint;
     if (route != null && route.distanceMeters > 0) {
       final m = route.distanceMeters;
-      if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)} km';
-      return '${m.round()} m';
+      final distStr = m >= 1000 ? '${(m / 1000).toStringAsFixed(1)} km' : '${m.round()} m';
+      return '$distStr en ruta';
     }
     if (current != null) {
       final m = Geolocator.distanceBetween(
@@ -421,8 +421,8 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
         place.location.latitude,
         place.location.longitude,
       );
-      if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)} km';
-      return '${m.round()} m';
+      final distStr = m >= 1000 ? '${(m / 1000).toStringAsFixed(1)} km' : '${m.round()} m';
+      return '$distStr lineal';
     }
     return 'Calculando...';
   }
@@ -557,11 +557,23 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            Text(
-                              place.type,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium,
+                            Row(
+                              children: [
+                                Text(
+                                  place.type,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                if (place.distanceMeters > 0) ...[
+                                  Text(
+                                    ' • ${(place.distanceMeters / 1000).toStringAsFixed(1)} km lineal',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),

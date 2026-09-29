@@ -584,7 +584,7 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
           const SizedBox(height: 6),
           Text(
             isLoggedIn
-                ? 'Este tour fue generado por el asistente de IA y está listo para guardarse. Elige cómo deseas conservarlo:'
+                ? 'Tu itinerario ya quedó guardado en tus tours personales. Si deseas compartirlo con otros viajeros, puedes enviarlo a revisión para publicarlo en el catálogo:'
                 : 'Hemos diseñado este recorrido personalizado según tus gustos. Inicia sesión para guardarlo en tu cuenta o enviarlo al catálogo:',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
@@ -612,86 +612,45 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
               ),
             )
           else
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      try {
-                        final personalTour = _copyTour(tour, isPublished: false, moderationStatus: 'pending');
-                        final saved = await ref.read(userToursProvider.notifier).saveTour(personalTour);
-                        ref.read(selectedTourProvider.notifier).state = saved;
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Guardado en tus tours personales exitosamente.'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error al guardar: $e'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    icon: const Icon(Icons.lock_outline_rounded),
-                    label: const Text('Guardar Personal'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  try {
+                    final publicTour = _copyTour(tour, isPublished: false, moderationStatus: 'pending');
+                    final saved = await ref.read(userToursProvider.notifier).saveTour(publicTour);
+                    ref.read(selectedTourProvider.notifier).state = saved;
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Tu tour ha sido enviado a revisión. Nuestro administrador lo evaluará para publicarlo en el catálogo.'),
+                          backgroundColor: AppTheme.primary,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error al enviar a revisión: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.public_rounded),
+                label: const Text('Publicar en el Catálogo'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      try {
-                        final publicTour = _copyTour(tour, isPublished: false, moderationStatus: 'pending');
-                        final saved = await ref.read(userToursProvider.notifier).saveTour(publicTour);
-                        ref.read(selectedTourProvider.notifier).state = saved;
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Tu tour ha sido enviado a revisión. Nuestro administrador lo evaluará para publicarlo en el catálogo.'),
-                              backgroundColor: AppTheme.primary,
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error al enviar a revisión: $e'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    icon: const Icon(Icons.public_rounded),
-                    label: const Text('Publicar Catálogo'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
         ],
       ),

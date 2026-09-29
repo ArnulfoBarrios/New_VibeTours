@@ -287,6 +287,38 @@ export function isLodgingExplicitlyConfirmed(hotel, status) {
 }
 
 /**
+ * Detects whether a string is a duration clause, temporal expression, or stay length
+ * rather than a genuine physical place or tourist POI (e.g. "Durar una semana", "1 semana", "5 días").
+ */
+export function isTemporalOrDurationPhrase(text) {
+  if (!text || typeof text !== 'string') return false
+  const clean = text.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (clean.length < 3) return false
+
+  // Verbal clauses of duration or stay length
+  if (/^(?:durar|demorar(?:se|me|te|nos)?|quedar(?:se|me|te|nos)?|pasar|tardar|estar|viajar|ir)\s+(?:por\s+)?(?:un[ao]?|\d+)\s+(?:semanas?|dias?|mes(?:es)?|noches?|horas?)/i.test(clean)) {
+    return true
+  }
+  if (/^(?:durar|demorar(?:se|me|te|nos)?|quedar(?:se|me|te|nos)?|tardar)\b/i.test(clean)) {
+    return true
+  }
+  // Pure temporal expressions (e.g. "una semana", "7 dias", "un fin de semana", "3 noches", "15 dias")
+  if (/^(?:un[ao]?|el|este|medio|\d+)\s+(?:semanas?|dias?|mes(?:es)?|noches?|horas?|anos?|fin\s+de\s+semana|puente(?:\s+festivo)?)$/i.test(clean)) {
+    return true
+  }
+  // Phrases with "estancia de", "estadia de", "duracion de", "tiempo de", "viaje de X dias"
+  if (/^(?:estancia|estadia|duracion|tiempo|viaje)\s+(?:de|en)\s+(?:un[ao]?|\d+)\s+(?:semanas?|dias?|mes(?:es)?)/i.test(clean)) {
+    return true
+  }
+  // Specific match for "durar una semana" or "durar X dias" anywhere
+  if (/\b(?:durar\s+un[ao]?\s+semana|durar\s+\d+\s+dias?)\b/i.test(clean)) {
+    return true
+  }
+
+  return false
+}
+
+/**
  * Deduplicates structured places before they are used to compose the chat
  * itinerary. The first occurrence keeps its day/order, matching the route
  * planner's existing behavior.
@@ -298,6 +330,7 @@ export function deduplicateChatSpecificPlaces(places = [], city = '') {
   for (const place of Array.isArray(places) ? places : []) {
     const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
     if (!name) continue
+    if (isTemporalOrDurationPhrase(name)) continue
     if (isChatHotelStop(name)) continue
 
     const key = canonicalChatPlaceKey(name, city)
@@ -316,7 +349,7 @@ export function deduplicateChatSpecificPlaces(places = [], city = '') {
 }
 
 /**
- * Removes accommodation lines only when they are being rendered as itinerary
+ * Removes accommodation lines and spurious duration phrases only when they are being rendered as itinerary
  * bullets. Hotel information in normal explanatory prose remains intact.
  */
 export function stripHotelStopsFromItineraryText(text, selectedHotel = null) {
@@ -336,6 +369,7 @@ export function stripHotelStopsFromItineraryText(text, selectedHotel = null) {
         .replace(/^(?:alojamiento|hospedaje|punto\s+de\s+(?:partida|encuentro)|base)\s*(?:\/|:|-)?\s*/i, '')
         .trim()
 
+      if (isTemporalOrDurationPhrase(candidate)) return false
       return !isChatHotelStop(candidate, selectedHotel)
     })
     .join('\n')
@@ -394,7 +428,7 @@ export function resolveCoordinatesForPlace(placeName, ...sources) {
 
 async function resolveOsmBackedChatPlace(place, city = '', country = '', selectedHotel = null) {
   const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
-  if (!name || isChatHotelStop(name, selectedHotel) || isUnmappedOrClosedVenue(name)) return null
+  if (!name || isTemporalOrDurationPhrase(name) || isChatHotelStop(name, selectedHotel) || isUnmappedOrClosedVenue(name)) return null
 
   // 1. If place already has verified coordinates, preserve them
   if (typeof place === 'object' && place?.latitude && place?.longitude && place?.coordinatesVerified) {
@@ -424,6 +458,10 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
   const query = [name, city, country].filter(Boolean).join(', ')
   const geo = await geocodePlace(query, centerLat, centerLon, { city, country }).catch(() => null)
   if (hasOsmMapRecord(geo) && !isNonTouristFacility(geo) && isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) {
+    if (centerLat != null && centerLon != null) {
+      const distM = haversineMeters(centerLat, centerLon, geo.latitude, geo.longitude)
+      if (distM > 45000) return null
+    }
     return geo
   }
 
@@ -441,6 +479,10 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
   }).catch(() => null)
   if (providerGeo && Number.isFinite(Number(providerGeo.latitude)) && Number.isFinite(Number(providerGeo.longitude)) &&
       isWithinCoastalCorridorBounds(providerGeo.latitude, providerGeo.longitude, city)) {
+    if (centerLat != null && centerLon != null) {
+      const distM = haversineMeters(centerLat, centerLon, providerGeo.latitude, providerGeo.longitude)
+      if (distM > 45000) return null
+    }
     return providerGeo
   }
 
@@ -451,7 +493,7 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
   const input = Array.isArray(places) ? places : []
   const settled = await Promise.all(input.map(async place => {
     const rawName = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
-    if (!rawName || isChatHotelStop(rawName, selectedHotel) || isUnmappedOrClosedVenue(rawName)) {
+    if (!rawName || isTemporalOrDurationPhrase(rawName) || isChatHotelStop(rawName, selectedHotel) || isUnmappedOrClosedVenue(rawName)) {
       return null
     }
 
@@ -2538,6 +2580,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con este esquema:
 REGLAS PARA "specificPlaces":
 1. DEBE contener ÚNICAMENTE lugares físicos y restaurantes reales con su nombre propio y su número de día ('dia': 1, 2, ...).
 2. Prohibido incluir textos genéricos como "Llegada", "Despedida", "Tiempo libre", "Día libre", "Tarde libre".
+3. ESTRICTAMENTE PROHIBIDO incluir frases verbales de duración o expresiones temporales (ej: "Durar una semana", "1 semana", "5 días", "Quedarme 3 días", "Pasar una semana"). Las duraciones pertenecen ÚNICAMENTE a "durationDays".
 
 REGLAS PARA "accommodationStatus":
 - "Hotel elegido": si el usuario indicó o confirmó un hotel con nombre propio comercial real (ej: "Hotel Palma Linda").
@@ -3679,7 +3722,7 @@ export function extractChatInformationFallback(prompt) {
     const lowerP = cleanPlaceName.toLowerCase()
     const isGenericStopPhrase = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|paradas\s+adicionales|lugares\s+adicionales|otras?\s+paradas?)\b/i.test(lowerP)
     const NON_PLACE_TARGETS = /^(paradas?|lugares|sitios|atractivos?|actividades|un\s+d[íi]a|\d+\s+d[íi]as?|hotel|hospedaje|alojamiento|tour|itinerario|ruta)$/i
-    if (!isGenericStopPhrase && !NON_PLACE_TARGETS.test(lowerP) && !isNonTouristicInput(lowerP) && !isGenericFacilityName(cleanPlaceName) && !isLodgingName(cleanPlaceName)) {
+    if (!isGenericStopPhrase && !NON_PLACE_TARGETS.test(lowerP) && !isTemporalOrDurationPhrase(lowerP) && !isNonTouristicInput(lowerP) && !isGenericFacilityName(cleanPlaceName) && !isLodgingName(cleanPlaceName)) {
       res.specificPlaces = [{
         name: cleanPlaceName,
         ...(targetDay && targetDay > 0 ? { dia: targetDay, day: targetDay } : {})

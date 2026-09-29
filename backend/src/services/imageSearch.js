@@ -31,7 +31,7 @@ const KNOWN_LANDMARK_IMAGES = {
   'parque fundadores': 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Barranquilla_parque_de_los_Fundadores_2.jpg',
   'parque fundadores de la aviacion': 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Barranquilla_parque_de_los_Fundadores_2.jpg',
   'parque los fundadores': 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Barranquilla_parque_de_los_Fundadores_2.jpg',
-  'museo bibliografico de autores del caribe': 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1200&q=80',
+  'museo bibliografico de autores del caribe': 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1200&q=80',
   'museo de antropologia': 'https://images.unsplash.com/photo-1566121318594-a4f65f3a4c12?auto=format&fit=crop&w=1200&q=80',
   'museo antropologico y etnologico': 'https://images.unsplash.com/photo-1566121318594-a4f65f3a4c12?auto=format&fit=crop&w=1200&q=80',
   'plaza de la locomotora': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/AspectoGranMalecon.jpg',
@@ -139,11 +139,12 @@ export function isImageSemanticallyCompatible(imageUrl = '', placeName = '', cat
       'portrait', 'retrato', 'rostro', 'headshot', 'face', 'autor', 'escritor',
       'biografia', 'biography', 'politico', 'general', 'persona', 'human',
       'nissan', 'gt-r', 'gtr', 'drift', 'racing', 'ferrari', 'lamborghini', 'porsche',
-      'bmw', 'mercedes', 'highway', 'speedway', 'motorcycle', 'moto', 'truck'
+      'bmw', 'mercedes', 'highway', 'speedway', 'motorcycle', 'moto', 'truck',
+      'sports_car', 'sportscar', 'photo-1503376780353'
     ]
-    const isAutoPoi = /\b(autom[oó]vil|transporte|coche|carro|auto|motor)\b/i.test(lowerPlace)
-    if (!isAutoPoi) {
-      forbiddenForPoi.push('car', 'coche', 'auto', 'vehiculo', 'automovil', 'sports_car', 'sportscar')
+    const isExplicitAutoMuseum = /\b(museo\s+del?\s+autom[oó]vil|museo\s+del?\s+transporte)\b/i.test(lowerPlace)
+    if (!isExplicitAutoMuseum) {
+      forbiddenForPoi.push('car', 'coche', 'auto', 'vehiculo', 'automovil', 'sports_car', 'sportscar', 'speedway')
     }
     if (forbiddenForPoi.some(term => lowerUrl.includes(term))) {
       return false
@@ -643,9 +644,15 @@ function isImageTitleRelevant(title, query, requiredGroups = null, url = '') {
   const titleLower = title.toLowerCase()
   const urlLower = (url || '').toLowerCase()
   
-  // Filter out non-photo image types like maps, flags, logos, coats of arms, location diagrams, PDFs, book scans
-  const isInvalidType = ['map', 'mapa', 'flag', 'bandera', 'logo', 'icon', 'symbol', 'coat_of_arms', 'escudo', 'location_map', 'chart', 'diagram', '.pdf', 'pdf.', 'document', 'manuscript', 'manuscrito', 'book', 'libro', 'moneda', 'coin', 'stamp', 'sello'].some(term => titleLower.includes(term) || urlLower.includes(term))
+  // Filter out non-photo image types like maps, flags, logos, coats of arms, location diagrams, PDFs, book scans, djvu, magazines
+  const isInvalidType = ['map', 'mapa', 'flag', 'bandera', 'logo', 'icon', 'symbol', 'coat_of_arms', 'escudo', 'location_map', 'chart', 'diagram', '.pdf', 'pdf.', '.djvu', 'djvu', 'document', 'manuscript', 'manuscrito', 'book', 'libro', 'moneda', 'coin', 'stamp', 'sello', 'magazine', 'revista', 'newspaper', 'periodico'].some(term => titleLower.includes(term) || urlLower.includes(term))
   if (isInvalidType) return false
+
+  // Reject automotive images for cultural/monument POIs
+  if (/\b(museo|monumento|catedral|iglesia|plaza|parque)\b/i.test(query || '')) {
+    const isAutoMismatch = /\b(sports?\s*car|nissan|ferrari|porsche|lamborghini|drift|racing|speedway|highway|autopista)\b/i.test(titleLower)
+    if (isAutoMismatch) return false
+  }
 
   // Validar extensión del archivo
   const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']
@@ -779,7 +786,7 @@ function curatedImage(seed, category, indexSeed = 0) {
       'https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=600&q=75',
     ],
     museum: [
-      'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=600&q=75',
+      'https://images.unsplash.com/photo-1565008447742-97f6f38c985c?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1580136579312-94651dfd596d?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1566121318594-a4f65f3a4c12?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1605721911519-3dfeb3be25e7?auto=format&fit=crop&w=600&q=75',
@@ -824,22 +831,34 @@ function curatedImage(seed, category, indexSeed = 0) {
       'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1498307833015-e7b400441eb8?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=600&q=75',
-      'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=600&q=75',
+      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=75',
     ]
   }
 
   const seedLower = String(seed || '').toLowerCase()
-  let targetCategory = category
+  let targetCategory = String(category || '').toLowerCase()
   if (/playa|beach|bah[íi]a|bahia|cala|cabo|piscina|isla|arrecife|ensenada|costa/i.test(seedLower)) {
     targetCategory = 'beach'
   } else if (/sendero|pueblito|trek|camino|hiking|bosque|chairama/i.test(seedLower)) {
     targetCategory = 'trail'
-  } else if (/ci[ée]naga|cienaga|laguna|manglar|r[íi]o|rio|reserva|humedal/i.test(seedLower)) {
+  } else if (/ci[ée]naga|cienaga|laguna|manglar|r[íi]o|rio|reserva|humedal|parque\s+nacional|selva/i.test(seedLower)) {
     targetCategory = 'nature'
   } else if (/panader[íi]a|\bpan\b|bakery|pasteler[íi]a|reposter[íi]a/i.test(seedLower)) {
     targetCategory = 'cafe'
-  } else if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom|lechon|lecher/i.test(seedLower)) {
+  } else if (/restaurante|comida|cafe|café|bistro|bar|parador|kiosko|asador|gourmet|gastronom|lechon|lecher|fonda/i.test(seedLower)) {
     targetCategory = 'restaurant'
+  } else if (/museo|museum|galer[íi]a|gallery|arte|art|exposici[oó]n|exhibici[oó]n/i.test(seedLower) || targetCategory === 'museum') {
+    targetCategory = 'museum'
+  } else if (/catedral|iglesia|bas[íi]lica|templo|convento|capilla|santuario|parroquia|church/i.test(seedLower) || targetCategory === 'religious') {
+    targetCategory = 'religious'
+  } else if (/mirador|viewpoint|cerro|panor[aá]mica|malecon|malec[oó]n/i.test(seedLower) || targetCategory === 'viewpoint') {
+    targetCategory = 'viewpoint'
+  } else if (/monumento|estatua|escultura|monument|statue|sculpture|plaza|palacio|castillo|muralla|baluarte|ferrocarril|ruinas|hist[oó]ric/i.test(seedLower) || ['historic', 'monument', 'cultural', 'attraction', 'culture'].includes(targetCategory)) {
+    targetCategory = 'historic'
+  } else if (/estadio|arena|deporte|sports|cancha/i.test(seedLower) || targetCategory === 'sports') {
+    targetCategory = 'sports'
+  } else if (/parque|jard[íi]n|bot[aá]nico|zoo|zoologico|zool[oó]gico/i.test(seedLower) || targetCategory === 'nature') {
+    targetCategory = 'nature'
   }
 
   // 1. Si la categoría es específica, servir foto temática rotada
@@ -853,7 +872,9 @@ function curatedImage(seed, category, indexSeed = 0) {
   }
 
   // 2. Solo para vistas panorámicas generales o portadas, verificar la ciudad
+  const isIndividualPoi = /\b(monumento|estatua|escultura|museo|restaurante|catedral|iglesia|parque|plaza|hotel|hostal|resort|mall|bar|fonda|mirador|puente)\b/i.test(seedLower)
   const cityLower = String(seed || '').toLowerCase()
+  if (!isIndividualPoi) {
   if (cityLower.includes('tulum')) {
     return 'https://images.unsplash.com/photo-1518638150340-f706e86654de?auto=format&fit=crop&w=1200&q=80' // Tulum Mayan cliff & turquoise sea
   } else if (cityLower.includes('miami')) {
@@ -892,6 +913,7 @@ function curatedImage(seed, category, indexSeed = 0) {
     return 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=80' // San Andres Island
   } else if (cityLower.includes('coveñas') || cityLower.includes('covenas') || cityLower.includes('tolu') || cityLower.includes('tolú') || cityLower.includes('morrosquillo')) {
     return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80' // Coveñas Caribbean Beach
+  }
   }
 
   const list = categoryImages.default

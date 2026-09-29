@@ -1171,13 +1171,27 @@ class _NearbyPlacesSection extends ConsumerWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  l10n.nearbyPlaces,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.nearbyPlaces,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Distancia en línea recta desde tu ubicación',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
@@ -1228,15 +1242,28 @@ class _NearbyPlacesSection extends ConsumerWidget {
                                       top: 8,
                                       right: 8,
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
                                         decoration: BoxDecoration(
                                           color: Colors.black.withValues(alpha: 0.65),
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.5),
                                         ),
-                                        child: Text(
-                                          '${(place.distanceMeters / 1000).toStringAsFixed(1)} km',
-                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.straighten_rounded,
+                                              size: 11,
+                                              color: Colors.white70,
+                                            ),
+                                            const SizedBox(width: 3.5),
+                                            Text(
+                                              place.distanceMeters < 1000
+                                                  ? '${place.distanceMeters} m lineal'
+                                                  : '${(place.distanceMeters / 1000).toStringAsFixed(1)} km lineal',
+                                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
