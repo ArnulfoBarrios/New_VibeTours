@@ -1,6 +1,6 @@
 import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
-import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS } from './destinationService.js'
+import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds } from './osm.js'
 import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate } from './candidate-catalog.js'
@@ -960,6 +960,11 @@ async function resolveDestinationCenter({ destination = '', country = '', userLa
     return { latitude: Number(userLat), longitude: Number(userLon), source: 'user' }
   }
 
+  const cachedCanonical = getCanonicalDestinationFromCache(destination)
+  if (cachedCanonical && Number.isFinite(Number(cachedCanonical.latitude)) && Number.isFinite(Number(cachedCanonical.longitude))) {
+    return { latitude: Number(cachedCanonical.latitude), longitude: Number(cachedCanonical.longitude), source: 'canonical-cache' }
+  }
+
   const normalizedDestination = String(destination || '')
     .toLowerCase()
     .normalize('NFD')
@@ -1502,14 +1507,18 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       }
     }
 
-    if (realPlaces.length < 10) {
-      const [generalPlaces, museums] = await Promise.all([
-        photonSearch(`turismo ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => []),
-        photonSearch(`museo ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => [])
+    if (realPlaces.length < minLandmarksTarget) {
+      const [generalPlaces, museums, parks, monuments] = await Promise.all([
+        photonSearch(`turismo ${clean}`, 8, lat, lon, null, 35000, targetCountry).catch(() => []),
+        photonSearch(`museo ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => []),
+        photonSearch(`parque ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => []),
+        photonSearch(`monumento ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => [])
       ])
       const additional = [
         ...generalPlaces,
-        ...museums
+        ...museums,
+        ...parks,
+        ...monuments
       ].filter(p => {
         if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
         if (p.name.toLowerCase().includes('perímetro urbano')) return false
@@ -1524,6 +1533,26 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       for (const p of additional) {
         if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
           realPlaces.push(p)
+        }
+      }
+    }
+
+    if (realHotels.length < 3 && lat && lon) {
+      const photonHotels = await photonSearch(`hotel ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => [])
+      for (const ph of photonHotels) {
+        if (!ph || !ph.name || isGenericFacilityName(ph.name) || isNonTouristFacility(ph.tags) || isNonTouristFacility({ name: ph.name })) continue
+        if (!realHotels.some(h => arePlacesSimilar(h.name || h, ph.name))) {
+          realHotels.push(ph)
+        }
+      }
+    }
+
+    if (realRests.length < minRestsTarget && lat && lon) {
+      const photonRests = await photonSearch(`restaurante ${clean}`, 10, lat, lon, null, 35000, targetCountry).catch(() => [])
+      for (const pr of photonRests) {
+        if (!pr || !pr.name || isGenericFacilityName(pr.name) || isNonTouristFacility(pr.tags) || isNonTouristFacility({ name: pr.name }) || isUnmappedOrClosedVenue(pr.name)) continue
+        if (!realRests.some(r => arePlacesSimilar(r.name || r, pr.name))) {
+          realRests.push(pr)
         }
       }
     }
@@ -1819,7 +1848,7 @@ export function isNonTouristicInput(text = '') {
 export async function generateChatResponse(state, backendInstruction = '', webSearchSummary = '', currentPreferences = {}, nearbyFoodPlaces = []) {
   const known = { ...(currentPreferences || {}) }
   const userCurrency = String(known.currency || currentPreferences.currency || 'cop').toLowerCase()
-  const history = state.history || []
+  const history = state.history || state.messages || []
   const lastUserMsg = state.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
   const lastAssistantMsg = (history || []).slice().reverse().find(m => m.role === 'assistant' || m.role === 'bot')?.content || ''
 
@@ -1844,8 +1873,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const destName = cleanAdministrativeCityName(rawDestName)
   const hasCity = Boolean(destName && !isVagueDestination(destName))
   const knownCityNormalized = destName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-  const isKnownColombianCity = /^(cartagena|santa marta|medellin|bogota|barranquilla|cali|covenas|tolu|san andres|bucaramanga|pereira|salento|guatape|villa de leyva)$/i.test(knownCityNormalized)
-  const destCountry = known.canonicalDestination?.country || known.country || (isKnownColombianCity ? 'Colombia' : '')
+  const centroidCountry = FALLBACK_DESTINATION_CENTROIDS[knownCityNormalized]?.country || ''
+  const isKnownColombianCity = centroidCountry === 'Colombia' || /^(cartagena|santa marta|medellin|bogota|barranquilla|cali|covenas|tolu|san andres|bucaramanga|pereira|salento|guatape|villa de leyva|cucuta|manizales|armenia|pasto|villavicencio|ibague|neiva|popayan|monteria|valledupar|sincelejo|riohacha|tunja)$/i.test(knownCityNormalized)
+  const destCountry = known.canonicalDestination?.country || known.country || centroidCountry || (isKnownColombianCity ? 'Colombia' : '')
   if (hasCity && Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0) {
     known.specificPlaces = await filterChatSpecificPlacesByOsm(known.specificPlaces, destName, destCountry, known.selectedHotel)
   }
@@ -2206,6 +2236,16 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             ? preset.hotels
             : []
 
+        if (rawHotels.length === 0 && (known.latitude != null && known.longitude != null)) {
+          const centerLat = known.latitude
+          const centerLon = known.longitude
+          const quickHotels = await photonSearch(`hotel ${cleanAdministrativeCityName(destName)}`, 5, centerLat, centerLon, null, 35000, destCountry).catch(() => [])
+          const validQuick = (quickHotels || []).filter(h => h && h.name && !isGenericFacilityName(h.name))
+          if (validQuick.length > 0) {
+            rawHotels = validQuick
+          }
+        }
+
         const hotelList = rawHotels.slice(0, 3)
         if (hotelList.length > 0) {
           const hotelIntro = (fbHasTransport && fbHasBudget)
@@ -2219,8 +2259,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             fallbackChips.push('Tengo casa propia / familiar')
           }
         } else {
-          fallbackMsg = `¡Perfecto! Ya registré tu transporte y presupuesto. ¿En qué hotel o alojamiento se hospedarán en ${destName}? (o indícame si te quedas en casa propia / familiar).`
-          fallbackChips = ['Tengo casa propia / familiar']
+          fallbackMsg = `Para tu hospedaje en ${destName}, te recomiendo elegir una opción en el centro de la ciudad o en sus zonas comerciales principales. ¿Deseas quedarte en algún hotel en particular, o en casa propia / familiar?`
+          fallbackChips = ['Zona Centro', 'Tengo casa propia / familiar', 'Continuar sin hotel']
         }
       } else if (!hasCompanions && !fbHasLodging) {
         fallbackMsg = `¡Excelente! ¿Viajas solo, en pareja, con amigos o en familia con niños a ${destName}?`

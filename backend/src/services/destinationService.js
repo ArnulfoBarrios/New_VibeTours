@@ -144,6 +144,69 @@ export function cleanAdministrativeCityName(rawName = '') {
   return cleaned.trim()
 }
 
+export function rankCanonicalCandidate(cand, cleanedQuery = '', options = {}) {
+  let score = 0
+  const normCleaned = String(cleanedQuery || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const candCityNorm = String(cand.city || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const candEntityNorm = String(cand.entityName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const candCountryNorm = String(cand.country || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const candType = String(cand.type || '').toLowerCase()
+
+  // 1. Settlement Hierarchy (Administrative & Urban prominence)
+  // Major cities, administrative boundaries, and towns outrank tiny rural hamlets/villages
+  if (['city', 'administrative', 'municipality', 'national_park', 'protected_area'].includes(candType)) {
+    score += 60
+  } else if (['town', 'suburb'].includes(candType)) {
+    score += 40
+  } else if (['village'].includes(candType)) {
+    score += 15
+  } else if (['hamlet', 'isolated_dwelling', 'residential'].includes(candType)) {
+    score += 5
+  }
+
+  // 2. Nominatim Importance (0.0 to 1.0)
+  if (typeof cand.importance === 'number' && Number.isFinite(cand.importance)) {
+    score += cand.importance * 50
+  }
+
+  // 3. Exact Name Matching
+  if (candCityNorm === normCleaned || candEntityNorm === normCleaned) {
+    score += 35
+  } else if (candCityNorm.startsWith(normCleaned) || candEntityNorm.startsWith(normCleaned)) {
+    score += 20
+  }
+
+  // 4. Preferred / Inferred Country Context
+  const countryHint = String(options?.countryHint || options?.preferredCountry || options?.country || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  if (countryHint) {
+    if (candCountryNorm === countryHint || cand.countryCode?.toLowerCase() === countryHint) {
+      score += 100
+    }
+  } else {
+    // If no explicit foreign country is requested in query, prioritize Colombia (primary domain) when candidate is in Colombia
+    const queryMentionsOtherCountry = /\b(espana|españa|mexico|méxico|argentina|peru|perú|chile|brasil|brazil|estados unidos|usa|francia|italia|alemania|romania|rumania)\b/i.test(normCleaned)
+    if (!queryMentionsOtherCountry && (cand.countryCode === 'CO' || candCountryNorm === 'colombia')) {
+      score += 45
+    }
+  }
+
+  // 5. Special entity types (e.g. searching for a park)
+  if (/\b(parque|reserva|natural)\b/i.test(normCleaned) && (candType === 'national_park' || candType === 'protected_area')) {
+    score += 50
+  }
+
+  return score
+}
+
+export function getCanonicalDestinationFromCache(query) {
+  if (!query || typeof query !== 'string') return null
+  const cleaned = cleanAdministrativeCityName(query.trim())
+  if (!cleaned) return null
+  const cacheKey = `canonical_${cleaned.toLowerCase()}`
+  const normKey = `canonical_${cleaned.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()}`
+  return canonicalCache.get(cacheKey) || canonicalCache.get(normKey) || null
+}
+
 export async function resolveCanonicalDestination(query, options = {}) {
   if (!query || typeof query !== 'string') return null
   let cleaned = query.trim().replace(/^(destino|lugar|ciudad|ubicaci[oó]n|location|destination|pais|pa[íi]s)\s*:\s*/i, '').trim()
@@ -241,21 +304,19 @@ export async function resolveCanonicalDestination(query, options = {}) {
             placeId: String(item.place_id || item.osm_id || `${lat}_${lon}`),
             rawName: item.name || item.display_name,
             category: item.category,
-            type: item.type
+            type: item.type,
+            importance: Number(item.importance) || 0,
+            placeRank: Number(item.place_rank) || 30
           }
         }).filter(c => (c.city || c.entityName) && Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
 
         if (candidateObjects.length > 0) {
-          let primary = candidateObjects[0]
-          // Prioritize national park or protected area if searching for a park
-          const parkMatch = candidateObjects.find(c => c.category === 'boundary' && (c.type === 'national_park' || c.type === 'protected_area'))
-          if (parkMatch && /\b(parque|reserva|natural)\b/i.test(cleaned)) {
-            primary = parkMatch
-          }
-          if (/^cartagena$/i.test(cleaned) && !/españa|spain|murcia/i.test(cleaned)) {
-            const colMatch = candidateObjects.find(c => c.countryCode === 'CO' || c.country === 'Colombia')
-            if (colMatch) primary = colMatch
-          }
+          const ranked = [...candidateObjects].sort((a, b) => {
+            const scoreB = rankCanonicalCandidate(b, cleaned, options)
+            const scoreA = rankCanonicalCandidate(a, cleaned, options)
+            return scoreB - scoreA
+          })
+          let primary = ranked[0]
 
           // Check for ambiguity across candidates with distinct countries/regions
           const distinctDestinations = []
@@ -288,6 +349,11 @@ export async function resolveCanonicalDestination(query, options = {}) {
           }
 
           canonicalCache.set(cacheKey, result)
+          canonicalCache.set(`canonical_${normKey}`, result)
+          if (result.city) {
+            const normCityKey = `canonical_${result.city.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()}`
+            canonicalCache.set(normCityKey, result)
+          }
           return result
         }
       }

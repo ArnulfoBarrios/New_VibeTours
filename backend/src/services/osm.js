@@ -1,5 +1,5 @@
 import { GeoCache } from './geoCache.js'
-import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS } from './destinationService.js'
+import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache } from './destinationService.js'
 import { rankAndFilterTouristAttractions, isNeighborhoodOrMinorPark, isLowQualityOrFastFoodVenue, arePlaceNamesSemanticallySame } from './open-tourism-service.js'
 
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
@@ -464,6 +464,33 @@ export function selectBestPoiResult(results, originalQuery = '') {
       return type === 'pier' || manMade === 'pier'
     })
     if (directPierMatch) return directPierMatch
+  }
+
+  if (candidates.length > 1) {
+    const settlementPriority = {
+      city: 6,
+      administrative: 5,
+      town: 4,
+      municipality: 4,
+      suburb: 3,
+      village: 2,
+      hamlet: 1,
+      isolated_dwelling: 0
+    }
+    const hasSettlement = candidates.some(r => {
+      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
+      return settlementPriority[type] !== undefined
+    })
+    if (hasSettlement) {
+      const sorted = [...candidates].sort((a, b) => {
+        const typeA = String(a.type || a.tags?.osm_value || '').toLowerCase()
+        const typeB = String(b.type || b.tags?.osm_value || '').toLowerCase()
+        const pA = settlementPriority[typeA] ?? 2.5
+        const pB = settlementPriority[typeB] ?? 2.5
+        return pB - pA
+      })
+      return sorted[0]
+    }
   }
 
   return candidates[0]
@@ -1253,6 +1280,39 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
       geocodeCache.set(key, verified)
       return verified
     }
+  }
+
+  const cleanQ = normalizedQuery.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const cachedCanonical = getCanonicalDestinationFromCache(normalizedQuery) || getCanonicalDestinationFromCache(cleanQ)
+  if (cachedCanonical && Number.isFinite(Number(cachedCanonical.latitude)) && Number.isFinite(Number(cachedCanonical.longitude))) {
+    const verified = withVerifiedCoordinates({
+      name: cachedCanonical.entityName || cachedCanonical.city,
+      latitude: cachedCanonical.latitude,
+      longitude: cachedCanonical.longitude,
+      city: cachedCanonical.city,
+      country: cachedCanonical.country,
+      address: cachedCanonical.displayName || '',
+      category: 'historic',
+      tags: { tourism: 'attraction', grounded_geocoded: true }
+    }, 'canonical-cache', `canonical_${cleanQ}`)
+    geocodeCache.set(key, verified)
+    return verified
+  }
+
+  const fallbackCentroid = FALLBACK_DESTINATION_CENTROIDS[cleanQ] || FALLBACK_DESTINATION_CENTROIDS[normalizedQuery.toLowerCase()]
+  if (fallbackCentroid) {
+    const verified = withVerifiedCoordinates({
+      name: fallbackCentroid.entityName || fallbackCentroid.city,
+      latitude: fallbackCentroid.latitude,
+      longitude: fallbackCentroid.longitude,
+      city: fallbackCentroid.city,
+      country: fallbackCentroid.country,
+      address: fallbackCentroid.displayName || '',
+      category: 'historic',
+      tags: { tourism: 'attraction', grounded_geocoded: true }
+    }, 'destination-centroid', `centroid_${cleanQ}`)
+    geocodeCache.set(key, verified)
+    return verified
   }
 
   return null
