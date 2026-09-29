@@ -15,8 +15,8 @@ const citiesCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 // An LLM can suggest a real venue while still inventing an inaccurate point.
 // Only coordinates returned by a map provider (or our small curated seed set)
 // may be used as navigation coordinates.
-const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-tourism'])
-const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-tourism'])
+const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch'])
+const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch'])
 
 // Algunas atracciones tienen más de un nombre comercial o institucional, pero
 // representan el mismo punto de visita. Esto es una identidad semántica, no
@@ -1151,8 +1151,21 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
           signal: AbortSignal.timeout(5000)
         })
         if (response.ok) {
-          const results = await response.json()
-          const validResult = (Array.isArray(results) ? results : []).find(r => {
+          const rawResults = await response.json()
+          const sortedResults = (Array.isArray(rawResults) ? rawResults : []).slice().sort((a, b) => {
+            const typeWeight = (t) => {
+              if (/per[íi]metro\s+urbano/i.test(t.display_name || t.name || '')) return 100
+              if (t.type === 'city') return 80
+              if (['administrative', 'municipality'].includes(t.type)) return 60
+              if (['town', 'suburb'].includes(t.type)) return 40
+              if (t.type === 'village') return 15
+              return 5
+            }
+            const scoreB = typeWeight(b) + (Number(b.importance) || 0) * 30 + (b.address?.country_code === 'co' ? 25 : 0)
+            const scoreA = typeWeight(a) + (Number(a.importance) || 0) * 30 + (a.address?.country_code === 'co' ? 25 : 0)
+            return scoreB - scoreA
+          })
+          const validResult = sortedResults.find(r => {
             const type = String(r.type || '').toLowerCase()
             const category = String(r.category || '').toLowerCase()
             const name = String(r.display_name || '').toLowerCase()
@@ -1640,6 +1653,7 @@ export function isFoodOrDrinkEstablishment(name = '') {
   if (!name || typeof name !== 'string') return false
   const clean = name.trim().toLowerCase()
   const unaccented = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (/\b(paradero|buseta|busetas|cootrans|cooptrans|despacho\s+de\s+buses|patio\s+de\s+buses|terminal\s+de\s+transporte)\b/i.test(unaccented)) return false
   if (/\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|parrilla|asador|asados|bistro|pizzer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|cafeter[íi]a|caf[ée]|bar|gastrobar|chifa|refresquer[íi]a|taquer[íi]a|cervecer[íi]a|pub|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|comidas\s+r[aá]pidas|burger|piqueos|piquer[íi]a|piqueteadero|cevicher[íi]a|cebicher[íi]a|gastron[oó]mico|food\s*court|cocina|comedor|piquetera|trattoria|steakhouse|saz[oó]n|fog[oó]n|dulcer[íi]a)\b/i.test(clean)) return true
   if (/\b(cucayo|varadero|narcobollo|nena\s+lela|donde\s+chucho|ouzo|burukuka|celele|cande|(?:la\s+)?cevicheria|(?:el\s+)?caiman\s+del\s+rio|(?:la\s+)?herradura|donde\s+valerio|kiosko\s+el\s+pescador|(?:el\s+)?montanero)\b/i.test(unaccented)) return true
   return false
@@ -1653,8 +1667,51 @@ export function isNonTouristFacility(tags = {}) {
   if (tags.place === 'neighbourhood' || tags.place === 'suburb' || tags.place === 'quarter' || tags.place === 'isolated_dwelling') return true
   if (tags.junction === 'roundabout' || tags.highway === 'roundabout') return true
 
+  // 1. Vehicular highway / road segments
+  if (tags.osm_key === 'highway' || tags.highway) {
+    const hw = String(tags.highway || tags.osm_value || '').toLowerCase()
+    if (hw !== 'pedestrian' && hw !== 'footway') {
+      return true
+    }
+  }
+  const tagType = String(tags.type || '').toLowerCase()
+  if (['primary', 'secondary', 'tertiary', 'trunk', 'motorway', 'street', 'residential', 'service', 'track', 'living_street'].includes(tagType)) {
+    return true
+  }
+  if (['pitch', 'track', 'fitness_centre', 'university', 'college', 'school', 'kindergarten', 'hospital', 'clinic', 'bank', 'police'].includes(tagType)) {
+    return true
+  }
+  if (tags.leisure === 'pitch' || tags.leisure === 'fitness_centre') {
+    return true
+  }
+
+  // 2. Public transit infrastructure (bus stops, platforms, stations, taxi ranks)
+  if (
+    tags.public_transport ||
+    ['bus_stop', 'platform', 'station', 'stop_position', 'stop_area'].includes(tags.public_transport) ||
+    ['bus_station', 'bus_stop', 'taxi', 'parking_space', 'ferry_terminal'].includes(tags.amenity)
+  ) {
+    return true
+  }
+
   const rawName = String(tags.name ?? '').toLowerCase()
   const name = rawName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+  // 3. Name-based road / highway patterns
+  if (
+    /^(v[íi]a\s+(?!parque|verde)|carretera\b|autopista\b|tramo\b|variante\b|troncal\b)/i.test(name) ||
+    /\bv[íi]a\s+[a-z0-9\s]+-[a-z0-9\s]+/i.test(name) ||
+    /^(calle|carrera|avenida|diagonal|transversal)\s+\d+\b/i.test(name)
+  ) {
+    return true
+  }
+
+  // 4. Name-based transit cooperatives, bus depots, and paraderos
+  if (
+    /\b(paradero|buseta|busetas|cootrans[a-z0-9]*|cooptrans[a-z0-9]*|terminal\s+de\s+(transporte|buses|busetas)|parada\s+de\s+(bus|buses|buseta|busetas)|despacho\s+de\s+buses|patio\s+de\s+buses|paradero\s+de\s+buses|estaci[oó]n\s+de\s+transferencia)\b/i.test(name)
+  ) {
+    return true
+  }
   if (tags.amenity === 'military' || tags.military) {
     const isHistoricAttraction = tags.tourism === 'attraction' || tags.historic === 'fort' || tags.historic === 'castle' || tags.historic === 'ruins'
     if (!isHistoricAttraction) return true

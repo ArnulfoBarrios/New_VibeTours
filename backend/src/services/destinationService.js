@@ -164,6 +164,17 @@ export function rankCanonicalCandidate(cand, cleanedQuery = '', options = {}) {
     score += 5
   }
 
+  // 1b. Urban Core / City Proper preference over broad territorial municipality boundary polygons
+  // In Latin America & OSM, place_rank 14/16 or 'Perímetro Urbano' denotes the real urban downtown core
+  // where tourist spots, hotels, and restaurants exist, unlike rural county boundary centroids (place_rank 12)
+  if (/per[íi]metro\s+urbano/i.test(cand.rawName || '')) {
+    score += 40
+  } else if (candType === 'city') {
+    score += 30
+  } else if (cand.placeRank === 14 || cand.placeRank === 16) {
+    score += 25
+  }
+
   // 2. Nominatim Importance (0.0 to 1.0)
   if (typeof cand.importance === 'number' && Number.isFinite(cand.importance)) {
     score += cand.importance * 50
@@ -253,7 +264,7 @@ export async function resolveCanonicalDestination(query, options = {}) {
   url.searchParams.set('q', normalizedQuery)
 
   try {
-    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(4000) })
+    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(6000) })
     if (response.ok) {
       const rawResults = await response.json()
       if (Array.isArray(rawResults) && rawResults.length > 0) {
@@ -366,18 +377,36 @@ export async function resolveCanonicalDestination(query, options = {}) {
   try {
     const photonUrl = new URL('https://photon.komoot.io/api/')
     photonUrl.searchParams.set('q', normalizedQuery)
-    photonUrl.searchParams.set('limit', '5')
-    const photonRes = await fetch(photonUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(4000) })
+    photonUrl.searchParams.set('limit', '8')
+    const photonRes = await fetch(photonUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(6000) })
     if (photonRes.ok) {
       const pJson = await photonRes.json()
-      const feat = pJson.features?.[0]
-      if (feat && feat.geometry?.coordinates) {
-        const props = feat.properties || {}
-        let rawCity = props.city || props.town || props.village || props.municipality || props.county || ''
-        if (!rawCity && (props.type === 'city' || props.osm_value === 'city')) rawCity = props.name
-        const city = cleanAdministrativeCityName(rawCity) || cleanAdministrativeCityName(cleaned)
-        const countryCode = (props.countrycode || '').toUpperCase()
-        const country = formatCountryName(props.country || '', countryCode)
+      const features = Array.isArray(pJson.features) ? pJson.features : []
+      if (features.length > 0) {
+        // Prioritize city settlements over rural hamlets and street names
+        const sortedFeatures = [...features].sort((a, b) => {
+          const typeScore = (f) => {
+            const p = f.properties || {}
+            if (p.type === 'city' || p.osm_value === 'city') return 100
+            if (p.type === 'administrative' || p.osm_value === 'administrative') return 70
+            if (p.type === 'town') return 50
+            if (p.type === 'village') return 20
+            return 5
+          }
+          const countryScore = (f) => {
+            const cc = (f.properties?.countrycode || '').toLowerCase()
+            return cc === 'co' ? 30 : 0
+          }
+          return (typeScore(b) + countryScore(b)) - (typeScore(a) + countryScore(a))
+        })
+        const feat = sortedFeatures[0]
+        if (feat && feat.geometry?.coordinates) {
+          const props = feat.properties || {}
+          let rawCity = props.city || props.town || props.village || props.municipality || props.county || ''
+          if (!rawCity && (props.type === 'city' || props.osm_value === 'city')) rawCity = props.name
+          const city = cleanAdministrativeCityName(rawCity) || cleanAdministrativeCityName(cleaned)
+          const countryCode = (props.countrycode || '').toUpperCase()
+          const country = formatCountryName(props.country || '', countryCode)
         const result = {
           displayName: props.name ? `${props.name}, ${country}` : cleaned,
           city,
@@ -392,8 +421,9 @@ export async function resolveCanonicalDestination(query, options = {}) {
           isAmbiguous: false,
           candidates: []
         }
-        canonicalCache.set(cacheKey, result)
-        return result
+          canonicalCache.set(cacheKey, result)
+          return result
+        }
       }
     }
   } catch (err) {

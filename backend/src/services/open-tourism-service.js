@@ -575,20 +575,14 @@ export async function discoverDynamicCityLandmarks(city = '', country = '', lat 
     if (isDuplicate) continue
 
     const matchedGeo = geoMap.get(key)
-    const angle = (idx * 137.5 * Math.PI) / 180
-    const radiusDeg = 0.0022 + (idx % 4) * 0.0008
-    const fallbackLat = hasCenterCoords ? Number((Number(lat) + Math.cos(angle) * radiusDeg).toFixed(6)) : null
-    const fallbackLon = hasCenterCoords ? Number((Number(lon) + Math.sin(angle) * radiusDeg).toFixed(6)) : null
-    idx++
-
     const item = {
       name,
       category: classifyDiscoveredLandmark(name),
       subcategory: inferStopSubcategory({ name }),
       fromWikipediaDiscovery: true,
-      latitude: matchedGeo?.latitude ?? fallbackLat,
-      longitude: matchedGeo?.longitude ?? fallbackLon,
-      source: matchedGeo ? 'wikipedia-geosearch' : 'wikipedia-tourism'
+      latitude: matchedGeo?.latitude ?? null,
+      longitude: matchedGeo?.longitude ?? null,
+      source: matchedGeo ? 'wikipedia-geosearch' : 'wikipedia-discovery'
     }
     item.priorityScore = scoreTouristAttraction(item) + (/\b(ronda\s+del|malec[oó]n|catedral|muelle|museo|sim[oó]n\s+bol[ií]var|plaza\s+cultural|pasaje\s+del\s+sol|pueblito|castillo)\b/i.test(name) ? 45 : 0)
     rawList.push(item)

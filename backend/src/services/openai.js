@@ -1460,7 +1460,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const needsOsmComplement = (realPlaces.length < minLandmarksTarget || realRests.length < minRestsTarget || realHotels.length < 2) && lat && lon
   if (needsOsmComplement) {
     const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 6000))
-    const searchRadiusM = requestedDays > 7 ? 55000 : 35000
+    const searchRadiusM = requestedDays > 7 ? 40000 : 25000
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
       realHotels.length < 2
         ? Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise])
@@ -1490,7 +1490,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       if (p.latitude != null && p.longitude != null) {
         if (!isWithinCoastalCorridorBounds(p.latitude, p.longitude, clean)) return false
         const d = haversineMeters(lat, lon, p.latitude, p.longitude)
-        if (d > 35000) return false
+        if (d > searchRadiusM) return false
       }
       return true
     }).slice(0, 24)
@@ -1509,10 +1509,10 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
     if (realPlaces.length < minLandmarksTarget) {
       const [generalPlaces, museums, parks, monuments] = await Promise.all([
-        photonSearch(`turismo ${clean}`, 8, lat, lon, null, 35000, targetCountry).catch(() => []),
-        photonSearch(`museo ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => []),
-        photonSearch(`parque ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => []),
-        photonSearch(`monumento ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => [])
+        photonSearch(`turismo ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+        photonSearch(`museo ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+        photonSearch(`parque ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+        photonSearch(`monumento ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
       ])
       const additional = [
         ...generalPlaces,
@@ -1525,7 +1525,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         if (p.latitude != null && p.longitude != null && lat != null && lon != null) {
           if (!isWithinCoastalCorridorBounds(p.latitude, p.longitude, clean)) return false
           const dist = haversineMeters(lat, lon, p.latitude, p.longitude)
-          if (dist > 35000) return false
+          if (dist > searchRadiusM) return false
         }
         return true
       })
@@ -1538,7 +1538,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     if (realHotels.length < 3 && lat && lon) {
-      const photonHotels = await photonSearch(`hotel ${clean}`, 6, lat, lon, null, 35000, targetCountry).catch(() => [])
+      const photonHotels = await photonSearch(`hotel ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
       for (const ph of photonHotels) {
         if (!ph || !ph.name || isGenericFacilityName(ph.name) || isNonTouristFacility(ph.tags) || isNonTouristFacility({ name: ph.name })) continue
         if (!realHotels.some(h => arePlacesSimilar(h.name || h, ph.name))) {
@@ -1548,7 +1548,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     if (realRests.length < minRestsTarget && lat && lon) {
-      const photonRests = await photonSearch(`restaurante ${clean}`, 10, lat, lon, null, 35000, targetCountry).catch(() => [])
+      const photonRests = await photonSearch(`restaurante ${clean}`, 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
       for (const pr of photonRests) {
         if (!pr || !pr.name || isGenericFacilityName(pr.name) || isNonTouristFacility(pr.tags) || isNonTouristFacility({ name: pr.name }) || isUnmappedOrClosedVenue(pr.name)) continue
         if (!realRests.some(r => arePlacesSimilar(r.name || r, pr.name))) {

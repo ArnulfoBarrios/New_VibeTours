@@ -15,9 +15,17 @@ export function buildProgressiveSearchQueries({ name = '', city = '', country = 
   const cleanCity = cleanAdministrativeCityName(city || '').trim()
   const cleanCountry = String(country || '').trim()
   const cleanAddress = String(address || '').trim()
+  const simplifiedName = cleanName
+    .replace(/\bmetropolitana\b/gi, '')
+    .replace(/\b(de|del|en)\s+(la\s+)?ciudad\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
   const values = [
     [cleanName, cleanCity, cleanCountry].filter(Boolean).join(', '),
     [cleanName, cleanCity].filter(Boolean).join(', '),
+    simplifiedName && simplifiedName !== cleanName && [simplifiedName, cleanCity, cleanCountry].filter(Boolean).join(', '),
+    simplifiedName && simplifiedName !== cleanName && [simplifiedName, cleanCity].filter(Boolean).join(', '),
     [cleanName, cleanCountry].filter(Boolean).join(', '),
     cleanName,
     cleanAddress && [cleanAddress, cleanCity, cleanCountry].filter(Boolean).join(', '),
