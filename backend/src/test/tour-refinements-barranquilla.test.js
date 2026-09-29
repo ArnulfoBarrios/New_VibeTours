@@ -9,32 +9,32 @@ test('KNOWN_ICONIC_LANDMARKS should have exact coordinates for Barranquilla icon
   // Museo del Atlantico must be at Cra 39 #35-21 (Centro Histórico)
   const museoAtlantico = KNOWN_ICONIC_LANDMARKS['museo del atlantico']
   assert.ok(museoAtlantico, 'museo del atlantico must exist in KNOWN_ICONIC_LANDMARKS')
-  assert.equal(museoAtlantico.latitude, 10.9788)
-  assert.equal(museoAtlantico.longitude, -74.7818)
+  assert.equal(museoAtlantico.latitude, 10.97825)
+  assert.equal(museoAtlantico.longitude, -74.77990)
 
-  // Shakira monument must be at Gran Malecón Sector 3
+  // Shakira monument must be at Gran Malecón Sector 3 (OSM node 11514927669)
   const shakira = KNOWN_ICONIC_LANDMARKS['monumento a shakira']
   assert.ok(shakira, 'monumento a shakira must exist in KNOWN_ICONIC_LANDMARKS')
-  assert.equal(shakira.latitude, 11.0223)
-  assert.equal(shakira.longitude, -74.7915)
+  assert.equal(shakira.latitude, 11.00997)
+  assert.equal(shakira.longitude, -74.78203)
 
   // Museo de Antropología (Bellas Artes)
   const museoAntropologia = KNOWN_ICONIC_LANDMARKS['museo de antropologia']
   assert.ok(museoAntropologia, 'museo de antropologia must exist in KNOWN_ICONIC_LANDMARKS')
-  assert.equal(museoAntropologia.latitude, 10.9935)
-  assert.equal(museoAntropologia.longitude, -74.7938)
+  assert.equal(museoAntropologia.latitude, 10.99689)
+  assert.equal(museoAntropologia.longitude, -74.79852)
 
   // Parque Fundadores de la Aviación (El Prado)
   const parqueFundadores = KNOWN_ICONIC_LANDMARKS['parque fundadores de la aviacion']
   assert.ok(parqueFundadores, 'parque fundadores de la aviacion must exist in KNOWN_ICONIC_LANDMARKS')
-  assert.equal(parqueFundadores.latitude, 10.9972)
-  assert.equal(parqueFundadores.longitude, -74.7975)
+  assert.equal(parqueFundadores.latitude, 10.99449)
+  assert.equal(parqueFundadores.longitude, -74.79331)
 
   // Plaza de la Locomotora (Barrio Abajo / Aduana)
   const plazaLocomotora = KNOWN_ICONIC_LANDMARKS['plaza de la locomotora']
   assert.ok(plazaLocomotora, 'plaza de la locomotora must exist in KNOWN_ICONIC_LANDMARKS')
-  assert.equal(plazaLocomotora.latitude, 10.9856)
-  assert.equal(plazaLocomotora.longitude, -74.7785)
+  assert.equal(plazaLocomotora.latitude, 10.98841)
+  assert.equal(plazaLocomotora.longitude, -74.77888)
 
   // Museo Bibliografico de Autores del Caribe
   const museoBiblio = KNOWN_ICONIC_LANDMARKS['museo bibliografico de autores del caribe']

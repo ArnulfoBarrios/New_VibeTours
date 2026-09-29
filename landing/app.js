@@ -168,12 +168,12 @@ async function initInteractiveGlobe() {
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     const isDark = currentTheme === 'dark';
 
-    // High Contrast Clean Travel Configuration (tuned for both Dark and Light themes)
+    // High Contrast Clean Travel Configuration (tuned for both Dark and Light themes with #3B9BF5 Emotiva Blue)
     const darkFactor = isDark ? 1 : 0.22;
     const baseColor = isDark ? [0.14, 0.20, 0.32] : [0.46, 0.64, 0.90];
-    const markerColor = isDark ? [0.22, 0.74, 0.97] : [0.0, 0.32, 0.95];
-    const glowColor = isDark ? [0.0, 0.38, 0.92] : [0.25, 0.54, 0.96];
-    const arcColor = isDark ? [0.22, 0.74, 0.97] : [0.0, 0.38, 0.95];
+    const markerColor = isDark ? [0.23, 0.61, 0.96] : [0.23, 0.61, 0.96];
+    const glowColor = isDark ? [0.20, 0.58, 0.96] : [0.23, 0.61, 0.96];
+    const arcColor = isDark ? [0.23, 0.61, 0.96] : [0.23, 0.61, 0.96];
     const mapBrightness = isDark ? 8.2 : 9.6;
 
     // IMPORTANT: width passed to createGlobe is the dimension (cobe applies devicePixelRatio internally)
@@ -1321,7 +1321,7 @@ class AppSimulator {
 
       // Draw Route Polyline
       this.routeLine = L.polyline(latlngs, {
-        color: '#007AFF',
+        color: '#3B9BF5',
         weight: 4,
         opacity: 0.85,
         dashArray: '6, 8',
@@ -1332,7 +1332,7 @@ class AppSimulator {
       city.stops.forEach((stop, idx) => {
         const pinIcon = L.divIcon({
           className: 'custom-pin-icon',
-          html: `<div style="background:#007AFF; color:#fff; font-size:10px; font-weight:800; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 3px 8px rgba(0,0,0,0.3);">${idx + 1}</div>`,
+          html: `<div style="background:#3B9BF5; color:#fff; font-size:10px; font-weight:800; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 3px 8px rgba(0,0,0,0.3);">${idx + 1}</div>`,
           iconSize: [22, 22],
           iconAnchor: [11, 11]
         });
@@ -1344,7 +1344,7 @@ class AppSimulator {
       // Add User GPS Pulsing Dot Marker
       this.userGpsMarker = L.circleMarker(latlngs[0], {
         radius: 7,
-        fillColor: '#00F0FF',
+        fillColor: '#38BDF8',
         color: '#FFFFFF',
         weight: 2,
         fillOpacity: 1

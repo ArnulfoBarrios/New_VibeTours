@@ -3185,24 +3185,38 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               color: Theme.of(context).colorScheme.primary,
             ),
           ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: stop.activities.take(3).map((act) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  act,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
-                ),
-              );
-            }).toList(),
-          ),
+          const SizedBox(height: 6),
+          ...stop.activities.take(3).map((act) {
+            return Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.check_rounded,
+                      size: 12,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      act,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, height: 1.3),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
         if (stop.tips.isNotEmpty || stop.curiousFacts.isNotEmpty) ...[
           const SizedBox(height: 8),

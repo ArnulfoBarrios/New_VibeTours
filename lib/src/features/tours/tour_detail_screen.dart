@@ -1473,18 +1473,51 @@ Future<void> _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? t
 
                   // Activities
                   if (stop.activities.isNotEmpty) ...[
-                    const Text('Actividades recomendadas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: stop.activities
-                          .map((act) => Chip(
-                                label: Text(act),
-                                backgroundColor: AppTheme.primary.withValues(alpha: 0.08),
-                              ))
-                          .toList(),
+                    Row(
+                      children: const [
+                        Icon(Icons.check_circle_outline_rounded, color: AppTheme.primary, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Actividades recomendadas',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 10),
+                    ...stop.activities.map((act) => Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: AppTheme.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Icon(
+                                  Icons.check_rounded,
+                                  size: 16,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  act,
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        height: 1.4,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
                   ],
                   // Safe bottom padding so system navigation bar never obstructs the chips
                   SizedBox(height: 36 + MediaQuery.of(context).viewPadding.bottom),
