@@ -154,6 +154,7 @@ function normalizeChatPlaceName(value) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(de\s+la|de\s+los|de\s+las|de\s+el|del|de|la|el|los|las|un|una|unos|unas|y|and|the|of|in|at)\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -2200,6 +2201,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
       if (!preset) {
         preset = { places: [], restaurants: [], hotels: [] }
+      }
+      if ((!preset.restaurants || preset.restaurants.length === 0) && destName) {
+        const cachedRests = await lookupCachedPlacesForCity(destName, 'restaurant').catch(() => [])
+        if (cachedRests?.length > 0) {
+          preset.restaurants = cachedRests.map(r => r.name || r)
+        }
+      }
+      if ((!preset.places || preset.places.length === 0) && destName) {
+        const cachedAttrs = await lookupCachedPlacesForCity(destName, 'attraction').catch(() => [])
+        if (cachedAttrs?.length > 0) {
+          preset.places = cachedAttrs.map(a => a.name || a)
+        }
       }
       trustedFallbackPlaces = [
         ...(preset?.places || []),

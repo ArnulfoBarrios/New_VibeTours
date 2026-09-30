@@ -1541,6 +1541,39 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     cleanRestaurants.push(item)
   }
 
+  // If attractions are insufficient to fill all days (at least 2 per day), pull from candidatePool
+  if (cleanAttractions.length < numDays * 2 && candidatePool.length > 0) {
+    for (const raw of candidatePool) {
+      if (cleanAttractions.length >= numDays * 3) break
+      const name = typeof raw === 'string' ? raw : (raw?.name || '')
+      const isFood = raw?.entityType === 'restaurant' || raw?.category === 'restaurant' ||
+        /\b(restaurante|restaurant|bistro|parrilla|asador|cocina|gastronom|taquer|pizzer|marisqu|cebich)\b/i.test(name)
+      if (isFood) continue
+      const item = enrichWithCoords(raw, 'attraction')
+      if (!item) continue
+      if (cleanAttractions.some((existing) => arePlaceNamesSemanticallySame(existing.name, item.name, city))) continue
+      if (cleanRestaurants.some((r) => arePlaceNamesSemanticallySame(r.name, item.name, city))) continue
+      cleanAttractions.push(item)
+    }
+  }
+
+  // If restaurants are fewer than numDays, pull available dining venues from candidatePool
+  if (cleanRestaurants.length < numDays && candidatePool.length > 0) {
+    for (const raw of candidatePool) {
+      if (cleanRestaurants.length >= numDays) break
+      const name = typeof raw === 'string' ? raw : (raw?.name || '')
+      const isFood = raw?.entityType === 'restaurant' || raw?.category === 'restaurant' ||
+        /\b(restaurante|restaurant|bistro|parrilla|asador|cocina|gastronom|taquer|pizzer|marisqu|cebich)\b/i.test(name)
+      if (!isFood) continue
+      const item = enrichWithCoords(raw, 'restaurant')
+      if (!item) continue
+      if (isLowQualityOrFastFoodVenue(item.name, item.tags)) continue
+      if (cleanAttractions.some((a) => arePlaceNamesSemanticallySame(a.name, item.name, city))) continue
+      if (cleanRestaurants.some((r) => arePlaceNamesSemanticallySame(r.name, item.name, city))) continue
+      cleanRestaurants.push(item)
+    }
+  }
+
   // Sort restaurants so full meal venues appear before pure pastry/cake/ice-cream shops
   cleanRestaurants.sort((a, b) => {
     const isDessertA = /\b(postres|ponques|reposteria|pasteleria|heladeria|dulceria)\b/i.test(normalizeTextKey(a.name))
@@ -1686,9 +1719,29 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       const info0 = inferPlaceMicroSector(c[0], cityCenter, city)
       return !info0.isPeripheralExcursion
     })
-    if (splittableIdx === -1) break
+    if (splittableIdx === -1) {
+      const anySplittable = clusters.findIndex((c) => c.length >= 2)
+      if (anySplittable === -1) break
+      const [first, ...rest] = clusters[anySplittable]
+      clusters.splice(anySplittable, 1, [first], rest)
+      continue
+    }
     const [first, second] = clusters[splittableIdx]
     clusters.splice(splittableIdx, 1, [first], [second])
+  }
+
+  // Guarantee every day has at least 1 attraction cluster if any attractions exist
+  if (clusters.length > 0) {
+    while (clusters.length < numDays) {
+      const multiCluster = clusters.find((c) => c.length >= 2)
+      if (multiCluster) {
+        const extra = multiCluster.pop()
+        clusters.push([extra])
+      } else {
+        const recycled = cleanAttractions[clusters.length % cleanAttractions.length]
+        clusters.push([{ ...recycled }])
+      }
+    }
   }
 
   // Build final day plans (1..numDays) and assign the closest restaurant to each day's cluster centroid

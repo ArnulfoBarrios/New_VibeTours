@@ -553,7 +553,17 @@ export function isValidSpecificPlace(placeName) {
     return false
   }
 
-  // 2.6 Descartar oficinas gremiales, asociaciones y fundaciones administrativas
+  // 2.6 Descartar agencias de viajes comerciales, operadores turísticos y venta de pasajes
+  if (/\b(agencia\s+de\s+viajes?|viajes\s+y\s+turismo|turismo\s+internacional|tour\s+operator|travel\s+agency|travel\s+and\s+tours?|operador\s+tur[ií]stico|operadores\s+tur[ií]sticos|mayorista\s+de\s+turismo|venta\s+de\s+tiquetes|ticket\s+office|asesores?\s+de\s+viajes?)\b/i.test(cleanLower)) {
+    return false
+  }
+
+  // 2.7 Descartar denominaciones genéricas aisladas sin nombre propio distintivo
+  if (/^(?:parque\s+nacional|plaza\s+de\s+mercado|plaza\s+de\s+mercado\s+central|centro\s+comercial|zona\s+rosa|centro\s+historico|centro)$/i.test(cleanLower)) {
+    return false
+  }
+
+  // 2.8 Descartar oficinas gremiales, asociaciones y fundaciones administrativas
   if (/\b(association|asociaci[oó]n|fundaci[oó]n|cooperativa|corporaci[oó]n|sindicato|gremio)\b/i.test(cleanLower) && !/\b(parque|museo|teatro|restaurante)\b/i.test(cleanLower)) {
     return false
   }
@@ -3351,17 +3361,69 @@ export function buildTourPlanner(input, location = null, places = []) {
         daysMap.get(dayKey).push(p)
       }
 
+      const isFoodStop = (p) => {
+        if (!p || !p.name) return false
+        const isAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla)\b/i.test(p.name)
+        if (isAttraction) return false
+        return getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe' || p.type === 'food' || p.isRestaurant === true
+      }
+
+      // Invariant: Guarantee all days 1..totalDays exist without gaps and have balanced stops
+      const usedNames = new Set(selectedPlaces.map(p => normalizePlaceKey(p.name)))
+      const availableAttractions = otherPlaces.filter(p => !isFoodStop(p) && isValidTouristAttraction(p, input))
+      const availableRestaurants = [
+        ...otherPlaces.filter(p => isFoodStop(p)),
+        ...candidatePlaces.filter(p => isFoodStop(p) && !selectedPlaces.some(sp => isPlaceMatching(sp.name, p.name)))
+      ]
+
+      for (let d = 1; d <= totalDays; d++) {
+        if (!daysMap.has(d)) {
+          daysMap.set(d, [])
+        }
+        const dayPlaces = daysMap.get(d)
+
+        // 1. Backfill attractions if day is empty or underfilled (< 2 attractions)
+        const currentAttractions = dayPlaces.filter(p => !isFoodStop(p))
+        while (currentAttractions.length < 2 && availableAttractions.length > 0) {
+          const cand = availableAttractions.shift()
+          if (!cand || !cand.name) continue
+          const key = normalizePlaceKey(cand.name)
+          if (!usedNames.has(key)) {
+            usedNames.add(key)
+            const filled = { ...cand, dia: d, day: d, category: cand.category || 'attraction' }
+            dayPlaces.unshift(filled)
+            currentAttractions.push(filled)
+          }
+        }
+
+        // 2. Add 1 restaurant if day has no restaurant and restaurants are available
+        const hasFood = dayPlaces.some(p => isFoodStop(p))
+        if (!hasFood && availableRestaurants.length > 0) {
+          const restIdx = availableRestaurants.findIndex(r => !usedNames.has(normalizePlaceKey(r.name)))
+          if (restIdx !== -1) {
+            const [rest] = availableRestaurants.splice(restIdx, 1)
+            usedNames.add(normalizePlaceKey(rest.name))
+            dayPlaces.push({
+              ...rest,
+              dia: d,
+              day: d,
+              category: 'restaurant',
+              entityType: 'restaurant',
+              type: 'food',
+              isRestaurant: true
+            })
+          }
+        }
+      }
+
       const reorderedByDay = []
-      for (const dayPlaces of daysMap.values()) {
+      for (let d = 1; d <= totalDays; d++) {
+        const dayPlaces = daysMap.get(d) || []
+        if (dayPlaces.length === 0) continue
+
         if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
           // Si un restaurante/gastronomía fue colocado en medio de atracciones no-gastronómicas, moverlo al cierre del día
           const lastPlace = dayPlaces[dayPlaces.length - 1]
-          const isFoodStop = (p) => {
-            if (!p || !p.name) return false
-            const isAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla)\b/i.test(p.name)
-            if (isAttraction) return false
-            return getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe' || p.type === 'food'
-          }
           const isLastFood = isFoodStop(lastPlace)
 
           if (!isLastFood) {
@@ -3374,11 +3436,8 @@ export function buildTourPlanner(input, location = null, places = []) {
               continue
             }
           }
-
-          reorderedByDay.push(...dayPlaces)
-        } else {
-          reorderedByDay.push(...dayPlaces)
         }
+        reorderedByDay.push(...dayPlaces)
       }
       // Preservar fielmente el orden y la distribución de días acordados en el chat
       selectedPlaces = reorderedByDay
@@ -6943,6 +7002,11 @@ export function isValidTouristAttraction(place, input) {
 
   // 0.002 Bloqueo absoluto de estaciones policiales, CAI, puntos de información burocráticos y oficinas
   if (/\b(polic[íi]a|police|cai|punto de informaci[óo]n|tourist information|oficina de informaci[óo]n|oficina de turismo|alcald[íi]a|juzgado|notar[íi]a|embajada|consulado|banco|atm|cajero|supermercado|farmacia|droguer[íi]a|hospital|cl[íi]nica)\b/i.test(nameLower) ||
+      /\b(agencia\s+de\s+viajes?|viajes\s+y\s+turismo|turismo\s+internacional|tour\s+operator|travel\s+agency|travel\s+and\s+tours?|operador\s+tur[ií]stico|operadores\s+tur[ií]sticos|mayorista\s+de\s+turismo|venta\s+de\s+tiquetes|ticket\s+office|asesores?\s+de\s+viajes?)\b/i.test(nameLower) ||
+      /^(?:parque\s+nacional|plaza\s+de\s+mercado|plaza\s+de\s+mercado\s+central|centro\s+comercial|zona\s+rosa|centro\s+historico|centro)$/i.test(nameLower) ||
+      place.tags?.tourism === 'travel_agency' ||
+      place.tags?.shop === 'travel_agency' ||
+      place.tags?.office === 'travel_agency' ||
       place.tags?.amenity === 'police' ||
       place.tags?.information === 'office' ||
       place.tags?.place === 'neighbourhood' ||

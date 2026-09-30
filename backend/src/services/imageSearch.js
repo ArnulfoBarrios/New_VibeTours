@@ -89,8 +89,17 @@ export function isImageSemanticallyCompatible(imageUrl = '', placeName = '', cat
     lowerCat === 'nature' || lowerCat === 'trail'
   )
 
-  // 0. Universal: Prohibir PDFs, páginas escaneadas de libros y documentos
+  // 0. Universal: Prohibir PDFs, páginas escaneadas de libros, documentos y gráficos no fotográficos (logos, escudos, crests, badges, clubes deportivos)
   if (lowerUrl.includes('.pdf') || lowerUrl.includes('pdf.') || lowerUrl.includes('manuscript') || lowerUrl.includes('documento')) {
+    return false
+  }
+  const forbiddenGraphics = [
+    'logo', 'escudo', 'crest', 'badge', 'emblem', 'emblema', 'insignia',
+    'coat_of_arms', 'coat of arms', 'blason', 'stemma', 'centenario',
+    'deportivo', 'futbol_club', 'soccer_club', 'football_club'
+  ]
+  const isExplicitSportsVenue = /\b(estadio|stadium|arena|coliseo|vel[oó]dromo|aut[oó]dromo)\b/i.test(lowerPlace)
+  if (!isExplicitSportsVenue && forbiddenGraphics.some(term => lowerUrl.includes(term))) {
     return false
   }
 
@@ -160,6 +169,20 @@ export function isWikiTitleRelevant(articleTitle, placeName, city = '') {
   const placeClean = placeName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const cityClean = (city || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
 
+  // 1. Prohibir artículos deportivos (clubes de fútbol, baloncesto, corporaciones deportivas) a menos que la búsqueda lo solicite explícitamente
+  const placeWantsSportsClub = /\b(club|deportivo|deportiva|f[uú]tbol|futbol|soccer|fc|baloncesto|basketball|b[eé]isbol|baseball|estadio|stadium|arena|vel[oó]dromo|aut[oó]dromo)\b/i.test(placeClean)
+  const artIsSportsClub = /\b(club|deportivo|deportiva|f[uú]tbol|futbol|soccer|fc|baloncesto|basketball|b[eé]isbol|baseball|centenario|plantilla|temporada)\b/i.test(artClean)
+  if (!placeWantsSportsClub && artIsSportsClub) {
+    return false
+  }
+
+  // 2. Prohibir subpáginas puramente administrativas/gubernamentales cuando se busca la ciudad o destino
+  const placeWantsAdmin = /\b(gobierno|geograf[íi]a|demograf[íi]a|econom[íi]a|pol[íi]tica|alcald[íi]a|concejo)\b/i.test(placeClean)
+  const artIsAdminSubpage = /\b(gobierno|geograf[íi]a|demograf[íi]a|econom[íi]a|pol[íi]tica|alcald[íi]a|concejo)\s+de\b/i.test(artClean)
+  if (!placeWantsAdmin && artIsAdminSubpage) {
+    return false
+  }
+
   const poiTypePattern = /\b(museo|museum|monumento|monument|parque|park|plaza|square|estadio|stadium|teatro|theatre|theater|catedral|cathedral|iglesia|church|bas[íi]lica|biblioteca|library|castillo|castle|mirador|viewpoint|palacio|palace|muelle|pier|puente|bridge|aeropuerto|airport|estaci[oó]n|station)\b/i
   const placeHasPoiType = poiTypePattern.test(placeClean)
   const artHasPoiType = poiTypePattern.test(artClean) || /\((monumento|museo|parque|estadio|teatro|edificio|obra|escultura|plaza|atractivo)\)/i.test(artClean)
@@ -170,9 +193,22 @@ export function isWikiTitleRelevant(articleTitle, placeName, city = '') {
     return false
   }
 
+  // Coincidencia exacta o con desambiguación parentética (ej. "Cúcuta", "Cúcuta (Colombia)", "Parque Santander (Cúcuta)")
+  const artBase = artClean.replace(/\s*\(.*?\)\s*/g, ' ').trim()
+  if (placeClean === artClean || placeClean === artBase) {
+    return true
+  }
+  if (cityClean && artBase === `${placeClean}, ${cityClean}`) {
+    return true
+  }
+
   // Exact or subset match
   if (placeClean.includes(artClean) || artClean.includes(placeClean)) {
-    return true
+    const placeTokensCount = placeClean.split(/\s+/).filter(Boolean).length
+    const artTokensCount = artClean.split(/\s+/).filter(Boolean).length
+    if (artTokensCount <= placeTokensCount + 1 || artClean.includes(`(${cityClean})`) || artClean.includes('(colombia)')) {
+      return true
+    }
   }
 
   const stopWords = new Set([
@@ -265,7 +301,7 @@ export async function imageForPlaceWithStatus(placeName, city, category = '', in
   }
 
   // 1A. Consulta prioritaria a Wikipedia Summary API
-  const wikiSummary = await wikipediaSummaryImage(placeName, city)
+  const wikiSummary = await wikipediaSummaryImage(placeName, city, country)
   if (isValidDistinct(wikiSummary)) {
     assignedUrls?.add(wikiSummary)
     return { url: wikiSummary, isFallback: false }
@@ -347,7 +383,8 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
 
   // 1. Search in Spanish Wikipedia with full destination context
   try {
-    const searchQuery = `${cleaned} ${cleanCity} ${cleanCountry}`.trim()
+    const queryTerms = [...new Set([cleaned, cleanCity, cleanCountry].filter(Boolean))]
+    const searchQuery = queryTerms.join(' ').trim()
     const searchUrl = `https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQuery)}&utf8=&format=json&origin=*`
     const sRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
     if (sRes.ok) {
@@ -361,9 +398,16 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
         if (!sumRes.ok) continue
         const sumJson = await sumRes.json()
 
-        // Anti-biography check: if looking for a museum or park, reject if article is a person's biography
         const descAndExtract = `${sumJson.description || ''} ${sumJson.extract || ''}`
+        // Anti-biography check: if looking for a museum or park, reject if article is a person's biography
         if (isPoiPlace && isPersonBioText(descAndExtract) && !/\b(museo|monumento|parque|plaza|estadio|teatro|edificio|obra|escultura)\b/i.test(sumJson.title)) {
+          continue
+        }
+
+        // Anti-sports team check: reject sports clubs when destination or landmark was requested
+        const isSportsTeamSummary = /\b(club de f[uú]tbol|equipo de f[uú]tbol|club deportivo|instituci[oó]n deportiva|entidad deportiva|football club|soccer club|club de baloncesto)\b/i.test(descAndExtract)
+        const isExplicitSportsQuery = /\b(club|deportivo|f[uú]tbol|futbol|soccer|fc|estadio|stadium|arena)\b/i.test(placeName)
+        if (isSportsTeamSummary && !isExplicitSportsQuery) {
           continue
         }
 
@@ -373,7 +417,8 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
           const isUnusable = [
             '.svg', 'flag', 'bandera', 'escudo', 'coat_of_arms', 'coat of arms', 'blason', 'stemma',
             'seal', 'logo', 'icon', 'symbol', 'map', 'mapa', 'location', 'diagram', 'chart',
-            'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_'
+            'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_',
+            'crest', 'badge', 'emblem', 'emblema', 'insignia', 'centenario', 'deportivo', 'futbol_club'
           ].some(k => lower.includes(k))
           if (!isUnusable && isImageSemanticallyCompatible(imageUrl, placeName)) {
             return imageUrl
@@ -401,13 +446,19 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
         if (isPoiPlace && isPersonBioText(descAndExtract) && !/\b(museo|monumento|parque|plaza|estadio|teatro|edificio|obra|escultura)\b/i.test(json.title)) {
           continue
         }
+        const isSportsTeamSummary = /\b(club de f[uú]tbol|equipo de f[uú]tbol|club deportivo|instituci[oó]n deportiva|entidad deportiva|football club|soccer club|club de baloncesto)\b/i.test(descAndExtract)
+        const isExplicitSportsQuery = /\b(club|deportivo|f[uú]tbol|futbol|soccer|fc|estadio|stadium|arena)\b/i.test(placeName)
+        if (isSportsTeamSummary && !isExplicitSportsQuery) {
+          continue
+        }
         const imageUrl = json.thumbnail?.source || json.originalimage?.source
         if (imageUrl) {
           const lower = imageUrl.toLowerCase()
           const isUnusable = [
             '.svg', 'flag', 'bandera', 'escudo', 'coat_of_arms', 'coat of arms', 'blason', 'stemma',
             'seal', 'logo', 'icon', 'symbol', 'map', 'mapa', 'location', 'diagram', 'chart',
-            'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_'
+            'portrait', 'stamp', 'monochrome', 'drawing', 'sketch', 'illustration', 'bw_',
+            'crest', 'badge', 'emblem', 'emblema', 'insignia', 'centenario', 'deportivo', 'futbol_club'
           ].some(k => lower.includes(k))
           if (!isUnusable && isImageSemanticallyCompatible(imageUrl, placeName)) {
             return imageUrl

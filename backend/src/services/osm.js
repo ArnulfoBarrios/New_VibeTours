@@ -1646,6 +1646,7 @@ export function isGenericFacilityName(rawName = '') {
   // Filter out orphan administrative or generic heritage labels without a distinctive proper name (e.g. "Monumento Nacional")
   if (/^(?:monumento|patrimonio|edificio|sitio|atractivo|bien)\s+(?:nacional|cultural|historico|histórico|turistico|turístico|distrital|municipal|de\s+la\s+nacion|de\s+la\s+nación)$/i.test(clean)) return true
   if (/^(?:monumento\s+nacional|patrimonio\s+nacional|patrimonio\s+cultural)$/i.test(clean)) return true
+  if (/^(?:parque\s+nacional|plaza\s+de\s+mercado|plaza\s+de\s+mercado\s+central|centro\s+comercial|zona\s+rosa|centro\s+hist[oó]rico|centro)$/i.test(clean)) return true
   return false
 }
 
@@ -1659,9 +1660,12 @@ export function isFoodOrDrinkEstablishment(name = '') {
   return false
 }
 
-export function isNonTouristFacility(tags = {}) {
-  if (!tags) return false
+export function isNonTouristFacility(rawTags = {}) {
+  if (!rawTags) return false
+  const tags = rawTags.tags || rawTags
   if (tags.office || tags.industrial || tags.shop || tags.craft) return true
+  if (tags.tourism === 'travel_agency' || (tags.tourism === 'information' && tags.information === 'office')) return true
+  if (['ticket_validator', 'bureau_de_change', 'money_transfer', 'bank'].includes(tags.amenity)) return true
   if (tags.man_made === 'pipeline' || tags.pipeline || tags.man_made === 'storage_tank' || tags.man_made === 'works') return true
 
   if (tags.place === 'neighbourhood' || tags.place === 'suburb' || tags.place === 'quarter' || tags.place === 'isolated_dwelling') return true
@@ -1694,7 +1698,7 @@ export function isNonTouristFacility(tags = {}) {
     return true
   }
 
-  const rawName = String(tags.name ?? '').toLowerCase()
+  const rawName = String(rawTags.name ?? tags.name ?? '').toLowerCase()
   const name = rawName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
   // 3. Name-based road / highway patterns
@@ -1737,6 +1741,7 @@ export function isNonTouristFacility(tags = {}) {
     if (!isPhysicalVenue) return true
   }
   if (
+    /\b(agencia\s+de\s+viajes?|viajes\s+y\s+turismo|turismo\s+internacional|tour\s+operator|travel\s+agency|travel\s+and\s+tours?|operador\s+tur[ií]stico|operadores\s+tur[ií]sticos|mayorista\s+de\s+turismo|venta\s+de\s+tiquetes|ticket\s+office|asesores?\s+de\s+viajes?)\b/i.test(name) ||
     /\b(oleoducto|gasoducto|poliducto|refineria|tuberia|estacion de bombeo|planta de tratamiento|patio de tanques|cenit|ecopetrol)\b/i.test(name) ||
     /\b(supermercado|tienda|drogueria|farmacia|ferreteria|almacen|panaderia|carniceria|minimarket|estanco|miscelanea|bodega|deposito)\b/i.test(name) ||
     /\b(alkosto|exito|carulla|olimpica|jumbo|makro|pricesmart|tiendas d1|d1|tiendas ara|ara|homecenter|falabella|sodimac|panamericana)\b/i.test(name) ||
@@ -2046,6 +2051,19 @@ export function arePlacesSimilar(a, b) {
   const normB = clean(strB)
   if (!normA || !normB) return false
   if (normA === normB) return true
+
+  // Universal connector-insensitive comparison (e.g. "Malecón Cúcuta" vs "Malecón de Cúcuta", "Central Park" vs "The Central Park")
+  const stripConnectors = (str) =>
+    str.replace(/\b(de\s+la|de\s+los|de\s+las|de\s+el|del|de|la|el|los|las|un|una|unos|unas|y|and|the|of|in|at)\b/gi, ' ')
+       .replace(/\s+/g, ' ')
+       .trim()
+
+  const strippedA = stripConnectors(normA)
+  const strippedB = stripConnectors(normB)
+  if (strippedA && strippedB) {
+    if (strippedA === strippedB) return true
+    if (strippedA.length >= 8 && strippedB.length >= 8 && (strippedA.includes(strippedB) || strippedB.includes(strippedA))) return true
+  }
 
   // Direct containment for sufficiently long strings
   if (normA.length >= 8 && normB.length >= 8 && (normA.includes(normB) || normB.includes(normA))) {
