@@ -81,7 +81,8 @@ test('Universal Tour Planner Fidelity & Anti-Degradation Suite', async (t) => {
     for (let d = 1; d <= numDays; d++) {
       const dayObj = clusteredDays.find((cd) => cd.day === d)
       assert.ok(dayObj, `Day ${d} must exist in clustered days`)
-      assert.ok(dayObj.stops.length > 0, `Day ${d} must have at least one stop`)
+      assert.ok(dayObj.stops.length >= 3, `Day ${d} must have at least 3 stops (2 attractions + 1 restaurant)`)
+      assert.ok(dayObj.restaurant, `Day ${d} must have a restaurant`)
     }
   })
 

@@ -1332,6 +1332,7 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
 }
 
 let photonCircuitOpenUntil = 0
+let photonConsecutiveErrors = 0
 
 export function isPhotonCircuitOpen() {
   return Date.now() < photonCircuitOpenUntil
@@ -1359,14 +1360,18 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
     url.searchParams.set('lon', String(lon))
   }
   try {
-    const timeoutMs = process.env.NODE_ENV === 'test' ? 4000 : 3500
+    const timeoutMs = process.env.NODE_ENV === 'test' ? 4000 : 4500
     const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
     if (!response.ok) {
       if (response.status === 429 || response.status >= 500) {
-        tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 15000)
+        photonConsecutiveErrors++
+        if (photonConsecutiveErrors >= 3) {
+          tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 2000 : 15000)
+        }
       }
       return []
     }
+    photonConsecutiveErrors = 0
     const json = await response.json()
     let results = (json.features ?? []).map((feature) => {
       const properties = feature.properties || {}
@@ -1417,7 +1422,10 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
     return results
   } catch (err) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError' || err.code === 'UND_ERR_CONNECT_TIMEOUT') {
-      tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 1500 : 2500)
+      photonConsecutiveErrors++
+      if (photonConsecutiveErrors >= 3) {
+        tripPhotonCircuit(process.env.NODE_ENV === 'test' ? 1500 : 5000)
+      }
     }
     return []
   }
@@ -1511,17 +1519,23 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
 
     if (results.length === 0) {
       console.warn('[osm] overpassAttractions returned empty or timed out, using multi-category Photon fallback...')
-      const [cathedrals, museums, piers, monuments] = await Promise.all([
-        photonSearch('catedral', 5, latitude, longitude, null, 20000).catch(() => []),
-        photonSearch('museo', 6, latitude, longitude, null, 20000).catch(() => []),
-        photonSearch('muelle', 5, latitude, longitude, null, 20000).catch(() => []),
-        photonSearch('monumento', 5, latitude, longitude, null, 20000).catch(() => [])
+      const [cathedrals, museums, parks, plazas, viewpoints, monuments, theaters] = await Promise.all([
+        photonSearch('catedral', 5, latitude, longitude, null, 25000).catch(() => []),
+        photonSearch('museo', 6, latitude, longitude, null, 25000).catch(() => []),
+        photonSearch('parque', 6, latitude, longitude, null, 25000).catch(() => []),
+        photonSearch('plaza', 6, latitude, longitude, null, 25000).catch(() => []),
+        photonSearch('mirador', 5, latitude, longitude, null, 25000).catch(() => []),
+        photonSearch('monumento', 5, latitude, longitude, null, 25000).catch(() => []),
+        photonSearch('teatro', 4, latitude, longitude, null, 25000).catch(() => [])
       ])
       const combined = [
         ...cathedrals,
         ...museums,
-        ...piers,
-        ...monuments
+        ...parks,
+        ...plazas,
+        ...viewpoints,
+        ...monuments,
+        ...theaters
       ]
       const seen = new Set()
       const rawFallback = []
@@ -1726,7 +1740,7 @@ export function isNonTouristFacility(rawTags = {}) {
   ) {
     return true
   }
-  if (isGenericFacilityName(rawName) || isGenericFacilityName(name)) return true
+  if (rawName && (isGenericFacilityName(rawName) || isGenericFacilityName(name))) return true
   if (/\b(biosaludable|parque\s+infantil|polideportivo|cancha\s+multiple|urbanizaci[oó]n|\d+\s+con\s+circunvalar)\b/i.test(rawName)) return true
   if (
     /\b(plaza|parque|plazoleta|zona|area)\s+(?:descanso(?:\s*\d+)?|hospital|salud|clinica|ips|eps)\b/i.test(name) ||
@@ -1926,11 +1940,11 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
 export async function photonFoodFallback(latitude, longitude) {
   try {
     const url = new URL('https://photon.komoot.io/api/')
-    url.searchParams.set('q', 'restaurant')
+    url.searchParams.set('q', 'restaurante')
     url.searchParams.set('lat', String(latitude))
     url.searchParams.set('lon', String(longitude))
-    url.searchParams.set('limit', '12')
-    const response = await fetch(url, { signal: AbortSignal.timeout(3000) })
+    url.searchParams.set('limit', '14')
+    const response = await fetch(url, { signal: AbortSignal.timeout(4500) })
     if (!response.ok) return []
     const json = await response.json()
     return (json.features ?? [])

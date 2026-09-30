@@ -1744,6 +1744,21 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     }
   }
 
+  // Density Invariant: Every day of a trip should have at least 2 attractions (morning + afternoon stops)
+  for (let i = 0; i < clusters.length && i < numDays; i++) {
+    if (clusters[i].length < 2 && cleanAttractions.length > 1) {
+      const existingNames = new Set(clusters[i].map(s => (s.name || '').toLowerCase()))
+      const partner = cleanAttractions.find(a =>
+        a && a.name &&
+        !existingNames.has(a.name.toLowerCase()) &&
+        !arePlaceNamesSemanticallySame(clusters[i][0].name, a.name, city)
+      )
+      if (partner) {
+        clusters[i].push(partner)
+      }
+    }
+  }
+
   // Build final day plans (1..numDays) and assign the closest restaurant to each day's cluster centroid
   const usedRests = new Set()
   const days = []
@@ -1778,6 +1793,18 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
 
     if (!chosenRest && cleanRestaurants.length > 0) {
       chosenRest = cleanRestaurants[(d - 1) % cleanRestaurants.length]
+    }
+    if (!chosenRest && cleanRestaurants.length === 0 && city) {
+      chosenRest = {
+        name: d % 2 === 1 ? `Almuerzo tradicional en el centro de ${city}` : `Cena y gastronomía local en ${city}`,
+        latitude: dayLat,
+        longitude: dayLon,
+        address: city,
+        entityType: 'restaurant',
+        category: 'restaurant',
+        type: 'food',
+        isRestaurant: true
+      }
     }
     if (chosenRest) {
       usedRests.add(chosenRest.name.toLowerCase())

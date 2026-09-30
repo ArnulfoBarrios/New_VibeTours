@@ -1601,17 +1601,23 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     if (realPlaces.length < minLandmarksTarget) {
-      const [generalPlaces, museums, parks, monuments] = await Promise.all([
+      const [generalPlaces, museums, parks, plazas, viewpoints, monuments, theaters] = await Promise.all([
         photonSearch(`turismo ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
         photonSearch(`museo ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
         photonSearch(`parque ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`monumento ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
+        photonSearch(`plaza ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+        photonSearch(`mirador ${clean}`, 5, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+        photonSearch(`monumento ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+        photonSearch(`teatro ${clean}`, 4, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
       ])
       const additional = [
         ...generalPlaces,
         ...museums,
         ...parks,
-        ...monuments
+        ...plazas,
+        ...viewpoints,
+        ...monuments,
+        ...theaters
       ].filter(p => {
         if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
         if (p.name.toLowerCase().includes('perímetro urbano')) return false
@@ -1641,8 +1647,12 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     if (realRests.length < minRestsTarget && lat && lon) {
-      const photonRests = await photonSearch(`restaurante ${clean}`, 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
-      for (const pr of photonRests) {
+      const [rests1, rests2, rests3] = await Promise.all([
+        photonSearch(`restaurante ${clean}`, 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+        photonSearch(`gastronomia ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+        photonSearch(`comida ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
+      ])
+      for (const pr of [...rests1, ...rests2, ...rests3]) {
         if (!pr || !pr.name || isGenericFacilityName(pr.name) || isNonTouristFacility(pr.tags) || isNonTouristFacility({ name: pr.name }) || isUnmappedOrClosedVenue(pr.name)) continue
         if (!realRests.some(r => arePlacesSimilar(r.name || r, pr.name))) {
           realRests.push(pr)
@@ -4532,33 +4542,51 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
   }
 
   // Fallback to dynamic Open-Source Tourism discovery (Wikipedia Turismo/Cultura sections + GeoSearch)
+  const combined = [...mappedCached]
   const wikiLandmarks = await discoverDynamicCityLandmarks(clean, country, lat, lon).catch(() => [])
   if (Array.isArray(wikiLandmarks) && wikiLandmarks.length > 0) {
-    const combined = [...mappedCached]
     for (const wp of wikiLandmarks) {
       if (wp && wp.name && !combined.some(existing => arePlacesSimilar(existing.name, wp.name))) {
         combined.push(wp)
       }
     }
-    cityLandmarksCache.set(cacheKey, combined)
-    saveCachedPlacesBatch(combined, clean, 'wiki_landmarks').catch(() => {})
-    return combined
   }
 
-  // Fallback to Photon POIs without circular call
-  const photonResults = await photonSearch(`turismo ${clean}`, 15).catch(() => [])
-  const fallbackList = [...mappedCached]
-  for (const p of photonResults) {
-    if (p && p.name && !isGenericFacilityName(p.name) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name)) {
-      if (!fallbackList.some(existing => arePlacesSimilar(existing.name, p.name))) {
-        fallbackList.push({ name: p.name, category: 'historic', latitude: p.latitude, longitude: p.longitude, address: p.address || '' })
+  // If still below minRequired, complement with multi-category Photon POIs
+  if (combined.length < minRequired) {
+    const photonQueries = [
+      `turismo ${clean}`,
+      `parque ${clean}`,
+      `plaza ${clean}`,
+      `mirador ${clean}`,
+      `museo ${clean}`,
+      `monumento ${clean}`,
+      `catedral ${clean}`
+    ]
+    const photonBatches = await Promise.all(
+      photonQueries.map(q => photonSearch(q, 8, lat, lon, null, 25000, country).catch(() => []))
+    )
+    for (const batch of photonBatches) {
+      for (const p of batch) {
+        if (p && p.name && !isGenericFacilityName(p.name) && !isNonTouristFacility(p.tags) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name)) {
+          if (!combined.some(existing => arePlacesSimilar(existing.name, p.name))) {
+            combined.push({
+              name: p.name,
+              category: 'historic',
+              latitude: p.latitude,
+              longitude: p.longitude,
+              address: p.address || ''
+            })
+          }
+        }
       }
     }
   }
-  if (fallbackList.length > 0) {
-    cityLandmarksCache.set(cacheKey, fallbackList)
-    saveCachedPlacesBatch(fallbackList, clean, 'photon_landmarks').catch(() => {})
-    return fallbackList
+
+  if (combined.length > 0) {
+    cityLandmarksCache.set(cacheKey, combined)
+    saveCachedPlacesBatch(combined, clean, 'dynamic_landmarks').catch(() => {})
+    return combined
   }
 
   if (mappedCached.length > 0) {
