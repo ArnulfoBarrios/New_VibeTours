@@ -11,6 +11,7 @@ import { supabase } from '../services/supabase.js'
 import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName, FALLBACK_DESTINATION_CENTROIDS } from '../services/destinationService.js'
 import { resolvePlaceWithCascade } from '../services/places-resolver.js'
 import { getCandidateId } from '../services/candidate-catalog.js'
+import { lookupCachedPlacesForCity, saveCachedPlacesBatch } from '../services/places-cache-service.js'
 
 import {
   enrichPlaceWithOpenData,
@@ -751,8 +752,12 @@ aiRouter.post('/chat', async (req, res, next) => {
     }
 
     // Precalentar en paralelo los datos que el flujo normal necesitará
-    // después. La conversación sigue usando el mismo extractor y el mismo
-    // generador; únicamente se solapan las consultas independientes.
+    // después. Solo disparamos la búsqueda de catálogo pesado cuando el usuario
+    // explícitamente confirme o solicite armar el itinerario / tour.
+    const isExplicitBuildOrItineraryRequest = Boolean(
+      currentPreferences?.readyToBuild ||
+      /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|c[oó]mo\s+(va|queda)\s+(el\s+|mi\s+)?itinerario|mostrar?\s+(el\s+|mi\s+)?itinerario|mu[eé]strame\s+(el\s+|mi\s+)?itinerario|ver\s+(el\s+|mi\s+)?itinerario|plan\s+de\s+viaje|detalles\s+del\s+d[íi]a)\b/i.test(message)
+    )
     const quickExtracted = extractChatInformationFallback(message)
     const existingCanonical = currentPreferences.canonicalDestination
     const preloadDestination = existingCanonical?.city ||
@@ -773,18 +778,20 @@ aiRouter.post('/chat', async (req, res, next) => {
       : preloadDestinationKey
         ? resolveCanonicalDestination(preloadDestination).catch(() => null)
         : Promise.resolve(null)
-    const catalogWarmup = canonicalWarmup.then(canonical => {
-      if (!canonical || !Number.isFinite(Number(canonical.latitude)) || !Number.isFinite(Number(canonical.longitude))) {
-        return null
-      }
-      return getRealDestinationCatalog(
-        canonical.city || canonical.entityName || preloadDestination,
-        canonical.country || currentPreferences.country || 'Colombia',
-        Number(canonical.latitude),
-        Number(canonical.longitude),
-        { requestedDays: Number(currentPreferences.durationDays || quickExtracted?.durationDays || 0) }
-      ).catch(() => null)
-    })
+    const catalogWarmup = (isExplicitBuildOrItineraryRequest && preloadDestinationKey)
+      ? canonicalWarmup.then(canonical => {
+          if (!canonical || !Number.isFinite(Number(canonical.latitude)) || !Number.isFinite(Number(canonical.longitude))) {
+            return null
+          }
+          return getRealDestinationCatalog(
+            canonical.city || canonical.entityName || preloadDestination,
+            canonical.country || currentPreferences.country || 'Colombia',
+            Number(canonical.latitude),
+            Number(canonical.longitude),
+            { requestedDays: Number(currentPreferences.durationDays || quickExtracted?.durationDays || 0) }
+          ).catch(() => null)
+        })
+      : Promise.resolve(null)
 
     // 1. Extraer preferencias de forma ultrarrápida (single-pass: intención + extracción determinista en 0ms)
     const intentEval = classifyUserIntent(message, currentPreferences)
@@ -1141,9 +1148,8 @@ aiRouter.post('/chat', async (req, res, next) => {
       const isExplicitItineraryRequest = /\b(itinerario|itinerarios|plan de viaje|cómo va el itinerario|mostrar el itinerario|muéstrame el itinerario|ver el itinerario|detalles del d[íi]a|ver d[íi]a|d[íi]a\s*\d+)\b/i.test(message)
       const isExplicitHotelInquiry = /\b(recomi[eé]ndame hoteles|qu[eé] hoteles|opciones de hotel|d[oó]nde hospedarm[eé]|d[oó]nde quedarm[eé]|recomiendas alg[uú]n hotel|informaci[oó]n del? hotel)\b/i.test(message)
       const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(message)
-      const isLodgingConfirmed = isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus)
       const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(message)
-      const needsCatalogImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitAttractionInquiry || isLodgingConfirmed || isExplicitBuildRequest
+      const needsCatalogImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitAttractionInquiry || isExplicitBuildRequest || Boolean(updatedPreferences?.readyToBuild)
 
       if (needsCatalogImmediate) {
         await catalogWarmup
@@ -1183,14 +1189,24 @@ aiRouter.post('/chat', async (req, res, next) => {
     const targetLon = updatedPreferences.longitude || updatedPreferences.canonicalDestination?.longitude
     if (targetLat && targetLon && isFoodQuery) {
       try {
-        nearbyFoodPlaces = await overpassNearbyFood(targetLat, targetLon, 4000).catch(() => [])
-        if (!nearbyFoodPlaces || nearbyFoodPlaces.length === 0) {
-          nearbyFoodPlaces = await photonFoodFallback(targetLat, targetLon).catch(() => [])
+        const destCity = updatedPreferences.city || updatedPreferences.destination || ''
+        const cachedFood = destCity ? await lookupCachedPlacesForCity(destCity, 'restaurant') : []
+        if (cachedFood && cachedFood.length > 0) {
+          nearbyFoodPlaces = cachedFood
+        } else {
+          nearbyFoodPlaces = await overpassNearbyFood(targetLat, targetLon, 4000).catch(() => [])
+          if (!nearbyFoodPlaces || nearbyFoodPlaces.length === 0) {
+            nearbyFoodPlaces = await photonFoodFallback(targetLat, targetLon).catch(() => [])
+          }
+          if (nearbyFoodPlaces && nearbyFoodPlaces.length > 0 && destCity) {
+            saveCachedPlacesBatch(nearbyFoodPlaces, destCity, 'osm_food').catch(() => {})
+          }
         }
       } catch (err) {
         console.warn('[ai/chat] nearby food search failed:', err.message)
       }
     }
+
 
     // 3. Generar respuesta conversacional amigable y cordial con la IA
     const recentHistory = (history || [])

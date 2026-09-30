@@ -7,6 +7,7 @@ import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate }
 import { resolvePlaceWithCascade, resolveProviderDestinationCenter, searchGeoapifyPlaces, searchMapboxPlaces } from './places-resolver.js'
 import { fetchWithProviderRetry } from './provider-http.js'
 import { generateSpeechAudio } from './ttsService.js'
+import { lookupCachedPlace, lookupCachedPlacesForCity, getCachedCityCatalog, saveCachedPlacesBatch } from './places-cache-service.js'
 
 import {
   enrichPlaceWithOpenData,
@@ -89,14 +90,14 @@ export async function fetchOpenAiChatCompletion(init = {}, retryOptions = null) 
       headers: { 'Content-Type': 'application/json' }
     })
   }
-  const response = retryOptions
-    ? await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', init, retryOptions)
-    : await fetch('https://api.openai.com/v1/chat/completions', init)
+  const effectiveRetry = retryOptions ?? { attempts: 1, timeoutMs: 4500 }
+  const response = await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', init, effectiveRetry)
   if (response && !response.ok) {
     await inspectOpenAiResponseForQuotaFailure(response)
   }
   return response
 }
+
 
 export function cleanAndParseJson(rawContent, fallback = null) {
   if (!rawContent || typeof rawContent !== 'string') return fallback
@@ -455,6 +456,17 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
     }
   }
 
+  // 1.5 Check cache first before querying live geocoders
+  const cachedPlace = await lookupCachedPlace(name, city).catch(() => null)
+  if (cachedPlace && hasOsmMapRecord(cachedPlace) && isWithinCoastalCorridorBounds(cachedPlace.latitude, cachedPlace.longitude, city)) {
+    if (centerLat != null && centerLon != null) {
+      const distM = haversineMeters(centerLat, centerLon, cachedPlace.latitude, cachedPlace.longitude)
+      if (distM <= 45000) return cachedPlace
+    } else {
+      return cachedPlace
+    }
+  }
+
   const query = [name, city, country].filter(Boolean).join(', ')
   const geo = await geocodePlace(query, centerLat, centerLon, { city, country }).catch(() => null)
   if (hasOsmMapRecord(geo) && !isNonTouristFacility(geo) && isWithinCoastalCorridorBounds(geo.latitude, geo.longitude, city)) {
@@ -545,6 +557,9 @@ async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = 
   if (!/\b(lugares|atracciones|sitios|restaurantes|gastronom[íi]a|hoteles|hospedaje|alojamiento|recomiend|visitar)\b/i.test(source)) {
     return source
   }
+  if (!/^\s*(?:[•●▪◦*-]|\d+[.)])\s+/m.test(source)) {
+    return source
+  }
 
   const nonPlaceBullet = /^(ubicaci[oó]n|direcci[oó]n|instalaciones|servicios|tarifa|precio|horario|consejo|recomendaci[oó]n)\b/i
   const lines = source.split(/\r?\n/)
@@ -555,6 +570,8 @@ async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = 
     if (isUnmappedOrClosedVenue(candidate) || isGenericFacilityName(candidate) || isNonTouristFacility({ name: candidate })) {
       return false
     }
+    const cached = await lookupCachedPlace(candidate, city).catch(() => null)
+    if (cached && hasOsmMapRecord(cached)) return true
     const query = [candidate, city, country].filter(Boolean).join(', ')
     const geo = await geocodePlace(query, null, null, { city, country }).catch(() => null)
     return hasOsmMapRecord(geo)
@@ -566,8 +583,12 @@ async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = 
 export async function sanitizeChatItineraryTextWithOsm(text, city = '', country = '', selectedHotel = null, trustedPlaces = []) {
   const sanitized = sanitizeChatItineraryText(text, city, selectedHotel)
   if (!/itinerario\s+de\s+viaje|\bD[ií]a\s+\d+\s*:/i.test(sanitized)) {
+    if (!/^\s*(?:[•●▪◦*-]|\d+[.)])\s+/m.test(sanitized)) {
+      return sanitized
+    }
     return sanitizeChatRecommendationTextWithOsm(sanitized, city, country)
   }
+
 
   const lines = sanitized.split(/\r?\n/)
   const trustedNames = (Array.isArray(trustedPlaces) ? trustedPlaces : [])
@@ -1202,11 +1223,11 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
         response_format: { type: 'json_object' }
       })),
     }, {
-      attempts: 3,
-      timeoutMs: 12000
+      attempts: 1,
+      timeoutMs: 4500
     })
 
-    if (response.ok) {
+    if (response && response.ok) {
       const data = await response.json()
       const parsed = cleanAndParseJson(data.choices?.[0]?.message?.content, null)
       const rawPlaces = Array.isArray(parsed) ? parsed : (parsed?.places || parsed?.lugares || [])
@@ -1216,7 +1237,10 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
           category: String(typeof p === 'object' && p.category ? p.category : 'historic')
         }))
         const verified = await verifiedCatalogEntries(candidates, cleanDest, country, count, null, null, 'attraction')
-        if (verified.length > 0) return verified
+        if (verified.length > 0) {
+          saveCachedPlacesBatch(verified, cleanDest, 'openai_places').catch(() => {})
+          return verified
+        }
       }
     }
   } catch (err) {
@@ -1309,11 +1333,11 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
         reasoning_effort: 'low'
       })),
     }, {
-      attempts: 3,
-      timeoutMs: 5000
+      attempts: 1,
+      timeoutMs: 4500
     })
 
-    if (response.ok) {
+    if (response && response.ok) {
       const data = await response.json()
       const parsed = cleanAndParseJson(data.choices?.[0]?.message?.content, null)
       if (parsed && Array.isArray(parsed.hotels) && parsed.hotels.length > 0) {
@@ -1323,7 +1347,10 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
           stars: String(h.stars || h.estrellas || '4')
         })).slice(0, 3)
         const verified = await verifiedCatalogEntries(candidates, cleanDest, country, 3, null, null, 'hotel')
-        if (verified.length > 0) return verified
+        if (verified.length > 0) {
+          saveCachedPlacesBatch(verified, cleanDest, 'openai_hotels').catch(() => {})
+          return verified
+        }
       }
     }
   } catch (err) {
@@ -1385,6 +1412,78 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const minRequiredRests = Math.max(8, requestedDays)
   if (cached && (cached.places?.length >= minRequiredPlaces) && (cached.restaurants?.length >= minRequiredRests)) return cached
 
+  const capitalCity = clean ? clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Destino'
+  const targetCountry = countryName || 'Local'
+
+  let realHotels = []
+  let realRests = []
+  let realPlaces = []
+  let realEvents = []
+
+  // 0. Check Database & LRU Memory cache (places_cache) in 0 ms
+  const cachedCityCatalog = await getCachedCityCatalog(clean).catch(() => null)
+  if (cachedCityCatalog) {
+    if (Array.isArray(cachedCityCatalog.places) && cachedCityCatalog.places.length > 0) {
+      for (const p of cachedCityCatalog.places) {
+        if (!realPlaces.some(rp => arePlacesSimilar(rp, p.name))) {
+          realPlaces.push(p)
+        }
+      }
+    }
+    if (Array.isArray(cachedCityCatalog.restaurants) && cachedCityCatalog.restaurants.length > 0) {
+      for (const r of cachedCityCatalog.restaurants) {
+        if (!realRests.some(rr => arePlacesSimilar(rr.name, r.name))) {
+          realRests.push(r)
+        }
+      }
+    }
+    if (Array.isArray(cachedCityCatalog.hotels) && cachedCityCatalog.hotels.length > 0) {
+      for (const h of cachedCityCatalog.hotels) {
+        if (!realHotels.some(rh => arePlacesSimilar(rh.name, h.name))) {
+          realHotels.push(h)
+        }
+      }
+    }
+    if (realPlaces.length >= minRequiredPlaces && realRests.length >= minRequiredRests) {
+      const candidateCatalog = createUnifiedCandidateCatalog({
+        places: realPlaces,
+        restaurants: realRests,
+        hotels: realHotels,
+        events: realEvents,
+        city: capitalCity,
+        country: targetCountry
+      })
+      const coordinatesMap = {}
+      for (const p of candidateCatalog.all || []) {
+        if (p?.name && Number.isFinite(p.latitude) && Number.isFinite(p.longitude)) {
+          coordinatesMap[p.name.toLowerCase().trim()] = {
+            latitude: p.latitude,
+            longitude: p.longitude,
+            coordinateSource: p.coordinateSource || 'cache_db',
+            coordinatesVerified: true,
+            placeId: p.placeId || '',
+            candidateId: getCandidateId(p)
+          }
+        }
+      }
+      const result = {
+        name: capitalCity,
+        country: targetCountry,
+        latitude: userLat,
+        longitude: userLon,
+        hotels: realHotels,
+        restaurants: realRests,
+        places: realPlaces.map(p => typeof p === 'string' ? p : p.name),
+        coordinatesMap,
+        candidateCatalog,
+        catalogSources: ['places_cache_db'],
+        events: realEvents || []
+      }
+      destinationCatalogCache.set(cacheKey, result)
+      return result
+    }
+  }
+
   // 1. Dynamic Geocode & OSM Live Query
   let lat = userLat
   let lon = userLon
@@ -1396,13 +1495,6 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  const capitalCity = clean ? clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Destino'
-  const targetCountry = countryName || 'Local'
-
-  let realHotels = []
-  let realRests = []
-  let realPlaces = []
-  let realEvents = []
 
   // 1. Ground truth priority:
   // 1.1 Resolve iconic / priority landmarks FIRST (curated presets or dynamic iconic query)
@@ -1422,7 +1514,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const minLandmarksTarget = Math.max(14, requestedDays * 2)
   let dynamicIconics = []
   if (realPlaces.length < minLandmarksTarget) {
-    dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry, lat, lon).catch(() => [])
+    dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry, lat, lon, minLandmarksTarget).catch(() => [])
     const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, Math.max(14, minLandmarksTarget), lat, lon)
 
     for (const vd of verifiedDynamic) {
@@ -1730,9 +1822,30 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     events: realEvents || []
   }
 
+  const toCache = (unifiedCatalog?.all || []).map(candidate => ({
+    name: candidate.name,
+    city: capitalCity,
+    latitude: candidate.latitude,
+    longitude: candidate.longitude,
+    address: candidate.address || '',
+    placeId: candidate.placeId || candidate.id || '',
+    source: candidate.coordinateSource || 'dynamic_catalog',
+    category: candidate.entityType === 'restaurant' ? 'restaurant' : (candidate.entityType === 'hotel' ? 'hotel' : 'attraction'),
+    metadata: {
+      desc: candidate.description || '',
+      stars: candidate.stars || '',
+      cuisine: candidate.cuisine || '',
+      tags: candidate.tags || {}
+    }
+  }))
+  if (toCache.length > 0) {
+    saveCachedPlacesBatch(toCache, clean, 'dynamic_catalog').catch(() => {})
+  }
+
   destinationCatalogCache.set(cacheKey, result)
   return result
 }
+
 
 export function getDestinationPresets(destName = '', countryName = '') {
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
@@ -1915,23 +2028,27 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       const isExplicitHotelInquiry = isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
       const isExplicitRestaurantInquiry = /\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|carta|platos)\b/i.test(lastUserMsg)
       const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(lastUserMsg)
-      const isLodgingConfirmed = isLodgingExplicitlyConfirmed(known.selectedHotel, known.accommodationStatus)
       const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(lastUserMsg)
-      const needsImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitRestaurantInquiry || isExplicitAttractionInquiry || isLodgingConfirmed || isExplicitBuildRequest
+      const needsImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitRestaurantInquiry || isExplicitAttractionInquiry || isExplicitBuildRequest || Boolean(known?.readyToBuild)
 
       if (needsImmediate) {
-        realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: reqDays })
-          .catch(err => {
-            console.warn('[generateChatResponse] Catalog lookup error:', err.message)
-            return { places: [], restaurants: [], hotels: [] }
-          })
+        const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
+        if (cachedCatalog && (cachedCatalog.places?.length > 0 || cachedCatalog.restaurants?.length > 0 || cachedCatalog.hotels?.length > 0)) {
+          realCatalog = cachedCatalog
+        } else {
+          realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: reqDays })
+            .catch(err => {
+              console.warn('[generateChatResponse] Catalog lookup error:', err.message)
+              return { places: [], restaurants: [], hotels: [] }
+            })
+        }
       } else {
-        // En turnos conversacionales previos (Etapas 1 y 2), no bloqueamos la respuesta conversacional.
-        // Se ejecuta en segundo plano para que esté disponible cuando el usuario llegue a la Etapa 3.
-        getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: reqDays }).catch(() => null)
+        // En turnos conversacionales simples (acompañantes, presupuesto, transporte, fechas),
+        // respondemos inmediatamente sin bloquear en Overpass, OSM ni Photon.
         realCatalog = { places: [], restaurants: [], hotels: [] }
       }
     }
+
     if (!webSearchSummary && /\b(evento|festivales|feria|carnaval|cu[aá]ndo ir|fechas?|agenda)\b/i.test(lastUserMsg)) {
       const ws = await searchWebForTravel({
         query: `festivales eventos culturales agenda ${destName} ${known.datesSeason || ''}`.trim(),
@@ -2047,19 +2164,48 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = '¡Hola! Soy Tour Planner AI 🤖. Cuéntame: ¿a qué ciudad o destino te gustaría viajar hoy?'
       }
     } else {
-      const preset = (realCatalog?.hotels?.length > 0 || realCatalog?.places?.length > 0)
-        ? realCatalog
-        : await getRealDestinationCatalog(
+      const fbHasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
+      const fbHasTransport = hasValidValue(known.transport)
+      const fbHasBudget = hasValidValue(known.budget)
+      const fbHasCompanions = hasValidValue(known.companions)
+      const fbAllKeyInfoComplete = Boolean(hasCity && hasDurationOrDates && fbHasLodging && fbHasTransport && fbHasBudget)
+
+      const isExplicitBuildRequestedByUser = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+generar|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+      effectiveReadyToBuild = Boolean(fbAllKeyInfoComplete && isExplicitBuildRequestedByUser)
+
+      const isItineraryInquiry = /\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|detalles del d[íi]a|ver d[íi]a)\b/i.test(lastUserMsg)
+      const isPlacesOrFoodInquiry = /\b(actividad|actividades|qu[ée] hacer|lugares|atracciones|visitar|restaurante|restaurantes|comida|comer|gastronom[íi]a)\b/i.test(lastUserMsg)
+      const isHotelInquiry = isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
+      const fbNeedsCatalog = Boolean(
+        isExplicitBuildRequestedByUser ||
+        isItineraryInquiry ||
+        isPlacesOrFoodInquiry ||
+        isHotelInquiry ||
+        (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging))
+      )
+
+      let preset = (realCatalog?.hotels?.length > 0 || realCatalog?.places?.length > 0) ? realCatalog : null
+      if (!preset && fbNeedsCatalog) {
+        const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
+        if (cachedCatalog && (cachedCatalog.places?.length > 0 || cachedCatalog.restaurants?.length > 0 || cachedCatalog.hotels?.length > 0)) {
+          preset = cachedCatalog
+        } else {
+          preset = await getRealDestinationCatalog(
             known.city || 'Destino',
             known.country || 'Local',
             known.latitude,
             known.longitude
           ).catch(() => ({ places: [], restaurants: [], hotels: [] }))
+        }
+      }
+      if (!preset) {
+        preset = { places: [], restaurants: [], hotels: [] }
+      }
       trustedFallbackPlaces = [
         ...(preset?.places || []),
         ...(preset?.restaurants || [])
       ]
-      const fbHasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
+
       const buildCoherentChatDayBlocks = (numDays, basePool) => {
         const clustered = clusterStopsIntoCoherentDays(basePool, preset.restaurants || [], {
           numDays,
@@ -2083,13 +2229,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           .filter(dp => dp.stops.length > 0)
           .map(dp => `Día ${dp.day}: ${destName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`)
       }
-      const fbHasTransport = hasValidValue(known.transport)
-      const fbHasBudget = hasValidValue(known.budget)
-      const fbHasCompanions = hasValidValue(known.companions)
-      const fbAllKeyInfoComplete = Boolean(hasCity && hasDurationOrDates && fbHasLodging && fbHasTransport && fbHasBudget)
 
-      const isExplicitBuildRequestedByUser = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+generar|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
-      effectiveReadyToBuild = Boolean(fbAllKeyInfoComplete && isExplicitBuildRequestedByUser)
 
       if (isExplicitBuildRequestedByUser && !fbAllKeyInfoComplete) {
         const missing = []
@@ -2648,17 +2788,18 @@ REGLAS PARA "accommodationStatus":
         temperature: 0.4,
         response_format: { type: 'json_object' },
         reasoning_effort: 'low'
-      })),
-      // El fallback conversacional puede responder sin este proveedor; no
-      // dejamos la interfaz esperando indefinidamente ante una red lenta.
-      signal: AbortSignal.timeout(25000)
+      }))
+    }, {
+      attempts: 1,
+      timeoutMs: 4500
     })
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '')
-      console.error('[generateChatResponse] OpenAI API error status:', response.status, errText)
-      throw new Error(`OpenAI HTTP ${response.status}: ${errText}`)
+    if (!response || !response.ok) {
+      const errText = response ? await response.text().catch(() => '') : 'OpenAI request timed out or unavailable'
+      console.warn('[generateChatResponse] OpenAI API unavailable or failed:', response?.status || 'TIMEOUT', errText)
+      throw new Error(`OpenAI HTTP ${response?.status || 'TIMEOUT'}: ${errText}`)
     }
+
 
     const json = await response.json()
     const rawContent = json.choices?.[0]?.message?.content || '{}'
@@ -2981,7 +3122,7 @@ REGLAS PARA "accommodationStatus":
         }
       }
       if (catPlaces.length < totalPlacesNeeded) {
-        const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry).catch(() => [])
+        const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry, null, null, totalPlacesNeeded).catch(() => [])
         const verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
         for (const di of verifiedDynamicIconics) {
           const diName = typeof di === 'string' ? di : (di?.name || '')
@@ -4276,7 +4417,7 @@ Formato JSON obligatorio:
 
 const cityLandmarksCache = new Map()
 
-export async function fetchCityIconicLandmarks(cityInput, countryInput = '', lat = null, lon = null) {
+export async function fetchCityIconicLandmarks(cityInput, countryInput = '', lat = null, lon = null, options = 3) {
   let city = ''
   let country = countryInput || ''
   if (typeof cityInput === 'object' && cityInput !== null) {
@@ -4287,9 +4428,28 @@ export async function fetchCityIconicLandmarks(cityInput, countryInput = '', lat
   }
   if (!city || !city.trim()) return []
   const clean = cleanAdministrativeCityName(city).trim()
+  const minRequired = typeof options === 'number' ? options : (options?.minCount || 3)
   const cacheKey = `${clean.toLowerCase()}__${(country || '').toLowerCase()}`
   if (cityLandmarksCache.has(cacheKey)) {
-    return cityLandmarksCache.get(cacheKey)
+    const memCached = cityLandmarksCache.get(cacheKey)
+    if (Array.isArray(memCached) && memCached.length >= minRequired) {
+      return memCached
+    }
+  }
+
+  // Tier 0: Check database / memory places_cache first in 0 ms
+  const cachedPlaces = await lookupCachedPlacesForCity(clean, 'attraction').catch(() => [])
+  const mappedCached = (Array.isArray(cachedPlaces) ? cachedPlaces : []).map(p => ({
+    name: p.name,
+    category: p.category || 'historic',
+    latitude: p.latitude,
+    longitude: p.longitude,
+    address: p.address || ''
+  }))
+
+  if (mappedCached.length >= minRequired) {
+    cityLandmarksCache.set(cacheKey, mappedCached)
+    return mappedCached
   }
 
   const apiKey = getActiveOpenAiKey()
@@ -4327,17 +4487,17 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
           reasoning_effort: 'none'
         })),
       }, {
-        attempts: 3,
-        timeoutMs: 25000
+        attempts: 1,
+        timeoutMs: 4500
       })
 
-      if (response.ok) {
+      if (response && response.ok) {
         const json = await response.json()
         const content = json.choices?.[0]?.message?.content
         if (content) {
           const parsed = JSON.parse(content)
           const rawPlaces = Array.isArray(parsed.places) ? parsed.places : []
-          const list = []
+          const list = [...mappedCached]
           for (const p of rawPlaces) {
             const entry = typeof p === 'string' ? { name: p, category: 'historic' } : p
             if (entry && entry.name && !isGenericFacilityName(entry.name) && !isNonTouristFacility({ name: entry.name }) && !isFoodOrDrinkEstablishment(entry.name) && !isUnmappedOrClosedVenue(entry.name)) {
@@ -4348,6 +4508,7 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
           }
           if (list.length >= 3) {
             cityLandmarksCache.set(cacheKey, list)
+            saveCachedPlacesBatch(list, clean, 'openai_iconic').catch(() => {})
             return list
           }
         }
@@ -4360,21 +4521,41 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
   // Fallback to dynamic Open-Source Tourism discovery (Wikipedia Turismo/Cultura sections + GeoSearch)
   const wikiLandmarks = await discoverDynamicCityLandmarks(clean, country, lat, lon).catch(() => [])
   if (Array.isArray(wikiLandmarks) && wikiLandmarks.length > 0) {
-    cityLandmarksCache.set(cacheKey, wikiLandmarks)
-    return wikiLandmarks
+    const combined = [...mappedCached]
+    for (const wp of wikiLandmarks) {
+      if (wp && wp.name && !combined.some(existing => arePlacesSimilar(existing.name, wp.name))) {
+        combined.push(wp)
+      }
+    }
+    cityLandmarksCache.set(cacheKey, combined)
+    saveCachedPlacesBatch(combined, clean, 'wiki_landmarks').catch(() => {})
+    return combined
   }
 
   // Fallback to Photon POIs without circular call
   const photonResults = await photonSearch(`turismo ${clean}`, 15).catch(() => [])
-  const fallbackList = photonResults
-    .map(p => ({ name: p.name, category: 'historic' }))
-    .filter(p => p && p.name && !isGenericFacilityName(p.name) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name))
+  const fallbackList = [...mappedCached]
+  for (const p of photonResults) {
+    if (p && p.name && !isGenericFacilityName(p.name) && !isNonTouristFacility({ name: p.name }) && !isFoodOrDrinkEstablishment(p.name)) {
+      if (!fallbackList.some(existing => arePlacesSimilar(existing.name, p.name))) {
+        fallbackList.push({ name: p.name, category: 'historic', latitude: p.latitude, longitude: p.longitude, address: p.address || '' })
+      }
+    }
+  }
   if (fallbackList.length > 0) {
     cityLandmarksCache.set(cacheKey, fallbackList)
+    saveCachedPlacesBatch(fallbackList, clean, 'photon_landmarks').catch(() => {})
     return fallbackList
   }
+
+  if (mappedCached.length > 0) {
+    cityLandmarksCache.set(cacheKey, mappedCached)
+    return mappedCached
+  }
+
   return []
 }
+
 
 export async function generateRichPlaceDescriptionsBatch({ destination = '', city = '', country = '', places = [], prompt = '' }) {
   if (!places || places.length === 0) return {}
