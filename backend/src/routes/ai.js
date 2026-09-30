@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
@@ -717,8 +717,31 @@ aiRouter.post('/chat', async (req, res, next) => {
       isValidRouteEndpoint(validExtracted.destinationPlace) &&
       /\b(tour\s+(?:de|desde)|ruta\s+(?:de|desde|entre)|road\s*trip|viaje\s+(?:de|desde)|de\s+[a-záéíóúñ]{3,20}\s+a\s+[a-záéíóúñ]{3,20})\b/i.test(message)
     )
+    const isExplicitLocationToDestination = Boolean(
+      validExtracted.tourType === 'location_to_destination' ||
+      validExtracted.isUserLocationOrigin ||
+      (validExtracted.originPlace === 'user_current_location') ||
+      /\b(desde\s+mi\s+ubicaci[oó]n|de\s+mi\s+ubicaci[oó]n|saliendo\s+de\s+mi\s+ubicaci[oó]n)\b/i.test(message)
+    )
 
-    if (hasExistingCity && !isExplicitCityChange && !isExplicitMultiRoute) {
+    if (isExplicitLocationToDestination) {
+      validExtracted.tourType = 'location_to_destination'
+      validExtracted.isUserLocationOrigin = true
+      validExtracted.originPlace = 'user_current_location'
+      validExtracted.durationDays = 1
+      validExtracted.durationHours = 8
+      validExtracted.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
+      delete validExtracted.selectedHotel
+      delete currentPreferences.selectedHotel
+      delete currentPreferences.accommodationStatus
+      if (validExtracted.destination) {
+        delete currentPreferences.city
+        delete currentPreferences.destination
+        delete currentPreferences.canonicalDestination
+      }
+    }
+
+    if (hasExistingCity && !isExplicitCityChange && !isExplicitMultiRoute && !isExplicitLocationToDestination) {
       const existingBaseCity = (currentPreferences.destination || currentPreferences.city || '').toLowerCase().trim()
       const newDest = (validExtracted.destination || '').toLowerCase().trim()
 
@@ -876,28 +899,39 @@ aiRouter.post('/chat', async (req, res, next) => {
     }
 
     // Normalización determinística de duración por expresiones clave y rangos de fechas
-    const datesString = `${updatedPreferences.datesSeason || ''} ${message || ''}`
-    const dateRangeMatch = datesString.match(/\b(?:del\s+|desde\s+(?:el\s+)?)?(\d{1,2})\s+(?:al|hasta(?:\s+el)?)\s+(\d{1,2})\b/i)
-    if (dateRangeMatch) {
-      const startD = parseInt(dateRangeMatch[1], 10)
-      const endD = parseInt(dateRangeMatch[2], 10)
-      if (endD >= startD && (endD - startD) <= 30) {
-        const calculatedDays = endD - startD + 1
-        updatedPreferences.durationDays = calculatedDays
-        updatedPreferences.durationHours = calculatedDays * 24
-      }
-    } else if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo|3 d[íi]as)\b/i.test(message)) {
-      updatedPreferences.durationDays = 3
-      updatedPreferences.durationHours = 72
-    } else if (/\b(fin de semana|un par de d[íi]as|2 d[íi]as)\b/i.test(message) && !updatedPreferences.durationDays) {
-      updatedPreferences.durationDays = 2
-      updatedPreferences.durationHours = 48
-    } else if (/\b(1 d[íi]a|un d[íi]a)\b/i.test(message) && !updatedPreferences.durationDays) {
+    const isPhysicalBridge = /\bpuente\s+(?:pumarejo|boyac[aá]|navarro|occidente|guayaquil|colgante|roncador|san\s+jorge|peatonal|vehicular|[a-z]{3,})/i.test(message) ||
+      /\bpuente\b/i.test(updatedPreferences.destination || '') ||
+      /\bpuente\b/i.test(currentPreferences.destination || '')
+
+    if (isExplicitLocationToDestination || updatedPreferences.tourType === 'location_to_destination' || updatedPreferences.isUserLocationOrigin) {
       updatedPreferences.durationDays = 1
       updatedPreferences.durationHours = 8
-    } else if (/\b(semanita|una semana|7 d[íi]as)\b/i.test(message)) {
-      updatedPreferences.durationDays = 7
-      updatedPreferences.durationHours = 168
+      updatedPreferences.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
+      delete updatedPreferences.selectedHotel
+    } else {
+      const datesString = `${updatedPreferences.datesSeason || ''} ${message || ''}`
+      const dateRangeMatch = datesString.match(/\b(?:del\s+|desde\s+(?:el\s+)?)?(\d{1,2})\s+(?:al|hasta(?:\s+el)?)\s+(\d{1,2})\b/i)
+      if (dateRangeMatch) {
+        const startD = parseInt(dateRangeMatch[1], 10)
+        const endD = parseInt(dateRangeMatch[2], 10)
+        if (endD >= startD && (endD - startD) <= 30) {
+          const calculatedDays = endD - startD + 1
+          updatedPreferences.durationDays = calculatedDays
+          updatedPreferences.durationHours = calculatedDays * 24
+        }
+      } else if (!isPhysicalBridge && /\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo|3 d[íi]as)\b/i.test(message)) {
+        updatedPreferences.durationDays = 3
+        updatedPreferences.durationHours = 72
+      } else if (/\b(fin de semana|un par de d[íi]as|2 d[íi]as)\b/i.test(message) && !updatedPreferences.durationDays) {
+        updatedPreferences.durationDays = 2
+        updatedPreferences.durationHours = 48
+      } else if (/\b(1 d[íi]a|un d[íi]a)\b/i.test(message) && !updatedPreferences.durationDays) {
+        updatedPreferences.durationDays = 1
+        updatedPreferences.durationHours = 8
+      } else if (/\b(semanita|una semana|7 d[íi]as)\b/i.test(message)) {
+        updatedPreferences.durationDays = 7
+        updatedPreferences.durationHours = 168
+      }
     }
 
     // Si hay objetos vacíos o nulos, limpiarlos
@@ -955,7 +989,7 @@ aiRouter.post('/chat', async (req, res, next) => {
             delete updatedPreferences.specificPlaces
             delete updatedPreferences.selectedHotel
           }
-          if (canonical.isMicroDestination && (currentPreferences.destination || currentPreferences.city) && !isExplicitCityChange) {
+          if (canonical.isMicroDestination && (currentPreferences.destination || currentPreferences.city) && !isExplicitCityChange && !isExplicitLocationToDestination) {
             // Keep macro base city, do not let microdestination overwrite it
             updatedPreferences.canonicalDestination = canonical
             updatedPreferences.destination = currentPreferences.destination || currentPreferences.city
@@ -5769,51 +5803,7 @@ export function computeDetourDistance(place, startPlace, endPlace) {
   return (distFromStartKm + distFromEndKm) - routeDistKm
 }
 
-export function isWithinCorridor(place, startPlace, endPlace, relaxed = false) {
-  if (!place || (!startPlace && !endPlace)) return true
-  const pLat = Number(place.latitude ?? place.lat ?? 0)
-  const pLon = Number(place.longitude ?? place.lon ?? 0)
-  if (!pLat || !pLon) return false
-
-  const startLat = startPlace ? Number(startPlace.latitude ?? startPlace.lat ?? 0) : null
-  const startLon = startPlace ? Number(startPlace.longitude ?? startPlace.lon ?? 0) : null
-  const endLat = endPlace ? Number(endPlace.latitude ?? endPlace.lat ?? 0) : null
-  const endLon = endPlace ? Number(endPlace.longitude ?? endPlace.lon ?? 0) : null
-
-  if (startLat !== null && startLon !== null && endLat !== null && endLon !== null) {
-    const routeDistMeters = haversineMeters(startLat, startLon, endLat, endLon)
-    const routeDistKm = routeDistMeters / 1000
-
-    const distFromStartKm = haversineMeters(pLat, pLon, startLat, startLon) / 1000
-    const distFromEndKm = haversineMeters(pLat, pLon, endLat, endLon) / 1000
-
-    const detourKm = (distFromStartKm + distFromEndKm) - routeDistKm
-
-    const maxDetourKm = relaxed
-      ? Math.max(8.0, routeDistKm * 0.6)
-      : (routeDistKm <= 35 
-          ? Math.min(4.5, Math.max(1.5, routeDistKm * 0.35))
-          : Math.min(25.0, routeDistKm * 0.35))
-
-    if (detourKm > maxDetourKm) {
-      return false
-    }
-
-    if (!relaxed) {
-      const pCity = place.city ? normalizeKey(place.city) : ''
-      const sCity = startPlace.city ? normalizeKey(startPlace.city) : ''
-      const eCity = endPlace.city ? normalizeKey(endPlace.city) : ''
-
-      if (pCity && sCity && eCity && sCity === eCity) {
-        if (!pCity.includes(sCity) && !sCity.includes(pCity)) {
-          return false
-        }
-      }
-    }
-  }
-
-  return true
-}
+export { isWithinCorridor }
 
 export function sortPlacesByProximity(places, origin = null) {
   if (!Array.isArray(places) || places.length <= 1) return places
@@ -6120,6 +6110,15 @@ async function collectCorridorCandidates(input, location) {
   }
   if (endPlace) {
     intermediates = intermediates.filter(p => normalizeKey(p.name) !== normalizeKey(endPlace.name))
+  }
+
+  // Sort intermediates monotonically by distance from startPlace to guarantee linear route progression
+  if (startPlace && Number.isFinite(startPlace.latitude) && Number.isFinite(startPlace.longitude)) {
+    intermediates.sort((a, b) => {
+      const distA = haversineMeters(startPlace.latitude, startPlace.longitude, a.latitude, a.longitude)
+      const distB = haversineMeters(startPlace.latitude, startPlace.longitude, b.latitude, b.longitude)
+      return distA - distB
+    })
   }
 
   const selected = []

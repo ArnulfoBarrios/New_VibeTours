@@ -68,6 +68,8 @@ class RoadRouteResult {
   final TrafficSeverity trafficSeverity;
   final RouteTravelMode travelMode;
 
+  bool get usesWalkingTransfer => walkingSegments.isNotEmpty;
+
   /// Keeps the already-rendered road geometry while importing only the
   /// traffic metadata from a later live-traffic request.
   RoadRouteResult withTrafficFrom(RoadRouteResult trafficRoute) {
@@ -118,6 +120,12 @@ class RoadRouteService {
   static final Map<String, Future<RoadRouteResult>> _routeCache = {};
   static final Map<String, Future<RoadRouteResult>> _inFlightRoutes = {};
   static final Map<String, Future<List<RoutePortWaypoint>>> _portCache = {};
+
+  static void clearCache() {
+    _routeCache.clear();
+    _inFlightRoutes.clear();
+    _portCache.clear();
+  }
 
   bool get hasLiveTrafficProvider => _tomTomApiKey.trim().isNotEmpty;
 
@@ -241,6 +249,49 @@ class RoadRouteService {
         travelMode: travelMode,
       );
 
+      // 2.1 Check for hiking / walking trail approach when destination is off-road
+      if (roadRoute != null && travelMode != RouteTravelMode.flight && travelMode != RouteTravelMode.walking) {
+        final hybrid = await _tryResolveHikingTrail(
+          start: start,
+          end: end,
+          roadRoute: roadRoute,
+          originHeading: legHeading,
+          travelMode: travelMode,
+        );
+        if (hybrid != null) {
+          _appendGeometry(geometry, hybrid.driving.geometry);
+          walkingSegments.add(hybrid.walking.geometry);
+          totalDistanceMeters += hybrid.driving.distanceMeters + hybrid.walking.distanceMeters;
+          totalTravelTimeSeconds += (hybrid.driving.travelTimeSeconds ?? 0) + (hybrid.walking.travelTimeSeconds ?? 0);
+          totalTrafficDelaySeconds += hybrid.driving.trafficDelaySeconds ?? 0;
+          usesLiveTraffic = usesLiveTraffic || hybrid.driving.usesLiveTraffic;
+          transitAdviceMessage = _formatWalkingAdvice(
+            hybrid.walking.distanceMeters,
+            hybrid.walking.travelTimeSeconds,
+          );
+          continue;
+        }
+      }
+
+      // 2.2 Pure walking route if both points are off-road within pedestrian distance
+      if ((roadRoute == null || travelMode == RouteTravelMode.walking) &&
+          travelMode != RouteTravelMode.flight &&
+          directDistance <= 35000) {
+        var pureWalking = _tomTomApiKey.trim().isNotEmpty
+            ? await _fetchTomTomPedestrianRoute(start, end)
+            : null;
+        pureWalking ??= await _fetchWalkingRoute(start, end);
+        if (pureWalking != null && !pureWalking.hasFerrySegment && pureWalking.geometry.isNotEmpty) {
+          _appendGeometry(geometry, pureWalking.geometry);
+          walkingSegments.add(pureWalking.geometry);
+          totalDistanceMeters += pureWalking.distanceMeters;
+          totalTravelTimeSeconds += pureWalking.travelTimeSeconds ?? 0;
+          final km = (pureWalking.distanceMeters / 1000).toStringAsFixed(1);
+          transitAdviceMessage = '🥾 Tramo a pie: Sendero peatonal hacia el destino (~$km km).';
+          continue;
+        }
+      }
+
       final requiresPortTransfer =
           roadRoute == null ||
           _looksLikeMaritimeTransfer(roadRoute, start, end);
@@ -327,7 +378,9 @@ class RoadRouteService {
         usesLiveTraffic = usesLiveTraffic || maritimeRoute.usesLiveTraffic;
       } else {
         // True physical transfer required (e.g. San Andrés Island or overseas without ferries)
-        final flightRoute = await _buildFlightAwareRoute(start, end);
+        final flightRoute = (isFlightMode || (roadRoute == null && directDistance > 200000))
+            ? await _buildFlightAwareRoute(start, end)
+            : null;
         if (flightRoute != null) {
           _appendGeometry(geometry, flightRoute.geometry);
           flightSegments.addAll(flightRoute.flightSegments);
@@ -923,44 +976,56 @@ out center tags 10;
     final hasHeading = originHeading != null && originHeading >= 0;
     final headingParam = hasHeading ? '&bearings=${originHeading.round()},80;' : '';
 
+    final modePath = profile == 'foot'
+        ? 'foot'
+        : (profile == 'bike' ? 'bike' : 'driving');
+    final radiusOptions = <String>[
+      'radiuses=250;250',
+      'radiuses=350;unlimited',
+      '',
+    ];
+
     for (final baseUrl in baseUrls) {
-      final uri = Uri.parse(
-        '$baseUrl/route/v1/driving/'
-        '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
-        '?overview=full&geometries=geojson&steps=true&alternatives=true&continue_straight=true&radiuses=250;250$headingParam',
-      );
-      try {
-        final response = await _client
-            .get(uri)
-            .timeout(const Duration(seconds: 5));
-        if (response.statusCode < 200 || response.statusCode >= 300) {
+      for (final radiusParam in radiusOptions) {
+        final radiusQuery = radiusParam.isNotEmpty ? '&$radiusParam' : '';
+        final uri = Uri.parse(
+          '$baseUrl/route/v1/$modePath/'
+          '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
+          '?overview=full&geometries=geojson&steps=true&alternatives=true&continue_straight=true$radiusQuery$headingParam',
+        );
+        try {
+          final response = await _client
+              .get(uri, headers: const {'User-Agent': 'VibeTours/1.0'})
+              .timeout(const Duration(seconds: 5));
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            continue;
+          }
+          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+          if (decoded['code'] != 'Ok') continue;
+          final routes = decoded['routes'] as List<dynamic>? ?? const [];
+          if (routes.isEmpty) continue;
+
+          final candidates = <_DrivingRoute>[];
+          for (final item in routes) {
+            if (item is Map<String, dynamic>) {
+              final geometry = _parseGeoJsonGeometry(item['geometry']);
+              if (geometry.length < 2) continue;
+              candidates.add(_DrivingRoute(
+                geometry: geometry,
+                distanceMeters: (item['distance'] as num?)?.toDouble() ?? 0,
+                travelTimeSeconds: (item['duration'] as num?)?.round(),
+                trafficDelaySeconds: null,
+                usesLiveTraffic: false,
+                hasFerrySegment: _containsFerryStep(item),
+              ));
+            }
+          }
+
+          final best = _selectBestBalancedRoute(candidates);
+          if (best != null) return best;
+        } on Object {
           continue;
         }
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        if (decoded['code'] != 'Ok') continue;
-        final routes = decoded['routes'] as List<dynamic>? ?? const [];
-        if (routes.isEmpty) continue;
-
-        final candidates = <_DrivingRoute>[];
-        for (final item in routes) {
-          if (item is Map<String, dynamic>) {
-            final geometry = _parseGeoJsonGeometry(item['geometry']);
-            if (geometry.length < 2) continue;
-            candidates.add(_DrivingRoute(
-              geometry: geometry,
-              distanceMeters: (item['distance'] as num?)?.toDouble() ?? 0,
-              travelTimeSeconds: (item['duration'] as num?)?.round(),
-              trafficDelaySeconds: null,
-              usesLiveTraffic: false,
-              hasFerrySegment: _containsFerryStep(item),
-            ));
-          }
-        }
-
-        final best = _selectBestBalancedRoute(candidates);
-        if (best != null) return best;
-      } on Object {
-        continue;
       }
     }
 
@@ -973,6 +1038,231 @@ out center tags 10;
       end,
       travelMode: travelMode,
     );
+  }
+
+  Future<_DrivingRoute?> _fetchWalkingRoute(
+    GeoPoint start,
+    GeoPoint end,
+  ) async {
+    final baseUrls = <String>[
+      'https://routing.openstreetmap.de/routed-foot',
+      _osrmBaseUrl,
+    ];
+    for (final baseUrl in baseUrls) {
+      final isRoutedFoot = baseUrl.contains('routed-foot');
+      final modePath = isRoutedFoot ? 'foot' : 'driving';
+      final uri = Uri.parse(
+        '$baseUrl/route/v1/$modePath/'
+        '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
+        '?overview=full&geometries=geojson&steps=true',
+      );
+      try {
+        final response = await _client
+            .get(uri, headers: const {'User-Agent': 'VibeTours/1.0'})
+            .timeout(const Duration(seconds: 5));
+        if (response.statusCode < 200 || response.statusCode >= 300) continue;
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        if (decoded['code'] != 'Ok') continue;
+        final routes = decoded['routes'] as List<dynamic>? ?? const [];
+        if (routes.isEmpty) continue;
+        final item = routes.first as Map<String, dynamic>;
+        final geometry = _parseGeoJsonGeometry(item['geometry']);
+        if (geometry.length < 2) continue;
+        return _DrivingRoute(
+          geometry: geometry,
+          distanceMeters: (item['distance'] as num?)?.toDouble() ?? 0,
+          travelTimeSeconds: (item['duration'] as num?)?.round(),
+          trafficDelaySeconds: null,
+          usesLiveTraffic: false,
+          hasFerrySegment: _containsFerryStep(item),
+        );
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  Future<_DrivingRoute?> _fetchTomTomPedestrianRoute(
+    GeoPoint start,
+    GeoPoint end,
+  ) async {
+    final key = _tomTomApiKey.trim();
+    if (key.isEmpty) return null;
+
+    final locations =
+        '${start.latitude},${start.longitude}:${end.latitude},${end.longitude}';
+    final uri = Uri.parse(
+      '$_tomTomRoutingBaseUrl/routing/1/calculateRoute/$locations/json',
+    ).replace(
+      queryParameters: {
+        'key': key,
+        'travelMode': 'pedestrian',
+        'routeType': 'fastest',
+      },
+    );
+
+    try {
+      final response = await _client
+          .get(uri, headers: const {'User-Agent': 'VibeTours/1.0'})
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final routes = decoded['routes'] as List<dynamic>? ?? const [];
+      if (routes.isEmpty) return null;
+
+      final firstRoute = routes.first as Map<String, dynamic>;
+      final legs = firstRoute['legs'] as List<dynamic>? ?? const [];
+      if (legs.isEmpty) return null;
+
+      final rawPoints =
+          (legs.first as Map<String, dynamic>)['points'] as List<dynamic>? ??
+              const [];
+      if (rawPoints.length < 2) return null;
+
+      final geometry = <GeoPoint>[];
+      for (final p in rawPoints) {
+        if (p is Map<String, dynamic>) {
+          final lat = (p['latitude'] as num?)?.toDouble();
+          final lon = (p['longitude'] as num?)?.toDouble();
+          if (lat != null && lon != null) {
+            geometry.add(GeoPoint(latitude: lat, longitude: lon));
+          }
+        }
+      }
+      if (geometry.length < 2) return null;
+
+      if (_distanceMeters(start, geometry.first) > 30) {
+        geometry.insert(0, start);
+      }
+      if (_distanceMeters(geometry.last, end) > 30) {
+        geometry.add(end);
+      }
+
+      final dist = _geometryDistanceMeters(geometry);
+      final walkSeconds = ((dist / 1000) * 900).round();
+
+      return _DrivingRoute(
+        geometry: geometry,
+        distanceMeters: dist,
+        travelTimeSeconds: walkSeconds,
+        trafficDelaySeconds: null,
+        usesLiveTraffic: false,
+        hasFerrySegment: false,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<({_DrivingRoute driving, _DrivingRoute walking})?> _tryResolveHikingTrail({
+    required GeoPoint start,
+    required GeoPoint end,
+    required _DrivingRoute roadRoute,
+    double? originHeading,
+    RouteTravelMode travelMode = RouteTravelMode.driving,
+  }) async {
+    final roadEnd = roadRoute.geometry.last;
+    final roadEndDist = _distanceMeters(roadEnd, end);
+    if (roadEndDist <= 250) return null;
+
+    _DrivingRoute? walkingRoute;
+
+    // 1. Attempt TomTom Pedestrian route (accurate mountain & park trail network)
+    if (_tomTomApiKey.trim().isNotEmpty) {
+      walkingRoute = await _fetchTomTomPedestrianRoute(roadEnd, end);
+    }
+
+    // 2. Attempt OSRM routed-foot (verify destination is actually reached)
+    if (walkingRoute == null) {
+      final forward = await _fetchWalkingRoute(roadEnd, end);
+      if (forward != null &&
+          !forward.hasFerrySegment &&
+          forward.geometry.isNotEmpty &&
+          _distanceMeters(forward.geometry.last, end) <= 850 &&
+          forward.distanceMeters >= 150) {
+        walkingRoute = forward;
+      } else {
+        final reverse = await _fetchWalkingRoute(end, roadEnd);
+        if (reverse != null &&
+            !reverse.hasFerrySegment &&
+            reverse.geometry.isNotEmpty) {
+          final reversedGeo = reverse.geometry.reversed.toList();
+          if (_distanceMeters(reversedGeo.last, end) <= 850 &&
+              reverse.distanceMeters >= 150) {
+            final dist = reverse.distanceMeters > 0
+                ? reverse.distanceMeters
+                : _geometryDistanceMeters(reversedGeo);
+            walkingRoute = _DrivingRoute(
+              geometry: reversedGeo,
+              distanceMeters: dist,
+              travelTimeSeconds:
+                  reverse.travelTimeSeconds ?? ((dist / 1000) * 900).round(),
+              trafficDelaySeconds: null,
+              usesLiveTraffic: false,
+              hasFerrySegment: false,
+            );
+          }
+        }
+      }
+    }
+
+    // 3. Guaranteed trail approach fallback directly to destination
+    if (walkingRoute == null ||
+        walkingRoute.hasFerrySegment ||
+        walkingRoute.geometry.isEmpty) {
+      if (roadEndDist <= 40000) {
+        final walkSeconds = ((roadEndDist / 1000) * 900).round();
+        walkingRoute = _DrivingRoute(
+          geometry: [roadEnd, end],
+          distanceMeters: roadEndDist,
+          travelTimeSeconds: walkSeconds,
+          trafficDelaySeconds: null,
+          usesLiveTraffic: false,
+          hasFerrySegment: false,
+        );
+      } else {
+        return null;
+      }
+    }
+
+    // 4. Ensure seamless continuous geometry from car drop-off to destination
+    final walkingGeo = List<GeoPoint>.from(walkingRoute.geometry);
+    if (walkingGeo.isNotEmpty) {
+      if (_distanceMeters(roadEnd, walkingGeo.first) > 30) {
+        walkingGeo.insert(0, roadEnd);
+      }
+      if (_distanceMeters(walkingGeo.last, end) > 30) {
+        walkingGeo.add(end);
+      }
+    }
+
+    final totalWalkDist = walkingRoute.distanceMeters > 0
+        ? walkingRoute.distanceMeters
+        : _geometryDistanceMeters(walkingGeo);
+    final totalWalkSeconds = walkingRoute.travelTimeSeconds ??
+        ((totalWalkDist / 1000) * 900).round();
+    final sanitizedWalking = _DrivingRoute(
+      geometry: walkingGeo,
+      distanceMeters: totalWalkDist > 0 ? totalWalkDist : roadEndDist,
+      travelTimeSeconds: totalWalkSeconds > 0 ? totalWalkSeconds : 60,
+      trafficDelaySeconds: null,
+      usesLiveTraffic: false,
+      hasFerrySegment: false,
+    );
+
+    return (driving: roadRoute, walking: sanitizedWalking);
+  }
+
+  String _formatWalkingAdvice(double distanceMeters, int? travelTimeSeconds) {
+    final km = (distanceMeters / 1000).toStringAsFixed(1);
+    final minutes = ((travelTimeSeconds ?? 0) / 60).round();
+    final durationStr = minutes >= 60
+        ? '${minutes ~/ 60} h ${minutes % 60} min'
+        : '$minutes min';
+    return '🚗 Conduce por carretera hasta el punto de acceso y continúa 🥾 a pie por el sendero hacia tu destino (~$km km, $durationStr de caminata).';
   }
 
   Future<_DrivingRoute?> _fetchBackendRoute(

@@ -661,22 +661,13 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       }
     }
 
-    // Trim the walking line from currentPos to the connection point
-    for (int i = 0; i < _walkingLines.length && i < _initialWalkingSegments.length; i++) {
-      final seg = _initialWalkingSegments[i];
-      if (seg.length >= 2) {
-        final endPoint = seg.last;
-        final distToEnd = _metricDistanceMeters(currentPos, endPoint);
+    // If the user has arrived at the destination of the walking trail, clear annotations
+    for (final seg in _initialWalkingSegments) {
+      if (seg.isNotEmpty) {
+        final distToEnd = _metricDistanceMeters(currentPos, seg.last);
         if (distToEnd < 20.0) {
           unawaited(_clearWalkingAnnotations());
           break;
-        } else {
-          try {
-            controller.updateLine(
-              _walkingLines[i],
-              LineOptions(geometry: [currentPos, endPoint]),
-            );
-          } catch (_) {}
         }
       }
     }
@@ -1141,28 +1132,16 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
       if (segmentPoints.length > 1) {
         _initialWalkingSegments.add(segmentPoints);
         try {
-          final line = await controller.addLine(
-            LineOptions(
-              geometry: segmentPoints,
-              lineColor: '#6DB4F8',
-              lineWidth: 4,
-              lineOpacity: 0.90,
-              lineJoin: 'round',
-            ),
-          );
-          _walkingLines.add(line);
-
           final dots = _generateWalkingDots(segmentPoints);
           if (dots.isNotEmpty) {
             final createdDots = await controller.addCircles([
               for (final dot in dots)
                 CircleOptions(
                   geometry: dot,
-                  circleRadius: 4.0,
-                  circleColor: '#3B9BF5',
+                  circleRadius: 3.5,
+                  circleColor: '#1A73E8',
                   circleOpacity: 1.0,
-                  circleStrokeWidth: 1.0,
-                  circleStrokeColor: '#FFFFFF',
+                  circleStrokeWidth: 0.0,
                 ),
             ]);
             _walkingDots.addAll(createdDots);
@@ -1316,19 +1295,30 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     final dots = <LatLng>[];
     if (points.length < 2) return dots;
 
+    // Google Maps-style walking dot spacing: 38 meters between dots
+    const double targetSpacingMeters = 38.0;
+    double accumulatedDistance = 0.0;
+    dots.add(points.first);
+
     for (int i = 0; i < points.length - 1; i++) {
       final p1 = points[i];
       final p2 = points[i + 1];
-      final dLat = p2.latitude - p1.latitude;
-      final dLng = p2.longitude - p1.longitude;
-      final distDeg = math.sqrt(dLat * dLat + dLng * dLng);
-      // Dot step ~ 0.00025 degrees (~25 meters)
-      const step = 0.00025;
-      final numSteps = (distDeg / step).round().clamp(2, 100);
-      for (int s = 0; s <= numSteps; s++) {
-        final t = s / numSteps;
-        dots.add(LatLng(p1.latitude + dLat * t, p1.longitude + dLng * t));
+      final segmentLength = _metricDistanceMeters(p1, p2);
+      if (segmentLength <= 0.5) continue;
+
+      var currentDistanceOnSegment = targetSpacingMeters - accumulatedDistance;
+      while (currentDistanceOnSegment <= segmentLength) {
+        final fraction = currentDistanceOnSegment / segmentLength;
+        final lat = p1.latitude + (p2.latitude - p1.latitude) * fraction;
+        final lng = p1.longitude + (p2.longitude - p1.longitude) * fraction;
+        dots.add(LatLng(lat, lng));
+        currentDistanceOnSegment += targetSpacingMeters;
       }
+      accumulatedDistance = segmentLength - (currentDistanceOnSegment - targetSpacingMeters);
+    }
+
+    if (dots.length > 1 && _metricDistanceMeters(dots.last, points.last) > 15.0) {
+      dots.add(points.last);
     }
     return dots;
   }

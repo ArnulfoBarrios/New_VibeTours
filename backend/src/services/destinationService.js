@@ -202,7 +202,13 @@ export function inferTourType(input = {}, extracted = null) {
     .filter(Boolean)
     .join(' ')
 
-  if (input.isUserLocationOrigin || input.is_user_location_origin) {
+  if (
+    input.isUserLocationOrigin ||
+    input.is_user_location_origin ||
+    input.originPlace === 'user_current_location' ||
+    extracted?.isUserLocationOrigin ||
+    extracted?.originPlace === 'user_current_location'
+  ) {
     return 'location_to_destination'
   }
 

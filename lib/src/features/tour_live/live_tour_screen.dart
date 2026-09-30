@@ -1014,7 +1014,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                           ? Icons.directions_boat_rounded
                                           : liveRoute?.usesBusTransfer == true
                                               ? Icons.directions_bus_rounded
-                                              : Icons.navigation_rounded,
+                                              : (liveRoute?.walkingSegments.isNotEmpty == true)
+                                                  ? Icons.hiking_rounded
+                                                  : Icons.navigation_rounded,
                                   size: 18,
                                   color: Theme.of(context).colorScheme.onPrimaryContainer,
                                 ),
@@ -1042,7 +1044,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                                   ? 'Toca aquí para trazar ruta al aeropuerto'
                                                   : liveRoute.usesMaritimeTransfer
                                                       ? 'Toca aquí para trazar ruta al muelle'
-                                                      : 'Toca aquí para trazar ruta al transbordo',
+                                                      : liveRoute.walkingSegments.isNotEmpty
+                                                          ? 'Toca aquí para ver el sendero a pie'
+                                                          : 'Toca aquí para trazar ruta al transbordo',
                                           style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
@@ -2090,6 +2094,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       hub = liveRoute.airports.first;
     } else if (liveRoute.usesMaritimeTransfer && liveRoute.ports.isNotEmpty) {
       hub = liveRoute.ports.first;
+    } else if (liveRoute.walkingSegments.isNotEmpty) {
+      hub = RoutePortWaypoint(
+        name: 'Inicio del sendero a pie',
+        location: liveRoute.walkingSegments.first.first,
+        role: 'Acceso peatonal',
+      );
     } else if (liveRoute.busTerminals.isNotEmpty) {
       hub = liveRoute.busTerminals.first;
     } else if (liveRoute.airports.isNotEmpty) {

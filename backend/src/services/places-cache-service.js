@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js'
 import { GeoCache } from './geoCache.js'
+import { FALLBACK_DESTINATION_CENTROIDS, haversineDistanceKm } from './destinationService.js'
 
 // In-memory LRU cache fallback (24 hours TTL, up to 1000 places)
 export const placesMemoryCache = new GeoCache(24 * 60 * 60 * 1000, 1000)
@@ -144,7 +145,18 @@ export async function lookupCachedPlacesForCity(city = '', category = null) {
 
     if (error || !data || data.length === 0) return []
 
-    const formatted = data.map(row => {
+    const centroid = FALLBACK_DESTINATION_CENTROIDS[normCity]
+    const validRows = centroid
+      ? data.filter(r => {
+          const lat = Number(r.latitude)
+          const lon = Number(r.longitude)
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
+          const dist = haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon)
+          return dist <= 50
+        })
+      : data
+
+    const formatted = validRows.map(row => {
       const placeCategory = classifyPlaceCategory(row.name, row.metadata, row.metadata?.category)
       return {
         name: row.name,

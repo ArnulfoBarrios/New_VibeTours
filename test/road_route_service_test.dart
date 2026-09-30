@@ -274,5 +274,155 @@ void main() {
       expect(terminals.first.name, 'Terminal de Transportes de Barranquilla');
       expect(terminals.any((t) => t.name.contains('Sincelejo')), isFalse);
     });
+
+    test('should build hybrid driving and walking route when destination is off-road and accessible via hiking trail', () async {
+      // Mock OSRM driving and foot endpoints
+      final mockClient = MockClient((request) async {
+        final uri = request.url.toString();
+
+        // Driving route: terminates on the road near trailhead (~3.9km from Pueblito)
+        if (uri.contains('/route/v1/driving/')) {
+          return http.Response(
+            jsonEncode({
+              'code': 'Ok',
+              'routes': [
+                {
+                  'distance': 123000.0,
+                  'duration': 5800.0,
+                  'geometry': {
+                    'type': 'LineString',
+                    'coordinates': [
+                      [-74.7964, 10.9639], // Barranquilla
+                      [-74.1500, 11.2000],
+                      [-74.0006, 11.2867], // Calabazo trailhead on road
+                    ],
+                  },
+                }
+              ],
+              'waypoints': [
+                {'location': [-74.7964, 10.9639], 'name': 'Barranquilla', 'distance': 0.0},
+                {'location': [-74.0006, 11.2867], 'name': 'Troncal del Caribe', 'distance': 3900.0},
+              ],
+            }),
+            200,
+          );
+        }
+
+        // Foot route: trail leading from trailhead on road to Pueblito Chairama
+        if (uri.contains('routed-foot') || uri.contains('/route/v1/foot/')) {
+          return http.Response(
+            jsonEncode({
+              'code': 'Ok',
+              'routes': [
+                {
+                  'distance': 9700.0,
+                  'duration': 8500.0,
+                  'geometry': {
+                    'type': 'LineString',
+                    'coordinates': [
+                      [-74.0006, 11.2867], // Trailhead on road
+                      [-73.9950, 11.3000],
+                      [-73.9851, 11.3195], // Pueblito Chairama (~50m snap)
+                    ],
+                  },
+                }
+              ],
+              'waypoints': [
+                {'location': [-74.0006, 11.2867], 'name': 'Entrada Calabazo', 'distance': 0.0},
+                {'location': [-73.9851, 11.3195], 'name': 'Pueblito Chairama', 'distance': 55.0},
+              ],
+            }),
+            200,
+          );
+        }
+
+        return http.Response('{"code":"NotFound"}', 404);
+      });
+
+      final service = RoadRouteService(client: mockClient);
+      const start = GeoPoint(latitude: 10.9639, longitude: -74.7964); // Barranquilla
+      const end = GeoPoint(latitude: 11.3200, longitude: -73.9850); // Pueblito Chairama
+
+      final result = await service.resolveRoute(
+        [start, end],
+        travelMode: RouteTravelMode.driving,
+      );
+
+      // Verify no inappropriate flight or maritime connection was triggered
+      expect(result.usesFlightTransfer, isFalse);
+      expect(result.usesMaritimeTransfer, isFalse);
+
+      // Verify hybrid road + walking trail geometry
+      expect(result.geometry.isNotEmpty, isTrue);
+      expect(result.walkingSegments.isNotEmpty, isTrue);
+      expect(result.usesWalkingTransfer, isTrue);
+
+      // Verify walking trail starts at the road drop-off point and reaches destination
+      final trail = result.walkingSegments.first;
+      expect(trail.length, greaterThanOrEqualTo(2));
+      expect(trail.first.latitude, closeTo(11.2867, 0.001));
+      expect(trail.last.latitude, closeTo(11.3195, 0.001));
+
+      // Verify combined distance and travel duration
+      expect(result.distanceMeters, closeTo(132700.0, 100.0));
+      expect(result.travelTimeSeconds, 5800 + 8500);
+
+      // Verify user-facing transit advice
+      expect(result.transitAdviceMessage, isNotNull);
+      expect(result.transitAdviceMessage, contains('sendero'));
+      expect(result.transitAdviceMessage, contains('caminata'));
+    });
+
+    test('should route pure pedestrian trail when both points are off-road within park', () async {
+      final mockClient = MockClient((request) async {
+        final uri = request.url.toString();
+        // OSRM driving has no road connection between park stops
+        if (uri.contains('/route/v1/driving/')) {
+          return http.Response('{"code":"NoRoute"}', 404);
+        }
+
+        if (uri.contains('routed-foot') || uri.contains('/route/v1/foot/')) {
+          return http.Response(
+            jsonEncode({
+              'code': 'Ok',
+              'routes': [
+                {
+                  'distance': 6000.0,
+                  'duration': 5400.0,
+                  'geometry': {
+                    'type': 'LineString',
+                    'coordinates': [
+                      [-73.9850, 11.3200], // Pueblito Chairama
+                      [-73.9600, 11.3250],
+                      [-73.9480, 11.3310], // Cabo San Juan
+                    ],
+                  },
+                }
+              ],
+            }),
+            200,
+          );
+        }
+
+        return http.Response('{"code":"NotFound"}', 404);
+      });
+
+      final service = RoadRouteService(client: mockClient);
+      const start = GeoPoint(latitude: 11.3200, longitude: -73.9850); // Pueblito
+      const end = GeoPoint(latitude: 11.3310, longitude: -73.9480); // Cabo San Juan
+
+      final result = await service.resolveRoute(
+        [start, end],
+        travelMode: RouteTravelMode.driving,
+      );
+
+      expect(result.usesFlightTransfer, isFalse);
+      expect(result.usesMaritimeTransfer, isFalse);
+      expect(result.walkingSegments.isNotEmpty, isTrue);
+      expect(result.usesWalkingTransfer, isTrue);
+      expect(result.distanceMeters, 6000.0);
+      expect(result.travelTimeSeconds, 5400);
+      expect(result.transitAdviceMessage, contains('Sendero peatonal'));
+    });
   });
 }

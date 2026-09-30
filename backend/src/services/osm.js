@@ -2047,6 +2047,53 @@ export function haversineMeters(lat1, lon1, lat2, lon2) {
   return R * c
 }
 
+export function isWithinCorridor(place, startPlace, endPlace, relaxed = false) {
+  if (!place || (!startPlace && !endPlace)) return true
+  const pLat = Number(place.latitude ?? place.lat ?? 0)
+  const pLon = Number(place.longitude ?? place.lon ?? 0)
+  if (!pLat || !pLon) return false
+
+  const startLat = startPlace ? Number(startPlace.latitude ?? startPlace.lat ?? 0) : null
+  const startLon = startPlace ? Number(startPlace.longitude ?? startPlace.lon ?? 0) : null
+  const endLat = endPlace ? Number(endPlace.latitude ?? endPlace.lat ?? 0) : null
+  const endLon = endPlace ? Number(endPlace.longitude ?? endPlace.lon ?? 0) : null
+
+  if (startLat !== null && startLon !== null && endLat !== null && endLon !== null) {
+    const routeDistMeters = haversineMeters(startLat, startLon, endLat, endLon)
+    const routeDistKm = routeDistMeters / 1000
+
+    const distFromStartKm = haversineMeters(pLat, pLon, startLat, startLon) / 1000
+    const distFromEndKm = haversineMeters(pLat, pLon, endLat, endLon) / 1000
+
+    const detourKm = (distFromStartKm + distFromEndKm) - routeDistKm
+
+    const maxDetourKm = relaxed
+      ? Math.max(8.0, routeDistKm * 0.6)
+      : (routeDistKm <= 35 
+          ? Math.min(4.5, Math.max(1.5, routeDistKm * 0.35))
+          : Math.min(25.0, routeDistKm * 0.35))
+
+    if (detourKm > maxDetourKm) {
+      return false
+    }
+
+    if (!relaxed) {
+      const cleanCity = (c) => (c ? String(c).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() : '')
+      const pCity = cleanCity(place.city)
+      const sCity = cleanCity(startPlace.city)
+      const eCity = cleanCity(endPlace.city)
+
+      if (pCity && sCity && eCity && sCity === eCity) {
+        if (!pCity.includes(sCity) && !sCity.includes(pCity)) {
+          return false
+        }
+      }
+    }
+  }
+
+  return true
+}
+
 export function arePlacesSimilar(a, b) {
   if (!a || !b) return false
   const strA = typeof a === 'string' ? a : (a?.name || '')

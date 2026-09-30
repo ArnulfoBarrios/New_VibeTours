@@ -120,6 +120,38 @@ test('Geographic Topologies & Fallback Chat Intelligence', async (t) => {
     assert.equal(resGroup.companions, 'En grupo')
   })
 
+  await t.test('should extract location_to_destination to physical bridge as 1-day excursion without lodging', () => {
+    const prompt = 'Crea un tour de mi ubicación hasta el Puente Pumarejo Voy a ir con unos amigos'
+    const extracted = extractChatInformationFallback(prompt)
+
+    assert.equal(extracted.tourType, 'location_to_destination')
+    assert.equal(extracted.isUserLocationOrigin, true)
+    assert.equal(extracted.destination, 'Puente Pumarejo')
+    assert.equal(extracted.durationDays, 1)
+    assert.equal(extracted.durationHours, 8)
+    assert.equal(extracted.accommodationStatus, 'Alojamiento no requerido / Tour de 1 día')
+    assert.equal(extracted.companions, 'Con amigos')
+  })
+
+  await t.test('should generate 1-day corridor day plan for location_to_destination without asking for lodging', async () => {
+    const userMsg = 'Crea un tour de mi ubicación hasta el Puente Pumarejo Voy a ir con unos amigos'
+    const chatRes = await generateChatResponse(
+      { history: [{ role: 'user', content: userMsg }] },
+      '',
+      '',
+      { userGpsLatitude: 11.018, userGpsLongitude: -74.851 },
+      []
+    )
+
+    assert.ok(chatRes.responseMessage.includes('Puente Pumarejo'), 'Response should mention Puente Pumarejo')
+    assert.ok(!chatRes.responseMessage.toLowerCase().includes('en qué hotel'), 'Should never ask for hotel')
+    assert.ok(!chatRes.responseMessage.toLowerCase().includes('tu alojamiento u hotel'), 'Should never ask for hotel')
+    assert.equal(chatRes.extractedPreferences?.tourType, 'location_to_destination')
+    assert.equal(chatRes.extractedPreferences?.durationDays, 1)
+    assert.ok(Array.isArray(chatRes.specificPlaces) && chatRes.specificPlaces.length >= 2, 'Should provide corridor stops')
+    assert.ok(chatRes.actionChips.some(c => c.includes('Generar tour en el mapa')), 'Action chips should offer map tour generation')
+  })
+
   await t.test('should execute applyTourType in ai.js without ReferenceError', async () => {
     const { applyTourType } = await import('../routes/ai.js')
     const tour = applyTourType({ destination: 'Parque Tayrona' })
@@ -130,3 +162,4 @@ test('Geographic Topologies & Fallback Chat Intelligence', async (t) => {
   })
 
 })
+

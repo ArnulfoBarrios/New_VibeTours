@@ -2,7 +2,7 @@ import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
-import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds } from './osm.js'
+import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds, isWithinCorridor } from './osm.js'
 import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate } from './candidate-catalog.js'
 import { resolvePlaceWithCascade, resolveProviderDestinationCenter, searchGeoapifyPlaces, searchMapboxPlaces } from './places-resolver.js'
 import { fetchWithProviderRetry } from './provider-http.js'
@@ -2003,44 +2003,63 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   let rawDestName = known.city || known.destination || ''
   if (lastUserMsg) {
     const fallbackExtracted = extractChatInformationFallback(lastUserMsg)
-    if (!rawDestName && (fallbackExtracted.city || fallbackExtracted.destination)) {
-      rawDestName = fallbackExtracted.city || fallbackExtracted.destination
-      known.city = fallbackExtracted.city || fallbackExtracted.destination
-      known.destination = fallbackExtracted.destination || fallbackExtracted.city
-    }
-    if (fallbackExtracted.tourType && !known.tourType) {
-      known.tourType = fallbackExtracted.tourType
-    }
-    if (fallbackExtracted.durationDays && !known.durationDays) {
-      known.durationDays = fallbackExtracted.durationDays
-      known.durationHours = fallbackExtracted.durationHours
-    }
-    if (fallbackExtracted.datesSeason && !known.datesSeason) {
-      known.datesSeason = fallbackExtracted.datesSeason
-    }
-    if (fallbackExtracted.companions && !known.companions) {
-      known.companions = fallbackExtracted.companions
-    }
-    if (fallbackExtracted.budget && !known.budget) {
-      known.budget = fallbackExtracted.budget
-    }
-    if (fallbackExtracted.transport && !known.transport) {
-      known.transport = fallbackExtracted.transport
-    }
-    if (fallbackExtracted.selectedHotel && !known.selectedHotel) {
-      known.selectedHotel = fallbackExtracted.selectedHotel
-    }
-    if (fallbackExtracted.accommodationStatus && !known.accommodationStatus) {
-      known.accommodationStatus = fallbackExtracted.accommodationStatus
-    }
-    if (fallbackExtracted.isMultiCity) {
-      known.isMultiCity = true
-      if (Array.isArray(fallbackExtracted.cities)) known.cities = fallbackExtracted.cities
-      if (fallbackExtracted.originPlace) known.originPlace = fallbackExtracted.originPlace
-      if (fallbackExtracted.destinationPlace) known.destinationPlace = fallbackExtracted.destinationPlace
-    }
-    if (fallbackExtracted.isUserLocationOrigin) {
+    if (fallbackExtracted.tourType === 'location_to_destination' || fallbackExtracted.isUserLocationOrigin) {
+      known.tourType = 'location_to_destination'
       known.isUserLocationOrigin = true
+      known.originPlace = 'user_current_location'
+      if (fallbackExtracted.destinationPlace || fallbackExtracted.destination) {
+        rawDestName = fallbackExtracted.destinationPlace || fallbackExtracted.destination
+        known.destinationPlace = rawDestName
+        known.destination = rawDestName
+        known.city = fallbackExtracted.city || rawDestName
+      }
+      known.durationDays = 1
+      known.durationHours = 8
+      known.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
+      delete known.selectedHotel
+      if (fallbackExtracted.companions) known.companions = fallbackExtracted.companions
+      if (fallbackExtracted.budget) known.budget = fallbackExtracted.budget
+      if (fallbackExtracted.transport) known.transport = fallbackExtracted.transport
+    } else {
+      if (!rawDestName && (fallbackExtracted.city || fallbackExtracted.destination)) {
+        rawDestName = fallbackExtracted.city || fallbackExtracted.destination
+        known.city = fallbackExtracted.city || fallbackExtracted.destination
+        known.destination = fallbackExtracted.destination || fallbackExtracted.city
+      }
+      if (fallbackExtracted.tourType && !known.tourType) {
+        known.tourType = fallbackExtracted.tourType
+      }
+      if (fallbackExtracted.durationDays && !known.durationDays) {
+        known.durationDays = fallbackExtracted.durationDays
+        known.durationHours = fallbackExtracted.durationHours
+      }
+      if (fallbackExtracted.datesSeason && !known.datesSeason) {
+        known.datesSeason = fallbackExtracted.datesSeason
+      }
+      if (fallbackExtracted.companions && !known.companions) {
+        known.companions = fallbackExtracted.companions
+      }
+      if (fallbackExtracted.budget && !known.budget) {
+        known.budget = fallbackExtracted.budget
+      }
+      if (fallbackExtracted.transport && !known.transport) {
+        known.transport = fallbackExtracted.transport
+      }
+      if (fallbackExtracted.selectedHotel && !known.selectedHotel) {
+        known.selectedHotel = fallbackExtracted.selectedHotel
+      }
+      if (fallbackExtracted.accommodationStatus && !known.accommodationStatus) {
+        known.accommodationStatus = fallbackExtracted.accommodationStatus
+      }
+      if (fallbackExtracted.isMultiCity) {
+        known.isMultiCity = true
+        if (Array.isArray(fallbackExtracted.cities)) known.cities = fallbackExtracted.cities
+        if (fallbackExtracted.originPlace) known.originPlace = fallbackExtracted.originPlace
+        if (fallbackExtracted.destinationPlace) known.destinationPlace = fallbackExtracted.destinationPlace
+      }
+      if (fallbackExtracted.isUserLocationOrigin) {
+        known.isUserLocationOrigin = true
+      }
     }
   }
 
@@ -2206,7 +2225,20 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     known.companions = 'En grupo'
   }
 
-  const hasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
+  const isLocationToDestination = known.tourType === 'location_to_destination' || known.isUserLocationOrigin || (known.originPlace === 'user_current_location') || (Number(known.durationDays) === 1 && known.originPlace)
+  if (isLocationToDestination) {
+    known.tourType = 'location_to_destination'
+    known.isUserLocationOrigin = true
+    known.originPlace = 'user_current_location'
+    known.durationDays = 1
+    known.durationHours = 8
+    known.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
+    delete known.selectedHotel
+    if (!known.transport) known.transport = 'Vehículo / Taxi'
+    if (!known.budget) known.budget = 'Moderado'
+  }
+
+  const hasLodging = isLocationToDestination ? true : hasValidLodging(known.selectedHotel, known.accommodationStatus)
   const hasTransport = hasValidValue(known.transport)
   const hasBudget = hasValidValue(known.budget)
   const hasCompanions = hasValidValue(known.companions)
@@ -2226,7 +2258,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = '¡Hola! Soy Tour Planner AI 🤖. Cuéntame: ¿a qué ciudad o destino te gustaría viajar hoy?'
       }
     } else {
-      const fbHasLodging = hasValidLodging(known.selectedHotel, known.accommodationStatus)
+      const fbHasLodging = isLocationToDestination ? true : hasValidLodging(known.selectedHotel, known.accommodationStatus)
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
       const fbHasCompanions = hasValidValue(known.companions)
@@ -2304,8 +2336,182 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           .map(dp => `Día ${dp.day}: ${destName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`)
       }
 
+      const buildLocationCorridorDayBlocks = async () => {
+        let startLat = Number(known.userGpsLatitude ?? known.latitude ?? 0)
+        let startLon = Number(known.userGpsLongitude ?? known.longitude ?? 0)
+        let endLat = Number(known.canonicalDestination?.latitude ?? 0)
+        let endLon = Number(known.canonicalDestination?.longitude ?? 0)
 
-      if (isExplicitBuildRequestedByUser && !fbAllKeyInfoComplete) {
+        if (!endLat || !endLon) {
+          const destGeo = await geocodePlace(`${destName} ${known.city || ''} ${destCountry || 'Colombia'}`).catch(() => null)
+          if (destGeo?.latitude && destGeo?.longitude) {
+            endLat = Number(destGeo.latitude)
+            endLon = Number(destGeo.longitude)
+          }
+        }
+
+        if (!startLat || !startLon) {
+          const cityCentroid = FALLBACK_DESTINATION_CENTROIDS[knownCityNormalized]
+          if (cityCentroid?.latitude && cityCentroid?.longitude) {
+            startLat = Number(cityCentroid.latitude)
+            startLon = Number(cityCentroid.longitude)
+          } else if (endLat && endLon) {
+            startLat = endLat + 0.04
+            startLon = endLon - 0.05
+          }
+        }
+
+        const startPlace = { name: 'Tu ubicación actual', latitude: startLat, longitude: startLon }
+        const endPlace = { name: destName, latitude: endLat, longitude: endLon }
+        const routeDistMeters = (startLat && endLat) ? haversineMeters(startLat, startLon, endLat, endLon) : 10000
+        const routeDistKm = Math.max(1, routeDistMeters / 1000)
+
+        const rawAttrs = []
+        const rawRests = []
+
+        if (startLat && endLat) {
+          const ratios = [0.25, 0.50, 0.75]
+          const midRadiusM = Math.max(3000, Math.min(8000, Math.round(routeDistKm * 500)))
+          const midpointResults = await Promise.all(
+            ratios.map(async ratio => {
+              const midLat = startLat + (endLat - startLat) * ratio
+              const midLon = startLon + (endLon - startLon) * ratio
+              const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 4000))
+              const [attrs, foods] = await Promise.all([
+                Promise.race([overpassAttractions(midLat, midLon, midRadiusM).catch(() => []), timeoutPromise]),
+                Promise.race([overpassNearbyFood(midLat, midLon, midRadiusM).catch(() => []), timeoutPromise])
+              ])
+              return { attrs: attrs || [], foods: foods || [] }
+            })
+          ).catch(() => [])
+          for (const res of midpointResults) {
+            if (res.attrs) rawAttrs.push(...res.attrs)
+            if (res.foods) rawRests.push(...res.foods)
+          }
+        }
+
+        if (preset?.candidateCatalog?.places?.length > 0) {
+          rawAttrs.push(...preset.candidateCatalog.places)
+        }
+        if (preset?.candidateCatalog?.restaurants?.length > 0) {
+          rawRests.push(...preset.candidateCatalog.restaurants)
+        }
+        if (Array.isArray(preset?.places)) {
+          for (const p of preset.places) {
+            const placeObj = typeof p === 'string' ? { name: p, ...(preset.coordinatesMap?.[p.toLowerCase()] || {}) } : p
+            rawAttrs.push(placeObj)
+          }
+        }
+        if (Array.isArray(preset?.restaurants)) {
+          for (const r of preset.restaurants) {
+            const restObj = typeof r === 'string' ? { name: r, entityType: 'restaurant', ...(preset.coordinatesMap?.[r.toLowerCase()] || {}) } : r
+            rawRests.push(restObj)
+          }
+        }
+
+        const searchCity = known.city || destName
+        if (rawAttrs.length < 4 && searchCity) {
+          const cachedCityAttrs = await lookupCachedPlacesForCity(searchCity, 'attraction').catch(() => [])
+          rawAttrs.push(...cachedCityAttrs)
+        }
+        if (rawRests.length < 2 && searchCity) {
+          const cachedCityRests = await lookupCachedPlacesForCity(searchCity, 'restaurant').catch(() => [])
+          rawRests.push(...cachedCityRests)
+        }
+
+        const validAttrs = []
+        const seenAttrNames = new Set()
+        for (const p of rawAttrs) {
+          if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name)) continue
+          if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
+          const norm = p.name.toLowerCase().trim()
+          if (seenAttrNames.has(norm)) continue
+          if (p.latitude != null && p.longitude != null && startLat && endLat) {
+            if (!isWithinCorridor(p, startPlace, endPlace)) continue
+            const distFromStart = haversineMeters(startLat, startLon, p.latitude, p.longitude)
+            validAttrs.push({ ...p, distFromStart })
+            seenAttrNames.add(norm)
+          } else {
+            validAttrs.push({ ...p, distFromStart: routeDistMeters * 0.5 })
+            seenAttrNames.add(norm)
+          }
+        }
+
+        const validRests = []
+        const seenRestNames = new Set()
+        for (const r of rawRests) {
+          if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isLowQualityOrFastFoodVenue(r.name)) continue
+          const norm = r.name.toLowerCase().trim()
+          if (seenRestNames.has(norm)) continue
+          if (r.latitude != null && r.longitude != null && startLat && endLat) {
+            if (!isWithinCorridor(r, startPlace, endPlace)) continue
+            const distFromStart = haversineMeters(startLat, startLon, r.latitude, r.longitude)
+            validRests.push({ ...r, distFromStart })
+            seenRestNames.add(norm)
+          } else {
+            validRests.push({ ...r, distFromStart: routeDistMeters * 0.5 })
+            seenRestNames.add(norm)
+          }
+        }
+
+        // Sort strictly monotonic by distance from startPlace (ZERO zigzag)
+        validAttrs.sort((a, b) => (a.distFromStart || 0) - (b.distFromStart || 0))
+        validRests.sort((a, b) => (a.distFromStart || 0) - (b.distFromStart || 0))
+
+        const selectedIntermediateAttrs = []
+        for (const a of validAttrs) {
+          if (selectedIntermediateAttrs.length >= 3) break
+          if (!selectedIntermediateAttrs.some(sel => arePlacesSimilar(sel.name, a.name))) {
+            selectedIntermediateAttrs.push(a)
+          }
+        }
+
+        let lunchRest = null
+        let dinnerRest = null
+        const halfDist = routeDistMeters * 0.5
+        if (validRests.length > 0) {
+          const sortedByMidpoint = [...validRests].sort((a, b) => Math.abs((a.distFromStart || 0) - halfDist) - Math.abs((b.distFromStart || 0) - halfDist))
+          lunchRest = sortedByMidpoint[0] || null
+          const dinnerCandidates = validRests.filter(r => !lunchRest || !arePlacesSimilar(r.name, lunchRest.name))
+          dinnerRest = dinnerCandidates.length > 0 ? dinnerCandidates[dinnerCandidates.length - 1] : null
+        }
+
+        const dayStops = []
+        const specificPlacesToSave = []
+
+        if (selectedIntermediateAttrs[0]) {
+          const s1 = selectedIntermediateAttrs[0]
+          dayStops.push(` • 🌅 **09:00 AM - Mañana**: Visita a **${s1.name}**`)
+          specificPlacesToSave.push({ name: s1.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s1.latitude, longitude: s1.longitude, coordinatesVerified: true })
+        }
+        if (selectedIntermediateAttrs[1]) {
+          const s2 = selectedIntermediateAttrs[1]
+          dayStops.push(` • 🏛️ **11:00 AM - Media mañana**: Recorrido en **${s2.name}**`)
+          specificPlacesToSave.push({ name: s2.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s2.latitude, longitude: s2.longitude, coordinatesVerified: true })
+        }
+        if (lunchRest) {
+          dayStops.push(` • 🍽️ **12:45 PM - Almuerzo**: **${lunchRest.name}** (gastronomía en la ruta)`)
+          specificPlacesToSave.push({ name: lunchRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: lunchRest.latitude, longitude: lunchRest.longitude, coordinatesVerified: true })
+        }
+        if (selectedIntermediateAttrs[2]) {
+          const s3 = selectedIntermediateAttrs[2]
+          dayStops.push(` • 🌇 **02:45 PM - Tarde**: Parada en **${s3.name}**`)
+          specificPlacesToSave.push({ name: s3.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s3.latitude, longitude: s3.longitude, coordinatesVerified: true })
+        }
+
+        dayStops.push(` • 🌉 **04:30 PM - Destino principal**: Llegada a **${destName}**`)
+        specificPlacesToSave.push({ name: destName, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: endLat, longitude: endLon, coordinatesVerified: Boolean(endLat && endLon) })
+
+        if (dinnerRest) {
+          dayStops.push(` • 🍴 **07:00 PM - Cena**: **${dinnerRest.name}** (experiencia culinaria)`)
+          specificPlacesToSave.push({ name: dinnerRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: dinnerRest.latitude, longitude: dinnerRest.longitude, coordinatesVerified: true })
+        }
+
+        known.specificPlaces = specificPlacesToSave
+        return `Día 1: Recorrido desde tu ubicación hasta ${destName} (Excursión de 1 día)\n\n${dayStops.join('\n')}`
+      }
+
+      if (isExplicitBuildRequestedByUser && !fbAllKeyInfoComplete && !isLocationToDestination) {
         const missing = []
         if (!hasCity) missing.push('el destino')
         if (!hasDurationOrDates) missing.push('las fechas o días de viaje')
@@ -2481,7 +2687,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       } else if (!fbHasLodging && hasBudget && hasTransport) {
         fallbackMsg = `¡Perfecto! Ya tenemos transporte y presupuesto. ¿En qué hotel o alojamiento se hospedarán en ${destName}? (o indícame si te quedas en casa propia / familiar).`
         fallbackChips = ['🏨 Recomiéndame hoteles', 'Tengo casa propia / familiar']
-      } else if (!hasBudget || !hasTransport || !fbHasLodging) {
+      } else if (!isLocationToDestination && (!hasBudget || !hasTransport || !fbHasLodging)) {
         const missing = []
         if (!hasTransport) missing.push('tu medio de transporte')
         if (!hasBudget) missing.push('tu presupuesto')
@@ -2491,58 +2697,64 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           ? `¡Genial! Registré **${hotelNameDisplay}** como tu hospedaje. Para continuar planificando tu viaje a ${destName}, `
           : `¡Genial! Para continuar planificando tu viaje a ${destName}, `
         fallbackMsg = `${prefix}¿podrías indicarme: ${missing.join(', ')}?`
-      } else if (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging)) {
-        const numDays = Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))
-        const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
-          ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
-          : []
-        const rawPresetRests = (preset.restaurants || []).map(r => typeof r === 'string' ? r : r.name).filter(Boolean)
-        const pool = deduplicateChatSpecificPlaces(
-          [...rawSpecifics, ...(preset.places || []), ...((preset.candidateCatalog?.places || []).map(p => p?.name || p).filter(Boolean))],
-          destName
-        ).map(p => typeof p === 'string' ? p : p.name)
-         .filter(p => !rawPresetRests.some(r => arePlacesSimilar(r, p)))
+      } else if (isLocationToDestination || (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging))) {
+        if (isLocationToDestination) {
+          const corridorBlock = await buildLocationCorridorDayBlocks()
+          fallbackMsg = `¡Perfecto! Diseñé un tour de 1 día desde tu ubicación hasta **${destName}**, pasando por atractivos en el camino sin desviaciones innecesarias:\n\n${corridorBlock}\n\n¿Qué te parece este recorrido? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
+          fallbackChips = ['🗺️ Generar tour en el mapa', 'Modificar paradas', 'Ver detalles']
+        } else {
+          const numDays = Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))
+          const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
+            ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
+            : []
+          const rawPresetRests = (preset.restaurants || []).map(r => typeof r === 'string' ? r : r.name).filter(Boolean)
+          const pool = deduplicateChatSpecificPlaces(
+            [...rawSpecifics, ...(preset.places || []), ...((preset.candidateCatalog?.places || []).map(p => p?.name || p).filter(Boolean))],
+            destName
+          ).map(p => typeof p === 'string' ? p : p.name)
+           .filter(p => !rawPresetRests.some(r => arePlacesSimilar(r, p)))
 
-        let dayBlocks = []
-        const usedGlobal = new Set()
-        let poolIdx = 0
-        for (let d = 1; d <= numDays; d++) {
-          let p1 = null
-          while (poolIdx < pool.length) {
-            const cand = pool[poolIdx++]
-            if (!usedGlobal.has(cand.toLowerCase())) {
-              p1 = cand
-              usedGlobal.add(cand.toLowerCase())
-              break
+          let dayBlocks = []
+          const usedGlobal = new Set()
+          let poolIdx = 0
+          for (let d = 1; d <= numDays; d++) {
+            let p1 = null
+            while (poolIdx < pool.length) {
+              const cand = pool[poolIdx++]
+              if (!usedGlobal.has(cand.toLowerCase())) {
+                p1 = cand
+                usedGlobal.add(cand.toLowerCase())
+                break
+              }
+            }
+            let p2 = null
+            while (poolIdx < pool.length) {
+              const cand = pool[poolIdx++]
+              if (!usedGlobal.has(cand.toLowerCase())) {
+                p2 = cand
+                usedGlobal.add(cand.toLowerCase())
+                break
+              }
+            }
+            let r = rawPresetRests.find(cName =>
+              !usedGlobal.has(cName.toLowerCase()) &&
+              (!p1 || !arePlacesSimilar(p1, cName)) &&
+              (!p2 || !arePlacesSimilar(p2, cName))
+            ) || rawPresetRests.find(cName =>
+              (!p1 || !arePlacesSimilar(p1, cName)) &&
+              (!p2 || !arePlacesSimilar(p2, cName))
+            ) || null
+            if (r) usedGlobal.add(r.toLowerCase())
+            const dayLines = [p1, p2, r].filter(Boolean).map(place => ` • ${place}`)
+            if (dayLines.length > 0) {
+              dayBlocks.push(`Día ${d}: ${destName}\n${dayLines.join('\n')}`)
             }
           }
-          let p2 = null
-          while (poolIdx < pool.length) {
-            const cand = pool[poolIdx++]
-            if (!usedGlobal.has(cand.toLowerCase())) {
-              p2 = cand
-              usedGlobal.add(cand.toLowerCase())
-              break
-            }
-          }
-          let r = rawPresetRests.find(cName =>
-            !usedGlobal.has(cName.toLowerCase()) &&
-            (!p1 || !arePlacesSimilar(p1, cName)) &&
-            (!p2 || !arePlacesSimilar(p2, cName))
-          ) || rawPresetRests.find(cName =>
-            (!p1 || !arePlacesSimilar(p1, cName)) &&
-            (!p2 || !arePlacesSimilar(p2, cName))
-          ) || null
-          if (r) usedGlobal.add(r.toLowerCase())
-          const dayLines = [p1, p2, r].filter(Boolean).map(place => ` • ${place}`)
-          if (dayLines.length > 0) {
-            dayBlocks.push(`Día ${d}: ${destName}\n${dayLines.join('\n')}`)
-          }
+
+          dayBlocks = buildCoherentChatDayBlocks(numDays, pool); fallbackMsg = `¡Perfecto! Con tu hospedaje confirmado en ${known.selectedHotel?.name || 'tu estancia'} y movilidad definida, aquí tienes tu plan:\n\nItinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
+            (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.') +
+            `\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
         }
-
-        dayBlocks = buildCoherentChatDayBlocks(numDays, pool); fallbackMsg = `¡Perfecto! Con tu hospedaje confirmado en ${known.selectedHotel?.name || 'tu estancia'} y movilidad definida, aquí tienes tu plan:\n\nItinerario de Viaje: ${destName} (${known.datesSeason || `${numDays} días`})\n\n` +
-          (dayBlocks.length > 0 ? dayBlocks.join('\n\n') : 'No encontré lugares turísticos verificables en OpenStreetMap para construir este itinerario.') +
-          `\n\n¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
       } else if (hasDurationOrDates) {
         fallbackMsg = `¡Excelente! Para tu viaje a ${destName} de ${known.datesSeason || `${known.durationDays} días`}, ¿qué lugares o tipo de actividades te gustaría incluir?`
       } else {
@@ -2566,13 +2778,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     }
 
+    const effectiveTrustedPlaces = [
+      ...trustedFallbackPlaces,
+      ...(Array.isArray(known.specificPlaces) ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name) : [])
+    ]
+
     return {
       responseMessage: await sanitizeChatItineraryTextWithOsm(
         fallbackMsg,
         destName,
         destCountry,
         known.selectedHotel,
-        trustedFallbackPlaces
+        effectiveTrustedPlaces
       ),
       actionChips: fallbackChips,
       extractedPreferences: { ...known, specificPlaces: fallbackSpecificPlaces },
@@ -3817,19 +4034,37 @@ export function extractChatInformationFallback(prompt) {
     }
   }
 
-  const locationOriginMatch = text.match(/\b(?:desde|partiendo\s+de)\s+(?:donde\s+estoy|mi\s+ubicaci[oó]n|mi\s+posici[oó]n|ac[aá]|aqu[íi])\s+(?:a|al|hacia|hasta)\s+([a-záéíóúñ\s]{2,35}?)(?:$|\s+(?:en|con|para|durante|del|por|el|la|los)\b)/i)
+  const locationOriginMatch = text.match(/\b(?:tour\s+)?(?:desde|de|saliendo\s+de|partiendo\s+de)\s+(?:donde\s+estoy|mi\s+ubicaci[oó]n|mi\s+posici[oó]n|ac[aá]|aqu[íi])\s+(?:a\s+el|al|a\s+la|a|hacia|hasta(?:\s+el)?)\s+([a-záéíóúñ\s'-]{2,50}?)(?:$|\s+(?:voy|vamos|en\s+(?:carro|auto|bici|bus|transporte|pareja|familia)|con|para|durante|del|por|el\s+pr[oó]ximo|la\s+pr[oó]xima)\b)/i)
   if (locationOriginMatch) {
-    const destCandidate = locationOriginMatch[1].trim()
+    let destCandidate = locationOriginMatch[1].trim()
+    destCandidate = destCandidate.replace(/^(?:el|la|los|las)\s+/i, (match, offset, str) => {
+      return /^(?:el\s+peñol|la\s+guajira|el\s+caim[aá]n)/i.test(str) ? match : ''
+    }).trim()
+    let targetCity = ''
+    destCandidate = destCandidate.replace(/\s+en\s+([a-záéíóúñ\s]+)$/i, (m, c) => {
+      targetCity = c.trim()
+      return ''
+    }).trim()
     if (isValidRouteEndpoint(destCandidate)) {
       const cleanDest = cleanAdministrativeCityName(destCandidate)
       if (cleanDest && cleanDest.length >= 3) {
+        const properDest = cleanDest.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
         res.isUserLocationOrigin = true
-        res.destination = cleanDest
-        res.city = cleanDest
+        res.originPlace = 'user_current_location'
+        res.destinationPlace = properDest
+        res.destination = properDest
+        res.city = targetCity ? targetCity.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : properDest
         res.tourType = 'location_to_destination'
+        if (!res.durationDays) {
+          res.durationDays = 1
+          res.durationHours = 8
+        }
+        res.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
       }
     }
   }
+
+  const isPhysicalBridge = /\bpuente\s+(?:pumarejo|boyac[aá]|navarro|occidente|guayaquil|colgante|roncador|san\s+jorge|peatonal|vehicular|[a-z]{3,})/i.test(prompt) || /\bpuente\b/i.test(res.destination || '')
 
   const dateRangeMatch = text.match(/\b(?:del\s+|desde\s+(?:el\s+)?)?(\d{1,2})\s+(?:al|hasta(?:\s+el)?)\s+(\d{1,2})\b/i)
   if (dateRangeMatch) {
@@ -3839,7 +4074,10 @@ export function extractChatInformationFallback(prompt) {
       res.durationDays = endD - startD + 1
       res.durationHours = res.durationDays * 24
     }
-  } else if (/\b(puente festivo|un puente festivo|un puente|puente|fin de semana largo|3 d[íi]as)\b/i.test(text)) {
+  } else if (!isPhysicalBridge && /\b(puente festivo|un puente festivo|fin de semana largo|3 d[íi]as)\b/i.test(text)) {
+    res.durationDays = 3
+    res.durationHours = 72
+  } else if (!isPhysicalBridge && /\b(un puente|el puente|puente)\b/i.test(text)) {
     res.durationDays = 3
     res.durationHours = 72
   } else if (/\b(fin de semana|un par de d[íi]as|2 d[íi]as)\b/i.test(text)) {
