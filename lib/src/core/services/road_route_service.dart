@@ -9,7 +9,7 @@ import '../../domain/models.dart';
 
 enum TrafficSeverity { unavailable, clear, moderate, heavy, severe }
 
-enum RouteTravelMode { driving, walking, cycling, publicTransport, taxi }
+enum RouteTravelMode { driving, walking, cycling, publicTransport, taxi, flight }
 
 class RoutePortWaypoint {
   const RoutePortWaypoint({
@@ -31,8 +31,12 @@ class RoadRouteResult {
     this.walkingSegments = const [],
     this.ports = const [],
     this.airports = const [],
+    this.busTerminals = const [],
     this.usesMaritimeTransfer = false,
     this.usesFlightTransfer = false,
+    this.usesBusTransfer = false,
+    this.hasFlightAlternative = false,
+    this.hasBusAlternative = false,
     this.transitAdviceMessage,
     this.usesLiveTraffic = false,
     this.usedFallback = false,
@@ -49,8 +53,12 @@ class RoadRouteResult {
   final List<List<GeoPoint>> walkingSegments;
   final List<RoutePortWaypoint> ports;
   final List<RoutePortWaypoint> airports;
+  final List<RoutePortWaypoint> busTerminals;
   final bool usesMaritimeTransfer;
   final bool usesFlightTransfer;
+  final bool usesBusTransfer;
+  final bool hasFlightAlternative;
+  final bool hasBusAlternative;
   final String? transitAdviceMessage;
   final bool usesLiveTraffic;
   final bool usedFallback;
@@ -70,8 +78,12 @@ class RoadRouteResult {
       walkingSegments: walkingSegments,
       ports: ports,
       airports: airports,
+      busTerminals: busTerminals,
       usesMaritimeTransfer: usesMaritimeTransfer,
       usesFlightTransfer: usesFlightTransfer,
+      usesBusTransfer: usesBusTransfer,
+      hasFlightAlternative: hasFlightAlternative,
+      hasBusAlternative: hasBusAlternative,
       transitAdviceMessage: transitAdviceMessage,
       usesLiveTraffic: trafficRoute.usesLiveTraffic,
       usedFallback: usedFallback,
@@ -170,8 +182,12 @@ class RoadRouteService {
     final walkingSegments = <List<GeoPoint>>[];
     final ports = <RoutePortWaypoint>[];
     final airports = <RoutePortWaypoint>[];
+    final busTerminals = <RoutePortWaypoint>[];
     var usesMaritimeTransfer = false;
     var usesFlightTransfer = false;
+    var usesBusTransfer = false;
+    var hasFlightAlternative = false;
+    var hasBusAlternative = false;
     var usedFallback = false;
     var usesLiveTraffic = false;
     var totalDistanceMeters = 0.0;
@@ -186,14 +202,19 @@ class RoadRouteService {
       final legHeading = isFirstLeg ? originHeading : null;
       final directDistance = _distanceMeters(start, end);
 
-      // Long-distance / Intercontinental transfer (> 400 km): Build Flight-aware route
-      if (directDistance > 400000) {
+      final isFlightMode = travelMode == RouteTravelMode.flight;
+      final isBusMode = travelMode == RouteTravelMode.publicTransport;
+      final isIntercity = directDistance > 80000;
+
+      // 1. Explicit Flight Mode requested by the user
+      if (isFlightMode) {
         final flightRoute = await _buildFlightAwareRoute(start, end);
         if (flightRoute != null) {
           _appendGeometry(geometry, flightRoute.geometry);
           flightSegments.addAll(flightRoute.flightSegments);
           airports.addAll(flightRoute.airports);
           usesFlightTransfer = true;
+          hasBusAlternative = true;
           transitAdviceMessage = flightRoute.transitAdviceMessage;
           totalDistanceMeters += flightRoute.distanceMeters;
           totalTravelTimeSeconds += (directDistance / 220).round(); // ~800 km/h flight speed
@@ -201,6 +222,7 @@ class RoadRouteService {
         }
       }
 
+      // 2. Road / Driving route for driving, bus, taxi, cycling, walking
       _DrivingRoute? roadRoute;
       if (preferLiveTraffic &&
           (travelMode == RouteTravelMode.driving ||
@@ -245,17 +267,55 @@ class RoadRouteService {
 
         _appendGeometry(geometry, fullLegGeometry.isEmpty ? [start, end] : fullLegGeometry);
         totalDistanceMeters += roadRoute.distanceMeters;
-        totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
+
+        // Custom duration & advice for Bus mode:
+        if (isBusMode && isIntercity) {
+          final busDuration = _calculateBusTravelTimeSeconds(
+            roadRoute.distanceMeters,
+            roadRoute.travelTimeSeconds,
+          );
+          totalTravelTimeSeconds += busDuration;
+          usesBusTransfer = true;
+
+          final departureTerminals = await _findBusTerminalsNear(start, role: 'Terminal salida');
+          final arrivalTerminals = await _findBusTerminalsNear(end, role: 'Terminal llegada');
+          if (departureTerminals.isNotEmpty) {
+            busTerminals.addAll(departureTerminals);
+          }
+          if (arrivalTerminals.isNotEmpty) {
+            busTerminals.addAll(arrivalTerminals);
+          }
+
+          if (departureTerminals.isNotEmpty && arrivalTerminals.isNotEmpty) {
+            final depName = departureTerminals.first.name;
+            final arrName = arrivalTerminals.first.name;
+            transitAdviceMessage = '🚌 Conexión en autobús: Aborda en $depName hacia $arrName.';
+          } else if (departureTerminals.isNotEmpty) {
+            final depName = departureTerminals.first.name;
+            transitAdviceMessage = '🚌 Conexión en autobús: Dirígete a $depName para abordar tu viaje.';
+          } else {
+            transitAdviceMessage = '🚌 Ruta terrestre en autobús intermunicipal con paradas técnicas.';
+          }
+        } else {
+          totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
+        }
+
         totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
         usesLiveTraffic = usesLiveTraffic || roadRoute.usesLiveTraffic;
+
+        // Flag long-distance travel alternatives (e.g. flight or bus)
+        if (directDistance > 250000) {
+          hasFlightAlternative = true;
+          if (!isBusMode) {
+            hasBusAlternative = true;
+          }
+        }
         continue;
       }
 
+      // 3. Fallbacks when no direct land connection exists (e.g. islands, water bodies)
       final maritimeRoute = await _buildMaritimeAwareRoute(start, end);
       if (maritimeRoute != null) {
-        // Keep only the real land approach in the main geometry. The transfer
-        // between ports is intentionally kept in maritimeSegments so map
-        // renderers cannot mistake it for a road or walking route.
         _appendGeometry(geometry, maritimeRoute.geometry);
         maritimeSegments.addAll(maritimeRoute.maritimeSegments);
         ports.addAll(maritimeRoute.ports);
@@ -265,36 +325,44 @@ class RoadRouteService {
         totalTravelTimeSeconds += maritimeRoute.travelTimeSeconds ?? 0;
         totalTrafficDelaySeconds += maritimeRoute.trafficDelaySeconds ?? 0;
         usesLiveTraffic = usesLiveTraffic || maritimeRoute.usesLiveTraffic;
-      } else if (roadRoute != null) {
-        // If the provider found a road only up to the coast, preserve that
-        // reachable road section. Never bridge the remaining gap with a
-        // straight line to a maritime destination.
-        _appendGeometry(geometry, roadRoute.geometry);
-        totalDistanceMeters += roadRoute.distanceMeters;
-        totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
-        totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
-        usesLiveTraffic = usesLiveTraffic || roadRoute.usesLiveTraffic;
       } else {
-        // Do not infer an off-road/walking segment from two unrelated points.
-        // That fallback used to create a dotted line across water or across
-        // the whole map when routing failed.
-        totalDistanceMeters += _distanceMeters(start, end);
-        usedFallback = true;
+        // True physical transfer required (e.g. San Andrés Island or overseas without ferries)
+        final flightRoute = await _buildFlightAwareRoute(start, end);
+        if (flightRoute != null) {
+          _appendGeometry(geometry, flightRoute.geometry);
+          flightSegments.addAll(flightRoute.flightSegments);
+          airports.addAll(flightRoute.airports);
+          usesFlightTransfer = true;
+          transitAdviceMessage = flightRoute.transitAdviceMessage;
+          totalDistanceMeters += flightRoute.distanceMeters;
+          totalTravelTimeSeconds += (directDistance / 220).round();
+          continue;
+        } else if (roadRoute != null) {
+          _appendGeometry(geometry, roadRoute.geometry);
+          totalDistanceMeters += roadRoute.distanceMeters;
+          totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
+          totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
+          usesLiveTraffic = usesLiveTraffic || roadRoute.usesLiveTraffic;
+        } else {
+          totalDistanceMeters += _distanceMeters(start, end);
+          usedFallback = true;
+        }
       }
     }
 
     return RoadRouteResult(
-      // An empty geometry is meaningful: it tells the map that there is no
-      // verified land route to draw. Falling back to `points` would recreate
-      // the straight-line artefact we are explicitly avoiding.
       geometry: geometry,
       maritimeSegments: maritimeSegments,
       flightSegments: flightSegments,
       walkingSegments: walkingSegments,
       ports: _dedupePorts(ports),
       airports: _dedupePorts(airports),
+      busTerminals: _dedupePorts(busTerminals),
       usesMaritimeTransfer: usesMaritimeTransfer,
       usesFlightTransfer: usesFlightTransfer,
+      usesBusTransfer: usesBusTransfer,
+      hasFlightAlternative: hasFlightAlternative,
+      hasBusAlternative: hasBusAlternative,
       transitAdviceMessage: transitAdviceMessage,
       usesLiveTraffic: usesLiveTraffic,
       usedFallback: usedFallback,
@@ -334,7 +402,7 @@ class RoadRouteService {
       _appendGeometry(geometry, [start]);
     }
 
-    final advice = '✈️ Conexión aérea requerida: Dirígete a ${startAirport?.name ?? "tu aeropuerto de salida"} para abordar tu vuelo hacia ${endAirport?.name ?? "el destino"}.';
+    final advice = '✈️ Conexión aérea: Dirígete a ${startAirport?.name ?? "tu aeropuerto de salida"} para abordar tu vuelo hacia ${endAirport?.name ?? "el destino"}.';
 
     return RoadRouteResult(
       geometry: geometry,
@@ -345,6 +413,62 @@ class RoadRouteService {
       distanceMeters: _geometryDistanceMeters(geometry),
     );
   }
+
+  static final List<({String name, double lat, double lon})> _curatedAirports = [
+    (name: 'Aeropuerto Ernesto Cortissoz (BAQ)', lat: 10.8896, lon: -74.7808),
+    (name: 'Aeropuerto Rafael Núñez (CTG)', lat: 10.4424, lon: -75.5130),
+    (name: 'Aeropuerto Simón Bolívar (SMR)', lat: 11.1198, lon: -74.2306),
+    (name: 'Aeropuerto El Dorado (BOG)', lat: 4.7016, lon: -74.1469),
+    (name: 'Aeropuerto José María Córdova (MDE)', lat: 6.1645, lon: -75.4276),
+    (name: 'Aeropuerto Olaya Herrera (EOH)', lat: 6.2206, lon: -75.5906),
+    (name: 'Aeropuerto Alfonso Bonilla Aragón (CLO)', lat: 3.5432, lon: -76.3816),
+    (name: 'Aeropuerto Palonegro (BGA)', lat: 7.1265, lon: -73.1848),
+    (name: 'Aeropuerto Matecaña (PEI)', lat: 4.8125, lon: -75.7394),
+    (name: 'Aeropuerto Camilo Daza (CUC)', lat: 7.9276, lon: -72.5116),
+    (name: 'Aeropuerto Gustavo Rojas Pinilla (ADZ)', lat: 12.5833, lon: -81.7106),
+    (name: 'Aeropuerto Los Garzones (MTR)', lat: 8.8242, lon: -75.8267),
+    (name: 'Aeropuerto Alfonso López Pumarejo (VUP)', lat: 10.4350, lon: -73.2494),
+    (name: 'Aeropuerto Antonio Nariño (PSO)', lat: 1.3964, lon: -77.2911),
+    (name: 'Aeropuerto El Edén (AXM)', lat: 4.4528, lon: -75.7664),
+    (name: 'Aeropuerto Benito Salas (NVA)', lat: 2.9502, lon: -75.2940),
+    (name: 'Aeropuerto Almirante Padilla (RCH)', lat: 11.5264, lon: -72.9261),
+    (name: 'Aeropuerto Vanguardia (VVC)', lat: 4.1683, lon: -73.6144),
+    (name: 'Aeropuerto Perales (IBE)', lat: 4.4214, lon: -75.1333),
+  ];
+
+  static final List<({String name, double lat, double lon})> _curatedBusTerminals = [
+    // Costa Caribe
+    (name: 'Terminal de Transportes de Barranquilla', lat: 10.9088, lon: -74.7935),
+    (name: 'Terminal de Transportes de Cartagena', lat: 10.3842, lon: -75.4590),
+    (name: 'Terminal de Transportes de Santa Marta', lat: 11.2185, lon: -74.1952),
+    (name: 'Terminal de Transportes de Valledupar', lat: 10.4578, lon: -73.2384),
+    (name: 'Terminal de Transportes de Montería', lat: 8.7554, lon: -75.8622),
+    (name: 'Terminal de Transportes de Sincelejo', lat: 9.2889, lon: -75.4055),
+    (name: 'Terminal de Transportes de Riohacha', lat: 11.5283, lon: -72.9090),
+    // Bogotá y Cundinamarca
+    (name: 'Terminal de Transporte de Bogotá - Salitre', lat: 4.6534, lon: -74.1137),
+    (name: 'Terminal de Transporte del Norte - Bogotá', lat: 4.7702, lon: -74.0435),
+    (name: 'Terminal de Transporte del Sur - Bogotá', lat: 4.5822, lon: -74.1610),
+    // Antioquia y Eje Cafetero
+    (name: 'Terminal de Transportes del Norte - Medellín', lat: 6.2736, lon: -75.5684),
+    (name: 'Terminal de Transportes del Sur - Medellín', lat: 6.2131, lon: -75.5861),
+    (name: 'Terminal de Transportes de Pereira', lat: 4.8105, lon: -75.6888),
+    (name: 'Terminal de Transportes de Manizales', lat: 5.0450, lon: -75.4950),
+    (name: 'Terminal de Transportes de Armenia', lat: 4.5262, lon: -75.6845),
+    // Santanderes
+    (name: 'Terminal de Transportes de Bucaramanga', lat: 7.0945, lon: -73.1362),
+    (name: 'Terminal de Transportes de Cúcuta', lat: 7.9048, lon: -72.5028),
+    // Tolima y Huila
+    (name: 'Terminal de Transportes de Ibagué', lat: 4.4326, lon: -75.2260),
+    (name: 'Terminal de Transportes de Neiva', lat: 2.9463, lon: -75.2890),
+    // Valle, Cauca y Nariño
+    (name: 'Terminal de Transportes de Cali', lat: 3.4650, lon: -76.5255),
+    (name: 'Terminal de Transportes de Popayán', lat: 2.4533, lon: -76.6025),
+    (name: 'Terminal de Transportes de Pasto', lat: 1.2052, lon: -77.2750),
+    // Llanos y Boyacá
+    (name: 'Terminal de Transportes de Villavicencio', lat: 4.1287, lon: -73.6331),
+    (name: 'Terminal de Transportes Juana Velasco de Gallo - Tunja', lat: 5.5458, lon: -73.3486),
+  ];
 
   Future<List<RoutePortWaypoint>> findAirportsNear(
     GeoPoint point, {
@@ -362,7 +486,21 @@ class RoadRouteService {
 
     final candidateList = <RoutePortWaypoint>[];
 
-    // 1. Photon Spatial Geocoding (fastest and ranked by user coordinates)
+    // 1. Curated major national airports within 95 km
+    for (final airport in _curatedAirports) {
+      final loc = GeoPoint(latitude: airport.lat, longitude: airport.lon);
+      if (_distanceMeters(point, loc) <= 95000) {
+        candidateList.add(
+          RoutePortWaypoint(
+            name: airport.name,
+            location: loc,
+            role: role,
+          ),
+        );
+      }
+    }
+
+    // 2. Photon Spatial Geocoding (fast and ranked by user coordinates)
     try {
       final photonUrl = Uri.parse(
         'https://photon.komoot.io/api/?q=aeropuerto&lat=${point.latitude}&lon=${point.longitude}&limit=10',
@@ -385,6 +523,10 @@ class RoadRouteService {
           final lat = (coords[1] as num?)?.toDouble();
           if (lat == null || lon == null) continue;
 
+          final loc = GeoPoint(latitude: lat, longitude: lon);
+          // Strict geographic proximity: reject results further than 95 km
+          if (_distanceMeters(point, loc) > 95000) continue;
+
           final osmValue = properties['osm_value']?.toString() ?? '';
           final type = properties['type']?.toString() ?? '';
           final name = properties['name']?.toString() ?? '';
@@ -398,7 +540,7 @@ class RoadRouteService {
             candidateList.add(
               RoutePortWaypoint(
                 name: name,
-                location: GeoPoint(latitude: lat, longitude: lon),
+                location: loc,
                 role: role,
               ),
             );
@@ -407,7 +549,7 @@ class RoadRouteService {
       }
     } catch (_) {}
 
-    // 2. Overpass API fallback if Photon had no candidates
+    // 3. Overpass API fallback if Photon and curated list had no candidates
     if (candidateList.isEmpty) {
       final query = '''
 [out:json][timeout:5];
@@ -438,12 +580,14 @@ out center tags 10;
             final lon = (raw['lon'] as num?)?.toDouble() ??
                 ((raw['center'] as Map<String, dynamic>?)?['lon'] as num?)?.toDouble();
             if (lat == null || lon == null) continue;
+            final loc = GeoPoint(latitude: lat, longitude: lon);
+            if (_distanceMeters(point, loc) > 95000) continue;
             final tags = raw['tags'] as Map<String, dynamic>? ?? const {};
             final name = tags['name'] ?? tags['name:es'] ?? tags['name:en'] ?? 'Aeropuerto';
             candidateList.add(
               RoutePortWaypoint(
                 name: name.toString(),
-                location: GeoPoint(latitude: lat, longitude: lon),
+                location: loc,
                 role: role,
               ),
             );
@@ -452,7 +596,7 @@ out center tags 10;
       } catch (_) {}
     }
 
-    // 3. Nominatim fallback if still empty
+    // 4. Nominatim fallback if still empty
     if (candidateList.isEmpty) {
       try {
         final nominatimUrl = Uri.parse(
@@ -469,11 +613,29 @@ out center tags 10;
             final lat = double.tryParse(raw['lat']?.toString() ?? '');
             final lon = double.tryParse(raw['lon']?.toString() ?? '');
             if (lat == null || lon == null) continue;
+            final loc = GeoPoint(latitude: lat, longitude: lon);
+            if (_distanceMeters(point, loc) > 95000) continue;
             final name = (raw['name'] ?? raw['display_name']?.toString().split(',').first ?? 'Aeropuerto').toString();
-            candidateList.add(RoutePortWaypoint(name: name, location: GeoPoint(latitude: lat, longitude: lon), role: role));
+            candidateList.add(RoutePortWaypoint(name: name, location: loc, role: role));
           }
         }
       } catch (_) {}
+    }
+
+    // 5. Regional fallback if empty (expand curated search to 180 km)
+    if (candidateList.isEmpty) {
+      for (final airport in _curatedAirports) {
+        final loc = GeoPoint(latitude: airport.lat, longitude: airport.lon);
+        if (_distanceMeters(point, loc) <= 180000) {
+          candidateList.add(
+            RoutePortWaypoint(
+              name: airport.name,
+              location: loc,
+              role: role,
+            ),
+          );
+        }
+      }
     }
 
     if (candidateList.isNotEmpty) {
@@ -488,6 +650,216 @@ out center tags 10;
     }
 
     return const [];
+  }
+
+  final Map<String, List<RoutePortWaypoint>> _busTerminalsDynamicCache = {};
+
+  Future<List<RoutePortWaypoint>> findBusTerminalsNear(
+    GeoPoint point, {
+    required String role,
+  }) => _findBusTerminalsNear(point, role: role);
+
+  Future<List<RoutePortWaypoint>> _findBusTerminalsNear(
+    GeoPoint point, {
+    required String role,
+  }) async {
+    final cacheKey = '${point.latitude.toStringAsFixed(1)},${point.longitude.toStringAsFixed(1)}';
+    if (_busTerminalsDynamicCache.containsKey(cacheKey)) {
+      return _busTerminalsDynamicCache[cacheKey]!;
+    }
+
+    final candidateList = <RoutePortWaypoint>[];
+
+    // 1. Curated major Colombian bus terminals within 65 km
+    for (final term in _curatedBusTerminals) {
+      final loc = GeoPoint(latitude: term.lat, longitude: term.lon);
+      if (_distanceMeters(point, loc) <= 65000) {
+        candidateList.add(
+          RoutePortWaypoint(
+            name: term.name,
+            location: loc,
+            role: role,
+          ),
+        );
+      }
+    }
+
+    // 2. Photon Spatial Geocoding (fast and ranked by user coordinates)
+    try {
+      final photonUrl = Uri.parse(
+        'https://photon.komoot.io/api/?q=terminal+de+transporte&lat=${point.latitude}&lon=${point.longitude}&limit=10',
+      );
+      final response = await _client.get(
+        photonUrl,
+        headers: const {'User-Agent': 'VibeTours/1.0'},
+      ).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final features = decoded['features'] as List<dynamic>? ?? const [];
+        for (final item in features) {
+          if (item is! Map<String, dynamic>) continue;
+          final properties = item['properties'] as Map<String, dynamic>? ?? const {};
+          final geometry = item['geometry'] as Map<String, dynamic>? ?? const {};
+          final coords = geometry['coordinates'] as List<dynamic>? ?? const [];
+          if (coords.length < 2) continue;
+          final lon = (coords[0] as num?)?.toDouble();
+          final lat = (coords[1] as num?)?.toDouble();
+          if (lat == null || lon == null) continue;
+
+          final loc = GeoPoint(latitude: lat, longitude: lon);
+          // Strict geographic proximity: reject results further than 65 km
+          if (_distanceMeters(point, loc) > 65000) continue;
+
+          final osmValue = properties['osm_value']?.toString() ?? '';
+          final name = properties['name']?.toString() ?? '';
+          final lowerName = name.toLowerCase();
+
+          final isBusStation = osmValue == 'bus_station' || osmValue == 'bus_terminal';
+          final hasTerminalName = lowerName.contains('terminal') ||
+              lowerName.contains('central de autobuses') ||
+              lowerName.contains('estación de autobuses');
+          final isIgnored = lowerName.contains('aeropuerto') || lowerName.contains('airport');
+
+          if ((isBusStation || hasTerminalName) && !isIgnored && name.isNotEmpty) {
+            candidateList.add(
+              RoutePortWaypoint(
+                name: name,
+                location: loc,
+                role: role,
+              ),
+            );
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 3. Nominatim bounded fallback if still empty
+    if (candidateList.isEmpty) {
+      try {
+        final nominatimUrl = Uri.parse(
+          'https://nominatim.openstreetmap.org/search?q=terminal+de+transporte&format=json&limit=5&bounded=1&viewbox=${point.longitude - 0.6},${point.latitude + 0.6},${point.longitude + 0.6},${point.latitude - 0.6}',
+        );
+        final nomResponse = await _client.get(
+          nominatimUrl,
+          headers: const {'User-Agent': 'VibeTours/1.0'},
+        ).timeout(const Duration(seconds: 4));
+        if (nomResponse.statusCode == 200) {
+          final nomDecoded = jsonDecode(nomResponse.body) as List<dynamic>;
+          for (final raw in nomDecoded) {
+            if (raw is! Map<String, dynamic>) continue;
+            final lat = double.tryParse(raw['lat']?.toString() ?? '');
+            final lon = double.tryParse(raw['lon']?.toString() ?? '');
+            if (lat == null || lon == null) continue;
+            final loc = GeoPoint(latitude: lat, longitude: lon);
+            if (_distanceMeters(point, loc) > 65000) continue;
+            final name = (raw['name'] ?? raw['display_name']?.toString().split(',').first ?? 'Terminal de Transporte').toString();
+            candidateList.add(RoutePortWaypoint(name: name, location: loc, role: role));
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 4. Overpass API fallback if still empty
+    if (candidateList.isEmpty) {
+      final query = '''
+[out:json][timeout:5];
+(
+  node(around:60000,${point.latitude},${point.longitude})["amenity"="bus_station"];
+  way(around:60000,${point.latitude},${point.longitude})["amenity"="bus_station"];
+);
+out center tags 10;
+''';
+      try {
+        final response = await _client
+            .post(
+              Uri.parse(_overpassUrl),
+              headers: const {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'VIBETOURS/1.0',
+              },
+              body: {'data': query},
+            )
+            .timeout(const Duration(seconds: 4));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+          final elements = decoded['elements'] as List<dynamic>? ?? const [];
+          for (final raw in elements) {
+            if (raw is! Map<String, dynamic>) continue;
+            final lat = (raw['lat'] as num?)?.toDouble() ??
+                ((raw['center'] as Map<String, dynamic>?)?['lat'] as num?)?.toDouble();
+            final lon = (raw['lon'] as num?)?.toDouble() ??
+                ((raw['center'] as Map<String, dynamic>?)?['lon'] as num?)?.toDouble();
+            if (lat == null || lon == null) continue;
+            final loc = GeoPoint(latitude: lat, longitude: lon);
+            if (_distanceMeters(point, loc) > 65000) continue;
+            final tags = raw['tags'] as Map<String, dynamic>? ?? const {};
+            final name = tags['name'] ?? tags['name:es'] ?? tags['name:en'] ?? 'Terminal de Transporte';
+            candidateList.add(
+              RoutePortWaypoint(
+                name: name.toString(),
+                location: loc,
+                role: role,
+              ),
+            );
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 5. Regional fallback if empty (expand curated search to 150 km)
+    if (candidateList.isEmpty) {
+      for (final term in _curatedBusTerminals) {
+        final loc = GeoPoint(latitude: term.lat, longitude: term.lon);
+        if (_distanceMeters(point, loc) <= 150000) {
+          candidateList.add(
+            RoutePortWaypoint(
+              name: term.name,
+              location: loc,
+              role: role,
+            ),
+          );
+        }
+      }
+    }
+
+    if (candidateList.isNotEmpty) {
+      candidateList.sort(
+        (a, b) => _distanceMeters(point, a.location)
+            .compareTo(_distanceMeters(point, b.location)),
+      );
+      final deduped = _dedupePorts(candidateList);
+      _busTerminalsDynamicCache[cacheKey] = deduped;
+      return deduped;
+    }
+
+    return const [];
+  }
+
+  /// Calculates realistic intermunicipal bus travel duration.
+  ///
+  /// Intermunicipal buses operate under speed limits (~50-55 km/h avg),
+  /// require terminal boarding buffers (30m), and mandatory technical
+  /// stops for driver rest and passenger meals on long trips.
+  int _calculateBusTravelTimeSeconds(double distanceMeters, int? baseDrivingSeconds) {
+    if (distanceMeters <= 30000) {
+      // Urban transit
+      return baseDrivingSeconds != null
+          ? (baseDrivingSeconds * 1.35).round()
+          : (distanceMeters / (22.0 * 1000 / 3600)).round();
+    }
+
+    // Cruising speed ~52 km/h (14.44 m/s) on national highways/mountain terrain
+    final double cruisingSeconds = distanceMeters / 14.44;
+
+    // Terminal boarding & departure buffer: 30 minutes
+    const int boardingBuffer = 1800;
+
+    // Technical rest stops: ~40 minutes every 200 km beyond the first 100 km
+    final int restStops = math.max(0, ((distanceMeters - 100000) / 200000).floor());
+    final int restStopsDuration = restStops * 2400;
+
+    return (cruisingSeconds + boardingBuffer + restStopsDuration).round();
   }
 
   Future<RoadRouteResult?> _buildMaritimeAwareRoute(
@@ -945,9 +1317,16 @@ out center tags 30;
   static List<RoutePortWaypoint> _dedupePorts(List<RoutePortWaypoint> ports) {
     final unique = <RoutePortWaypoint>[];
     for (final port in ports) {
-      final exists = unique.any(
-        (item) => _distanceMeters(item.location, port.location) < 80,
-      );
+      final exists = unique.any((item) {
+        final dist = _distanceMeters(item.location, port.location);
+        if (dist < 800) return true;
+        final cleanA = item.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        final cleanB = port.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        if (cleanA.isNotEmpty && cleanB.isNotEmpty && dist < 3000 && (cleanA.contains(cleanB) || cleanB.contains(cleanA))) {
+          return true;
+        }
+        return false;
+      });
       if (!exists) unique.add(port);
     }
     return unique;

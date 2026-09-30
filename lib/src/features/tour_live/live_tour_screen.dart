@@ -153,6 +153,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   final _nextStopKey = GlobalKey();
   bool _tourChecked = false;
   String? _dismissedApproachingStopId;
+  RouteTravelMode? _activeTravelMode;
+  bool _isTransitBannerDismissed = false;
 
   int _calculateMaxDays(Tour tour) {
     if (tour.stops.isEmpty) return 1;
@@ -968,82 +970,107 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 ),
               ),
 
-              if (liveRoute?.transitAdviceMessage != null)
+              if (liveRoute?.transitAdviceMessage != null && !_isTransitBannerDismissed)
                 Positioned(
                   left: 16,
                   right: 16,
                   top: MediaQuery.of(context).padding.top + 70,
-                  child: InkWell(
-                    onTap: () async {
-                      await _handleTransitBannerTap(liveRoute);
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: AppTheme.primary.withValues(alpha: 0.4),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.12),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppTheme.primary.withValues(alpha: 0.4),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(7),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primaryContainer,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              liveRoute?.usesFlightTransfer == true
-                                  ? Icons.flight_takeoff_rounded
-                                  : liveRoute?.usesMaritimeTransfer == true
-                                      ? Icons.directions_boat_rounded
-                                      : Icons.navigation_rounded,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  liveRoute!.transitAdviceMessage!,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: Theme.of(context).colorScheme.onSurface,
-                                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          await _handleTransitBannerTap(liveRoute);
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                  shape: BoxShape.circle,
                                 ),
-                                const SizedBox(height: 4),
-                                Row(
+                                child: Icon(
+                                  liveRoute?.usesFlightTransfer == true
+                                      ? Icons.flight_takeoff_rounded
+                                      : liveRoute?.usesMaritimeTransfer == true
+                                          ? Icons.directions_boat_rounded
+                                          : liveRoute?.usesBusTransfer == true
+                                              ? Icons.directions_bus_rounded
+                                              : Icons.navigation_rounded,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      'Toca aquí para trazar ruta al terminal',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.primary,
-                                      ),
+                                      liveRoute!.transitAdviceMessage!,
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: Theme.of(context).colorScheme.onSurface,
+                                          ),
                                     ),
-                                    const SizedBox(width: 4),
-                                    Icon(Icons.arrow_forward_rounded, size: 12, color: AppTheme.primary),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          liveRoute.usesBusTransfer
+                                              ? 'Toca aquí para trazar ruta a la terminal'
+                                              : liveRoute.usesFlightTransfer
+                                                  ? 'Toca aquí para trazar ruta al aeropuerto'
+                                                  : liveRoute.usesMaritimeTransfer
+                                                      ? 'Toca aquí para trazar ruta al muelle'
+                                                      : 'Toca aquí para trazar ruta al transbordo',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.primary,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Icon(Icons.arrow_forward_rounded, size: 12, color: AppTheme.primary),
+                                      ],
+                                    ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => setState(() => _isTransitBannerDismissed = true),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    size: 18,
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -1725,7 +1752,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     });
     final requestToken = ++_routeRequestToken;
     final profileTransport = ref.read(touristProfileProvider).valueOrNull?.transportPreference;
-    final travelMode = routeTravelModeFor(profileTransport);
+    final travelMode = _activeTravelMode ??= routeTravelModeFor(profileTransport);
     final previousRoute = _liveRoute;
     late final RoadRouteResult route;
     try {
@@ -1775,11 +1802,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       destination.latitude, destination.longitude,
     );
 
-    // Intra-city anomaly check: block jumps over 100km unless explicitly multimodal / flight transfer
-    final isFlightOrMaritime = route.usesFlightTransfer || route.usesMaritimeTransfer;
-    bool isUnreachable = !isFlightOrMaritime && ((route.usedFallback && directDist > 20000) || (directDist > 100000));
+    // Intercity / distance check: only block if routing engine completely failed to find roads
+    final isMultimodal = route.usesFlightTransfer || route.usesMaritimeTransfer || route.usesBusTransfer;
+    bool isUnreachable = !isMultimodal && route.usedFallback && directDist > 25000;
     
-    if (route.geometry.isNotEmpty && !isFlightOrMaritime) {
+    if (route.geometry.isNotEmpty && !isMultimodal && route.usedFallback) {
       final snapStart = Geolocator.distanceBetween(
         origin.latitude, origin.longitude,
         route.geometry.first.latitude, route.geometry.first.longitude,
@@ -1914,16 +1941,16 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   String _timeLabel(Tour tour, double progress, RoadRouteResult? route) {
     final seconds = route?.travelTimeSeconds;
-    if (seconds != null && seconds > 0 && seconds < 7200) {
+    if (seconds != null && seconds > 0) {
       final remainingMeters = _remainingRouteDistanceMeters(route);
       final totalMeters = route?.distanceMeters ?? 0;
       final remainingSeconds = remainingMeters != null && totalMeters > 0
           ? (seconds * (remainingMeters / totalMeters)).round()
           : seconds;
-      return _formatDuration(remainingSeconds.clamp(0, 7200));
+      return _formatDuration(remainingSeconds);
     }
     if (_selectedVoicePlace != null || _navigatingToHotel) return 'Calculando...';
-    // Calculate realistic walking time for the active leg based on remaining meters
+    // Calculate realistic travel time for the active leg based on remaining meters
     final legMeters = _remainingRouteDistanceMeters(route) ?? route?.distanceMeters ?? 0;
     if (legMeters > 0) {
       final speedKmh = switch (route?.travelMode ?? RouteTravelMode.driving) {
@@ -1932,9 +1959,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         RouteTravelMode.publicTransport => 22.0,
         RouteTravelMode.taxi => 28.0,
         RouteTravelMode.driving => 35.0,
+        RouteTravelMode.flight => 600.0,
       };
-      final estimatedMins = (legMeters / 1000.0 / speedKmh * 60).round().clamp(1, 180);
-      return '$estimatedMins min';
+      final estimatedMins = (legMeters / 1000.0 / speedKmh * 60).round();
+      return _formatDuration(estimatedMins * 60);
     }
     final activeStopMins = tour.stops.isNotEmpty && _activeStop < tour.stops.length
         ? (tour.stops[_activeStop].suggestedMinutes > 0 ? tour.stops[_activeStop].suggestedMinutes : 25)
@@ -2055,16 +2083,26 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   Future<void> _handleTransitBannerTap(RoadRouteResult liveRoute) async {
-    RoutePortWaypoint? hub = liveRoute.airports.isNotEmpty
-        ? liveRoute.airports.first
-        : liveRoute.ports.isNotEmpty
-            ? liveRoute.ports.first
-            : null;
+    RoutePortWaypoint? hub;
+    if (liveRoute.usesBusTransfer && liveRoute.busTerminals.isNotEmpty) {
+      hub = liveRoute.busTerminals.first;
+    } else if (liveRoute.usesFlightTransfer && liveRoute.airports.isNotEmpty) {
+      hub = liveRoute.airports.first;
+    } else if (liveRoute.usesMaritimeTransfer && liveRoute.ports.isNotEmpty) {
+      hub = liveRoute.ports.first;
+    } else if (liveRoute.busTerminals.isNotEmpty) {
+      hub = liveRoute.busTerminals.first;
+    } else if (liveRoute.airports.isNotEmpty) {
+      hub = liveRoute.airports.first;
+    }
 
     if (hub == null && _currentPoint != null) {
-      final nearby = await _routeService.findAirportsNear(_currentPoint!, role: 'Aeropuerto salida');
-      if (nearby.isNotEmpty) {
-        hub = nearby.first;
+      if (liveRoute.usesBusTransfer || _activeTravelMode == RouteTravelMode.publicTransport) {
+        final nearby = await _routeService.findBusTerminalsNear(_currentPoint!, role: 'Terminal salida');
+        if (nearby.isNotEmpty) hub = nearby.first;
+      } else {
+        final nearby = await _routeService.findAirportsNear(_currentPoint!, role: 'Aeropuerto salida');
+        if (nearby.isNotEmpty) hub = nearby.first;
       }
     }
 
@@ -2158,6 +2196,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       'museum': 'Museo',
       'hotel': 'Hotel / Alojamiento',
       'hostel': 'Hostal',
+      'terminal': 'Terminal de transporte',
+      'terminal salida': 'Terminal de transporte',
+      'terminal llegada': 'Terminal de transporte',
+      'aeropuerto': 'Aeropuerto',
+      'aeropuerto salida': 'Aeropuerto',
+      'aeropuerto llegada': 'Aeropuerto',
+      'puerto': 'Muelle / Puerto',
+      'puerto de embarque': 'Muelle / Puerto',
     };
 
     if (translations.containsKey(primary)) {
@@ -2394,16 +2440,37 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   Widget _buildRestaurantNavigationPanel(BuildContext context, Tour tour) {
-    final isAirport = _selectedVoicePlace?.type == 'aeropuerto' ||
+    final nameLower = (_selectedVoicePlace?.name ?? '').toLowerCase();
+    final typeLower = (_selectedVoicePlace?.type ?? '').toLowerCase();
+
+    final isBusTerminal = typeLower.contains('terminal') ||
+        typeLower.contains('bus') ||
+        typeLower.contains('autobús') ||
+        typeLower.contains('autobus') ||
+        nameLower.contains('terminal') ||
+        nameLower.contains('central de autobuses') ||
+        nameLower.contains('estación de autobuses');
+
+    final isAirport = !isBusTerminal && (
+        _selectedVoicePlace?.type == 'aeropuerto' ||
         (_selectedVoicePlace?.type?.contains('Aeropuerto') ?? false) ||
-        (_selectedVoicePlace?.name.contains('Aeropuerto') ?? false);
-    final isPort = _selectedVoicePlace?.type == 'puerto' ||
+        (_selectedVoicePlace?.name.contains('Aeropuerto') ?? false) ||
+        typeLower.contains('aeropuerto') ||
+        typeLower.contains('airport') ||
+        nameLower.contains('aeropuerto') ||
+        nameLower.contains('airport')
+    );
+
+    final isPort = !isBusTerminal && (
+        _selectedVoicePlace?.type == 'puerto' ||
         _selectedVoicePlace?.type?.contains('Embarque') == true ||
         (_selectedVoicePlace?.type?.contains('Puerto') ?? false) ||
         (_selectedVoicePlace?.name.contains('Muelle') ?? false) ||
-        (_selectedVoicePlace?.name.contains('Puerto') ?? false);
-    final nameLower = (_selectedVoicePlace?.name ?? '').toLowerCase();
-    final typeLower = (_selectedVoicePlace?.type ?? '').toLowerCase();
+        (_selectedVoicePlace?.name.contains('Puerto') ?? false) ||
+        typeLower.contains('muelle') ||
+        nameLower.contains('muelle')
+    );
+
     final isHotel = typeLower == 'hotel' ||
         nameLower.contains('hotel') ||
         nameLower.contains('hostal') ||
@@ -2413,6 +2480,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         nameLower.contains('estelar') ||
         nameLower.contains('boutique') ||
         nameLower.contains('posada');
+
     final isAttraction = typeLower == 'attraction' ||
         typeLower == 'tourism' ||
         typeLower == 'monument' ||
@@ -2425,25 +2493,29 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         nameLower.contains('castillo') ||
         nameLower.contains('plaza');
 
-    final destinationTitle = isAirport
-        ? 'Ruta al Aeropuerto'
-        : isPort
-            ? 'Ruta al Muelle'
-            : isHotel
-                ? 'Ruta a tu Alojamiento'
-                : isAttraction
-                    ? 'Ruta al Punto de Interés'
-                    : 'Ruta al Restaurante';
+    final destinationTitle = isBusTerminal
+        ? 'Ruta a la Terminal de Transporte'
+        : isAirport
+            ? 'Ruta al Aeropuerto'
+            : isPort
+                ? 'Ruta al Muelle'
+                : isHotel
+                    ? 'Ruta a tu Alojamiento'
+                    : isAttraction
+                        ? 'Ruta al Punto de Interés'
+                        : 'Ruta al Restaurante';
 
-    final destinationIcon = isAirport
-        ? Icons.flight_takeoff_rounded
-        : isPort
-            ? Icons.directions_boat_rounded
-            : isHotel
-                ? Icons.hotel_rounded
-                : isAttraction
-                    ? Icons.place_rounded
-                    : Icons.restaurant_rounded;
+    final destinationIcon = isBusTerminal
+        ? Icons.directions_bus_rounded
+        : isAirport
+            ? Icons.flight_takeoff_rounded
+            : isPort
+                ? Icons.directions_boat_rounded
+                : isHotel
+                    ? Icons.hotel_rounded
+                    : isAttraction
+                        ? Icons.place_rounded
+                        : Icons.restaurant_rounded;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -2476,7 +2548,17 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         if (_selectedVoicePlace?.cuisine != null || _selectedVoicePlace?.type != null) ...[
           const SizedBox(height: 2),
           Text(
-            'Categoría: ${_formatFoodCategory(_selectedVoicePlace?.cuisine, _selectedVoicePlace?.type)}',
+            isBusTerminal
+                ? 'Punto de abordaje para tu viaje terrestre'
+                : isAirport
+                    ? 'Terminal aérea para tu vuelo'
+                    : isPort
+                        ? 'Punto de embarque marítimo / fluvial'
+                        : isHotel
+                            ? 'Lugar de descanso y hospedaje'
+                            : isAttraction
+                                ? 'Atracción o lugar de interés'
+                                : 'Categoría: ${_formatFoodCategory(_selectedVoicePlace?.cuisine, _selectedVoicePlace?.type)}',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
                 ),
@@ -2497,7 +2579,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   }
                 },
                 icon: const Icon(Icons.arrow_back_rounded),
-                label: const Text('Volver al Tour'),
+                label: Text(
+                  isBusTerminal || isAirport || isPort
+                      ? 'Volver a la Ruta Principal'
+                      : 'Volver al Tour',
+                ),
               ),
             ),
           ],
@@ -2913,7 +2999,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           children: [
             Icon(
               transportIconFor(
-                ref.read(touristProfileProvider).valueOrNull?.transportPreference,
+                _activeTravelMode?.name ??
+                    ref.read(touristProfileProvider).valueOrNull?.transportPreference,
               ),
               size: 14,
               color: AppTheme.primary,
@@ -2959,6 +3046,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           minHeight: 3,
           borderRadius: BorderRadius.circular(999),
         ),
+        const SizedBox(height: 8),
+        _buildTravelModeSelector(context, tour, liveRoute),
         const SizedBox(height: 10),
         // Row 2: Action Controls (Ya llegué + Audioguía + Asistente IA + Siguiente/Finalizar)
         Row(
@@ -3042,6 +3131,140 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildTravelModeSelector(
+    BuildContext context,
+    Tour tour,
+    RoadRouteResult? liveRoute,
+  ) {
+    final currentMode = _activeTravelMode ??
+        routeTravelModeFor(ref.read(touristProfileProvider).valueOrNull?.transportPreference);
+
+    final directDist = _currentPoint != null && tour.stops.isNotEmpty && _activeStop < tour.stops.length
+        ? Geolocator.distanceBetween(
+            _currentPoint!.latitude,
+            _currentPoint!.longitude,
+            tour.stops[_activeStop].location.latitude,
+            tour.stops[_activeStop].location.longitude,
+          )
+        : 0.0;
+
+    final isLongDistance = directDist > 200000 ||
+        (liveRoute != null && liveRoute.distanceMeters > 200000) ||
+        (liveRoute?.hasFlightAlternative == true) ||
+        (liveRoute?.usesFlightTransfer == true);
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildTransportModeChip(
+            icon: Icons.directions_car_rounded,
+            label: 'Carro',
+            mode: RouteTravelMode.driving,
+            isSelected: currentMode == RouteTravelMode.driving,
+            tour: tour,
+          ),
+          const SizedBox(width: 6),
+          _buildTransportModeChip(
+            icon: Icons.directions_bus_rounded,
+            label: 'Autobús',
+            mode: RouteTravelMode.publicTransport,
+            isSelected: currentMode == RouteTravelMode.publicTransport,
+            tour: tour,
+          ),
+          if (isLongDistance) ...[
+            const SizedBox(width: 6),
+            _buildTransportModeChip(
+              icon: Icons.flight_takeoff_rounded,
+              label: 'Avión',
+              mode: RouteTravelMode.flight,
+              isSelected: currentMode == RouteTravelMode.flight,
+              tour: tour,
+            ),
+          ] else ...[
+            const SizedBox(width: 6),
+            _buildTransportModeChip(
+              icon: Icons.directions_walk_rounded,
+              label: 'A pie',
+              mode: RouteTravelMode.walking,
+              isSelected: currentMode == RouteTravelMode.walking,
+              tour: tour,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransportModeChip({
+    required IconData icon,
+    required String label,
+    required RouteTravelMode mode,
+    required bool isSelected,
+    required Tour tour,
+  }) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          if (_activeTravelMode != mode) {
+            setState(() {
+              _activeTravelMode = mode;
+              _isTransitBannerDismissed = false;
+              _liveRoute = null;
+              _liveRouteStopIndex = null;
+              _selectedVoicePlace = null;
+            });
+            _recalculateRoute(tour, force: true);
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? theme.colorScheme.primaryContainer
+                : theme.colorScheme.surface.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline.withValues(alpha: 0.25),
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected
+                    ? theme.colorScheme.onPrimaryContainer
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected
+                      ? theme.colorScheme.onPrimaryContainer
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

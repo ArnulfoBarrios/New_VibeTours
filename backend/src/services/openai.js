@@ -1,6 +1,6 @@
 import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
-import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache } from './destinationService.js'
+import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds } from './osm.js'
 import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate } from './candidate-catalog.js'
@@ -1601,24 +1601,38 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     if (realPlaces.length < minLandmarksTarget) {
-      const [generalPlaces, museums, parks, plazas, viewpoints, monuments, theaters] = await Promise.all([
-        photonSearch(`turismo ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`museo ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`parque ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`plaza ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`mirador ${clean}`, 5, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`monumento ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`teatro ${clean}`, 4, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
-      ])
-      const additional = [
-        ...generalPlaces,
-        ...museums,
-        ...parks,
-        ...plazas,
-        ...viewpoints,
-        ...monuments,
-        ...theaters
-      ].filter(p => {
+      const isNatureOrMicroDest = /tayrona|minca|cocora|parque|reserva|valle|playa|ca[nñ][oó]n|sierra|monta[nñ]a|cascada|guatap[eé]|tatacoa/i.test(clean)
+      const baseQueries = isNatureOrMicroDest
+        ? [
+            `turismo ${clean}`,
+            `playa ${clean}`,
+            `sendero ${clean}`,
+            `mirador ${clean}`,
+            `parque ${clean}`,
+            `reserva ${clean}`,
+            `cascada ${clean}`
+          ]
+        : [
+            `turismo ${clean}`,
+            `museo ${clean}`,
+            `parque ${clean}`,
+            `plaza ${clean}`,
+            `mirador ${clean}`,
+            `monumento ${clean}`,
+            `teatro ${clean}`
+          ]
+
+      const directCategoryQueries = (lat && lon)
+        ? (isNatureOrMicroDest
+            ? ['playa', 'sendero', 'mirador', 'parque', 'turismo']
+            : ['turismo', 'museo', 'plaza', 'parque', 'mirador'])
+        : []
+
+      const allSearchQueries = [...baseQueries, ...directCategoryQueries]
+      const photonResults = await Promise.all(
+        allSearchQueries.map(q => photonSearch(q, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []))
+      )
+      const additional = photonResults.flat().filter(p => {
         if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
         if (p.name.toLowerCase().includes('perímetro urbano')) return false
         if (p.latitude != null && p.longitude != null && lat != null && lon != null) {
@@ -1647,12 +1661,13 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     if (realRests.length < minRestsTarget && lat && lon) {
-      const [rests1, rests2, rests3] = await Promise.all([
+      const [rests1, rests2, rests3, restsDirect] = await Promise.all([
         photonSearch(`restaurante ${clean}`, 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
         photonSearch(`gastronomia ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`comida ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
+        photonSearch(`comida ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+        photonSearch('restaurante', 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
       ])
-      for (const pr of [...rests1, ...rests2, ...rests3]) {
+      for (const pr of [...rests1, ...rests2, ...rests3, ...restsDirect]) {
         if (!pr || !pr.name || isGenericFacilityName(pr.name) || isNonTouristFacility(pr.tags) || isNonTouristFacility({ name: pr.name }) || isUnmappedOrClosedVenue(pr.name)) continue
         if (!realRests.some(r => arePlacesSimilar(r.name || r, pr.name))) {
           realRests.push(pr)
@@ -1924,7 +1939,7 @@ export function getDefaultActionChips(known = {}, lastMessage = '') {
     return ['🚀 Generar itinerario completo', '✏️ Modificar algún día', '➕ Agregar otra actividad']
   }
 
-  if (!known.datesSeason) {
+  if (!known.datesSeason && !known.durationDays && !known.durationHours) {
     return ['Próximo mes', 'Este fin de semana', 'Vacaciones de mitad de año', 'Fin de año']
   }
   if (!known.durationDays && !known.durationHours) {
@@ -1985,12 +2000,46 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   }
 
   let rawDestName = known.city || known.destination || ''
-  if (!rawDestName && lastUserMsg) {
+  if (lastUserMsg) {
     const fallbackExtracted = extractChatInformationFallback(lastUserMsg)
-    if (fallbackExtracted.city) {
-      rawDestName = fallbackExtracted.city
-      known.city = fallbackExtracted.city
+    if (!rawDestName && (fallbackExtracted.city || fallbackExtracted.destination)) {
+      rawDestName = fallbackExtracted.city || fallbackExtracted.destination
+      known.city = fallbackExtracted.city || fallbackExtracted.destination
       known.destination = fallbackExtracted.destination || fallbackExtracted.city
+    }
+    if (fallbackExtracted.tourType && !known.tourType) {
+      known.tourType = fallbackExtracted.tourType
+    }
+    if (fallbackExtracted.durationDays && !known.durationDays) {
+      known.durationDays = fallbackExtracted.durationDays
+      known.durationHours = fallbackExtracted.durationHours
+    }
+    if (fallbackExtracted.datesSeason && !known.datesSeason) {
+      known.datesSeason = fallbackExtracted.datesSeason
+    }
+    if (fallbackExtracted.companions && !known.companions) {
+      known.companions = fallbackExtracted.companions
+    }
+    if (fallbackExtracted.budget && !known.budget) {
+      known.budget = fallbackExtracted.budget
+    }
+    if (fallbackExtracted.transport && !known.transport) {
+      known.transport = fallbackExtracted.transport
+    }
+    if (fallbackExtracted.selectedHotel && !known.selectedHotel) {
+      known.selectedHotel = fallbackExtracted.selectedHotel
+    }
+    if (fallbackExtracted.accommodationStatus && !known.accommodationStatus) {
+      known.accommodationStatus = fallbackExtracted.accommodationStatus
+    }
+    if (fallbackExtracted.isMultiCity) {
+      known.isMultiCity = true
+      if (Array.isArray(fallbackExtracted.cities)) known.cities = fallbackExtracted.cities
+      if (fallbackExtracted.originPlace) known.originPlace = fallbackExtracted.originPlace
+      if (fallbackExtracted.destinationPlace) known.destinationPlace = fallbackExtracted.destinationPlace
+    }
+    if (fallbackExtracted.isUserLocationOrigin) {
+      known.isUserLocationOrigin = true
     }
   }
 
@@ -2085,11 +2134,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     return isLodgingExplicitlyConfirmed(hotel, status)
   }
 
-  const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
-  const isNegatedLodgingTurn = isLodgingNegationOrUncertainty(lastUserMsg) || isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
+  const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesit(?:o|amos)\s+(?:hotel|alojamiento|hospedaje)|no requier(?:o|en|imos)\s+(?:hotel|alojamiento|hospedaje)|nos\s+(?:vamos\s+a\s+)?quedar\s+en\s+la\s+playa|quedarnos?\s+en\s+la\s+playa|dormir\s+en\s+la\s+playa|acampar|camping|en\s+carpa|en\s+hamaca|sin\s+(?:hotel|alojamiento|hospedaje)\s+porque|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
+  const isNegatedLodgingTurn = !isHomeOrLocalLodging && (isLodgingNegationOrUncertainty(lastUserMsg) || isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg))
   if (isHomeOrLocalLodging) {
-    known.selectedHotel = { name: 'Casa propia / Alojamiento particular' }
-    known.accommodationStatus = 'Casa propia / familiar'
+    const isBeachOrCamp = /playa|acampar|camping|carpa|hamaca/i.test(lastUserMsg)
+    known.selectedHotel = { name: isBeachOrCamp ? 'Playa / Camping / Sin hotel comercial' : 'Casa propia / Alojamiento particular' }
+    known.accommodationStatus = isBeachOrCamp ? 'Alojamiento particular / Camping' : 'Casa propia / familiar'
   } else if (isLodgingCategoryOrGeneric(lastUserMsg) || isNegatedLodgingTurn) {
     delete known.selectedHotel
     known.accommodationStatus = isNegatedLodgingTurn ? 'Recomiéndame hoteles' : 'Por definir'
@@ -3693,6 +3743,11 @@ export function isValidRouteEndpoint(candidate = '') {
     return false
   }
 
+  // 1b. Cannot be a relative/user location reference
+  if (/\b(donde\s+estoy|mi\s+ubicaci[oó]n|mi\s+posici[oó]n|ac[aá]|aqu[íi]|mi\s+casa)\b/i.test(clean)) {
+    return false
+  }
+
   // 2. Cannot contain money, budget, companions, duration, transport, or hotel words
   if (/\b(peso|pesos|d[oó]lar|d[oó]lares|mill[oó]n|millones|usd|cop|presupuesto|gasto|gastos|carro|auto|coche|taxi|bus|avi[oó]n|tren|amigo|amigos|familia|pareja|hotel|hostal|resort|d[íi]as?|noche|noches|semana|mes|a[ñn]o)\b/i.test(clean)) {
     return false
@@ -3730,6 +3785,21 @@ export function extractChatInformationFallback(prompt) {
       res.cities = [origin, destination]
       res.destination = `${origin} a ${destination}`
       res.city = destination
+      res.tourType = 'city_to_city'
+    }
+  }
+
+  const locationOriginMatch = text.match(/\b(?:desde|partiendo\s+de)\s+(?:donde\s+estoy|mi\s+ubicaci[oó]n|mi\s+posici[oó]n|ac[aá]|aqu[íi])\s+(?:a|al|hacia|hasta)\s+([a-záéíóúñ\s]{2,35}?)(?:$|\s+(?:en|con|para|durante|del|por|el|la|los)\b)/i)
+  if (locationOriginMatch) {
+    const destCandidate = locationOriginMatch[1].trim()
+    if (isValidRouteEndpoint(destCandidate)) {
+      const cleanDest = cleanAdministrativeCityName(destCandidate)
+      if (cleanDest && cleanDest.length >= 3) {
+        res.isUserLocationOrigin = true
+        res.destination = cleanDest
+        res.city = cleanDest
+        res.tourType = 'location_to_destination'
+      }
     }
   }
 
@@ -3841,10 +3911,16 @@ export function extractChatInformationFallback(prompt) {
     }
   }
 
-  if (isNegatedOrAskingLodging || /\b(recomi[eé]ndame hoteles|hoteles|opciones de hotel|buscar hotel|sin hotel|no tengo hotel|no tenemos hotel|dame recomendaciones)\b/i.test(text)) {
+  const isNoCommercialLodgingNeeded = /\b(no\s+necesit(?:o|amos)\s+(?:hotel|alojamiento|hospedaje)|no\s+requier(?:o|en|imos)\s+(?:hotel|alojamiento|hospedaje)|nos\s+(?:vamos\s+a\s+)?quedar\s+en\s+la\s+playa|quedarnos?\s+en\s+la\s+playa|dormir\s+en\s+la\s+playa|acampar|camping|en\s+carpa|en\s+hamaca|sin\s+(?:hotel|alojamiento|hospedaje)\s+porque)\b/i.test(text)
+
+  if (isNoCommercialLodgingNeeded) {
+    res.selectedHotel = 'Playa / Camping / Sin hotel comercial'
+    res.accommodationStatus = 'Alojamiento particular / Camping'
+  } else if (isNegatedOrAskingLodging || /\b(recomi[eé]ndame hoteles|hoteles|opciones de hotel|buscar hotel|sin hotel|no tengo hotel|no tenemos hotel|dame recomendaciones)\b/i.test(text)) {
     delete res.selectedHotel
     res.accommodationStatus = 'Recomiéndame hoteles'
   } else if (/\b(casa propia|mi casa|casa familiar|tengo hospedaje|tengo hotel|ya tengo hotel|tengo donde quedarme)\b/i.test(text)) {
+    res.selectedHotel = 'Casa propia / familiar'
     res.accommodationStatus = 'Casa propia / familiar'
   } else if (!isNegatedOrAskingLodging && /\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar)\b/i.test(text)) {
     res.accommodationStatus = 'Hotel elegido'
@@ -3864,16 +3940,30 @@ export function extractChatInformationFallback(prompt) {
 
   const NON_DEST = /^(pareja|en pareja|familia|en familia|amigos|con amigos|solo|sola|grupo|en grupo|econ[oó]mico|moderado|lujo|barato|mochilero|caminando|a pie|auto|carro|coche|taxi|uber|bicicleta|bici|transporte p[úu]blico|hotel|hoteles|hostal|resort|hospedaje|alojamiento|un d[íi]a|\d+\s+d[íi]as?|fin de semana|puente|mes|semana|a[ñn]o|vacaciones|turismo|planes?|actividades|sitios|lugares|atracciones|nada|s[íi]|si|no|ok|hola|buenas?|gracias|adelante|generar?|crear?|empezar?|mover|movernos|pesos|vamos|nos vamos|presupuesto)$/i
 
-  if (!res.destination && !isPreferenceInput) {
-    const destActionPattern = /\b(?:tour|viaje|itinerario|plan|vacaciones|escapada)\s+(?:a|hacia|en|por|para)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s]{2,30}?)(?:$|\s+(?:donde|que|para|con|en|el|la|los|las|del|durante|por|desde|sin|de\s+\d)\b)/i
-    const destVerbPattern = /\b(?:viajar|conocer|visitar|ir|llegar)\s+(?:a|hacia|en|hasta)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s]{2,30}?)(?:$|\s+(?:donde|que|para|con|en|el|la|los|las|del|durante|por|desde|sin)\b)/i
+  if (!res.destination) {
+    const formatDestinationProperCase = (str = '') => {
+      if (!str) return ''
+      const words = str.trim().split(/\s+/)
+      const minorWords = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'e', 'en', 'a', 'al', 'of', 'and', 'the'])
+      return words.map((w, idx) => {
+        const lower = w.toLowerCase()
+        if (idx > 0 && minorWords.has(lower)) return lower
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+      }).join(' ')
+    }
+
+    const destActionPattern = /\b(?:tour|viaje|itinerario|plan|vacaciones|escapada)\s+(?:a\s+el|al|a\s+la|a\s+los|a\s+las|a|hacia|en|por|para)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45}?)(?:$|\s+(?:donde|que|para|con|durante|desde|sin|de\s+\d|del\s+\d|por\s+\d|por\s+(?:un|una|\d)|en\s+\d)\b)/i
+    const destVerbPattern = /\b(?:viajar|conocer|visitar|ir|llegar)\s+(?:a\s+el|al|a\s+la|a\s+los|a\s+las|a|hacia|en|hasta)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45}?)(?:$|\s+(?:donde|que|para|con|durante|desde|sin|de\s+\d|del\s+\d|por\s+\d|por\s+(?:un|una|\d)|en\s+\d)\b)/i
 
     const mAction = (prompt || '').trim().match(destActionPattern) || (prompt || '').trim().match(destVerbPattern)
     if (mAction) {
-      const candidate = mAction[1].trim()
+      let candidate = mAction[1].trim()
+      candidate = candidate.replace(/^(?:el|la|los|las)\s+/i, (match, offset, str) => {
+        return /^(?:el\s+peñol|la\s+guajira|el\s+caim[aá]n)/i.test(str) ? match : ''
+      }).trim()
       const candidateLower = candidate.toLowerCase()
       if (!isVagueDestination(candidateLower) && !isNonTouristicInput(candidateLower) && !NON_DEST.test(candidateLower)) {
-        const cleanCity = cleanAdministrativeCityName(candidate)
+        const cleanCity = formatDestinationProperCase(cleanAdministrativeCityName(candidate))
         if (cleanCity && cleanCity.length >= 3) {
           res.destination = cleanCity
           res.city = cleanCity
@@ -3881,21 +3971,25 @@ export function extractChatInformationFallback(prompt) {
       }
     } else if (!isCommandOrControl) {
       const barePatterns = [
-        /^(?:a|hacia)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s]{2,30})$/i,
-        /^([A-ZÁÉÍÓÚa-záéíóúñ\s]{2,30})$/i
+        /^(?:voy\s+a\s+ir\s+(?:al|a\s+la|a)|voy\s+(?:al|a\s+la|a)|vamos\s+(?:al|a\s+la|a)|ir\s+(?:al|a\s+la|a))\s+([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45})$/i,
+        /^(?:a|al|hacia|en|para)\s+(?:el\s+|la\s+)?([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45})$/i,
+        /^([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45})$/i
       ]
       for (const pat of barePatterns) {
         const m = (prompt || '').trim().match(pat)
         if (m) {
-          const candidate = m[1].trim()
+          let candidate = m[1].trim()
+          candidate = candidate.replace(/^(?:el|la|los|las)\s+/i, (match, offset, str) => {
+            return /^(?:el\s+peñol|la\s+guajira|el\s+caim[aá]n)/i.test(str) ? match : ''
+          }).trim()
           const candidateLower = candidate.toLowerCase()
           if (
-            candidate.split(/\s+/).length <= 3 &&
+            candidate.split(/\s+/).length <= 6 &&
             !isVagueDestination(candidateLower) &&
             !isNonTouristicInput(candidateLower) &&
             !NON_DEST.test(candidateLower)
           ) {
-            const cleanCity = cleanAdministrativeCityName(candidate)
+            const cleanCity = formatDestinationProperCase(cleanAdministrativeCityName(candidate))
             if (cleanCity && cleanCity.length >= 3) {
               res.destination = cleanCity
               res.city = cleanCity
@@ -3906,6 +4000,19 @@ export function extractChatInformationFallback(prompt) {
       }
     }
   }
+
+  // Infer Geographic Topology for the tour
+  res.tourType = inferTourType({
+    destination: res.destination,
+    city: res.city,
+    isUserLocationOrigin: res.isUserLocationOrigin,
+    isMultiCity: res.isMultiCity,
+    isMultiCountry: res.isMultiCountry,
+    cities: res.cities,
+    originPlace: res.originPlace,
+    destinationPlace: res.destinationPlace,
+    prompt
+  })
 
   // Extract user-requested places / stops to add (e.g. "agrega La Ventana al Mundo", "quiero visitar el Castillo de Salgar para el día 2")
   const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|conocer|vamos\s+a|adiciona|adicionar)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;])/i
@@ -4554,15 +4661,14 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
 
   // If still below minRequired, complement with multi-category Photon POIs
   if (combined.length < minRequired) {
-    const photonQueries = [
-      `turismo ${clean}`,
-      `parque ${clean}`,
-      `plaza ${clean}`,
-      `mirador ${clean}`,
-      `museo ${clean}`,
-      `monumento ${clean}`,
-      `catedral ${clean}`
-    ]
+    const isNatureOrMicroDest = /tayrona|minca|cocora|parque|reserva|valle|playa|ca[nñ][oó]n|sierra|monta[nñ]a|cascada|guatap[eé]|tatacoa/i.test(clean)
+    const baseQueries = isNatureOrMicroDest
+      ? [`turismo ${clean}`, `playa ${clean}`, `sendero ${clean}`, `mirador ${clean}`, `parque ${clean}`, `reserva ${clean}`]
+      : [`turismo ${clean}`, `parque ${clean}`, `plaza ${clean}`, `mirador ${clean}`, `museo ${clean}`, `monumento ${clean}`, `catedral ${clean}`]
+    const directQueries = (lat && lon)
+      ? (isNatureOrMicroDest ? ['playa', 'sendero', 'mirador', 'parque', 'turismo'] : ['turismo', 'plaza', 'parque', 'museo', 'mirador'])
+      : []
+    const photonQueries = [...baseQueries, ...directQueries]
     const photonBatches = await Promise.all(
       photonQueries.map(q => photonSearch(q, 8, lat, lon, null, 25000, country).catch(() => []))
     )
@@ -4572,7 +4678,7 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
           if (!combined.some(existing => arePlacesSimilar(existing.name, p.name))) {
             combined.push({
               name: p.name,
-              category: 'historic',
+              category: isNatureOrMicroDest ? 'nature' : 'historic',
               latitude: p.latitude,
               longitude: p.longitude,
               address: p.address || ''

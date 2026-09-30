@@ -123,17 +123,14 @@ const requestSchema = z.object({
   specificPlaces: z.array(z.any()).optional().default([])
 })
 
-const TOUR_TRIP_TYPES = new Set([
-  'micro_destination',
-  'coastal_islands',
-  'single_city',
-  'city_to_city',
-  'international_multicity',
-  'location_to_destination',
-])
-
-const MICRO_DESTINATION_PATTERN = /tayrona|minca|guatap[eé]|valle de cocora|parque nacional|reserva natural|sierra nevada|amazonas|eje cafetero|pueblito|monta[nñ]a|ca[nñ]o?n|cascada/i
-const COASTAL_ISLAND_PATTERN = /\bislas?\b|\bcayos?\b|islas? del rosario|isla bar[uú]|san bernardo|archipi[eé]lago|islas? de san bernardo|coastal islands|island hopping/i
+export {
+  TOUR_TRIP_TYPES,
+  MICRO_DESTINATION_PATTERN,
+  COASTAL_ISLAND_PATTERN,
+  normalizeTourType,
+  inferTourType,
+  geographicScopeFor,
+} from '../services/destinationService.js'
 
 function destinationKey(value) {
   return cleanAdministrativeCityName(String(value || ''))
@@ -143,169 +140,11 @@ function destinationKey(value) {
     .toLowerCase()
 }
 
-export function normalizeTourType(value) {
-  const normalized = String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\s-]+/g, '_')
-
-  const aliases = {
-    microdestino: 'micro_destination',
-    micro_destination: 'micro_destination',
-    destino_natural: 'micro_destination',
-    coastal: 'coastal_islands',
-    coastal_islands: 'coastal_islands',
-    islas_costeras: 'coastal_islands',
-    single_city: 'single_city',
-    ciudad_unica: 'single_city',
-    city_to_city: 'city_to_city',
-    entre_ciudades: 'city_to_city',
-    international_multicity: 'international_multicity',
-    multi_ciudad_internacional: 'international_multicity',
-    location_to_destination: 'location_to_destination',
-    ubicacion_a_destino: 'location_to_destination',
-  }
-
-  const result = aliases[normalized] || normalized
-  return TOUR_TRIP_TYPES.has(result) ? result : ''
-}
-
-/**
- * Resolves the geographic topology of a trip independently from its thematic
- * TourType (cultural, gastronomic, ecological, etc.). A seven-day city tour
- * is still single_city; duration alone must not widen its geographic scope.
- */
-export function inferTourType(input = {}, extracted = null) {
-  const explicit = normalizeTourType(
-    input.tourType || input.tour_type || extracted?.tourType || extracted?.tour_type
-  )
-  if (explicit) return explicit
-
-  const destinationText = [input.destination, input.city].filter(Boolean).join(' ')
-  const placesList = [
-    ...(Array.isArray(input.specificPlaces) ? input.specificPlaces : []),
-    ...(Array.isArray(input.selectedPlaces) ? input.selectedPlaces : []),
-    ...(Array.isArray(input.places) ? input.places : [])
-  ]
-  const specificText = placesList
-    .map(place => typeof place === 'string' ? place : place?.name)
-    .filter(Boolean)
-    .join(' ')
-
-  if (input.isUserLocationOrigin || input.is_user_location_origin) {
-    return 'location_to_destination'
-  }
-
-  if (
-    input.isMultiCity ||
-    input.is_multi_city ||
-    input.isMultiCountry ||
-    input.is_multi_country ||
-    (Array.isArray(input.cities) && input.cities.length > 1) ||
-    (input.originPlace && input.destinationPlace)
-  ) {
-    return input.isMultiCountry || input.is_multi_country
-      ? 'international_multicity'
-      : 'city_to_city'
-  }
-
-  // A micro-destination mentioned as a day stop does not automatically turn
-  // the whole hub-city tour into a micro-destination. For example, Tayrona
-  // may be an excursion from Santa Marta, while it must never widen a
-  // Barranquilla tour. Prefer the canonical destination and only use a
-  // specific-place fallback when no hub has been established yet.
-  if (
-    input.canonicalDestination?.isMicroDestination ||
-    MICRO_DESTINATION_PATTERN.test(destinationText) ||
-    (!destinationText && MICRO_DESTINATION_PATTERN.test(specificText))
-  ) {
-    return 'micro_destination'
-  }
-
-  if (COASTAL_ISLAND_PATTERN.test(`${destinationText} ${specificText}`)) {
-    return 'coastal_islands'
-  }
-
-  return 'single_city'
-}
-
-/**
- * Geographic policy used by every candidate and stop validation stage.
- * Nearby municipalities are allowed for a single-city tour, but distant
- * cities are not admitted just because the itinerary lasts several days.
- */
-export function geographicScopeFor(input = {}, extracted = null) {
-  const tourType = inferTourType(input, extracted)
-  const transport = String(input.transport || '').toLowerCase()
-  const asksForNearby = /cerca|cercan|alrededores|municipios?|afueras|zona metropolitana|pueblos cercanos/i.test(
-    [input.prompt, input.destination, input.city].filter(Boolean).join(' ')
-  )
-
-  if (tourType === 'single_city') {
-    const isCoastalCorridor = /\b(coveñas|covenas|tol[uú]|san antero|golfo de morrosquillo|san bernardo del viento)\b/i.test(
-      [input.prompt, input.destination, input.city].filter(Boolean).join(' ')
-    )
-    const maxDistanceKm = transport.includes('camin')
-      ? 10
-      : transport.includes('bicic')
-        ? 18
-        : (asksForNearby || isCoastalCorridor)
-          ? 50
-          : 35
-    return {
-      tourType,
-      mode: 'single_city',
-      maxDistanceKm,
-      isRegional: false,
-      allowNearbyMunicipalities: true,
-    }
-  }
-
-  if (tourType === 'micro_destination') {
-    return {
-      tourType,
-      mode: 'micro_destination',
-      maxDistanceKm: 25,
-      isRegional: true,
-      allowNearbyMunicipalities: false,
-    }
-  }
-
-  if (tourType === 'coastal_islands') {
-    return {
-      tourType,
-      mode: 'coastal_islands',
-      maxDistanceKm: 90,
-      isRegional: true,
-      allowNearbyMunicipalities: true,
-    }
-  }
-
-  if (tourType === 'city_to_city' || tourType === 'location_to_destination') {
-    return {
-      tourType,
-      mode: 'corridor',
-      maxDistanceKm: 120,
-      isRegional: true,
-      allowNearbyMunicipalities: true,
-    }
-  }
-
-  return {
-    tourType,
-    mode: 'multicity',
-    maxDistanceKm: 250,
-    isRegional: true,
-    allowNearbyMunicipalities: true,
-  }
-}
-
 function applyTourType(input, extracted = null) {
   input.tourType = inferTourType(input, extracted)
   return input
 }
+
 
 // Clasificador de tipos de entidad universal para evitar que lugares de distinta categoría se confundan entre sí
 export function getPlaceEntityType(placeName) {

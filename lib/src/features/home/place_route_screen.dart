@@ -444,6 +444,7 @@ class _PlaceRouteScreenState extends ConsumerState<PlaceRouteScreen> {
         RouteTravelMode.publicTransport => 22.0,
         RouteTravelMode.taxi => 28.0,
         RouteTravelMode.driving => 35.0,
+        RouteTravelMode.flight => 600.0,
       };
       final mins = (m / 1000.0 / speedKmh * 60).round().clamp(1, 180);
       return '$mins min';

@@ -10,13 +10,24 @@ import '../services/road_route_service.dart';
 IconData transportIconFor(Object? transport) {
   final value = transport?.toString().trim().toLowerCase() ?? '';
 
+  if (value.contains('vuelo') ||
+      value.contains('aéreo') ||
+      value.contains('aereo') ||
+      value.contains('avion') ||
+      value.contains('avión') ||
+      value.contains('flight')) {
+    return Icons.flight_takeoff_rounded;
+  }
   if (value.contains('camin') || value.contains('peat') || value.contains('walk')) {
     return Icons.directions_walk_rounded;
   }
   if (value.contains('bicic') || value.contains('bicycl') || value.contains('bike')) {
     return Icons.directions_bike_rounded;
   }
-  if (value.contains('públic') || value.contains('public') || value.contains('bus')) {
+  if (value.contains('públic') ||
+      value.contains('public') ||
+      value.contains('bus') ||
+      value.contains('autob')) {
     return Icons.directions_bus_rounded;
   }
   if (value.contains('taxi') || value.contains('app')) {
@@ -32,13 +43,24 @@ IconData transportIconFor(Object? transport) {
 RouteTravelMode routeTravelModeFor(Object? transport) {
   final value = transport?.toString().trim().toLowerCase() ?? '';
 
+  if (value.contains('vuelo') ||
+      value.contains('aéreo') ||
+      value.contains('aereo') ||
+      value.contains('avion') ||
+      value.contains('avión') ||
+      value.contains('flight')) {
+    return RouteTravelMode.flight;
+  }
   if (value.contains('camin') || value.contains('peat') || value.contains('walk')) {
     return RouteTravelMode.walking;
   }
   if (value.contains('bicic') || value.contains('bicycl') || value.contains('bike')) {
     return RouteTravelMode.cycling;
   }
-  if (value.contains('públic') || value.contains('public') || value.contains('bus')) {
+  if (value.contains('públic') ||
+      value.contains('public') ||
+      value.contains('bus') ||
+      value.contains('autob')) {
     return RouteTravelMode.publicTransport;
   }
   if (value.contains('taxi') || value.contains('app')) {

@@ -1,0 +1,104 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { extractChatInformationFallback, generateChatResponse } from '../services/openai.js'
+import { inferTourType, geographicScopeFor } from '../services/destinationService.js'
+
+test('Geographic Topologies & Fallback Chat Intelligence', async (t) => {
+
+  await t.test('should recognize micro_destination and extract all preferences in a single turn', () => {
+    const prompt = 'Crea un tour al parque Tayrona que dure un fin de semana, nos vamos a quedar en la playa así que no necesitamos alojamiento voy a ir con mi familia y tenemos un presupuesto de 7 millones de pesos'
+    const extracted = extractChatInformationFallback(prompt)
+
+    assert.equal(extracted.destination, 'Parque Tayrona')
+    assert.equal(extracted.city, 'Parque Tayrona')
+    assert.equal(extracted.tourType, 'micro_destination')
+    assert.equal(extracted.durationDays, 2)
+    assert.equal(extracted.companions, 'En familia')
+    assert.equal(extracted.budget, 'Moderado')
+    assert.equal(extracted.accommodationStatus, 'Alojamiento particular / Camping')
+  })
+
+  await t.test('should recognize micro_destination from simple destination statement', () => {
+    const prompt = 'Voy a ir al parque Tayrona'
+    const extracted = extractChatInformationFallback(prompt)
+
+    assert.equal(extracted.destination, 'Parque Tayrona')
+    assert.equal(extracted.tourType, 'micro_destination')
+  })
+
+  await t.test('should recognize city_to_city corridor route', () => {
+    const prompt = 'Ruta de Medellín a Guatapé para el próximo fin de semana'
+    const extracted = extractChatInformationFallback(prompt)
+
+    assert.equal(extracted.tourType, 'city_to_city')
+    assert.equal(extracted.isMultiCity, true)
+    assert.equal(extracted.originPlace, 'Medellín')
+    assert.equal(extracted.destinationPlace, 'Guatapé')
+    assert.equal(extracted.destination, 'Medellín a Guatapé')
+  })
+
+  await t.test('should recognize location_to_destination starting from user position', () => {
+    const prompt = 'Quiero un viaje desde donde estoy hasta Villa de Leyva'
+    const extracted = extractChatInformationFallback(prompt)
+
+    assert.equal(extracted.tourType, 'location_to_destination')
+    assert.equal(extracted.isUserLocationOrigin, true)
+    assert.ok(extracted.destination.toLowerCase().includes('villa de leyva'))
+  })
+
+  await t.test('should recognize coastal_islands topology', () => {
+    const prompt = 'Tour por Tolú y las Islas de San Bernardo por 3 días'
+    const extracted = extractChatInformationFallback(prompt)
+
+    assert.equal(extracted.tourType, 'coastal_islands')
+    assert.ok(extracted.destination.toLowerCase().includes('san bernardo') || extracted.destination.toLowerCase().includes('tolú'))
+  })
+
+  await t.test('should recognize single_city urban topology', () => {
+    const prompt = 'Quiero un tour en Pereira de 3 días con amigos'
+    const extracted = extractChatInformationFallback(prompt)
+
+    assert.equal(extracted.tourType, 'single_city')
+    assert.equal(extracted.destination, 'Pereira')
+    assert.equal(extracted.companions, 'Con amigos')
+  })
+
+  await t.test('should assign correct geographic scope policies for all 6 topologies', () => {
+    const microScope = geographicScopeFor({ destination: 'Parque Tayrona' })
+    assert.equal(microScope.tourType, 'micro_destination')
+    assert.equal(microScope.maxDistanceKm, 25)
+
+    const islandsScope = geographicScopeFor({ destination: 'Islas del Rosario' })
+    assert.equal(islandsScope.tourType, 'coastal_islands')
+    assert.equal(islandsScope.maxDistanceKm, 90)
+
+    const cityScope = geographicScopeFor({ destination: 'Medellín', transport: 'caminando' })
+    assert.equal(cityScope.tourType, 'single_city')
+    assert.equal(cityScope.maxDistanceKm, 10)
+
+    const corridorScope = geographicScopeFor({ isMultiCity: true, originPlace: 'Medellín', destinationPlace: 'Guatapé' })
+    assert.equal(corridorScope.tourType, 'city_to_city')
+    assert.equal(corridorScope.maxDistanceKm, 120)
+
+    const locationScope = geographicScopeFor({ isUserLocationOrigin: true, destination: 'Villa de Leyva' })
+    assert.equal(locationScope.tourType, 'location_to_destination')
+    assert.equal(locationScope.maxDistanceKm, 120)
+
+    const multicityScope = geographicScopeFor({ isMultiCountry: true, cities: ['Bogotá', 'París'] })
+    assert.equal(multicityScope.tourType, 'international_multicity')
+    assert.equal(multicityScope.maxDistanceKm, 250)
+  })
+
+  await t.test('should respond coherently in chat without looping or asking for generic cities', async () => {
+    const userMsg = 'Crea un tour al parque Tayrona que dure un fin de semana, nos vamos a quedar en la playa así que no necesitamos alojamiento voy a ir con mi familia y tenemos un presupuesto de 7 millones de pesos'
+    const chatRes = await generateChatResponse({ history: [{ role: 'user', content: userMsg }] }, '', '', {}, [])
+
+    assert.ok(chatRes.responseMessage.includes('Parque Tayrona'), 'Chat must acknowledge Parque Tayrona')
+    assert.ok(chatRes.responseMessage.includes('transporte'), 'Chat must ask for missing transport')
+    assert.equal(chatRes.extractedPreferences?.tourType, 'micro_destination')
+    assert.equal(chatRes.extractedPreferences?.budget, 'Moderado')
+    assert.equal(chatRes.extractedPreferences?.companions, 'En familia')
+    assert.ok(chatRes.actionChips.some(c => /caminando|auto|transporte/i.test(c)), 'Action chips should offer transport options')
+  })
+
+})
