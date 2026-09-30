@@ -1987,8 +1987,9 @@ export function isNonTouristicInput(text = '') {
 export async function generateChatResponse(state, backendInstruction = '', webSearchSummary = '', currentPreferences = {}, nearbyFoodPlaces = []) {
   const known = { ...(currentPreferences || {}) }
   const userCurrency = String(known.currency || currentPreferences.currency || 'cop').toLowerCase()
-  const history = state.history || state.messages || []
-  const lastUserMsg = state.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
+  const history = state?.history || state?.messages || []
+  const rawLastUserMsg = state?.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
+  const lastUserMsg = normalizeSpanishNumberWords(rawLastUserMsg)
   const lastAssistantMsg = (history || []).slice().reverse().find(m => m.role === 'assistant' || m.role === 'bot')?.content || ''
 
   // Normalize already-confirmed stops before they reach the prompt, fallback
@@ -3733,13 +3734,39 @@ Devuelve ÚNICAMENTE un JSON con:
   return extractChatInformationFallback(userMessage)
 }
 
+export function normalizeSpanishNumberWords(text = '') {
+  if (!text || typeof text !== 'string') return ''
+
+  const SPANISH_WORD_TO_DIGIT = {
+    'un': '1', 'uno': '1', 'una': '1',
+    'dos': '2', 'tres': '3', 'cuatro': '4',
+    'cinco': '5', 'seis': '6', 'siete': '7',
+    'ocho': '8', 'nueve': '9', 'diez': '10',
+    'once': '11', 'doce': '12', 'trece': '13',
+    'catorce': '14', 'quince': '15', 'dieciseis': '16',
+    'dieciséis': '16', 'diecisiete': '17', 'dieciocho': '18',
+    'diecinueve': '19', 'veinte': '20', 'veintiuno': '21',
+    'veintidos': '22', 'veintidós': '22', 'veintitres': '23',
+    'veintitrés': '23', 'veinticuatro': '24', 'veinticinco': '25',
+    'treinta': '30', 'cuarenta': '40', 'cincuenta': '50'
+  }
+
+  return text.replace(
+    /\b(un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|diecis[eé]is|diecisiete|dieciocho|diecinueve|veinte|veintiun[oa]?|veintid[oó]s|veintitr[eé]s|veinticuatro|veinticinco|treinta|cuarenta|cincuenta)\b(?=\s+(?:d[íi]as?|semanas?|meses?|noches?|mill[oó]n|millones|mil|personas?|adultos?|ni[ñn]os?|amigos?|viajeros?|pesos|d[oó]lares|cop|usd|eur|€|\$))/gi,
+    (match) => {
+      const cleanKey = match.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      return SPANISH_WORD_TO_DIGIT[cleanKey] || SPANISH_WORD_TO_DIGIT[match.toLowerCase()] || match
+    }
+  )
+}
+
 export function isValidRouteEndpoint(candidate = '') {
   if (!candidate || typeof candidate !== 'string') return false
   const clean = candidate.trim().toLowerCase()
-  if (clean.length < 3 || clean.length > 35) return false
+  if (clean.length < 3 || clean.length > 50) return false
 
   // 1. Cannot contain verbs or movement/stay words
-  if (/\b(mover|movernos|ir|irnos|viajar|viajaremos|quedar|quedarnos|hospedar|hospedarnos|caminar|llegar|salir|conocer|visitar|hacer|estar|pasar|comprar|comer|tomar|vamos|nos vamos)\b/i.test(clean)) {
+  if (/\b(mover|movernos|ir|irnos|viajar|viajo|viajamos|viajaremos|quedar|quedarnos|hospedar|hospedarnos|caminar|llegar|salir|conocer|visitar|hacer|estar|pasar|comprar|comer|tomar|vamos|nos vamos|somos|tengo|tenemos|quiero|queremos|gustaria|gustar[íi]a)\b/i.test(clean)) {
     return false
   }
 
@@ -3749,7 +3776,7 @@ export function isValidRouteEndpoint(candidate = '') {
   }
 
   // 2. Cannot contain money, budget, companions, duration, transport, or hotel words
-  if (/\b(peso|pesos|d[oó]lar|d[oó]lares|mill[oó]n|millones|usd|cop|presupuesto|gasto|gastos|carro|auto|coche|taxi|bus|avi[oó]n|tren|amigo|amigos|familia|pareja|hotel|hostal|resort|d[íi]as?|noche|noches|semana|mes|a[ñn]o)\b/i.test(clean)) {
+  if (/\b(peso|pesos|d[oó]lar|d[oó]lares|mill[oó]n|millones|usd|cop|presupuesto|gasto|gastos|plata|efectivo|carro|auto|coche|taxi|bus|avi[oó]n|tren|amigo|amigos|familia|pareja|persona|personas|adulto|adultos|ni[ñn]o|ni[ñn]os|ni[ñn]a|ni[ñn]as|hotel|hostal|resort|d[íi]as?|noche|noches|semana|semanas|mes|meses|a[ñn]o|a[ñn]os)\b/i.test(clean)) {
     return false
   }
 
@@ -3761,16 +3788,17 @@ export function isValidRouteEndpoint(candidate = '') {
   // 4. Must not be a vague destination or non-touristic input
   if (isNonTouristicInput(clean) || isVagueDestination(clean)) return false
 
-  // 5. Must not have excessive word count (city names are 1 to 3 words)
+  // 5. Must not have excessive word count (destinations are up to 7 words, e.g. "Tolú y las Islas de San Bernardo")
   const words = clean.split(/\s+/).filter(Boolean)
-  if (words.length > 3) return false
+  if (words.length > 7) return false
 
   return true
 }
 
 export function extractChatInformationFallback(prompt) {
   const res = {}
-  const text = (prompt || '').toLowerCase()
+  const normalized = normalizeSpanishNumberWords(prompt || '')
+  const text = normalized.toLowerCase()
 
   const routeMatch = text.match(/\b(?:tour\s+|viaje\s+|ruta\s+|road\s*trip\s+|trayecto\s+)?(?:de|desde)\s+([a-záéíóúñ\s]+?)\s+(?:a|hast[aá]|hacia)\s+([a-záéíóúñ\s]+?)(?:$|\s+(?:en|con|para|durante|del|por|el|la|los)\b)/i)
   if (routeMatch) {
@@ -3820,16 +3848,25 @@ export function extractChatInformationFallback(prompt) {
   } else if (/\b(1 d[íi]a|un d[íi]a)\b/i.test(text)) {
     res.durationDays = 1
     res.durationHours = 8
-  } else if (/\b(semanita|una semana|7 d[íi]as)\b/i.test(text)) {
+  } else if (/\b(semanita|una semana|7 d[íi]as|1 semana)\b/i.test(text)) {
     res.durationDays = 7
     res.durationHours = 168
   } else {
-    const daysMatch = text.match(/\b(\d+)\s+d[íi]as?\b/i)
-    if (daysMatch) {
-      const d = parseInt(daysMatch[1], 10)
-      if (d > 0 && d <= 30) {
-        res.durationDays = d
-        res.durationHours = d * 24
+    const weeksMatch = text.match(/\b(\d+)\s+semanas?\b/i)
+    if (weeksMatch) {
+      const w = parseInt(weeksMatch[1], 10)
+      if (w > 0 && w <= 4) {
+        res.durationDays = w * 7
+        res.durationHours = w * 7 * 24
+      }
+    } else {
+      const daysMatch = text.match(/\b(\d+)\s+d[íi]as?\b/i)
+      if (daysMatch) {
+        const d = parseInt(daysMatch[1], 10)
+        if (d > 0 && d <= 30) {
+          res.durationDays = d
+          res.durationHours = d * 24
+        }
       }
     }
   }
@@ -3857,6 +3894,19 @@ export function extractChatInformationFallback(prompt) {
     res.groupSize = 1
   } else if (/\b(nos\s+vamos|nos\s+quedamos|nos\s+hospedamos|tenemos|vamos\s+con|viajamos|somos)\b/i.test(text)) {
     res.companions = 'En grupo'
+  }
+
+  const groupSizeMatch = text.match(/\b(?:somos|vamos|seremos|grupo\s+de)?\s*(\d+)\s+(?:personas?|adultos?|amigos?|viajeros?)\b/i) || text.match(/\b(?:somos|seremos)\s+(\d+)\b/i)
+  if (groupSizeMatch) {
+    const size = parseInt(groupSizeMatch[1], 10)
+    if (size > 0 && size <= 50) {
+      res.groupSize = size
+      if (!res.companions) {
+        if (size === 1) res.companions = 'Solo'
+        else if (size === 2) res.companions = 'En pareja'
+        else res.companions = 'En grupo'
+      }
+    }
   }
 
   const budgetNumMatch = text.match(/\b(?:presupuesto\s+(?:de\s+)?|tengo\s+|contamos\s+con\s+)?(\d+(?:[.,]\d+)?)\s*(mill[oó]n(?:es)?|mil|k|usd|d[oó]lares|pesos|cop|euros|€|\$)\b/i)
@@ -3933,7 +3983,7 @@ export function extractChatInformationFallback(prompt) {
     res.budget ||
     res.transport ||
     res.accommodationStatus ||
-    /\b(pr[oó]ximo mes|fin de semana|d[íi]as?|pareja|familia|amigos|solo|econ[oó]mico|moderado|lujo|caminando|auto|taxi|hotel|hospedaje)\b/i.test(text)
+    /\b(pr[oó]ximo mes|fin de semana|d[íi]as?|semanas?|pareja|familia|amigos|solo|econ[oó]mico|moderado|lujo|caminando|auto|taxi|hotel|hospedaje)\b/i.test(text)
   )
 
   const isCommandOrControl = /\b(gener(ar|es|a|e|en|al)?|cre(ar|es|a|e|en)?|inicia(r)?|finaliza(r)?|constru(ye|ir)|dise[ñn](ar|a|es|e)?|est[aá]\s+perfecto|listo|procede|adelante|vamos|armar?|hazlo|de acuerdo|dale|genial|ok|comenzar|ver|mostrar|detalles|men[uú]|platos|comida|restaurantes?|hoteles?|atracciones|actividades|itinerario|itinerarios)\b/i.test(text)
@@ -3962,14 +4012,14 @@ export function extractChatInformationFallback(prompt) {
         return /^(?:el\s+peñol|la\s+guajira|el\s+caim[aá]n)/i.test(str) ? match : ''
       }).trim()
       const candidateLower = candidate.toLowerCase()
-      if (!isVagueDestination(candidateLower) && !isNonTouristicInput(candidateLower) && !NON_DEST.test(candidateLower)) {
+      if (isValidRouteEndpoint(candidate) && !isVagueDestination(candidateLower) && !isNonTouristicInput(candidateLower) && !NON_DEST.test(candidateLower)) {
         const cleanCity = formatDestinationProperCase(cleanAdministrativeCityName(candidate))
         if (cleanCity && cleanCity.length >= 3) {
           res.destination = cleanCity
           res.city = cleanCity
         }
       }
-    } else if (!isCommandOrControl) {
+    } else if (!isCommandOrControl && !isPreferenceInput) {
       const barePatterns = [
         /^(?:voy\s+a\s+ir\s+(?:al|a\s+la|a)|voy\s+(?:al|a\s+la|a)|vamos\s+(?:al|a\s+la|a)|ir\s+(?:al|a\s+la|a))\s+([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45})$/i,
         /^(?:a|al|hacia|en|para)\s+(?:el\s+|la\s+)?([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45})$/i,
@@ -3985,6 +4035,7 @@ export function extractChatInformationFallback(prompt) {
           const candidateLower = candidate.toLowerCase()
           if (
             candidate.split(/\s+/).length <= 6 &&
+            isValidRouteEndpoint(candidate) &&
             !isVagueDestination(candidateLower) &&
             !isNonTouristicInput(candidateLower) &&
             !NON_DEST.test(candidateLower)

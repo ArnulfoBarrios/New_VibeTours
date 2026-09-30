@@ -101,4 +101,32 @@ test('Geographic Topologies & Fallback Chat Intelligence', async (t) => {
     assert.ok(chatRes.actionChips.some(c => /caminando|auto|transporte/i.test(c)), 'Action chips should offer transport options')
   })
 
+  await t.test('should extract Spanish numbers written as words for duration, budget, and group size', () => {
+    const resDays = extractChatInformationFallback('Nos vamos a quedar dos días y vamos el sábado')
+    assert.equal(resDays.durationDays, 2)
+    assert.equal(resDays.durationHours, 48)
+
+    const resWeeks = extractChatInformationFallback('Queremos un viaje de tres semanas')
+    assert.equal(resWeeks.durationDays, 21)
+
+    const resBudgetMod = extractChatInformationFallback('Tenemos un presupuesto de siete millones de pesos')
+    assert.equal(resBudgetMod.budget, 'Moderado')
+
+    const resBudgetLux = extractChatInformationFallback('Contamos con veinte millones de presupuesto')
+    assert.equal(resBudgetLux.budget, 'Lujo')
+
+    const resGroup = extractChatInformationFallback('Somos cuatro personas viajando juntas')
+    assert.equal(resGroup.groupSize, 4)
+    assert.equal(resGroup.companions, 'En grupo')
+  })
+
+  await t.test('should execute applyTourType in ai.js without ReferenceError', async () => {
+    const { applyTourType } = await import('../routes/ai.js')
+    const tour = applyTourType({ destination: 'Parque Tayrona' })
+    assert.equal(tour.tourType, 'micro_destination')
+
+    const routeTour = applyTourType({ isMultiCity: true, originPlace: 'Medellín', destinationPlace: 'Guatapé' })
+    assert.equal(routeTour.tourType, 'city_to_city')
+  })
+
 })

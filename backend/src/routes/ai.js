@@ -123,7 +123,7 @@ const requestSchema = z.object({
   specificPlaces: z.array(z.any()).optional().default([])
 })
 
-export {
+import {
   TOUR_TRIP_TYPES,
   MICRO_DESTINATION_PATTERN,
   COASTAL_ISLAND_PATTERN,
@@ -131,6 +131,16 @@ export {
   inferTourType,
   geographicScopeFor,
 } from '../services/destinationService.js'
+
+export {
+  TOUR_TRIP_TYPES,
+  MICRO_DESTINATION_PATTERN,
+  COASTAL_ISLAND_PATTERN,
+  normalizeTourType,
+  inferTourType,
+  geographicScopeFor,
+  applyTourType,
+}
 
 function destinationKey(value) {
   return cleanAdministrativeCityName(String(value || ''))
