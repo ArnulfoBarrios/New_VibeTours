@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initCityDockControls();
   initScrollEffects();
   initCardSpotlight();
+  initTiltEffect();
   initInteractiveSmartphoneSimulator();
   initLivePhoneClock();
   initFaqAccordion();
@@ -247,11 +248,11 @@ async function initInteractiveGlobe() {
 function initCityDockControls() {
   const cityButtons = document.querySelectorAll('.city-dock-btn');
   const cityCoordinates = {
-    cartagena: { phi: 0, theta: 0.15, voice: "Torre del Reloj", stops: "6 Paradas • 2.4 km" },
-    tokio: { phi: 4.7, theta: 0.25, voice: "Templo Senso-ji", stops: "12 Paradas • 4.8 km" },
-    paris: { phi: 1.5, theta: 0.3, voice: "Torre Eiffel", stops: "10 Paradas • 4.1 km" },
-    newyork: { phi: 0.2, theta: 0.28, voice: "Central Park", stops: "9 Paradas • 3.5 km" },
-    roma: { phi: 1.7, theta: 0.28, voice: "Coliseo Romano", stops: "8 Paradas • 3.2 km" }
+    cartagena: { phi: 0, theta: 0.15, flag: "🇨🇴", city: "Cartagena", voice: "Torre del Reloj", stops: "6 Paradas • 2.4 km" },
+    tokio: { phi: 4.7, theta: 0.25, flag: "🇯🇵", city: "Tokio", voice: "Templo Senso-ji", stops: "12 Paradas • 4.8 km" },
+    paris: { phi: 1.5, theta: 0.3, flag: "🇫🇷", city: "París", voice: "Torre Eiffel", stops: "10 Paradas • 4.1 km" },
+    newyork: { phi: 0.2, theta: 0.28, flag: "🇺🇸", city: "Nueva York", voice: "Central Park", stops: "9 Paradas • 3.5 km" },
+    roma: { phi: 1.7, theta: 0.28, flag: "🇮🇹", city: "Roma", voice: "Coliseo Romano", stops: "8 Paradas • 3.2 km" }
   };
 
   cityButtons.forEach(btn => {
@@ -267,10 +268,26 @@ function initCityDockControls() {
         globeThetaOffset = target.theta - 0.15;
         isGlidingToCity = true;
 
-        const voiceSubEl = document.getElementById('float-voice-sub');
-        const gpsSubEl = document.getElementById('float-gps-sub');
-        if (voiceSubEl) voiceSubEl.innerText = target.voice;
-        if (gpsSubEl) gpsSubEl.innerText = target.stops;
+        // Update Dynamic Spotlight Badge on Globe
+        const spotlightEl = document.getElementById('globeCitySpotlight');
+        const flagEl = document.getElementById('spotlightFlag');
+        const cityNameEl = document.getElementById('spotlightCityName');
+        const cityBadgeEl = document.getElementById('spotlightCityBadge');
+
+        if (spotlightEl && flagEl && cityNameEl && cityBadgeEl) {
+          flagEl.innerText = target.flag;
+          cityNameEl.innerText = target.city;
+          cityBadgeEl.innerText = target.stops;
+          spotlightEl.classList.remove('visible');
+          void spotlightEl.offsetWidth; // trigger reflow for pop animation
+          spotlightEl.classList.add('visible');
+        }
+
+        // Update Hero HUD Floating Audio & GPS titles
+        const floatAudioTitle = document.getElementById('heroFloatAudioTitle');
+        const floatGpsTitle = document.getElementById('heroFloatGpsTitle');
+        if (floatAudioTitle) floatAudioTitle.innerText = target.voice;
+        if (floatGpsTitle) floatGpsTitle.innerText = target.voice;
       }
     });
   });
@@ -1652,11 +1669,15 @@ function initBentoAudioWidget() {
   const waveform = document.querySelector('.mini-waveform');
   let isPlaying = false;
 
+  const playIcon = '<svg class="play-svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  const pauseIcon = '<svg class="pause-svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+
   if (playBtn && waveform) {
     playBtn.style.cursor = 'pointer';
+    playBtn.innerHTML = playIcon;
     playBtn.addEventListener('click', () => {
       isPlaying = !isPlaying;
-      playBtn.innerText = isPlaying ? '⏸' : '▶';
+      playBtn.innerHTML = isPlaying ? pauseIcon : playIcon;
       waveform.classList.toggle('playing', isPlaying);
 
       if (window.speechSynthesis) {
@@ -1671,12 +1692,12 @@ function initBentoAudioWidget() {
           utter.rate = 1.0;
           utter.onend = () => {
             isPlaying = false;
-            playBtn.innerText = '▶';
+            playBtn.innerHTML = playIcon;
             waveform.classList.remove('playing');
           };
           utter.onerror = () => {
             isPlaying = false;
-            playBtn.innerText = '▶';
+            playBtn.innerHTML = playIcon;
             waveform.classList.remove('playing');
           };
           window.speechSynthesis.speak(utter);
@@ -1686,6 +1707,48 @@ function initBentoAudioWidget() {
       }
     });
   }
+}
+
+/* --------------------------------------------------------------------------
+   8c. 3D PERSPECTIVE TILT CONTROLLER FOR SMARTPHONE MOCKUPS
+   -------------------------------------------------------------------------- */
+function initTiltEffect() {
+  const tiltCards = document.querySelectorAll('[data-tilt]');
+  if (!tiltCards.length) return;
+
+  const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  if (!canHover) return;
+
+  tiltCards.forEach(card => {
+    const frame = card.querySelector('.phone-mockup-frame') || card;
+    let isHovered = false;
+
+    card.addEventListener('mouseenter', () => {
+      isHovered = true;
+      frame.style.transition = 'transform 0.12s ease-out, box-shadow 0.12s ease-out';
+    });
+
+    card.addEventListener('mousemove', (e) => {
+      if (!isHovered) return;
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+
+      // Max tilt degrees: 6.5deg for natural luxury feel
+      const rotateX = ((y - centerY) / centerY) * -6.5;
+      const rotateY = ((x - centerX) / centerX) * 6.5;
+
+      frame.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateY(-6px) scale3d(1.02, 1.02, 1.02)`;
+    });
+
+    card.addEventListener('mouseleave', () => {
+      isHovered = false;
+      frame.style.transition = 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s ease';
+      frame.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0) scale3d(1, 1, 1)';
+    });
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -1705,6 +1768,12 @@ const landingTranslations = {
     heroCtaPrimary: 'Empezar Gratis',
     heroCtaSecondary: 'Explorar abajo',
     heroDockLabel: 'Girar planeta a:',
+    heroFloatAudioTitle: 'Torre del Reloj',
+    heroFloatAudioSub: 'Reproduciendo al oído',
+    heroFloatGpsTitle: 'Baluarte San Pedro',
+    heroFloatGpsSub: 'Narración activada por cercanía',
+    heroFloatAiTitle: 'Ruta Inteligente',
+    heroFloatAiSub: 'Generada en 1.8s',
 
     s1Eyebrow: 'RUTAS AL INSTANTE',
     s1Title: 'Hechas para tu tiempo y tus gustos',
@@ -1716,12 +1785,16 @@ const landingTranslations = {
     s2Desc: 'Guarda el teléfono en el bolsillo y camina tranquilo. El GPS detecta tu cercanía a cada plaza o monumento y reproduce la narración automáticamente en tus audífonos.',
     bentoAudioProximity: 'Torre del Reloj • A 12 metros',
     s2AudioSub: 'Haz clic para escuchar cómo suena tu guía',
+    popoutAudioTitle: 'Audio GPS Activo',
+    popoutAudioSub: 'Torre del Reloj • Reproduciendo',
 
     s3Eyebrow: '100% A TU RITMO',
     s3Title: 'Sin grupos, sin horarios y sin pagar de más',
     s3Desc: 'Detente a tomar fotos o almorzar cuando te apetezca sin miedo a perder al guía. Tu recorrido se pausa contigo y ahorras lo que cobran las agencias tradicionales.',
     s3OldLbl: 'Tour de Agencia',
     s3NewVal: 'Gratis',
+    popoutGpsTitle: '100% Sin Conexión',
+    popoutGpsSub: 'Mapas y audios descargables',
 
     simCockpitBadge: 'PRUEBA EN VIVO',
     simTitle: 'Interactúa con la app desde aquí',
@@ -1764,6 +1837,12 @@ const landingTranslations = {
     heroCtaPrimary: 'Start Free',
     heroCtaSecondary: 'Scroll down',
     heroDockLabel: 'Spin planet to:',
+    heroFloatAudioTitle: 'Clock Tower',
+    heroFloatAudioSub: 'Audio guide playing in ear',
+    heroFloatGpsTitle: 'San Pedro Bastion',
+    heroFloatGpsSub: 'Triggered by proximity (12m)',
+    heroFloatAiTitle: 'Smart AI Route',
+    heroFloatAiSub: 'Generated in 1.8s',
 
     s1Eyebrow: 'INSTANT ROUTES',
     s1Title: 'Tailored to your time and tastes',
@@ -1775,12 +1854,16 @@ const landingTranslations = {
     s2Desc: 'Keep your phone in your pocket and walk freely. GPS detects your proximity to each square or monument and plays the audio automatically.',
     bentoAudioProximity: 'Clock Tower • 12 meters away',
     s2AudioSub: 'Click to preview how your guide sounds',
+    popoutAudioTitle: 'GPS Audio Active',
+    popoutAudioSub: 'Clock Tower • In progress',
 
     s3Eyebrow: '100% YOUR PACE',
     s3Title: 'No crowds, no schedules, zero overpriced fees',
     s3Desc: 'Pause for photos or grab coffee whenever you want without losing the group. Your route waits for you while saving agency costs.',
     s3OldLbl: 'Agency Tour',
     s3NewVal: 'Free',
+    popoutGpsTitle: '100% Offline Mode',
+    popoutGpsSub: 'Downloadable tours & audio',
 
     simCockpitBadge: 'LIVE INTERACTIVE DEMO',
     simTitle: 'Interact with the app right here',
@@ -1838,6 +1921,12 @@ window.setLandingLanguage = function(lang) {
   updateText('#hero-cta-primary span', t.heroCtaPrimary);
   updateText('#hero-cta-secondary span', t.heroCtaSecondary);
   updateText('#hero-dock-label', t.heroDockLabel);
+  updateText('#heroFloatAudioTitle', t.heroFloatAudioTitle);
+  updateText('#heroFloatAudioSub', t.heroFloatAudioSub);
+  updateText('#heroFloatGpsTitle', t.heroFloatGpsTitle);
+  updateText('#heroFloatGpsSub', t.heroFloatGpsSub);
+  updateText('#heroFloatAiTitle', t.heroFloatAiTitle);
+  updateText('#heroFloatAiSub', t.heroFloatAiSub);
 
   // 01. Routes
   updateText('#s1-eyebrow', t.s1Eyebrow);
@@ -1851,6 +1940,8 @@ window.setLandingLanguage = function(lang) {
   updateText('#s2-desc', t.s2Desc);
   updateText('#bento-audio-proximity', t.bentoAudioProximity);
   updateText('#s2-audio-sub', t.s2AudioSub);
+  updateText('#popoutAudioTitle', t.popoutAudioTitle);
+  updateText('#popoutAudioSub', t.popoutAudioSub);
 
   // 03. Freedom
   updateText('#s3-eyebrow', t.s3Eyebrow);
@@ -1858,6 +1949,8 @@ window.setLandingLanguage = function(lang) {
   updateText('#s3-desc', t.s3Desc);
   updateText('#s3-old-lbl', t.s3OldLbl);
   updateText('#s3-new-val', t.s3NewVal);
+  updateText('#popoutGpsTitle', t.popoutGpsTitle);
+  updateText('#popoutGpsSub', t.popoutGpsSub);
 
   // 04. Simulator
   updateText('#sim-cockpit-badge', t.simCockpitBadge);
