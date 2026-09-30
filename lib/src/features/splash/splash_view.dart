@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Presentation widget representing the clean splash screen (Screen 2).
-/// Displays the centered circular VibeTours logo and the "from !emotiva" branding
-/// on a crisp white background.
+/// Presentation widget representing the clean splash screen.
+/// Displays the centered circular VibeTours logo and the "from !emotiva" branding,
+/// automatically adapting its colors and branding asset to light or dark mode.
 class SplashView extends StatelessWidget {
   const SplashView({
     super.key,
@@ -14,6 +14,9 @@ class SplashView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF000000) : Colors.white;
+
     Widget content = Stack(
       children: [
         Center(
@@ -24,7 +27,7 @@ class SplashView extends StatelessWidget {
           right: 0,
           bottom: 48,
           child: SafeArea(
-            child: _buildFooter(),
+            child: _buildFooter(isDark: isDark),
           ),
         ),
       ],
@@ -37,16 +40,18 @@ class SplashView extends StatelessWidget {
       );
     }
 
+    final systemUiStyle = SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: backgroundColor,
+      systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+    );
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
+      value: systemUiStyle,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: backgroundColor,
         body: content,
       ),
     );
@@ -61,15 +66,17 @@ class SplashView extends StatelessWidget {
     );
   }
 
-  Widget _buildFooter() {
-    const footerTextColor = Color(0xFF6B7280);
-    const emotivaLogoPath = 'assets/images/emotiva_logo_light.png';
+  Widget _buildFooter({required bool isDark}) {
+    final footerTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF6B7280);
+    final emotivaLogoPath = isDark
+        ? 'assets/images/emotiva_logo_dark.png'
+        : 'assets/images/emotiva_logo_light.png';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Text(
+        Text(
           'from',
           style: TextStyle(
             fontSize: 13,

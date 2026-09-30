@@ -25,6 +25,29 @@ void main() {
       
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
       expect(scaffold.backgroundColor, Colors.white);
+
+      final images = tester.widgetList<Image>(find.byType(Image)).toList();
+      final emotivaImage = images[1].image as AssetImage;
+      expect(emotivaImage.assetName, 'assets/images/emotiva_logo_light.png');
+    });
+
+    testWidgets('should render clean dark branding with black background in dark mode', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: const SplashView(),
+        ),
+      );
+
+      expect(find.text('from'), findsOneWidget);
+      expect(find.byType(Image), findsNWidgets(2)); // Center circular logo + Emotiva logo
+      
+      final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
+      expect(scaffold.backgroundColor, const Color(0xFF000000));
+
+      final images = tester.widgetList<Image>(find.byType(Image)).toList();
+      final emotivaImage = images[1].image as AssetImage;
+      expect(emotivaImage.assetName, 'assets/images/emotiva_logo_dark.png');
     });
   });
 
