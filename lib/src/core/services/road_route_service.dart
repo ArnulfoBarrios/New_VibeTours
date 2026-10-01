@@ -277,9 +277,10 @@ class RoadRouteService {
       if ((roadRoute == null || travelMode == RouteTravelMode.walking) &&
           travelMode != RouteTravelMode.flight &&
           directDistance <= 35000) {
-        var pureWalking = _tomTomApiKey.trim().isNotEmpty
-            ? await _fetchTomTomPedestrianRoute(start, end)
-            : null;
+        var pureWalking = await _fetchBRouterWalkingRoute(start, end);
+        if (pureWalking == null && _tomTomApiKey.trim().isNotEmpty) {
+          pureWalking = await _fetchTomTomPedestrianRoute(start, end);
+        }
         pureWalking ??= await _fetchWalkingRoute(start, end);
         if (pureWalking != null && !pureWalking.hasFerrySegment && pureWalking.geometry.isNotEmpty) {
           _appendGeometry(geometry, pureWalking.geometry);
@@ -1054,7 +1055,7 @@ out center tags 10;
       final uri = Uri.parse(
         '$baseUrl/route/v1/$modePath/'
         '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
-        '?overview=full&geometries=geojson&steps=true',
+        '?overview=full&geometries=geojson&steps=true&radiuses=3000;3000',
       );
       try {
         final response = await _client
@@ -1137,6 +1138,11 @@ out center tags 10;
       if (_distanceMeters(start, geometry.first) > 30) {
         geometry.insert(0, start);
       }
+      // If TomTom pedestrian route stops far from the target (e.g. stopped at the road network
+      // because trails aren't mapped in TomTom), reject it so trail routers can resolve it.
+      if (_distanceMeters(geometry.last, end) > 350) {
+        return null;
+      }
       if (_distanceMeters(geometry.last, end) > 30) {
         geometry.add(end);
       }
@@ -1157,6 +1163,70 @@ out center tags 10;
     }
   }
 
+  Future<_DrivingRoute?> _fetchBRouterWalkingRoute(
+    GeoPoint start,
+    GeoPoint end,
+  ) async {
+    final profiles = ['hiking-mountain', 'trekking'];
+    for (final profile in profiles) {
+      final uri = Uri.parse(
+        'https://brouter.de/brouter'
+        '?lonlats=${start.longitude},${start.latitude}|${end.longitude},${end.latitude}'
+        '&profile=$profile&format=geojson',
+      );
+      try {
+        final response = await _client
+            .get(uri, headers: const {'User-Agent': 'VibeTours/1.0'})
+            .timeout(const Duration(seconds: 7));
+        if (response.statusCode < 200 || response.statusCode >= 300) continue;
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final features = decoded['features'] as List<dynamic>? ?? const [];
+        if (features.isEmpty) continue;
+        final feat = features.first as Map<String, dynamic>;
+        final geom = feat['geometry'] as Map<String, dynamic>? ?? const {};
+        final coords = geom['coordinates'] as List<dynamic>? ?? const [];
+        if (coords.length < 2) continue;
+
+        final geometry = <GeoPoint>[];
+        for (final item in coords) {
+          if (item is List && item.length >= 2) {
+            final lon = (item[0] as num).toDouble();
+            final lat = (item[1] as num).toDouble();
+            geometry.add(GeoPoint(latitude: lat, longitude: lon));
+          }
+        }
+        if (geometry.length < 2) continue;
+
+        if (_distanceMeters(start, geometry.first) > 30) {
+          geometry.insert(0, start);
+        }
+        if (_distanceMeters(geometry.last, end) > 30) {
+          geometry.add(end);
+        }
+
+        final props = feat['properties'] as Map<String, dynamic>? ?? const {};
+        final distStr = props['track-length']?.toString();
+        final timeStr = props['total-time']?.toString();
+        final distanceMeters = (distStr != null ? double.tryParse(distStr) : null) ??
+            _geometryDistanceMeters(geometry);
+        final travelTimeSeconds = (timeStr != null ? int.tryParse(timeStr) : null) ??
+            ((distanceMeters / 1000) * 900).round();
+
+        return _DrivingRoute(
+          geometry: geometry,
+          distanceMeters: distanceMeters,
+          travelTimeSeconds: travelTimeSeconds,
+          trafficDelaySeconds: null,
+          usesLiveTraffic: false,
+          hasFerrySegment: false,
+        );
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
   Future<({_DrivingRoute driving, _DrivingRoute walking})?> _tryResolveHikingTrail({
     required GeoPoint start,
     required GeoPoint end,
@@ -1170,12 +1240,15 @@ out center tags 10;
 
     _DrivingRoute? walkingRoute;
 
-    // 1. Attempt TomTom Pedestrian route (accurate mountain & park trail network)
-    if (_tomTomApiKey.trim().isNotEmpty) {
+    // 1. Attempt BRouter for hiking, mountain & park trail networks (full OSM paths)
+    walkingRoute = await _fetchBRouterWalkingRoute(roadEnd, end);
+
+    // 2. Attempt TomTom Pedestrian route (if TomTom reaches destination)
+    if (walkingRoute == null && _tomTomApiKey.trim().isNotEmpty) {
       walkingRoute = await _fetchTomTomPedestrianRoute(roadEnd, end);
     }
 
-    // 2. Attempt OSRM routed-foot (verify destination is actually reached)
+    // 3. Attempt OSRM routed-foot (verify destination is actually reached)
     if (walkingRoute == null) {
       final forward = await _fetchWalkingRoute(roadEnd, end);
       if (forward != null &&

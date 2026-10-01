@@ -2481,34 +2481,34 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
 
         if (selectedIntermediateAttrs[0]) {
           const s1 = selectedIntermediateAttrs[0]
-          dayStops.push(` • 🌅 **09:00 AM - Mañana**: Visita a **${s1.name}**`)
+          dayStops.push(`• ${s1.name}`)
           specificPlacesToSave.push({ name: s1.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s1.latitude, longitude: s1.longitude, coordinatesVerified: true })
         }
         if (selectedIntermediateAttrs[1]) {
           const s2 = selectedIntermediateAttrs[1]
-          dayStops.push(` • 🏛️ **11:00 AM - Media mañana**: Recorrido en **${s2.name}**`)
+          dayStops.push(`• ${s2.name}`)
           specificPlacesToSave.push({ name: s2.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s2.latitude, longitude: s2.longitude, coordinatesVerified: true })
         }
         if (lunchRest) {
-          dayStops.push(` • 🍽️ **12:45 PM - Almuerzo**: **${lunchRest.name}** (gastronomía en la ruta)`)
+          dayStops.push(`• ${lunchRest.name}`)
           specificPlacesToSave.push({ name: lunchRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: lunchRest.latitude, longitude: lunchRest.longitude, coordinatesVerified: true })
         }
         if (selectedIntermediateAttrs[2]) {
           const s3 = selectedIntermediateAttrs[2]
-          dayStops.push(` • 🌇 **02:45 PM - Tarde**: Parada en **${s3.name}**`)
+          dayStops.push(`• ${s3.name}`)
           specificPlacesToSave.push({ name: s3.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s3.latitude, longitude: s3.longitude, coordinatesVerified: true })
         }
 
-        dayStops.push(` • 🌉 **04:30 PM - Destino principal**: Llegada a **${destName}**`)
+        dayStops.push(`• ${destName}`)
         specificPlacesToSave.push({ name: destName, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: endLat, longitude: endLon, coordinatesVerified: Boolean(endLat && endLon) })
 
         if (dinnerRest) {
-          dayStops.push(` • 🍴 **07:00 PM - Cena**: **${dinnerRest.name}** (experiencia culinaria)`)
+          dayStops.push(`• ${dinnerRest.name}`)
           specificPlacesToSave.push({ name: dinnerRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: dinnerRest.latitude, longitude: dinnerRest.longitude, coordinatesVerified: true })
         }
 
         known.specificPlaces = specificPlacesToSave
-        return `Día 1: Recorrido desde tu ubicación hasta ${destName} (Excursión de 1 día)\n\n${dayStops.join('\n')}`
+        return `Itinerario de Viaje: En ruta hacia ${destName} (1 día)\n\nDía 1: En ruta hacia ${destName}\n${dayStops.join('\n')}`
       }
 
       if (isExplicitBuildRequestedByUser && !fbAllKeyInfoComplete && !isLocationToDestination) {
@@ -2700,7 +2700,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       } else if (isLocationToDestination || (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging))) {
         if (isLocationToDestination) {
           const corridorBlock = await buildLocationCorridorDayBlocks()
-          fallbackMsg = `¡Perfecto! Diseñé un tour de 1 día desde tu ubicación hasta **${destName}**, pasando por atractivos en el camino sin desviaciones innecesarias:\n\n${corridorBlock}\n\n¿Qué te parece este recorrido? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
+          fallbackMsg = `¡Perfecto! Diseñé un tour de 1 día desde tu ubicación hasta **${destName}**, pasando por atractivos en el camino:\n\n${corridorBlock}\n\n¿Qué te parece este recorrido? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
           fallbackChips = ['🗺️ Generar tour en el mapa', 'Modificar paradas', 'Ver detalles']
         } else {
           const numDays = Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))
@@ -2857,7 +2857,8 @@ TAXONOMÍA DE LAS 6 MODALIDADES DE TOURS Y REGLAS TERRITORIALES DINÁMICAS:
 
 6. TOUR DESDE MI UBICACIÓN (GPS ORIGEN -> DESTINO):
    - Toma el punto de partida del usuario y traza el recorrido hacia el destino final.
-   - Encabezado de días: "Día 1: En Ruta hacia [Destino]", "Día 2: [Destino]"
+   - Encabezado de días: "Día 1: En ruta hacia [Destino]", "Día 2: [Destino]"
+   - FORMATO LIMPIO DE VIÑETAS (•): Al igual que en los demás tours, cada parada debe ser ÚNICAMENTE el nombre limpio del lugar o restaurante (ej: "• [Nombre del Atractivo]", "• [Nombre del Restaurante]"). ESTRICTAMENTE PROHIBIDO incluir horarios (ej: 09:00 AM), momentos del día (Mañana/Tarde/Almuerzo/Cena), emojis por viñeta o descripciones entre paréntesis.
 
 REGLA UNIVERSAL DE AGRUPAMIENTO GEOGRÁFICO Y DISTRIBUCIÓN POR DÍAS:
 1. AGRUPAMIENTO POR SECTOR O CIRCUITO DE ACCESO:
