@@ -339,7 +339,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
         final dotPos = dot.options.geometry;
         if (dotPos != null) {
           final distToUser = _metricDistanceMeters(currentPos, dotPos);
-          if (distToUser < 18.0) {
+          if (distToUser < 35.0) {
             dotsToRemove.add(dot);
           }
         }
@@ -958,7 +958,7 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
               for (final dot in dots)
                 CircleOptions(
                   geometry: dot,
-                  circleRadius: 3.5,
+                  circleRadius: 3.2,
                   circleColor: '#1A73E8',
                   circleOpacity: 1.0,
                   circleStrokeWidth: 0.0,
@@ -1455,8 +1455,19 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     final dots = <LatLng>[];
     if (points.length < 2) return dots;
 
-    // Google Maps-style walking dot spacing: 38 meters between dots
-    const double targetSpacingMeters = 38.0;
+    double totalDistance = 0.0;
+    for (int i = 0; i < points.length - 1; i++) {
+      totalDistance += _metricDistanceMeters(points[i], points[i + 1]);
+    }
+
+    // Google Maps-style walking dot spacing: dynamic spacing so dots stay
+    // cleanly separated with generous breathing room regardless of distance.
+    final double targetSpacingMeters = totalDistance < 250.0
+        ? 45.0
+        : totalDistance < 800.0
+            ? 70.0
+            : (totalDistance / 25.0).clamp(90.0, 140.0);
+
     double accumulatedDistance = 0.0;
     dots.add(points.first);
 
@@ -1477,7 +1488,8 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
       accumulatedDistance = segmentLength - (currentDistanceOnSegment - targetSpacingMeters);
     }
 
-    if (dots.length > 1 && _metricDistanceMeters(dots.last, points.last) > 15.0) {
+    if (dots.isNotEmpty &&
+        _metricDistanceMeters(dots.last, points.last) >= targetSpacingMeters * 0.6) {
       dots.add(points.last);
     }
     return dots;
