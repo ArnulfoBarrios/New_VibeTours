@@ -7600,3 +7600,59 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
     next(error)
   }
 })
+
+// ─────────────────────────────────────────────────────────────
+// Audio Transcription Endpoint (OpenAI Whisper)
+// POST /api/ai/audio/transcribe
+// ─────────────────────────────────────────────────────────────
+aiRouter.post('/audio/transcribe', async (req, res, next) => {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      return res.status(503).json({ error: 'OpenAI API key no configurada en el servidor' })
+    }
+
+    const { audioBase64, format = 'm4a', prompt, language = 'es' } = req.body || {}
+    if (!audioBase64) {
+      return res.status(400).json({ error: 'audioBase64 es requerido' })
+    }
+
+    const audioBuffer = Buffer.from(audioBase64, 'base64')
+    const filename = `recording.${format}`
+    const mimeType = format === 'mp3' ? 'audio/mpeg' : (format === 'wav' ? 'audio/wav' : 'audio/m4a')
+
+    const blob = new Blob([audioBuffer], { type: mimeType })
+    const formData = new FormData()
+    formData.append('file', blob, filename)
+    formData.append('model', 'whisper-1')
+    if (language) formData.append('language', language)
+    formData.append(
+      'prompt',
+      prompt || 'VibeTours, viajes, turismo, Colombia, Bogotá, Medellín, Cartagena, Santa Marta, Cali, hoteles, restaurantes, itinerarios, planes'
+    )
+
+    const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: formData
+    })
+
+    if (!whisperResponse.ok) {
+      const errText = await whisperResponse.text()
+      console.error('[Whisper] OpenAI transcription error:', errText)
+      return res.status(whisperResponse.status).json({
+        error: 'Error en servicio de transcripción Whisper',
+        details: errText
+      })
+    }
+
+    const data = await whisperResponse.json()
+    return res.json({ text: data.text })
+  } catch (error) {
+    console.error('[Whisper] Transcribe error:', error)
+    next(error)
+  }
+})
+

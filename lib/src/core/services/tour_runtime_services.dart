@@ -662,6 +662,15 @@ class VoiceGuideService {
   }) async {
     final completer = Completer<String?>();
     String? recognizedWords;
+    Timer? silenceDebounceTimer;
+
+    void finish(String? text) {
+      silenceDebounceTimer?.cancel();
+      silenceDebounceTimer = null;
+      if (!completer.isCompleted) {
+        completer.complete(text);
+      }
+    }
 
     // Immediately stop any ongoing audio/TTS playback so speaker sound doesn't bleed into mic
     try {
@@ -671,18 +680,25 @@ class VoiceGuideService {
 
     final ready = await _speech.initialize(
       onError: (errorNotification) {
-        debugPrint('Speech STT Error: ${errorNotification.errorMsg} - ${errorNotification.permanent}');
-        if (onError != null) onError(errorNotification.errorMsg);
-        if (!completer.isCompleted) {
-          completer.complete(recognizedWords);
+        debugPrint('Speech STT Error: ${errorNotification.errorMsg} - permanent: ${errorNotification.permanent}');
+        final msg = errorNotification.errorMsg.toLowerCase();
+        // If it's a timeout or no_match and we already captured speech, return what was captured
+        if (msg.contains('no_match') || msg.contains('timeout')) {
+          if (recognizedWords != null && recognizedWords!.trim().isNotEmpty) {
+            finish(recognizedWords);
+            return;
+          }
         }
+        if (onError != null) onError(errorNotification.errorMsg);
+        finish(recognizedWords);
       },
       onStatus: (status) {
         debugPrint('Speech STT Status: $status');
         if (status == 'notListening' || status == 'done') {
-          if (!completer.isCompleted) {
-            completer.complete(recognizedWords);
-          }
+          // Delay briefly to allow any final onResult callback to finish updating recognizedWords
+          Future.delayed(const Duration(milliseconds: 350), () {
+            finish(recognizedWords);
+          });
         }
       },
     );
@@ -704,32 +720,38 @@ class VoiceGuideService {
           if (onPartialResult != null) {
             onPartialResult(result.recognizedWords);
           }
-          if (result.finalResult && !completer.isCompleted) {
-            completer.complete(result.recognizedWords);
-          }
+          
+          // Debounce: wait for 2.2 seconds of silence after words are detected before finishing.
+          // This gives the user time to breathe, pause, and say the rest of their sentence without being cut off!
+          silenceDebounceTimer?.cancel();
+          silenceDebounceTimer = Timer(const Duration(milliseconds: 2200), () {
+            if (recognizedWords != null && recognizedWords!.trim().isNotEmpty) {
+              debugPrint('[VoiceGuide] Silencio detectado tras frase completa, finalizando escucha');
+              _speech.stop();
+              finish(recognizedWords);
+            }
+          });
         },
         onSoundLevelChange: onSoundLevelChange,
         listenOptions: SpeechListenOptions(
           partialResults: true,
           cancelOnError: false,
           listenMode: ListenMode.dictation,
-          listenFor: const Duration(seconds: 30),
-          pauseFor: const Duration(seconds: 4),
+          listenFor: const Duration(seconds: 45),
+          pauseFor: const Duration(seconds: 8), // 8 seconds silence threshold before Android OS gives up
           localeId: targetLocaleId,
         ),
       );
     } catch (e) {
+      silenceDebounceTimer?.cancel();
       debugPrint('Speech STT listen call failed: $e');
       if (onError != null) onError('Error al iniciar la escucha.');
       return null;
     }
 
-    // Timeout fallback just in case
-    Future.delayed(const Duration(seconds: 31), () {
-      if (!completer.isCompleted) {
-        _speech.stop();
-        completer.complete(recognizedWords);
-      }
+    // Safety timeout fallback
+    Future.delayed(const Duration(seconds: 46), () {
+      finish(recognizedWords);
     });
 
     return completer.future;
