@@ -19,7 +19,7 @@ class AudioTranscriptionService {
     }
 
     final defaultPrompt = prompt ??
-        'VibeTours, turismo, viajes, Colombia, Bogotá, Medellín, Cartagena, Santa Marta, Cali, hoteles, restaurantes, planes, tours';
+        'VibeTours Colombia: Barranquilla, Gran Malecón, Bogotá, Medellín, Cartagena, Santa Marta, Cali, Bucaramanga, San Andrés, lugares emblemáticos, sitios turísticos, transporte, vehículo, carro, presupuesto, itinerario, tour.';
 
     // 1. Prioridad: Transcripción directa con Groq Whisper Large v3 (100% Gratuito y ultra-rápido)
     if (AppConfig.hasGroq) {
@@ -102,7 +102,7 @@ class AudioTranscriptionService {
       'format': 'm4a',
       'language': 'es',
       'prompt': prompt ??
-          'VibeTours, turismo, viajes, Colombia, Bogotá, Medellín, Cartagena, Santa Marta, Cali, hoteles, restaurantes, planes, tours',
+          'VibeTours Colombia: Barranquilla, Gran Malecón, Bogotá, Medellín, Cartagena, Santa Marta, Cali, Bucaramanga, San Andrés, lugares emblemáticos, sitios turísticos, transporte, vehículo, carro, presupuesto, itinerario, tour.',
     });
 
     Object? lastErr;

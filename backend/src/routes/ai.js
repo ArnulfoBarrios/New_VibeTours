@@ -618,6 +618,12 @@ aiRouter.post('/chat', async (req, res, next) => {
       /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|c[oó]mo\s+(va|queda)\s+(el\s+|mi\s+)?itinerario|mostrar?\s+(el\s+|mi\s+)?itinerario|mu[eé]strame\s+(el\s+|mi\s+)?itinerario|ver\s+(el\s+|mi\s+)?itinerario|plan\s+de\s+viaje|detalles\s+del\s+d[íi]a)\b/i.test(message)
     )
     const quickExtracted = extractChatInformationFallback(message)
+    const isLocationRequestEarly = Boolean(
+      quickExtracted?.tourType === 'location_to_destination' ||
+      quickExtracted?.isUserLocationOrigin ||
+      (quickExtracted?.originPlace === 'user_current_location') ||
+      /\b(desde\s+mi\s+ubicaci[oó]n|de\s+mi\s+ubicaci[oó]n|saliendo\s+de\s+mi\s+ubicaci[oó]n)\b/i.test(message)
+    )
     const existingCanonical = currentPreferences.canonicalDestination
     const preloadDestination = existingCanonical?.city ||
       existingCanonical?.entityName ||
@@ -632,12 +638,12 @@ aiRouter.post('/chat', async (req, res, next) => {
       Number.isFinite(Number(existingCanonical.latitude)) &&
       Number.isFinite(Number(existingCanonical.longitude))
     )
-    const canonicalWarmup = preloadDestinationKey && existingCanonicalIsUsable
-      ? Promise.resolve(existingCanonical)
-      : preloadDestinationKey
-        ? resolveCanonicalDestination(preloadDestination).catch(() => null)
-        : Promise.resolve(null)
-    const catalogWarmup = (isExplicitBuildOrItineraryRequest && preloadDestinationKey)
+    const canonicalWarmup = (isLocationRequestEarly || !preloadDestinationKey)
+      ? Promise.resolve(null)
+      : (existingCanonicalIsUsable
+        ? Promise.resolve(existingCanonical)
+        : resolveCanonicalDestination(preloadDestination).catch(() => null))
+    const catalogWarmup = (!isLocationRequestEarly && isExplicitBuildOrItineraryRequest && preloadDestinationKey)
       ? canonicalWarmup.then(canonical => {
           if (!canonical || !Number.isFinite(Number(canonical.latitude)) || !Number.isFinite(Number(canonical.longitude))) {
             return null
@@ -973,14 +979,41 @@ aiRouter.post('/chat', async (req, res, next) => {
           currentPreferences.destination ||
           currentPreferences.city
         )
-        const canonical = (
-          existingCanonicalIsUsable &&
-          currentCanonicalKey === rawDestinationKey
-        )
-          ? existingCanonical
-          : preloadDestinationKey === rawDestinationKey
-            ? await canonicalWarmup
-            : await resolveCanonicalDestination(rawDest)
+        let canonical = null
+        if (isExplicitLocationToDestination || updatedPreferences.tourType === 'location_to_destination' || updatedPreferences.isUserLocationOrigin) {
+          const userLat = Number(latitude ?? currentPreferences.latitude ?? updatedPreferences.latitude ?? 0)
+          const userLon = Number(longitude ?? currentPreferences.longitude ?? updatedPreferences.longitude ?? 0)
+          const landmarkGeo = await geocodePlace(rawDest, userLat || null, userLon || null, {
+            country: updatedPreferences.country || currentPreferences.country || ''
+          }).catch(() => null)
+          if (landmarkGeo?.latitude && landmarkGeo?.longitude) {
+            const resolvedCity = cleanAdministrativeCityName(landmarkGeo.city) || cleanAdministrativeCityName(rawDest)
+            canonical = {
+              displayName: landmarkGeo.name || rawDest,
+              city: resolvedCity,
+              entityName: landmarkGeo.name || rawDest,
+              isMicroDestination: false,
+              region: '',
+              country: landmarkGeo.country || currentPreferences.country || 'Colombia',
+              countryCode: 'CO',
+              latitude: Number(landmarkGeo.latitude),
+              longitude: Number(landmarkGeo.longitude),
+              placeId: landmarkGeo.placeId || '',
+              isAmbiguous: false,
+              candidates: []
+            }
+          }
+        }
+        if (!canonical) {
+          canonical = (
+            existingCanonicalIsUsable &&
+            currentCanonicalKey === rawDestinationKey
+          )
+            ? existingCanonical
+            : preloadDestinationKey === rawDestinationKey
+              ? await canonicalWarmup
+              : await resolveCanonicalDestination(rawDest)
+        }
         if (canonical) {
           // If destination changed, clear previous specific places and hotel to prevent cross-destination pollution
           const prevDest = currentPreferences.canonicalDestination?.entityName || currentPreferences.canonicalDestination?.city || currentPreferences.destination || currentPreferences.city
@@ -1004,6 +1037,10 @@ aiRouter.post('/chat', async (req, res, next) => {
           if (Number.isFinite(canonical.latitude) && Number.isFinite(canonical.longitude)) {
             updatedPreferences.latitude = canonical.latitude
             updatedPreferences.longitude = canonical.longitude
+          }
+          if (latitude && longitude) {
+            updatedPreferences.userGpsLatitude = Number(latitude)
+            updatedPreferences.userGpsLongitude = Number(longitude)
           }
         } else {
           updatedPreferences.destination = rawDest
@@ -1160,7 +1197,12 @@ aiRouter.post('/chat', async (req, res, next) => {
           updatedPreferences.durationHours = maxDay === 1 ? 8 : maxDay * 24
         }
 
-        const chatCatalog = chatCity ? await getRealDestinationCatalog(chatCity, chatCountry, updatedPreferences.latitude, updatedPreferences.longitude, { requestedDays: maxDay || 7 }).catch(() => null) : null
+        const isLocationRoute = Boolean(
+          isExplicitLocationToDestination ||
+          updatedPreferences.tourType === 'location_to_destination' ||
+          updatedPreferences.isUserLocationOrigin
+        )
+        const chatCatalog = (!isLocationRoute && chatCity) ? await getRealDestinationCatalog(chatCity, chatCountry, updatedPreferences.latitude, updatedPreferences.longitude, { requestedDays: maxDay || 7 }).catch(() => null) : null
         const aiSpecifics = Array.isArray(aiResponse.extractedPreferences?.specificPlaces)
           ? aiResponse.extractedPreferences.specificPlaces
           : []
@@ -1337,7 +1379,12 @@ aiRouter.post('/chat', async (req, res, next) => {
         : deduplicatePlacesByName(rawCombined)
 
       let validatedSpecifics = combinedSpecifics
-      if (validatedSpecifics.length > 0 && updatedPreferences.city) {
+      const isLocationRoute = Boolean(
+        isExplicitLocationToDestination ||
+        updatedPreferences.tourType === 'location_to_destination' ||
+        updatedPreferences.isUserLocationOrigin
+      )
+      if (validatedSpecifics.length > 0 && updatedPreferences.city && !isLocationRoute) {
         validatedSpecifics = await filterChatSpecificPlacesByOsm(
           validatedSpecifics,
           updatedPreferences.city,
@@ -7619,7 +7666,7 @@ aiRouter.post('/audio/transcribe', async (req, res, next) => {
     const audioBuffer = Buffer.from(audioBase64, 'base64')
     const filename = `recording.${format}`
     const mimeType = format === 'mp3' ? 'audio/mpeg' : (format === 'wav' ? 'audio/wav' : 'audio/m4a')
-    const defaultPrompt = prompt || 'VibeTours, viajes, turismo, Colombia, Bogotá, Medellín, Cartagena, Santa Marta, Cali, hoteles, restaurantes, itinerarios, planes'
+    const defaultPrompt = prompt || 'VibeTours Colombia: Barranquilla, Gran Malecón, Bogotá, Medellín, Cartagena, Santa Marta, Cali, Bucaramanga, San Andrés, lugares emblemáticos, sitios turísticos, transporte, vehículo, carro, presupuesto, itinerario, tour.'
 
     // 1. Prioridad: Groq Cloud Whisper Large v3 (100% Gratuito, ultra-rápido)
     if (groqKey) {

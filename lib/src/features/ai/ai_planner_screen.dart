@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -9,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import 'package:geolocator/geolocator.dart';
 
@@ -36,6 +38,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   final _scrollController = ScrollController();
   
   final _voiceRecorder = _AudioVoiceRecorderSession();
+  final _liveSpeech = _LiveSpeechRecognizerSession();
   bool _isVoiceActive = false;
   bool _isVoicePaused = false;
   bool _isVoiceTranscribing = false;
@@ -50,6 +53,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Pre-inicializar el motor de dictado en segundo plano para respuesta instantánea
+    unawaited(_liveSpeech.initialize());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
       
@@ -71,6 +76,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _voiceRecorder.dispose();
+    _liveSpeech.dispose();
     _prompt.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -103,6 +109,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
     if (_isVoiceActive) {
       unawaited(_voiceRecorder.cancel());
+      unawaited(_liveSpeech.cancel());
       _isVoiceActive = false;
       _isVoicePaused = false;
       _isVoiceTranscribing = false;
@@ -1532,6 +1539,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _voiceFeedbackIsError = false;
     });
 
+    // 1. Iniciar grabador de audio físico (.m4a para Whisper)
     final started = await _voiceRecorder.start(
       onSoundLevel: (level) {
         if (!mounted || !_isVoiceActive || _isVoicePaused || _isVoiceTranscribing) return;
@@ -1540,14 +1548,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         });
       },
       onError: (errorMsg) {
-        if (!mounted) return;
-        setState(() {
-          _isVoiceActive = false;
-          _isVoicePaused = false;
-          _isVoiceTranscribing = false;
-          _voiceFeedback = errorMsg;
-          _voiceFeedbackIsError = true;
-        });
+        debugPrint('[AudioVoiceRecorder] Error: $errorMsg');
       },
     );
 
@@ -1556,20 +1557,38 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         _isVoiceActive = false;
         _isVoicePaused = false;
         _isVoiceTranscribing = false;
+        _voiceFeedback = 'No se pudo acceder al micrófono.';
+        _voiceFeedbackIsError = true;
       });
+      return;
     }
+
+    // 2. Iniciar dictado en vivo en tiempo real (las palabras fluyen inmediatamente)
+    unawaited(
+      _liveSpeech.startListening(
+        onLiveText: (liveText) {
+          if (!mounted || !_isVoiceActive || _isVoicePaused || _isVoiceTranscribing) return;
+          final combined = _baselinePrompt.isEmpty
+              ? liveText
+              : '$_baselinePrompt $liveText';
+          _setPromptText(combined);
+        },
+      ),
+    );
   }
 
   Future<void> _toggleVoicePause() async {
     if (!_isVoiceActive || _isVoiceTranscribing) return;
     if (_isVoicePaused) {
       await _voiceRecorder.resume();
+      await _liveSpeech.resume();
       setState(() {
         _isVoicePaused = false;
         _voiceFeedback = null;
       });
     } else {
       await _voiceRecorder.pause();
+      await _liveSpeech.pause();
       setState(() {
         _isVoicePaused = true;
         _voiceSoundLevel = 0.0;
@@ -1586,6 +1605,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _voiceSoundLevel = 0.0;
       _voiceFeedback = null;
     });
+
+    // Detener la escucha en vivo
+    await _liveSpeech.stop();
 
     try {
       final recordedPath = await _voiceRecorder.stop();
@@ -1623,20 +1645,26 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         await _sendMessage();
       }
     } catch (e) {
-      debugPrint('[Voice] Error al transcribir: $e');
+      debugPrint('[Voice] Error al transcribir con IA: $e');
       if (!mounted) return;
+      // Si la IA remota falla, preservamos intacto el texto reconocido en vivo
       setState(() {
         _isVoiceActive = false;
         _isVoicePaused = false;
         _isVoiceTranscribing = false;
-        _voiceFeedback = 'Error de transcripción: $e';
-        _voiceFeedbackIsError = true;
+        _voiceSoundLevel = 0.0;
+        _voiceFeedback = null;
+        _voiceFeedbackIsError = false;
       });
+      if (autoSend && _prompt.text.trim().isNotEmpty) {
+        await _sendMessage();
+      }
     }
   }
 
   Future<void> _cancelVoiceInput() async {
     await _voiceRecorder.cancel();
+    await _liveSpeech.cancel();
     if (!mounted) return;
     _setPromptText(_baselinePrompt);
     setState(() {
@@ -1806,6 +1834,7 @@ class SmartVoiceNormalizer {
     RegExp(r'\b(cartajena|cartagena)\b', caseSensitive: false): 'Cartagena',
     RegExp(r'\b(santa marta|santamarta)\b', caseSensitive: false): 'Santa Marta',
     RegExp(r'\b(san andres|sanandres)\b', caseSensitive: false): 'San Andrés',
+    RegExp(r'\b(marranquilla|barranqulla|barranquillla)\b', caseSensitive: false): 'Barranquilla',
     RegExp(r'\b(barranquilla|quilla)\b', caseSensitive: false): 'Barranquilla',
     RegExp(r'\b(cali)\b', caseSensitive: false): 'Cali',
     RegExp(r'\b(bucaramanga)\b', caseSensitive: false): 'Bucaramanga',
@@ -1823,6 +1852,11 @@ class SmartVoiceNormalizer {
     RegExp(r'\b(cabo de la vela)\b', caseSensitive: false): 'Cabo de la Vela',
     RegExp(r'\b(palomino)\b', caseSensitive: false): 'Palomino',
     RegExp(r'\b(mompox|mompos)\b', caseSensitive: false): 'Mompox',
+    RegExp(r'\b(el malecon|gran malecon|malecon del rio)\b', caseSensitive: false): 'el Gran Malecón',
+    RegExp(r'\b(los valores m[aá]s importantes)\b', caseSensitive: false): 'los lugares más importantes',
+    RegExp(r'\b(valores m[aá]s importantes)\b', caseSensitive: false): 'lugares más importantes',
+    RegExp(r'\b(dar el carro)\b', caseSensitive: false): 'usar el carro',
+    RegExp(r'\b(en todo el mercado)\b', caseSensitive: false): 'en todo el recorrido',
   };
 
   static String normalize(String input) {
@@ -1962,6 +1996,223 @@ class _AudioVoiceRecorderSession {
   Future<void> dispose() async {
     await cancel();
     await _recorder.dispose();
+  }
+}
+
+/// Sesión de reconocimiento de voz en vivo en el dispositivo.
+/// Muestra las palabras en tiempo real mientras el usuario habla (latencia 0 ms).
+/// Si el reconocedor nativo se detiene por silencio, se reconecta automáticamente
+/// para no perder las siguientes frases.
+class _LiveSpeechRecognizerSession {
+  final SpeechToText _speech = SpeechToText();
+  bool _initialized = false;
+  bool _isAvailable = false;
+  bool _isListening = false;
+  bool _shouldBeListening = false;
+  Timer? _restartDebounce;
+  String? _resolvedLocaleId;
+
+  final List<String> _finalizedUtterances = [];
+  String _currentUtterance = '';
+  void Function(String fullLiveText)? _onLiveTextUpdated;
+
+  bool get isListening => _isListening;
+  bool get isAvailable => _isAvailable;
+
+  Future<bool> initialize() async {
+    if (_initialized) return _isAvailable;
+    try {
+      _isAvailable = await _speech.initialize(
+        onError: (err) {
+          debugPrint('[LiveSpeech] Error: ${err.errorMsg} (permanent: ${err.permanent})');
+          _isListening = false;
+          if (_shouldBeListening) {
+            final msg = err.errorMsg.toLowerCase();
+            if (msg.contains('timeout') || msg.contains('no_match') || msg.contains('busy')) {
+              _scheduleRestart();
+            }
+          }
+        },
+        onStatus: (status) {
+          debugPrint('[LiveSpeech] Status: $status');
+          if (status == 'listening') {
+            _isListening = true;
+          } else if (status == 'notListening' || status == 'done') {
+            _isListening = false;
+            if (_shouldBeListening) {
+              _scheduleRestart();
+            }
+          }
+        },
+      );
+      _initialized = true;
+      if (_isAvailable) {
+        _resolvedLocaleId = await _resolveLocale();
+      }
+      return _isAvailable;
+    } catch (e) {
+      debugPrint('[LiveSpeech] Init exception: $e');
+      _initialized = true;
+      _isAvailable = false;
+      return false;
+    }
+  }
+
+  Future<String?> _resolveLocale() async {
+    try {
+      final locales = await _speech.locales();
+      const preferred = [
+        'es_co', 'es-co', 'es_419', 'es-419', 'es_mx', 'es-mx', 'es_us', 'es-us', 'es_es', 'es-es'
+      ];
+      for (final p in preferred) {
+        for (final l in locales) {
+          if (l.localeId.toLowerCase().replaceAll('-', '_') == p.replaceAll('-', '_')) {
+            return l.localeId;
+          }
+        }
+      }
+      final sys = await _speech.systemLocale();
+      if (sys != null && sys.localeId.toLowerCase().startsWith('es')) {
+        return sys.localeId;
+      }
+      for (final l in locales) {
+        if (l.localeId.toLowerCase().startsWith('es')) {
+          return l.localeId;
+        }
+      }
+    } catch (_) {}
+    return 'es_CO';
+  }
+
+  Future<void> startListening({
+    required void Function(String fullLiveText) onLiveText,
+  }) async {
+    _onLiveTextUpdated = onLiveText;
+    _shouldBeListening = true;
+    _finalizedUtterances.clear();
+    _currentUtterance = '';
+    _restartDebounce?.cancel();
+
+    if (!_initialized) {
+      await initialize();
+    }
+    if (!_isAvailable) {
+      debugPrint('[LiveSpeech] Speech to text no disponible en este dispositivo');
+      return;
+    }
+
+    await _listenInternal();
+  }
+
+  Future<void> _listenInternal() async {
+    if (!_shouldBeListening) return;
+    try {
+      if (_speech.isListening) {
+        await _speech.stop();
+      }
+      await _speech.listen(
+        onResult: (result) {
+          if (!_shouldBeListening) return;
+          final words = result.recognizedWords.trim();
+          if (words.isEmpty) return;
+
+          // Si el reconocedor comenzó un nuevo segmento tras una pausa breve
+          if (_currentUtterance.isNotEmpty &&
+              !words.toLowerCase().startsWith(_currentUtterance.toLowerCase().substring(0, math.min(8, _currentUtterance.length)))) {
+            _finalizedUtterances.add(_currentUtterance);
+            _currentUtterance = words;
+          } else {
+            _currentUtterance = words;
+          }
+
+          if (result.finalResult) {
+            _finalizedUtterances.add(_currentUtterance);
+            _currentUtterance = '';
+          }
+
+          final all = [..._finalizedUtterances];
+          if (_currentUtterance.isNotEmpty) {
+            all.add(_currentUtterance);
+          }
+          final combined = all.join(' ').trim();
+          if (combined.isNotEmpty) {
+            _onLiveTextUpdated?.call(combined);
+          }
+        },
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: false,
+          listenMode: ListenMode.dictation,
+          localeId: _resolvedLocaleId ?? 'es_CO',
+          listenFor: const Duration(minutes: 10),
+          pauseFor: const Duration(seconds: 8),
+        ),
+      );
+      _isListening = true;
+    } catch (e) {
+      debugPrint('[LiveSpeech] Listen error: $e');
+      if (_shouldBeListening) {
+        _scheduleRestart();
+      }
+    }
+  }
+
+  void _scheduleRestart() {
+    _restartDebounce?.cancel();
+    if (!_shouldBeListening) return;
+    _restartDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (_shouldBeListening) {
+        _listenInternal();
+      }
+    });
+  }
+
+  Future<void> pause() async {
+    _shouldBeListening = false;
+    _restartDebounce?.cancel();
+    if (_isListening || _speech.isListening) {
+      try {
+        await _speech.stop();
+      } catch (_) {}
+    }
+    _isListening = false;
+  }
+
+  Future<void> resume() async {
+    _shouldBeListening = true;
+    await _listenInternal();
+  }
+
+  Future<void> stop() async {
+    _shouldBeListening = false;
+    _restartDebounce?.cancel();
+    if (_isListening || _speech.isListening) {
+      try {
+        await _speech.stop();
+      } catch (_) {}
+    }
+    _isListening = false;
+    _currentUtterance = '';
+    _finalizedUtterances.clear();
+  }
+
+  Future<void> cancel() async {
+    _shouldBeListening = false;
+    _restartDebounce?.cancel();
+    if (_isListening || _speech.isListening) {
+      try {
+        await _speech.cancel();
+      } catch (_) {}
+    }
+    _isListening = false;
+    _currentUtterance = '';
+    _finalizedUtterances.clear();
+  }
+
+  void dispose() {
+    _shouldBeListening = false;
+    _restartDebounce?.cancel();
+    cancel();
   }
 }
 
