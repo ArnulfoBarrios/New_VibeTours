@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -10,7 +9,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 
 import 'package:geolocator/geolocator.dart';
 
@@ -38,7 +36,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   final _scrollController = ScrollController();
   
   final _voiceRecorder = _AudioVoiceRecorderSession();
-  final _liveSpeech = _LiveSpeechRecognizerSession();
+  int _recordingSeconds = 0;
+  Timer? _recordingTimer;
   bool _isVoiceActive = false;
   bool _isVoicePaused = false;
   bool _isVoiceTranscribing = false;
@@ -53,8 +52,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Pre-inicializar el motor de dictado en segundo plano para respuesta instantánea
-    unawaited(_liveSpeech.initialize());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
       
@@ -75,8 +72,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _recordingTimer?.cancel();
     _voiceRecorder.dispose();
-    _liveSpeech.dispose();
     _prompt.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -108,8 +105,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     if (builderState.isTyping || builderState.isLoading || builderState.isBuilding) return;
 
     if (_isVoiceActive) {
+      _recordingTimer?.cancel();
+      _recordingTimer = null;
       unawaited(_voiceRecorder.cancel());
-      unawaited(_liveSpeech.cancel());
       _isVoiceActive = false;
       _isVoicePaused = false;
       _isVoiceTranscribing = false;
@@ -1432,29 +1430,70 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                         ),
                       ),
                       Expanded(
-                        child: TextField(
-                          controller: _prompt,
-                          minLines: 1,
-                          maxLines: 5,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _sendMessage(),
-                          decoration: InputDecoration(
-                            hintText: _isVoiceActive
-                                ? (_isVoiceTranscribing
-                                    ? 'Transcribiendo audio...'
-                                    : (_isVoicePaused ? 'Voz en pausa...' : 'Escuchando tu voz...'))
-                                : 'Describe tu tour ideal...',
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            filled: false,
-                            fillColor: Colors.transparent,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                            isDense: true,
-                          ),
-                        ),
+                        child: _isVoiceActive
+                            ? Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: _isVoicePaused
+                                            ? Colors.amber.shade700
+                                            : (_isVoiceTranscribing ? Colors.purple : Colors.red.shade600),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _formatVoiceDuration(_recordingSeconds),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: _isVoicePaused ? Colors.amber.shade900 : Colors.blue.shade900,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _isVoiceTranscribing
+                                          ? const Text(
+                                              'Transcribiendo con Groq Whisper IA...',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontStyle: FontStyle.italic,
+                                                color: Colors.purple,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            )
+                                          : _VoiceWaveformVisualizer(
+                                              soundLevel: _voiceSoundLevel,
+                                              isPaused: _isVoicePaused,
+                                            ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : TextField(
+                                controller: _prompt,
+                                minLines: 1,
+                                maxLines: 5,
+                                textInputAction: TextInputAction.send,
+                                onSubmitted: (_) => _sendMessage(),
+                                decoration: const InputDecoration(
+                                  hintText: 'Describe tu tour ideal...',
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  disabledBorder: InputBorder.none,
+                                  errorBorder: InputBorder.none,
+                                  filled: false,
+                                  fillColor: Colors.transparent,
+                                  contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                  isDense: true,
+                                ),
+                              ),
                       ),
                     ],
                   ),
@@ -1530,6 +1569,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
   Future<void> _startVoiceInput() async {
     _baselinePrompt = _prompt.text.trim();
+    _recordingSeconds = 0;
+    _recordingTimer?.cancel();
     setState(() {
       _isVoiceActive = true;
       _isVoicePaused = false;
@@ -1539,7 +1580,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _voiceFeedbackIsError = false;
     });
 
-    // 1. Iniciar grabador de audio físico (.m4a para Whisper)
     final started = await _voiceRecorder.start(
       onSoundLevel: (level) {
         if (!mounted || !_isVoiceActive || _isVoicePaused || _isVoiceTranscribing) return;
@@ -1549,10 +1589,20 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       },
       onError: (errorMsg) {
         debugPrint('[AudioVoiceRecorder] Error: $errorMsg');
+        if (!mounted) return;
+        _recordingTimer?.cancel();
+        setState(() {
+          _isVoiceActive = false;
+          _isVoicePaused = false;
+          _isVoiceTranscribing = false;
+          _voiceFeedback = errorMsg;
+          _voiceFeedbackIsError = true;
+        });
       },
     );
 
     if (!started && mounted) {
+      _recordingTimer?.cancel();
       setState(() {
         _isVoiceActive = false;
         _isVoicePaused = false;
@@ -1563,32 +1613,29 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       return;
     }
 
-    // 2. Iniciar dictado en vivo en tiempo real (las palabras fluyen inmediatamente)
-    unawaited(
-      _liveSpeech.startListening(
-        onLiveText: (liveText) {
-          if (!mounted || !_isVoiceActive || _isVoicePaused || _isVoiceTranscribing) return;
-          final combined = _baselinePrompt.isEmpty
-              ? liveText
-              : '$_baselinePrompt $liveText';
-          _setPromptText(combined);
-        },
-      ),
-    );
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || !_isVoiceActive) {
+        timer.cancel();
+        return;
+      }
+      if (!_isVoicePaused && !_isVoiceTranscribing) {
+        setState(() {
+          _recordingSeconds++;
+        });
+      }
+    });
   }
 
   Future<void> _toggleVoicePause() async {
     if (!_isVoiceActive || _isVoiceTranscribing) return;
     if (_isVoicePaused) {
       await _voiceRecorder.resume();
-      await _liveSpeech.resume();
       setState(() {
         _isVoicePaused = false;
         _voiceFeedback = null;
       });
     } else {
       await _voiceRecorder.pause();
-      await _liveSpeech.pause();
       setState(() {
         _isVoicePaused = true;
         _voiceSoundLevel = 0.0;
@@ -1600,14 +1647,14 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   Future<void> _finishVoiceInput({bool autoSend = false}) async {
     if (!_isVoiceActive || _isVoiceTranscribing) return;
 
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+
     setState(() {
       _isVoiceTranscribing = true;
       _voiceSoundLevel = 0.0;
       _voiceFeedback = null;
     });
-
-    // Detener la escucha en vivo
-    await _liveSpeech.stop();
 
     try {
       final recordedPath = await _voiceRecorder.stop();
@@ -1617,11 +1664,32 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
       final recordedFile = File(recordedPath);
       final rawText = await AudioTranscriptionService.transcribeAudioFile(recordedFile);
-      final cleanedText = SmartVoiceNormalizer.normalize(rawText);
 
       try {
         if (recordedFile.existsSync()) recordedFile.deleteSync();
       } catch (_) {}
+
+      // Filtro contra alucinaciones de silencio de Whisper (cuando no se habló o hubo silencio)
+      final isSilenceHallucination = RegExp(
+        r'^(gracias por ver el video|gracias por el video|gracias por ver este video|subt[ií]tulos|thank you for watching|amara\.org|suscr[ií]bete|hasta la pr[oó]xima)[.!\s]*$',
+        caseSensitive: false,
+      ).hasMatch(rawText.trim());
+
+      if (isSilenceHallucination || rawText.trim().isEmpty) {
+        debugPrint('[Voice] Whisper detectó silencio / alucinación descartada: $rawText');
+        if (!mounted) return;
+        setState(() {
+          _isVoiceActive = false;
+          _isVoicePaused = false;
+          _isVoiceTranscribing = false;
+          _voiceSoundLevel = 0.0;
+          _voiceFeedback = 'No se detectó voz. Por favor habla más cerca del micrófono.';
+          _voiceFeedbackIsError = true;
+        });
+        return;
+      }
+
+      final cleanedText = SmartVoiceNormalizer.normalize(rawText);
 
       if (!mounted) return;
 
@@ -1647,24 +1715,21 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     } catch (e) {
       debugPrint('[Voice] Error al transcribir con IA: $e');
       if (!mounted) return;
-      // Si la IA remota falla, preservamos intacto el texto reconocido en vivo
       setState(() {
         _isVoiceActive = false;
         _isVoicePaused = false;
         _isVoiceTranscribing = false;
         _voiceSoundLevel = 0.0;
-        _voiceFeedback = null;
-        _voiceFeedbackIsError = false;
+        _voiceFeedback = 'Error al transcribir: $e';
+        _voiceFeedbackIsError = true;
       });
-      if (autoSend && _prompt.text.trim().isNotEmpty) {
-        await _sendMessage();
-      }
     }
   }
 
   Future<void> _cancelVoiceInput() async {
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
     await _voiceRecorder.cancel();
-    await _liveSpeech.cancel();
     if (!mounted) return;
     _setPromptText(_baselinePrompt);
     setState(() {
@@ -1675,6 +1740,12 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _voiceFeedback = null;
       _voiceFeedbackIsError = false;
     });
+  }
+
+  String _formatVoiceDuration(int totalSeconds) {
+    final m = totalSeconds ~/ 60;
+    final s = totalSeconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 
   void _setPromptText(String value) {
@@ -1998,221 +2069,49 @@ class _AudioVoiceRecorderSession {
     await _recorder.dispose();
   }
 }
+/// Visualizador de onda acústica en tiempo real para el dictado por voz.
+/// Muestra barras dinámicas que reaccionan a la amplitud de la voz del usuario.
+class _VoiceWaveformVisualizer extends StatelessWidget {
+  const _VoiceWaveformVisualizer({
+    required this.soundLevel,
+    required this.isPaused,
+  });
 
-/// Sesión de reconocimiento de voz en vivo en el dispositivo.
-/// Muestra las palabras en tiempo real mientras el usuario habla (latencia 0 ms).
-/// Si el reconocedor nativo se detiene por silencio, se reconecta automáticamente
-/// para no perder las siguientes frases.
-class _LiveSpeechRecognizerSession {
-  final SpeechToText _speech = SpeechToText();
-  bool _initialized = false;
-  bool _isAvailable = false;
-  bool _isListening = false;
-  bool _shouldBeListening = false;
-  Timer? _restartDebounce;
-  String? _resolvedLocaleId;
+  final double soundLevel;
+  final bool isPaused;
 
-  final List<String> _finalizedUtterances = [];
-  String _currentUtterance = '';
-  void Function(String fullLiveText)? _onLiveTextUpdated;
-
-  bool get isListening => _isListening;
-  bool get isAvailable => _isAvailable;
-
-  Future<bool> initialize() async {
-    if (_initialized) return _isAvailable;
-    try {
-      _isAvailable = await _speech.initialize(
-        onError: (err) {
-          debugPrint('[LiveSpeech] Error: ${err.errorMsg} (permanent: ${err.permanent})');
-          _isListening = false;
-          if (_shouldBeListening) {
-            final msg = err.errorMsg.toLowerCase();
-            if (msg.contains('timeout') || msg.contains('no_match') || msg.contains('busy')) {
-              _scheduleRestart();
-            }
-          }
-        },
-        onStatus: (status) {
-          debugPrint('[LiveSpeech] Status: $status');
-          if (status == 'listening') {
-            _isListening = true;
-          } else if (status == 'notListening' || status == 'done') {
-            _isListening = false;
-            if (_shouldBeListening) {
-              _scheduleRestart();
-            }
-          }
-        },
-      );
-      _initialized = true;
-      if (_isAvailable) {
-        _resolvedLocaleId = await _resolveLocale();
-      }
-      return _isAvailable;
-    } catch (e) {
-      debugPrint('[LiveSpeech] Init exception: $e');
-      _initialized = true;
-      _isAvailable = false;
-      return false;
-    }
-  }
-
-  Future<String?> _resolveLocale() async {
-    try {
-      final locales = await _speech.locales();
-      const preferred = [
-        'es_co', 'es-co', 'es_419', 'es-419', 'es_mx', 'es-mx', 'es_us', 'es-us', 'es_es', 'es-es'
-      ];
-      for (final p in preferred) {
-        for (final l in locales) {
-          if (l.localeId.toLowerCase().replaceAll('-', '_') == p.replaceAll('-', '_')) {
-            return l.localeId;
-          }
-        }
-      }
-      final sys = await _speech.systemLocale();
-      if (sys != null && sys.localeId.toLowerCase().startsWith('es')) {
-        return sys.localeId;
-      }
-      for (final l in locales) {
-        if (l.localeId.toLowerCase().startsWith('es')) {
-          return l.localeId;
-        }
-      }
-    } catch (_) {}
-    return 'es_CO';
-  }
-
-  Future<void> startListening({
-    required void Function(String fullLiveText) onLiveText,
-  }) async {
-    _onLiveTextUpdated = onLiveText;
-    _shouldBeListening = true;
-    _finalizedUtterances.clear();
-    _currentUtterance = '';
-    _restartDebounce?.cancel();
-
-    if (!_initialized) {
-      await initialize();
-    }
-    if (!_isAvailable) {
-      debugPrint('[LiveSpeech] Speech to text no disponible en este dispositivo');
-      return;
-    }
-
-    await _listenInternal();
-  }
-
-  Future<void> _listenInternal() async {
-    if (!_shouldBeListening) return;
-    try {
-      if (_speech.isListening) {
-        await _speech.stop();
-      }
-      await _speech.listen(
-        onResult: (result) {
-          if (!_shouldBeListening) return;
-          final words = result.recognizedWords.trim();
-          if (words.isEmpty) return;
-
-          // Si el reconocedor comenzó un nuevo segmento tras una pausa breve
-          if (_currentUtterance.isNotEmpty &&
-              !words.toLowerCase().startsWith(_currentUtterance.toLowerCase().substring(0, math.min(8, _currentUtterance.length)))) {
-            _finalizedUtterances.add(_currentUtterance);
-            _currentUtterance = words;
-          } else {
-            _currentUtterance = words;
-          }
-
-          if (result.finalResult) {
-            _finalizedUtterances.add(_currentUtterance);
-            _currentUtterance = '';
-          }
-
-          final all = [..._finalizedUtterances];
-          if (_currentUtterance.isNotEmpty) {
-            all.add(_currentUtterance);
-          }
-          final combined = all.join(' ').trim();
-          if (combined.isNotEmpty) {
-            _onLiveTextUpdated?.call(combined);
-          }
-        },
-        listenOptions: SpeechListenOptions(
-          partialResults: true,
-          cancelOnError: false,
-          listenMode: ListenMode.dictation,
-          localeId: _resolvedLocaleId ?? 'es_CO',
-          listenFor: const Duration(minutes: 10),
-          pauseFor: const Duration(seconds: 8),
+  @override
+  Widget build(BuildContext context) {
+    if (isPaused) {
+      return Text(
+        'Voz pausada',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.amber.shade800,
+          fontWeight: FontWeight.w600,
         ),
       );
-      _isListening = true;
-    } catch (e) {
-      debugPrint('[LiveSpeech] Listen error: $e');
-      if (_shouldBeListening) {
-        _scheduleRestart();
-      }
     }
-  }
 
-  void _scheduleRestart() {
-    _restartDebounce?.cancel();
-    if (!_shouldBeListening) return;
-    _restartDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (_shouldBeListening) {
-        _listenInternal();
-      }
-    });
-  }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: List.generate(9, (index) {
+        final offsets = [0.35, 0.7, 0.45, 1.0, 0.6, 0.85, 0.5, 0.75, 0.4];
+        final factor = offsets[index % offsets.length];
+        final dynamicHeight = 5.0 + (soundLevel * factor * 18.0).clamp(0.0, 20.0);
 
-  Future<void> pause() async {
-    _shouldBeListening = false;
-    _restartDebounce?.cancel();
-    if (_isListening || _speech.isListening) {
-      try {
-        await _speech.stop();
-      } catch (_) {}
-    }
-    _isListening = false;
-  }
-
-  Future<void> resume() async {
-    _shouldBeListening = true;
-    await _listenInternal();
-  }
-
-  Future<void> stop() async {
-    _shouldBeListening = false;
-    _restartDebounce?.cancel();
-    if (_isListening || _speech.isListening) {
-      try {
-        await _speech.stop();
-      } catch (_) {}
-    }
-    _isListening = false;
-    _currentUtterance = '';
-    _finalizedUtterances.clear();
-  }
-
-  Future<void> cancel() async {
-    _shouldBeListening = false;
-    _restartDebounce?.cancel();
-    if (_isListening || _speech.isListening) {
-      try {
-        await _speech.cancel();
-      } catch (_) {}
-    }
-    _isListening = false;
-    _currentUtterance = '';
-    _finalizedUtterances.clear();
-  }
-
-  void dispose() {
-    _shouldBeListening = false;
-    _restartDebounce?.cancel();
-    cancel();
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          width: 3.5,
+          height: dynamicHeight,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade600.withValues(alpha: (0.4 + soundLevel * 0.6).clamp(0.4, 1.0)),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        );
+      }),
+    );
   }
 }
 

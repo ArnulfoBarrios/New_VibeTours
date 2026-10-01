@@ -2265,6 +2265,336 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const hasBudget = hasValidValue(known.budget)
   const hasCompanions = hasValidValue(known.companions)
 
+  const buildLocationCorridorDayBlocks = async (activeCatalog = null) => {
+    let startLat = Number(known.userGpsLatitude ?? known.latitude ?? 0)
+    let startLon = Number(known.userGpsLongitude ?? known.longitude ?? 0)
+    let endLat = Number(known.canonicalDestination?.latitude ?? 0)
+    let endLon = Number(known.canonicalDestination?.longitude ?? 0)
+
+    // Dynamically detect administrative city from start GPS coordinates if not already present
+    let detectedCity = known.city || ''
+    if (!detectedCity && startLat && startLon) {
+      let closestDist = Infinity
+      let closestCityName = ''
+      for (const [key, centroid] of Object.entries(FALLBACK_DESTINATION_CENTROIDS)) {
+        if (centroid?.latitude && centroid?.longitude) {
+          const d = haversineMeters(startLat, startLon, centroid.latitude, centroid.longitude)
+          if (d < closestDist && d <= 50000) {
+            closestDist = d
+            closestCityName = centroid.city || key
+          }
+        }
+      }
+      if (closestCityName) {
+        detectedCity = closestCityName
+        if (!known.city) known.city = closestCityName
+      }
+    }
+
+    if (!endLat || !endLon) {
+      const destGeo = await geocodePlace(destName, startLat || null, startLon || null, {
+        city: detectedCity || '',
+        country: destCountry || 'Colombia'
+      }).catch(() => null)
+      if (destGeo?.latitude && destGeo?.longitude) {
+        endLat = Number(destGeo.latitude)
+        endLon = Number(destGeo.longitude)
+        if (destGeo.city && !known.city) {
+          known.city = destGeo.city
+          detectedCity = destGeo.city
+        }
+        if (destGeo.country && !known.country) known.country = destGeo.country
+      }
+    }
+
+    if (!endLat || !endLon) {
+      if (detectedCity) {
+        const cityCentroid = FALLBACK_DESTINATION_CENTROIDS[detectedCity.toLowerCase()]
+        if (cityCentroid?.latitude && cityCentroid?.longitude) {
+          endLat = Number(cityCentroid.latitude)
+          endLon = Number(cityCentroid.longitude)
+        }
+      }
+      if (!endLat || !endLon) {
+        if (startLat && startLon) {
+          endLat = startLat + 0.02
+          endLon = startLon + 0.02
+        }
+      }
+    }
+
+    if (!startLat || !startLon) {
+      const cityCentroid = FALLBACK_DESTINATION_CENTROIDS[knownCityNormalized]
+      if (cityCentroid?.latitude && cityCentroid?.longitude) {
+        startLat = Number(cityCentroid.latitude)
+        startLon = Number(cityCentroid.longitude)
+      } else if (endLat && endLon) {
+        startLat = endLat + 0.04
+        startLon = endLon - 0.05
+      }
+    }
+
+    const startPlace = { name: 'Tu ubicación actual', latitude: startLat, longitude: startLon }
+    const endPlace = { name: destName, latitude: endLat, longitude: endLon }
+    const routeDistMeters = (startLat && endLat) ? haversineMeters(startLat, startLon, endLat, endLon) : 10000
+    const routeDistKm = Math.max(1, routeDistMeters / 1000)
+
+    const rawAttrs = []
+    const rawRests = []
+
+    const cat = activeCatalog || (typeof preset !== 'undefined' ? preset : null) || realCatalog || {}
+
+    // 1. In-memory preset places and candidate catalog first (< 1ms)
+    if (cat?.candidateCatalog?.places?.length > 0) {
+      rawAttrs.push(...cat.candidateCatalog.places)
+    }
+    if (cat?.candidateCatalog?.restaurants?.length > 0) {
+      rawRests.push(...cat.candidateCatalog.restaurants)
+    }
+    if (Array.isArray(cat?.places)) {
+      for (const p of cat.places) {
+        const placeObj = typeof p === 'string' ? { name: p, ...(cat.coordinatesMap?.[p.toLowerCase()] || {}) } : p
+        rawAttrs.push(placeObj)
+      }
+    }
+    if (Array.isArray(cat?.restaurants)) {
+      for (const r of cat.restaurants) {
+        const restObj = typeof r === 'string' ? { name: r, entityType: 'restaurant', ...(cat.coordinatesMap?.[r.toLowerCase()] || {}) } : r
+        rawRests.push(restObj)
+      }
+    }
+
+    // 1.5 Curated iconic landmarks along corridor (< 1ms)
+    const maxCandidateRadiusM = Math.max(12000, routeDistMeters * 1.5)
+    for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
+      if (!landmark || landmark.latitude == null || landmark.longitude == null) continue
+      const dFromStart = haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
+      if (dFromStart <= maxCandidateRadiusM || (detectedCity && landmark.city?.toLowerCase() === detectedCity.toLowerCase())) {
+        const isRest = landmark.category === 'restaurant' || isFoodOrDrinkEstablishment(landmark.name)
+        if (isRest) {
+          rawRests.push({ ...landmark, entityType: 'restaurant' })
+        } else {
+          rawAttrs.push({ ...landmark, entityType: 'attraction' })
+        }
+      }
+    }
+
+    // 2. Database cache lookup (< 5ms)
+    const searchCity = detectedCity || known.city || destName
+    if (searchCity) {
+      const [cachedCityAttrs, cachedCityRests] = await Promise.all([
+        lookupCachedPlacesForCity(searchCity, 'attraction').catch(() => []),
+        lookupCachedPlacesForCity(searchCity, 'restaurant').catch(() => [])
+      ])
+      if (cachedCityAttrs?.length) rawAttrs.push(...cachedCityAttrs)
+      if (cachedCityRests?.length) rawRests.push(...cachedCityRests)
+    }
+
+    // 3. Count candidates along the corridor
+    let existingCorridorAttrs = 0
+    let existingCorridorRests = 0
+    if (startLat && endLat) {
+      for (const p of rawAttrs) {
+        if (p?.name && p.latitude != null && p.longitude != null && isWithinCorridor(p, startPlace, endPlace)) {
+          existingCorridorAttrs++
+        }
+      }
+      for (const r of rawRests) {
+        if (r?.name && r.latitude != null && r.longitude != null && isWithinCorridor(r, startPlace, endPlace)) {
+          existingCorridorRests++
+        }
+      }
+    }
+
+    // 4. Only query live OSM if we don't have enough candidates along the corridor (single midpoint, tight 1.8s timeout)
+    if (startLat && endLat && (existingCorridorAttrs < 3 || existingCorridorRests < 2)) {
+      const midLat = startLat + (endLat - startLat) * 0.5
+      const midLon = startLon + (endLon - startLon) * 0.5
+      const midRadiusM = Math.max(2500, Math.min(6000, Math.round(routeDistKm * 400)))
+
+      const liveQueryAll = async () => {
+        const liveTasks = []
+        if (existingCorridorAttrs < 3) {
+          liveTasks.push(
+            overpassAttractions(midLat, midLon, midRadiusM)
+              .then(res => {
+                if (res?.length > 0) rawAttrs.push(...res)
+                else return photonSearch('turismo', 6, midLat, midLon, null, midRadiusM, destCountry).then(p => { if (p?.length) rawAttrs.push(...p) })
+              })
+              .catch(() => {})
+          )
+        }
+        if (existingCorridorRests < 2) {
+          liveTasks.push(
+            overpassNearbyFood(midLat, midLon, midRadiusM)
+              .then(res => {
+                if (res?.length > 0) rawRests.push(...res)
+                else return photonSearch('restaurante', 6, midLat, midLon, null, midRadiusM, destCountry).then(f => { if (f?.length) rawRests.push(...f) })
+              })
+              .catch(() => {})
+          )
+        }
+        await Promise.allSettled(liveTasks)
+      }
+
+      await Promise.race([
+        liveQueryAll(),
+        new Promise(resolve => setTimeout(resolve, 1800))
+      ])
+    }
+
+    const validAttrs = []
+    const seenAttrNames = new Set()
+    for (const p of rawAttrs) {
+      if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name)) continue
+      if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
+      const norm = p.name.toLowerCase().trim()
+      if (seenAttrNames.has(norm)) continue
+      if (p.latitude != null && p.longitude != null && startLat && endLat) {
+        if (!isWithinCorridor(p, startPlace, endPlace)) continue
+        const distFromStart = haversineMeters(startLat, startLon, p.latitude, p.longitude)
+        validAttrs.push({ ...p, distFromStart })
+        seenAttrNames.add(norm)
+      } else {
+        validAttrs.push({ ...p, distFromStart: routeDistMeters * 0.5 })
+        seenAttrNames.add(norm)
+      }
+    }
+
+    const validRests = []
+    const seenRestNames = new Set()
+    for (const r of rawRests) {
+      if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isLowQualityOrFastFoodVenue(r.name)) continue
+      const norm = r.name.toLowerCase().trim()
+      if (seenRestNames.has(norm)) continue
+      if (r.latitude != null && r.longitude != null && startLat && endLat) {
+        if (!isWithinCorridor(r, startPlace, endPlace)) continue
+        const distFromStart = haversineMeters(startLat, startLon, r.latitude, r.longitude)
+        validRests.push({ ...r, distFromStart })
+        seenRestNames.add(norm)
+      } else {
+        validRests.push({ ...r, distFromStart: routeDistMeters * 0.5 })
+        seenRestNames.add(norm)
+      }
+    }
+
+    // Fallback: If strict corridor yielded too few places, relax constraint to nearest available in raw pool
+    if (validAttrs.length < 2 && startLat && endLat) {
+      for (const p of rawAttrs) {
+        if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name)) continue
+        if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
+        const norm = p.name.toLowerCase().trim()
+        if (seenAttrNames.has(norm)) continue
+        const distFromStart = (p.latitude != null && p.longitude != null) ? haversineMeters(startLat, startLon, p.latitude, p.longitude) : routeDistMeters * 0.5
+        validAttrs.push({ ...p, distFromStart })
+        seenAttrNames.add(norm)
+        if (validAttrs.length >= 3) break
+      }
+    }
+
+    if (validRests.length < 1 && startLat && endLat) {
+      for (const r of rawRests) {
+        if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isLowQualityOrFastFoodVenue(r.name)) continue
+        const norm = r.name.toLowerCase().trim()
+        if (seenRestNames.has(norm)) continue
+        const distFromStart = (r.latitude != null && r.longitude != null) ? haversineMeters(startLat, startLon, r.latitude, r.longitude) : routeDistMeters * 0.5
+        validRests.push({ ...r, distFromStart })
+        seenRestNames.add(norm)
+        if (validRests.length >= 2) break
+      }
+    }
+
+    // Secondary Fallback: If still sparse, draw from regional KNOWN_ICONIC_LANDMARKS for detected city
+    if (validAttrs.length < 2 && detectedCity) {
+      for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
+        if (!landmark || !landmark.name || landmark.category === 'restaurant' || isFoodOrDrinkEstablishment(landmark.name)) continue
+        if (landmark.city?.toLowerCase() === detectedCity.toLowerCase()) {
+          if (arePlacesSimilar(landmark.name, destName)) continue
+          const norm = landmark.name.toLowerCase().trim()
+          if (seenAttrNames.has(norm)) continue
+          const distFromStart = (landmark.latitude != null && landmark.longitude != null)
+            ? haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
+            : routeDistMeters * 0.5
+          validAttrs.push({ ...landmark, distFromStart })
+          seenAttrNames.add(norm)
+          if (validAttrs.length >= 3) break
+        }
+      }
+    }
+
+    if (validRests.length < 1 && detectedCity) {
+      for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
+        if (!landmark || !landmark.name || (landmark.category !== 'restaurant' && !isFoodOrDrinkEstablishment(landmark.name))) continue
+        if (landmark.city?.toLowerCase() === detectedCity.toLowerCase()) {
+          const norm = landmark.name.toLowerCase().trim()
+          if (seenRestNames.has(norm)) continue
+          const distFromStart = (landmark.latitude != null && landmark.longitude != null)
+            ? haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
+            : routeDistMeters * 0.5
+          validRests.push({ ...landmark, distFromStart })
+          seenRestNames.add(norm)
+          if (validRests.length >= 2) break
+        }
+      }
+    }
+
+    // Sort strictly monotonic by distance from startPlace (ZERO zigzag)
+    validAttrs.sort((a, b) => (a.distFromStart || 0) - (b.distFromStart || 0))
+    validRests.sort((a, b) => (a.distFromStart || 0) - (b.distFromStart || 0))
+
+    const selectedIntermediateAttrs = []
+    for (const a of validAttrs) {
+      if (selectedIntermediateAttrs.length >= 3) break
+      if (!selectedIntermediateAttrs.some(sel => arePlacesSimilar(sel.name, a.name))) {
+        selectedIntermediateAttrs.push(a)
+      }
+    }
+
+    let lunchRest = null
+    let dinnerRest = null
+    const halfDist = routeDistMeters * 0.5
+    if (validRests.length > 0) {
+      const sortedByMidpoint = [...validRests].sort((a, b) => Math.abs((a.distFromStart || 0) - halfDist) - Math.abs((b.distFromStart || 0) - halfDist))
+      lunchRest = sortedByMidpoint[0] || null
+      const dinnerCandidates = validRests.filter(r => !lunchRest || !arePlacesSimilar(r.name, lunchRest.name))
+      dinnerRest = dinnerCandidates.length > 0 ? dinnerCandidates[dinnerCandidates.length - 1] : null
+    }
+
+    const dayStops = []
+    const specificPlacesToSave = []
+
+    if (selectedIntermediateAttrs[0]) {
+      const s1 = selectedIntermediateAttrs[0]
+      dayStops.push(`• ${s1.name}`)
+      specificPlacesToSave.push({ name: s1.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s1.latitude, longitude: s1.longitude, coordinatesVerified: true })
+    }
+    if (selectedIntermediateAttrs[1]) {
+      const s2 = selectedIntermediateAttrs[1]
+      dayStops.push(`• ${s2.name}`)
+      specificPlacesToSave.push({ name: s2.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s2.latitude, longitude: s2.longitude, coordinatesVerified: true })
+    }
+    if (lunchRest) {
+      dayStops.push(`• ${lunchRest.name}`)
+      specificPlacesToSave.push({ name: lunchRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: lunchRest.latitude, longitude: lunchRest.longitude, coordinatesVerified: true })
+    }
+    if (selectedIntermediateAttrs[2]) {
+      const s3 = selectedIntermediateAttrs[2]
+      dayStops.push(`• ${s3.name}`)
+      specificPlacesToSave.push({ name: s3.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s3.latitude, longitude: s3.longitude, coordinatesVerified: true })
+    }
+
+    dayStops.push(`• ${destName}`)
+    specificPlacesToSave.push({ name: destName, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: endLat, longitude: endLon, coordinatesVerified: Boolean(endLat && endLon) })
+
+    if (dinnerRest) {
+      dayStops.push(`• ${dinnerRest.name}`)
+      specificPlacesToSave.push({ name: dinnerRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: dinnerRest.latitude, longitude: dinnerRest.longitude, coordinatesVerified: true })
+    }
+
+    known.specificPlaces = specificPlacesToSave
+    return `Itinerario de Viaje: En ruta hacia ${destName} (1 día)\n\nDía 1: En ruta hacia ${destName}\n${dayStops.join('\n')}`
+  }
+
   async function runFallbackChatResponse() {
     let fallbackChips = getDefaultActionChips(known, lastUserMsg)
     let fallbackMsg = ''
@@ -2284,9 +2614,11 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
       const fbHasCompanions = hasValidValue(known.companions)
-      const fbAllKeyInfoComplete = Boolean(hasCity && hasDurationOrDates && fbHasLodging && fbHasTransport && fbHasBudget)
+      const fbAllKeyInfoComplete = isLocationToDestination
+        ? Boolean(hasCity && hasDurationOrDates)
+        : Boolean(hasCity && hasDurationOrDates && fbHasLodging && fbHasTransport && fbHasBudget)
 
-      const isExplicitBuildRequestedByUser = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+generar|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+      const isExplicitBuildRequestedByUser = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
       effectiveReadyToBuild = Boolean(fbAllKeyInfoComplete && isExplicitBuildRequestedByUser)
 
       const isItineraryInquiry = /\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|detalles del d[íi]a|ver d[íi]a)\b/i.test(lastUserMsg)
@@ -2358,333 +2690,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           .map(dp => `Día ${dp.day}: ${destName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`)
       }
 
-      const buildLocationCorridorDayBlocks = async () => {
-        let startLat = Number(known.userGpsLatitude ?? known.latitude ?? 0)
-        let startLon = Number(known.userGpsLongitude ?? known.longitude ?? 0)
-        let endLat = Number(known.canonicalDestination?.latitude ?? 0)
-        let endLon = Number(known.canonicalDestination?.longitude ?? 0)
-
-        // Dynamically detect administrative city from start GPS coordinates if not already present
-        let detectedCity = known.city || ''
-        if (!detectedCity && startLat && startLon) {
-          let closestDist = Infinity
-          let closestCityName = ''
-          for (const [key, centroid] of Object.entries(FALLBACK_DESTINATION_CENTROIDS)) {
-            if (centroid?.latitude && centroid?.longitude) {
-              const d = haversineMeters(startLat, startLon, centroid.latitude, centroid.longitude)
-              if (d < closestDist && d <= 50000) {
-                closestDist = d
-                closestCityName = centroid.city || key
-              }
-            }
-          }
-          if (closestCityName) {
-            detectedCity = closestCityName
-            if (!known.city) known.city = closestCityName
-          }
-        }
-
-        if (!endLat || !endLon) {
-          const destGeo = await geocodePlace(destName, startLat || null, startLon || null, {
-            city: detectedCity || '',
-            country: destCountry || 'Colombia'
-          }).catch(() => null)
-          if (destGeo?.latitude && destGeo?.longitude) {
-            endLat = Number(destGeo.latitude)
-            endLon = Number(destGeo.longitude)
-            if (destGeo.city && !known.city) {
-              known.city = destGeo.city
-              detectedCity = destGeo.city
-            }
-            if (destGeo.country && !known.country) known.country = destGeo.country
-          }
-        }
-
-        if (!endLat || !endLon) {
-          if (detectedCity) {
-            const cityCentroid = FALLBACK_DESTINATION_CENTROIDS[detectedCity.toLowerCase()]
-            if (cityCentroid?.latitude && cityCentroid?.longitude) {
-              endLat = Number(cityCentroid.latitude)
-              endLon = Number(cityCentroid.longitude)
-            }
-          }
-          if (!endLat || !endLon) {
-            if (startLat && startLon) {
-              endLat = startLat + 0.02
-              endLon = startLon + 0.02
-            }
-          }
-        }
-
-        if (!startLat || !startLon) {
-          const cityCentroid = FALLBACK_DESTINATION_CENTROIDS[knownCityNormalized]
-          if (cityCentroid?.latitude && cityCentroid?.longitude) {
-            startLat = Number(cityCentroid.latitude)
-            startLon = Number(cityCentroid.longitude)
-          } else if (endLat && endLon) {
-            startLat = endLat + 0.04
-            startLon = endLon - 0.05
-          }
-        }
-
-        const startPlace = { name: 'Tu ubicación actual', latitude: startLat, longitude: startLon }
-        const endPlace = { name: destName, latitude: endLat, longitude: endLon }
-        const routeDistMeters = (startLat && endLat) ? haversineMeters(startLat, startLon, endLat, endLon) : 10000
-        const routeDistKm = Math.max(1, routeDistMeters / 1000)
-
-        const rawAttrs = []
-        const rawRests = []
-
-        // 1. In-memory preset places and candidate catalog first (< 1ms)
-        if (preset?.candidateCatalog?.places?.length > 0) {
-          rawAttrs.push(...preset.candidateCatalog.places)
-        }
-        if (preset?.candidateCatalog?.restaurants?.length > 0) {
-          rawRests.push(...preset.candidateCatalog.restaurants)
-        }
-        if (Array.isArray(preset?.places)) {
-          for (const p of preset.places) {
-            const placeObj = typeof p === 'string' ? { name: p, ...(preset.coordinatesMap?.[p.toLowerCase()] || {}) } : p
-            rawAttrs.push(placeObj)
-          }
-        }
-        if (Array.isArray(preset?.restaurants)) {
-          for (const r of preset.restaurants) {
-            const restObj = typeof r === 'string' ? { name: r, entityType: 'restaurant', ...(preset.coordinatesMap?.[r.toLowerCase()] || {}) } : r
-            rawRests.push(restObj)
-          }
-        }
-
-        // 1.5 Curated iconic landmarks along corridor (< 1ms)
-        const maxCandidateRadiusM = Math.max(12000, routeDistMeters * 1.5)
-        for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
-          if (!landmark || landmark.latitude == null || landmark.longitude == null) continue
-          const dFromStart = haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
-          if (dFromStart <= maxCandidateRadiusM || (detectedCity && landmark.city?.toLowerCase() === detectedCity.toLowerCase())) {
-            const isRest = landmark.category === 'restaurant' || isFoodOrDrinkEstablishment(landmark.name)
-            if (isRest) {
-              rawRests.push({ ...landmark, entityType: 'restaurant' })
-            } else {
-              rawAttrs.push({ ...landmark, entityType: 'attraction' })
-            }
-          }
-        }
-
-        // 2. Database cache lookup (< 5ms)
-        const searchCity = detectedCity || known.city || destName
-        if (searchCity) {
-          const [cachedCityAttrs, cachedCityRests] = await Promise.all([
-            lookupCachedPlacesForCity(searchCity, 'attraction').catch(() => []),
-            lookupCachedPlacesForCity(searchCity, 'restaurant').catch(() => [])
-          ])
-          if (cachedCityAttrs?.length) rawAttrs.push(...cachedCityAttrs)
-          if (cachedCityRests?.length) rawRests.push(...cachedCityRests)
-        }
-
-        // 3. Count candidates along the corridor
-        let existingCorridorAttrs = 0
-        let existingCorridorRests = 0
-        if (startLat && endLat) {
-          for (const p of rawAttrs) {
-            if (p?.name && p.latitude != null && p.longitude != null && isWithinCorridor(p, startPlace, endPlace)) {
-              existingCorridorAttrs++
-            }
-          }
-          for (const r of rawRests) {
-            if (r?.name && r.latitude != null && r.longitude != null && isWithinCorridor(r, startPlace, endPlace)) {
-              existingCorridorRests++
-            }
-          }
-        }
-
-        // 4. Only query live OSM if we don't have enough candidates along the corridor (single midpoint, tight 1.8s timeout)
-        if (startLat && endLat && (existingCorridorAttrs < 3 || existingCorridorRests < 2)) {
-          const midLat = startLat + (endLat - startLat) * 0.5
-          const midLon = startLon + (endLon - startLon) * 0.5
-          const midRadiusM = Math.max(2500, Math.min(6000, Math.round(routeDistKm * 400)))
-
-          const liveQueryAll = async () => {
-            const liveTasks = []
-            if (existingCorridorAttrs < 3) {
-              liveTasks.push(
-                overpassAttractions(midLat, midLon, midRadiusM)
-                  .then(res => {
-                    if (res?.length > 0) rawAttrs.push(...res)
-                    else return photonSearch('turismo', 6, midLat, midLon, null, midRadiusM, destCountry).then(p => { if (p?.length) rawAttrs.push(...p) })
-                  })
-                  .catch(() => {})
-              )
-            }
-            if (existingCorridorRests < 2) {
-              liveTasks.push(
-                overpassNearbyFood(midLat, midLon, midRadiusM)
-                  .then(res => {
-                    if (res?.length > 0) rawRests.push(...res)
-                    else return photonSearch('restaurante', 6, midLat, midLon, null, midRadiusM, destCountry).then(f => { if (f?.length) rawRests.push(...f) })
-                  })
-                  .catch(() => {})
-              )
-            }
-            await Promise.allSettled(liveTasks)
-          }
-
-          await Promise.race([
-            liveQueryAll(),
-            new Promise(resolve => setTimeout(resolve, 1800))
-          ])
-        }
-
-        const validAttrs = []
-        const seenAttrNames = new Set()
-        for (const p of rawAttrs) {
-          if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name)) continue
-          if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
-          const norm = p.name.toLowerCase().trim()
-          if (seenAttrNames.has(norm)) continue
-          if (p.latitude != null && p.longitude != null && startLat && endLat) {
-            if (!isWithinCorridor(p, startPlace, endPlace)) continue
-            const distFromStart = haversineMeters(startLat, startLon, p.latitude, p.longitude)
-            validAttrs.push({ ...p, distFromStart })
-            seenAttrNames.add(norm)
-          } else {
-            validAttrs.push({ ...p, distFromStart: routeDistMeters * 0.5 })
-            seenAttrNames.add(norm)
-          }
-        }
-
-        const validRests = []
-        const seenRestNames = new Set()
-        for (const r of rawRests) {
-          if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isLowQualityOrFastFoodVenue(r.name)) continue
-          const norm = r.name.toLowerCase().trim()
-          if (seenRestNames.has(norm)) continue
-          if (r.latitude != null && r.longitude != null && startLat && endLat) {
-            if (!isWithinCorridor(r, startPlace, endPlace)) continue
-            const distFromStart = haversineMeters(startLat, startLon, r.latitude, r.longitude)
-            validRests.push({ ...r, distFromStart })
-            seenRestNames.add(norm)
-          } else {
-            validRests.push({ ...r, distFromStart: routeDistMeters * 0.5 })
-            seenRestNames.add(norm)
-          }
-        }
-
-        // Fallback: If strict corridor yielded too few places, relax constraint to nearest available in raw pool
-        if (validAttrs.length < 2 && startLat && endLat) {
-          for (const p of rawAttrs) {
-            if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name)) continue
-            if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
-            const norm = p.name.toLowerCase().trim()
-            if (seenAttrNames.has(norm)) continue
-            const distFromStart = (p.latitude != null && p.longitude != null) ? haversineMeters(startLat, startLon, p.latitude, p.longitude) : routeDistMeters * 0.5
-            validAttrs.push({ ...p, distFromStart })
-            seenAttrNames.add(norm)
-            if (validAttrs.length >= 3) break
-          }
-        }
-
-        if (validRests.length < 1 && startLat && endLat) {
-          for (const r of rawRests) {
-            if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isLowQualityOrFastFoodVenue(r.name)) continue
-            const norm = r.name.toLowerCase().trim()
-            if (seenRestNames.has(norm)) continue
-            const distFromStart = (r.latitude != null && r.longitude != null) ? haversineMeters(startLat, startLon, r.latitude, r.longitude) : routeDistMeters * 0.5
-            validRests.push({ ...r, distFromStart })
-            seenRestNames.add(norm)
-            if (validRests.length >= 2) break
-          }
-        }
-
-        // Secondary Fallback: If still sparse, draw from regional KNOWN_ICONIC_LANDMARKS for detected city
-        if (validAttrs.length < 2 && detectedCity) {
-          for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
-            if (!landmark || !landmark.name || landmark.category === 'restaurant' || isFoodOrDrinkEstablishment(landmark.name)) continue
-            if (landmark.city?.toLowerCase() === detectedCity.toLowerCase()) {
-              if (arePlacesSimilar(landmark.name, destName)) continue
-              const norm = landmark.name.toLowerCase().trim()
-              if (seenAttrNames.has(norm)) continue
-              const distFromStart = (landmark.latitude != null && landmark.longitude != null)
-                ? haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
-                : routeDistMeters * 0.5
-              validAttrs.push({ ...landmark, distFromStart })
-              seenAttrNames.add(norm)
-              if (validAttrs.length >= 3) break
-            }
-          }
-        }
-
-        if (validRests.length < 1 && detectedCity) {
-          for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
-            if (!landmark || !landmark.name || (landmark.category !== 'restaurant' && !isFoodOrDrinkEstablishment(landmark.name))) continue
-            if (landmark.city?.toLowerCase() === detectedCity.toLowerCase()) {
-              const norm = landmark.name.toLowerCase().trim()
-              if (seenRestNames.has(norm)) continue
-              const distFromStart = (landmark.latitude != null && landmark.longitude != null)
-                ? haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
-                : routeDistMeters * 0.5
-              validRests.push({ ...landmark, distFromStart })
-              seenRestNames.add(norm)
-              if (validRests.length >= 2) break
-            }
-          }
-        }
-
-        // Sort strictly monotonic by distance from startPlace (ZERO zigzag)
-        validAttrs.sort((a, b) => (a.distFromStart || 0) - (b.distFromStart || 0))
-        validRests.sort((a, b) => (a.distFromStart || 0) - (b.distFromStart || 0))
-
-        const selectedIntermediateAttrs = []
-        for (const a of validAttrs) {
-          if (selectedIntermediateAttrs.length >= 3) break
-          if (!selectedIntermediateAttrs.some(sel => arePlacesSimilar(sel.name, a.name))) {
-            selectedIntermediateAttrs.push(a)
-          }
-        }
-
-        let lunchRest = null
-        let dinnerRest = null
-        const halfDist = routeDistMeters * 0.5
-        if (validRests.length > 0) {
-          const sortedByMidpoint = [...validRests].sort((a, b) => Math.abs((a.distFromStart || 0) - halfDist) - Math.abs((b.distFromStart || 0) - halfDist))
-          lunchRest = sortedByMidpoint[0] || null
-          const dinnerCandidates = validRests.filter(r => !lunchRest || !arePlacesSimilar(r.name, lunchRest.name))
-          dinnerRest = dinnerCandidates.length > 0 ? dinnerCandidates[dinnerCandidates.length - 1] : null
-        }
-
-        const dayStops = []
-        const specificPlacesToSave = []
-
-        if (selectedIntermediateAttrs[0]) {
-          const s1 = selectedIntermediateAttrs[0]
-          dayStops.push(`• ${s1.name}`)
-          specificPlacesToSave.push({ name: s1.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s1.latitude, longitude: s1.longitude, coordinatesVerified: true })
-        }
-        if (selectedIntermediateAttrs[1]) {
-          const s2 = selectedIntermediateAttrs[1]
-          dayStops.push(`• ${s2.name}`)
-          specificPlacesToSave.push({ name: s2.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s2.latitude, longitude: s2.longitude, coordinatesVerified: true })
-        }
-        if (lunchRest) {
-          dayStops.push(`• ${lunchRest.name}`)
-          specificPlacesToSave.push({ name: lunchRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: lunchRest.latitude, longitude: lunchRest.longitude, coordinatesVerified: true })
-        }
-        if (selectedIntermediateAttrs[2]) {
-          const s3 = selectedIntermediateAttrs[2]
-          dayStops.push(`• ${s3.name}`)
-          specificPlacesToSave.push({ name: s3.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s3.latitude, longitude: s3.longitude, coordinatesVerified: true })
-        }
-
-        dayStops.push(`• ${destName}`)
-        specificPlacesToSave.push({ name: destName, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: endLat, longitude: endLon, coordinatesVerified: Boolean(endLat && endLon) })
-
-        if (dinnerRest) {
-          dayStops.push(`• ${dinnerRest.name}`)
-          specificPlacesToSave.push({ name: dinnerRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: dinnerRest.latitude, longitude: dinnerRest.longitude, coordinatesVerified: true })
-        }
-
-        known.specificPlaces = specificPlacesToSave
-        return `Itinerario de Viaje: En ruta hacia ${destName} (1 día)\n\nDía 1: En ruta hacia ${destName}\n${dayStops.join('\n')}`
-      }
+      // buildLocationCorridorDayBlocks is hoisted to generateChatResponse scope above
 
       if (isExplicitBuildRequestedByUser && !fbAllKeyInfoComplete && !isLocationToDestination) {
         const missing = []
@@ -2706,7 +2712,11 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           fallbackChips.push('Económico', 'Moderado', 'Lujo')
         }
       } else if (effectiveReadyToBuild) {
+        if (isLocationToDestination && (!Array.isArray(known.specificPlaces) || known.specificPlaces.length === 0)) {
+          await buildLocationCorridorDayBlocks()
+        }
         fallbackMsg = `¡Perfecto! Todo está listo para tu viaje a ${destName}. Procedo a generar tu tour en el mapa.`
+        fallbackChips = [`🚀 Generar tour en ${destName || 'el mapa'}`]
       } else if (hasCity && /\b(m[aá]s informaci[oó]n|detalles|cu[eé]ntame m[aá]s|informaci[oó]n del?|informaci[oó]n sobre|c[oó]mo es|servicios|fotos|precios?|ubicaci[oó]n)\b/i.test(lastUserMsg) && /\b(hotel|hostal|resort|casa la fe|casa isabel|majagua)\b/i.test(lastUserMsg)) {
         if (/casa la fe/i.test(lastUserMsg) && (/cartagena/i.test(destName) || !destName)) {
           fallbackMsg = `¡Con mucho gusto! Aquí tienes los detalles del **Hotel Casa La Fe** en ${destName}: 🏨✨\n\n` +
@@ -3353,12 +3363,14 @@ REGLAS PARA "accommodationStatus":
     }
 
     // Evaluar estado completo de información clave mediante Single Source of Truth
-    const finalHasLodging = Boolean(
-      isLodgingExplicitlyConfirmed(
-        parsedExtracted.selectedHotel || known.selectedHotel,
-        parsedExtracted.accommodationStatus || known.accommodationStatus
-      )
-    )
+    const finalHasLodging = isLocationToDestination
+      ? true
+      : Boolean(
+          isLodgingExplicitlyConfirmed(
+            parsedExtracted.selectedHotel || known.selectedHotel,
+            parsedExtracted.accommodationStatus || known.accommodationStatus
+          )
+        )
     const finalHasTransport = Boolean(hasValidValue(known.transport) || hasValidValue(parsedExtracted.transport))
     const finalHasBudget = Boolean(hasValidValue(known.budget) || hasValidValue(parsedExtracted.budget))
     const finalHasCompanions = Boolean(hasValidValue(known.companions) || hasValidValue(parsedExtracted.companions))
@@ -3369,13 +3381,23 @@ REGLAS PARA "accommodationStatus":
       (parsedExtracted.durationDays && Number(parsedExtracted.durationDays) > 0)
     )
 
-    const isAllKeyInfoComplete = Boolean(
-      finalHasCity &&
-      finalHasDates &&
-      finalHasLodging &&
-      finalHasTransport &&
-      finalHasBudget
-    )
+    const isAllKeyInfoComplete = isLocationToDestination
+      ? Boolean(finalHasCity && finalHasDates)
+      : Boolean(
+          finalHasCity &&
+          finalHasDates &&
+          finalHasLodging &&
+          finalHasTransport &&
+          finalHasBudget
+        )
+
+    if (isLocationToDestination) {
+      if (!parsedExtracted.transport && known.transport) parsedExtracted.transport = known.transport
+      if (!parsedExtracted.budget && known.budget) parsedExtracted.budget = known.budget
+      if (!parsedExtracted.tourType) parsedExtracted.tourType = 'location_to_destination'
+      if (!parsedExtracted.durationDays) parsedExtracted.durationDays = 1
+      parsedExtracted.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
+    }
 
     if (!finalHasCompanions && isAllKeyInfoComplete) {
       if (!parsedExtracted.companions) {
@@ -3396,7 +3418,7 @@ REGLAS PARA "accommodationStatus":
       .trim()
 
     // Detección explícita de comando de generación enviado por el usuario
-    const isUserExplicitlyOrderingBuild = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+generar|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+    const isUserExplicitlyOrderingBuild = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
 
     // Detección de petición de agregar paradas
     const isGenericMoreStopsRequest = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|aumentar\s+(las\s+)?paradas|sumar\s+(m[aá]s\s+)?paradas|paradas\s+adicionales|agrega\s+m[aá]s|a[ñn]ade\s+m[aá]s|incluye\s+m[aá]s)\b/i.test(lastUserMsg)
@@ -3865,7 +3887,7 @@ REGLAS PARA "accommodationStatus":
     )
 
     if (isUserExplicitlyOrderingBuild && isAllKeyInfoComplete) {
-      if (Array.isArray(known.specificPlaces) && known.specificPlaces.length >= 2) {
+      if (Array.isArray(known.specificPlaces) && known.specificPlaces.length >= 1) {
         parsedExtracted.specificPlaces = known.specificPlaces
       }
       responseMessage = `¡Excelente! Procedo a generar tu tour en el mapa para que disfrutes tu viaje a ${destName || 'tu destino'}.`

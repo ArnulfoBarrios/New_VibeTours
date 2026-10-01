@@ -724,6 +724,9 @@ aiRouter.post('/chat', async (req, res, next) => {
       /\b(tour\s+(?:de|desde)|ruta\s+(?:de|desde|entre)|road\s*trip|viaje\s+(?:de|desde)|de\s+[a-záéíóúñ]{3,20}\s+a\s+[a-záéíóúñ]{3,20})\b/i.test(message)
     )
     const isExplicitLocationToDestination = Boolean(
+      currentPreferences.tourType === 'location_to_destination' ||
+      currentPreferences.isUserLocationOrigin ||
+      (currentPreferences.originPlace === 'user_current_location') ||
       validExtracted.tourType === 'location_to_destination' ||
       validExtracted.isUserLocationOrigin ||
       (validExtracted.originPlace === 'user_current_location') ||
@@ -740,6 +743,12 @@ aiRouter.post('/chat', async (req, res, next) => {
       delete validExtracted.selectedHotel
       delete currentPreferences.selectedHotel
       delete currentPreferences.accommodationStatus
+      if (!currentPreferences.transport && !validExtracted.transport) {
+        validExtracted.transport = 'Vehículo / Taxi'
+      }
+      if (!currentPreferences.budget && !validExtracted.budget) {
+        validExtracted.budget = 'Moderado'
+      }
       if (validExtracted.destination) {
         delete currentPreferences.city
         delete currentPreferences.destination
@@ -1354,7 +1363,13 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences.destination = cleanAdministrativeCityName(updatedPreferences.destination)
     }
 
-    if (!hasConfirmedCity || isAskingCityRecomms) {
+    const isLocationRoute = Boolean(
+      isExplicitLocationToDestination ||
+      updatedPreferences.tourType === 'location_to_destination' ||
+      updatedPreferences.isUserLocationOrigin
+    )
+
+    if ((!hasConfirmedCity || isAskingCityRecomms) && !isLocationRoute) {
       delete updatedPreferences.specificPlaces
     } else {
       const isConfirmedItineraryMsg = Boolean(
@@ -1379,11 +1394,6 @@ aiRouter.post('/chat', async (req, res, next) => {
         : deduplicatePlacesByName(rawCombined)
 
       let validatedSpecifics = combinedSpecifics
-      const isLocationRoute = Boolean(
-        isExplicitLocationToDestination ||
-        updatedPreferences.tourType === 'location_to_destination' ||
-        updatedPreferences.isUserLocationOrigin
-      )
       if (validatedSpecifics.length > 0 && updatedPreferences.city && !isLocationRoute) {
         validatedSpecifics = await filterChatSpecificPlacesByOsm(
           validatedSpecifics,
@@ -1399,11 +1409,15 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     }
 
+    const effectiveReadyToBuild = isLocationRoute
+      ? Boolean(aiResponse.readyToBuild)
+      : (Boolean(aiResponse.readyToBuild) && isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus))
+
     res.json({
       responseMessage: aiResponse.responseMessage,
       actionChips: aiResponse.actionChips || [],
       destinationSuggestions: aiResponse.destinationSuggestions || [],
-      readyToBuild: Boolean(aiResponse.readyToBuild) && isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus),
+      readyToBuild: effectiveReadyToBuild,
       preferences: updatedPreferences,
       webSearchDone: Boolean(webSearchResult)
     })
