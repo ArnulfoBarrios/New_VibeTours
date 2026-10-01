@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
-import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
@@ -36,16 +35,14 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   final _prompt = TextEditingController();
   final _scrollController = ScrollController();
   
-  AudioRecorder? _audioRecorder;
-  bool _isRecordingAudio = false;
-  bool _isTranscribingAudio = false;
-  int _recordingDurationSeconds = 0;
-  Timer? _recordingTimer;
-  StreamSubscription<Amplitude>? _amplitudeSubscription;
+  final _voiceRecorder = _AudioVoiceRecorderSession();
+  bool _isVoiceActive = false;
+  bool _isVoicePaused = false;
+  bool _isVoiceTranscribing = false;
   double _voiceSoundLevel = 0.0;
+  String _baselinePrompt = '';
   String? _voiceFeedback;
   bool _voiceFeedbackIsError = false;
-  String? _recordingFilePath;
   String? _selectedImagePath;
   bool _isProcessingAction = false;
 
@@ -73,9 +70,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _recordingTimer?.cancel();
-    _amplitudeSubscription?.cancel();
-    _audioRecorder?.dispose();
+    _voiceRecorder.dispose();
     _prompt.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -96,8 +91,8 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     if ((state == AppLifecycleState.inactive ||
             state == AppLifecycleState.paused ||
             state == AppLifecycleState.detached) &&
-        _isRecordingAudio) {
-      unawaited(_cancelAudioRecording());
+        _isVoiceActive) {
+      unawaited(_cancelVoiceInput());
     }
   }
 
@@ -106,6 +101,13 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     final builderState = ref.read(aiBuilderProvider);
     if (builderState.isTyping || builderState.isLoading || builderState.isBuilding) return;
 
+    if (_isVoiceActive) {
+      unawaited(_voiceRecorder.cancel());
+      _isVoiceActive = false;
+      _isVoicePaused = false;
+      _isVoiceTranscribing = false;
+    }
+
     final text = _prompt.text.trim();
     if (text.isEmpty && _selectedImagePath == null) return;
     
@@ -113,9 +115,6 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     
     // Limpiar inmediatamente para evitar múltiples envíos mientras se obtiene la ubicación
     _prompt.clear();
-    if (_isRecordingAudio) {
-      unawaited(_cancelAudioRecording());
-    }
     setState(() {
       _selectedImagePath = null;
       _isProcessingAction = true;
@@ -1302,6 +1301,101 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                 ],
               ),
             ),
+          if (_isVoiceActive)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8, left: 4, right: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _isVoiceTranscribing
+                    ? Colors.purple.shade50
+                    : (_isVoicePaused ? Colors.amber.shade50 : Colors.blue.shade50),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _isVoiceTranscribing
+                      ? Colors.purple.shade300
+                      : (_isVoicePaused ? Colors.amber.shade300 : Colors.blue.shade300),
+                  width: 1.2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  if (_isVoiceTranscribing)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+                      ),
+                    )
+                  else
+                    Icon(
+                      _isVoicePaused ? Icons.pause_circle_filled_rounded : Icons.mic_rounded,
+                      color: _isVoicePaused ? Colors.amber.shade800 : Colors.blue.shade700,
+                      size: 18,
+                    ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isVoiceTranscribing
+                          ? 'Transcribiendo voz con IA (Groq Whisper)...'
+                          : (_isVoicePaused
+                              ? 'En pausa. Toca ▶ para continuar'
+                              : 'Grabando tu voz... Habla con tranquilidad y toca ✔ al terminar'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _isVoiceTranscribing
+                            ? Colors.purple.shade900
+                            : (_isVoicePaused ? Colors.amber.shade900 : Colors.blue.shade900),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (!_isVoiceTranscribing) ...[
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: _toggleVoicePause,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _isVoicePaused ? Colors.green.shade600 : Colors.amber.shade700,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _isVoicePaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                              color: Colors.white,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isVoicePaused ? 'Reanudar' : 'Pausar',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey, size: 20),
+                      tooltip: 'Descartar dictado',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      onPressed: _cancelVoiceInput,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1311,112 +1405,50 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
                     border: Border.all(
-                      color: _isRecordingAudio ? Colors.red.shade300 : Colors.grey.shade300,
-                      width: _isRecordingAudio ? 1.5 : 1.0,
+                      color: _isVoiceActive
+                          ? (_isVoicePaused ? Colors.amber.shade400 : Colors.blue.shade400)
+                          : Colors.grey.shade300,
+                      width: _isVoiceActive ? 1.5 : 1.0,
                     ),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      if (_isRecordingAudio)
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 10,
-                                  height: 10,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.redAccent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _formatDuration(_recordingDurationSeconds),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.redAccent,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                const Expanded(
-                                  child: Text(
-                                    'Grabando... Toca el botón para terminar',
-                                    style: TextStyle(fontSize: 12, color: Colors.black54),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.close_rounded, color: Colors.grey, size: 20),
-                                  tooltip: 'Cancelar',
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                  onPressed: _cancelAudioRecording,
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      else if (_isTranscribingAudio)
-                        const Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Transcribiendo con IA (Whisper)...',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.blue,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      else ...[
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4.0),
-                          child: IconButton(
-                            icon: const Icon(Icons.image_outlined, color: Colors.grey, size: 22),
-                            onPressed: _pickImage,
-                            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
-                            padding: EdgeInsets.zero,
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4.0),
+                        child: IconButton(
+                          icon: const Icon(Icons.image_outlined, color: Colors.grey, size: 22),
+                          onPressed: _pickImage,
+                          constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _prompt,
+                          minLines: 1,
+                          maxLines: 5,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _sendMessage(),
+                          decoration: InputDecoration(
+                            hintText: _isVoiceActive
+                                ? (_isVoiceTranscribing
+                                    ? 'Transcribiendo audio...'
+                                    : (_isVoicePaused ? 'Voz en pausa...' : 'Escuchando tu voz...'))
+                                : 'Describe tu tour ideal...',
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            filled: false,
+                            fillColor: Colors.transparent,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                            isDense: true,
                           ),
                         ),
-                        Expanded(
-                          child: TextField(
-                            controller: _prompt,
-                            minLines: 1,
-                            maxLines: 5,
-                            textInputAction: TextInputAction.send,
-                            onSubmitted: (_) => _sendMessage(),
-                            decoration: const InputDecoration(
-                              hintText: 'Describe tu tour ideal...',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              disabledBorder: InputBorder.none,
-                              errorBorder: InputBorder.none,
-                              filled: false,
-                              fillColor: Colors.transparent,
-                              contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
@@ -1427,31 +1459,15 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                 builder: (context, _) {
                   final hasText = _prompt.text.trim().isNotEmpty || _selectedImagePath != null;
 
-                  if (_isTranscribingAudio) {
-                    return Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade100,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    );
-                  }
-
-                  if (_isRecordingAudio) {
+                  if (_isVoiceActive) {
                     return _VoicePromptButton(
-                      key: const ValueKey('recording_active_button'),
+                      key: const ValueKey('voice_active_button'),
                       isRecording: true,
-                      isBusy: false,
+                      isPaused: _isVoicePaused,
+                      isTranscribing: _isVoiceTranscribing,
+                      isBusy: _isVoiceTranscribing,
                       soundLevel: _voiceSoundLevel,
-                      onPressed: () => _stopAndTranscribe(autoSend: false),
+                      onPressed: () => _finishVoiceInput(autoSend: false),
                     );
                   }
 
@@ -1479,9 +1495,10 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           : _VoicePromptButton(
                               key: const ValueKey('mic_button'),
                               isRecording: false,
+                              isPaused: false,
                               isBusy: isBusy,
                               soundLevel: 0.0,
-                              onPressed: _startAudioRecording,
+                              onPressed: _toggleVoiceInput,
                             ),
                     ),
                   );
@@ -1494,154 +1511,138 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     );
   }
 
-  // === Audio Recording & Whisper Transcription Logic ===
+  // === Continuous Voice Input & Smart Normalizer ===
 
-  String _formatDuration(int totalSeconds) {
-    final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
-    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
+  Future<void> _toggleVoiceInput() async {
+    if (_isVoiceActive) {
+      await _finishVoiceInput();
+    } else {
+      await _startVoiceInput();
+    }
   }
 
-  Future<void> _startAudioRecording() async {
-    final l10n = AppLocalizations.of(context);
-    try {
-      _audioRecorder ??= AudioRecorder();
-      final hasPermission = await _audioRecorder!.hasPermission();
-      if (!hasPermission) {
+  Future<void> _startVoiceInput() async {
+    _baselinePrompt = _prompt.text.trim();
+    setState(() {
+      _isVoiceActive = true;
+      _isVoicePaused = false;
+      _isVoiceTranscribing = false;
+      _voiceSoundLevel = 0.0;
+      _voiceFeedback = null;
+      _voiceFeedbackIsError = false;
+    });
+
+    final started = await _voiceRecorder.start(
+      onSoundLevel: (level) {
+        if (!mounted || !_isVoiceActive || _isVoicePaused || _isVoiceTranscribing) return;
         setState(() {
-          _voiceFeedback = l10n.voicePromptPermissionDenied;
+          _voiceSoundLevel = level;
+        });
+      },
+      onError: (errorMsg) {
+        if (!mounted) return;
+        setState(() {
+          _isVoiceActive = false;
+          _isVoicePaused = false;
+          _isVoiceTranscribing = false;
+          _voiceFeedback = errorMsg;
           _voiceFeedbackIsError = true;
         });
-        return;
-      }
+      },
+    );
 
-      final tempDir = await getTemporaryDirectory();
-      final filePath = p.join(
-        tempDir.path,
-        'vibetours_voice_${DateTime.now().millisecondsSinceEpoch}.m4a',
-      );
-      _recordingFilePath = filePath;
-
-      await _audioRecorder!.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
-        ),
-        path: filePath,
-      );
-
-      _recordingDurationSeconds = 0;
-      _recordingTimer?.cancel();
-      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (!mounted || !_isRecordingAudio) return;
-        setState(() {
-          _recordingDurationSeconds++;
-        });
-      });
-
-      _amplitudeSubscription?.cancel();
-      _amplitudeSubscription = _audioRecorder!
-          .onAmplitudeChanged(const Duration(milliseconds: 100))
-          .listen((amp) {
-        if (!mounted || !_isRecordingAudio) return;
-        final normalized = ((amp.current + 50) / 50).clamp(0.0, 1.0);
-        setState(() {
-          _voiceSoundLevel = normalized;
-        });
-      });
-
+    if (!started && mounted) {
       setState(() {
-        _isRecordingAudio = true;
-        _isTranscribingAudio = false;
-        _voiceFeedback = null;
-        _voiceFeedbackIsError = false;
-      });
-    } catch (e) {
-      debugPrint('[VoiceRecord] Error al iniciar grabación: $e');
-      setState(() {
-        _isRecordingAudio = false;
-        _voiceFeedback = 'No se pudo iniciar el micrófono: $e';
-        _voiceFeedbackIsError = true;
+        _isVoiceActive = false;
+        _isVoicePaused = false;
+        _isVoiceTranscribing = false;
       });
     }
   }
 
-  Future<void> _stopAndTranscribe({bool autoSend = false}) async {
-    if (!_isRecordingAudio || _audioRecorder == null) return;
+  Future<void> _toggleVoicePause() async {
+    if (!_isVoiceActive || _isVoiceTranscribing) return;
+    if (_isVoicePaused) {
+      await _voiceRecorder.resume();
+      setState(() {
+        _isVoicePaused = false;
+        _voiceFeedback = null;
+      });
+    } else {
+      await _voiceRecorder.pause();
+      setState(() {
+        _isVoicePaused = true;
+        _voiceSoundLevel = 0.0;
+        _voiceFeedback = null;
+      });
+    }
+  }
 
-    _recordingTimer?.cancel();
-    _recordingTimer = null;
-    _amplitudeSubscription?.cancel();
-    _amplitudeSubscription = null;
+  Future<void> _finishVoiceInput({bool autoSend = false}) async {
+    if (!_isVoiceActive || _isVoiceTranscribing) return;
 
     setState(() {
-      _isRecordingAudio = false;
-      _isTranscribingAudio = true;
-      _voiceFeedback = null;
-      _voiceFeedbackIsError = false;
+      _isVoiceTranscribing = true;
       _voiceSoundLevel = 0.0;
+      _voiceFeedback = null;
     });
 
     try {
-      final path = await _audioRecorder!.stop();
-      final filePath = path ?? _recordingFilePath;
-
-      if (filePath == null || !File(filePath).existsSync()) {
-        throw Exception('No se encontró el archivo de audio.');
+      final recordedPath = await _voiceRecorder.stop();
+      if (recordedPath == null || !File(recordedPath).existsSync()) {
+        throw Exception('No se encontró el archivo de audio grabado.');
       }
 
-      final file = File(filePath);
-      final transcript = await AudioTranscriptionService.transcribeAudioFile(file);
+      final recordedFile = File(recordedPath);
+      final rawText = await AudioTranscriptionService.transcribeAudioFile(recordedFile);
+      final cleanedText = SmartVoiceNormalizer.normalize(rawText);
+
+      try {
+        if (recordedFile.existsSync()) recordedFile.deleteSync();
+      } catch (_) {}
 
       if (!mounted) return;
 
-      if (transcript.isNotEmpty) {
-        final currentText = _prompt.text.trim();
-        final newText = currentText.isEmpty ? transcript : '$currentText $transcript';
-        _setPromptText(newText);
+      if (cleanedText.isNotEmpty) {
+        final combined = _baselinePrompt.isEmpty
+            ? cleanedText
+            : '$_baselinePrompt $cleanedText';
+        _setPromptText(combined);
+      }
 
-        setState(() {
-          _isTranscribingAudio = false;
-          _voiceFeedback = null;
-          _voiceFeedbackIsError = false;
-        });
+      setState(() {
+        _isVoiceActive = false;
+        _isVoicePaused = false;
+        _isVoiceTranscribing = false;
+        _voiceSoundLevel = 0.0;
+        _voiceFeedback = null;
+        _voiceFeedbackIsError = false;
+      });
 
-        if (autoSend && _prompt.text.trim().isNotEmpty) {
-          await _sendMessage();
-        }
-      } else {
-        setState(() {
-          _isTranscribingAudio = false;
-          _voiceFeedback = 'No se detectaron palabras en el audio.';
-          _voiceFeedbackIsError = true;
-        });
+      if (autoSend && _prompt.text.trim().isNotEmpty) {
+        await _sendMessage();
       }
     } catch (e) {
-      debugPrint('[VoiceRecord] Error al transcribir: $e');
+      debugPrint('[Voice] Error al transcribir: $e');
       if (!mounted) return;
       setState(() {
-        _isTranscribingAudio = false;
-        _voiceFeedback = 'Error al transcribir audio: $e';
+        _isVoiceActive = false;
+        _isVoicePaused = false;
+        _isVoiceTranscribing = false;
+        _voiceFeedback = 'Error de transcripción: $e';
         _voiceFeedbackIsError = true;
       });
     }
   }
 
-  Future<void> _cancelAudioRecording() async {
-    _recordingTimer?.cancel();
-    _recordingTimer = null;
-    _amplitudeSubscription?.cancel();
-    _amplitudeSubscription = null;
-
-    try {
-      await _audioRecorder?.cancel();
-    } catch (_) {}
-
+  Future<void> _cancelVoiceInput() async {
+    await _voiceRecorder.cancel();
     if (!mounted) return;
+    _setPromptText(_baselinePrompt);
     setState(() {
-      _isRecordingAudio = false;
-      _isTranscribingAudio = false;
+      _isVoiceActive = false;
+      _isVoicePaused = false;
+      _isVoiceTranscribing = false;
       _voiceSoundLevel = 0.0;
       _voiceFeedback = null;
       _voiceFeedbackIsError = false;
@@ -1661,12 +1662,16 @@ class _VoicePromptButton extends StatefulWidget {
   const _VoicePromptButton({
     super.key,
     required this.isRecording,
+    this.isPaused = false,
+    this.isTranscribing = false,
     required this.isBusy,
     required this.onPressed,
     this.soundLevel = 0.0,
   });
 
   final bool isRecording;
+  final bool isPaused;
+  final bool isTranscribing;
   final bool isBusy;
   final VoidCallback onPressed;
   final double soundLevel;
@@ -1701,7 +1706,7 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
   }
 
   void _syncAnimation() {
-    if (widget.isRecording) {
+    if (widget.isRecording && !widget.isPaused && !widget.isTranscribing) {
       if (!_controller.isAnimating) {
         _controller.repeat(reverse: true);
       }
@@ -1714,20 +1719,26 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
   @override
   Widget build(BuildContext context) {
     final active = widget.isRecording;
+    final paused = widget.isPaused;
+    final transcribing = widget.isTranscribing;
     final busy = widget.isBusy;
-    final background = active
-        ? Colors.red.shade600
-        : Colors.blue.shade600;
-    final foreground = Colors.white;
+    final background = transcribing
+        ? Colors.purple.shade700
+        : (active
+            ? (paused ? Colors.amber.shade700 : Colors.blue.shade700)
+            : Colors.blue.shade600);
+    const foreground = Colors.white;
 
-    final soundBoost = active
+    final soundBoost = (active && !paused && !transcribing)
         ? widget.soundLevel * 0.22
         : 0.0;
 
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final pulse = active ? 1 + (_controller.value * 0.08) + soundBoost : 1.0;
+        final pulse = (active && !paused && !transcribing)
+            ? 1 + (_controller.value * 0.08) + soundBoost
+            : 1.0;
         return Transform.scale(
           scale: pulse,
           child: Container(
@@ -1739,7 +1750,10 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
               boxShadow: active
                   ? [
                       BoxShadow(
-                        color: Colors.red.withValues(alpha: (0.35 + soundBoost * 0.4).clamp(0.0, 0.85)),
+                        color: (transcribing
+                                ? Colors.purple
+                                : (paused ? Colors.amber : Colors.blue))
+                            .withValues(alpha: (0.35 + soundBoost * 0.4).clamp(0.0, 0.85)),
                         blurRadius: 16 + (soundBoost * 20),
                         spreadRadius: 2 + (soundBoost * 6),
                       ),
@@ -1748,22 +1762,206 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
             ),
             child: IconButton(
               padding: EdgeInsets.zero,
-              tooltip: active ? 'Terminar y transcribir' : 'Hablar por micrófono',
+              tooltip: transcribing
+                  ? 'Transcribiendo audio...'
+                  : (active ? 'Listo / Finalizar dictado' : 'Hablar por micrófono'),
               onPressed: busy ? null : widget.onPressed,
               icon: AnimatedSwitcher(
                 duration: 180.ms,
-                child: Icon(
-                  active ? Icons.stop_rounded : Icons.mic_rounded,
-                  key: ValueKey<bool>(active),
-                  color: foreground,
-                  size: active ? 22 : 20,
-                ),
+                child: transcribing
+                    ? const SizedBox(
+                        key: ValueKey('transcribing_spinner'),
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Icon(
+                        active ? Icons.check_rounded : Icons.mic_rounded,
+                        key: ValueKey<String>('${active}_$paused'),
+                        color: foreground,
+                        size: active ? 22 : 20,
+                      ),
               ),
             ),
           ),
         );
       },
     );
+  }
+}
+
+/// Normalizador inteligente de voz que corrige palabras poco claras,
+/// tartamudeos y destinos turísticos comunes de Colombia.
+class SmartVoiceNormalizer {
+  const SmartVoiceNormalizer._();
+
+  static final Map<RegExp, String> _replacements = {
+    RegExp(r'\b(ir a|voy a|quiero ir a)\s+(?:procrear|crear)\b', caseSensitive: false): r'$1 pasear',
+    RegExp(r'\b(pa crear)\b', caseSensitive: false): 'para crear',
+    RegExp(r'\b(bogota|bogotta)\b', caseSensitive: false): 'Bogotá',
+    RegExp(r'\b(medellin|medeyin)\b', caseSensitive: false): 'Medellín',
+    RegExp(r'\b(cartajena|cartagena)\b', caseSensitive: false): 'Cartagena',
+    RegExp(r'\b(santa marta|santamarta)\b', caseSensitive: false): 'Santa Marta',
+    RegExp(r'\b(san andres|sanandres)\b', caseSensitive: false): 'San Andrés',
+    RegExp(r'\b(barranquilla|quilla)\b', caseSensitive: false): 'Barranquilla',
+    RegExp(r'\b(cali)\b', caseSensitive: false): 'Cali',
+    RegExp(r'\b(bucaramanga)\b', caseSensitive: false): 'Bucaramanga',
+    RegExp(r'\b(eje cafetero)\b', caseSensitive: false): 'Eje Cafetero',
+    RegExp(r'\b(villa de leyva|villadeleyva)\b', caseSensitive: false): 'Villa de Leyva',
+    RegExp(r'\b(guatavita)\b', caseSensitive: false): 'Guatavita',
+    RegExp(r'\b(guatape|guatapé)\b', caseSensitive: false): 'Guatapé',
+    RegExp(r'\b(monserrate|montserrate)\b', caseSensitive: false): 'Monserrate',
+    RegExp(r'\b(zipaquira|zipaquirá)\b', caseSensitive: false): 'Zipaquirá',
+    RegExp(r'\b(comuna trece|comuna 13)\b', caseSensitive: false): 'Comuna 13',
+    RegExp(r'\b(tayrona|tairona)\b', caseSensitive: false): 'Tayrona',
+    RegExp(r'\b(tatacoa)\b', caseSensitive: false): 'la Tatacoa',
+    RegExp(r'\b(salento)\b', caseSensitive: false): 'Salento',
+    RegExp(r'\b(barichara)\b', caseSensitive: false): 'Barichara',
+    RegExp(r'\b(cabo de la vela)\b', caseSensitive: false): 'Cabo de la Vela',
+    RegExp(r'\b(palomino)\b', caseSensitive: false): 'Palomino',
+    RegExp(r'\b(mompox|mompos)\b', caseSensitive: false): 'Mompox',
+  };
+
+  static String normalize(String input) {
+    var text = input.trim();
+    if (text.isEmpty) return '';
+
+    // 1. Eliminar palabras consecutivas duplicadas (tartamudeo: "quiero quiero")
+    final words = text.split(RegExp(r'\s+'));
+    if (words.isNotEmpty) {
+      final deduplicated = <String>[];
+      for (int i = 0; i < words.length; i++) {
+        if (i == 0 || words[i].toLowerCase() != words[i - 1].toLowerCase()) {
+          deduplicated.add(words[i]);
+        }
+      }
+      text = deduplicated.join(' ');
+    }
+
+    // 2. Corregir destinos y lugares turísticos frecuentes
+    for (final entry in _replacements.entries) {
+      text = text.replaceAll(entry.key, entry.value);
+    }
+
+    // 3. Mayúscula al inicio
+    if (text.isNotEmpty) {
+      text = text[0].toUpperCase() + text.substring(1);
+    }
+
+    return text;
+  }
+}
+
+/// Sesión de grabación de audio con micrófono de alta fidelidad.
+/// Permite pausar/reanudar manualmente y nunca corta la grabación por silencios.
+class _AudioVoiceRecorderSession {
+  final AudioRecorder _recorder = AudioRecorder();
+  StreamSubscription<Amplitude>? _ampSub;
+  String? _currentRecordingPath;
+  bool _isRecording = false;
+  bool _isPaused = false;
+
+  bool get isRecording => _isRecording;
+  bool get isPaused => _isPaused;
+
+  Future<bool> start({
+    required void Function(double soundLevel) onSoundLevel,
+    required void Function(String error) onError,
+  }) async {
+    try {
+      final hasPerm = await _recorder.hasPermission();
+      if (!hasPerm) {
+        onError('Permiso de micrófono no otorgado.');
+        return false;
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final filePath = '${tempDir.path}/vibe_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      _currentRecordingPath = filePath;
+
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: filePath,
+      );
+
+      _isRecording = true;
+      _isPaused = false;
+
+      _ampSub?.cancel();
+      _ampSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 90)).listen((amp) {
+        final normalized = ((amp.current + 50.0) / 45.0).clamp(0.0, 1.0);
+        onSoundLevel(normalized);
+      });
+
+      return true;
+    } catch (e) {
+      debugPrint('[AudioVoiceRecorder] Start error: $e');
+      onError('No se pudo iniciar la grabación: $e');
+      return false;
+    }
+  }
+
+  Future<void> pause() async {
+    if (!_isRecording || _isPaused) return;
+    try {
+      await _recorder.pause();
+      _isPaused = true;
+    } catch (e) {
+      debugPrint('[AudioVoiceRecorder] Pause error: $e');
+    }
+  }
+
+  Future<void> resume() async {
+    if (!_isRecording || !_isPaused) return;
+    try {
+      await _recorder.resume();
+      _isPaused = false;
+    } catch (e) {
+      debugPrint('[AudioVoiceRecorder] Resume error: $e');
+    }
+  }
+
+  Future<String?> stop() async {
+    _ampSub?.cancel();
+    _ampSub = null;
+    _isRecording = false;
+    _isPaused = false;
+
+    try {
+      final path = await _recorder.stop();
+      return path ?? _currentRecordingPath;
+    } catch (e) {
+      debugPrint('[AudioVoiceRecorder] Stop error: $e');
+      return _currentRecordingPath;
+    }
+  }
+
+  Future<void> cancel() async {
+    _ampSub?.cancel();
+    _ampSub = null;
+    _isRecording = false;
+    _isPaused = false;
+
+    try {
+      await _recorder.cancel();
+      if (_currentRecordingPath != null) {
+        final f = File(_currentRecordingPath!);
+        if (f.existsSync()) f.deleteSync();
+      }
+    } catch (_) {}
+    _currentRecordingPath = null;
+  }
+
+  Future<void> dispose() async {
+    await cancel();
+    await _recorder.dispose();
   }
 }
 

@@ -7602,15 +7602,14 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// Audio Transcription Endpoint (OpenAI Whisper)
+// Audio Transcription Endpoint (Groq Whisper / ElevenLabs Scribe / OpenAI Whisper)
 // POST /api/ai/audio/transcribe
 // ─────────────────────────────────────────────────────────────
 aiRouter.post('/audio/transcribe', async (req, res, next) => {
   try {
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      return res.status(503).json({ error: 'OpenAI API key no configurada en el servidor' })
-    }
+    const groqKey = process.env.GROQ_API_KEY
+    const elevenLabsKey = process.env.ELEVENLABS_API_KEY
+    const openAiKey = process.env.OPENAI_API_KEY
 
     const { audioBase64, format = 'm4a', prompt, language = 'es' } = req.body || {}
     if (!audioBase64) {
@@ -7620,38 +7619,106 @@ aiRouter.post('/audio/transcribe', async (req, res, next) => {
     const audioBuffer = Buffer.from(audioBase64, 'base64')
     const filename = `recording.${format}`
     const mimeType = format === 'mp3' ? 'audio/mpeg' : (format === 'wav' ? 'audio/wav' : 'audio/m4a')
+    const defaultPrompt = prompt || 'VibeTours, viajes, turismo, Colombia, Bogotá, Medellín, Cartagena, Santa Marta, Cali, hoteles, restaurantes, itinerarios, planes'
 
-    const blob = new Blob([audioBuffer], { type: mimeType })
-    const formData = new FormData()
-    formData.append('file', blob, filename)
-    formData.append('model', 'whisper-1')
-    if (language) formData.append('language', language)
-    formData.append(
-      'prompt',
-      prompt || 'VibeTours, viajes, turismo, Colombia, Bogotá, Medellín, Cartagena, Santa Marta, Cali, hoteles, restaurantes, itinerarios, planes'
-    )
+    // 1. Prioridad: Groq Cloud Whisper Large v3 (100% Gratuito, ultra-rápido)
+    if (groqKey) {
+      try {
+        const blob = new Blob([audioBuffer], { type: mimeType })
+        const formData = new FormData()
+        formData.append('file', blob, filename)
+        formData.append('model', 'whisper-large-v3-turbo')
+        if (language) formData.append('language', language)
+        formData.append('temperature', '0.0')
+        formData.append('prompt', defaultPrompt)
 
-    const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: formData
-    })
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${groqKey}`
+          },
+          body: formData
+        })
 
-    if (!whisperResponse.ok) {
-      const errText = await whisperResponse.text()
-      console.error('[Whisper] OpenAI transcription error:', errText)
-      return res.status(whisperResponse.status).json({
-        error: 'Error en servicio de transcripción Whisper',
-        details: errText
-      })
+        if (groqResponse.ok) {
+          const data = await groqResponse.json()
+          if (data && typeof data.text === 'string' && data.text.trim().length > 0) {
+            console.log('[Whisper] Transcripción exitosa con Groq:', data.text.trim())
+            return res.json({ text: data.text.trim(), provider: 'groq' })
+          }
+        } else {
+          console.warn('[Whisper] Groq error:', await groqResponse.text())
+        }
+      } catch (err) {
+        console.warn('[Whisper] Groq request error:', err)
+      }
     }
 
-    const data = await whisperResponse.json()
-    return res.json({ text: data.text })
+    // 2. Fallback: ElevenLabs Scribe STT
+    if (elevenLabsKey) {
+      try {
+        const blob = new Blob([audioBuffer], { type: mimeType })
+        const formData = new FormData()
+        formData.append('file', blob, filename)
+        formData.append('model_id', 'scribe_v1')
+        formData.append('language_code', language || 'es')
+
+        const elevenResponse = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+          method: 'POST',
+          headers: {
+            'xi-api-key': elevenLabsKey
+          },
+          body: formData
+        })
+
+        if (elevenResponse.ok) {
+          const data = await elevenResponse.json()
+          if (data && typeof data.text === 'string' && data.text.trim().length > 0) {
+            console.log('[Whisper] Transcripción exitosa con ElevenLabs Scribe:', data.text.trim())
+            return res.json({ text: data.text.trim(), provider: 'elevenlabs' })
+          }
+        } else {
+          console.warn('[Whisper] ElevenLabs STT error:', await elevenResponse.text())
+        }
+      } catch (err) {
+        console.warn('[Whisper] ElevenLabs request error:', err)
+      }
+    }
+
+    // 3. Fallback: OpenAI Whisper
+    if (openAiKey) {
+      try {
+        const blob = new Blob([audioBuffer], { type: mimeType })
+        const formData = new FormData()
+        formData.append('file', blob, filename)
+        formData.append('model', 'whisper-1')
+        if (language) formData.append('language', language)
+        formData.append('prompt', defaultPrompt)
+
+        const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openAiKey}`
+          },
+          body: formData
+        })
+
+        if (whisperResponse.ok) {
+          const data = await whisperResponse.json()
+          return res.json({ text: data.text.trim(), provider: 'openai' })
+        } else {
+          console.warn('[Whisper] OpenAI error:', await whisperResponse.text())
+        }
+      } catch (err) {
+        console.warn('[Whisper] OpenAI request error:', err)
+      }
+    }
+
+    return res.status(503).json({
+      error: 'No hay proveedores de transcripción disponibles. Configura GROQ_API_KEY en el servidor.'
+    })
   } catch (error) {
-    console.error('[Whisper] Transcribe error:', error)
+    console.error('[Whisper] Transcribe endpoint fatal error:', error)
     next(error)
   }
 })

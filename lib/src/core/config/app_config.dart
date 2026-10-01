@@ -27,6 +27,7 @@ class AppConfig {
     'GOOGLE_WEB_CLIENT_ID',
   );
   static const _definedTomTomApiKey = String.fromEnvironment('TOMTOM_API_KEY');
+  static const _definedGroqApiKey = String.fromEnvironment('GROQ_API_KEY');
   static const _definedOpenAiApiKey = String.fromEnvironment('OPENAI_API_KEY');
   static const _definedElevenLabsApiKey = String.fromEnvironment('ELEVENLABS_API_KEY');
   static const _definedElevenLabsVoiceId = String.fromEnvironment('ELEVENLABS_VOICE_ID');
@@ -75,6 +76,12 @@ class AppConfig {
   static String get tomTomApiKey => _definedTomTomApiKey.isNotEmpty
       ? _definedTomTomApiKey
       : _asset('TOMTOM_API_KEY');
+
+  static String get groqApiKey => _definedGroqApiKey.isNotEmpty
+      ? _definedGroqApiKey
+      : _asset('GROQ_API_KEY');
+
+  static bool get hasGroq => groqApiKey.isNotEmpty;
 
   static String get openAiApiKey => _definedOpenAiApiKey.isNotEmpty
       ? _definedOpenAiApiKey

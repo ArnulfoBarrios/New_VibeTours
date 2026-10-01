@@ -18,7 +18,47 @@ class AudioTranscriptionService {
       throw Exception('El archivo de grabación está vacío.');
     }
 
-    // 1. Try direct OpenAI Whisper API if client has OPENAI_API_KEY
+    final defaultPrompt = prompt ??
+        'VibeTours, turismo, viajes, Colombia, Bogotá, Medellín, Cartagena, Santa Marta, Cali, hoteles, restaurantes, planes, tours';
+
+    // 1. Prioridad: Transcripción directa con Groq Whisper Large v3 (100% Gratuito y ultra-rápido)
+    if (AppConfig.hasGroq) {
+      try {
+        debugPrint('[Whisper] Intentando transcripción directa con Groq Cloud...');
+        final uri = Uri.parse('https://api.groq.com/openai/v1/audio/transcriptions');
+        final request = http.MultipartRequest('POST', uri)
+          ..headers['Authorization'] = 'Bearer ${AppConfig.groqApiKey}'
+          ..fields['model'] = 'whisper-large-v3-turbo'
+          ..fields['language'] = 'es'
+          ..fields['temperature'] = '0.0'
+          ..fields['prompt'] = defaultPrompt
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: 'recording.m4a',
+            ),
+          );
+
+        final streamed = await request.send().timeout(const Duration(seconds: 25));
+        final response = await http.Response.fromStream(streamed);
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          final text = (data['text'] as String?)?.trim() ?? '';
+          if (text.isNotEmpty) {
+            debugPrint('[Whisper] Transcripción con Groq exitosa: $text');
+            return text;
+          }
+        } else {
+          debugPrint('[Whisper] Groq direct error ${response.statusCode}: ${response.body}');
+        }
+      } catch (e) {
+        debugPrint('[Whisper] Groq direct exception: $e');
+      }
+    }
+
+    // 2. Transcripción directa con OpenAI Whisper si tiene clave
     if (AppConfig.hasOpenAi) {
       try {
         debugPrint('[Whisper] Intentando transcripción directa con OpenAI...');
@@ -27,8 +67,7 @@ class AudioTranscriptionService {
           ..headers['Authorization'] = 'Bearer ${AppConfig.openAiApiKey}'
           ..fields['model'] = 'whisper-1'
           ..fields['language'] = 'es'
-          ..fields['prompt'] = prompt ??
-              'VibeTours, turismo, viajes, Colombia, Bogotá, Medellín, Cartagena, Santa Marta, Cali, hoteles, restaurantes, planes, tours'
+          ..fields['prompt'] = defaultPrompt
           ..files.add(
             http.MultipartFile.fromBytes(
               'file',
@@ -44,7 +83,7 @@ class AudioTranscriptionService {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
           final text = (data['text'] as String?)?.trim() ?? '';
           if (text.isNotEmpty) {
-            debugPrint('[Whisper] Transcripción directa exitosa: $text');
+            debugPrint('[Whisper] Transcripción directa OpenAI exitosa: $text');
             return text;
           }
         } else {
@@ -68,6 +107,11 @@ class AudioTranscriptionService {
 
     Object? lastErr;
     for (final baseUrl in baseUrls) {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        if (baseUrl.contains('localhost') || baseUrl.contains('127.0.0.1')) {
+          continue; // Avoid connection refused on physical mobile device
+        }
+      }
       try {
         debugPrint('[Whisper] Intentando transcripción vía backend en $baseUrl...');
         final uri = Uri.parse('$baseUrl/ai/audio/transcribe');
