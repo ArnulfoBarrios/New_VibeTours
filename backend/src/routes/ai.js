@@ -7754,15 +7754,15 @@ aiRouter.post('/audio/transcribe', async (req, res, next) => {
     const audioBuffer = Buffer.from(audioBase64, 'base64')
     const filename = `recording.${format}`
     const mimeType = format === 'mp3' ? 'audio/mpeg' : (format === 'wav' ? 'audio/wav' : 'audio/m4a')
-    const defaultPrompt = prompt || 'VibeTours Colombia: Barranquilla, Gran Malecón, Bogotá, Medellín, Cartagena, Santa Marta, Cali, Bucaramanga, San Andrés, lugares emblemáticos, sitios turísticos, transporte, vehículo, carro, presupuesto, itinerario, tour.'
+    const defaultPrompt = prompt || 'VibeTours Colombia: la Cordialidad, Murillo, Calle 30, Vía 40, Circunvalar, Gran Malecón, Simón Bolívar, Barranquilla, Bogotá, Medellín, Cartagena, Santa Marta, Cali, Bucaramanga, San Andrés, crea un tour, desde mi ubicación, ruta, viaje, itinerario, lugares emblemáticos, sitios turísticos, transporte, vehículo, carro, presupuesto, tour.'
 
-    // 1. Prioridad: Groq Cloud Whisper Large v3 (100% Gratuito, ultra-rápido)
+    // 1. Prioridad: Groq Cloud Whisper Large v3 (100% Gratuito, ultra-preciso)
     if (groqKey) {
       try {
         const blob = new Blob([audioBuffer], { type: mimeType })
         const formData = new FormData()
         formData.append('file', blob, filename)
-        formData.append('model', 'whisper-large-v3-turbo')
+        formData.append('model', 'whisper-large-v3')
         if (language) formData.append('language', language)
         formData.append('temperature', '0.0')
         formData.append('prompt', defaultPrompt)

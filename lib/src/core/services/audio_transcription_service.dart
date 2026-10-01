@@ -19,16 +19,19 @@ class AudioTranscriptionService {
     }
 
     final defaultPrompt = prompt ??
-        'VibeTours Colombia: Barranquilla, Gran Malecón, Bogotá, Medellín, Cartagena, Santa Marta, Cali, Bucaramanga, San Andrés, lugares emblemáticos, sitios turísticos, transporte, vehículo, carro, presupuesto, itinerario, tour.';
+        'VibeTours Colombia: la Cordialidad, Murillo, Calle 30, Vía 40, Circunvalar, Gran Malecón, Simón Bolívar, Barranquilla, Bogotá, Medellín, Cartagena, Santa Marta, Cali, Bucaramanga, San Andrés, crea un tour, desde mi ubicación, ruta, viaje, itinerario, lugares emblemáticos, sitios turísticos, transporte, vehículo, carro, presupuesto, tour.';
 
-    // 1. Prioridad: Transcripción directa con Groq Whisper Large v3 (100% Gratuito y ultra-rápido)
+    final isWav = audioFile.path.toLowerCase().endsWith('.wav');
+    final filename = isWav ? 'recording.wav' : 'recording.m4a';
+
+    // 1. Prioridad: Transcripción directa con Groq Whisper Large v3 (100% Gratuito y ultra-preciso)
     if (AppConfig.hasGroq) {
       try {
-        debugPrint('[Whisper] Intentando transcripción directa con Groq Cloud...');
+        debugPrint('[Whisper] Intentando transcripción directa con Groq Cloud (whisper-large-v3)...');
         final uri = Uri.parse('https://api.groq.com/openai/v1/audio/transcriptions');
         final request = http.MultipartRequest('POST', uri)
           ..headers['Authorization'] = 'Bearer ${AppConfig.groqApiKey}'
-          ..fields['model'] = 'whisper-large-v3-turbo'
+          ..fields['model'] = 'whisper-large-v3'
           ..fields['language'] = 'es'
           ..fields['temperature'] = '0.0'
           ..fields['prompt'] = defaultPrompt
@@ -36,7 +39,7 @@ class AudioTranscriptionService {
             http.MultipartFile.fromBytes(
               'file',
               bytes,
-              filename: 'recording.m4a',
+              filename: filename,
             ),
           );
 
@@ -72,7 +75,7 @@ class AudioTranscriptionService {
             http.MultipartFile.fromBytes(
               'file',
               bytes,
-              filename: 'recording.m4a',
+              filename: filename,
             ),
           );
 
@@ -99,10 +102,9 @@ class AudioTranscriptionService {
     final base64Audio = base64Encode(bytes);
     final payload = jsonEncode({
       'audioBase64': base64Audio,
-      'format': 'm4a',
+      'format': isWav ? 'wav' : 'm4a',
       'language': 'es',
-      'prompt': prompt ??
-          'VibeTours Colombia: Barranquilla, Gran Malecón, Bogotá, Medellín, Cartagena, Santa Marta, Cali, Bucaramanga, San Andrés, lugares emblemáticos, sitios turísticos, transporte, vehículo, carro, presupuesto, itinerario, tour.',
+      'prompt': defaultPrompt,
     });
 
     Object? lastErr;

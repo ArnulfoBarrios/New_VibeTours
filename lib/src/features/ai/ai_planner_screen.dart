@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -1616,6 +1617,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       return;
     }
 
+    // Vibración táctil que confirma que el chip de audio ya está grabando físicamente
+    unawaited(HapticFeedback.mediumImpact());
+
     _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted || !_isVoiceActive) {
         timer.cancel();
@@ -1901,6 +1905,15 @@ class SmartVoiceNormalizer {
   const SmartVoiceNormalizer._();
 
   static final Map<RegExp, String> _replacements = {
+    // Intenciones y rutas arteriales colombianas con distorsiones fonéticas
+    RegExp(r'\b(pastor beli[aá]n|la coordialidad|la cordialida|pastor belian)\b', caseSensitive: false): 'la Cordialidad',
+    RegExp(r'\b(cordialidad)\b', caseSensitive: false): 'la Cordialidad',
+    RegExp(r'\b(tereo un turno|ves de la ubicaci[oó]n|desde la ubicaci[oó]n|ves de la ubicacion)\b', caseSensitive: false): 'desde mi ubicación',
+    RegExp(r'\b(crea un tour|arma un tour|haz un tour|hacer un tour)\b', caseSensitive: false): 'Crea un tour',
+    RegExp(r'\b(avenida murillo|la murillo)\b', caseSensitive: false): 'la Murillo',
+    RegExp(r'\b(la circunvalar|avenida circunvalar)\b', caseSensitive: false): 'la Circunvalar',
+    RegExp(r'\b(la v[ií]a 40|via 40)\b', caseSensitive: false): 'la Vía 40',
+    RegExp(r'\b(la calle 30|calle 30)\b', caseSensitive: false): 'la Calle 30',
     RegExp(r'\b(ir a|voy a|quiero ir a)\s+(?:procrear|crear)\b', caseSensitive: false): r'$1 pasear',
     RegExp(r'\b(pa crear)\b', caseSensitive: false): 'para crear',
     RegExp(r'\b(bogota|bogotta)\b', caseSensitive: false): 'Bogotá',
@@ -1987,14 +2000,17 @@ class _AudioVoiceRecorderSession {
       }
 
       final tempDir = await getTemporaryDirectory();
-      final filePath = '${tempDir.path}/vibe_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final filePath = '${tempDir.path}/vibe_voice_${DateTime.now().millisecondsSinceEpoch}.wav';
       _currentRecordingPath = filePath;
 
       await _recorder.start(
         const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+          autoGain: true,
+          echoCancel: true,
+          noiseSuppress: true,
         ),
         path: filePath,
       );
