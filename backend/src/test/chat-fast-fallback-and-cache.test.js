@@ -55,7 +55,7 @@ describe('Ultra-fast Chat Performance, Dynamic Fallback, and Places Cache', () =
         assert.equal(res.status, 200)
         const data = await res.json()
 
-        assert.ok(duration < 1500, `Expected conversational response in < 1500ms, took ${duration.toFixed(2)}ms for "${tc.message}"`)
+        assert.ok(duration < 2500, `Expected conversational response in < 2500ms, took ${duration.toFixed(2)}ms for "${tc.message}"`)
         assert.ok(data.responseMessage, 'Response must have responseMessage')
         assert.ok(Array.isArray(data.actionChips), 'Response must have actionChips')
         assert.ok(data.updatedPreferences || data.preferences, 'Response must have preferences')

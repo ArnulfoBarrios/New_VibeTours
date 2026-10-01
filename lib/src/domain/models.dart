@@ -912,6 +912,8 @@ class AiTourRequest {
     this.isMultiCity = false,
     this.durationHours,
     this.durationDays,
+    this.tourType,
+    this.isUserLocationOrigin,
     required this.type,
     required this.language,
     required this.prompt,
@@ -930,6 +932,8 @@ class AiTourRequest {
   final CanonicalDestination? canonicalDestination;
   final String? originPlace;
   final String? destinationPlace;
+  final String? tourType;
+  final bool? isUserLocationOrigin;
   final List<String> cities;
   final bool isMultiCity;
   final double? durationHours;
@@ -952,6 +956,8 @@ class AiTourRequest {
     if (canonicalDestination != null) 'canonicalDestination': canonicalDestination!.toJson(),
     if (originPlace != null) 'originPlace': originPlace,
     if (destinationPlace != null) 'destinationPlace': destinationPlace,
+    if (tourType != null) 'tourType': tourType,
+    if (isUserLocationOrigin != null) 'isUserLocationOrigin': isUserLocationOrigin,
     if (cities.isNotEmpty) 'cities': cities,
     'isMultiCity': isMultiCity,
     if (durationHours != null) 'durationHours': durationHours,

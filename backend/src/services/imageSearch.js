@@ -35,6 +35,12 @@ const KNOWN_LANDMARK_IMAGES = {
   'museo de antropologia': 'https://images.unsplash.com/photo-1566121318594-a4f65f3a4c12?auto=format&fit=crop&w=1200&q=80',
   'museo antropologico y etnologico': 'https://images.unsplash.com/photo-1566121318594-a4f65f3a4c12?auto=format&fit=crop&w=1200&q=80',
   'plaza de la locomotora': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/AspectoGranMalecon.jpg',
+  'puente pumarejo': 'https://upload.wikimedia.org/wikipedia/commons/a/aa/PuentePumarejoBAQ2020.jpg',
+  'puente alberto pumarejo': 'https://upload.wikimedia.org/wikipedia/commons/a/aa/PuentePumarejoBAQ2020.jpg',
+  'puente pumarejo barranquilla': 'https://upload.wikimedia.org/wikipedia/commons/a/aa/PuentePumarejoBAQ2020.jpg',
+  'ecoparque cienaga de mallorquin': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Manglar_en_La_Caimanera_-_panoramio.jpg/1280px-Manglar_en_La_Caimanera_-_panoramio.jpg',
+  'cienaga de mallorquin': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Manglar_en_La_Caimanera_-_panoramio.jpg/1280px-Manglar_en_La_Caimanera_-_panoramio.jpg',
+  'ecoparque mallorquin': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Manglar_en_La_Caimanera_-_panoramio.jpg/1280px-Manglar_en_La_Caimanera_-_panoramio.jpg',
   // Barranquilla Restaurants & Iconic Gastronomy
   'cucayo': 'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?auto=format&fit=crop&w=1200&q=80',
   'restaurante cucayo': 'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?auto=format&fit=crop&w=1200&q=80',

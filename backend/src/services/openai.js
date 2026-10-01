@@ -2368,6 +2368,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     const maxCandidateRadiusM = Math.max(12000, routeDistMeters * 1.5)
     for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
       if (!landmark || landmark.latitude == null || landmark.longitude == null) continue
+      const isLodging = isLodgingName(landmark.name) || isLodgingCategoryOrGeneric(landmark.name) || landmark.category === 'hotel' || landmark.tags?.tourism === 'hotel'
+      if (isLodging) continue
       const dFromStart = haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
       if (dFromStart <= maxCandidateRadiusM || (detectedCity && landmark.city?.toLowerCase() === detectedCity.toLowerCase())) {
         const isRest = landmark.category === 'restaurant' || isFoodOrDrinkEstablishment(landmark.name)
@@ -2446,7 +2448,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     const validAttrs = []
     const seenAttrNames = new Set()
     for (const p of rawAttrs) {
-      if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name)) continue
+      if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name) || isLodgingName(p.name) || isLodgingCategoryOrGeneric(p.name) || p.tags?.tourism === 'hotel' || p.category === 'hotel') continue
       if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
       const norm = p.name.toLowerCase().trim()
       if (seenAttrNames.has(norm)) continue
@@ -2479,16 +2481,16 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
 
     // Fallback: If strict corridor yielded too few places, relax constraint to nearest available in raw pool
-    if (validAttrs.length < 2 && startLat && endLat) {
+    if (validAttrs.length < 3 && startLat && endLat) {
       for (const p of rawAttrs) {
-        if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name)) continue
+        if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name) || isLodgingName(p.name) || isLodgingCategoryOrGeneric(p.name) || p.tags?.tourism === 'hotel' || p.category === 'hotel') continue
         if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
         const norm = p.name.toLowerCase().trim()
         if (seenAttrNames.has(norm)) continue
         const distFromStart = (p.latitude != null && p.longitude != null) ? haversineMeters(startLat, startLon, p.latitude, p.longitude) : routeDistMeters * 0.5
         validAttrs.push({ ...p, distFromStart })
         seenAttrNames.add(norm)
-        if (validAttrs.length >= 3) break
+        if (validAttrs.length >= 5) break
       }
     }
 
@@ -2505,9 +2507,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
 
     // Secondary Fallback: If still sparse, draw from regional KNOWN_ICONIC_LANDMARKS for detected city
-    if (validAttrs.length < 2 && detectedCity) {
+    if (validAttrs.length < 3 && detectedCity) {
       for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
-        if (!landmark || !landmark.name || landmark.category === 'restaurant' || isFoodOrDrinkEstablishment(landmark.name)) continue
+        if (!landmark || !landmark.name || landmark.category === 'restaurant' || isFoodOrDrinkEstablishment(landmark.name) || isLodgingName(landmark.name) || isLodgingCategoryOrGeneric(landmark.name) || landmark.category === 'hotel' || landmark.tags?.tourism === 'hotel') continue
         if (landmark.city?.toLowerCase() === detectedCity.toLowerCase()) {
           if (arePlacesSimilar(landmark.name, destName)) continue
           const norm = landmark.name.toLowerCase().trim()
@@ -2517,7 +2519,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             : routeDistMeters * 0.5
           validAttrs.push({ ...landmark, distFromStart })
           seenAttrNames.add(norm)
-          if (validAttrs.length >= 3) break
+          if (validAttrs.length >= 5) break
         }
       }
     }
@@ -2544,52 +2546,43 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
 
     const selectedIntermediateAttrs = []
     for (const a of validAttrs) {
-      if (selectedIntermediateAttrs.length >= 3) break
+      if (selectedIntermediateAttrs.length >= 4) break
       if (!selectedIntermediateAttrs.some(sel => arePlacesSimilar(sel.name, a.name))) {
         selectedIntermediateAttrs.push(a)
       }
     }
 
     let lunchRest = null
-    let dinnerRest = null
     const halfDist = routeDistMeters * 0.5
     if (validRests.length > 0) {
       const sortedByMidpoint = [...validRests].sort((a, b) => Math.abs((a.distFromStart || 0) - halfDist) - Math.abs((b.distFromStart || 0) - halfDist))
       lunchRest = sortedByMidpoint[0] || null
-      const dinnerCandidates = validRests.filter(r => !lunchRest || !arePlacesSimilar(r.name, lunchRest.name))
-      dinnerRest = dinnerCandidates.length > 0 ? dinnerCandidates[dinnerCandidates.length - 1] : null
     }
+
+    const mid = Math.ceil(selectedIntermediateAttrs.length / 2)
+    const preLunchAttrs = selectedIntermediateAttrs.slice(0, mid)
+    const postLunchAttrs = selectedIntermediateAttrs.slice(mid)
 
     const dayStops = []
     const specificPlacesToSave = []
 
-    if (selectedIntermediateAttrs[0]) {
-      const s1 = selectedIntermediateAttrs[0]
-      dayStops.push(`• ${s1.name}`)
-      specificPlacesToSave.push({ name: s1.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s1.latitude, longitude: s1.longitude, coordinatesVerified: true })
+    for (const s of preLunchAttrs) {
+      dayStops.push(`• ${s.name}`)
+      specificPlacesToSave.push({ name: s.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true })
     }
-    if (selectedIntermediateAttrs[1]) {
-      const s2 = selectedIntermediateAttrs[1]
-      dayStops.push(`• ${s2.name}`)
-      specificPlacesToSave.push({ name: s2.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s2.latitude, longitude: s2.longitude, coordinatesVerified: true })
-    }
+
     if (lunchRest) {
       dayStops.push(`• ${lunchRest.name}`)
       specificPlacesToSave.push({ name: lunchRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: lunchRest.latitude, longitude: lunchRest.longitude, coordinatesVerified: true })
     }
-    if (selectedIntermediateAttrs[2]) {
-      const s3 = selectedIntermediateAttrs[2]
-      dayStops.push(`• ${s3.name}`)
-      specificPlacesToSave.push({ name: s3.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s3.latitude, longitude: s3.longitude, coordinatesVerified: true })
+
+    for (const s of postLunchAttrs) {
+      dayStops.push(`• ${s.name}`)
+      specificPlacesToSave.push({ name: s.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true })
     }
 
     dayStops.push(`• ${destName}`)
     specificPlacesToSave.push({ name: destName, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: endLat, longitude: endLon, coordinatesVerified: Boolean(endLat && endLon) })
-
-    if (dinnerRest) {
-      dayStops.push(`• ${dinnerRest.name}`)
-      specificPlacesToSave.push({ name: dinnerRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: dinnerRest.latitude, longitude: dinnerRest.longitude, coordinatesVerified: true })
-    }
 
     known.specificPlaces = specificPlacesToSave
     return `Itinerario de Viaje: En ruta hacia ${destName} (1 día)\n\nDía 1: En ruta hacia ${destName}\n${dayStops.join('\n')}`

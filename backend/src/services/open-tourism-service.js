@@ -444,7 +444,7 @@ export function inferStopSubcategory(place = {}) {
   const lower = normalizeTextKey(name)
 
   // Explicit landmark & attraction keywords MUST NOT be misclassified as food or cafes
-  const isStrictAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla|carnaval)\b/i.test(name)
+  const isStrictAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla|carnaval|puente|bridge|arco)\b/i.test(name)
 
   const isMarkedAsRestaurant = String(place.entityType || '').toLowerCase() === 'restaurant' ||
     String(place.category || '').toLowerCase() === 'restaurant' ||

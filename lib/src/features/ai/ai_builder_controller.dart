@@ -383,6 +383,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
             final isMicro = canonical?.isMicroDestination == true ||
                 RegExp(r'tayrona|minca|guatapé|guatape|islas del rosario|isla barú|isla baru', caseSensitive: false).hasMatch(dest.toString());
 
+            final isLocationToDest = updatedPreferences['tourType']?.toString() == 'location_to_destination' ||
+                updatedPreferences['isUserLocationOrigin'] == true ||
+                updatedPreferences['originPlace']?.toString() == 'user_current_location';
+
             final request = AiTourRequest(
               prompt: text,
               destination: canonical?.displayName ?? dest.toString(),
@@ -396,10 +400,14 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
               touristProfileSummary: summary,
               touristInterests: profile.interests.map((e) => e.translationKey).toList(),
               touristPace: profile.preferredPace,
-              latitude: canonical?.latitude ?? lat,
-              longitude: canonical?.longitude ?? lon,
+              latitude: isLocationToDest ? (lat ?? canonical?.latitude) : (canonical?.latitude ?? lat),
+              longitude: isLocationToDest ? (lon ?? canonical?.longitude) : (canonical?.longitude ?? lon),
               budget: updatedPreferences['budget']?.toString(),
               selectedPlaces: specPlaces,
+              originPlace: isLocationToDest ? 'user_current_location' : (updatedPreferences['originPlace']?.toString()),
+              destinationPlace: isLocationToDest ? dest.toString() : (updatedPreferences['destinationPlace']?.toString()),
+              tourType: isLocationToDest ? 'location_to_destination' : (updatedPreferences['tourType']?.toString()),
+              isUserLocationOrigin: isLocationToDest ? true : (updatedPreferences['isUserLocationOrigin'] == true),
             );
 
             await startPlanning(request);

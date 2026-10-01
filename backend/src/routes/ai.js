@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingName, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
@@ -160,8 +160,8 @@ function applyTourType(input, extracted = null) {
 export function getPlaceEntityType(placeName) {
   if (!placeName || typeof placeName !== 'string') return 'generic'
   const lower = placeName.toLowerCase()
-  if (/\b(museo|museum|galer[íi]a de arte|teatro|monumento|estatua|escultura|castillo|fuerte|muralla|bastion|palacio)\b/i.test(lower)) return 'cultural'
-  if (/\b(parque|jard[íi]n|jardin|bosque|reserva|sendero|cascada|laguna|lago|mirador|bot[áa]nico|botanico|pueblito)\b/i.test(lower)) return 'park_nature'
+  if (/\b(museo|museum|galer[íi]a de arte|teatro|monumento|estatua|escultura|castillo|fuerte|muralla|bastion|palacio|puente|bridge)\b/i.test(lower)) return 'cultural'
+  if (/\b(parque|jard[íi]n|jardin|bosque|reserva|sendero|cascada|laguna|lago|mirador|bot[áa]nico|botanico|pueblito|ecoparque|ci[eé]naga)\b/i.test(lower)) return 'park_nature'
   if (/\b(playa|beach|bah[íi]a|bahia|cala|isla|island|cayo|arrecife|muelle|puerto|piscina|cabo|ensenada|playón)\b/i.test(lower)) return 'beach_coastal'
   if (/\b(catedral|bas[íi]lica|basilica|iglesia|capilla|templo|mezquita|sinagoga|santuario)\b/i.test(lower)) return 'religious'
   if (/\b(restaurante|restaurant|bistro|caf[ée]|coffee|bar|gastrobar|asador|pizzer[íi]a|taquer[íi]a|pub|cervecer[íi]a|panader[íi]a|pasteler[íi]a|comida|helader[íi]a|parador|kiosko)\b/i.test(lower)) return 'food'
@@ -1258,10 +1258,10 @@ aiRouter.post('/chat', async (req, res, next) => {
             return arePlacesSimilar(rName, poiName)
           })
           const isFoodPattern = isFoodOrDrinkEstablishment(poiName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(poiName)
-          const isAiRestaurant = Boolean(aiMatch && (aiMatch.isRestaurant || aiMatch.type === 'food' || aiMatch.category === 'restaurant' || aiMatch.entityType === 'restaurant'))
-          const isNonDiningVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(poiName)
+          const isNonDiningVenue = !/^(?:restaurante|caf[ée]|bistro|asador)\s+/i.test(poiName) && /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro|puente|bridge|ecoparque|ci[eé]naga|sendero|mirador|malec[oó]n|malecon|playa|estatua|obelisco)\b/i.test(poiName)
 
-          const isDining = (isAiRestaurant || isCatalogRestaurant || isFoodPattern || (isLastStopInDay && !isNonDiningVenue)) && (!isNonDiningVenue || isAiRestaurant || isCatalogRestaurant)
+          const isAiRestaurant = Boolean(aiMatch && (aiMatch.isRestaurant || aiMatch.type === 'food' || aiMatch.category === 'restaurant' || aiMatch.entityType === 'restaurant'))
+          const isDining = !isNonDiningVenue && (isAiRestaurant || isCatalogRestaurant || isFoodPattern || isLastStopInDay)
 
           const resolvedLat = (aiMatch && Number.isFinite(Number(aiMatch.latitude))) ? Number(aiMatch.latitude) : catalogCoords?.latitude
           const resolvedLon = (aiMatch && Number.isFinite(Number(aiMatch.longitude))) ? Number(aiMatch.longitude) : catalogCoords?.longitude
@@ -3138,7 +3138,7 @@ export function buildTourPlanner(input, location = null, places = []) {
     candidatePlaces.map((place, index) => normalizeCandidate(place, index, input, origin)),
   ).filter((place) => place.name)
 
-  const isCorridorRoute = Boolean(input.originPlace || input.destinationPlace)
+  const isCorridorRoute = Boolean(input.originPlace || input.destinationPlace || input.tourType === 'location_to_destination' || input.isUserLocationOrigin)
   let selectedPlaces = []
   const requestedCount = normalized.filter(p => 
     p.rawTags?.requested_place === 'true' || 
@@ -3152,8 +3152,11 @@ export function buildTourPlanner(input, location = null, places = []) {
     : Math.max(baseStopTarget, requestedCount)
 
   if (isCorridorRoute) {
-    const startPlaceCandidate = normalized.find(p => p.rawTags?.start_point === 'true' || p.type === 'start_point' || (input.originPlace && normalizeKey(p.name) === normalizeKey(input.originPlace)))
-    const endPlaceCandidate = normalized.find(p => p.rawTags?.end_point === 'true' || p.type === 'end_point' || (input.destinationPlace && normalizeKey(p.name) === normalizeKey(input.destinationPlace)))
+    const destName = input.destinationPlace || input.destination || ''
+    const destKey = normalizeKey(destName)
+    const startPlaceCandidate = normalized.find(p => p.rawTags?.start_point === 'true' || p.type === 'start_point' || (input.originPlace && normalizeKey(p.name) === normalizeKey(input.originPlace))) ||
+      (input.isUserLocationOrigin && Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude)) ? { name: 'Tu ubicación actual', latitude: Number(input.latitude), longitude: Number(input.longitude), type: 'start_point' } : null)
+    const endPlaceCandidate = normalized.find(p => p.rawTags?.end_point === 'true' || p.type === 'end_point' || (destKey && normalizeKey(p.name) === destKey) || (destKey.length >= 4 && normalizeKey(p.name).includes(destKey)))
 
     let intermediates = normalized.filter(p => 
       (!startPlaceCandidate || normalizeKey(p.name) !== normalizeKey(startPlaceCandidate.name)) &&
@@ -3181,7 +3184,7 @@ export function buildTourPlanner(input, location = null, places = []) {
         }))
         .sort((a, b) => a.detourKm - b.detourKm)
       
-      intermediates = candidatesWithDetour.slice(0, 3)
+      intermediates = candidatesWithDetour.slice(0, 4)
     }
 
     const scoredIntermediates = intermediates
@@ -3307,7 +3310,7 @@ export function buildTourPlanner(input, location = null, places = []) {
 
       const isFoodStop = (p) => {
         if (!p || !p.name) return false
-        const isAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla)\b/i.test(p.name)
+        const isAttraction = /\b(zool[oó]gico|zoologico|zoo|acuario|bioparque|museo|museum|casa\s+museo|galer[ií]a|catedral|cathedral|bas[ií]lica|iglesia|parroquia|templo|santuario|castillo|castle|fuerte|fort|muralla|baluarte|malec[oó]n|malecon|ronda|muelle|mirador|viewpoint|monumento|monument|estatua|obelisco|teatro|parque|ecoparque|ci[eé]naga|laguna|playa|isla|puente|bridge)\b/i.test(p.name)
         if (isAttraction) return false
         return getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe' || p.type === 'food' || p.isRestaurant === true
       }
@@ -3425,19 +3428,48 @@ export function buildTourPlanner(input, location = null, places = []) {
 
       selectedPlaces = orderPlacesAlongRoute(selectedPlaces, startLoc, endLoc)
     } else if (selectedPlaces.length > 1 && requestedPlaces.length < 2) {
-      const totalDays = Math.max(1, Math.ceil((input.durationHours || 24) / 24))
-      if (totalDays <= 1) {
-        selectedPlaces = sortPlacesByProximity(selectedPlaces, origin)
-      } else {
-        const chunkSize = Math.ceil(selectedPlaces.length / totalDays)
-        const chunked = []
-        for (let d = 0; d < totalDays; d++) {
-          const chunk = selectedPlaces.slice(d * chunkSize, (d + 1) * chunkSize)
-          if (chunk.length > 0) {
-            chunked.push(...sortPlacesByProximity(chunk, d === 0 ? origin : null))
+      const isCorridorOrLocationToDest = isCorridorRoute || input.tourType === 'location_to_destination' || input.isUserLocationOrigin
+      if (!isCorridorOrLocationToDest) {
+        const totalDays = Math.max(1, Math.ceil((input.durationHours || 24) / 24))
+        if (totalDays <= 1) {
+          selectedPlaces = sortPlacesByProximity(selectedPlaces, origin)
+        } else {
+          const chunkSize = Math.ceil(selectedPlaces.length / totalDays)
+          const chunked = []
+          for (let d = 0; d < totalDays; d++) {
+            const chunk = selectedPlaces.slice(d * chunkSize, (d + 1) * chunkSize)
+            if (chunk.length > 0) {
+              chunked.push(...sortPlacesByProximity(chunk, d === 0 ? origin : null))
+            }
           }
+          const attrs = selectedPlaces.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); const rests = selectedPlaces.filter(p => getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe'); const clustered = clusterStopsIntoCoherentDays(attrs, rests, { numDays: totalDays, city: input.city || input.destination, cityCenter: origin }); const clusteredFlat = clustered.flatMap(dp => sortPlacesByProximity(dp.stops, dp.day === 1 ? origin : null)); selectedPlaces = clusteredFlat.length > 0 ? clusteredFlat : (chunked.length > 0 ? chunked : selectedPlaces)
         }
-        const attrs = selectedPlaces.filter(p => getPlaceEntityType(p.name) !== 'food' && p.category !== 'restaurant' && p.category !== 'cafe'); const rests = selectedPlaces.filter(p => getPlaceEntityType(p.name) === 'food' || p.category === 'restaurant' || p.category === 'cafe'); const clustered = clusterStopsIntoCoherentDays(attrs, rests, { numDays: totalDays, city: input.city || input.destination, cityCenter: origin }); const clusteredFlat = clustered.flatMap(dp => sortPlacesByProximity(dp.stops, dp.day === 1 ? origin : null)); selectedPlaces = clusteredFlat.length > 0 ? clusteredFlat : (chunked.length > 0 ? chunked : selectedPlaces)
+      }
+    }
+  }
+
+  const isCorridorOrLocationToDest = isCorridorRoute || input.tourType === 'location_to_destination' || input.isUserLocationOrigin
+  if (isCorridorOrLocationToDest && selectedPlaces.length > 1) {
+    const destName = input.destinationPlace || input.destination || ''
+    const destKey = normalizeKey(destName)
+    const destIdx = selectedPlaces.findIndex(p => {
+      const k = normalizeKey(p.name || '')
+      return k === destKey || (destKey.length >= 4 && (k.includes(destKey) || destKey.includes(k)))
+    })
+    if (destIdx !== -1 && destIdx !== selectedPlaces.length - 1) {
+      const [destItem] = selectedPlaces.splice(destIdx, 1)
+      selectedPlaces.push(destItem)
+    }
+    const userStartLat = Number(input.latitude)
+    const userStartLon = Number(input.longitude)
+    if (Number.isFinite(userStartLat) && Number.isFinite(userStartLon)) {
+      const startLoc = { latitude: userStartLat, longitude: userStartLon }
+      const lastStop = selectedPlaces[selectedPlaces.length - 1]
+      const endLoc = { latitude: lastStop.latitude, longitude: lastStop.longitude }
+      const intermediates = selectedPlaces.slice(0, selectedPlaces.length - 1)
+      if (intermediates.length > 1 && lastStop.latitude && lastStop.longitude) {
+        const orderedIntermediates = orderPlacesAlongRoute(intermediates, startLoc, endLoc)
+        selectedPlaces = [...orderedIntermediates, lastStop]
       }
     }
   }
@@ -6037,9 +6069,11 @@ async function collectCorridorCandidates(input, location) {
   let startPlace = null
   let endPlace = null
   
-  if (input.originPlace === 'user_current_location' || input.isUserLocationOrigin) {
-    let userLat = Number(input.latitude ?? location?.latitude ?? 0)
-    let userLon = Number(input.longitude ?? location?.longitude ?? 0)
+  if (input.originPlace === 'user_current_location' || input.isUserLocationOrigin || input.tourType === 'location_to_destination') {
+    let userLat = Number(input.latitude ?? 0)
+    let userLon = Number(input.longitude ?? 0)
+    if (!userLat && location?.latitude) userLat = Number(location.latitude)
+    if (!userLon && location?.longitude) userLon = Number(location.longitude)
     if (userLat && userLon) {
       const revGeo = await reverseGeocodeLocation(userLat, userLon).catch(() => null)
       const userCity = revGeo?.city || city
@@ -6072,11 +6106,17 @@ async function collectCorridorCandidates(input, location) {
     }
   }
   
-  if (input.destinationPlace) {
-    const destGeo = await geocodePlace(`${input.destinationPlace} ${city} ${country}`)
+  const targetDest = input.destinationPlace || input.destination
+  if (targetDest) {
+    let destGeo = null
+    if (location?.latitude && location?.longitude && (location.name?.toLowerCase().includes(targetDest.toLowerCase()) || targetDest.toLowerCase().includes(location.name?.toLowerCase()))) {
+      destGeo = location
+    } else {
+      destGeo = await geocodePlace(`${targetDest} ${city} ${country}`)
+    }
     if (destGeo) {
       endPlace = {
-        name: input.destinationPlace,
+        name: targetDest,
         latitude: destGeo.latitude,
         longitude: destGeo.longitude,
         category: 'attraction',
@@ -6216,7 +6256,7 @@ export async function collectTourCandidates(input, location) {
   }
 
   // Case B: Origin and/or Destination specified route within city
-  if (input.originPlace || input.destinationPlace) {
+  if (input.originPlace || input.destinationPlace || input.tourType === 'location_to_destination' || input.isUserLocationOrigin) {
     if (!input.durationHours) {
       input.durationHours = 8 // Default 1 day (8h)
     }
@@ -6903,6 +6943,11 @@ export function isValidTouristAttraction(place, input) {
     return false
   }
 
+  // 0.000 Bloqueo absoluto de marcas y nombres de alojamiento/hoteles (Crowne Plaza, Dann Carlton, etc.)
+  if (isLodgingName(nameLower) || isLodgingCategoryOrGeneric(nameLower) || place.category === 'hotel' || place.tags?.tourism === 'hotel' || place.tags?.tourism === 'hostel' || place.tags?.tourism === 'motel' || place.tags?.tourism === 'guest_house') {
+    return false
+  }
+
   // 0.001 Bloqueo de estructuras físicas genéricas o no turísticas (pérgolas, canchas de barrio, paradas de bus)
   if (/^(la\s+)?(p[ée]rgola|cancha|cancha sint[ée]tica|cancha de f[uú]tbol|cancha de microf[uú]tbol|parada de bus|estaci[óo]n de bus|quiosco|kiosco|grader[íi]as)$/i.test(nameLower) ||
       /\b(cancha sint[ée]tica|cancha de f[uú]tbol|parque cancha)\b/i.test(nameLower)) {
@@ -6955,6 +7000,9 @@ export function isValidTouristAttraction(place, input) {
                            }))
 
   if (isRequestedByChat) {
+    if (isLodgingName(nameLower) || isLodgingCategoryOrGeneric(nameLower) || place.category === 'hotel' || place.tags?.tourism === 'hotel') {
+      return false
+    }
     return true
   }
 
@@ -6986,12 +7034,15 @@ export function isValidTouristAttraction(place, input) {
   if (osmVal === 'administrative') return false
 
   // 5. Exclude transport infrastructure, airports, terminals, roads, highways, corridors, bypasses or streets
-  if (
-    /aeropuerto|airport|terminal de transporte|terminal de buses|terminal terrestre|corredor vial|variante|troncal|autopista|via |vía |calle |carrera |avenida |diagonal |transversal |puente |road |street |highway /i.test(nameLower) ||
-    /^via |^vía |^calle |^carrera |^avenida |^diagonal |^transversal |^variante |^puente |^autopista |^road |^street |^highway /i.test(nameLower) ||
-    /via$|vía$|calle$|carrera$|avenida$|diagonal$|transversal$|variante$|puente$|autopista$|road$|street$|highway$/i.test(nameLower)
-  ) {
-    return false
+  const isIconicBridgeOrAttraction = /\b(puente pumarejo|puente de boyac[aá]|puente de occidente|puente colgante|golden gate|brooklyn bridge|tower bridge|ponte vecchio)\b/i.test(nameLower) || place.tags?.historic === 'monument' || place.tags?.tourism === 'attraction'
+  if (!isIconicBridgeOrAttraction) {
+    if (
+      /aeropuerto|airport|terminal de transporte|terminal de buses|terminal terrestre|corredor vial|variante|troncal|autopista|via |vía |calle |carrera |avenida |diagonal |transversal |puente |road |street |highway /i.test(nameLower) ||
+      /^via |^vía |^calle |^carrera |^avenida |^diagonal |^transversal |^variante |^puente |^autopista |^road |^street |^highway /i.test(nameLower) ||
+      /via$|vía$|calle$|carrera$|avenida$|diagonal$|transversal$|variante$|puente$|autopista$|road$|street$|highway$/i.test(nameLower)
+    ) {
+      return false
+    }
   }
 
   // 6. Exclude administrative, municipality, courts or police offices
