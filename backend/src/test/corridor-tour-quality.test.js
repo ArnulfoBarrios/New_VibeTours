@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { isValidTouristAttraction, getPlaceEntityType, buildTourPlanner } from '../routes/ai.js'
-import { isLodgingName, generateChatResponse } from '../services/openai.js'
+import { isLodgingName, generateChatResponse, extractChatInformationFallback } from '../services/openai.js'
 import { inferStopSubcategory } from '../services/open-tourism-service.js'
 import { imageForPlace } from '../services/imageSearch.js'
 
@@ -107,5 +107,71 @@ describe('Corridor Tour Quality & Fix Verifications', () => {
     // Final stop MUST be Puente Pumarejo
     const last = planner.selectedPlaces[planner.selectedPlaces.length - 1]
     assert.equal(last.name, 'Puente Pumarejo', 'Puente Pumarejo must be the final stop')
+  })
+
+  it('6. extractChatInformationFallback handles sentences with periods and punctuation cleanly', () => {
+    const promptWithDot = 'Crea un tour desde mi Ubicación hasta el Paseo Bolívar.'
+    const extracted = extractChatInformationFallback(promptWithDot)
+    assert.equal(extracted.tourType, 'location_to_destination')
+    assert.equal(extracted.isUserLocationOrigin, true)
+    assert.equal(extracted.originPlace, 'user_current_location')
+    assert.equal(extracted.destination, 'Paseo Bolívar')
+    assert.equal(extracted.destinationPlace, 'Paseo Bolívar')
+
+    const promptExclamation = 'Haz un recorrido desde donde estoy al Gran Malecón del Río!'
+    const extracted2 = extractChatInformationFallback(promptExclamation)
+    assert.equal(extracted2.tourType, 'location_to_destination')
+    assert.equal(extracted2.destination, 'Gran Malecón Del Río')
+  })
+
+  it('7. generateChatResponse overrides old sticky destination when a new corridor route is requested', async () => {
+    const userMsg = 'Crea un tour desde mi Ubicación hasta el Paseo Bolívar.'
+    // State previously had Puerto Colombia stored
+    const previousStateWithPuertoColombia = {
+      destination: 'Malecón de Puerto Colombia',
+      city: 'Puerto Colombia',
+      tourType: 'location_to_destination',
+      isUserLocationOrigin: true,
+      userGpsLatitude: 11.0041,
+      userGpsLongitude: -74.8070,
+      canonicalDestination: {
+        displayName: 'Puerto Colombia, Atlántico',
+        city: 'Puerto Colombia',
+        latitude: 10.9878,
+        longitude: -74.9547
+      }
+    }
+
+    const res = await generateChatResponse(
+      { history: [{ role: 'user', content: userMsg }] },
+      '',
+      '',
+      previousStateWithPuertoColombia,
+      []
+    )
+
+    // The response message and itinerary must be for Paseo Bolívar, NOT Puerto Colombia
+    assert.ok(
+      res.responseMessage.toLowerCase().includes('paseo bolívar') || res.responseMessage.toLowerCase().includes('paseo bolivar'),
+      `Response should mention Paseo Bolívar, got: ${res.responseMessage}`
+    )
+    assert.ok(
+      !res.responseMessage.toLowerCase().includes('hacia puerto colombia'),
+      `Response must NOT route towards Puerto Colombia`
+    )
+
+    const places = res.specificPlaces || res.extractedPreferences?.specificPlaces || []
+    assert.ok(places.length >= 2, `Expected at least 2 stops, got ${places.length}`)
+
+    // Puerto Colombia places like Castillo de Salgar or Salgarito Beach Club must NOT be present
+    const hasSalgar = places.some(p => p.name.toLowerCase().includes('salgar') || p.name.toLowerCase().includes('puerto colombia'))
+    assert.equal(hasSalgar, false, 'Stops heading to Paseo Bolívar must never include Puerto Colombia or Salgar')
+
+    // Last stop must be Paseo Bolívar
+    const lastStop = places[places.length - 1]
+    assert.ok(
+      lastStop.name.toLowerCase().includes('paseo bolívar') || lastStop.name.toLowerCase().includes('paseo bolivar'),
+      `Final stop must be Paseo Bolívar, got: ${lastStop.name}`
+    )
   })
 })

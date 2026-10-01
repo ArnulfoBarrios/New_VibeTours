@@ -622,7 +622,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       quickExtracted?.tourType === 'location_to_destination' ||
       quickExtracted?.isUserLocationOrigin ||
       (quickExtracted?.originPlace === 'user_current_location') ||
-      /\b(desde\s+mi\s+ubicaci[oó]n|de\s+mi\s+ubicaci[oó]n|saliendo\s+de\s+mi\s+ubicaci[oó]n)\b/i.test(message)
+      /\b(desde\s+mi\s+ubicaci[oó]n|de\s+mi\s+ubicaci[oó]n|saliendo\s+de\s+mi\s+ubicaci[oó]n|desde\s+donde\s+estoy|desde\s+aqu[íi]|desde\s+ac[aá])\b/i.test(message)
     )
     const existingCanonical = currentPreferences.canonicalDestination
     const preloadDestination = existingCanonical?.city ||
@@ -730,7 +730,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       validExtracted.tourType === 'location_to_destination' ||
       validExtracted.isUserLocationOrigin ||
       (validExtracted.originPlace === 'user_current_location') ||
-      /\b(desde\s+mi\s+ubicaci[oó]n|de\s+mi\s+ubicaci[oó]n|saliendo\s+de\s+mi\s+ubicaci[oó]n)\b/i.test(message)
+      /\b(desde\s+mi\s+ubicaci[oó]n|de\s+mi\s+ubicaci[oó]n|saliendo\s+de\s+mi\s+ubicaci[oó]n|desde\s+donde\s+estoy|desde\s+aqu[íi]|desde\s+ac[aá])\b/i.test(message)
     )
 
     if (isExplicitLocationToDestination) {
@@ -749,10 +749,17 @@ aiRouter.post('/chat', async (req, res, next) => {
       if (!currentPreferences.budget && !validExtracted.budget) {
         validExtracted.budget = 'Moderado'
       }
-      if (validExtracted.destination) {
-        delete currentPreferences.city
-        delete currentPreferences.destination
+      const newCorridorDest = validExtracted.destination || validExtracted.destinationPlace
+      if (newCorridorDest) {
+        currentPreferences.destination = newCorridorDest
+        currentPreferences.destinationPlace = newCorridorDest
+        currentPreferences.city = validExtracted.city || newCorridorDest
         delete currentPreferences.canonicalDestination
+        currentPreferences.specificPlaces = []
+        validExtracted.destination = newCorridorDest
+        validExtracted.destinationPlace = newCorridorDest
+        validExtracted.city = validExtracted.city || newCorridorDest
+        validExtracted.specificPlaces = []
       }
     }
 
@@ -1419,6 +1426,9 @@ aiRouter.post('/chat', async (req, res, next) => {
       destinationSuggestions: aiResponse.destinationSuggestions || [],
       readyToBuild: effectiveReadyToBuild,
       preferences: updatedPreferences,
+      updatedPreferences,
+      destination: updatedPreferences.destination,
+      destinationPlace: updatedPreferences.destinationPlace,
       webSearchDone: Boolean(webSearchResult)
     })
   } catch (error) {
@@ -6211,6 +6221,19 @@ async function collectCorridorCandidates(input, location) {
   }
   if (endPlace) {
     intermediates = intermediates.filter(p => normalizeKey(p.name) !== normalizeKey(endPlace.name))
+  }
+
+  if (intermediates.length < 2 && startPlace && endPlace) {
+    intermediates = uniqueByName(pool)
+      .filter((place) => place && place.name)
+      .filter((place) => isValidTouristAttraction(place, input))
+      .filter((place) => isWithinCorridor(place, startPlace, endPlace, true))
+    if (startPlace) {
+      intermediates = intermediates.filter(p => normalizeKey(p.name) !== normalizeKey(startPlace.name))
+    }
+    if (endPlace) {
+      intermediates = intermediates.filter(p => normalizeKey(p.name) !== normalizeKey(endPlace.name))
+    }
   }
 
   // Sort intermediates monotonically by distance from startPlace to guarantee linear route progression

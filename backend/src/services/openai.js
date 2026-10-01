@@ -2012,6 +2012,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         known.destinationPlace = rawDestName
         known.destination = rawDestName
         known.city = fallbackExtracted.city || rawDestName
+        delete known.canonicalDestination
+        known.specificPlaces = []
       }
       known.durationDays = 1
       known.durationHours = 8
@@ -2268,8 +2270,13 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const buildLocationCorridorDayBlocks = async (activeCatalog = null) => {
     let startLat = Number(known.userGpsLatitude ?? known.latitude ?? 0)
     let startLon = Number(known.userGpsLongitude ?? known.longitude ?? 0)
-    let endLat = Number(known.canonicalDestination?.latitude ?? 0)
-    let endLon = Number(known.canonicalDestination?.longitude ?? 0)
+    const canonicalMatchesDest = known.canonicalDestination && (
+      arePlacesSimilar(known.canonicalDestination.displayName, destName) ||
+      arePlacesSimilar(known.canonicalDestination.city, destName) ||
+      arePlacesSimilar(known.canonicalDestination.entityName, destName)
+    )
+    let endLat = canonicalMatchesDest ? Number(known.canonicalDestination.latitude || 0) : 0
+    let endLon = canonicalMatchesDest ? Number(known.canonicalDestination.longitude || 0) : 0
 
     // Dynamically detect administrative city from start GPS coordinates if not already present
     let detectedCity = known.city || ''
@@ -2487,6 +2494,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
         const norm = p.name.toLowerCase().trim()
         if (seenAttrNames.has(norm)) continue
+        if (p.latitude != null && p.longitude != null && !isWithinCorridor(p, startPlace, endPlace, true)) continue
         const distFromStart = (p.latitude != null && p.longitude != null) ? haversineMeters(startLat, startLon, p.latitude, p.longitude) : routeDistMeters * 0.5
         validAttrs.push({ ...p, distFromStart })
         seenAttrNames.add(norm)
@@ -2499,6 +2507,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isLowQualityOrFastFoodVenue(r.name)) continue
         const norm = r.name.toLowerCase().trim()
         if (seenRestNames.has(norm)) continue
+        if (r.latitude != null && r.longitude != null && !isWithinCorridor(r, startPlace, endPlace, true)) continue
         const distFromStart = (r.latitude != null && r.longitude != null) ? haversineMeters(startLat, startLon, r.latitude, r.longitude) : routeDistMeters * 0.5
         validRests.push({ ...r, distFromStart })
         seenRestNames.add(norm)
@@ -2514,6 +2523,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           if (arePlacesSimilar(landmark.name, destName)) continue
           const norm = landmark.name.toLowerCase().trim()
           if (seenAttrNames.has(norm)) continue
+          if (startLat && endLat && landmark.latitude != null && landmark.longitude != null) {
+            if (!isWithinCorridor(landmark, startPlace, endPlace, true)) continue
+          }
           const distFromStart = (landmark.latitude != null && landmark.longitude != null)
             ? haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
             : routeDistMeters * 0.5
@@ -2530,6 +2542,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         if (landmark.city?.toLowerCase() === detectedCity.toLowerCase()) {
           const norm = landmark.name.toLowerCase().trim()
           if (seenRestNames.has(norm)) continue
+          if (startLat && endLat && landmark.latitude != null && landmark.longitude != null) {
+            if (!isWithinCorridor(landmark, startPlace, endPlace, true)) continue
+          }
           const distFromStart = (landmark.latitude != null && landmark.longitude != null)
             ? haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
             : routeDistMeters * 0.5
@@ -4215,25 +4230,12 @@ export function extractChatInformationFallback(prompt) {
   const res = {}
   const normalized = normalizeSpanishNumberWords(prompt || '')
   const text = normalized.toLowerCase()
+  const cleanForRoutes = text
+    .replace(/[.,;:!?¿¡"'()]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 
-  const routeMatch = text.match(/\b(?:tour\s+|viaje\s+|ruta\s+|road\s*trip\s+|trayecto\s+)?(?:de|desde)\s+([a-záéíóúñ\s]+?)\s+(?:a|hast[aá]|hacia)\s+([a-záéíóúñ\s]+?)(?:$|\s+(?:en|con|para|durante|del|por|el|la|los)\b)/i)
-  if (routeMatch) {
-    const originRaw = routeMatch[1].trim()
-    const destinationRaw = routeMatch[2].trim()
-    if (isValidRouteEndpoint(originRaw) && isValidRouteEndpoint(destinationRaw)) {
-      const origin = originRaw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-      const destination = destinationRaw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-      res.isMultiCity = true
-      res.originPlace = origin
-      res.destinationPlace = destination
-      res.cities = [origin, destination]
-      res.destination = `${origin} a ${destination}`
-      res.city = destination
-      res.tourType = 'city_to_city'
-    }
-  }
-
-  const locationOriginMatch = text.match(/\b(?:tour\s+)?(?:desde|de|saliendo\s+de|partiendo\s+de)\s+(?:donde\s+estoy|mi\s+ubicaci[oó]n|mi\s+posici[oó]n|ac[aá]|aqu[íi])\s+(?:a\s+el|al|a\s+la|a|hacia|hasta(?:\s+el)?)\s+([a-záéíóúñ\s'-]{2,50}?)(?:$|\s+(?:voy|vamos|en\s+(?:carro|auto|bici|bus|transporte|pareja|familia)|con|para|durante|del|por|el\s+pr[oó]ximo|la\s+pr[oó]xima)\b)/i)
+  const locationOriginMatch = cleanForRoutes.match(/\b(?:tour\s+|viaje\s+|ruta\s+|recorrido\s+|paseo\s+)?(?:desde|de|saliendo\s+de|partiendo\s+de)\s+(?:donde\s+estoy|donde\s+me\s+encuentro|mi\s+ubicaci[oó]n|mi\s+posici[oó]n|ac[aá]|aqu[íi])\s+(?:a\s+el|al|a\s+la|a\s+los|a\s+las|a|hacia(?:\s+(?:el|la|los|las))?|hasta(?:\s+(?:el|la|los|las))?|para(?:\s+(?:el|la|los|las))?)\s+([a-záéíóúñ\s'-]{2,50}?)(?:$|\s+(?:voy|vamos|en\s+(?:carro|auto|bici|bus|transporte|pareja|familia)|con|para|durante|\bdel\s+\d+|\bdel\s+pr[oó]ximo\s+mes|el\s+pr[oó]ximo|la\s+pr[oó]xima)\b)/i)
   if (locationOriginMatch) {
     let destCandidate = locationOriginMatch[1].trim()
     destCandidate = destCandidate.replace(/^(?:el|la|los|las)\s+/i, (match, offset, str) => {
@@ -4259,6 +4261,25 @@ export function extractChatInformationFallback(prompt) {
           res.durationHours = 8
         }
         res.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
+      }
+    }
+  }
+
+  if (!res.tourType) {
+    const routeMatch = cleanForRoutes.match(/\b(?:tour\s+|viaje\s+|ruta\s+|road\s*trip\s+|trayecto\s+)?(?:de|desde)\s+([a-záéíóúñ\s]+?)\s+(?:a|hast[aá]|hacia)\s+([a-záéíóúñ\s]+?)(?:$|\s+(?:en|con|para|durante|\bdel\s+\d+|\bdel\s+pr[oó]ximo\s+mes|por|el\s+pr[oó]ximo|la\s+pr[oó]xima)\b)/i)
+    if (routeMatch) {
+      const originRaw = routeMatch[1].trim()
+      const destinationRaw = routeMatch[2].trim()
+      if (isValidRouteEndpoint(originRaw) && isValidRouteEndpoint(destinationRaw)) {
+        const origin = originRaw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        const destination = destinationRaw.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        res.isMultiCity = true
+        res.originPlace = origin
+        res.destinationPlace = destination
+        res.cities = [origin, destination]
+        res.destination = `${origin} a ${destination}`
+        res.city = destination
+        res.tourType = 'city_to_city'
       }
     }
   }

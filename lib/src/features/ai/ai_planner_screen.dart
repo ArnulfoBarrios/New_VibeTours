@@ -348,8 +348,11 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
     final city = prefs['destination'] ?? prefs['city'];
     final isMultiCity = prefs['isMultiCity'] == true || (prefs['originPlace'] != null && prefs['destinationPlace'] != null);
-    final destinationLabel = isMultiCity && prefs['originPlace'] != null && prefs['destinationPlace'] != null
-        ? 'Ruta: ${prefs['originPlace']} ➔ ${prefs['destinationPlace']}'
+    final isLocationToDest = prefs['tourType'] == 'location_to_destination' || prefs['isUserLocationOrigin'] == true;
+    final originRaw = prefs['originPlace']?.toString();
+    final originDisplay = (originRaw == 'user_current_location' || (originRaw == null && isLocationToDest)) ? 'Tu ubicación' : originRaw;
+    final destinationLabel = (isMultiCity || isLocationToDest) && prefs['destinationPlace'] != null
+        ? 'Ruta: $originDisplay ➔ ${prefs['destinationPlace']}'
         : 'Destino: $city';
     final datesSeason = prefs['datesSeason'];
     final durationDays = prefs['durationDays'] ?? (prefs['durationHours'] != null ? (prefs['durationHours'] / 24.0).toStringAsFixed(0) : null);
