@@ -605,12 +605,69 @@ class VoiceGuideService {
     }
   }
 
+  /// Resolves the best available speech recognition locale.
+  /// Matches preferredLocaleId, system locale, or falls back to Latin American Spanish.
+  Future<String> resolveLocaleId({String? preferredLocaleId}) async {
+    try {
+      final locales = await _speech.locales();
+      if (locales.isEmpty) return preferredLocaleId ?? 'es-CO';
+
+      if (preferredLocaleId != null && preferredLocaleId.trim().isNotEmpty) {
+        final target = preferredLocaleId.toLowerCase().replaceAll('-', '_');
+        for (final loc in locales) {
+          final locNorm = loc.localeId.toLowerCase().replaceAll('-', '_');
+          if (locNorm == target || locNorm.startsWith('${target}_') || target.startsWith('${locNorm}_')) {
+            return loc.localeId;
+          }
+        }
+      }
+
+      final sys = await _speech.systemLocale();
+      if (sys != null) {
+        final sysNorm = sys.localeId.toLowerCase().replaceAll('-', '_');
+        for (final loc in locales) {
+          final locNorm = loc.localeId.toLowerCase().replaceAll('-', '_');
+          if (locNorm == sysNorm) {
+            return loc.localeId;
+          }
+        }
+      }
+
+      // Preference order for VibeTours: Colombian/Latam first, then universal Spanish
+      const regionalSpanish = ['es_co', 'es-co', 'es_419', 'es-419', 'es_mx', 'es-mx', 'es_us', 'es-us', 'es_es', 'es-es'];
+      for (final pref in regionalSpanish) {
+        for (final loc in locales) {
+          if (loc.localeId.toLowerCase().replaceAll('-', '_') == pref.replaceAll('-', '_')) {
+            return loc.localeId;
+          }
+        }
+      }
+
+      for (final loc in locales) {
+        if (loc.localeId.toLowerCase().startsWith('es')) {
+          return loc.localeId;
+        }
+      }
+    } catch (e) {
+      debugPrint('[VoiceGuide] Error al resolver locale STT: $e');
+    }
+    return preferredLocaleId ?? 'es-CO';
+  }
+
   Future<String?> listenCommand({
+    String? preferredLocaleId,
     void Function(String)? onPartialResult,
     void Function(String)? onError,
+    void Function(double level)? onSoundLevelChange,
   }) async {
     final completer = Completer<String?>();
     String? recognizedWords;
+
+    // Immediately stop any ongoing audio/TTS playback so speaker sound doesn't bleed into mic
+    try {
+      await _audioPlayer.stop();
+      await _tts.stop();
+    } catch (_) {}
 
     final ready = await _speech.initialize(
       onError: (errorNotification) {
@@ -636,6 +693,9 @@ class VoiceGuideService {
       return null;
     }
 
+    final targetLocaleId = await resolveLocaleId(preferredLocaleId: preferredLocaleId);
+    debugPrint('[VoiceGuide] STT escuchando con locale: $targetLocaleId');
+
     try {
       await _speech.listen(
         onResult: (result) {
@@ -648,12 +708,14 @@ class VoiceGuideService {
             completer.complete(result.recognizedWords);
           }
         },
+        onSoundLevelChange: onSoundLevelChange,
         listenOptions: SpeechListenOptions(
           partialResults: true,
-          cancelOnError: true,
-          listenFor: const Duration(seconds: 25),
-          pauseFor: const Duration(seconds: 5),
-          localeId: 'es-CO',
+          cancelOnError: false,
+          listenMode: ListenMode.dictation,
+          listenFor: const Duration(seconds: 30),
+          pauseFor: const Duration(seconds: 4),
+          localeId: targetLocaleId,
         ),
       );
     } catch (e) {
@@ -663,7 +725,7 @@ class VoiceGuideService {
     }
 
     // Timeout fallback just in case
-    Future.delayed(const Duration(seconds: 26), () {
+    Future.delayed(const Duration(seconds: 31), () {
       if (!completer.isCompleted) {
         _speech.stop();
         completer.complete(recognizedWords);

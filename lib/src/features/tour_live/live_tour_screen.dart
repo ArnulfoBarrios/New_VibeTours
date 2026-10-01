@@ -647,7 +647,16 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       return;
     }
     if (_isProcessingVoice) return;
+    final loc = Localizations.localeOf(context);
+    final preferredLocale = loc.countryCode != null && loc.countryCode!.isNotEmpty
+        ? '${loc.languageCode}_${loc.countryCode}'
+        : loc.languageCode;
     final tour = _navigationTour;
+
+    // Stop any ongoing voice guide speech to prevent audio echo in microphone
+    await voiceGuide.stop();
+
+    if (!mounted) return;
 
     // Start listening with blue pulse animation
     setState(() {
@@ -661,6 +670,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     String? transcript;
     try {
       transcript = await voiceGuide.listenCommand(
+        preferredLocaleId: preferredLocale,
         onError: (err) => sttError = err,
       );
     } catch (e) {

@@ -37,6 +37,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
   
   bool _isRecording = false;
   bool _isStartingVoice = false;
+  double _voiceSoundLevel = 0.0;
   String? _voiceFeedback;
   bool _voiceFeedbackIsError = false;
   String _baselinePrompt = '';
@@ -1395,6 +1396,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                               key: const ValueKey('mic_button'),
                               isRecording: _isRecording,
                               isBusy: _isStartingVoice || isBusy,
+                              soundLevel: _voiceSoundLevel,
                               onPressed: _toggleVoiceInput,
                             ),
                     ),
@@ -1423,6 +1425,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     final l10n = AppLocalizations.of(context);
     setState(() {
       _isStartingVoice = true;
+      _voiceSoundLevel = 0.0;
       _voiceFeedback = l10n.voicePromptPreparing;
       _voiceFeedbackIsError = false;
       _baselinePrompt = _prompt.text.trim();
@@ -1433,7 +1436,13 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
     try {
       await _voicePrompt.start(
-        localeCode: 'es', 
+        locale: Localizations.localeOf(context),
+        onSoundLevelChange: (level) {
+          if (!mounted || !_isRecording) return;
+          setState(() {
+            _voiceSoundLevel = level;
+          });
+        },
         onResult: (words, isFinal) {
           if (!mounted || _ignoreVoiceResults) return;
           
@@ -1490,6 +1499,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
           setState(() {
             _isRecording = false;
             _isStartingVoice = false;
+            _voiceSoundLevel = 0.0;
             _voiceFeedback = message;
             _voiceFeedbackIsError = true;
           });
@@ -1505,6 +1515,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       setState(() {
         _isRecording = false;
         _isStartingVoice = false;
+        _voiceSoundLevel = 0.0;
         _voiceFeedback = message;
         _voiceFeedbackIsError = true;
       });
@@ -1514,6 +1525,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       setState(() {
         _isRecording = false;
         _isStartingVoice = false;
+        _voiceSoundLevel = 0.0;
         _voiceFeedback = message;
         _voiceFeedbackIsError = true;
       });
@@ -1526,6 +1538,7 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
       _ignoreVoiceResults = true;
       _isRecording = false;
       _isStartingVoice = false;
+      _voiceSoundLevel = 0.0;
       _voiceFeedback = l10n.voicePromptStopped;
       _voiceFeedbackIsError = false;
     });
@@ -1582,11 +1595,13 @@ class _VoicePromptButton extends StatefulWidget {
     required this.isRecording,
     required this.isBusy,
     required this.onPressed,
+    this.soundLevel = 0.0,
   });
 
   final bool isRecording;
   final bool isBusy;
   final VoidCallback onPressed;
+  final double soundLevel;
 
   @override
   State<_VoicePromptButton> createState() => _VoicePromptButtonState();
@@ -1637,10 +1652,15 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
         : Colors.blue.shade600;
     final foreground = active ? Colors.blue.shade700 : Colors.white;
 
+    // Normalize sound level from dB (-10 to 10 typical) to a smooth scale
+    final soundBoost = active
+        ? ((widget.soundLevel + 4) / 14).clamp(0.0, 1.0) * 0.18
+        : 0.0;
+
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final pulse = active ? 1 + (_controller.value * 0.08) : 1.0;
+        final pulse = active ? 1 + (_controller.value * 0.08) + soundBoost : 1.0;
         return Transform.scale(
           scale: pulse,
           child: Container(
@@ -1652,9 +1672,9 @@ class _VoicePromptButtonState extends State<_VoicePromptButton>
               boxShadow: active
                   ? [
                       BoxShadow(
-                        color: Colors.blue.withValues(alpha: 0.22),
-                        blurRadius: 18,
-                        spreadRadius: 1,
+                        color: Colors.blue.withValues(alpha: (0.22 + soundBoost * 0.3).clamp(0.0, 0.7)),
+                        blurRadius: 18 + (soundBoost * 20),
+                        spreadRadius: 1 + (soundBoost * 6),
                       ),
                     ]
                   : null,
@@ -1694,10 +1714,11 @@ class _VoicePromptSession {
   bool get isListening => _speech.isListening;
 
   Future<void> start({
-    required String localeCode,
+    required Locale locale,
     required void Function(String words, bool isFinal) onResult,
     required void Function(String status) onStatus,
     required void Function(SpeechRecognitionError error) onError,
+    void Function(double level)? onSoundLevelChange,
   }) async {
     if (_disposed) {
       throw StateError('Voice session already disposed.');
@@ -1715,16 +1736,17 @@ class _VoicePromptSession {
       throw const _VoicePromptException(_VoicePromptFailure.unavailable);
     }
 
-    final localeId = await _preferredLocaleId(localeCode);
+    final localeId = await _preferredLocaleId(locale);
     await _speech.listen(
       onResult: (result) => onResult(result.recognizedWords, result.finalResult),
+      onSoundLevelChange: onSoundLevelChange,
       listenOptions: SpeechListenOptions(
         partialResults: true,
         cancelOnError: false,
         listenMode: ListenMode.dictation,
         localeId: localeId,
         listenFor: const Duration(minutes: 10),
-        pauseFor: const Duration(minutes: 5),
+        pauseFor: const Duration(seconds: 4),
       ),
     );
   }
@@ -1764,30 +1786,56 @@ class _VoicePromptSession {
     return _speech.initialize(
       onStatus: onStatus,
       onError: onError,
-      options: [SpeechToText.androidNoBluetooth, SpeechToText.iosNoBluetooth],
+      // Bluetooth is enabled by default by omitting androidNoBluetooth/iosNoBluetooth
     );
   }
 
-  Future<String?> _preferredLocaleId(String languageCode) async {
+  Future<String?> _preferredLocaleId(Locale locale) async {
     try {
       final locales = await _speech.locales();
-      final normalized = languageCode.toLowerCase();
-      for (final locale in locales) {
-        final value = locale.localeId.toLowerCase();
-        if (value == normalized ||
-            value.startsWith('${normalized}_') ||
-            value.startsWith('$normalized-')) {
-          return locale.localeId;
+      final lang = locale.languageCode.toLowerCase();
+      final country = locale.countryCode?.toLowerCase() ?? '';
+      final targetFull = country.isNotEmpty ? '${lang}_$country' : null;
+
+      // 1. Match exact language + country (e.g. es_CO, es_MX, en_US)
+      if (targetFull != null) {
+        for (final l in locales) {
+          final val = l.localeId.toLowerCase().replaceAll('-', '_');
+          if (val == targetFull) {
+            return l.localeId;
+          }
         }
       }
+
+      // 2. Match system locale if language matches
       final systemLocale = await _speech.systemLocale();
-      if (systemLocale != null) {
+      if (systemLocale != null && systemLocale.localeId.toLowerCase().startsWith(lang)) {
         return systemLocale.localeId;
+      }
+
+      // 3. Priority for Latin American Spanish in VibeTours
+      if (lang == 'es') {
+        const regionalSpanish = ['es_co', 'es-co', 'es_419', 'es-419', 'es_mx', 'es-mx', 'es_us', 'es-us', 'es_es', 'es-es'];
+        for (final pref in regionalSpanish) {
+          for (final l in locales) {
+            if (l.localeId.toLowerCase().replaceAll('-', '_') == pref.replaceAll('-', '_')) {
+              return l.localeId;
+            }
+          }
+        }
+      }
+
+      // 4. Any match starting with language
+      for (final l in locales) {
+        final val = l.localeId.toLowerCase();
+        if (val == lang || val.startsWith('${lang}_') || val.startsWith('$lang-')) {
+          return l.localeId;
+        }
       }
     } catch (_) {
       // Fall back
     }
-    return languageCode == 'en' ? 'en_US' : 'es_ES';
+    return locale.languageCode == 'en' ? 'en_US' : 'es_CO';
   }
 }
 
