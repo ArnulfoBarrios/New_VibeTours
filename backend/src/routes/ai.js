@@ -2340,18 +2340,26 @@ export async function processTourBuild(jobId, input, confirmedPlaces, plannerCon
   }
 
   try {
+    const isUserOrigin = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
+    const cleanConfirmedPlaces = isUserOrigin
+      ? (Array.isArray(confirmedPlaces) ? confirmedPlaces : []).filter(p => {
+          const pName = (p?.name || '').toLowerCase()
+          return !pName.includes('tu ubicación') && !pName.includes('tu ubicacion') && p?.type !== 'start_point'
+        })
+      : (Array.isArray(confirmedPlaces) ? confirmedPlaces : [])
+
     const planner = {
-      selectedPlaces: confirmedPlaces.map((p, i) => ({
+      selectedPlaces: cleanConfirmedPlaces.map((p, i) => ({
         ...p,
         placeId: p.placeId || p.locationInfo?.place_id || p.id,
         order: i,
         minutes: p.durationMinutes
       })),
       ...plannerContext,
-      distanceKm: estimateRouteDistance(confirmedPlaces, null),
+      distanceKm: estimateRouteDistance(cleanConfirmedPlaces, null),
       timeProfile: {
         durationHours: input.durationHours,
-        stopTarget: confirmedPlaces.length,
+        stopTarget: cleanConfirmedPlaces.length,
         pace: input.touristPace,
         hasProfile: Boolean(input.touristProfileSummary || input.touristInterests?.length),
       }
@@ -3141,20 +3149,50 @@ export async function buildFallbackTour(planner, input) {
 
 export function buildTourPlanner(input, location = null, places = []) {
   const origin = location ? { latitude: location.latitude, longitude: location.longitude } : null
-  const candidatePlaces = Array.isArray(places) && places.length > 0
-    ? places
-    : (Array.isArray(input.specificPlaces) && input.specificPlaces.length > 0 ? input.specificPlaces : (Array.isArray(input.selectedPlaces) ? input.selectedPlaces : []))
+  const refList = (Array.isArray(input.specificPlaces) && input.specificPlaces.length > 0)
+    ? input.specificPlaces
+    : (Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
+
+  let candidatePlaces = Array.isArray(places) && places.length > 0 ? [...places] : []
+  if (candidatePlaces.length === 0) {
+    candidatePlaces = [...refList]
+  } else if (refList.length > 0) {
+    for (const ref of refList) {
+      const refName = typeof ref === 'string' ? ref.trim() : String(ref?.name || '').trim()
+      if (!refName) continue
+      const existing = candidatePlaces.find(p => arePlacesSimilar(p.name || '', refName))
+      if (existing) {
+        if (typeof ref === 'object') {
+          Object.assign(existing, {
+            ...ref,
+            rawTags: { ...(existing.rawTags || {}), requested_place: 'true' },
+            isRequested: true,
+          })
+        } else {
+          existing.isRequested = true
+          existing.rawTags = { ...(existing.rawTags || {}), requested_place: 'true' }
+        }
+      } else {
+        const item = typeof ref === 'object' ? { ...ref } : { name: refName }
+        item.rawTags = { ...(item.rawTags || {}), requested_place: 'true' }
+        item.isRequested = true
+        candidatePlaces.push(item)
+      }
+    }
+  }
+
   const normalized = uniqueByName(
     candidatePlaces.map((place, index) => normalizeCandidate(place, index, input, origin)),
   ).filter((place) => place.name)
 
   const isCorridorRoute = Boolean(input.originPlace || input.destinationPlace || input.tourType === 'location_to_destination' || input.isUserLocationOrigin)
   let selectedPlaces = []
+  const isUserOrigin = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
+
   const requestedCount = normalized.filter(p => 
     p.rawTags?.requested_place === 'true' || 
     p.category === 'requested' || 
-    (Array.isArray(input.specificPlaces) && input.specificPlaces.some(sp => normalizeKey(sp) === normalizeKey(p.name) || normalizeKey(p.name).includes(normalizeKey(sp)))) ||
-    (Array.isArray(input.selectedPlaces) && input.selectedPlaces.some(sp => normalizeKey(sp) === normalizeKey(p.name) || normalizeKey(p.name).includes(normalizeKey(sp))))
+    (refList.length > 0 && refList.some(sp => arePlacesSimilar(typeof sp === 'object' ? sp.name : sp, p.name)))
   ).length
   const baseStopTarget = stopCountForDuration(input.durationHours)
   const stopTarget = requestedCount >= 2
@@ -3164,56 +3202,115 @@ export function buildTourPlanner(input, location = null, places = []) {
   if (isCorridorRoute) {
     const destName = input.destinationPlace || input.destination || ''
     const destKey = normalizeKey(destName)
-    const startPlaceCandidate = normalized.find(p => p.rawTags?.start_point === 'true' || p.type === 'start_point' || (input.originPlace && normalizeKey(p.name) === normalizeKey(input.originPlace))) ||
-      (input.isUserLocationOrigin && Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude)) ? { name: 'Tu ubicación actual', latitude: Number(input.latitude), longitude: Number(input.longitude), type: 'start_point' } : null)
-    const endPlaceCandidate = normalized.find(p => p.rawTags?.end_point === 'true' || p.type === 'end_point' || (destKey && normalizeKey(p.name) === destKey) || (destKey.length >= 4 && normalizeKey(p.name).includes(destKey)))
+    
+    // Origin place candidate (only used as a tourist stop if genuine landmark, NOT user current location)
+    const startPlaceCandidate = normalized.find(p => 
+      p.rawTags?.start_point === 'true' || 
+      p.type === 'start_point' || 
+      (input.originPlace && normalizeKey(p.name) === normalizeKey(input.originPlace))
+    ) || (Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude)) ? { name: 'Tu ubicación actual', latitude: Number(input.latitude), longitude: Number(input.longitude), type: 'start_point' } : null)
 
-    let intermediates = normalized.filter(p => 
-      (!startPlaceCandidate || normalizeKey(p.name) !== normalizeKey(startPlaceCandidate.name)) &&
-      (!endPlaceCandidate || normalizeKey(p.name) !== normalizeKey(endPlaceCandidate.name)) &&
-      isWithinCorridor(p, startPlaceCandidate, endPlaceCandidate)
+    // End place candidate (Destination)
+    let endPlaceCandidate = normalized.find(p => 
+      p.rawTags?.end_point === 'true' || 
+      p.type === 'end_point' || 
+      (destKey && normalizeKey(p.name) === destKey) || 
+      (destKey.length >= 4 && normalizeKey(p.name).includes(destKey))
     )
-
-    if (intermediates.length < 2) {
-      intermediates = normalized.filter(p => 
-        (!startPlaceCandidate || normalizeKey(p.name) !== normalizeKey(startPlaceCandidate.name)) &&
-        (!endPlaceCandidate || normalizeKey(p.name) !== normalizeKey(endPlaceCandidate.name)) &&
-        isWithinCorridor(p, startPlaceCandidate, endPlaceCandidate, true)
-      )
+    if (!endPlaceCandidate && destName) {
+      const refDest = refList.find(r => arePlacesSimilar(typeof r === 'object' ? r.name : r, destName))
+      const lat = (refDest && Number.isFinite(Number(refDest.latitude))) ? Number(refDest.latitude) : Number(location?.latitude || 0)
+      const lon = (refDest && Number.isFinite(Number(refDest.longitude))) ? Number(refDest.longitude) : Number(location?.longitude || 0)
+      endPlaceCandidate = normalizeCandidate({
+        name: destName,
+        latitude: lat,
+        longitude: lon,
+        type: 'end_point',
+        category: 'attraction',
+        rawTags: { end_point: 'true', requested_place: 'true' }
+      }, 0, input, origin)
     }
 
-    if (intermediates.length < 2 && startPlaceCandidate && endPlaceCandidate) {
-      const candidatesWithDetour = normalized
-        .filter(p => 
-          normalizeKey(p.name) !== normalizeKey(startPlaceCandidate.name) &&
-          normalizeKey(p.name) !== normalizeKey(endPlaceCandidate.name)
-        )
-        .map(p => ({
+    const startLoc = {
+      latitude: Number(input.latitude ?? location?.latitude ?? startPlaceCandidate?.latitude ?? 0),
+      longitude: Number(input.longitude ?? location?.longitude ?? startPlaceCandidate?.longitude ?? 0)
+    }
+    const endLoc = endPlaceCandidate ? {
+      latitude: Number(endPlaceCandidate.latitude ?? location?.latitude ?? 0),
+      longitude: Number(endPlaceCandidate.longitude ?? location?.longitude ?? 0)
+    } : null
+
+    // Intermediates candidate pool: EXCLUDE startPlaceCandidate (if user location) and endPlaceCandidate
+    let intermediates = normalized.filter(p => {
+      const isStart = (isUserOrigin && (normalizeKey(p.name).includes('tu ubicacion') || p.type === 'start_point' || p.rawTags?.start_point === 'true')) ||
+        (startPlaceCandidate && normalizeKey(p.name) === normalizeKey(startPlaceCandidate.name))
+      const isEnd = endPlaceCandidate && (normalizeKey(p.name) === normalizeKey(endPlaceCandidate.name) || (destKey.length >= 4 && normalizeKey(p.name) === destKey))
+      return !isStart && !isEnd
+    })
+
+    // If we have requested places from the chat (SSOT):
+    const requestedIntermediates = []
+    const otherIntermediates = []
+    for (const p of intermediates) {
+      const isRequested = p.rawTags?.requested_place === 'true' ||
+                          p.category === 'requested' ||
+                          refList.some(sp => arePlacesSimilar(typeof sp === 'object' ? sp.name : sp, p.name))
+      if (isRequested) {
+        requestedIntermediates.push(p)
+      } else {
+        otherIntermediates.push(p)
+      }
+    }
+
+    let pickedIntermediates = []
+    if (requestedIntermediates.length >= 1) {
+      requestedIntermediates.sort((a, b) => {
+        const idxA = refList.findIndex(item => arePlacesSimilar(typeof item === 'object' ? item.name : item, a.name))
+        const idxB = refList.findIndex(item => arePlacesSimilar(typeof item === 'object' ? item.name : item, b.name))
+        return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999)
+      })
+
+      pickedIntermediates = [...requestedIntermediates]
+      const reservedCount = (endPlaceCandidate ? 1 : 0) + (!isUserOrigin && startPlaceCandidate ? 1 : 0)
+      if (pickedIntermediates.length < stopTarget - reservedCount) {
+        const scoredOther = otherIntermediates
+          .filter(p => isWithinCorridor(p, startPlaceCandidate, endPlaceCandidate, true))
+          .map(p => ({ ...p, score: scorePlace(p, input) }))
+          .sort((a, b) => b.score - a.score)
+        const needed = stopTarget - reservedCount - pickedIntermediates.length
+        pickedIntermediates.push(...scoredOther.slice(0, needed))
+      }
+    } else {
+      let corridorIntermediates = intermediates.filter(p => isWithinCorridor(p, startPlaceCandidate, endPlaceCandidate))
+      if (corridorIntermediates.length < 2) {
+        corridorIntermediates = intermediates.filter(p => isWithinCorridor(p, startPlaceCandidate, endPlaceCandidate, true))
+      }
+      if (corridorIntermediates.length < 2 && startPlaceCandidate && endPlaceCandidate) {
+        const candidatesWithDetour = intermediates.map(p => ({
           ...p,
           detourKm: computeDetourDistance(p, startPlaceCandidate, endPlaceCandidate)
-        }))
-        .sort((a, b) => a.detourKm - b.detourKm)
-      
-      intermediates = candidatesWithDetour.slice(0, 4)
+        })).sort((a, b) => a.detourKm - b.detourKm)
+        corridorIntermediates = candidatesWithDetour.slice(0, 4)
+      }
+      const scored = corridorIntermediates
+        .map(p => ({ ...p, score: scorePlace(p, input) }))
+        .sort((a, b) => b.score - a.score)
+      const reservedCount = (!isUserOrigin && startPlaceCandidate ? 1 : 0) + (endPlaceCandidate ? 1 : 0)
+      const neededIntermediates = Math.max(1, Math.min(scored.length, stopTarget - reservedCount))
+      pickedIntermediates = scored.slice(0, neededIntermediates)
     }
 
-    const scoredIntermediates = intermediates
-      .map(p => ({ ...p, score: scorePlace(p, input) }))
-      .sort((a, b) => b.score - a.score)
+    if (startLoc && endLoc && pickedIntermediates.length > 1) {
+      pickedIntermediates = orderPlacesAlongRoute(pickedIntermediates, startLoc, endLoc)
+    }
 
-    const reservedCount = (startPlaceCandidate ? 1 : 0) + (endPlaceCandidate ? 1 : 0)
-    const neededIntermediates = Math.max(1, Math.min(scoredIntermediates.length, stopTarget - reservedCount))
-    let pickedIntermediates = scoredIntermediates.slice(0, neededIntermediates)
-
-    if (startPlaceCandidate && endPlaceCandidate) {
-      pickedIntermediates = orderPlacesAlongRoute(pickedIntermediates, startPlaceCandidate, endPlaceCandidate)
-      selectedPlaces = [startPlaceCandidate, ...pickedIntermediates, endPlaceCandidate]
-    } else if (startPlaceCandidate) {
-      selectedPlaces = [startPlaceCandidate, ...pickedIntermediates]
-    } else if (endPlaceCandidate) {
-      selectedPlaces = [...pickedIntermediates, endPlaceCandidate]
-    } else {
-      selectedPlaces = pickedIntermediates
+    selectedPlaces = []
+    if (startPlaceCandidate && !isUserOrigin && !normalizeKey(startPlaceCandidate.name).includes('tu ubicacion')) {
+      selectedPlaces.push(startPlaceCandidate)
+    }
+    selectedPlaces.push(...pickedIntermediates)
+    if (endPlaceCandidate) {
+      selectedPlaces.push(endPlaceCandidate)
     }
   } else {
     const scored = normalized
@@ -3459,25 +3556,48 @@ export function buildTourPlanner(input, location = null, places = []) {
   }
 
   const isCorridorOrLocationToDest = isCorridorRoute || input.tourType === 'location_to_destination' || input.isUserLocationOrigin
-  if (isCorridorOrLocationToDest && selectedPlaces.length > 1) {
+  if (isCorridorOrLocationToDest && selectedPlaces.length > 0) {
+    if (isUserOrigin) {
+      selectedPlaces = selectedPlaces.filter(p => 
+        !normalizeKey(p.name).includes('tu ubicacion') && 
+        p.type !== 'start_point' && 
+        p.rawTags?.user_current_location !== 'true'
+      )
+    }
+
     const destName = input.destinationPlace || input.destination || ''
     const destKey = normalizeKey(destName)
-    const destIdx = selectedPlaces.findIndex(p => {
-      const k = normalizeKey(p.name || '')
-      return k === destKey || (destKey.length >= 4 && (k.includes(destKey) || destKey.includes(k)))
-    })
-    if (destIdx !== -1 && destIdx !== selectedPlaces.length - 1) {
-      const [destItem] = selectedPlaces.splice(destIdx, 1)
-      selectedPlaces.push(destItem)
+    if (destName) {
+      const destIdx = selectedPlaces.findIndex(p => {
+        const k = normalizeKey(p.name || '')
+        return k === destKey || (destKey.length >= 4 && (k.includes(destKey) || destKey.includes(k)))
+      })
+      if (destIdx !== -1 && destIdx !== selectedPlaces.length - 1) {
+        const [destItem] = selectedPlaces.splice(destIdx, 1)
+        selectedPlaces.push(destItem)
+      } else if (destIdx === -1) {
+        const refDest = refList.find(r => arePlacesSimilar(typeof r === 'object' ? r.name : r, destName))
+        const lat = (refDest && Number.isFinite(Number(refDest.latitude))) ? Number(refDest.latitude) : Number(location?.latitude || 0)
+        const lon = (refDest && Number.isFinite(Number(refDest.longitude))) ? Number(refDest.longitude) : Number(location?.longitude || 0)
+        const resolvedEnd = normalizeCandidate({
+          name: destName,
+          latitude: lat,
+          longitude: lon,
+          type: 'end_point',
+          category: 'attraction',
+          rawTags: { end_point: 'true', requested_place: 'true' }
+        }, 0, input, origin)
+        selectedPlaces.push(resolvedEnd)
+      }
     }
-    const userStartLat = Number(input.latitude)
-    const userStartLon = Number(input.longitude)
-    if (Number.isFinite(userStartLat) && Number.isFinite(userStartLon)) {
+    const userStartLat = Number(input.latitude ?? location?.latitude)
+    const userStartLon = Number(input.longitude ?? location?.longitude)
+    if (Number.isFinite(userStartLat) && Number.isFinite(userStartLon) && selectedPlaces.length > 1) {
       const startLoc = { latitude: userStartLat, longitude: userStartLon }
       const lastStop = selectedPlaces[selectedPlaces.length - 1]
       const endLoc = { latitude: lastStop.latitude, longitude: lastStop.longitude }
       const intermediates = selectedPlaces.slice(0, selectedPlaces.length - 1)
-      if (intermediates.length > 1 && lastStop.latitude && lastStop.longitude) {
+      if (intermediates.length > 1 && Number.isFinite(lastStop.latitude) && Number.isFinite(lastStop.longitude)) {
         const orderedIntermediates = orderPlacesAlongRoute(intermediates, startLoc, endLoc)
         selectedPlaces = [...orderedIntermediates, lastStop]
       }
@@ -6072,7 +6192,7 @@ async function collectMultiCityCandidates(input) {
   return uniqueByName(allPlaces)
 }
 
-async function collectCorridorCandidates(input, location) {
+export async function collectCorridorCandidates(input, location) {
   const city = location?.city || input.city || ''
   const country = location?.country || input.country || ''
   
@@ -6093,10 +6213,12 @@ async function collectCorridorCandidates(input, location) {
         name: placeName,
         latitude: userLat,
         longitude: userLon,
-        category: 'attraction',
+        category: 'origin',
         type: 'start_point',
         city: userCity,
         country: userCountry,
+        coordinateSource: 'osm',
+        coordinatesVerified: true,
         tags: { start_point: 'true', user_current_location: 'true' }
       }
     }
@@ -6211,10 +6333,68 @@ async function collectCorridorCandidates(input, location) {
     pool.push(...geocodedIconics)
   }
 
+  // 4. Inject explicit requested/selected places from chat itinerary (SSOT)
+  const refList = (Array.isArray(input.specificPlaces) && input.specificPlaces.length > 0)
+    ? input.specificPlaces
+    : (Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
+
+  if (refList.length > 0) {
+    const geocodedRefs = await Promise.allSettled(
+      refList.map(async (item) => {
+        const placeName = typeof item === 'string' ? item.trim() : String(item?.name || '').trim()
+        if (!placeName) return null
+        const normRefName = normalizeKey(placeName)
+        if (normRefName.includes('tu ubicacion')) return null
+
+        let lat = typeof item === 'object' && Number.isFinite(Number(item.latitude)) ? Number(item.latitude) : null
+        let lon = typeof item === 'object' && Number.isFinite(Number(item.longitude)) ? Number(item.longitude) : null
+        let coordSource = typeof item === 'object' ? (item.coordinateSource || 'osm') : 'osm'
+        let placeId = typeof item === 'object' ? (item.placeId || '') : ''
+
+        if (lat == null || lon == null) {
+          const geo = await geocodePlace(`${placeName} ${city} ${country}`.trim()).catch(() => null)
+          if (geo && Number.isFinite(Number(geo.latitude)) && Number.isFinite(Number(geo.longitude))) {
+            lat = Number(geo.latitude)
+            lon = Number(geo.longitude)
+            coordSource = geo.coordinateSource || 'osm'
+            placeId = geo.placeId || ''
+          }
+        }
+
+        if (lat != null && lon != null) {
+          const rawCat = typeof item === 'object' ? (item.category || item.type || 'attraction') : 'attraction'
+          const isFood = typeof item === 'object' ? (item.isRestaurant || item.type === 'food' || item.category === 'restaurant') : isFoodOrDrinkEstablishment(placeName)
+          return {
+            ...(typeof item === 'object' ? item : {}),
+            name: placeName,
+            latitude: lat,
+            longitude: lon,
+            coordinateSource: coordSource,
+            coordinatesVerified: true,
+            placeId,
+            category: isFood ? 'restaurant' : rawCat,
+            type: isFood ? 'food' : (typeof item === 'object' && item.type ? item.type : 'attraction'),
+            isRestaurant: Boolean(isFood),
+            tags: {
+              ...(typeof item === 'object' && item.tags ? item.tags : {}),
+              requested_place: 'true',
+              grounded_geocoded: 'true',
+              coordinates_verified: 'true',
+              coordinate_source: coordSource
+            }
+          }
+        }
+        return null
+      })
+    )
+    const validRefs = geocodedRefs.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean)
+    pool.push(...validRefs)
+  }
+
   let intermediates = uniqueByName(pool)
     .filter((place) => place && place.name)
-    .filter((place) => isValidTouristAttraction(place, input))
-    .filter((place) => isWithinCorridor(place, startPlace, endPlace))
+    .filter((place) => place.tags?.requested_place === 'true' || isValidTouristAttraction(place, input))
+    .filter((place) => place.tags?.requested_place === 'true' || isWithinCorridor(place, startPlace, endPlace))
   
   if (startPlace) {
     intermediates = intermediates.filter(p => normalizeKey(p.name) !== normalizeKey(startPlace.name))
@@ -6226,8 +6406,8 @@ async function collectCorridorCandidates(input, location) {
   if (intermediates.length < 2 && startPlace && endPlace) {
     intermediates = uniqueByName(pool)
       .filter((place) => place && place.name)
-      .filter((place) => isValidTouristAttraction(place, input))
-      .filter((place) => isWithinCorridor(place, startPlace, endPlace, true))
+      .filter((place) => place.tags?.requested_place === 'true' || isValidTouristAttraction(place, input))
+      .filter((place) => place.tags?.requested_place === 'true' || isWithinCorridor(place, startPlace, endPlace, true))
     if (startPlace) {
       intermediates = intermediates.filter(p => normalizeKey(p.name) !== normalizeKey(startPlace.name))
     }
@@ -6245,8 +6425,11 @@ async function collectCorridorCandidates(input, location) {
     })
   }
 
+  const isUserOrigin = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
   const selected = []
-  if (startPlace) selected.push(startPlace)
+  if (startPlace && !isUserOrigin && !normalizeKey(startPlace.name).includes('tu ubicacion')) {
+    selected.push(startPlace)
+  }
   selected.push(...intermediates)
   if (endPlace) selected.push(endPlace)
 

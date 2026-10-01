@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { isValidTouristAttraction, getPlaceEntityType, buildTourPlanner } from '../routes/ai.js'
+import { isValidTouristAttraction, getPlaceEntityType, buildTourPlanner, collectCorridorCandidates } from '../routes/ai.js'
 import { isLodgingName, generateChatResponse, extractChatInformationFallback } from '../services/openai.js'
 import { inferStopSubcategory } from '../services/open-tourism-service.js'
 import { imageForPlace } from '../services/imageSearch.js'
@@ -173,5 +173,86 @@ describe('Corridor Tour Quality & Fix Verifications', () => {
       lastStop.name.toLowerCase().includes('paseo bolívar') || lastStop.name.toLowerCase().includes('paseo bolivar'),
       `Final stop must be Paseo Bolívar, got: ${lastStop.name}`
     )
+  })
+
+  it('8. buildTourPlanner faithfully preserves chat-confirmed selectedPlaces and NEVER includes Tu ubicación actual as a stop', () => {
+    const input = {
+      destination: 'Estadio Moderno Julio Torres',
+      destinationPlace: 'Estadio Moderno Julio Torres',
+      originPlace: 'user_current_location',
+      tourType: 'location_to_destination',
+      isUserLocationOrigin: true,
+      latitude: 11.0180,
+      longitude: -74.8500,
+      durationHours: 8,
+      durationDays: 1,
+      selectedPlaces: [
+        'Ecoparque Ciénaga de Mallorquín',
+        'Parque Sagrado Corazón',
+        'Restaurante El Celler',
+        'Parque Washington',
+        'La Troja',
+        'Estadio Moderno Julio Torres'
+      ]
+    }
+
+    // Candidate pack from live Overpass query returns unrelated POIs along corridor
+    const overpassPlaces = [
+      { name: 'Museo Mapuka', latitude: 11.0195, longitude: -74.8505, category: 'museum' },
+      { name: 'Monumento a Jose Martí', latitude: 11.0020, longitude: -74.8250, category: 'monument' },
+      { name: 'Museo Bibliográfico de Autores del Caribe', latitude: 10.9950, longitude: -74.8100, category: 'museum' },
+      { name: 'Mirador de la Riviera', latitude: 10.9900, longitude: -74.8050, category: 'viewpoint' },
+      { name: 'Zoológico de Barranquilla', latitude: 11.0080, longitude: -74.8020, category: 'attraction' }
+    ]
+
+    const planner = buildTourPlanner(input, { latitude: 11.0180, longitude: -74.8500 }, overpassPlaces)
+
+    const stopNames = planner.selectedPlaces.map(p => p.name)
+
+    // 1. "Tu ubicación actual" MUST NEVER be a stop in the tour
+    const hasUserLocationStop = stopNames.some(name => name.toLowerCase().includes('tu ubicación') || name.toLowerCase().includes('tu ubicacion'))
+    assert.equal(hasUserLocationStop, false, '"Tu ubicación actual" must NOT appear as a tourist stop')
+
+    // 2. Chat-confirmed places must ALL be preserved in the generated tour (SSOT)
+    assert.ok(stopNames.some(n => n.includes('Ciénaga de Mallorquín') || n.includes('Mallorquín')), 'Must include Ciénaga de Mallorquín')
+    assert.ok(stopNames.some(n => n.includes('Sagrado Corazón')), 'Must include Parque Sagrado Corazón')
+    assert.ok(stopNames.some(n => n.includes('El Celler')), 'Must include Restaurante El Celler')
+    assert.ok(stopNames.some(n => n.includes('Parque Washington')), 'Must include Parque Washington')
+    assert.ok(stopNames.some(n => n.includes('La Troja')), 'Must include La Troja')
+    assert.ok(stopNames.some(n => n.includes('Estadio Moderno Julio Torres')), 'Must include Estadio Moderno Julio Torres')
+
+    // 3. Destination must ALWAYS be the final stop
+    const finalStop = planner.selectedPlaces[planner.selectedPlaces.length - 1]
+    assert.equal(finalStop.name, 'Estadio Moderno Julio Torres', 'Destination must be the final stop')
+  })
+
+  it('9. collectCorridorCandidates excludes user origin from selected array and injects chat places', async () => {
+    const input = {
+      destination: 'Estadio Moderno Julio Torres',
+      destinationPlace: 'Estadio Moderno Julio Torres',
+      originPlace: 'user_current_location',
+      tourType: 'location_to_destination',
+      isUserLocationOrigin: true,
+      latitude: 11.0180,
+      longitude: -74.8500,
+      city: 'Barranquilla',
+      country: 'Colombia',
+      selectedPlaces: [
+        'Parque Sagrado Corazón',
+        'La Troja',
+        'Estadio Moderno Julio Torres'
+      ]
+    }
+
+    const corridorResults = await collectCorridorCandidates(input, { latitude: 11.0180, longitude: -74.8500, city: 'Barranquilla', country: 'Colombia' })
+
+    // "Tu ubicación actual" must NOT be in the returned candidates list as an attraction
+    const hasUserLoc = corridorResults.some(p => (p.name || '').toLowerCase().includes('tu ubicación') || (p.name || '').toLowerCase().includes('tu ubicacion'))
+    assert.equal(hasUserLoc, false, 'User location origin must not be included in candidate list')
+
+    // Injected chat places must be present
+    const names = corridorResults.map(p => p.name)
+    assert.ok(names.some(n => n.includes('La Troja')), 'La Troja should be in corridor candidates')
+    assert.ok(names.some(n => n.includes('Sagrado Corazón')), 'Parque Sagrado Corazón should be in corridor candidates')
   })
 })
