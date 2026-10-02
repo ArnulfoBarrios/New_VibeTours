@@ -4292,6 +4292,25 @@ export function extractChatInformationFallback(prompt) {
   }
 
   if (!res.tourType) {
+    const multiMatch = text.match(/\b(?:multi[\s-]?ciudad(?:\s+internacional)?|viaje\s+internacional|recorriendo|visitando)\s+([a-záéíóúñ\s,y-]{5,80})/i)
+    if (multiMatch) {
+      const rawList = multiMatch[1]
+        .split(/,|\by\b|\be\b/i)
+        .map(s => s.trim())
+        .filter(s => s.length >= 3 && !/\b(conociendo|castillos|cascos|d[íi]as?|mes|a[ñn]o|turismo|planes?)\b/i.test(s))
+      if (rawList.length >= 2) {
+        const cleanCities = rawList.map(c => cleanAdministrativeCityName(c).split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '))
+        res.isMultiCity = true
+        res.isMultiCountry = true
+        res.cities = cleanCities
+        res.destination = cleanCities.join(', ')
+        res.city = cleanCities[0]
+        res.tourType = 'international_multicity'
+      }
+    }
+  }
+
+  if (!res.tourType) {
     const routeMatch = cleanForRoutes.match(/\b(?:tour\s+|viaje\s+|ruta\s+|road\s*trip\s+|trayecto\s+)?(?:de|desde)\s+([a-záéíóúñ\s]+?)\s+(?:a|hast[aá]|hacia)\s+([a-záéíóúñ\s]+?)(?:$|\s+(?:en|con|para|durante|\bdel\s+\d+|\bdel\s+pr[oó]ximo\s+mes|por|el\s+pr[oó]ximo|la\s+pr[oó]xima)\b)/i)
     if (routeMatch) {
       const originRaw = routeMatch[1].trim()
@@ -4307,6 +4326,14 @@ export function extractChatInformationFallback(prompt) {
         res.city = destination
         res.tourType = 'city_to_city'
       }
+    }
+  }
+
+  if (!res.tourType) {
+    if (/\b(isla|islas|cayo|cayos|archipi[eé]lago|playas?\s+v[íi]rgenes|island\s+hopping)\b/i.test(text)) {
+      res.tourType = 'coastal_islands'
+    } else if (/\b(senderismo|mirador|miradores|alpino|alpes|lago|laguna|volc[aá]n|glaciar|parque\s+natural|parque\s+nacional|reserva\s+natural|microdestino)\b/i.test(text)) {
+      res.tourType = 'micro_destination'
     }
   }
 

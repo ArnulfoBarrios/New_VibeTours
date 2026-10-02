@@ -15,8 +15,8 @@ const citiesCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 // An LLM can suggest a real venue while still inventing an inaccurate point.
 // Only coordinates returned by a map provider (or our small curated seed set)
 // may be used as navigation coordinates.
-const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'curated', 'manual', 'catalog', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch'])
-const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch'])
+const VERIFIED_COORDINATE_SOURCES = new Set(['osm', 'photon', 'nominatim', 'tomtom', 'curated', 'manual', 'catalog', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-discovery'])
+const OSM_MAP_SOURCES = new Set(['osm', 'photon', 'nominatim', 'tomtom', 'mapbox', 'geoapify', 'ai_address', 'cache', 'cache_memory', 'cache_db', 'wikipedia-geosearch', 'wikipedia-discovery'])
 
 // Algunas atracciones tienen más de un nombre comercial o institucional, pero
 // representan el mismo punto de visita. Esto es una identidad semántica, no
@@ -1805,8 +1805,9 @@ export function isNonTouristFacility(rawTags = {}) {
     /\b(rotario|club rotario|club de leones|club social|asociacion|fundacion|cooperativa|corporacion|sindicato|gremio|oficina)\b/i.test(name) ||
     /\b(urbanizacion|condominio|conjunto\s+residencial|complejo\s+residencial|torre\s+residencial|viviendas|barrio\s+residencial|rotonda|glorieta|retorno\s+vial|intercambiador\s+vial|redoma)\b/i.test(name) ||
     /\b(etapa\s+\d+|manzana\s+[a-z\d]+|bloque\s+\d+|apto\b|apartamentos|torre\s+\d+)\b/i.test(name) ||
-    /\b(mirador\s+del\s+mar\s+[ivx\d]+)\b/i.test(name) ||
     /\b(universidad\s+simon\s+bolivar|sede\s+\d+|facultad\s+de|instituto\s+tecnico|sena\s+-\s+hoteleria)\b/i.test(name) ||
+    /\b(instituto|istituto|formazione|scuola|scuole|liceo|colegio|escuela|centro\s+di\s+formazione|kindergarten|preescolar|technical\s+school|training\s+center|universit[aá]|facolt[aá])\b/i.test(name) ||
+    /\b(caduti\s+per\s+la\s+patria|monumento\s+ai\s+caduti\s+delle\s+guerre|lapide\s+ai\s+caduti)\b/i.test(name) ||
     name.includes('aguas de') ||
     name.includes('acueducto') ||
     name.includes('alcantarillado') ||

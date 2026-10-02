@@ -315,25 +315,42 @@ async function fetchCityWikipediaWikitext(city = '', country = '', lang = 'es') 
 async function fetchWikipediaGeoSearchLandmarks(lat, lon, city = '', lang = 'es') {
   if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) return []
   try {
-    const url = `https://${lang}.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${Number(lat)}|${Number(lon)}&gsradius=10000&gslimit=35&format=json&origin=*`
-    const res = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT },
-      signal: AbortSignal.timeout(3500)
-    })
-    if (!res.ok) return []
-    const data = await res.json()
-    return (data?.query?.geosearch || [])
-      .map((item) => {
-        const cleaned = cleanExtractedLandmarkCandidate(item.title, city)
-        if (!cleaned) return null
-        return {
-          name: cleaned,
-          latitude: Number(item.lat),
-          longitude: Number(item.lon),
-          source: 'wikipedia-geosearch'
-        }
+    const fetchFromLang = async (targetLang) => {
+      const url = `https://${targetLang}.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${Number(lat)}|${Number(lon)}&gsradius=10000&gslimit=35&format=json&origin=*`
+      const res = await fetch(url, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(3500)
       })
-      .filter(Boolean)
+      if (!res.ok) return []
+      const data = await res.json()
+      return (data?.query?.geosearch || [])
+        .map((item) => {
+          const cleaned = cleanExtractedLandmarkCandidate(item.title, city)
+          if (!cleaned) return null
+          return {
+            name: cleaned,
+            latitude: Number(item.lat),
+            longitude: Number(item.lon),
+            source: 'wikipedia-geosearch'
+          }
+        })
+        .filter(Boolean)
+    }
+
+    const esItems = await fetchFromLang(lang)
+    if (esItems.length >= 8 || lang === 'en') {
+      return esItems
+    }
+    const enItems = await fetchFromLang('en').catch(() => [])
+    const seen = new Set(esItems.map(i => i.name.toLowerCase()))
+    const combined = [...esItems]
+    for (const enItem of enItems) {
+      if (!seen.has(enItem.name.toLowerCase())) {
+        seen.add(enItem.name.toLowerCase())
+        combined.push(enItem)
+      }
+    }
+    return combined
   } catch {
     return []
   }
@@ -708,7 +725,12 @@ export async function fetchWikipediaSummaryByTitle(title, lang = 'es') {
       headers: { 'User-Agent': USER_AGENT },
       signal: AbortSignal.timeout(3500)
     })
-    if (!response.ok) return null
+    if (!response.ok) {
+      if (lang !== 'en') {
+        return await fetchWikipediaSummaryByTitle(title, 'en')
+      }
+      return null
+    }
 
     const summary = await response.json()
     if (!summary?.extract || summary.type === 'disambiguation') return null
@@ -720,6 +742,9 @@ export async function fetchWikipediaSummaryByTitle(title, lang = 'es') {
       imageUrl: summary.originalimage?.source || summary.thumbnail?.source || ''
     }
   } catch {
+    if (lang !== 'en') {
+      return await fetchWikipediaSummaryByTitle(title, 'en').catch(() => null)
+    }
     return null
   }
 }
@@ -733,19 +758,26 @@ async function searchWikipediaSummaryByQuery(query, lang = 'es', placeName = '',
       headers: { 'User-Agent': USER_AGENT },
       signal: AbortSignal.timeout(3500)
     })
-    if (!response.ok) return null
-
-    const data = await response.json()
-    const hits = data?.query?.search || []
-    for (const hit of hits) {
-      if (!hit?.title) continue
-      const candidateSummary = await fetchWikipediaSummaryByTitle(hit.title, lang)
-      if (candidateSummary && !isGenericMunicipalitySummary(candidateSummary, placeName, city)) {
-        return candidateSummary
+    if (response.ok) {
+      const data = await response.json()
+      const hits = data?.query?.search || []
+      for (const hit of hits) {
+        if (!hit?.title) continue
+        const candidateSummary = await fetchWikipediaSummaryByTitle(hit.title, lang)
+        if (candidateSummary && !isGenericMunicipalitySummary(candidateSummary, placeName, city)) {
+          return candidateSummary
+        }
       }
+    }
+
+    if (lang !== 'en') {
+      return await searchWikipediaSummaryByQuery(query, 'en', placeName, city)
     }
     return null
   } catch {
+    if (lang !== 'en') {
+      return await searchWikipediaSummaryByQuery(query, 'en', placeName, city).catch(() => null)
+    }
     return null
   }
 }

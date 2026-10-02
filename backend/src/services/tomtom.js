@@ -38,3 +38,45 @@ export async function optimizeRoute(places) {
     return places
   }
 }
+
+export async function searchTomTomPlaces({ query = '', category = '', lat = null, lon = null, radiusMeters = 10000, limit = 10 } = {}) {
+  const apiKey = process.env.TOMTOM_API_KEY
+  if (!apiKey) return []
+  try {
+    let url = ''
+    const hasCoords = Number.isFinite(Number(lat)) && Number.isFinite(Number(lon))
+    if (category && hasCoords) {
+      url = `https://api.tomtom.com/search/2/categorySearch/${encodeURIComponent(category)}.json?key=${apiKey}&lat=${Number(lat)}&lon=${Number(lon)}&radius=${radiusMeters}&limit=${limit}`
+    } else if (query && hasCoords) {
+      url = `https://api.tomtom.com/search/2/poiSearch/${encodeURIComponent(query)}.json?key=${apiKey}&lat=${Number(lat)}&lon=${Number(lon)}&radius=${radiusMeters}&limit=${limit}`
+    } else if (query) {
+      url = `https://api.tomtom.com/search/2/search/${encodeURIComponent(query)}.json?key=${apiKey}&limit=${limit}`
+    } else {
+      return []
+    }
+
+    const response = await fetch(url, { signal: AbortSignal.timeout(4500) })
+    if (!response.ok) return []
+    const data = await response.json()
+    const results = Array.isArray(data.results) ? data.results : []
+    return results.map(r => {
+      const name = r.poi?.name || r.address?.freeformAddress || ''
+      const pLat = r.position?.lat
+      const pLon = r.position?.lon
+      if (!name || !Number.isFinite(pLat) || !Number.isFinite(pLon)) return null
+      return {
+        name,
+        latitude: pLat,
+        longitude: pLon,
+        address: r.address?.freeformAddress || name,
+        category: category || (r.poi?.categories?.[0] || 'attraction'),
+        coordinateSource: 'tomtom',
+        coordinatesVerified: true,
+        placeId: `tomtom:${r.id || ''}`
+      }
+    }).filter(Boolean)
+  } catch (err) {
+    console.warn('[tomtom] search error:', err.message)
+    return []
+  }
+}

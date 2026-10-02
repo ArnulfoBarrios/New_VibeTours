@@ -19,8 +19,10 @@ import {
   buildDeterministicStopDetails,
   arePlaceNamesSemanticallySame,
   estimateRealisticStopDurationMinutes,
-  inferStopSubcategory, clusterStopsIntoCoherentDays, areStopsCompatibleInSameDay, inferPlaceMicroSector
+  inferStopSubcategory, clusterStopsIntoCoherentDays, areStopsCompatibleInSameDay, inferPlaceMicroSector,
+  discoverDynamicCityLandmarks
 } from '../services/open-tourism-service.js'
+import { searchTomTomPlaces } from '../services/tomtom.js'
 
 export const aiRouter = Router()
 
@@ -1450,7 +1452,7 @@ aiRouter.post('/tours/generate', async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)
     applyTourType(input)
-    if (input.city && input.city.trim().length > 0) {
+    if (input.city && input.city.trim().length > 0 && !input.destinationPlace && !input.isMultiCity && (!input.cities || input.cities.length <= 1)) {
       input.destination = input.city.trim()
     }
 
@@ -2642,8 +2644,27 @@ async function processTourGeneration(jobId, input) {
     
     let canonicalDest = input.canonicalDestination
     if (!canonicalDest || !canonicalDest.latitude || !canonicalDest.longitude) {
-      const queryParts = [...new Set([input.destination, input.city, input.country].filter(Boolean))]
-      canonicalDest = await resolveCanonicalDestination(queryParts.join(', '))
+      let targetQuery = input.destination
+      if (input.isMultiCity && Array.isArray(input.cities) && input.cities.length > 0) {
+        targetQuery = input.cities[0]
+      } else if (input.destinationPlace) {
+        targetQuery = input.destinationPlace
+      }
+      const queryParts = [...new Set([targetQuery, input.city, input.country].filter(Boolean))]
+      canonicalDest = await resolveCanonicalDestination(queryParts.join(', '), { countryHint: input.country })
+    }
+
+    if (canonicalDest && canonicalDest.isAmbiguous && input.country && Array.isArray(canonicalDest.candidates)) {
+      const countryNorm = input.country.toLowerCase().trim()
+      const matchedCand = canonicalDest.candidates.find(c => 
+        c.country?.toLowerCase()?.includes(countryNorm) || 
+        countryNorm.includes(c.country?.toLowerCase() || '') ||
+        c.countryCode?.toLowerCase() === countryNorm
+      )
+      if (matchedCand) {
+        canonicalDest = matchedCand
+        canonicalDest.isAmbiguous = false
+      }
     }
 
     if (!canonicalDest || !canonicalDest.latitude || !canonicalDest.longitude) {
@@ -2667,10 +2688,12 @@ async function processTourGeneration(jobId, input) {
 
     // Anchor input to canonical destination
     input.canonicalDestination = canonicalDest
-    input.destination = canonicalDest.displayName
-    input.city = canonicalDest.city
-    input.country = canonicalDest.country
-    input.region = canonicalDest.region
+    if (!input.isMultiCity && (!Array.isArray(input.cities) || input.cities.length <= 1)) {
+      input.destination = canonicalDest.displayName
+      input.city = canonicalDest.city
+      input.country = canonicalDest.country || input.country
+      input.region = canonicalDest.region
+    }
 
     const location = {
       name: canonicalDest.displayName,
@@ -3744,10 +3767,17 @@ function scorePlace(place, input) {
       place.tags?.place === 'island' || 
       place.type === 'island' || 
       /isla|island|mucura|múcura|tintipan|tintipán|palma|san-bernardo|boqueron|boquerón|isleta|faro/i.test(placeName)
-      
     if (isIslandStop) {
       finalScore += 45 // Substantial boost to prioritize islands over minor mainland stops
     }
+  }
+
+  // Significant boost for certified iconic tourism attractions (Wikipedia, TomTom, iconic landmarks)
+  if (place.fromWikipediaDiscovery || place.source === 'wikipedia-geosearch' || place.source === 'wikipedia-discovery' || place.tags?.from_wikipedia || place.tags?.iconic_landmark) {
+    finalScore += 250
+  }
+  if (place.coordinateSource === 'tomtom' || place.source === 'tomtom' || place.tags?.tomtom_landmark) {
+    finalScore += 200
   }
 
   return finalScore
@@ -6137,24 +6167,83 @@ async function collectMultiCityCandidates(input) {
         .filter(place => isValidTouristAttraction(place, { ...input, city: cityName }))
     }
 
-    const cityGeo = await geocodePlace(`${cityName} ${input.country || ''}`)
+    const cityCountry = (input.isMultiCountry || input.is_multi_country) ? '' : (input.country || '')
+    const cityGeo = await geocodePlace(`${cityName} ${cityCountry}`.trim())
     if (cityGeo) cityGeos.push({ city: cityName, geo: cityGeo })
 
     let overpass = []
     let photon = []
     if (cityGeo) {
       overpass = await overpassAttractions(cityGeo.latitude, cityGeo.longitude, 12000)
-      photon = await photonSearch(`${cityName} ${input.country || ''}`, 15)
+      photon = await photonSearch(`${cityName} ${cityCountry}`.trim(), 15)
     }
     
-    const pool = [...geocodedIconics, ...overpass, ...photon]
-    const valid = uniqueByName(pool)
-      .filter((place) => place && place.name)
-      .filter((place) => isValidTouristAttraction(place, { ...input, city: cityName }))
-      .slice(0, 5)
+    let wikiLandmarks = []
+    let tomtomLandmarks = []
+    if (cityGeo) {
+      const [wRes, tRes] = await Promise.all([
+        discoverDynamicCityLandmarks(cityName, (input.isMultiCountry ? '' : input.country) || '', cityGeo.latitude, cityGeo.longitude).catch(() => []),
+        searchTomTomPlaces({ category: 'museum', lat: cityGeo.latitude, lon: cityGeo.longitude, limit: 6 }).catch(() => [])
+      ])
+      wikiLandmarks = wRes || []
+      tomtomLandmarks = tRes || []
+    }
+
+    const geocodedWiki = await Promise.all(
+      wikiLandmarks.map(async (item) => {
+        let pLat = Number(item.latitude)
+        let pLon = Number(item.longitude)
+        let pSource = item.source || 'wikipedia-discovery'
+        if (!Number.isFinite(pLat) || !Number.isFinite(pLon)) {
+          const geo = await geocodePlace(`${item.name}, ${cityName}`).catch(() => null)
+          if (geo && Number.isFinite(Number(geo.latitude)) && Number.isFinite(Number(geo.longitude))) {
+            pLat = Number(geo.latitude)
+            pLon = Number(geo.longitude)
+            pSource = geo.coordinateSource || 'osm'
+          }
+        }
+        if (Number.isFinite(pLat) && Number.isFinite(pLon)) {
+          return {
+            name: item.name,
+            latitude: pLat,
+            longitude: pLon,
+            type: 'tourism',
+            category: item.category || 'historic',
+            city: cityName,
+            country: input.country || '',
+            address: item.address || `${item.name}, ${cityName}`,
+            description: item.description || '',
+            coordinateSource: pSource,
+            coordinatesVerified: true,
+            fromWikipediaDiscovery: true,
+            placeId: item.placeId || ''
+          }
+        }
+        return null
+      })
+    ).then(res => res.filter(Boolean))
+
+    const cleanTomTom = (tomtomLandmarks || [])
+      .filter(p => !isNonTouristFacility({ name: p.name }))
       .map(p => ({ ...p, city: cityName }))
-    
-    allPlaces.push(...valid)
+
+    let pool = [...geocodedIconics, ...geocodedWiki, ...cleanTomTom, ...overpass, ...photon]
+    let valid = uniqueByName(pool)
+      .filter((place) => place && place.name)
+      .filter((place) => !isNonTouristFacility({ name: place.name }))
+      .filter((place) => isValidTouristAttraction(place, { ...input, city: cityName }))
+
+    // Enforce strict 35km radius from the city centroid to avoid homonyms in other countries (e.g. Pragal in Portugal)
+    if (cityGeo && Number.isFinite(Number(cityGeo.latitude)) && Number.isFinite(Number(cityGeo.longitude))) {
+      valid = valid.filter(place => {
+        if (!place.latitude || !place.longitude) return false
+        const distKm = haversineMeters(cityGeo.latitude, cityGeo.longitude, place.latitude, place.longitude) / 1000
+        return distKm <= 35
+      })
+    }
+
+    const capped = valid.slice(0, 5).map(p => ({ ...p, city: cityName }))
+    allPlaces.push(...capped)
   }
 
   // 2. Search for en-route POIs in the highway corridor between City 1 and City N
@@ -6426,6 +6515,36 @@ export async function collectCorridorCandidates(input, location) {
     }
   }
 
+  if (intermediates.length < 2 && endPlace) {
+    const endLat = endPlace.latitude
+    const endLon = endPlace.longitude
+    const endCity = endPlace.city || city || input.destination || ''
+    const [wikiLandmarks, tomtomLandmarks] = await Promise.all([
+      discoverDynamicCityLandmarks(endCity, country, endLat, endLon).catch(() => []),
+      searchTomTomPlaces({ category: 'museum', lat: endLat, lon: endLon, limit: 4 }).catch(() => [])
+    ])
+    for (const item of [...wikiLandmarks, ...tomtomLandmarks]) {
+      let pLat = Number(item.latitude)
+      let pLon = Number(item.longitude)
+      if (Number.isFinite(pLat) && Number.isFinite(pLon) && !intermediates.some(ex => arePlacesSimilar(ex.name, item.name)) && (!endPlace || !arePlacesSimilar(endPlace.name, item.name))) {
+        intermediates.push({
+          name: item.name,
+          latitude: pLat,
+          longitude: pLon,
+          type: 'tourism',
+          category: item.category || 'historic',
+          city: endCity,
+          country,
+          address: item.address || `${item.name}, ${endCity}`,
+          description: item.description || '',
+          coordinateSource: item.coordinateSource || 'osm',
+          coordinatesVerified: true,
+          placeId: item.placeId || ''
+        })
+      }
+    }
+  }
+
   // Sort intermediates monotonically by forward progress t along route corridor
   if (startPlace && endPlace) {
     intermediates.sort((a, b) => {
@@ -6498,11 +6617,14 @@ export async function collectTourCandidates(input, location) {
   const city = isMicroDest
     ? (input.canonicalDestination?.entityName || input.destination || location?.city || input.city || '')
     : (location?.city || input.city || input.destination || '')
-  const country = location?.country || input.country || ''
+  let country = location?.country || input.country || ''
 
   let canonicalDest = input.canonicalDestination
   if (!canonicalDest && (city || input.destination)) {
     canonicalDest = await resolveCanonicalDestination(city || input.destination, { countryHint: country }).catch(() => null)
+  }
+  if (!country && canonicalDest?.country) {
+    country = canonicalDest.country
   }
 
   // Obtenemos primero las coordenadas del centro del destino para validar el radio
@@ -6699,7 +6821,7 @@ export async function collectTourCandidates(input, location) {
           geo = await resolvePlaceWithCascade({
             name: cleanPName,
             city,
-            country: country || 'Colombia',
+            country: country || canonicalDest?.country || 'Colombia',
             address: rawAddress,
             cityLat: destLat,
             cityLon: destLon,
@@ -6842,7 +6964,7 @@ export async function collectTourCandidates(input, location) {
           directGeo = await resolvePlaceWithCascade({
             name: cleanPName,
             city,
-            country: country || 'Colombia',
+            country: country || canonicalDest?.country || 'Colombia',
             address: rawAddress,
             cityLat: destLat,
             cityLon: destLon,
@@ -6928,11 +7050,27 @@ export async function collectTourCandidates(input, location) {
     }
   }
 
-  // 1. Fetch top iconic landmarks from OpenAI global geography knowledge
-  const iconicLandmarks = await fetchCityIconicLandmarks(
-    isMicroDest ? (input.canonicalDestination?.entityName || input.destination || city) : city,
-    country
-  )
+  // 1. Fetch top iconic landmarks (OpenAI or Open-Source Tourism discovery)
+  const targetCity = isMicroDest ? (input.canonicalDestination?.entityName || input.destination || city) : city
+  const searchLat = input.canonicalDestination?.latitude || location?.latitude || cityCenterLat
+  const searchLon = input.canonicalDestination?.longitude || location?.longitude || cityCenterLon
+
+  const [iconicLandmarks, wikiLandmarks, tomtomResults] = await Promise.all([
+    fetchCityIconicLandmarks(
+      targetCity,
+      country,
+      searchLat,
+      searchLon,
+      15
+    ).catch(() => []),
+    discoverDynamicCityLandmarks(targetCity, country, searchLat, searchLon).catch(() => []),
+    (searchLat && searchLon) ? Promise.all([
+      searchTomTomPlaces({ category: 'museum', lat: searchLat, lon: searchLon, radiusMeters: Math.round(geoScope.maxDistanceKm * 1000), limit: 6 }).catch(() => []),
+      searchTomTomPlaces({ category: 'historic_building', lat: searchLat, lon: searchLon, radiusMeters: Math.round(geoScope.maxDistanceKm * 1000), limit: 6 }).catch(() => []),
+      searchTomTomPlaces({ category: 'park_recreation_area', lat: searchLat, lon: searchLon, radiusMeters: Math.round(geoScope.maxDistanceKm * 1000), limit: 6 }).catch(() => []),
+      searchTomTomPlaces({ query: targetCity, lat: searchLat, lon: searchLon, radiusMeters: Math.round(geoScope.maxDistanceKm * 1000), limit: 6 }).catch(() => [])
+    ]).then(res => res.flat()).catch(() => []) : Promise.resolve([])
+  ])
 
   let geocodedIconics = []
   if (Array.isArray(iconicLandmarks) && iconicLandmarks.length > 0) {
@@ -6975,6 +7113,73 @@ export async function collectTourCandidates(input, location) {
       .filter(place => isValidTouristAttraction(place, input))
   }
 
+  const cleanTomTom = (tomtomResults || []).map(p => ({
+    name: p.name,
+    latitude: p.latitude,
+    longitude: p.longitude,
+    type: p.category || 'tourism',
+    category: p.category || 'historic',
+    city,
+    country,
+    address: p.address || `${p.name}, ${city}`,
+    placeId: p.placeId || '',
+    coordinateSource: 'tomtom',
+    coordinatesVerified: true,
+    tags: { tomtom_landmark: 'true', coordinate_source: 'tomtom', coordinates_verified: 'true' }
+  })).filter(p => !isNonTouristFacility({ name: p.name }) && !isNonTouristFacility(p.tags))
+
+  const geocodedWikiSettled = await Promise.allSettled(
+    (wikiLandmarks || []).map(async (item) => {
+      let pLat = Number(item.latitude)
+      let pLon = Number(item.longitude)
+      let pSource = item.source || 'wikipedia-geosearch'
+      if (!Number.isFinite(pLat) || !Number.isFinite(pLon)) {
+        const searchQuery = `${item.name}, ${city}, ${country}`.trim()
+        const geo = await geocodePlace(searchQuery, searchLat, searchLon, {
+          city,
+          country,
+          isRegionalOrNature,
+          maxDistanceKm: geoScope.maxDistanceKm
+        }).catch(() => null)
+        if (geo && Number.isFinite(Number(geo.latitude)) && Number.isFinite(Number(geo.longitude))) {
+          pLat = Number(geo.latitude)
+          pLon = Number(geo.longitude)
+          pSource = geo.coordinateSource || 'osm'
+        }
+      }
+      if (Number.isFinite(pLat) && Number.isFinite(pLon)) {
+        const candidate = {
+          name: item.name,
+          latitude: pLat,
+          longitude: pLon,
+          type: item.type || 'tourism',
+          category: item.category || 'historic',
+          subcategory: item.subcategory,
+          city,
+          country,
+          address: item.address || `${item.name}, ${city}`,
+          placeId: item.placeId || '',
+          coordinateSource: pSource,
+          coordinatesVerified: true,
+          description: item.description || '',
+          fromWikipediaDiscovery: true,
+          tags: {
+            from_wikipedia: 'true',
+            coordinate_source: pSource,
+            coordinates_verified: 'true'
+          }
+        }
+        if (hasOsmMapRecord(candidate) && isValidTouristAttraction(candidate, input)) {
+          return candidate
+        }
+      }
+      return null
+    })
+  )
+  const geocodedWiki = geocodedWikiSettled
+    .map(r => r.status === 'fulfilled' ? r.value : null)
+    .filter(Boolean)
+
   const query = `${input.destination} ${city} ${country}`.trim()
   const photonPlaces = await photonSearch(query, 30).catch(() => [])
 
@@ -6995,8 +7200,8 @@ export async function collectTourCandidates(input, location) {
     ? await overpassAttractions(searchCenterLat, searchCenterLon, radiusWide).catch(() => [])
     : []
   
-  // Prioritize specific chat places and geocoded iconic landmarks first in the pool
-  let pool = [...geocodedSpecifics, ...geocodedIconics, ...overpassPlaces, ...photonPlaces]
+  // Prioritize specific chat places, geocoded iconic landmarks, Wikipedia POIs, and TomTom POIs first in the pool
+  let pool = [...geocodedSpecifics, ...geocodedIconics, ...geocodedWiki, ...cleanTomTom, ...overpassPlaces, ...photonPlaces]
 
   // Proximity filter against subzone centroid to prevent mixing distant downtown POIs with nature reserves
   if (validSpecifics.length > 0 && searchCenterLat && searchCenterLon) {
@@ -7146,6 +7351,86 @@ export async function collectTourCandidates(input, location) {
   }
 
   selected = selected.filter(hasOsmMapRecord)
+
+  if (selected.length < 3) {
+    console.info('[tour-ai] Activating open-source tourism & TomTom discovery fallback for:', { destination: input.destination, city, country })
+    const centerLat = canonicalDest?.latitude ?? cityCenterLat ?? location?.latitude
+    const centerLon = canonicalDest?.longitude ?? cityCenterLon ?? location?.longitude
+    
+    // 1. Wikipedia & Wikivoyage dynamic landmarks
+    const wikiLandmarks = await discoverDynamicCityLandmarks(city || input.destination, country, centerLat, centerLon).catch(() => [])
+    
+    // 2. TomTom POI search for museums, parks, historic buildings and landmarks
+    const tomtomResults = await Promise.all([
+      searchTomTomPlaces({ category: 'museum', lat: centerLat, lon: centerLon, radiusMeters: Math.round(geoScope.maxDistanceKm * 1000), limit: 8 }).catch(() => []),
+      searchTomTomPlaces({ category: 'historic_building', lat: centerLat, lon: centerLon, radiusMeters: Math.round(geoScope.maxDistanceKm * 1000), limit: 6 }).catch(() => []),
+      searchTomTomPlaces({ category: 'park_recreation_area', lat: centerLat, lon: centerLon, radiusMeters: Math.round(geoScope.maxDistanceKm * 1000), limit: 6 }).catch(() => []),
+      searchTomTomPlaces({ query: `${city || input.destination}`, lat: centerLat, lon: centerLon, radiusMeters: Math.round(geoScope.maxDistanceKm * 1000), limit: 8 }).catch(() => [])
+    ])
+    const tomtomLandmarks = tomtomResults.flat()
+
+    const openDataCandidates = [...wikiLandmarks, ...tomtomLandmarks]
+    if (openDataCandidates.length > 0) {
+      const regionalOpts = {
+        isRegionalOrNature,
+        isMicroDest: Boolean(isMicroDest || canonicalDest?.isMicroDestination),
+        durationDays: input.durationDays,
+        maxDistanceKm: geoScope.maxDistanceKm,
+        city,
+        country
+      }
+      const geocodedOpenData = await Promise.allSettled(
+        openDataCandidates.map(async (item) => {
+          let pLat = Number(item.latitude)
+          let pLon = Number(item.longitude)
+          let pSource = item.coordinateSource || 'osm'
+          if (!Number.isFinite(pLat) || !Number.isFinite(pLon)) {
+            const searchQuery = `${item.name}, ${city}, ${country}`.trim()
+            const geo = await geocodePlace(searchQuery, centerLat, centerLon, regionalOpts).catch(() => null)
+            if (geo && Number.isFinite(Number(geo.latitude)) && Number.isFinite(Number(geo.longitude))) {
+              pLat = Number(geo.latitude)
+              pLon = Number(geo.longitude)
+              pSource = geo.coordinateSource || 'osm'
+            }
+          }
+          if (Number.isFinite(pLat) && Number.isFinite(pLon)) {
+            const candidateObj = {
+              name: item.name,
+              latitude: pLat,
+              longitude: pLon,
+              type: item.type || 'tourism',
+              category: item.category || 'historic',
+              subcategory: item.subcategory,
+              city,
+              country,
+              address: item.address || `${item.name}, ${city}`,
+              placeId: item.placeId || '',
+              coordinateSource: pSource,
+              coordinatesVerified: true,
+              description: item.description || '',
+              tags: {
+                open_tourism_fallback: 'true',
+                coordinate_source: pSource,
+                coordinates_verified: 'true'
+              }
+            }
+            if (hasOsmMapRecord(candidateObj) && validateCandidateLocation(candidateObj, canonicalDest || location, geoScope.maxDistanceKm)) {
+              return candidateObj
+            }
+          }
+          return null
+        })
+      )
+      const validOpenData = geocodedOpenData
+        .map(r => r.status === 'fulfilled' ? r.value : null)
+        .filter(Boolean)
+
+      if (validOpenData.length > 0) {
+        selected = uniqueByName([...selected, ...validOpenData])
+        source = 'open-tourism-tomtom-fallback'
+      }
+    }
+  }
 
   if (selected.length < 3) {
     console.warn('[tour-ai] Insufficient validated POIs for destination:', input.destination)

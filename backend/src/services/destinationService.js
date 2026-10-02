@@ -153,8 +153,8 @@ export const TOUR_TRIP_TYPES = new Set([
   'location_to_destination',
 ])
 
-export const MICRO_DESTINATION_PATTERN = /tayrona|minca|guatap[eé]|valle de cocora|cocora|parque nacional|parque natural|reserva natural|sierra nevada|tatacoa|desierto de la tatacoa|chicamocha|ca[nñ][oó]n|amazonas|eje cafetero|pueblito|monta[nñ]a|cascada/i
-export const COASTAL_ISLAND_PATTERN = /\bislas?\b|\bcayos?\b|islas? del rosario|isla bar[uú]|san bernardo|archipi[eé]lago|islas? de san bernardo|coastal islands|island hopping/i
+export const MICRO_DESTINATION_PATTERN = /tayrona|minca|guatap[eé]|valle de cocora|cocora|parque nacional|parque natural|reserva natural|sierra nevada|tatacoa|desierto de la tatacoa|chicamocha|ca[nñ][oó]n|amazonas|eje cafetero|pueblito|monta[nñ]a|cascada|alpin[oa]|alpes|senderismo|mirador|miradores|lago|laguna|volc[aá]n|glaciar|glaciares|bosque|cueva|cuevas|valle\b|geoparque/i
+export const COASTAL_ISLAND_PATTERN = /\bislas?\b|\bcayos?\b|\bisland\b|\bislands\b|isla\s+[a-záéíóúñ]+|archipi[eé]lago|islas? del rosario|isla bar[uú]|san bernardo|islas? de san bernardo|coastal islands|island hopping|arrecife|atol[oó]n|costa\b|playas?\b/i
 
 export function normalizeTourType(value) {
   const normalized = String(value ?? '')
@@ -175,6 +175,7 @@ export function normalizeTourType(value) {
     ciudad_unica: 'single_city',
     city_to_city: 'city_to_city',
     entre_ciudades: 'city_to_city',
+    road_trip: 'city_to_city',
     international_multicity: 'international_multicity',
     multi_ciudad_internacional: 'international_multicity',
     location_to_destination: 'location_to_destination',
@@ -191,7 +192,7 @@ export function inferTourType(input = {}, extracted = null) {
   )
   if (explicit) return explicit
 
-  const destinationText = [input.destination, input.city, input.destinationPlace].filter(Boolean).join(' ')
+  const destinationText = [input.destination, input.city, input.destinationPlace, input.prompt].filter(Boolean).join(' ')
   const placesList = [
     ...(Array.isArray(input.specificPlaces) ? input.specificPlaces : []),
     ...(Array.isArray(input.selectedPlaces) ? input.selectedPlaces : []),
@@ -212,17 +213,23 @@ export function inferTourType(input = {}, extracted = null) {
     return 'location_to_destination'
   }
 
+  const hasMultipleCities = (Array.isArray(input.cities) && input.cities.length > 1) ||
+    (input.originPlace && input.destinationPlace && input.originPlace !== input.destinationPlace)
+  const isMultiCountryOrIntl = input.isMultiCountry || input.is_multi_country ||
+    (Array.isArray(input.cities) && input.cities.length >= 3) ||
+    /\b(internacional|multi[\s-]?pa[íi]s|multi[\s-]?ciudad\s+internacional)\b/i.test(destinationText)
+
+  if (isMultiCountryOrIntl) {
+    return 'international_multicity'
+  }
+
   if (
     input.isMultiCity ||
     input.is_multi_city ||
-    input.isMultiCountry ||
-    input.is_multi_country ||
-    (Array.isArray(input.cities) && input.cities.length > 1) ||
-    (input.originPlace && input.destinationPlace)
+    hasMultipleCities ||
+    /\b(road\s*trip|carretera)\b/i.test(destinationText)
   ) {
-    return input.isMultiCountry || input.is_multi_country
-      ? 'international_multicity'
-      : 'city_to_city'
+    return 'city_to_city'
   }
 
   const normDest = destinationText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
@@ -230,14 +237,15 @@ export function inferTourType(input = {}, extracted = null) {
     input.canonicalDestination?.isMicroDestination ||
     FALLBACK_DESTINATION_CENTROIDS[normDest]?.isMicroDestination ||
     MICRO_DESTINATION_PATTERN.test(destinationText) ||
-    (!destinationText && MICRO_DESTINATION_PATTERN.test(specificText))
+    (!destinationText && MICRO_DESTINATION_PATTERN.test(specificText)) ||
+    input.type === 'natural'
   )
 
   if (isKnownMicroDest) {
     return 'micro_destination'
   }
 
-  if (COASTAL_ISLAND_PATTERN.test(`${destinationText} ${specificText}`)) {
+  if (COASTAL_ISLAND_PATTERN.test(`${destinationText} ${specificText}`) || input.type === 'costero') {
     return 'coastal_islands'
   }
 
