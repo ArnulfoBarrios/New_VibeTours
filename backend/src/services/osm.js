@@ -2089,46 +2089,114 @@ export function haversineMeters(lat1, lon1, lat2, lon2) {
   return R * c
 }
 
-export function isWithinCorridor(place, startPlace, endPlace, relaxed = false) {
-  if (!place || (!startPlace && !endPlace)) return true
+export function computeCorridorProjection(place, startPlace, endPlace) {
+  if (!place || !startPlace || !endPlace) return null
   const pLat = Number(place.latitude ?? place.lat ?? 0)
   const pLon = Number(place.longitude ?? place.lon ?? 0)
-  if (!pLat || !pLon) return false
+  const sLat = Number(startPlace.latitude ?? startPlace.lat ?? 0)
+  const sLon = Number(startPlace.longitude ?? startPlace.lon ?? 0)
+  const eLat = Number(endPlace.latitude ?? endPlace.lat ?? 0)
+  const eLon = Number(endPlace.longitude ?? endPlace.lon ?? 0)
+  if (!pLat || !pLon || !sLat || !sLon || !eLat || !eLon) return null
 
-  const startLat = startPlace ? Number(startPlace.latitude ?? startPlace.lat ?? 0) : null
-  const startLon = startPlace ? Number(startPlace.longitude ?? startPlace.lon ?? 0) : null
-  const endLat = endPlace ? Number(endPlace.latitude ?? endPlace.lat ?? 0) : null
-  const endLon = endPlace ? Number(endPlace.longitude ?? endPlace.lon ?? 0) : null
+  const midLatRad = ((sLat + eLat) / 2) * (Math.PI / 180)
+  const metersPerDegLat = 111132.954
+  const metersPerDegLon = 111412.84 * Math.cos(midLatRad)
 
-  if (startLat !== null && startLon !== null && endLat !== null && endLon !== null) {
-    const routeDistMeters = haversineMeters(startLat, startLon, endLat, endLon)
-    const routeDistKm = routeDistMeters / 1000
+  // Vector AB (start to end)
+  const dxAB = (eLon - sLon) * metersPerDegLon
+  const dyAB = (eLat - sLat) * metersPerDegLat
+  const lenSq = dxAB * dxAB + dyAB * dyAB
+  const routeDistMeters = Math.sqrt(lenSq)
 
-    const distFromStartKm = haversineMeters(pLat, pLon, startLat, startLon) / 1000
-    const distFromEndKm = haversineMeters(pLat, pLon, endLat, endLon) / 1000
+  if (routeDistMeters < 50) {
+    return { t: 0, crossTrackMeters: 0, detourMeters: 0, routeDistMeters }
+  }
 
-    const detourKm = (distFromStartKm + distFromEndKm) - routeDistKm
+  // Vector AP (start to place)
+  const dxAP = (pLon - sLon) * metersPerDegLon
+  const dyAP = (pLat - sLat) * metersPerDegLat
 
-    const maxDetourKm = relaxed
-      ? Math.max(8.0, routeDistKm * 0.6)
-      : (routeDistKm <= 35 
-          ? Math.min(4.5, Math.max(1.5, routeDistKm * 0.35))
-          : Math.min(25.0, routeDistKm * 0.35))
+  // Projection scalar t along route vector AB
+  const t = (dxAP * dxAB + dyAP * dyAB) / lenSq
 
-    if (detourKm > maxDetourKm) {
-      return false
-    }
+  // Perpendicular cross-track distance (shortest distance from point to line AB)
+  const cross = Math.abs(dxAP * dyAB - dyAP * dxAB)
+  const crossTrackMeters = cross / routeDistMeters
 
-    if (!relaxed) {
-      const cleanCity = (c) => (c ? String(c).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() : '')
-      const pCity = cleanCity(place.city)
-      const sCity = cleanCity(startPlace.city)
-      const eCity = cleanCity(endPlace.city)
+  // Detour distance in meters
+  const distFromStartMeters = haversineMeters(pLat, pLon, sLat, sLon)
+  const distFromEndMeters = haversineMeters(pLat, pLon, eLat, eLon)
+  const detourMeters = (distFromStartMeters + distFromEndMeters) - routeDistMeters
 
-      if (pCity && sCity && eCity && sCity === eCity) {
-        if (!pCity.includes(sCity) && !sCity.includes(pCity)) {
-          return false
-        }
+  return {
+    t,
+    crossTrackMeters,
+    detourMeters,
+    routeDistMeters,
+    distFromStartMeters,
+    distFromEndMeters
+  }
+}
+
+export function isWithinCorridor(place, startPlace, endPlace, relaxed = false) {
+  if (!place || (!startPlace && !endPlace)) return true
+  const proj = computeCorridorProjection(place, startPlace, endPlace)
+  if (!proj) return true
+
+  const { t, crossTrackMeters, detourMeters, routeDistMeters } = proj
+  const routeDistKm = routeDistMeters / 1000
+  const crossTrackKm = crossTrackMeters / 1000
+  const detourKm = detourMeters / 1000
+
+  // 1. Strict forward-movement check: point must not be behind start or past end
+  const minT = relaxed ? -0.05 : 0.02
+  const maxT = relaxed ? 1.05 : 0.98
+  if (t < minT || t > maxT) {
+    return false
+  }
+
+  // 2. Cross-track (lateral perpendicular deviation) limit:
+  // For urban routes (<= 25 km): max lateral deviation is bounded to 1.8 km (strict) or 2.5 km (relaxed).
+  // For regional/intercity routes: scales gracefully.
+  let maxCrossTrackKm = 2.0
+  if (routeDistKm <= 15) {
+    maxCrossTrackKm = relaxed ? 2.5 : 1.8
+  } else if (routeDistKm <= 35) {
+    maxCrossTrackKm = relaxed ? Math.min(4.5, Math.max(2.5, routeDistKm * 0.22)) : Math.min(3.0, Math.max(1.8, routeDistKm * 0.16))
+  } else if (routeDistKm <= 80) {
+    maxCrossTrackKm = relaxed ? Math.min(8.0, routeDistKm * 0.18) : Math.min(5.5, routeDistKm * 0.12)
+  } else {
+    maxCrossTrackKm = relaxed ? Math.min(18.0, routeDistKm * 0.15) : Math.min(12.0, routeDistKm * 0.10)
+  }
+
+  if (crossTrackKm > maxCrossTrackKm) {
+    return false
+  }
+
+  // 3. Detour distance budget
+  let maxDetourKm = 3.0
+  if (routeDistKm <= 15) {
+    maxDetourKm = relaxed ? 3.5 : 2.2
+  } else if (routeDistKm <= 35) {
+    maxDetourKm = relaxed ? Math.min(6.5, routeDistKm * 0.35) : Math.min(4.0, routeDistKm * 0.22)
+  } else {
+    maxDetourKm = relaxed ? Math.min(20.0, routeDistKm * 0.30) : Math.min(12.0, routeDistKm * 0.18)
+  }
+
+  if (detourKm > maxDetourKm) {
+    return false
+  }
+
+  if (!relaxed) {
+    const cleanCity = (c) => (c ? String(c).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() : '')
+    const pCity = cleanCity(place.city)
+    const sCity = cleanCity(startPlace.city)
+    const eCity = cleanCity(endPlace.city)
+
+    if (pCity && sCity && eCity && sCity === eCity) {
+      if (!pCity.includes(sCity) && !sCity.includes(pCity)) {
+        return false
       }
     }
   }

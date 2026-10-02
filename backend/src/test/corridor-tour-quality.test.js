@@ -4,6 +4,7 @@ import { isValidTouristAttraction, getPlaceEntityType, buildTourPlanner, collect
 import { isLodgingName, generateChatResponse, extractChatInformationFallback } from '../services/openai.js'
 import { inferStopSubcategory } from '../services/open-tourism-service.js'
 import { imageForPlace } from '../services/imageSearch.js'
+import { computeCorridorProjection, isWithinCorridor } from '../services/osm.js'
 
 describe('Corridor Tour Quality & Fix Verifications', () => {
   it('1. Hotel & Lodging filter should strictly reject commercial hotels', () => {
@@ -254,5 +255,64 @@ describe('Corridor Tour Quality & Fix Verifications', () => {
     const names = corridorResults.map(p => p.name)
     assert.ok(names.some(n => n.includes('La Troja')), 'La Troja should be in corridor candidates')
     assert.ok(names.some(n => n.includes('Sagrado Corazón')), 'Parque Sagrado Corazón should be in corridor candidates')
+  })
+
+  it('10. Universal corridor projection rejects opposite-direction or severe-detour landmarks (e.g. Puente Pumarejo) while accepting valid route stops', () => {
+    const startPlace = { name: 'Soledad Terminal', latitude: 10.9254, longitude: -74.7958 }
+    const endPlace = { name: 'Gran Malecón del Río', latitude: 11.0050, longitude: -74.7800 }
+
+    // Puente Pumarejo is far east (~4km cross-track on an ~8.9km route vector) - MUST be rejected!
+    const pumarejo = { name: 'Puente Pumarejo', latitude: 10.9536, longitude: -74.7533 }
+    const projPumarejo = computeCorridorProjection(pumarejo, startPlace, endPlace)
+    assert.ok(projPumarejo.crossTrackMeters > 3000, `Puente Pumarejo cross-track must be > 3000m, was ${projPumarejo.crossTrackMeters}`)
+    assert.equal(isWithinCorridor(pumarejo, startPlace, endPlace), false, 'Puente Pumarejo must be rejected by isWithinCorridor')
+    assert.equal(isWithinCorridor(pumarejo, startPlace, endPlace, true), false, 'Puente Pumarejo must be rejected even in relaxed corridor')
+
+    // Malambo is south (opposite direction to the northward trip to Malecón) - MUST be rejected (t < 0)
+    const malambo = { name: 'Malambo Centro', latitude: 10.8600, longitude: -74.7700 }
+    const projMalambo = computeCorridorProjection(malambo, startPlace, endPlace)
+    assert.ok(projMalambo.t < 0, 'Malambo must have negative forward projection t')
+    assert.equal(isWithinCorridor(malambo, startPlace, endPlace), false, 'Backward place must be rejected')
+
+    // Museo del Atlántico is on the forward corridor (t ~ 0.73, crossTrack < 1500m) - MUST be accepted!
+    const museoAtlantico = { name: 'Museo del Atlántico', latitude: 10.9840, longitude: -74.7797 }
+    const projMuseo = computeCorridorProjection(museoAtlantico, startPlace, endPlace)
+    assert.ok(projMuseo.t > 0.5 && projMuseo.t < 0.9, 'Museo del Atlántico must be along the travel progression')
+    assert.ok(projMuseo.crossTrackMeters < 1500, 'Museo del Atlántico cross-track must be within corridor')
+    assert.equal(isWithinCorridor(museoAtlantico, startPlace, endPlace), true, 'Museo del Atlántico must be accepted')
+  })
+
+  it('11. generateChatResponse for Soledad to Gran Malecón tour never suggests Puente Pumarejo and maintains forward monotonic progress', async () => {
+    const userMsg = 'Crea un tour desde mi ubicación hasta el Gran Malecón del Río'
+    const res = await generateChatResponse(
+      { history: [{ role: 'user', content: userMsg }] },
+      '',
+      '',
+      {
+        city: 'Barranquilla',
+        country: 'Colombia',
+        destination: 'Gran Malecón del Río',
+        tourType: 'location_to_destination',
+        originPlace: 'user_current_location',
+        isUserLocationOrigin: true,
+        userGpsLatitude: 10.9254,
+        userGpsLongitude: -74.7958
+      },
+      []
+    )
+
+    const places = res.specificPlaces || res.extractedPreferences?.specificPlaces || []
+    assert.ok(places.length >= 2, `Expected at least 2 stops, got ${places.length}`)
+
+    // 1. Puente Pumarejo MUST NEVER appear as a stop
+    const hasPumarejo = places.some(p => (p.name || '').toLowerCase().includes('pumarejo'))
+    assert.equal(hasPumarejo, false, 'Puente Pumarejo must NEVER appear as a detour stop when heading to Gran Malecón')
+
+    // 2. Final stop MUST be Gran Malecón del Río
+    const lastStop = places[places.length - 1]
+    assert.ok(
+      (lastStop.name || '').toLowerCase().includes('malecón') || (lastStop.name || '').toLowerCase().includes('malecon'),
+      `Final stop must be Gran Malecón del Río, got ${lastStop.name}`
+    )
   })
 })

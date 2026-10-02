@@ -3,7 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
-import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor } from '../services/osm.js'
+import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingName, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
@@ -1268,7 +1268,7 @@ aiRouter.post('/chat', async (req, res, next) => {
           const isNonDiningVenue = !/^(?:restaurante|caf[ée]|bistro|asador)\s+/i.test(poiName) && /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro|puente|bridge|ecoparque|ci[eé]naga|sendero|mirador|malec[oó]n|malecon|playa|estatua|obelisco)\b/i.test(poiName)
 
           const isAiRestaurant = Boolean(aiMatch && (aiMatch.isRestaurant || aiMatch.type === 'food' || aiMatch.category === 'restaurant' || aiMatch.entityType === 'restaurant'))
-          const isDining = !isNonDiningVenue && (isAiRestaurant || isCatalogRestaurant || isFoodPattern || isLastStopInDay)
+          const isDining = !isNonDiningVenue && (isAiRestaurant || isCatalogRestaurant || isFoodPattern || (!isLocationRoute && isLastStopInDay))
 
           const resolvedLat = (aiMatch && Number.isFinite(Number(aiMatch.latitude))) ? Number(aiMatch.latitude) : catalogCoords?.latitude
           const resolvedLon = (aiMatch && Number.isFinite(Number(aiMatch.longitude))) ? Number(aiMatch.longitude) : catalogCoords?.longitude
@@ -6072,21 +6072,9 @@ export function sortPlacesByProximity(places, origin = null) {
 export function orderPlacesAlongRoute(places, startLoc, endLoc) {
   if (!places || places.length <= 1 || !startLoc || !endLoc) return places
 
-  const latA = Number(startLoc.latitude ?? startLoc.lat ?? 0)
-  const lonA = Number(startLoc.longitude ?? startLoc.lon ?? 0)
-  const latB = Number(endLoc.latitude ?? endLoc.lat ?? 0)
-  const lonB = Number(endLoc.longitude ?? endLoc.lon ?? 0)
-
-  const dLat = latB - latA
-  const dLon = lonB - lonA
-  const lenSq = dLat * dLat + dLon * dLon
-
-  if (lenSq < 1e-7) return places
-
   const mapped = places.map((place) => {
-    const pLat = Number(place.latitude ?? 0)
-    const pLon = Number(place.longitude ?? 0)
-    const t = ((pLat - latA) * dLat + (pLon - lonA) * dLon) / lenSq
+    const proj = computeCorridorProjection(place, startLoc, endLoc)
+    const t = proj ? proj.t : 0
     return { place, t }
   })
 
@@ -6270,16 +6258,28 @@ export async function collectCorridorCandidates(input, location) {
     const lonB = endPlace.longitude
 
     const steps = [0.25, 0.50, 0.75]
-    for (const ratio of steps) {
+    const midTasks = steps.map(async (ratio) => {
       const midLat = latA + (latB - latA) * ratio
       const midLon = lonA + (lonB - lonA) * ratio
       try {
-        const attractions = await overpassAttractions(midLat, midLon, 6000)
-        pool.push(...attractions)
-        const foodSpots = await overpassNearbyFood(midLat, midLon, 4000)
-        pool.push(...foodSpots)
+        const [attractions, foodSpots] = await Promise.all([
+          overpassAttractions(midLat, midLon, 3500).catch(() => []),
+          overpassNearbyFood(midLat, midLon, 2500).catch(() => [])
+        ])
+        return [...attractions, ...foodSpots]
       } catch (err) {
-        console.warn('[corridor] Midpoint fetch error:', err.message)
+        return []
+      }
+    })
+    const midResults = await Promise.race([
+      Promise.allSettled(midTasks),
+      new Promise(resolve => setTimeout(resolve, 2000))
+    ])
+    if (Array.isArray(midResults)) {
+      for (const res of midResults) {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          pool.push(...res.value)
+        }
       }
     }
   }
@@ -6416,8 +6416,16 @@ export async function collectCorridorCandidates(input, location) {
     }
   }
 
-  // Sort intermediates monotonically by distance from startPlace to guarantee linear route progression
-  if (startPlace && Number.isFinite(startPlace.latitude) && Number.isFinite(startPlace.longitude)) {
+  // Sort intermediates monotonically by forward progress t along route corridor
+  if (startPlace && endPlace) {
+    intermediates.sort((a, b) => {
+      const projA = computeCorridorProjection(a, startPlace, endPlace)
+      const projB = computeCorridorProjection(b, startPlace, endPlace)
+      const tA = projA ? projA.t : haversineMeters(startPlace.latitude, startPlace.longitude, a.latitude, a.longitude)
+      const tB = projB ? projB.t : haversineMeters(startPlace.latitude, startPlace.longitude, b.latitude, b.longitude)
+      return tA - tB
+    })
+  } else if (startPlace && Number.isFinite(startPlace.latitude) && Number.isFinite(startPlace.longitude)) {
     intermediates.sort((a, b) => {
       const distA = haversineMeters(startPlace.latitude, startPlace.longitude, a.latitude, a.longitude)
       const distB = haversineMeters(startPlace.latitude, startPlace.longitude, b.latitude, b.longitude)

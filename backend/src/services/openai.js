@@ -2,7 +2,7 @@ import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
 import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
-import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds, isWithinCorridor, KNOWN_ICONIC_LANDMARKS } from './osm.js'
+import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection, KNOWN_ICONIC_LANDMARKS } from './osm.js'
 import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate } from './candidate-catalog.js'
 import { resolvePlaceWithCascade, resolveProviderDestinationCenter, searchGeoapifyPlaces, searchMapboxPlaces } from './places-resolver.js'
 import { fetchWithProviderRetry } from './provider-http.js'
@@ -2306,11 +2306,24 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       if (destGeo?.latitude && destGeo?.longitude) {
         endLat = Number(destGeo.latitude)
         endLon = Number(destGeo.longitude)
-        if (destGeo.city && !known.city) {
+        if (destGeo.city) {
           known.city = destGeo.city
           detectedCity = destGeo.city
         }
         if (destGeo.country && !known.country) known.country = destGeo.country
+      }
+    }
+
+    if (!endLat || !endLon) {
+      const destKey = destName.toLowerCase().trim()
+      const knownLandmark = KNOWN_ICONIC_LANDMARKS[destKey] || Object.values(KNOWN_ICONIC_LANDMARKS).find(l => arePlacesSimilar(l.name, destName))
+      if (knownLandmark?.latitude && knownLandmark?.longitude) {
+        endLat = Number(knownLandmark.latitude)
+        endLon = Number(knownLandmark.longitude)
+        if (knownLandmark.city) {
+          known.city = knownLandmark.city
+          detectedCity = knownLandmark.city
+        }
       }
     }
 
@@ -2371,7 +2384,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     }
 
-    // 1.5 Curated iconic landmarks along corridor (< 1ms)
+    // 1.5 Curated fallback landmarks within search radius (< 1ms)
     const maxCandidateRadiusM = Math.max(12000, routeDistMeters * 1.5)
     for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
       if (!landmark || landmark.latitude == null || landmark.longitude == null) continue
@@ -2415,11 +2428,11 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     }
 
-    // 4. Only query live OSM if we don't have enough candidates along the corridor (single midpoint, tight 1.8s timeout)
-    if (startLat && endLat && (existingCorridorAttrs < 3 || existingCorridorRests < 2)) {
+    // 4. Live OSM query strictly if corridor candidates are scarce (tight 1.8s timeout, parallel)
+    if (startLat && endLat && (existingCorridorAttrs < 3 || existingCorridorRests < 1)) {
       const midLat = startLat + (endLat - startLat) * 0.5
       const midLon = startLon + (endLon - startLon) * 0.5
-      const midRadiusM = Math.max(2500, Math.min(6000, Math.round(routeDistKm * 400)))
+      const midRadiusM = Math.max(1500, Math.min(5000, Math.round(routeDistKm * 350)))
 
       const liveQueryAll = async () => {
         const liveTasks = []
@@ -2433,7 +2446,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
               .catch(() => {})
           )
         }
-        if (existingCorridorRests < 2) {
+        if (existingCorridorRests < 1) {
           liveTasks.push(
             overpassNearbyFood(midLat, midLon, midRadiusM)
               .then(res => {
@@ -2459,13 +2472,17 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
       const norm = p.name.toLowerCase().trim()
       if (seenAttrNames.has(norm)) continue
+
       if (p.latitude != null && p.longitude != null && startLat && endLat) {
-        if (!isWithinCorridor(p, startPlace, endPlace)) continue
-        const distFromStart = haversineMeters(startLat, startLon, p.latitude, p.longitude)
-        validAttrs.push({ ...p, distFromStart })
-        seenAttrNames.add(norm)
-      } else {
-        validAttrs.push({ ...p, distFromStart: routeDistMeters * 0.5 })
+        const proj = computeCorridorProjection(p, startPlace, endPlace)
+        if (!proj || !isWithinCorridor(p, startPlace, endPlace)) continue
+        validAttrs.push({
+          ...p,
+          t: proj.t,
+          crossTrackKm: proj.crossTrackMeters / 1000,
+          detourKm: proj.detourMeters / 1000,
+          distFromStart: proj.distFromStartMeters
+        })
         seenAttrNames.add(norm)
       }
     }
@@ -2476,29 +2493,41 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isLowQualityOrFastFoodVenue(r.name)) continue
       const norm = r.name.toLowerCase().trim()
       if (seenRestNames.has(norm)) continue
+
       if (r.latitude != null && r.longitude != null && startLat && endLat) {
-        if (!isWithinCorridor(r, startPlace, endPlace)) continue
-        const distFromStart = haversineMeters(startLat, startLon, r.latitude, r.longitude)
-        validRests.push({ ...r, distFromStart })
-        seenRestNames.add(norm)
-      } else {
-        validRests.push({ ...r, distFromStart: routeDistMeters * 0.5 })
+        const proj = computeCorridorProjection(r, startPlace, endPlace)
+        if (!proj || !isWithinCorridor(r, startPlace, endPlace)) continue
+        validRests.push({
+          ...r,
+          t: proj.t,
+          crossTrackKm: proj.crossTrackMeters / 1000,
+          detourKm: proj.detourMeters / 1000,
+          distFromStart: proj.distFromStartMeters
+        })
         seenRestNames.add(norm)
       }
     }
 
-    // Fallback: If strict corridor yielded too few places, relax constraint to nearest available in raw pool
-    if (validAttrs.length < 3 && startLat && endLat) {
+    // Fallback: If strict corridor yielded too few places, relax constraint (relaxed = true)
+    if (validAttrs.length < 2 && startLat && endLat) {
       for (const p of rawAttrs) {
         if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isLowQualityOrFastFoodVenue(p.name) || isLodgingName(p.name) || isLodgingCategoryOrGeneric(p.name) || p.tags?.tourism === 'hotel' || p.category === 'hotel') continue
         if (arePlacesSimilar(p.name, destName) || arePlacesSimilar(p.name, startPlace.name)) continue
         const norm = p.name.toLowerCase().trim()
         if (seenAttrNames.has(norm)) continue
-        if (p.latitude != null && p.longitude != null && !isWithinCorridor(p, startPlace, endPlace, true)) continue
-        const distFromStart = (p.latitude != null && p.longitude != null) ? haversineMeters(startLat, startLon, p.latitude, p.longitude) : routeDistMeters * 0.5
-        validAttrs.push({ ...p, distFromStart })
-        seenAttrNames.add(norm)
-        if (validAttrs.length >= 5) break
+        if (p.latitude != null && p.longitude != null) {
+          const proj = computeCorridorProjection(p, startPlace, endPlace)
+          if (!proj || !isWithinCorridor(p, startPlace, endPlace, true)) continue
+          validAttrs.push({
+            ...p,
+            t: proj.t,
+            crossTrackKm: proj.crossTrackMeters / 1000,
+            detourKm: proj.detourMeters / 1000,
+            distFromStart: proj.distFromStartMeters
+          })
+          seenAttrNames.add(norm)
+          if (validAttrs.length >= 4) break
+        }
       }
     }
 
@@ -2507,97 +2536,94 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         if (!r || !r.name || isGenericFacilityName(r.name) || isNonTouristFacility(r.tags) || isNonTouristFacility({ name: r.name }) || isLowQualityOrFastFoodVenue(r.name)) continue
         const norm = r.name.toLowerCase().trim()
         if (seenRestNames.has(norm)) continue
-        if (r.latitude != null && r.longitude != null && !isWithinCorridor(r, startPlace, endPlace, true)) continue
-        const distFromStart = (r.latitude != null && r.longitude != null) ? haversineMeters(startLat, startLon, r.latitude, r.longitude) : routeDistMeters * 0.5
-        validRests.push({ ...r, distFromStart })
-        seenRestNames.add(norm)
-        if (validRests.length >= 2) break
-      }
-    }
-
-    // Secondary Fallback: If still sparse, draw from regional KNOWN_ICONIC_LANDMARKS for detected city
-    if (validAttrs.length < 3 && detectedCity) {
-      for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
-        if (!landmark || !landmark.name || landmark.category === 'restaurant' || isFoodOrDrinkEstablishment(landmark.name) || isLodgingName(landmark.name) || isLodgingCategoryOrGeneric(landmark.name) || landmark.category === 'hotel' || landmark.tags?.tourism === 'hotel') continue
-        if (landmark.city?.toLowerCase() === detectedCity.toLowerCase()) {
-          if (arePlacesSimilar(landmark.name, destName)) continue
-          const norm = landmark.name.toLowerCase().trim()
-          if (seenAttrNames.has(norm)) continue
-          if (startLat && endLat && landmark.latitude != null && landmark.longitude != null) {
-            if (!isWithinCorridor(landmark, startPlace, endPlace, true)) continue
-          }
-          const distFromStart = (landmark.latitude != null && landmark.longitude != null)
-            ? haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
-            : routeDistMeters * 0.5
-          validAttrs.push({ ...landmark, distFromStart })
-          seenAttrNames.add(norm)
-          if (validAttrs.length >= 5) break
-        }
-      }
-    }
-
-    if (validRests.length < 1 && detectedCity) {
-      for (const [k, landmark] of Object.entries(KNOWN_ICONIC_LANDMARKS)) {
-        if (!landmark || !landmark.name || (landmark.category !== 'restaurant' && !isFoodOrDrinkEstablishment(landmark.name))) continue
-        if (landmark.city?.toLowerCase() === detectedCity.toLowerCase()) {
-          const norm = landmark.name.toLowerCase().trim()
-          if (seenRestNames.has(norm)) continue
-          if (startLat && endLat && landmark.latitude != null && landmark.longitude != null) {
-            if (!isWithinCorridor(landmark, startPlace, endPlace, true)) continue
-          }
-          const distFromStart = (landmark.latitude != null && landmark.longitude != null)
-            ? haversineMeters(startLat, startLon, landmark.latitude, landmark.longitude)
-            : routeDistMeters * 0.5
-          validRests.push({ ...landmark, distFromStart })
+        if (r.latitude != null && r.longitude != null) {
+          const proj = computeCorridorProjection(r, startPlace, endPlace)
+          if (!proj || !isWithinCorridor(r, startPlace, endPlace, true)) continue
+          validRests.push({
+            ...r,
+            t: proj.t,
+            crossTrackKm: proj.crossTrackMeters / 1000,
+            detourKm: proj.detourMeters / 1000,
+            distFromStart: proj.distFromStartMeters
+          })
           seenRestNames.add(norm)
           if (validRests.length >= 2) break
         }
       }
     }
 
-    // Sort strictly monotonic by distance from startPlace (ZERO zigzag)
-    validAttrs.sort((a, b) => (a.distFromStart || 0) - (b.distFromStart || 0))
-    validRests.sort((a, b) => (a.distFromStart || 0) - (b.distFromStart || 0))
+    // 1. Sort candidate attractions by forward progress t ascending
+    validAttrs.sort((a, b) => (a.t ?? 0) - (b.t ?? 0))
 
+    // 2. Select up to 3-4 attractions, ensuring reasonable spacing along the route
     const selectedIntermediateAttrs = []
+    let lastT = -1
     for (const a of validAttrs) {
       if (selectedIntermediateAttrs.length >= 4) break
-      if (!selectedIntermediateAttrs.some(sel => arePlacesSimilar(sel.name, a.name))) {
-        selectedIntermediateAttrs.push(a)
+      if (selectedIntermediateAttrs.some(sel => arePlacesSimilar(sel.name, a.name))) continue
+      const aT = Number(a.t ?? 0)
+      if (lastT >= 0 && Math.abs(aT - lastT) < 0.05) continue
+      selectedIntermediateAttrs.push(a)
+      lastT = aT
+    }
+    if (selectedIntermediateAttrs.length < 2) {
+      for (const a of validAttrs) {
+        if (selectedIntermediateAttrs.length >= 3) break
+        if (!selectedIntermediateAttrs.some(sel => arePlacesSimilar(sel.name, a.name))) {
+          selectedIntermediateAttrs.push(a)
+        }
       }
+      selectedIntermediateAttrs.sort((a, b) => (a.t ?? 0) - (b.t ?? 0))
     }
 
+    // 3. Select a lunch restaurant positioned in the midday section of the route (t around 0.25 to 0.75)
     let lunchRest = null
-    const halfDist = routeDistMeters * 0.5
     if (validRests.length > 0) {
-      const sortedByMidpoint = [...validRests].sort((a, b) => Math.abs((a.distFromStart || 0) - halfDist) - Math.abs((b.distFromStart || 0) - halfDist))
+      const middayRests = validRests.filter(r => (r.t ?? 0) >= 0.25 && (r.t ?? 0) <= 0.75)
+      const poolRests = middayRests.length > 0 ? middayRests : validRests
+      const sortedByMidpoint = [...poolRests].sort((a, b) => Math.abs((a.t ?? 0) - 0.50) - Math.abs((b.t ?? 0) - 0.50))
       lunchRest = sortedByMidpoint[0] || null
     }
 
-    const mid = Math.ceil(selectedIntermediateAttrs.length / 2)
-    const preLunchAttrs = selectedIntermediateAttrs.slice(0, mid)
-    const postLunchAttrs = selectedIntermediateAttrs.slice(mid)
+    // 4. UNIFIED TOPOLOGICAL SORTING:
+    // Combine all intermediate stops (attractions + lunch) and sort strictly by t ascending!
+    const allIntermediateStops = [...selectedIntermediateAttrs]
+    if (lunchRest && !allIntermediateStops.some(s => arePlacesSimilar(s.name, lunchRest.name))) {
+      allIntermediateStops.push(lunchRest)
+    }
+    allIntermediateStops.sort((a, b) => (a.t ?? 0) - (b.t ?? 0))
 
     const dayStops = []
     const specificPlacesToSave = []
 
-    for (const s of preLunchAttrs) {
+    for (const s of allIntermediateStops) {
+      const isRest = s.entityType === 'restaurant' || s.category === 'restaurant' || (lunchRest && arePlacesSimilar(s.name, lunchRest.name))
       dayStops.push(`• ${s.name}`)
-      specificPlacesToSave.push({ name: s.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true })
-    }
-
-    if (lunchRest) {
-      dayStops.push(`• ${lunchRest.name}`)
-      specificPlacesToSave.push({ name: lunchRest.name, dia: 1, day: 1, category: 'restaurant', type: 'food', entityType: 'restaurant', latitude: lunchRest.latitude, longitude: lunchRest.longitude, coordinatesVerified: true })
-    }
-
-    for (const s of postLunchAttrs) {
-      dayStops.push(`• ${s.name}`)
-      specificPlacesToSave.push({ name: s.name, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true })
+      specificPlacesToSave.push({
+        name: s.name,
+        dia: 1,
+        day: 1,
+        category: isRest ? 'restaurant' : (s.category || 'attraction'),
+        type: isRest ? 'food' : (s.type || 'cultural'),
+        entityType: isRest ? 'restaurant' : 'attraction',
+        latitude: s.latitude,
+        longitude: s.longitude,
+        coordinatesVerified: Boolean(s.latitude && s.longitude)
+      })
     }
 
     dayStops.push(`• ${destName}`)
-    specificPlacesToSave.push({ name: destName, dia: 1, day: 1, category: 'attraction', type: 'cultural', entityType: 'attraction', latitude: endLat, longitude: endLon, coordinatesVerified: Boolean(endLat && endLon) })
+    specificPlacesToSave.push({
+      name: destName,
+      dia: 1,
+      day: 1,
+      category: 'attraction',
+      type: 'cultural',
+      entityType: 'attraction',
+      latitude: endLat,
+      longitude: endLon,
+      coordinatesVerified: Boolean(endLat && endLon)
+    })
 
     known.specificPlaces = specificPlacesToSave
     return `Itinerario de Viaje: En ruta hacia ${destName} (1 día)\n\nDía 1: En ruta hacia ${destName}\n${dayStops.join('\n')}`
