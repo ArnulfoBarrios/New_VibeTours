@@ -800,17 +800,28 @@ aiRouter.post('/chat', async (req, res, next) => {
                /\b(parque|reserva|isla|playa|valle|mirador)\b/i.test(dest)
       }
       if (isSubordinateParkOrAttraction(validExtracted.destination)) {
+        let catalogHub = null
+        if (!validExtracted.city || isSubordinateParkOrAttraction(validExtracted.city)) {
+          const lowerM = message.toLowerCase()
+          for (const [k, c] of Object.entries(FALLBACK_DESTINATION_CENTROIDS)) {
+            if (!c.isMicroDestination && k.length > 3 && new RegExp(`\\b${k}\\b`, 'i').test(lowerM)) {
+              catalogHub = c.city || c.entityName
+              break
+            }
+          }
+        }
         const hubInMessage = message.match(/\b(santa marta|cartagena|medell[íi]n|bogot[áa]|barranquilla|cali|bucaramanga|pereira)\b/i)
         const detectedHub = (validExtracted.city && !isSubordinateParkOrAttraction(validExtracted.city))
           ? validExtracted.city
-          : (hubInMessage ? hubInMessage[1] : null)
+          : (catalogHub || (hubInMessage ? hubInMessage[1] : null))
 
         if (detectedHub) {
           console.info(`[ai/chat] Promoting base hub city "${detectedHub}" as primary destination and saving "${validExtracted.destination}" as specific place.`)
           if (!validExtracted.specificPlaces) validExtracted.specificPlaces = []
           const alreadyHas = validExtracted.specificPlaces.some(p => (typeof p === 'string' ? p : p.name).toLowerCase().includes(validExtracted.destination.toLowerCase()))
           if (!alreadyHas) {
-            validExtracted.specificPlaces.push({ name: validExtracted.destination, dia: 2 })
+            const targetDay = Number(validExtracted.durationDays) === 1 ? 1 : 2
+            validExtracted.specificPlaces.push({ name: validExtracted.destination, dia: targetDay, day: targetDay })
           }
           validExtracted.destination = cleanAdministrativeCityName(detectedHub)
           validExtracted.city = cleanAdministrativeCityName(detectedHub)

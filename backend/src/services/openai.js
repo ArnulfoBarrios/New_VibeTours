@@ -1903,7 +1903,7 @@ export function isVagueDestination(destination, preferences = {}) {
   if (preferences.canonicalDestination && preferences.canonicalDestination.city) return false
   const lower = String(destination).trim().toLowerCase()
   if (lower.length <= 2) return true
-  const isGenericTermOnly = /^(playa|playas|caribe|costa|mar|monta[ñn]a|naturaleza|europa|asia|latinoam[ée]rica|sudam[ée]rica|extranjero|fuera|exterior|frontera|isla|alojamiento|hospedaje|ciudad|destino|destinos|viaje|lugar|cualquiera|no se|no sé|donde sea|sorpr[ée]ndeme|recomi[ée]ndame|en mi pa[íi]s|mi pa[íi]s|cerca|cercanos|internacional|eeuu)$/i.test(lower)
+  const isGenericTermOnly = /^(playa|playas|caribe|costa|mar|monta[ñn]a|naturaleza|centro|centro hist[óo]rico|europa|asia|latinoam[ée]rica|sudam[ée]rica|extranjero|fuera|exterior|frontera|isla|alojamiento|hospedaje|ciudad|destino|destinos|viaje|lugar|cualquiera|no se|no sé|donde sea|sorpr[ée]ndeme|recomi[ée]ndame|en mi pa[íi]s|mi pa[íi]s|cerca|cercanos|internacional|eeuu)$/i.test(lower)
   return isGenericTermOnly
 }
 
@@ -2059,10 +2059,26 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         if (fallbackExtracted.originPlace) known.originPlace = fallbackExtracted.originPlace
         if (fallbackExtracted.destinationPlace) known.destinationPlace = fallbackExtracted.destinationPlace
       }
+      if (fallbackExtracted.originPlace && !known.originPlace) {
+        known.originPlace = fallbackExtracted.originPlace
+      }
+      if (Array.isArray(fallbackExtracted.interests) && fallbackExtracted.interests.length > 0) {
+        known.interests = Array.from(new Set([...(known.interests || []), ...fallbackExtracted.interests]))
+      }
+      if (Array.isArray(fallbackExtracted.specificPlaces) && fallbackExtracted.specificPlaces.length > 0) {
+        known.specificPlaces = deduplicateChatSpecificPlaces([
+          ...(known.specificPlaces || []),
+          ...fallbackExtracted.specificPlaces
+        ], rawDestName)
+      }
       if (fallbackExtracted.isUserLocationOrigin) {
         known.isUserLocationOrigin = true
       }
     }
+  }
+
+  if (Number(known.durationDays) === 1 && !known.accommodationStatus) {
+    known.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
   }
 
   const destName = cleanAdministrativeCityName(rawDestName)
@@ -2262,7 +2278,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     if (!known.budget) known.budget = 'Moderado'
   }
 
-  const hasLodging = isLocationToDestination ? true : hasValidLodging(known.selectedHotel, known.accommodationStatus)
+  const isOneDayTour = Number(known.durationDays) === 1
+  const hasLodging = (isLocationToDestination || isOneDayTour) ? true : hasValidLodging(known.selectedHotel, known.accommodationStatus)
   const hasTransport = hasValidValue(known.transport)
   const hasBudget = hasValidValue(known.budget)
   const hasCompanions = hasValidValue(known.companions)
@@ -2644,15 +2661,17 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = '¡Hola! Soy Tour Planner AI 🤖. Cuéntame: ¿a qué ciudad o destino te gustaría viajar hoy?'
       }
     } else {
-      const fbHasLodging = isLocationToDestination ? true : hasValidLodging(known.selectedHotel, known.accommodationStatus)
+      const isOneDayTour = Number(known.durationDays) === 1
+      const fbHasLodging = (isLocationToDestination || isOneDayTour) ? true : hasValidLodging(known.selectedHotel, known.accommodationStatus)
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
       const fbHasCompanions = hasValidValue(known.companions)
-      const fbAllKeyInfoComplete = isLocationToDestination
+      const fbAllKeyInfoComplete = (isLocationToDestination || isOneDayTour)
         ? Boolean(hasCity && hasDurationOrDates)
         : Boolean(hasCity && hasDurationOrDates && fbHasLodging && fbHasTransport && fbHasBudget)
 
-      const isExplicitBuildRequestedByUser = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+      const isDescribingTripIdea = /\b(?:lo\s+que\s+quiero\s+(?:hacer\s+)?es\s+crear|quiero\s+crear\s+un\s+tour\s+(?:en\s+donde|donde)|la\s+idea\s+es\s+crear)\b/i.test(lastUserMsg)
+      const isExplicitBuildRequestedByUser = !isDescribingTripIdea && /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
       effectiveReadyToBuild = Boolean(fbAllKeyInfoComplete && isExplicitBuildRequestedByUser)
 
       const isItineraryInquiry = /\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|detalles del d[íi]a|ver d[íi]a)\b/i.test(lastUserMsg)
@@ -2906,7 +2925,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       } else if (!fbHasLodging && hasBudget && hasTransport) {
         fallbackMsg = `¡Perfecto! Ya tenemos transporte y presupuesto. ¿En qué hotel o alojamiento se hospedarán en ${destName}? (o indícame si te quedas en casa propia / familiar).`
         fallbackChips = ['🏨 Recomiéndame hoteles', 'Tengo casa propia / familiar']
-      } else if (!isLocationToDestination && (!hasBudget || !hasTransport || !fbHasLodging)) {
+      } else if (!isLocationToDestination && !isOneDayTour && (!hasBudget || !hasTransport || !fbHasLodging)) {
         const missing = []
         if (!hasTransport) missing.push('tu medio de transporte')
         if (!hasBudget) missing.push('tu presupuesto')
@@ -2921,6 +2940,31 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const corridorBlock = await buildLocationCorridorDayBlocks()
           fallbackMsg = `¡Perfecto! Diseñé un tour de 1 día desde tu ubicación hasta **${destName}**, pasando por atractivos en el camino:\n\n${corridorBlock}\n\n¿Qué te parece este recorrido? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
           fallbackChips = ['🗺️ Generar tour en el mapa', 'Modificar paradas', 'Ver detalles']
+        } else if (isOneDayTour) {
+          // Dynamic lightweight 1-day proposal (Universal, concise, mobile-friendly)
+          const specifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
+            ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
+            : []
+          const rawPresetPlaces = (preset.places || []).filter(Boolean)
+          const hasBeach = (known.interests || []).includes('Playas') || /playa|mar|costa/i.test(lastUserMsg)
+          const hasNature = (known.interests || []).includes('Naturaleza') || /naturaleza|monta[ñn]a|cascada/i.test(lastUserMsg)
+
+          const primaryActivity = hasBeach
+            ? 'Playa y brisa marina'
+            : (hasNature ? 'Contacto con la naturaleza y senderos' : (specifics[0] || rawPresetPlaces[0] || 'Recorrido por sitios emblemáticos'))
+          const secondaryCandidate = specifics.find(s => !arePlacesSimilar(s, primaryActivity)) || (primaryActivity !== specifics[0] && specifics[0] ? specifics[0] : null) || rawPresetPlaces.find(p => !arePlacesSimilar(p, primaryActivity)) || 'Atractivo destacado de la zona'
+
+          const transportTxt = known.transport ? ` en ${known.transport.toLowerCase()}` : ''
+          const companionsTxt = known.companions ? ` ${known.companions.toLowerCase()}` : ''
+
+          const intro = `¡Excelente plan! Para 1 día${transportTxt}${companionsTxt} en **${destName}**, te sugiero esta distribución:`
+          const morning = `• **Mañana**: ${primaryActivity}.`
+          const afternoon = `• **Tarde**: Visita y recorrido en **${secondaryCandidate}**.`
+          const evening = `• **Atardecer**: Tiempo libre y regreso.`
+          const question = `¿Te parece bien esta ruta o prefieres ajustar las paradas antes de armar el tour en el mapa?`
+
+          fallbackMsg = `${intro}\n\n${morning}\n${afternoon}\n${evening}\n\n${question}`
+          fallbackChips = ['🗺️ Generar tour en el mapa', 'Ajustar paradas', 'Ver alternativas']
         } else {
           const numDays = Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))
           const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
@@ -4037,7 +4081,7 @@ export async function extractChatInformation(userMessage, currentData = {}, hist
   }
 
   const apiKey = getActiveOpenAiKey()
-  if (!apiKey) {
+  if (!apiKey || isOpenAiCircuitOpen()) {
     return extractChatInformationFallback(userMessage)
   }
 
@@ -4223,7 +4267,7 @@ export function isValidRouteEndpoint(candidate = '') {
   if (clean.length < 3 || clean.length > 50) return false
 
   // 1. Cannot contain verbs or movement/stay words
-  if (/\b(mover|movernos|ir|irnos|viajar|viajo|viajamos|viajaremos|quedar|quedarnos|hospedar|hospedarnos|caminar|llegar|salir|conocer|visitar|hacer|estar|pasar|comprar|comer|tomar|vamos|nos vamos|somos|tengo|tenemos|quiero|queremos|gustaria|gustar[íi]a)\b/i.test(clean)) {
+  if (/\b(mover|movernos|ir|irnos|viajar|viajo|viajamos|viajaremos|quedar|quedarnos|hospedar|hospedarnos|caminar|llegar|salir|conocer|visitar|hacer|estar|pasar|comprar|comer|tomar|vamos|nos vamos|somos|tengo|tenemos|quiero|queremos|gustaria|gustar[íi]a|relajar|relajarnos|relajarse|descansar|descanso)\b/i.test(clean)) {
     return false
   }
 
@@ -4260,6 +4304,78 @@ export function extractChatInformationFallback(prompt) {
     .replace(/[.,;:!?¿¡"'()]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+
+  const NON_DEST = /^(pareja|en pareja|familia|en familia|amigos|con amigos|solo|sola|grupo|en grupo|econ[oó]mico|moderado|lujo|barato|mochilero|caminando|a pie|auto|carro|coche|taxi|uber|bicicleta|bici|transporte p[úu]blico|hotel|hoteles|hostal|resort|hospedaje|alojamiento|un d[íi]a|\d+\s+d[íi]as?|fin de semana|puente|mes|semana|a[ñn]o|vacaciones|turismo|planes?|actividades|sitios|lugares|atracciones|nada|s[íi]|si|no|ok|hola|buenas?|gracias|adelante|generar?|crear?|empezar?|mover|movernos|pesos|vamos|nos vamos|presupuesto)$/i
+
+  // 1. Universal Origin / Presence Detection (e.g. "yo me encuentro en Santa Marta", "estoy en Medellín", "ubicados en Cancún", "saliendo desde Bogotá")
+  const presenceMatch = cleanForRoutes.match(/\b(?:yo\s+)?(?:me\s+encuentro|nos\s+encontramos|estoy|estamos|estando|ubicad[oa]s?|radicad[oa]s?|saliendo\s+desde|saliendo\s+de|partiendo\s+de)\s+(?:ahora\s+mismo\s+|actualmente\s+)?(?:en|por|desde)\s+([a-záéíóúñ\s'-]{2,40}?)(?:$|\s+(?:y\b|lo\s+que|la\s+idea|donde|que\b|para\b|con\b|en\b|vamos|voy|pero|si\b|adem[aá]s|el\s+tour|un\s+tour|durante|\bdel\s+\d+|\bpor\s+\d+)\b)/i)
+  if (presenceMatch) {
+    const rawOrigin = presenceMatch[1].trim()
+    const lowerOrigin = rawOrigin.toLowerCase()
+    if (isValidRouteEndpoint(rawOrigin) && !isVagueDestination(lowerOrigin) && !isNonTouristicInput(lowerOrigin) && !NON_DEST.test(lowerOrigin)) {
+      const cleanCity = cleanAdministrativeCityName(rawOrigin)
+      if (cleanCity && cleanCity.length >= 3) {
+        const properCity = cleanCity.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+        res.originPlace = properCity
+        res.city = properCity
+        res.destination = properCity
+      }
+    }
+  }
+
+  // 2. Universal scan against known centroids in FALLBACK_DESTINATION_CENTROIDS (Cities & Microdestinations)
+  const textWithoutAccents = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  for (const [key, centroid] of Object.entries(FALLBACK_DESTINATION_CENTROIDS)) {
+    if (key.length <= 3) continue
+    const keyClean = key.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const keyRegex = new RegExp(`\\b${keyClean.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i')
+    if (keyRegex.test(textWithoutAccents)) {
+      if (centroid.isMicroDestination) {
+        const mName = centroid.entityName || key.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+        res.specificPlaces = res.specificPlaces || []
+        if (!res.specificPlaces.some(p => arePlacesSimilar(typeof p === 'string' ? p : p.name, mName))) {
+          res.specificPlaces.push({
+            name: mName,
+            category: 'attraction',
+            type: 'cultural',
+            entityType: 'attraction'
+          })
+        }
+        if (!res.destination) {
+          res.destination = mName
+          res.city = mName
+        }
+      } else {
+        const cCity = centroid.city || centroid.entityName
+        res.city = cCity
+        res.destination = cCity
+      }
+    }
+  }
+
+  // 3. Universal Thematic Interests Extraction
+  const interestsList = []
+  if (/\b(playas?|mar|costa|brisa|arena|balneario|sol y playa)\b/i.test(text)) {
+    interestsList.push('Playas')
+  }
+  if (/\b(naturaleza|monta[ñn]a|cascada|senderismo|rio|r[íi]o|ecoturismo|bosque|verde|ecol[oó]gico)\b/i.test(text)) {
+    interestsList.push('Naturaleza')
+  }
+  if (/\b(historia|museos?|cultural|cultura|arquitectura|colonial|patrimonio|monumentos?)\b/i.test(text)) {
+    interestsList.push('Cultura e historia')
+  }
+  if (/\b(gastronom[íi]a|comida|restaurantes?|platos? t[íi]picos?|degustaci[oó]n|cenar|almorzar)\b/i.test(text)) {
+    interestsList.push('Gastronomía')
+  }
+  if (/\b(aventura|extremo|deportes?|rafting|canopy|buceo|surf|escalada)\b/i.test(text)) {
+    interestsList.push('Aventura')
+  }
+  if (/\b(rumba|fiesta|vida nocturna|bares|bar|discoteca)\b/i.test(text)) {
+    interestsList.push('Vida nocturna')
+  }
+  if (interestsList.length > 0) {
+    res.interests = interestsList
+  }
 
   const locationOriginMatch = cleanForRoutes.match(/\b(?:tour\s+|viaje\s+|ruta\s+|recorrido\s+|paseo\s+)?(?:desde|de|saliendo\s+de|partiendo\s+de)\s+(?:donde\s+estoy|donde\s+me\s+encuentro|mi\s+ubicaci[oó]n|mi\s+posici[oó]n|ac[aá]|aqu[íi])\s+(?:a\s+el|al|a\s+la|a\s+los|a\s+las|a|hacia(?:\s+(?:el|la|los|las))?|hasta(?:\s+(?:el|la|los|las))?|para(?:\s+(?:el|la|los|las))?)\s+([a-záéíóúñ\s'-]{2,50}?)(?:$|\s+(?:voy|vamos|en\s+(?:carro|auto|bici|bus|transporte|pareja|familia)|con|para|durante|\bdel\s+\d+|\bdel\s+pr[oó]ximo\s+mes|el\s+pr[oó]ximo|la\s+pr[oó]xima)\b)/i)
   if (locationOriginMatch) {
@@ -4392,6 +4508,15 @@ export function extractChatInformationFallback(prompt) {
     res.datesSeason = 'Fin de año'
   }
 
+  if (res.durationDays === 1) {
+    if (!res.accommodationStatus) {
+      res.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
+    }
+    if (!res.datesSeason) {
+      res.datesSeason = 'Tour de 1 día'
+    }
+  }
+
   if (/\b(pareja|con mi novia|con mi novio|con mi esposa|con mi esposo)\b/i.test(text)) {
     res.companions = 'En pareja'
     res.groupSize = 2
@@ -4499,8 +4624,6 @@ export function extractChatInformationFallback(prompt) {
 
   const isCommandOrControl = /\b(gener(ar|es|a|e|en|al)?|cre(ar|es|a|e|en)?|inicia(r)?|finaliza(r)?|constru(ye|ir)|dise[ñn](ar|a|es|e)?|est[aá]\s+perfecto|listo|procede|adelante|vamos|armar?|hazlo|de acuerdo|dale|genial|ok|comenzar|ver|mostrar|detalles|men[uú]|platos|comida|restaurantes?|hoteles?|atracciones|actividades|itinerario|itinerarios)\b/i.test(text)
 
-  const NON_DEST = /^(pareja|en pareja|familia|en familia|amigos|con amigos|solo|sola|grupo|en grupo|econ[oó]mico|moderado|lujo|barato|mochilero|caminando|a pie|auto|carro|coche|taxi|uber|bicicleta|bici|transporte p[úu]blico|hotel|hoteles|hostal|resort|hospedaje|alojamiento|un d[íi]a|\d+\s+d[íi]as?|fin de semana|puente|mes|semana|a[ñn]o|vacaciones|turismo|planes?|actividades|sitios|lugares|atracciones|nada|s[íi]|si|no|ok|hola|buenas?|gracias|adelante|generar?|crear?|empezar?|mover|movernos|pesos|vamos|nos vamos|presupuesto)$/i
-
   if (!res.destination) {
     const formatDestinationProperCase = (str = '') => {
       if (!str) return ''
@@ -4576,14 +4699,15 @@ export function extractChatInformationFallback(prompt) {
     prompt
   })
 
-  // Extract user-requested places / stops to add (e.g. "agrega La Ventana al Mundo", "quiero visitar el Castillo de Salgar para el día 2")
-  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|conocer|vamos\s+a|adiciona|adicionar)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;])/i
+  // Extract user-requested places / stops to add (e.g. "agrega La Ventana al Mundo", "quiero visitar el Castillo de Salgar para el día 2", "si me puedo ir a Minca")
+  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|conocer|vamos\s+a|adiciona|adicionar|si\s+me\s+puedo\s+ir\s+a|puedo\s+ir\s+a|irme\s+a|ir\s+a|pasar\s+por|conociendo|descubrir)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;])/i
   const placeMatch = (prompt || '').trim().match(addPlaceRegex)
   if (placeMatch) {
     const rawPlaceName = placeMatch[1].trim()
     const targetDay = placeMatch[2] ? parseInt(placeMatch[2], 10) : null
     let cleanPlaceName = rawPlaceName
       .replace(/^(?:a\s+|al\s+|en\s+)/i, '')
+      .replace(/^(?:(?:la\s+)?playa|(?:el\s+)?centro)\s+y\s+/i, '')
       .replace(/^(?:el|la|los|las|un|una)\s+/i, (match) => {
         return /^(?:el\s+puente|la\s+ronda|la\s+catedral|el\s+muelle|el\s+malec[oó]n|la\s+troja|la\s+cueva|el\s+caim[aá]n)/i.test(rawPlaceName)
           ? match
@@ -4591,15 +4715,21 @@ export function extractChatInformationFallback(prompt) {
       })
       .trim()
     cleanPlaceName = cleanPlaceName.charAt(0).toUpperCase() + cleanPlaceName.slice(1)
-    cleanPlaceName = cleanPlaceName.replace(/\s+(?:por\s+favor|porfa|gracias|adicionales?)$/i, '').trim()
+    cleanPlaceName = cleanPlaceName.replace(/\s+(?:por\s+favor|porfa|gracias|adicionales?|podr[aá]\s+ser.*|ser[íi]a\s+bacano.*|ser[íi]a\s+genial.*|y\s+(?:relajarnos|descansar|pasar\s+el\s+rato|disfrutar|conocer|pasear|comer)|para\s+.*)$/i, '').trim()
     const lowerP = cleanPlaceName.toLowerCase()
     const isGenericStopPhrase = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|paradas\s+adicionales|lugares\s+adicionales|otras?\s+paradas?)\b/i.test(lowerP)
-    const NON_PLACE_TARGETS = /^(paradas?|lugares|sitios|atractivos?|actividades|un\s+d[íi]a|\d+\s+d[íi]as?|hotel|hospedaje|alojamiento|tour|itinerario|ruta)$/i
-    if (!isGenericStopPhrase && !NON_PLACE_TARGETS.test(lowerP) && !isTemporalOrDurationPhrase(lowerP) && !isNonTouristicInput(lowerP) && !isGenericFacilityName(cleanPlaceName) && !isLodgingName(cleanPlaceName)) {
-      res.specificPlaces = [{
-        name: cleanPlaceName,
-        ...(targetDay && targetDay > 0 ? { dia: targetDay, day: targetDay } : {})
-      }]
+    const NON_PLACE_TARGETS = /^(paradas?|lugares|sitios|atractivos?|actividades|un\s+d[íi]a|\d+\s+d[íi]as?|hotel|hospedaje|alojamiento|tour|itinerario|ruta|relajarnos|relajar|relajarse|descansar|descanso)$/i
+    if (isValidRouteEndpoint(cleanPlaceName) && !isGenericStopPhrase && !NON_PLACE_TARGETS.test(lowerP) && !isTemporalOrDurationPhrase(lowerP) && !isNonTouristicInput(lowerP) && !isVagueDestination(lowerP) && !isGenericFacilityName(cleanPlaceName) && !isLodgingName(cleanPlaceName)) {
+      res.specificPlaces = res.specificPlaces || []
+      if (!res.specificPlaces.some(p => arePlacesSimilar(typeof p === 'string' ? p : p.name, cleanPlaceName))) {
+        res.specificPlaces.push({
+          name: cleanPlaceName,
+          category: 'attraction',
+          type: 'cultural',
+          entityType: 'attraction',
+          ...(targetDay && targetDay > 0 ? { dia: targetDay, day: targetDay } : {})
+        })
+      }
     }
   }
 
