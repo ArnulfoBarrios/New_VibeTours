@@ -315,4 +315,31 @@ describe('Corridor Tour Quality & Fix Verifications', () => {
       `Final stop must be Gran Malecón del Río, got ${lastStop.name}`
     )
   })
+
+  it('12. Paseo Bolívar and Parque Suri Salcedo resolution, non-dining categorization, and authentic imagery', async () => {
+    const { resolvePlaceWithCascade } = await import('../services/places-resolver.js')
+    const { imageForPlaceWithStatus } = await import('../services/imageSearch.js')
+
+    // 1. Resolve Paseo Bolívar dynamically via cascade
+    const resolvedPaseo = await resolvePlaceWithCascade('Paseo Bolívar', 'Barranquilla', 'Colombia')
+    assert.ok(resolvedPaseo, 'Paseo Bolívar must be resolvable')
+    assert.ok(Math.abs(resolvedPaseo.latitude - 10.983) < 0.01, `Latitude should be near 10.983, got ${resolvedPaseo.latitude}`)
+    assert.ok(Math.abs(resolvedPaseo.longitude - (-74.777)) < 0.01, `Longitude should be near -74.777, got ${resolvedPaseo.longitude}`)
+
+    // 2. Categorization: Paseo Bolívar must NEVER be dining
+    const subcat = inferStopSubcategory({ name: 'Paseo Bolívar' })
+    assert.notEqual(subcat, 'restaurant')
+    assert.notEqual(subcat, 'cafe')
+
+    const entityType = getPlaceEntityType('Paseo Bolívar')
+    assert.notEqual(entityType, 'food')
+
+    // 3. Authentic images
+    const paseoImg = await imageForPlaceWithStatus('Paseo Bolívar', 'Barranquilla', 'historic', 0)
+    assert.ok(paseoImg.url && !paseoImg.url.includes('photo-1544025162'), 'Paseo Bolívar must not have ribs food photo')
+
+    const suriImg = await imageForPlaceWithStatus('Parque Tomás Suri Salcedo', 'Barranquilla', 'nature', 0)
+    assert.ok(suriImg.url && !suriImg.url.includes('photo-1506744038136-46273834b3fb'), 'Parque Suri Salcedo must not have Yosemite mountain photo')
+  })
 })
+

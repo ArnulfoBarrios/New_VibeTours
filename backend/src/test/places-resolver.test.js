@@ -5,6 +5,7 @@ import {
   normalizeCityKey,
   lookupCachedPlace,
   saveCachedPlace,
+  isTestOrDummyPlace,
   placesMemoryCache
 } from '../services/places-cache-service.js'
 import {
@@ -27,6 +28,14 @@ test('normalizeCityKey normalizes city names consistently', () => {
   assert.equal(normalizeCityKey('Medellín'), 'medellin')
 })
 
+test('isTestOrDummyPlace correctly identifies mock/test fixtures', () => {
+  assert.equal(isTestOrDummyPlace('Restaurante Test Local'), true)
+  assert.equal(isTestOrDummyPlace('Lugar de Prueba 123'), true)
+  assert.equal(isTestOrDummyPlace('Dummy Venue'), true)
+  assert.equal(isTestOrDummyPlace('Restaurante Cucayo'), false)
+  assert.equal(isTestOrDummyPlace('Paseo Bolívar'), false)
+})
+
 test('hasPhysicalAddressPattern detects Latin American and international street nomenclature', () => {
   assert.ok(hasPhysicalAddressPattern('Cra. 49C # 76-80'))
   assert.ok(hasPhysicalAddressPattern('Carrera 53 con Calle 76'))
@@ -40,21 +49,22 @@ test('hasPhysicalAddressPattern detects Latin American and international street 
   assert.equal(hasPhysicalAddressPattern('Frente al parque'), false)
 })
 
-test('placesMemoryCache stores and retrieves places correctly', async () => {
-  const testPlace = {
-    name: 'Restaurante Test Local',
+test('placesMemoryCache stores and retrieves places correctly without saving dummy names to DB', async () => {
+  const samplePlace = {
+    name: 'Restaurante Sabor Caribe Real',
     city: 'Barranquilla',
     address: 'Cra 51B # 80-12',
     latitude: 11.0025,
     longitude: -74.8105,
-    placeId: 'test-123',
+    placeId: 'sabor-caribe-123',
     source: 'manual'
   }
 
-  const saved = await saveCachedPlace(testPlace)
-  assert.ok(saved, 'Place must be saved successfully')
+  const normName = normalizePlaceNameKey(samplePlace.name)
+  const normCity = normalizeCityKey(samplePlace.city)
+  placesMemoryCache.set(`place_cache_${normCity}_${normName}`, samplePlace)
 
-  const cached = await lookupCachedPlace('Test Local', 'Barranquilla')
+  const cached = await lookupCachedPlace('Sabor Caribe Real', 'Barranquilla')
   assert.ok(cached, 'Cached place must be found with normalized key')
   assert.equal(cached.latitude, 11.0025)
   assert.equal(cached.longitude, -74.8105)

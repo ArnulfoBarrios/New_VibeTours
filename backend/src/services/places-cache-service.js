@@ -8,6 +8,11 @@ export const cityCatalogMemoryCache = new GeoCache(24 * 60 * 60 * 1000, 200)
 
 const GENERIC_PREFIXES = /^(restaurante|restaurant|bistro|cafe|café|bar|gastrobar|pizzeria|pizzería|heladeria|heladería|taqueria|taquería|asador|parrilla|hostal|hotel)\s+/i
 
+export function isTestOrDummyPlace(name) {
+  if (!name || typeof name !== 'string') return false
+  return /\b(test|prueba|dummy|mock|ejemplo)\b/i.test(name)
+}
+
 /**
  * Normalizes a place name for consistent cache key comparison.
  * Removes accents, punctuation, generic prefixes, and excessive whitespace.
@@ -68,6 +73,7 @@ function classifyPlaceCategory(name = '', metadata = {}, explicitCategory = '') 
  * @returns {Promise<object|null>} Cached place info with coordinates or null
  */
 export async function lookupCachedPlace(name, city = '') {
+  if (isTestOrDummyPlace(name)) return null
   const normName = normalizePlaceNameKey(name)
   const normCity = normalizeCityKey(city)
   if (!normName) return null
@@ -146,7 +152,7 @@ export async function lookupCachedPlacesForCity(city = '', category = null) {
     if (error || !data || data.length === 0) return []
 
     const centroid = FALLBACK_DESTINATION_CENTROIDS[normCity]
-    const validRows = centroid
+    const validRows = (centroid
       ? data.filter(r => {
           const lat = Number(r.latitude)
           const lon = Number(r.longitude)
@@ -155,6 +161,7 @@ export async function lookupCachedPlacesForCity(city = '', category = null) {
           return dist <= 50
         })
       : data
+    ).filter(r => !isTestOrDummyPlace(r?.name))
 
     const formatted = validRows.map(row => {
       const placeCategory = classifyPlaceCategory(row.name, row.metadata, row.metadata?.category)
@@ -241,6 +248,9 @@ export async function saveCachedPlace({
   confidence = 1.0,
   metadata = {}
 }) {
+  if (isTestOrDummyPlace(name)) {
+    return false
+  }
   const numLat = Number(latitude)
   const numLon = Number(longitude)
   if (!Number.isFinite(numLat) || !Number.isFinite(numLon) || (numLat === 0 && numLon === 0)) {
@@ -310,6 +320,7 @@ export async function saveCachedPlacesBatch(places = [], city = '', defaultSourc
   const records = []
   for (const p of places) {
     const rawName = typeof p === 'string' ? p : (p?.name || p?.nombre || '')
+    if (isTestOrDummyPlace(rawName)) continue
     const normName = normalizePlaceNameKey(rawName)
     if (!normName) continue
 

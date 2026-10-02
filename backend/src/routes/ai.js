@@ -1216,7 +1216,14 @@ aiRouter.post('/chat', async (req, res, next) => {
         const isLocationRoute = Boolean(
           isExplicitLocationToDestination ||
           updatedPreferences.tourType === 'location_to_destination' ||
-          updatedPreferences.isUserLocationOrigin
+          updatedPreferences.isUserLocationOrigin ||
+          updatedPreferences.originPlace === 'user_current_location' ||
+          aiResponse.extractedPreferences?.tourType === 'location_to_destination' ||
+          aiResponse.extractedPreferences?.isUserLocationOrigin ||
+          (history || []).some(h => {
+            const txt = (h.content || h.text || '').toLowerCase()
+            return txt.includes('location_to_destination') || txt.includes('desde mi ubicación') || txt.includes('desde mi ubicacion') || txt.includes('desde mi posición') || txt.includes('desde mi posicion')
+          })
         )
         const chatCatalog = (!isLocationRoute && chatCity) ? await getRealDestinationCatalog(chatCity, chatCountry, updatedPreferences.latitude, updatedPreferences.longitude, { requestedDays: maxDay || 7 }).catch(() => null) : null
         const aiSpecifics = Array.isArray(aiResponse.extractedPreferences?.specificPlaces)
@@ -1265,10 +1272,13 @@ aiRouter.post('/chat', async (req, res, next) => {
             return arePlacesSimilar(rName, poiName)
           })
           const isFoodPattern = isFoodOrDrinkEstablishment(poiName) || /restaurante|bistro|caf[ée]|comida|asador|gourmet|bar|pub|ostras|ostrer[íi]a|mariscos|del\s+sabor/i.test(poiName)
-          const isNonDiningVenue = !/^(?:restaurante|caf[ée]|bistro|asador)\s+/i.test(poiName) && /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro|puente|bridge|ecoparque|ci[eé]naga|sendero|mirador|malec[oó]n|malecon|playa|estatua|obelisco)\b/i.test(poiName)
+          const isNonDiningVenue = !/^(?:restaurante|caf[ée]|bistro|asador)\s+/i.test(poiName) && /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro|puente|bridge|ecoparque|ci[eé]naga|sendero|mirador|malec[oó]n|malecon|playa|estatua|obelisco|paseo|plaza|plazoleta|calle|avenida|bulevar)\b/i.test(poiName)
+          const isDestinationPlace = arePlacesSimilar(poiName, updatedPreferences.destination || '') ||
+            arePlacesSimilar(poiName, updatedPreferences.destinationPlace || '') ||
+            Boolean(updatedPreferences.destination && poiName.toLowerCase().includes(updatedPreferences.destination.toLowerCase()))
 
           const isAiRestaurant = Boolean(aiMatch && (aiMatch.isRestaurant || aiMatch.type === 'food' || aiMatch.category === 'restaurant' || aiMatch.entityType === 'restaurant'))
-          const isDining = !isNonDiningVenue && (isAiRestaurant || isCatalogRestaurant || isFoodPattern || (!isLocationRoute && isLastStopInDay))
+          const isDining = !isNonDiningVenue && !isDestinationPlace && (isAiRestaurant || isCatalogRestaurant || isFoodPattern || (!isLocationRoute && isLastStopInDay))
 
           const resolvedLat = (aiMatch && Number.isFinite(Number(aiMatch.latitude))) ? Number(aiMatch.latitude) : catalogCoords?.latitude
           const resolvedLon = (aiMatch && Number.isFinite(Number(aiMatch.longitude))) ? Number(aiMatch.longitude) : catalogCoords?.longitude
@@ -3885,7 +3895,7 @@ function normalizeCategory(place) {
   const category = String(place.category ?? place.type ?? '').toLowerCase()
   const name = String(place.name ?? '').toLowerCase()
   const tags = normalizeTags(place.tags)
-  const isCulturalPOI = /\b(zool[óo]gico|zoologico|zoo|acuario|bioparque|museo|museum|galer[íi]a|catedral|cathedral|iglesia|church|templo|temple|bas[íi]lica|parque|park|plaza|monumento|monument|malec[óo]n|malecon|teatro|theatre|carnaval|estadio|stadium|sendero|playa|mirador)\b/i.test(name)
+  const isCulturalPOI = /\b(zool[óo]gico|zoologico|zoo|acuario|bioparque|museo|museum|galer[íi]a|catedral|cathedral|iglesia|church|templo|temple|bas[íi]lica|parque|park|plaza|plazoleta|paseo|calle|avenida|bulevar|monumento|monument|malec[óo]n|malecon|teatro|theatre|carnaval|estadio|stadium|sendero|playa|mirador)\b/i.test(name)
   const isExplicitDiningName = !isCulturalPOI && (category === 'restaurant' || category === 'food' || String(place.entityType || '').toLowerCase() === 'restaurant' || /\b(restaurante|restaurant|vegetariano|vegano|creper[íi]a|bistro|caf[ée]|cafeter[íi]a|bar|gastrobar|pizzer[íi]a|asador|asados|parrilla|taquer[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a|marisquer[íi]a|ostras|ostrer[íi]a|mariscos|del\s+sabor|cazuela|pescado|arroz|fritos|cevicher[íi]a|cebicher[íi]a|trattoria|steakhouse|piqueteadero|comedor|saz[oó]n|fog[oó]n)\b/i.test(name))
   if (isExplicitDiningName) {
     return /\b(caf[ée]|cafeter[íi]a|panader[íi]a|pasteler[íi]a|reposter[íi]a|helader[íi]a)\b/i.test(name) ? 'cafe' : 'restaurant'
@@ -5474,7 +5484,7 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     tags: source.etiquetas || source.tags || []
   })
   
-  const existingImageUrl = source.imageUrl || images[0] || matchedPlace?.imageUrl || candidateFallback?.imageUrl || ''
+  const existingImageUrl = source.imageUrl || images[0] || matchedPlace?.imageUrl || candidateFallback?.imageUrl || coordinates?.imageUrl || ''
   let image = ''
   let isFallbackImg = false
 
@@ -5491,7 +5501,7 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
         country: input.country,
         assignedUrls: options?.assignedUrls
       }),
-      new Promise(resolve => setTimeout(() => resolve({ url: "", isFallback: true }), 2500))
+      new Promise(resolve => setTimeout(() => resolve({ url: "", isFallback: true }), 4500))
     ]).catch(() => ({ url: "", isFallback: true }))
     image = imageStatus.url || existingImageUrl
     isFallbackImg = imageStatus.isFallback

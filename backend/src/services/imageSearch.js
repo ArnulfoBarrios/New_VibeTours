@@ -41,6 +41,12 @@ const KNOWN_LANDMARK_IMAGES = {
   'ecoparque cienaga de mallorquin': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Manglar_en_La_Caimanera_-_panoramio.jpg/1280px-Manglar_en_La_Caimanera_-_panoramio.jpg',
   'cienaga de mallorquin': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Manglar_en_La_Caimanera_-_panoramio.jpg/1280px-Manglar_en_La_Caimanera_-_panoramio.jpg',
   'ecoparque mallorquin': 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Manglar_en_La_Caimanera_-_panoramio.jpg/1280px-Manglar_en_La_Caimanera_-_panoramio.jpg',
+  'paseo bolivar': 'https://upload.wikimedia.org/wikipedia/commons/9/9e/Barranquilla_-_Paseo_de_Bol%C3%ADvar.jpg',
+  'paseo de bolivar': 'https://upload.wikimedia.org/wikipedia/commons/9/9e/Barranquilla_-_Paseo_de_Bol%C3%ADvar.jpg',
+  'paseo bolivar barranquilla': 'https://upload.wikimedia.org/wikipedia/commons/9/9e/Barranquilla_-_Paseo_de_Bol%C3%ADvar.jpg',
+  'parque tomas suri salcedo': 'https://upload.wikimedia.org/wikipedia/commons/7/7e/Aspecto_parque_Tom%C3%A1s_Sur%C3%AD_Salcedo_2_Barranquilla_2026-02-15_at_15.37.33.jpg',
+  'parque suri salcedo': 'https://upload.wikimedia.org/wikipedia/commons/7/7e/Aspecto_parque_Tom%C3%A1s_Sur%C3%AD_Salcedo_2_Barranquilla_2026-02-15_at_15.37.33.jpg',
+  'parque sagrado corazon': 'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1200&q=80',
   // Barranquilla Restaurants & Iconic Gastronomy
   'cucayo': 'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?auto=format&fit=crop&w=1200&q=80',
   'restaurante cucayo': 'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?auto=format&fit=crop&w=1200&q=80',
@@ -773,6 +779,7 @@ function categorySearchKeywords(category) {
     museum: ['museum', 'gallery', 'art', 'museo', 'galeria', 'arte', 'exhibicion'],
     historic: ['castle', 'monument', 'ruins', 'monumento', 'historico', 'muralla', 'baluarte', 'plaza', 'ruinas'],
     religious: ['church', 'cathedral', 'temple', 'catedral', 'iglesia', 'templo', 'capilla', 'santuario'],
+    park: ['park', 'city park', 'parque', 'jardin', 'plaza verde', 'trees', 'greenery'],
     nature: ['park', 'nature', 'forest', 'reserve', 'jardin', 'sendero', 'playa', 'beach', 'rio', 'river', 'lake', 'lago', 'parque'],
     viewpoint: ['viewpoint', 'landscape', 'panorama', 'mirador', 'vista', 'paisaje'],
     sports: ['stadium', 'arena', 'cancha', 'estadio', 'deporte', 'sports'],
@@ -801,7 +808,7 @@ function curatedImage(seed, category, indexSeed = 0) {
       'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80'
+      'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=800&q=80'
     ],
     restaurant: [
       'https://images.unsplash.com/photo-1590846406792-0adc7f938f1d?auto=format&fit=crop&w=800&q=80',
@@ -863,12 +870,18 @@ function curatedImage(seed, category, indexSeed = 0) {
       'https://images.unsplash.com/photo-1518098268026-4e43a1a009de?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1590076212870-13f63901b0f1?auto=format&fit=crop&w=600&q=75',
     ],
+    park: [
+      'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1496614441538-04e8023779af?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1588880331179-bc9b93a8cb5e?auto=format&fit=crop&w=800&q=80',
+    ],
     nature: [
       'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=600&q=75',
-      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=75',
+      'https://images.unsplash.com/photo-1511497584788-87676104235f?auto=format&fit=crop&w=600&q=75',
     ],
     viewpoint: [
       'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=75',
@@ -888,7 +901,7 @@ function curatedImage(seed, category, indexSeed = 0) {
       'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1498307833015-e7b400441eb8?auto=format&fit=crop&w=600&q=75',
       'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=600&q=75',
-      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=75',
+      'https://images.unsplash.com/photo-1477959858617-67f30bc75b82?auto=format&fit=crop&w=600&q=75',
     ]
   }
 
@@ -914,12 +927,14 @@ function curatedImage(seed, category, indexSeed = 0) {
     targetCategory = 'historic'
   } else if (/estadio|arena|deporte|sports|cancha/i.test(seedLower) || targetCategory === 'sports') {
     targetCategory = 'sports'
-  } else if (/parque|jard[íi]n|bot[aá]nico|zoo|zoologico|zool[oó]gico/i.test(seedLower) || targetCategory === 'nature') {
+  } else if (/parque|jard[íi]n|bot[aá]nico/i.test(seedLower) || targetCategory === 'park') {
+    targetCategory = 'park'
+  } else if (/zoo|zoologico|zool[oó]gico/i.test(seedLower) || targetCategory === 'nature') {
     targetCategory = 'nature'
   }
 
   // 1. Si la categoría es específica, servir foto temática rotada
-  const specificCategories = ['beach', 'trail', 'restaurant', 'cafe', 'market', 'nightlife', 'museum', 'religious', 'sports', 'nature', 'viewpoint', 'historic']
+  const specificCategories = ['beach', 'trail', 'restaurant', 'cafe', 'market', 'nightlife', 'museum', 'religious', 'sports', 'nature', 'viewpoint', 'historic', 'park']
   const finalCategory = specificCategories.includes(targetCategory) ? targetCategory : 'default'
   
   if (finalCategory !== 'default') {

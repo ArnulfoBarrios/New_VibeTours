@@ -242,6 +242,189 @@ async function queryMapboxGeocoding({ query, expectedName = '', cityLat, cityLon
 }
 
 /**
+ * Queries TomTom Search POI & Geocoding API.
+ */
+async function queryTomTomGeocoding({ query, expectedName = '', cityLat, cityLon, maxDistanceKm }) {
+  const apiKey = process.env.TOMTOM_API_KEY?.trim()
+  if (!apiKey) return null
+
+  const queries = Array.isArray(query) ? query : [query]
+  for (const currentQuery of [...new Set(queries.map(v => String(v || '').trim()).filter(Boolean))]) {
+    try {
+      const url = new URL(`https://api.tomtom.com/search/2/search/${encodeURIComponent(currentQuery)}.json`)
+      url.searchParams.set('key', apiKey)
+      url.searchParams.set('limit', '5')
+      url.searchParams.set('language', 'es-ES')
+      if (cityLat != null && cityLon != null && Number.isFinite(Number(cityLat)) && Number.isFinite(Number(cityLon))) {
+        url.searchParams.set('lat', String(cityLat))
+        url.searchParams.set('lon', String(cityLon))
+        url.searchParams.set('radius', String(Math.round(maxDistanceKm * 1000)))
+      }
+
+      const res = await fetchWithProviderRetry(url.toString(), {}, { attempts: 2, timeoutMs: HTTP_TIMEOUT_MS })
+      if (!res?.ok) continue
+
+      const data = await res.json()
+      const results = Array.isArray(data.results) ? data.results : []
+      for (const item of results) {
+        const lat = item.position?.lat
+        const lon = item.position?.lon
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
+        if (!isWithinCityBounds(lat, lon, cityLat, cityLon, maxDistanceKm)) continue
+
+        const featName = item.poi?.name || item.address?.freeformAddress || currentQuery
+        if (expectedName && !isDistinctNameMatch(expectedName, featName) && !isDistinctNameMatch(expectedName, item.address?.freeformAddress || '')) {
+          continue
+        }
+
+        return {
+          name: featName,
+          address: item.address?.freeformAddress || featName,
+          latitude: Number(lat),
+          longitude: Number(lon),
+          placeId: `tomtom:${item.id || ''}`,
+          source: 'tomtom',
+          confidence: Number(item.score ?? 0.85),
+          providerType: item.type || 'POI',
+          tags: {
+            tomtomCategories: item.poi?.categories || [],
+            query: currentQuery
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[places-resolver] TomTom query error:', err.message)
+    }
+  }
+  return null
+}
+
+/**
+ * Queries Wikipedia / Wikidata for geographic coordinates of landmarks, avenues, and monuments.
+ */
+async function queryWikipediaCoordinates({ query, expectedName = '', city = '', cityLat, cityLon, maxDistanceKm }) {
+  const queries = Array.isArray(query) ? query : [query]
+  for (const currentQuery of [...new Set(queries.map(v => String(v || '').trim()).filter(Boolean))]) {
+    try {
+      const url = new URL('https://es.wikipedia.org/w/api.php')
+      url.searchParams.set('action', 'query')
+      url.searchParams.set('prop', 'coordinates|pageprops')
+      url.searchParams.set('generator', 'search')
+      url.searchParams.set('gsrsearch', currentQuery)
+      url.searchParams.set('gsrlimit', '5')
+      url.searchParams.set('format', 'json')
+      url.searchParams.set('origin', '*')
+
+      const res = await fetchWithProviderRetry(url.toString(), {
+        headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }
+      }, { attempts: 2, timeoutMs: HTTP_TIMEOUT_MS })
+      if (!res?.ok) continue
+
+      const data = await res.json()
+      const pages = Object.values(data?.query?.pages || {})
+      const cleanCityLower = cleanAdministrativeCityName(city || '').toLowerCase()
+
+      for (const page of pages) {
+        const title = page.title || ''
+        const titleLower = title.toLowerCase()
+        if (cleanCityLower && (titleLower === cleanCityLower || titleLower === `${cleanCityLower} (colombia)`)) {
+          continue
+        }
+
+        const coord = page.coordinates?.[0]
+        if (!coord) continue
+        const lat = Number(coord.lat)
+        const lon = Number(coord.lon)
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
+        if (!isWithinCityBounds(lat, lon, cityLat, cityLon, maxDistanceKm)) continue
+
+        if (expectedName && !isDistinctNameMatch(expectedName, title)) {
+          continue
+        }
+
+        const freeImage = page.pageprops?.page_image_free || ''
+        const imageUrl = freeImage ? `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(freeImage)}` : ''
+
+        return {
+          name: title,
+          address: title,
+          latitude: lat,
+          longitude: lon,
+          placeId: `wikipedia:${page.pageid}`,
+          source: 'wikipedia',
+          confidence: 0.9,
+          imageUrl,
+          providerType: 'landmark',
+          tags: {
+            wikibaseItem: page.pageprops?.wikibase_item || '',
+            pageImage: freeImage,
+            query: currentQuery
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[places-resolver] Wikipedia coordinates error:', err.message)
+    }
+  }
+  return null
+}
+
+/**
+ * Queries OSM Nominatim directly for complex ways/relations (squares, avenues, promenades).
+ */
+async function queryNominatimDetailed({ query, expectedName = '', cityLat, cityLon, maxDistanceKm }) {
+  const queries = Array.isArray(query) ? query : [query]
+  for (const currentQuery of [...new Set(queries.map(v => String(v || '').trim()).filter(Boolean))]) {
+    try {
+      const url = new URL('https://nominatim.openstreetmap.org/search')
+      url.searchParams.set('q', currentQuery)
+      url.searchParams.set('format', 'json')
+      url.searchParams.set('limit', '5')
+      url.searchParams.set('addressdetails', '1')
+
+      const res = await fetchWithProviderRetry(url.toString(), {
+        headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }
+      }, { attempts: 2, timeoutMs: HTTP_TIMEOUT_MS })
+      if (!res?.ok) continue
+
+      const items = await res.json()
+      if (!Array.isArray(items)) continue
+
+      for (const item of items) {
+        const lat = Number(item.lat)
+        const lon = Number(item.lon)
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
+        if (!isWithinCityBounds(lat, lon, cityLat, cityLon, maxDistanceKm)) continue
+
+        const itemName = item.name || item.display_name?.split(',')?.[0] || currentQuery
+        if (expectedName && !isDistinctNameMatch(expectedName, itemName) && !isDistinctNameMatch(expectedName, item.display_name || '')) {
+          continue
+        }
+
+        return {
+          name: itemName,
+          address: item.display_name || itemName,
+          latitude: lat,
+          longitude: lon,
+          placeId: `osm:${item.osm_type || 'node'}/${item.osm_id || ''}`,
+          source: 'osm_nominatim',
+          confidence: Number(item.importance ?? 0.8),
+          providerType: item.type || item.class || '',
+          tags: {
+            osmClass: item.class,
+            osmType: item.type,
+            query: currentQuery
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[places-resolver] Nominatim query error:', err.message)
+    }
+  }
+  return null
+}
+
+/**
  * Discovers several POIs from Mapbox for the unified candidate catalog.
  * This is intentionally separate from resolvePlaceWithCascade: resolving one
  * requested name and discovering a destination catalog have different needs.
@@ -460,16 +643,17 @@ export async function searchGeoapifyPlaces({
  *
  * Persists any newly resolved coordinates to cache.
  */
-export async function resolvePlaceWithCascade({
-  name,
-  city = '',
-  country = 'Colombia',
-  address = '',
-  cityLat = null,
-  cityLon = null,
-  maxDistanceKm = DEFAULT_MAX_DISTANCE_KM,
-  options = {}
-}) {
+export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry = 'Colombia', maybeAddress = '', maybeOptions = {}) {
+  const isObj = Boolean(arg1 && typeof arg1 === 'object' && !Array.isArray(arg1))
+  const name = isObj ? arg1.name : arg1
+  const city = isObj ? (arg1.city || '') : maybeCity
+  const country = isObj ? (arg1.country || 'Colombia') : maybeCountry
+  const address = isObj ? (arg1.address || '') : maybeAddress
+  const cityLat = isObj ? arg1.cityLat : null
+  const cityLon = isObj ? arg1.cityLon : null
+  const maxDistanceKm = isObj ? (arg1.maxDistanceKm ?? DEFAULT_MAX_DISTANCE_KM) : DEFAULT_MAX_DISTANCE_KM
+  const options = (isObj ? arg1.options : maybeOptions) || {}
+
   if (!name || typeof name !== 'string') return null
   const cleanName = name.trim()
   const cleanCity = cleanAdministrativeCityName(city || '')
@@ -605,6 +789,39 @@ export async function resolvePlaceWithCascade({
   }
 
   // -------------------------------------------------------------
+  // Tier 3.5: TomTom Search POI & Geocoding API (Live commercial fallback)
+  // -------------------------------------------------------------
+  const tomtomResult = await queryTomTomGeocoding({
+    query: progressiveQueries,
+    expectedName: cleanName,
+    cityLat,
+    cityLon,
+    maxDistanceKm
+  })
+
+  if (tomtomResult) {
+    const resolved = {
+      name: cleanName,
+      city: cleanCity,
+      address: tomtomResult.address,
+      latitude: tomtomResult.latitude,
+      longitude: tomtomResult.longitude,
+      placeId: tomtomResult.placeId,
+      place_id: tomtomResult.placeId,
+      coordinateSource: 'tomtom',
+      coordinatesVerified: true,
+      providerType: tomtomResult.providerType || '',
+      tags: tomtomResult.tags || {}
+    }
+    saveCachedPlace({
+      ...resolved,
+      source: 'tomtom',
+      metadata: { providerName: tomtomResult.name, providerId: tomtomResult.placeId }
+    }).catch(() => {})
+    return resolved
+  }
+
+  // -------------------------------------------------------------
   // Tier 4: OpenStreetMap / Photon / Nominatim
   // -------------------------------------------------------------
   const osmResult = await geocodePlace(fullSearchQuery, cityLat, cityLon, {
@@ -633,6 +850,66 @@ export async function resolvePlaceWithCascade({
       saveCachedPlace({ ...resolved, source: 'osm' }).catch(() => {})
       return resolved
     }
+  }
+
+  // -------------------------------------------------------------
+  // Tier 4.5: OSM Nominatim Detailed (Relations / Ways for plazas, parks, and avenues)
+  // -------------------------------------------------------------
+  const nominatimResult = await queryNominatimDetailed({
+    query: progressiveQueries,
+    expectedName: cleanName,
+    cityLat,
+    cityLon,
+    maxDistanceKm
+  })
+
+  if (nominatimResult) {
+    const resolved = {
+      name: cleanName,
+      city: cleanCity,
+      address: nominatimResult.address || nominatimResult.name || '',
+      latitude: nominatimResult.latitude,
+      longitude: nominatimResult.longitude,
+      placeId: nominatimResult.placeId,
+      place_id: nominatimResult.placeId,
+      coordinateSource: 'osm_nominatim',
+      coordinatesVerified: true,
+      providerType: nominatimResult.providerType || '',
+      tags: nominatimResult.tags || {}
+    }
+    saveCachedPlace({ ...resolved, source: 'osm_nominatim' }).catch(() => {})
+    return resolved
+  }
+
+  // -------------------------------------------------------------
+  // Tier 4.8: Wikipedia / Wikidata Coordinates (Verified Global Landmarks)
+  // -------------------------------------------------------------
+  const wikiResult = await queryWikipediaCoordinates({
+    query: progressiveQueries,
+    expectedName: cleanName,
+    city: cleanCity,
+    cityLat,
+    cityLon,
+    maxDistanceKm
+  })
+
+  if (wikiResult) {
+    const resolved = {
+      name: cleanName,
+      city: cleanCity,
+      address: wikiResult.address || wikiResult.name || '',
+      latitude: wikiResult.latitude,
+      longitude: wikiResult.longitude,
+      placeId: wikiResult.placeId,
+      place_id: wikiResult.placeId,
+      imageUrl: wikiResult.imageUrl || '',
+      coordinateSource: 'wikipedia',
+      coordinatesVerified: true,
+      providerType: wikiResult.providerType || 'landmark',
+      tags: wikiResult.tags || {}
+    }
+    saveCachedPlace({ ...resolved, source: 'wikipedia' }).catch(() => {})
+    return resolved
   }
 
   // -------------------------------------------------------------
