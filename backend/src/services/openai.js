@@ -62,6 +62,127 @@ export function getActiveOpenAiKey() {
   return process.env.OPENAI_API_KEY || ''
 }
 
+const GEMINI_CIRCUIT_COOLDOWN_MS = 30 * 60 * 1000
+let geminiCircuitOpenUntil = 0
+let geminiCircuitReason = ''
+
+export function isGeminiCircuitOpen() {
+  if (!geminiCircuitOpenUntil) return false
+  if (Date.now() >= geminiCircuitOpenUntil) {
+    geminiCircuitOpenUntil = 0
+    geminiCircuitReason = ''
+    return false
+  }
+  return true
+}
+
+export function getGeminiCircuitStatus() {
+  return {
+    isOpen: isGeminiCircuitOpen(),
+    openUntil: geminiCircuitOpenUntil,
+    reason: geminiCircuitReason
+  }
+}
+
+export function tripGeminiCircuitBreaker(reason = 'insufficient_quota', cooldownMs = GEMINI_CIRCUIT_COOLDOWN_MS) {
+  geminiCircuitOpenUntil = Date.now() + Math.max(1000, Number(cooldownMs) || GEMINI_CIRCUIT_COOLDOWN_MS)
+  geminiCircuitReason = String(reason || 'insufficient_quota')
+  console.warn(`[gemini] Circuit breaker tripped (${geminiCircuitReason}). Switching to Open-Source Tourism fallback.`)
+}
+
+export function resetGeminiCircuitBreaker() {
+  geminiCircuitOpenUntil = 0
+  geminiCircuitReason = ''
+}
+
+export function getActiveGeminiKey() {
+  if (isGeminiCircuitOpen()) return ''
+  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || ''
+}
+
+export function getActiveLlmKey() {
+  const openAiKey = getActiveOpenAiKey()
+  if (openAiKey) return openAiKey
+  return getActiveGeminiKey()
+}
+
+export function hasActiveLlm() {
+  return Boolean(getActiveLlmKey())
+}
+
+export function getActiveLlmProvider() {
+  if (getActiveOpenAiKey()) return 'openai'
+  if (getActiveGeminiKey()) return 'gemini'
+  return 'fallback'
+}
+
+async function inspectGeminiResponseForQuotaFailure(response) {
+  if (!response) return
+  if (response.status === 401 || response.status === 402 || response.status === 403) {
+    tripGeminiCircuitBreaker(`http_${response.status}`)
+    return
+  }
+  if (response.status === 429) {
+    let bodyText = ''
+    try {
+      bodyText = typeof response.clone === 'function'
+        ? await response.clone().text()
+        : await response.text()
+    } catch {
+      bodyText = ''
+    }
+    tripGeminiCircuitBreaker('insufficient_quota')
+  }
+}
+
+export async function fetchGeminiChatCompletion(init = {}, retryOptions = null) {
+  const geminiKey = getActiveGeminiKey()
+  if (!geminiKey || isGeminiCircuitOpen()) {
+    return new Response(JSON.stringify({ error: { code: 'circuit_breaker_open', message: geminiCircuitReason || 'no_gemini_key' } }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  let bodyObj = {}
+  try {
+    bodyObj = typeof init.body === 'string' ? JSON.parse(init.body) : (init.body || {})
+  } catch {
+    bodyObj = {}
+  }
+
+  const geminiModel = process.env.GEMINI_MODEL || 'gemini-1.5-flash'
+  const geminiBody = {
+    ...bodyObj,
+    model: geminiModel
+  }
+  delete geminiBody.reasoning_effort
+
+  const effectiveRetry = retryOptions ?? { attempts: 1, timeoutMs: 7000 }
+  const geminiInit = {
+    ...init,
+    method: 'POST',
+    headers: {
+      ...(init.headers || {}),
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${geminiKey}`
+    },
+    body: JSON.stringify(geminiBody)
+  }
+
+  const response = await fetchWithProviderRetry(
+    'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    geminiInit,
+    effectiveRetry
+  )
+
+  if (response && !response.ok) {
+    await inspectGeminiResponseForQuotaFailure(response)
+  }
+
+  return response
+}
+
 async function inspectOpenAiResponseForQuotaFailure(response) {
   if (!response) return
   if (response.status === 401 || response.status === 402) {
@@ -85,6 +206,10 @@ async function inspectOpenAiResponseForQuotaFailure(response) {
 
 export async function fetchOpenAiChatCompletion(init = {}, retryOptions = null) {
   if (isOpenAiCircuitOpen()) {
+    const geminiKey = getActiveGeminiKey()
+    if (geminiKey) {
+      return await fetchGeminiChatCompletion(init, retryOptions)
+    }
     return new Response(JSON.stringify({ error: { code: 'circuit_breaker_open', message: openAiCircuitReason } }), {
       status: 429,
       headers: { 'Content-Type': 'application/json' }
@@ -94,6 +219,13 @@ export async function fetchOpenAiChatCompletion(init = {}, retryOptions = null) 
   const response = await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', init, effectiveRetry)
   if (response && !response.ok) {
     await inspectOpenAiResponseForQuotaFailure(response)
+    if (isOpenAiCircuitOpen()) {
+      const geminiKey = getActiveGeminiKey()
+      if (geminiKey) {
+        console.log('[llm-fallback] OpenAI quota exhausted. Seamlessly routing to Google Gemini...')
+        return await fetchGeminiChatCompletion(init, retryOptions)
+      }
+    }
   }
   return response
 }
@@ -1191,7 +1323,7 @@ export async function suggestPlacesWithOpenAI({ destination = '', country = '', 
   const cleanDest = String(destination || '').trim()
   if (!cleanDest) return []
 
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
 
   const targetDest = `${cleanDest}${country ? `, ${country}` : ''}`.trim()
   const system = `Eres un asistente experto en turismo global de VibeTours.
@@ -1299,7 +1431,7 @@ export async function suggestHotelsWithOpenAI({ destination = '', country = '', 
   const cleanDest = String(destination || '').trim()
   if (!cleanDest) return []
 
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
 
   const targetDest = `${cleanDest}${country ? `, ${country}` : ''}`.trim()
   const system = `Eres un asistente experto en viajes de VibeTours.
@@ -3062,7 +3194,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     }
   }
 
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
   if (!apiKey) {
     return await runFallbackChatResponse()
   }
@@ -3358,7 +3490,7 @@ REGLAS PARA "accommodationStatus":
 
     const json = await response.json()
     const rawContent = json.choices?.[0]?.message?.content || '{}'
-    const parsed = JSON.parse(rawContent)
+    const parsed = cleanAndParseJson(rawContent, null) || JSON.parse(rawContent)
 
     let rawMsg = String(parsed.responseMessage || '¿En qué más te puedo ayudar con tu itinerario?')
     let responseMessage = rawMsg
@@ -4080,8 +4212,8 @@ export async function extractChatInformation(userMessage, currentData = {}, hist
     return extractChatInformationFallback(userMessage)
   }
 
-  const apiKey = getActiveOpenAiKey()
-  if (!apiKey || isOpenAiCircuitOpen()) {
+  const apiKey = getActiveLlmKey()
+  if (!apiKey) {
     return extractChatInformationFallback(userMessage)
   }
 
@@ -4170,7 +4302,7 @@ Devuelve ÚNICAMENTE un JSON con:
 
     if (response.ok) {
       const data = await response.json()
-      const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
+      const parsed = cleanAndParseJson(data.choices?.[0]?.message?.content, null) || JSON.parse(data.choices?.[0]?.message?.content ?? '{}')
       if (parsed.durationDays && !parsed.durationHours) {
         parsed.durationHours = Number(parsed.durationDays) * 24
       }
@@ -4824,7 +4956,7 @@ export async function planWithOpenAI({
   userPreferences = {},
   selectedHotel = null
 }) {
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
   if (!apiKey) return null
 
   const cleanCity = cleanAdministrativeCityName(city || destination || '')
@@ -5076,7 +5208,7 @@ Lugares obligatorios: ${JSON.stringify(selectedPlaces)}`
 }
 
 export async function suggestFallbackPlacesWithOpenAI({ destination, city, country, type, excludeNames = [] }) {
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
   if (!apiKey) return []
   const targetLocation = `${city || destination || ''} ${country || ''}`.trim()
   const excludeStr = Array.isArray(excludeNames) && excludeNames.length > 0 ? `\nLugares que YA están en el tour (NO repetir): ${excludeNames.join(', ')}` : ''
@@ -5140,7 +5272,7 @@ export async function fetchDynamicDestinationProfile(cityInput, countryInput = '
     return destinationCatalogCache.get(cacheKey)
   }
 
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
   if (!apiKey) return null
 
   try {
@@ -5274,7 +5406,7 @@ export async function fetchCityIconicLandmarks(cityInput, countryInput = '', lat
     return mappedCached
   }
 
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
   if (apiKey) {
     try {
       const response = await fetchOpenAiChatCompletion({
@@ -5398,7 +5530,7 @@ Devuelve ÚNICAMENTE un JSON válido con este formato:
 
 export async function generateRichPlaceDescriptionsBatch({ destination = '', city = '', country = '', places = [], prompt = '' }) {
   if (!places || places.length === 0) return {}
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
 
   const placeNames = places.map(p => typeof p === 'string' ? p : (p?.name || '')).filter(Boolean)
   if (placeNames.length === 0) return {}
@@ -5833,7 +5965,7 @@ function buildRichFallbackDescription(name, city = '') {
 }
 
 export async function generateCustomPlaceReasons(arg1 = [], arg2 = '', arg3 = '') {
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
   let places = []
   let destination = ''
   let city = ''
@@ -6023,7 +6155,7 @@ export async function geocodePlacesWithOpenAI({ city = '', country = '', places 
     return fallbackResults
   }
 
-  const apiKey = getActiveOpenAiKey()
+  const apiKey = getActiveLlmKey()
   if (!apiKey) {
     return resolveWithProviders()
   }
