@@ -1,3 +1,10 @@
+import dotenv from 'dotenv'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.resolve(__dirname, '../../.env') })
+
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -96,4 +103,41 @@ describe('Verification of User-Reported Fixes', () => {
     assert.equal(bocasGeo.longitude, -74.8547, 'Longitude must be -74.8547 (Tajamar Occidental)')
     assert.ok(!bocasGeo.name.toLowerCase().includes('restaurante'), 'Must not be a restaurant')
   })
+
+  it('6. Resolves Casa del Carnaval to Carrera 54 (Barrio Abajo) and never to Hotel Via 40', async () => {
+    const carnavalGeo = await resolvePlaceWithCascade({
+      name: 'Casa del Carnaval',
+      city: 'Barranquilla',
+      country: 'Colombia'
+    })
+    assert.ok(carnavalGeo, 'Must resolve Casa del Carnaval')
+    assert.equal(carnavalGeo.latitude, 10.9928, 'Latitude must be 10.9928')
+    assert.equal(carnavalGeo.longitude, -74.7877, 'Longitude must be -74.7877 (Barrio Abajo)')
+    assert.notEqual(carnavalGeo.longitude, -74.7797, 'Longitude must not point to Via 40')
+  })
+
+  it('7. Extracts "Marecon del Rio" typo and relative clause cleanly to "Malecon del Rio"', () => {
+    const prompt = 'Bueno, ahora mismo me encuentro en Barranquilla, voy a durar un día y quiero ver los lugares más bonitos de la ciudad. Y uno de los lugares a los que quiero ir es el Marecón del Río, que es de los lugares más bonitos de la ciudad. Eso tengo entendido yo.'
+    const places = extractRequestedSpecificPlaces(prompt)
+    assert.ok(places.length >= 1, 'Must extract place')
+    assert.ok(places.some(p => p.name.toLowerCase().includes('malecón')), 'Must extract Malecón del Río despite typo and relative phrasing')
+  })
+
+  it('8. Uses Gemini fallback seamlessly when OpenAI circuit breaker is open', async () => {
+    tripOpenAiCircuitBreaker('insufficient_quota', 60000)
+    try {
+      const userMsg = 'Bueno, ahora mismo me encuentro en Barranquilla, voy a durar un día y quiero ver el Malecón del Río.'
+      const res = await generateChatResponse({
+        message: userMsg,
+        history: [{ role: 'user', content: userMsg }]
+      })
+      assert.ok(res.responseMessage, 'Must generate response message')
+      assert.ok(res.responseMessage.toLowerCase().includes('malecón'), 'Gemini response must mention Malecón')
+      assert.ok(res.actionChips.length > 0, 'Must provide action chips')
+    } finally {
+      resetOpenAiCircuitBreaker()
+      resetGeminiCircuitBreaker()
+    }
+  })
 })
+

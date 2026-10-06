@@ -667,9 +667,9 @@ export const KNOWN_ICONIC_LANDMARKS = {
   // Casa del Carnaval y Museo del Carnaval son un mismo complejo cultural.
   // Este punto sólo es un último respaldo offline; en condiciones normales
   // geocodePlace consulta Photon/Nominatim antes de llegar aquí.
-  'casa del carnaval': { name: 'Casa del Carnaval', latitude: 10.9928, longitude: -74.7797, city: 'Barranquilla', country: 'Colombia' },
-  'museo del carnaval': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7797, city: 'Barranquilla', country: 'Colombia' },
-  'museo del carnaval de barranquilla': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7797, city: 'Barranquilla', country: 'Colombia' },
+  'casa del carnaval': { name: 'Casa del Carnaval', latitude: 10.9928, longitude: -74.7877, city: 'Barranquilla', country: 'Colombia' },
+  'museo del carnaval': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7877, city: 'Barranquilla', country: 'Colombia' },
+  'museo del carnaval de barranquilla': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7877, city: 'Barranquilla', country: 'Colombia' },
   'castillo de salgar': { name: 'Castillo de Salgar', latitude: 11.0182, longitude: -74.9417, city: 'Puerto Colombia', country: 'Colombia' },
   'cienaga de mallorquin': { name: 'Ecoparque Ciénaga de Mallorquín', latitude: 11.0350, longitude: -74.8445, city: 'Barranquilla', country: 'Colombia' },
   'ecoparque cienaga de mallorquin': { name: 'Ecoparque Ciénaga de Mallorquín', latitude: 11.0350, longitude: -74.8445, city: 'Barranquilla', country: 'Colombia' },

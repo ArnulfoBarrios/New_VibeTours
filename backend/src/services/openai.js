@@ -120,7 +120,7 @@ export function getActiveLlmProvider() {
 
 async function inspectGeminiResponseForQuotaFailure(response) {
   if (!response) return
-  if (response.status === 401 || response.status === 402 || response.status === 403) {
+  if (response.status === 401 || response.status === 402 || response.status === 403 || response.status === 404) {
     tripGeminiCircuitBreaker(`http_${response.status}`)
     return
   }
@@ -153,7 +153,10 @@ export async function fetchGeminiChatCompletion(init = {}, retryOptions = null) 
     bodyObj = {}
   }
 
-  const geminiModel = process.env.GEMINI_MODEL || 'gemini-1.5-flash'
+  let geminiModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
+  if (/gemini-1\.5|gemini-2\.5-flash$/i.test(geminiModel)) {
+    geminiModel = 'gemini-3.5-flash-lite'
+  }
   const geminiBody = {
     ...bodyObj,
     model: geminiModel
@@ -219,14 +222,13 @@ export async function fetchOpenAiChatCompletion(init = {}, retryOptions = null) 
   }
   const effectiveRetry = retryOptions ?? { attempts: 1, timeoutMs: 4500 }
   const response = await fetchWithProviderRetry('https://api.openai.com/v1/chat/completions', init, effectiveRetry)
-  if (response && !response.ok) {
-    await inspectOpenAiResponseForQuotaFailure(response)
-    if (isOpenAiCircuitOpen() || response.status === 401 || response.status === 429) {
-      const geminiKey = getActiveGeminiKey()
-      if (geminiKey) {
-        console.log('[llm-fallback] OpenAI request unavailable or quota exhausted. Seamlessly routing to Google Gemini...')
-        return await fetchGeminiChatCompletion(init, retryOptions)
-      }
+  if (!response || !response.ok) {
+    if (response) await inspectOpenAiResponseForQuotaFailure(response)
+    else tripOpenAiCircuitBreaker('timeout', 60000)
+    const geminiKey = getActiveGeminiKey()
+    if (geminiKey) {
+      console.log('[llm-fallback] OpenAI request unavailable or quota exhausted. Seamlessly routing to Google Gemini...')
+      return await fetchGeminiChatCompletion(init, retryOptions)
     }
   }
   return response
@@ -3674,7 +3676,7 @@ REGLAS PARA "accommodationStatus":
       }))
     }, {
       attempts: 1,
-      timeoutMs: 4500
+      timeoutMs: 8000
     })
 
     if (!response || !response.ok) {
@@ -4612,6 +4614,7 @@ export function extractRequestedSpecificPlaces(prompt) {
   // 1. Strip conversational fillers and parenthetical qualifiers globally
   const normalizedText = prompt
     .replace(/(?:,\s*)?\b(?:por\s+ejemplo|tipo|como|tal\s+vez|quiz[aá]s|en\s+especial|sobre\s+todo|de\s+pronto)\b(?:,\s*)?/gi, ' ')
+    .replace(/\bmarec[oó]n\b/gi, 'malecón')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -4629,7 +4632,7 @@ export function extractRequestedSpecificPlaces(prompt) {
     clean = clean.charAt(0).toUpperCase() + clean.slice(1)
     clean = clean.replace(/\s+(?:por\s+favor|porfa|gracias|adicionales?|podr[aá]\s+ser.*|ser[íi]a\s+bacano.*|ser[íi]a\s+genial.*|y\s+(?:relajarnos|descansar|pasar\s+el\s+rato|disfrutar|conocer|pasear|comer)|para\s+.*)$/i, '').trim()
     clean = clean.replace(/\s+(?:y|e|luego|despu[eé]s)$/i, '').trim()
-    clean = clean.replace(/\s+(?:(?:me\s+)?(?:dicen|han\s+dicho)\s+que.*|que\s+(?:dicen|es)\s+.*|es\s+bastante\s+.*|es\s+muy\s+.*|me\s+han\s+recomendado.*)$/i, '').trim()
+    clean = clean.replace(/\s+(?:(?:me\s+)?(?:dicen|han\s+dicho)\s+que.*|que\s+(?:dicen|es)\s+.*|es\s+bastante\s+.*|es\s+muy\s+.*|me\s+han\s+recomendado.*|que\s+es\s+de\s+los\s+lugares\s+.*)$/i, '').trim()
     return clean
   }
 
@@ -4693,7 +4696,7 @@ export function extractRequestedSpecificPlaces(prompt) {
   }
 
   // C. Single / Standard place addition (supports modal intentions, conditionals, and iterative scanning)
-  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|quiero\s+ver|quisiera\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|(?:me|nos)\s+gustar[íi]a\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|queremos\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|deseo\s+(?:ver|conocer|visitar|ir\s+a)|deseamos\s+(?:ver|conocer|visitar|ir\s+a)|cambiar\s+(?:por|a)|cambia\s+(?:por|a)|cambio\s+por|conocer|vamos\s+a|adiciona|adicionar|si\s+me\s+puedo\s+ir\s+a|puedo\s+ir\s+a|irme\s+a|ir\s+a|pasar\s+por|conociendo|descubrir)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;\n])/gi
+  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|quiero\s+ver|quisiera\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|(?:me|nos)\s+gustar[íi]a\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|queremos\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|deseo\s+(?:ver|conocer|visitar|ir\s+a)|deseamos\s+(?:ver|conocer|visitar|ir\s+a)|cambiar\s+(?:por|a)|cambia\s+(?:por|a)|cambio\s+por|conocer|vamos\s+a|adiciona|adicionar|si\s+me\s+puedo\s+ir\s+a|puedo\s+ir\s+a|irme\s+a|ir\s+a|pasar\s+por|conociendo|descubrir|(?:uno\s+de\s+los\s+lugares|un\s+lugar)\s+(?:a\s+los\s+que\s+quiero\s+ir|al\s+que\s+quiero\s+ir|que\s+quiero\s+(?:visitar|conocer|ver))\s+es(?:\s+(?:el|la))?)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;\n])/gi
   let placeMatch
   while ((placeMatch = addPlaceRegex.exec(normalizedText)) !== null) {
     const rawPlaceName = placeMatch[1].trim()
