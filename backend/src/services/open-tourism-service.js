@@ -38,6 +38,24 @@ function normalizeTextKey(text = '') {
     .trim()
 }
 
+export function stemToken(token = '') {
+  let t = String(token || '').toLowerCase().trim()
+  if (t.length <= 3) return t
+  // Spanish plurals: -ces -> -z (e.g. luces -> luz, cruces -> cruz, peces -> pez)
+  if (t.endsWith('ces') && t.length > 4) {
+    return t.slice(0, -3) + 'z'
+  }
+  // -es -> base (e.g. campeones -> campeon, flores -> flor, murales -> mural)
+  if (t.endsWith('es') && t.length > 4) {
+    return t.slice(0, -2)
+  }
+  // -s -> base (e.g. bocas -> boca, cenizas -> ceniza)
+  if (t.endsWith('s') && !t.endsWith('ss') && !t.endsWith('is') && !t.endsWith('us')) {
+    return t.slice(0, -1)
+  }
+  return t
+}
+
 export function isNeighborhoodOrMinorPark(name = '', tags = {}, wikipediaTrusted = false) {
   const cleanName = String(name || '').trim()
   if (!cleanName) return true
@@ -413,13 +431,17 @@ export function arePlaceNamesSemanticallySame(nameA = '', nameB = '', city = '')
     return normA.includes(normB) || normB.includes(normA)
   }
 
-  const setA = new Set(tokensA)
-  const setB = new Set(tokensB)
-  const intersection = tokensA.filter((t) => setB.has(t))
+  const stemmedA = tokensA.map(t => stemToken(t))
+  const stemmedB = tokensB.map(t => stemToken(t))
+  if (stemmedA.join(' ') === stemmedB.join(' ')) return true
+
+  const setStemmedA = new Set(stemmedA)
+  const setStemmedB = new Set(stemmedB)
+  const stemmedIntersection = stemmedA.filter((st) => setStemmedB.has(st))
 
   // 1. Exact token match after stripping intermediate modifiers
-  if (intersection.length === Math.min(setA.size, setB.size)) {
-    const nonTypeTokens = intersection.filter((t) => !FACILITY_TYPE_TOKENS.has(t))
+  if (stemmedIntersection.length === Math.min(setStemmedA.size, setStemmedB.size)) {
+    const nonTypeTokens = stemmedIntersection.filter((t) => !FACILITY_TYPE_TOKENS.has(t))
     if (nonTypeTokens.length > 0) {
       const sameFamilyOrCompatible =
         famA === famB ||
@@ -433,8 +455,8 @@ export function arePlaceNamesSemanticallySame(nameA = '', nameB = '', city = '')
     }
   }
 
-  // 2. Shared 2+ non-generic proper tokens (e.g. "Gustavo Rojas Pinilla", "San Jerónimo", "Sagrada Familia")
-  const nonTypeIntersection = intersection.filter((t) => !FACILITY_TYPE_TOKENS.has(t))
+  // 2. Shared 2+ non-generic proper tokens (e.g. "Gustavo Rojas Pinilla", "San Jerónimo", "Sagrada Familia", "Bocas Ceniza")
+  const nonTypeIntersection = stemmedIntersection.filter((t) => !FACILITY_TYPE_TOKENS.has(t))
   if (nonTypeIntersection.length >= 2) return true
 
   // 3. Shared church & its facing plaza/atrium (e.g. "Iglesia de San Roque" and "Plaza de San Roque")
@@ -485,8 +507,11 @@ export function inferStopSubcategory(place = {}) {
      /\b(restaurante|restaurant|asador|asados|parrilla|cevicheria|cebicheria|marisqueria|ostras|ostreria|mariscos|del sabor|cazuela|pescado|arroz|fritos|narcobollo|trattoria|steakhouse|piqueteadero|comedor|cocina|sazon|fogon|taqueria|bistro|gastrobar|vegetariano|vegano|creperia|pizzeria)\b/i.test(name) ||
      amenity === 'restaurant' ||
      amenity === 'fast_food' ||
+     amenity === 'food_court' ||
      rawCat === 'restaurant' ||
-     rawCat === 'food')
+     rawCat === 'food' ||
+     rawCat === 'food_court' ||
+     /\b(caim[aá]n\s+del\s+r[ií]o|mercado\s+gastron[oó]mico|patio\s+de\s+comidas|food\s*hall|food\s*court)\b/i.test(name))
   ) {
     return 'restaurant'
   }
@@ -645,7 +670,7 @@ function extractOsmMetadata(place = {}) {
   }
 }
 
-function isGenericMunicipalitySummary(summary = {}, placeName = '', city = '') {
+function isGenericMunicipalitySummary(summary = {}, placeName = '', city = '', snippet = '') {
   if (!summary) return true
   const normTitle = normalizeTextKey(summary.title || '')
   const normCity = normalizeTextKey(city || '')
@@ -667,11 +692,28 @@ function isGenericMunicipalitySummary(summary = {}, placeName = '', city = '') {
     return true
   }
 
-  // Require at least one distinctive non-city token overlap between placeName and the Wikipedia article title
+  // Reject sports club articles (e.g. Caimanes de Barranquilla baseball team, Junior de Barranquilla football club) unless the query explicitly asks for a sports team/stadium
+  const placeWantsSportsClub = /\b(club|deportivo|deportiva|f[uú]tbol|futbol|soccer|fc|baloncesto|basketball|b[eé]isbol|baseball|estadio|stadium|arena|vel[oó]dromo|aut[oó]dromo)\b/i.test(placeName)
+  const artIsSportsClub = /\b(club\s+de\s+(?:f[uú]tbol|b[eé]isbol|baloncesto)|equipo\s+de\s+(?:b[eé]isbol|f[uú]tbol|baloncesto)|liga\s+profesional\s+de\s+b[eé]isbol|club\s+deportivo)\b/i.test(extract) ||
+    /\b(club|deportivo|deportiva|f[uú]tbol|futbol|fc|b[eé]isbol|baseball)\b/i.test(normTitle)
+  if (!placeWantsSportsClub && artIsSportsClub) {
+    return true
+  }
+
+  // Check token overlap against title, extract, description, or Wikipedia search snippet (supporting aliases/nicknames)
   const placeTokens = extractDistinctivePlaceTokens(placeName, city)
   if (placeTokens.length > 0) {
-    const hasOverlap = placeTokens.some((token) => normTitle.includes(token))
-    if (!hasOverlap && normTitle !== normPlace) return true
+    const stemmedPlaceTokens = placeTokens.map((t) => stemToken(t))
+    const normExtract = normalizeTextKey(extract)
+    const normDesc = normalizeTextKey(desc)
+    const normSnippet = normalizeTextKey(String(snippet || '').replace(/<[^>]+>/g, ' '))
+
+    const hasTitleOverlap = stemmedPlaceTokens.some((token) => normTitle.includes(token))
+    const hasContentOverlap = stemmedPlaceTokens.some((token) => normExtract.includes(token) || normDesc.includes(token) || normSnippet.includes(token))
+
+    if (!hasTitleOverlap && !hasContentOverlap && normTitle !== normPlace) {
+      return true
+    }
   }
 
   return false
@@ -764,7 +806,7 @@ async function searchWikipediaSummaryByQuery(query, lang = 'es', placeName = '',
       for (const hit of hits) {
         if (!hit?.title) continue
         const candidateSummary = await fetchWikipediaSummaryByTitle(hit.title, lang)
-        if (candidateSummary && !isGenericMunicipalitySummary(candidateSummary, placeName, city)) {
+        if (candidateSummary && !isGenericMunicipalitySummary(candidateSummary, placeName, city, hit.snippet)) {
           return candidateSummary
         }
       }
@@ -1287,11 +1329,6 @@ export function buildDeterministicStopDetails(place = {}, context = {}) {
   const stopIndex = Number(context.stopIndex || 0)
   const durationMinutes = Number(context.durationMinutes || place.suggestedMinutes || estimateRealisticStopDurationMinutes(place, stopIndex))
 
-  const description = composeDeterministicTourGuideScript(place, {
-    ...context,
-    durationMinutes
-  })
-
   const rawHistory = String(place.history || '').trim()
   const isCleanHistory =
     rawHistory.length > 25 &&
@@ -1299,6 +1336,13 @@ export function buildDeterministicStopDetails(place = {}, context = {}) {
     subcategory !== 'restaurant' &&
     subcategory !== 'cafe'
   const historySentences = isCleanHistory ? splitIntoSentences(rawHistory) : []
+
+  const description = isCleanHistory
+    ? rawHistory
+    : composeDeterministicTourGuideScript(place, {
+        ...context,
+        durationMinutes
+      })
 
   const curiousFacts = []
   if (historySentences.length >= 3) {
@@ -1575,10 +1619,12 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     cleanRestaurants.push(item)
   }
 
-  // If attractions are insufficient to fill all days (at least 2 per day), pull from candidatePool
-  if (cleanAttractions.length < numDays * 2 && candidatePool.length > 0) {
+  // If attractions are insufficient to fill all days (4 for 1-day tour, at least 2 per day for multi-day), pull from candidatePool
+  const targetAttractionsCount = numDays === 1 ? 4 : numDays * 2
+  const maxAttractionsToPull = numDays === 1 ? 4 : numDays * 3
+  if (cleanAttractions.length < targetAttractionsCount && candidatePool.length > 0) {
     for (const raw of candidatePool) {
-      if (cleanAttractions.length >= numDays * 3) break
+      if (cleanAttractions.length >= maxAttractionsToPull) break
       const name = typeof raw === 'string' ? raw : (raw?.name || '')
       const isFood = raw?.entityType === 'restaurant' || raw?.category === 'restaurant' ||
         /\b(restaurante|restaurant|bistro|parrilla|asador|cocina|gastronom|taquer|pizzer|marisqu|cebich)\b/i.test(name)
@@ -1852,7 +1898,15 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       isRestaurant: true
     } : null
 
-    const allDayStops = [...dayAttractions, ...(restWithMeta ? [restWithMeta] : [])].map((stop) => ({
+    let orderedDayStops = []
+    if (restWithMeta) {
+      const mid = Math.ceil(dayAttractions.length / 2)
+      orderedDayStops = [...dayAttractions.slice(0, mid), restWithMeta, ...dayAttractions.slice(mid)]
+    } else {
+      orderedDayStops = [...dayAttractions]
+    }
+
+    const allDayStops = orderedDayStops.map((stop) => ({
       ...stop,
       dia: d,
       day: d

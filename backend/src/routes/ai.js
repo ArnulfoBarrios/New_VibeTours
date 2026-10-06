@@ -3520,19 +3520,15 @@ export function buildTourPlanner(input, location = null, places = []) {
         if (dayPlaces.length === 0) continue
 
         if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
-          // Si un restaurante/gastronomía fue colocado en medio de atracciones no-gastronómicas, moverlo al cierre del día
-          const lastPlace = dayPlaces[dayPlaces.length - 1]
-          const isLastFood = isFoodStop(lastPlace)
-
-          if (!isLastFood) {
-            const foodIdx = dayPlaces.findIndex((p, idx) => idx > 0 && isFoodStop(p))
-            if (foodIdx !== -1) {
-              const reordered = [...dayPlaces]
-              const [foodItem] = reordered.splice(foodIdx, 1)
-              reordered.push(foodItem)
-              reorderedByDay.push(...reordered)
-              continue
-            }
+          // Lunch / restaurant stop belongs in the middle of the day's itinerary (e.g. Stop 3 out of 5)
+          const foodIdx = dayPlaces.findIndex((p) => isFoodStop(p))
+          if (foodIdx !== -1) {
+            const reordered = [...dayPlaces]
+            const [foodItem] = reordered.splice(foodIdx, 1)
+            const midIndex = Math.floor(reordered.length / 2)
+            reordered.splice(midIndex, 0, foodItem)
+            reorderedByDay.push(...reordered)
+            continue
           }
         }
         reorderedByDay.push(...dayPlaces)
@@ -3923,13 +3919,11 @@ function formatTime(minutes) {
 
 function stopCountForDuration(durationHours) {
   if (durationHours <= 3.5) return 3
-  if (durationHours <= 5.5) return 4
-  if (durationHours <= 7) return 5
-  if (durationHours <= 10) return 6
-  if (durationHours <= 24) return 8
-  if (durationHours <= 48) return 12
-  if (durationHours <= 72) return 16
-  return Math.max(24, Math.ceil((durationHours || 24) / 24) * 3)
+  if (durationHours <= 5) return 4
+  if (durationHours <= 24) return 5
+  if (durationHours <= 48) return 10
+  if (durationHours <= 72) return 15
+  return Math.max(15, Math.ceil((durationHours || 24) / 24) * 5)
 }
 
 function normalizeCategory(place) {

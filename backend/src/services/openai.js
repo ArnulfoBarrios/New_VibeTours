@@ -19,7 +19,9 @@ import {
   isNeighborhoodOrMinorPark,
   scoreTouristAttraction,
   clusterStopsIntoCoherentDays,
-  areStopsCompatibleInSameDay
+  areStopsCompatibleInSameDay,
+  arePlaceNamesSemanticallySame,
+  stemToken
 } from './open-tourism-service.js'
 
 export { generateSpeechAudio }
@@ -287,7 +289,10 @@ function normalizeChatPlaceName(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\b(de\s+la|de\s+los|de\s+las|de\s+el|del|de|la|el|los|las|un|una|unos|unas|y|and|the|of|in|at)\b/gi, ' ')
-    .replace(/\s+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(stemToken)
+    .join(' ')
     .trim()
 }
 
@@ -469,6 +474,13 @@ export function deduplicateChatSpecificPlaces(places = [], city = '') {
 
     const key = canonicalChatPlaceKey(name, city)
     if (seen.has(key)) continue
+
+    const isDuplicate = result.some((existing) => {
+      const existingName = typeof existing === 'string' ? existing : (existing?.name || '')
+      return arePlaceNamesSemanticallySame(existingName, name, city)
+    })
+    if (isDuplicate) continue
+
     seen.add(key)
 
     const displayName = canonicalChatDisplayName(name, city)
@@ -3008,10 +3020,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         } else {
           fallbackMsg = `¿En qué fechas planeas viajar y cuántos días durará tu estadía en ${destName}?`
         }
-      } else if (/\b(actividad|actividades|qu[ée] hacer|lugares|atracciones|visitar)\b/i.test(lastUserMsg)) {
-        fallbackMsg = `¡Lugares recomendados en ${destName}! 🌟\n\n` +
-          (preset.places || []).slice(0, 6).map(p => `• **${p}**: Atractivo destacado para descubrir lo mejor del destino.`).join('\n') +
-          `\n\n¿Cuáles de estos lugares te gustaría incluir en tu itinerario?`
+      } else if (!isOneDayTour && !isExplicitBuildRequestedByUser && /\b(qu[ée] (?:lugares|actividades|atracciones|hacer)|recomi[ée]ndame lugares|cu[aá]les son los lugares|qu[ée] puedo hacer)\b/i.test(lastUserMsg)) {
+        const placesList = (preset.places || []).slice(0, 6).map(p => {
+          const pName = typeof p === 'object' ? (p.name || p.nombre || '') : String(p || '')
+          return pName ? `• **${pName}**: Atractivo destacado para descubrir lo mejor del destino.` : null
+        }).filter(Boolean)
+        if (placesList.length > 0) {
+          fallbackMsg = `¡Lugares recomendados en ${destName}! 🌟\n\n` +
+            placesList.join('\n') +
+            `\n\n¿Cuáles de estos lugares te gustaría incluir en tu itinerario?`
+        } else {
+          fallbackMsg = `En ${destName} puedes disfrutar de sitios históricos, paseos emblemáticos y gastronomía local. ¿Qué tipo de atractivos te gustaría priorizar en tu visita?`
+        }
       } else if (/\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|men[uú]s|carta|platos)\b/i.test(lastUserMsg)) {
         const foodList = (realCatalog?.restaurants && realCatalog.restaurants.length > 0)
           ? realCatalog.restaurants.slice(0, 4)
@@ -3073,30 +3093,87 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           fallbackMsg = `¡Perfecto! Diseñé un tour de 1 día desde tu ubicación hasta **${destName}**, pasando por atractivos en el camino:\n\n${corridorBlock}\n\n¿Qué te parece este recorrido? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
           fallbackChips = ['🗺️ Generar tour en el mapa', 'Modificar paradas', 'Ver detalles']
         } else if (isOneDayTour) {
-          // Dynamic lightweight 1-day proposal (Universal, concise, mobile-friendly)
-          const specifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
-            ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
-            : []
-          const rawPresetPlaces = (preset.places || []).filter(Boolean)
-          const hasBeach = (known.interests || []).includes('Playas') || /playa|mar|costa/i.test(lastUserMsg)
-          const hasNature = (known.interests || []).includes('Naturaleza') || /naturaleza|monta[ñn]a|cascada/i.test(lastUserMsg)
+          const getPlaceName = (p) => typeof p === 'object' ? (p?.name || p?.nombre || '') : String(p || '')
+          const isFoodStop = (p) => {
+            const n = getPlaceName(p)
+            return p?.isRestaurant === true || p?.category === 'restaurant' || p?.type === 'food' ||
+              isFoodOrDrinkEstablishment(n) ||
+              /\b(restaurante|restaurant|asador|bistro|gastrobar|cevicher|parrilla|comedor|food\s*hall|caim[aá]n\s+del\s+r[ií]o)\b/i.test(n)
+          }
 
-          const primaryActivity = hasBeach
-            ? 'Playa y brisa marina'
-            : (hasNature ? 'Contacto con la naturaleza y senderos' : (specifics[0] || rawPresetPlaces[0] || 'Recorrido por sitios emblemáticos'))
-          const secondaryCandidate = specifics.find(s => !arePlacesSimilar(s, primaryActivity)) || (primaryActivity !== specifics[0] && specifics[0] ? specifics[0] : null) || rawPresetPlaces.find(p => !arePlacesSimilar(p, primaryActivity)) || 'Atractivo destacado de la zona'
+          // 1. Candidate attractions (excluding food venues)
+          const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
+            ? known.specificPlaces.map(p => typeof p === 'string' ? { name: p } : p).filter(p => getPlaceName(p))
+            : []
+
+          const rawPresetPlaces = (preset.places || []).map(p => typeof p === 'string' ? { name: p } : p).filter(p => getPlaceName(p))
+          const catalogPlaces = ((preset.candidateCatalog?.places || []).map(p => typeof p === 'string' ? { name: p } : p)).filter(p => getPlaceName(p))
+
+          const allAttractionCandidates = deduplicateChatSpecificPlaces(
+            [...rawSpecifics, ...rawPresetPlaces, ...catalogPlaces].filter(p => !isFoodStop(p)),
+            destName
+          )
+
+          // 2. Candidate restaurants
+          const rawPresetRests = (preset.restaurants || []).map(p => typeof p === 'string' ? { name: p, isRestaurant: true } : { ...p, isRestaurant: true })
+          const catalogRests = ((preset.candidateCatalog?.restaurants || []).map(p => typeof p === 'string' ? { name: p, isRestaurant: true } : { ...p, isRestaurant: true }))
+          const specificRests = rawSpecifics.filter(isFoodStop)
+          const allRestaurantCandidates = deduplicateChatSpecificPlaces(
+            [...specificRests, ...rawPresetRests, ...catalogRests, ...[...rawPresetPlaces, ...catalogPlaces].filter(isFoodStop)],
+            destName
+          )
+
+          const chosenRestaurantObj = allRestaurantCandidates[0] || {
+            name: `Almuerzo tradicional en el centro de ${destName}`,
+            category: 'restaurant',
+            entityType: 'restaurant',
+            type: 'food',
+            isRestaurant: true
+          }
+          const chosenRestaurant = getPlaceName(chosenRestaurantObj)
+
+          // 3. Pick 4 attractions
+          const chosenAttractions = allAttractionCandidates.slice(0, 4)
+          while (chosenAttractions.length < 4) {
+            const fallbackAttractions = [
+              { name: 'Centro Histórico y Plaza Principal', category: 'attraction' },
+              { name: 'Paseo Turístico y Mirador Panorámico', category: 'attraction' },
+              { name: 'Museo o Espacio Cultural Emblemático', category: 'attraction' },
+              { name: 'Parque o Corredor Ecológico Destacado', category: 'attraction' }
+            ]
+            const nextFb = fallbackAttractions.find(fb => !chosenAttractions.some(ca => arePlaceNamesSemanticallySame(getPlaceName(ca), fb.name, destName)))
+            if (!nextFb) break
+            chosenAttractions.push(nextFb)
+          }
+
+          const stop1 = getPlaceName(chosenAttractions[0])
+          const stop2 = getPlaceName(chosenAttractions[1])
+          const stop3Lunch = chosenRestaurant
+          const stop4 = getPlaceName(chosenAttractions[2])
+          const stop5 = getPlaceName(chosenAttractions[3])
+
+          // Update known.specificPlaces with the 5 stops so the planner uses them verbatim
+          known.specificPlaces = [
+            { ...(chosenAttractions[0] || {}), name: stop1, dia: 1, day: 1, category: 'attraction' },
+            { ...(chosenAttractions[1] || {}), name: stop2, dia: 1, day: 1, category: 'attraction' },
+            { ...(chosenRestaurantObj || {}), name: stop3Lunch, dia: 1, day: 1, category: 'restaurant', entityType: 'restaurant', type: 'food', isRestaurant: true },
+            { ...(chosenAttractions[2] || {}), name: stop4, dia: 1, day: 1, category: 'attraction' },
+            { ...(chosenAttractions[3] || {}), name: stop5, dia: 1, day: 1, category: 'attraction' }
+          ]
 
           const transportTxt = known.transport ? ` en ${known.transport.toLowerCase()}` : ''
-          const companionsTxt = known.companions ? ` ${known.companions.toLowerCase()}` : ''
+          const companionsTxt = known.companions ? ` con ${known.companions.toLowerCase().replace(/^(con\s+)+/i, '')}` : ''
 
-          const intro = `¡Excelente plan! Para 1 día${transportTxt}${companionsTxt} en **${destName}**, te sugiero esta distribución:`
-          const morning = `• **Mañana**: ${primaryActivity}.`
-          const afternoon = `• **Tarde**: Visita y recorrido en **${secondaryCandidate}**.`
-          const evening = `• **Atardecer**: Tiempo libre y regreso.`
-          const question = `¿Te parece bien esta ruta o prefieres ajustar las paradas antes de armar el tour en el mapa?`
+          const intro = `¡Excelente plan! Para un tour completo de 1 día${transportTxt}${companionsTxt} en **${destName}**, he preparado un recorrido de 5 paradas con almuerzo a mediodía:`
+          const line1 = `1. 🕘 **09:00 AM - Mañana**: Visita a **${stop1}**.`
+          const line2 = `2. 🕚 **11:00 AM - Media mañana**: Recorrido en **${stop2}**.`
+          const line3 = `3. 🍽️ **12:30 PM - Mediodía (Almuerzo)**: Degustación de gastronomía local en **${stop3Lunch}**.`
+          const line4 = `4. 🕒 **03:00 PM - Tarde**: Exploración de **${stop4}**.`
+          const line5 = `5. 🌅 **05:30 PM - Atardecer**: Cierre panorámico en **${stop5}**.`
+          const question = `¿Te gusta este itinerario de 5 paradas o deseas cambiar algún lugar antes de generar el tour en el mapa?`
 
-          fallbackMsg = `${intro}\n\n${morning}\n${afternoon}\n${evening}\n\n${question}`
-          fallbackChips = ['🗺️ Generar tour en el mapa', 'Ajustar paradas', 'Ver alternativas']
+          fallbackMsg = `${intro}\n\n${line1}\n${line2}\n${line3}\n${line4}\n${line5}\n\n${question}`
+          fallbackChips = ['🗺️ Generar tour en el mapa', 'Cambiar paradas', 'Ver opciones de comida']
         } else {
           const numDays = Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))
           const rawSpecifics = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
@@ -5682,7 +5759,9 @@ Devuelve estrictamente un objeto JSON donde cada clave es el nombre exacto del l
       return {
         name,
         data: {
-          descripcion: details.description || buildRichFallbackDescription(name, targetCity),
+          descripcion: (enriched.history && enriched.history.length > 25 && !/\b(es\s+un\s+municipio\s+colombiano|capital\s+del\s+departamento)\b/i.test(enriched.history))
+            ? enriched.history
+            : (details.description || buildRichFallbackDescription(enriched, targetCity)),
           actividades: details.activities?.length > 0 ? details.activities : buildFallbackActivitiesForPlace(name, targetCity),
           datos_curiosos: details.curiousFacts?.length > 0 ? details.curiousFacts : buildFallbackCuriositiesForPlace(name, targetCity),
           consejos: details.tips?.length > 0 ? details.tips : buildFallbackTipsForPlace(name, targetCity),
@@ -5853,10 +5932,39 @@ function buildFallbackTipsForPlace(name, city = '') {
   return [`Planificar la visita con ropa ligera y calzado cómodo para disfrutar del recorrido.`]
 }
 
-function buildRichFallbackDescription(name, city = '') {
-  const clean = String(name || '').trim()
+function buildRichFallbackDescription(nameOrPlace, city = '') {
+  const placeObj = typeof nameOrPlace === 'object' && nameOrPlace !== null ? nameOrPlace : { name: nameOrPlace }
+  const clean = String(placeObj.name || placeObj.nombre || '').trim()
   const loc = city ? `en ${city}` : 'en la región'
   const seed = Math.abs(clean.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0))
+  const tags = { ...(placeObj.tags || {}), ...(placeObj.rawTags || {}) }
+  const amenity = String(tags.amenity || '').toLowerCase()
+  const rawCat = String(placeObj.category || placeObj.subcategory || placeObj.type || '').toLowerCase()
+
+  // 1. Food and gastronomic venues MUST be checked FIRST so markets/food halls (e.g. Caimán del Río) are not misclassified as wild wetlands
+  const isFoodVenue =
+    amenity === 'restaurant' ||
+    amenity === 'cafe' ||
+    amenity === 'food_court' ||
+    amenity === 'fast_food' ||
+    rawCat === 'restaurant' ||
+    rawCat === 'cafe' ||
+    rawCat === 'food' ||
+    placeObj.isRestaurant === true ||
+    isFoodOrDrinkEstablishment(clean) ||
+    /\b(caim[aá]n\s+del\s+r[ií]o|mercado\s+gastron[oó]mico|patio\s+de\s+comidas|food\s*hall|food\s*court|gastronom[ií]a|restaurante|restaurant|asador|bistro|bar|gastrobar|taquer[ií]a|pizzer[ií]a|cevicher[ií]a)\b/i.test(clean)
+
+  if (isFoodVenue) {
+    const isSeafoodVenue = /mariscos|pescado|ceviche|costeñ|mar|playa|puerto/i.test(clean)
+    if (isSeafoodVenue) {
+      return `Destacado referente culinario ${loc} donde los pescados frescos, preparaciones típicas y sabores de mar ofrecen una auténtica muestra gastronómica.`
+    }
+    const isCafeVenue = /caf[ée]|bistro|bakery|panader[íi]a|dulce/i.test(clean) || amenity === 'cafe' || rawCat === 'cafe'
+    if (isCafeVenue) {
+      return `Rincón tradicional de café y tertulia ${loc}, ideal para degustar café de origen y repostería artesanal en un ambiente relajado.`
+    }
+    return `Reconocido espacio gastronómico ${loc} que reúne una variada oferta culinaria, platos tradicionales e ingredientes frescos locales en un ambiente vibrante.`
+  }
 
   const isBocasDeCeniza = /\b(bocas?\s+de\s+ceniza|tajamar|desembocadura)\b/i.test(clean)
   if (isBocasDeCeniza) {

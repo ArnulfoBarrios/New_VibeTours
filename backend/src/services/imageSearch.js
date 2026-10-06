@@ -499,32 +499,26 @@ export async function wikipediaSummaryText(placeName, city = '', country = '') {
     if (sRes.ok) {
       const sJson = await sRes.json()
       const searchHits = sJson?.query?.search || []
-      let topHit = searchHits[0]
-      if (topHit && topHit.title) {
-        const cleanLower = cleaned.toLowerCase()
-        const cleanCityLower = cleanCity.toLowerCase()
-        
-        // Disambiguation for specific attraction types: if place has a distinct category word,
-        // prefer hits that contain that word over general city/department pages
-        const isDistinctPoiType = /\b(zool[oó]gico|zoo|museo|catedral|estadio|castillo|teatro|acuario|jard[ií]n bot[aá]nico|aeropuerto|terminal)\b/i.test(cleanLower)
-        if (isDistinctPoiType) {
-          const matchedPoiHit = searchHits.slice(0, 5).find(h =>
-            /\b(zool[oó]gico|zoo|museo|catedral|estadio|castillo|teatro|acuario|jard[ií]n bot[aá]nico|aeropuerto|terminal)\b/i.test(h.title.toLowerCase())
-          )
-          if (matchedPoiHit) {
-            topHit = matchedPoiHit
-          }
-        }
+      const cleanLower = cleaned.toLowerCase()
+      const cleanCityLower = cleanCity.toLowerCase()
+      const isDistinctPoiType = /\b(zool[oó]gico|zoo|museo|catedral|estadio|castillo|teatro|acuario|jard[ií]n bot[aá]nico|aeropuerto|terminal)\b/i.test(cleanLower)
+      const placeWords = cleanLower.split(/\s+/).filter(w => w.length >= 3 && !/^(parque|playa|sendero|cabo|bahia|bahía|hotel|isla|restaurante|el|la|los|las|de|del|en)$/i.test(w))
 
-        const topTitleLower = topHit.title.toLowerCase()
-        const placeWords = cleanLower.split(/\s+/).filter(w => w.length >= 3 && !/^(parque|playa|sendero|cabo|bahia|bahía|hotel|isla|restaurante|el|la|los|las|de|del|en)$/i.test(w))
-        let isBroadMismatch = (topTitleLower.includes('parque nacional') && !cleanLower.includes('parque nacional')) ||
-                              (cleanCityLower && topTitleLower === cleanCityLower) ||
-                              (isDistinctPoiType && !/\b(zool[oó]gico|zoo|museo|catedral|estadio|castillo|teatro|acuario|jard[ií]n bot[aá]nico|aeropuerto|terminal)\b/i.test(topTitleLower))
-        const hasSpecificWordMatch = placeWords.length === 0 || placeWords.some(w => topTitleLower.includes(w))
+      for (const hit of searchHits.slice(0, 5)) {
+        if (!hit || !hit.title) continue
+        const hitTitleLower = hit.title.toLowerCase()
+        const snippetClean = (hit.snippet || '').toLowerCase().replace(/<[^>]+>/g, ' ')
 
-        if (!isBroadMismatch && hasSpecificWordMatch) {
-          const slug = encodeURIComponent(topHit.title.replace(/\s+/g, '_'))
+        let isBroadMismatch = (hitTitleLower.includes('parque nacional') && !cleanLower.includes('parque nacional')) ||
+                              (cleanCityLower && hitTitleLower === cleanCityLower) ||
+                              (isDistinctPoiType && !/\b(zool[oó]gico|zoo|museo|catedral|estadio|castillo|teatro|acuario|jard[ií]n bot[aá]nico|aeropuerto|terminal)\b/i.test(hitTitleLower))
+        if (isBroadMismatch) continue
+
+        const hasTitleMatch = placeWords.length === 0 || placeWords.some(w => hitTitleLower.includes(w))
+        const hasSnippetMatch = placeWords.length > 0 && placeWords.some(w => snippetClean.includes(w))
+
+        if (hasTitleMatch || hasSnippetMatch) {
+          const slug = encodeURIComponent(hit.title.replace(/\s+/g, '_'))
           const sumUrl = `https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`
           const sumRes = await fetch(sumUrl, { headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' }, signal: AbortSignal.timeout(4000) })
           if (sumRes.ok) {
@@ -534,7 +528,8 @@ export async function wikipediaSummaryText(placeName, city = '', country = '') {
               const isEnglish = /\b(is the|is a|was a|located in|town of|municipality of)\b/i.test(extractLower)
               const isForeignMismatch = (cleanCountry.toLowerCase() === 'colombia' || cleanCity.toLowerCase() === 'cartagena') &&
                 (extractLower.includes('lanzarote') || extractLower.includes('canarias') || extractLower.includes('españa') || extractLower.includes('alicante'))
-              if (!isEnglish && !isForeignMismatch) {
+              const isVerified = hasTitleMatch || placeWords.some(w => extractLower.includes(w))
+              if (!isEnglish && !isForeignMismatch && isVerified) {
                 return sumJson.extract
               }
             }
