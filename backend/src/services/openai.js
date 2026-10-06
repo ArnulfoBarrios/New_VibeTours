@@ -1,6 +1,6 @@
 import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
-import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor } from './destinationService.js'
+import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor, evaluateTourRequirements } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection, KNOWN_ICONIC_LANDMARKS } from './osm.js'
 import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate } from './candidate-catalog.js'
@@ -1624,6 +1624,28 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         }
       }
     }
+
+    const cleanKey = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    const presetIconics = DESTINATION_ICONIC_LANDMARKS[cleanKey] || DESTINATION_ICONIC_LANDMARKS[clean] || []
+    if (presetIconics.length > 0) {
+      const verifiedIconics = await verifyCatalogEntriesOnOsm(presetIconics, clean, targetCountry, presetIconics.length, userLat, userLon)
+      for (const vi of verifiedIconics) {
+        if (!realPlaces.some(rp => arePlacesSimilar(rp, vi.name))) {
+          realPlaces.push(vi)
+        }
+      }
+    }
+
+    const presetRests = DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[clean] || []
+    if (presetRests.length > 0) {
+      const verifiedRests = await verifyCatalogEntriesOnOsm(presetRests, clean, targetCountry, presetRests.length, userLat, userLon, 'restaurant')
+      for (const pr of verifiedRests) {
+        if (!realRests.some(r => arePlacesSimilar(r.name, pr.name))) {
+          realRests.push(pr)
+        }
+      }
+    }
+
     if (realPlaces.length >= minRequiredPlaces && realRests.length >= minRequiredRests) {
       const candidateCatalog = createUnifiedCandidateCatalog({
         places: realPlaces,
@@ -2290,7 +2312,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   if (hasCity && !isLocationToDestination && Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0) {
     known.specificPlaces = await filterChatSpecificPlacesByOsm(known.specificPlaces, destName, destCountry, known.selectedHotel)
   }
-  const hasDurationOrDates = Boolean(known.durationDays || known.datesSeason)
+  let hasDurationOrDates = Boolean(known.durationDays || known.datesSeason)
   const knownPlacesList = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
     ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
     : []
@@ -2457,10 +2479,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     if (!known.budget) known.budget = 'Moderado'
   }
 
-  const isOneDayTour = Number(known.durationDays) === 1
-  const hasLodging = (isLocationToDestination || isOneDayTour) ? true : hasValidLodging(known.selectedHotel, known.accommodationStatus)
-  const hasTransport = hasValidValue(known.transport)
-  const hasBudget = hasValidValue(known.budget)
+  const initialReqCheck = evaluateTourRequirements(known, null)
+  const isOneDayTour = initialReqCheck.isExpressOrOneDay
+  if (isOneDayTour) {
+    if (!known.durationDays) known.durationDays = 1
+    if (!known.durationHours) known.durationHours = 8
+    if (!known.tourType) known.tourType = 'express_tour'
+    if (!known.datesSeason) known.datesSeason = 'Tour de 1 día'
+    hasDurationOrDates = true
+  }
+  const hasLodging = (isLocationToDestination || isOneDayTour) ? true : initialReqCheck.hasLodging
+  const hasTransport = initialReqCheck.hasTransport
+  const hasBudget = initialReqCheck.hasBudget
   const hasCompanions = hasValidValue(known.companions)
 
   const buildLocationCorridorDayBlocks = async (activeCatalog = null) => {
@@ -2840,16 +2870,13 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = '¡Hola! Soy Tour Planner AI 🤖. Cuéntame: ¿a qué ciudad o destino te gustaría viajar hoy?'
       }
     } else {
-      const isOneDayTour = Number(known.durationDays) === 1
-      const fbHasLodging = (isLocationToDestination || isOneDayTour) ? true : hasValidLodging(known.selectedHotel, known.accommodationStatus)
-      const fbHasTransport = hasValidValue(known.transport)
-      const fbHasBudget = hasValidValue(known.budget)
+      const fbReqCheck = evaluateTourRequirements(known, null)
+      const isOneDayTour = fbReqCheck.isExpressOrOneDay
+      const fbHasLodging = fbReqCheck.hasLodging
+      const fbHasTransport = fbReqCheck.hasTransport
+      const fbHasBudget = fbReqCheck.hasBudget
       const fbHasCompanions = hasValidValue(known.companions)
-      const fbAllKeyInfoComplete = isLocationToDestination
-        ? Boolean(hasCity && hasDurationOrDates)
-        : (isOneDayTour
-          ? Boolean(hasCity && hasDurationOrDates && fbHasTransport && fbHasBudget)
-          : Boolean(hasCity && hasDurationOrDates && fbHasLodging && fbHasTransport && fbHasBudget))
+      const fbAllKeyInfoComplete = fbReqCheck.isComplete
 
       const isDescribingTripIdea = /\b(?:lo\s+que\s+quiero\s+(?:hacer\s+)?es\s+crear|quiero\s+crear\s+un\s+tour\s+(?:en\s+donde|donde)|la\s+idea\s+es\s+crear)\b/i.test(lastUserMsg)
       const isExplicitBuildRequestedByUser = !isDescribingTripIdea && /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cr[eé]alo|cr[eé]ala|h[aá]zlo|construy[eé]lo|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
@@ -2927,16 +2954,10 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       // buildLocationCorridorDayBlocks is hoisted to generateChatResponse scope above
 
       if (isExplicitBuildRequestedByUser && !fbAllKeyInfoComplete && !isLocationToDestination) {
-        const missing = []
-        if (!hasCity) missing.push('el destino')
-        if (!hasDurationOrDates) missing.push('las fechas o días de viaje')
-        if (!fbHasLodging) missing.push('tu alojamiento u hotel (o si te quedas en casa propia/familiar)')
-        if (!fbHasTransport) missing.push('tu medio de transporte')
-        if (!fbHasBudget) missing.push('tu presupuesto')
-
+        const missing = fbReqCheck.missing
         fallbackMsg = `Para generar tu tour en el mapa, aún necesitamos definir: **${missing.join(', ')}**. ¿Podrías indicarme este dato?`
         fallbackChips = []
-        if (!fbHasLodging) {
+        if (!fbHasLodging && !isOneDayTour) {
           fallbackChips.push('Tengo mi propio hospedaje', '🏨 Recomiéndame hoteles')
         }
         if (!fbHasTransport) {
@@ -3446,11 +3467,11 @@ REGLA DE NATURALIDAD Y CERO INVENCIONES:
 
 ESTADO ACTUAL DE DATOS:
 • DESTINO: ${hasCity ? `CONFIRMADO (${destName})` : 'PENDIENTE'}
-• FECHAS / DURACIÓN: ${hasDurationOrDates ? `CONFIRMADO (${known.datesSeason || `${known.durationDays || 2} días`})` : 'PENDIENTE'}
+• FECHAS / DURACIÓN: ${isOneDayTour ? 'CONFIRMADO (Tour express / 1 día - No requiere fechas de calendario)' : (hasDurationOrDates ? `CONFIRMADO (${known.datesSeason || `${known.durationDays || 2} días`})` : 'PENDIENTE')}
 • ACOMPAÑANTES: ${hasCompanions ? `CONFIRMADO (${known.companions})` : 'PENDIENTE'}
 • TRANSPORTE: ${hasTransport ? `CONFIRMADO (${known.transport})` : 'PENDIENTE'}
 • PRESUPUESTO: ${hasBudget ? `CONFIRMADO (${known.budget})` : 'PENDIENTE'}
-• HOSPEDAJE: ${hasLodging ? `CONFIRMADO (${known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus})` : 'PENDIENTE'}
+• HOSPEDAJE: ${isOneDayTour ? 'NO REQUERIDO (Tour express / 1 día - CERO preguntas de hotel o alojamiento)' : (hasLodging ? `CONFIRMADO (${known.selectedHotel?.name || known.selectedHotel || known.accommodationStatus})` : 'PENDIENTE')}
 ${knownPlacesList.length > 0 ? `• LUGARES SELECCIONADOS POR EL VIAJERO (OBLIGATORIOS): ${knownPlacesList.join(', ')}` : ''}
 
 ${webSearchSummary ? `INFORMACIÓN EN TIEMPO REAL DESDE LA WEB:\n${webSearchSummary}` : ''}
@@ -3461,32 +3482,39 @@ ETAPA 1: ASESORÍA DE DESTINOS, FECHAS / DURACIÓN Y ACOMPAÑANTES
 - Si falta el destino o el usuario pide recomendaciones ("no sé a dónde viajar", "recomiéndame algún lugar", "¿a dónde puedo ir?"):
   Sugiérele de inmediato 4 o 5 destinos variados y populares (playa, naturaleza, cultura, destinos internacionales) con 1 línea descriptiva de cada uno y pregunta cuál le interesa.
 - Si ya indicó destino (${destName}): Acéptalo con entusiasmo y pregunta por las fechas y días de estadía (y acompañantes si faltan).
+- En tours de 1 día / express: Si el usuario ya indicó que es un tour de 1 día o express, NO exijas fechas de calendario.
 
 ETAPA 2: PRESUPUESTO, MEDIO DE TRANSPORTE Y ALOJAMIENTO
-- Si el HOSPEDAJE figura como PENDIENTE en el ESTADO ACTUAL DE DATOS:
+- REGLA DE ORO DE TOURS DE 1 DÍA / EXPRESS:
+  * Si es un tour de 1 día o express: ESTRICTAMENTE PROHIBIDO preguntar por hoteles, hostales o alojamiento. Tampoco exigir fechas de calendario.
+  * Únicamente pregunta en 1 línea directa por el medio de transporte o presupuesto SI Y SOLO SI aún figuran como PENDIENTE. Si ya los indicó, NUNCA vuelvas a preguntarlos.
+- Si el HOSPEDAJE figura como PENDIENTE en el ESTADO ACTUAL DE DATOS (únicamente en tours de varios días):
   * ESTRICTAMENTE PROHIBIDO redactar o mostrar el bloque de itinerario por días (Día 1, Día 2, etc.), viñetas de días ni preguntar si procedemos a generar el tour en el mapa.
   * Tu respuesta debe ser MÁXIMO de 1 o 2 oraciones breves y directas, reconociendo amablemente los datos recibidos y preguntando ÚNICAMENTE por el hotel o alojamiento (o si se hospedarán en casa propia / familiar).
+  * En tours internacionales o multi-ciudad: Se debe tener en cuenta el hospedaje por cada ciudad de parada (o confirmar si se hospedarán en hoteles en cada ciudad o casa familiar).
   * Si el usuario pide recomendaciones de hotel/alojamiento o indica una preferencia de categoría (ej: "¿qué recomiendas?", "recomiéndame hoteles", "una villa privada está bien", "busco resort"):
     - Si eligió categoría o estilo (ej: "una villa privada", "un resort"), el hospedaje SIGUE PENDIENTE. Sugiérele 2 o 3 opciones reales con nombre propio o pregúntale si tiene alguna reservada.
-     - Si pide opciones de hoteles, presenta únicamente opciones que aparezcan en el catálogo verificado de ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}. Si no hay opciones verificadas, informa que no se encontraron alojamientos confirmados y ofrece buscar en un radio mayor.
+    - Si pide opciones de hoteles, presenta únicamente opciones que aparezcan en el catálogo verificado de ${destName || 'el destino'} ${realCatalog?.hotels?.length ? `(Opciones verificadas: ${realCatalog.hotels.map(h => h.name).join(', ')})` : ''}. Si no hay opciones verificadas, informa que no se encontraron alojamientos confirmados y ofrece buscar en un radio mayor.
       FORMATO OBLIGATORIO Y EQUILIBRADO PARA HOTELES (MÁXIMO 1 O 2 LÍNEAS POR OPCIÓN):
       • [Nombre del Hotel]: [Ubicación clara con referencia de zona o atractivos cercanos] (~[Rango de precio estimado] ${userCurrency.toUpperCase()}/noche).
       (Ejemplo: • Hotel Boutique Don Pepe: Opción colonial en el Centro Histórico cerca de la Catedral y restaurantes (~$410.000 - $650.000 COP/noche).)
       CERO párrafos largos ni rodeos innecesarios.
-    - PROHIBIDO presentar el itinerario definitivo ni activar "readyToBuild" mientras el hospedaje siga como PENDIENTE.
+    - PROHIBIDO presentar el itinerario definitivo ni activar "readyToBuild" mientras el hospedaje siga como PENDIENTE en tours de varios días.
   * Si el usuario acaba de seleccionar o confirmar un hotel (ej: "Ok el Hotel X está bien", "Ya elegí el Hotel X", "El primero", "Me quedo con el Hotel X"):
     - Valida su elección inmediatamente con entusiasmo ("¡Excelente elección quedarse en [Hotel]!") y pregunta en 1 sola línea por los datos que sigan PENDIENTES (por ejemplo, el medio de transporte o presupuesto).
     - ESTRICTAMENTE PROHIBIDO volver a mostrarle la lista de hoteles ni volver a preguntarle qué hotel prefiere.
   NUNCA des consejos genéricos como "buscar en plataformas" ni vuelvas a preguntar por datos que ya estén CONFIRMADOS (presupuesto, transporte, fechas).
-- Si faltan datos de transporte, presupuesto o alojamiento:
+- Si faltan datos de transporte o presupuesto:
   Pregunta en 1 sola línea directa ÚNICAMENTE por los campos que figuren como PENDIENTE en el ESTADO ACTUAL DE DATOS.
 
-ETAPA 3: PRESENTACIÓN COMPLETA DEL ITINERARIO POR DÍAS (ENTREGA INMEDIATA ÚNICAMENTE TRAS CONFIRMACIÓN REAL)
-- REQUISITO OBLIGATORIO: Esta etapa SOLO se activa si el HOSPEDAJE está efectivamente CONFIRMADO (un hotel con nombre comercial real elegido, o indicación de "casa propia / familiar"). Si el hospedaje figura como PENDIENTE, ESTÁ TOTALMENTE PROHIBIDO emitir el itinerario final o avanzar a generación.
-- Si el usuario acaba de confirmar su hospedaje real con nombre propio o en casa propia (y ya contamos con destino, fechas, transporte y presupuesto):
+ETAPA 3: PRESENTACIÓN COMPLETA DEL ITINERARIO POR DÍAS (ENTREGA INMEDIATA)
+- REQUISITO OBLIGATORIO:
+  * En tours de 1 día / express: Esta etapa se activa de inmediato en cuanto se definen destino, transporte y presupuesto (cero preguntas de hotel o fechas).
+  * En tours de varios días: Esta etapa SOLO se activa si el HOSPEDAJE está efectivamente CONFIRMADO (un hotel con nombre comercial real elegido, o indicación de "casa propia / familiar"). Si el hospedaje figura como PENDIENTE, ESTÁ TOTALMENTE PROHIBIDO emitir el itinerario final o avanzar a generación.
+- Si el usuario acaba de confirmar su hospedaje real con nombre propio o en casa propia (y ya contamos con destino, fechas, transporte y presupuesto) o si es tour de 1 día:
   DEBES GENERAR Y MOSTRAR OBLIGATORIAMENTE EL ITINERARIO COMPLETO POR DÍAS EN ESTE MISMO MENSAJE.
-  PROHIBIDO TERMINAR EL MENSAJE CON UN SIMPLE ACUSE DE RECIBO (ej: "Con su casa como base, taxis y presupuesto de lujo...") SIN EL ITINERARIO COMPLETO. Si el usuario ya dio su hospedaje, NO te detengas en palabras amables ni felicitaciones aisladas: ENTREGA DE INMEDIATO EL ITINERARIO COMPLETO (Día 1 a Día N con todas sus viñetas •).
-- DURACIÓN EXACTA: Debes estructurar EXACTAMENTE ${Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))} días en el itinerario (desde Día 1 hasta Día ${Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))}), sin omitir ningún día ni generar días de menos.
+  PROHIBIDO TERMINAR EL MENSAJE CON UN SIMPLE ACUSE DE RECIBO (ej: "Con su casa como base, taxis y presupuesto de lujo...") SIN EL ITINERARIO COMPLETO. ENTREGA DE INMEDIATO EL ITINERARIO COMPLETO (Día 1 a Día N con todas sus viñetas •).
+- DURACIÓN EXACTA: Debes estructurar EXACTAMENTE ${isOneDayTour ? 1 : Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))} días en el itinerario (desde Día 1 hasta Día ${isOneDayTour ? 1 : Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))}), sin omitir ningún día ni generar días de menos.
 
 Formato OBLIGATORIO del Itinerario:
 Itinerario de Viaje: ${destName || known.destination} (${known.datesSeason || `${known.durationDays || 2} días`})
@@ -3711,35 +3739,22 @@ REGLAS PARA "accommodationStatus":
     }
 
     // Evaluar estado completo de información clave mediante Single Source of Truth
-    const finalHasLodging = isLocationToDestination
-      ? true
-      : Boolean(
-          isLodgingExplicitlyConfirmed(
-            parsedExtracted.selectedHotel || known.selectedHotel,
-            parsedExtracted.accommodationStatus || known.accommodationStatus
-          )
-        )
-    const finalHasTransport = Boolean(hasValidValue(known.transport) || hasValidValue(parsedExtracted.transport))
-    const finalHasBudget = Boolean(hasValidValue(known.budget) || hasValidValue(parsedExtracted.budget))
+    const finalReqCheck = evaluateTourRequirements(known, parsedExtracted)
+    const isOneDayTour = finalReqCheck.isExpressOrOneDay
+    const finalHasLodging = finalReqCheck.hasLodging
+    const finalHasTransport = finalReqCheck.hasTransport
+    const finalHasBudget = finalReqCheck.hasBudget
     const finalHasCompanions = Boolean(hasValidValue(known.companions) || hasValidValue(parsedExtracted.companions))
-    const finalHasCity = Boolean(hasCity || hasValidValue(parsedExtracted.city))
-    const finalHasDates = Boolean(
-      hasDurationOrDates ||
-      hasValidValue(parsedExtracted.datesSeason) ||
-      (parsedExtracted.durationDays && Number(parsedExtracted.durationDays) > 0)
-    )
+    const finalHasCity = finalReqCheck.hasCity
+    const finalHasDates = finalReqCheck.hasDates
+    const isAllKeyInfoComplete = finalReqCheck.isComplete
 
-    const isAllKeyInfoComplete = isLocationToDestination
-      ? Boolean(finalHasCity && finalHasDates)
-      : Boolean(
-          finalHasCity &&
-          finalHasDates &&
-          finalHasLodging &&
-          finalHasTransport &&
-          finalHasBudget
-        )
-
-    if (isLocationToDestination) {
+    if (isOneDayTour) {
+      if (!parsedExtracted.durationDays) parsedExtracted.durationDays = 1
+      if (!parsedExtracted.durationHours) parsedExtracted.durationHours = 8
+      if (!parsedExtracted.tourType) parsedExtracted.tourType = 'express_tour'
+      if (!parsedExtracted.accommodationStatus) parsedExtracted.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
+    } else if (isLocationToDestination) {
       if (!parsedExtracted.transport && known.transport) parsedExtracted.transport = known.transport
       if (!parsedExtracted.budget && known.budget) parsedExtracted.budget = known.budget
       if (!parsedExtracted.tourType) parsedExtracted.tourType = 'location_to_destination'
@@ -4205,8 +4220,8 @@ REGLAS PARA "accommodationStatus":
     const isItineraryStatusInquiry = /\b(c[oó]mo va el itinerario|c[oó]mo va mi itinerario|estado del itinerario)\b/i.test(lastUserMsg)
     if (isItineraryStatusInquiry) {
       actionChips = ['🚀 Generar itinerario completo', '✏️ Modificar algún día', '➕ Agregar otra actividad']
-    } else if (!finalHasLodging) {
-      // Hospedaje aún pendiente: PROHIBIDO ofrecer "Generar tour". Ofrecer opciones de hospedaje.
+    } else if (!finalHasLodging && !isOneDayTour) {
+      // Hospedaje aún pendiente (solo en tours de varios días): PROHIBIDO ofrecer "Generar tour". Ofrecer opciones de hospedaje.
       actionChips = actionChips.filter(c => !/generar tour|crear tour|armar tour|construir tour/i.test(c))
       if (!actionChips.some(c => /casa propia|familiar/i.test(c))) {
         actionChips.unshift('Tengo casa propia / familiar')
@@ -4241,16 +4256,10 @@ REGLAS PARA "accommodationStatus":
       responseMessage = `¡Excelente! Procedo a generar tu tour en el mapa para que disfrutes tu viaje a ${destName || 'tu destino'}.`
       actionChips = [`🚀 Generar tour en ${destName || known.destination || 'el mapa'}`]
     } else if (isUserExplicitlyOrderingBuild && !isAllKeyInfoComplete) {
-      const missing = []
-      if (!finalHasCity) missing.push('el destino')
-      if (!finalHasDates) missing.push('las fechas o días de viaje')
-      if (!finalHasLodging) missing.push('tu alojamiento u hotel (o confirmar si te hospedas en casa propia/familiar)')
-      if (!finalHasTransport) missing.push('tu medio de transporte')
-      if (!finalHasBudget) missing.push('tu presupuesto estimado')
-
+      const missing = finalReqCheck.missing
       responseMessage = `Para poder generar tu tour en el mapa y armar la ruta con precisión, aún necesitamos definir: **${missing.join(', ')}**. Por favor indícame este detalle para continuar.`
       actionChips = []
-      if (!finalHasLodging) {
+      if (!finalHasLodging && !isOneDayTour) {
         actionChips.push('Tengo casa propia / familiar', '🏨 Recomiéndame hoteles')
       }
       if (!finalHasTransport) {
@@ -4372,11 +4381,12 @@ REGLA CRÍTICA DE DESTINO TURÍSTICO (UNIVERSAL: CIUDADES, PARQUES, ISLAS, REGIO
 - Solo extraer si el usuario declara EXPLÍCITAMENTE que desea viajar allí, explorar la zona o cambiar de destino.
 - Si el usuario menciona un lugar como corrección, queja o negación (ej: "te equivocaste, esos lugares son de Barranquilla, no de Santa Marta"), NO sobreescribas el destino y mantén: "destination": ${JSON.stringify(currentData.destination || currentData.city || null)}, "city": ${JSON.stringify(currentData.city || currentData.destination || null)}.
 
-REGLA DE LAS 6 MODALIDADES DE VIAJE:
+REGLA DE LAS MODALIDADES DE VIAJE:
 - "tourType": clasifica en uno de:
+  * "express_tour": Tour intra-urbano de un solo día o recorrido express/rápido para visitar los atractivos más icónicos de una ciudad sin alojamiento ni cambio de municipio.
+  * "single_city": Ciudad única con estancia de 2 o más días (ej: Barranquilla, Medellín, Bogotá, Madrid, Roma).
   * "micro_destination": Parques naturales, reservas, montañas, valles aislados (ej: Parque Tayrona, Minca, Guatapé, Valle de Cocora).
   * "coastal_islands": Pueblos/zonas costeras con islas o archipiélagos (ej: Tolú y Coveñas con Islas de San Bernardo, Cartagena con Islas del Rosario).
-  * "single_city": Ciudad única (ej: Barranquilla, Medellín, Bogotá, Madrid, Roma).
   * "city_to_city": Rutas o road trips entre dos o más ciudades (ej: Barranquilla a Santa Marta, Medellín a Bogotá).
   * "international_multicity": Viajes internacionales que abarcan varios países o múltiples ciudades internacionales (ej: Europa con Italia y España; Japón y Corea).
   * "location_to_destination": Rutas que parten desde la ubicación GPS del usuario hacia un punto determinado.
@@ -4397,7 +4407,7 @@ REGLA DE LAS 6 MODALIDADES DE VIAJE:
 
 Devuelve ÚNICAMENTE un JSON con:
 - "destination": destino turístico explícito o null.
-- "tourType": "micro_destination" | "coastal_islands" | "single_city" | "city_to_city" | "international_multicity" | "location_to_destination" o null.
+- "tourType": "express_tour" | "single_city" | "micro_destination" | "coastal_islands" | "city_to_city" | "international_multicity" | "location_to_destination" o null.
 - "isMultiCity": boolean.
 - "isMultiCountry": boolean.
 - "isUserLocationOrigin": boolean.
@@ -4419,7 +4429,7 @@ Devuelve ÚNICAMENTE un JSON con:
 - "selectedHotel": { "name": "Nombre comercial exacto del hotel específico" } si el usuario CONFIRMÓ EXPLÍCITAMENTE quedarse allí con su nombre propio (ej: "confirmo el Hotel Casa La Fe", "elijo el Hotel Dann Carlton", "me hospedo en el Hotel X") O { "name": "Casa propia / Alojamiento particular" } si es casa propia/familiar. NUNCA coloques categorías o tipos genéricos como "Villa privada", "Resort", "Hotel boutique", "Cabaña", "Apartamento" en selectedHotel; en tales casos DEBE ser null.
 - "accommodationStatus": "Casa propia / familiar" (si indica casa propia/familiar), "Hotel elegido" (ÚNICAMENTE si el usuario confirmó explícitamente un hotel con nombre comercial específico), "Por definir" (si menciona un tipo de hospedaje como "una villa privada", "un resort", pide recomendaciones, o aún no confirma) o null.
 - "lodgingTypePreference": categoría o estilo preferido si el usuario lo menciona (ej: "villa privada", "resort frente al mar", "hotel boutique", "cabaña", "económico") o null.
-- "specificPlaces": lista de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Cabo San Juan", "dia": 1 }, { "name": "Playa Cristal", "dia": 2 }]). NUNCA incluir actividades genéricas ("Llegada", "Despedida", "Tiempo libre", "Día libre").`
+- "specificPlaces": lista ordenada de atracciones o lugares físicos con nombre propio y día (ej: [{ "name": "Cabo San Juan", "dia": 1 }, { "name": "Playa Cristal", "dia": 2 }]). PRESERVA ESTRICTAMENTE el orden secuencial que el usuario indique (ej: "primero X, luego Y"). Si el usuario dice "quiero ir a, por ejemplo, al Malecón", extrae el nombre del lugar ("Malecón"). NUNCA incluir actividades genéricas ("Llegada", "Despedida", "Tiempo libre", "Día libre").`
 
   try {
     const response = await fetchOpenAiChatCompletion({
@@ -4564,6 +4574,103 @@ export function isValidRouteEndpoint(candidate = '') {
   if (words.length > 7) return false
 
   return true
+}
+
+export function extractRequestedSpecificPlaces(prompt) {
+  if (!prompt || typeof prompt !== 'string') return []
+
+  // 1. Strip conversational fillers and parenthetical qualifiers globally
+  const normalizedText = prompt
+    .replace(/(?:,\s*)?\b(?:por\s+ejemplo|tipo|como|tal\s+vez|quiz[aá]s|en\s+especial|sobre\s+todo|de\s+pronto)\b(?:,\s*)?/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const sanitizePlace = (raw) => {
+    if (!raw) return ''
+    let clean = raw.trim()
+      .replace(/^(?:a\s+el|al\s+|a\s+la\s+|a\s+los\s+|a\s+las\s+|a\s+|en\s+|de\s+)/i, '')
+      .replace(/^(?:(?:la\s+)?playa|(?:el\s+)?centro)\s+y\s+/i, '')
+      .replace(/^(?:el|la|los|las|un|una)\s+/i, (match) => {
+        return /^(?:(?:al|a\s+el|el)\s+puente|(?:a\s+la|la)\s+ronda|(?:a\s+la|la)\s+catedral|(?:al|el)\s+muelle|(?:al|el)\s+malec[oó]n|(?:a\s+la|la)\s+troja|(?:a\s+la|la)\s+cueva|(?:al|el)\s+caim[aá]n)/i.test(raw)
+          ? match
+          : ''
+      })
+      .trim()
+    clean = clean.charAt(0).toUpperCase() + clean.slice(1)
+    clean = clean.replace(/\s+(?:por\s+favor|porfa|gracias|adicionales?|podr[aá]\s+ser.*|ser[íi]a\s+bacano.*|ser[íi]a\s+genial.*|y\s+(?:relajarnos|descansar|pasar\s+el\s+rato|disfrutar|conocer|pasear|comer)|para\s+.*)$/i, '').trim()
+    clean = clean.replace(/\s+(?:y|e|luego|despu[eé]s)$/i, '').trim()
+    return clean
+  }
+
+  const isValidPlace = (clean) => {
+    if (!clean || clean.length < 3) return false
+    const lowerP = clean.toLowerCase()
+    const isGenericStopPhrase = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|paradas\s+adicionales|lugares\s+adicionales|otras?\s+paradas?|(?:lugares|sitios|atractivos|puntos|zonas|rincones)\s+(?:m[aá]s|mejores|bonitos|lindos|bellos|populares|tur[íi]sticos|emblem[aá]ticos|destacados|principales)|(?:los\s+|las\s+)?(?:mejores|principales|m[aá]s\s+(?:bonitos|lindos|bellos|populares|destacados))\s+(?:lugares|sitios|atractivos|puntos|zonas))\b/i.test(lowerP)
+    const NON_PLACE_TARGETS = /^(paradas?|lugares|sitios|atractivos?|actividades|un\s+d[íi]a|\d+\s+d[íi]as?|hotel|hospedaje|alojamiento|tour|itinerario|ruta|relajarnos|relajar|relajarse|descansar|descanso|lugares\s+m[aá]s\s+bonitos|los\s+lugares\s+m[aá]s\s+bonitos|los\s+mejores\s+lugares|mejores\s+lugares)$/i
+    const isGenericFacility = /^(restaurante|restaurant|bar|caf[eé]|hotel|hostal|hostel|posada|alojamiento|atractivo|tienda|puesto|kiosko)$/i.test(lowerP)
+    return (
+      isValidRouteEndpoint(clean) &&
+      !isGenericStopPhrase &&
+      !NON_PLACE_TARGETS.test(lowerP) &&
+      !isTemporalOrDurationPhrase(lowerP) &&
+      !isNonTouristicInput(lowerP) &&
+      !isVagueDestination(lowerP) &&
+      !isGenericFacility &&
+      !isLodgingName(clean)
+    )
+  }
+
+  const results = []
+  const seen = new Set()
+  const addIfValid = (raw, day = null) => {
+    const clean = sanitizePlace(raw)
+    if (!clean || seen.has(clean.toLowerCase())) return
+    if (isValidPlace(clean)) {
+      seen.add(clean.toLowerCase())
+      results.push({
+        name: clean,
+        category: 'attraction',
+        type: 'cultural',
+        entityType: 'attraction',
+        ...(day && day > 0 ? { dia: day, day } : {})
+      })
+    }
+  }
+
+  // A. Sequence detection (e.g. "primero ... luego ... después ...")
+  if (/\b(?:primero|1[.)]|en\s+primer\s+lugar)\b/i.test(normalizedText) && /\b(?:luego|despu[eé]s|segundo|2[.)])\b/i.test(normalizedText)) {
+    const seqRegex = /(?:^|\b)(?:primero|1[.)]|en\s+primer\s+lugar|luego|despu[eé]s|segundo|2[.)]|tercero|3[.)]|cuarto|4[.)]|al\s+final|de\s+[uú]ltimo)\s+(?:(?:quiero\s+)?(?:ir\s+(?:al|a\s+la|a)|visitar|conocer)|vamos\s+a|pasar\s+por|\b(?:a\s+el|al|a\s+la|a)\b)?\s*([^,.;]+?)(?=(?:,\s*)?(?:\s+y\s+)?(?:\b(?:luego|despu[eé]s|segundo|2[.)]|tercero|3[.)]|cuarto|4[.)]|al\s+final|de\s+[uú]ltimo)\b|[.;!?]|$))/gi
+    let m
+    while ((m = seqRegex.exec(normalizedText)) !== null) {
+      if (m[1]) addIfValid(m[1])
+    }
+    if (results.length >= 2) return results
+  }
+
+  // B. Multi-item list detection (e.g. "visitar A, B y C" or "ir a A, B y C")
+  const listMatch = normalizedText.match(/\b(?:quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|vamos\s+a|visitar|conocer|recorrer|ir\s+a)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s',-]+?(?:\s*,\s*[A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]+)*(?:\s+y\s+[A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]+))(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a)\s*(\d+)|[.;!?]|$)/i)
+  if (listMatch) {
+    const listBody = listMatch[1]
+    const targetDay = listMatch[2] ? parseInt(listMatch[2], 10) : null
+    const items = listBody.split(/,\s*|\s+y\s+/i)
+    if (items.length >= 2) {
+      for (const item of items) {
+        addIfValid(item, targetDay)
+      }
+      if (results.length >= 2) return results
+    }
+  }
+
+  // C. Single / Standard place addition
+  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|conocer|vamos\s+a|adiciona|adicionar|si\s+me\s+puedo\s+ir\s+a|puedo\s+ir\s+a|irme\s+a|ir\s+a|pasar\s+por|conociendo|descubrir)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;])/i
+  const placeMatch = normalizedText.match(addPlaceRegex)
+  if (placeMatch) {
+    const rawPlaceName = placeMatch[1].trim()
+    const targetDay = placeMatch[2] ? parseInt(placeMatch[2], 10) : null
+    addIfValid(rawPlaceName, targetDay)
+  }
+
+  return results
 }
 
 export function extractChatInformationFallback(prompt) {
@@ -4969,36 +5076,13 @@ export function extractChatInformationFallback(prompt) {
     prompt
   })
 
-  // Extract user-requested places / stops to add (e.g. "agrega La Ventana al Mundo", "quiero visitar el Castillo de Salgar para el día 2", "si me puedo ir a Minca")
-  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|conocer|vamos\s+a|adiciona|adicionar|si\s+me\s+puedo\s+ir\s+a|puedo\s+ir\s+a|irme\s+a|ir\s+a|pasar\s+por|conociendo|descubrir)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;])/i
-  const placeMatch = (prompt || '').trim().match(addPlaceRegex)
-  if (placeMatch) {
-    const rawPlaceName = placeMatch[1].trim()
-    const targetDay = placeMatch[2] ? parseInt(placeMatch[2], 10) : null
-    let cleanPlaceName = rawPlaceName
-      .replace(/^(?:a\s+|al\s+|en\s+)/i, '')
-      .replace(/^(?:(?:la\s+)?playa|(?:el\s+)?centro)\s+y\s+/i, '')
-      .replace(/^(?:el|la|los|las|un|una)\s+/i, (match) => {
-        return /^(?:el\s+puente|la\s+ronda|la\s+catedral|el\s+muelle|el\s+malec[oó]n|la\s+troja|la\s+cueva|el\s+caim[aá]n)/i.test(rawPlaceName)
-          ? match
-          : ''
-      })
-      .trim()
-    cleanPlaceName = cleanPlaceName.charAt(0).toUpperCase() + cleanPlaceName.slice(1)
-    cleanPlaceName = cleanPlaceName.replace(/\s+(?:por\s+favor|porfa|gracias|adicionales?|podr[aá]\s+ser.*|ser[íi]a\s+bacano.*|ser[íi]a\s+genial.*|y\s+(?:relajarnos|descansar|pasar\s+el\s+rato|disfrutar|conocer|pasear|comer)|para\s+.*)$/i, '').trim()
-    const lowerP = cleanPlaceName.toLowerCase()
-    const isGenericStopPhrase = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|paradas\s+adicionales|lugares\s+adicionales|otras?\s+paradas?|(?:lugares|sitios|atractivos|puntos|zonas|rincones)\s+(?:m[aá]s|mejores|bonitos|lindos|bellos|populares|tur[íi]sticos|emblem[aá]ticos|destacados|principales)|(?:los\s+|las\s+)?(?:mejores|principales|m[aá]s\s+(?:bonitos|lindos|bellos|populares|destacados))\s+(?:lugares|sitios|atractivos|puntos|zonas))\b/i.test(lowerP)
-    const NON_PLACE_TARGETS = /^(paradas?|lugares|sitios|atractivos?|actividades|un\s+d[íi]a|\d+\s+d[íi]as?|hotel|hospedaje|alojamiento|tour|itinerario|ruta|relajarnos|relajar|relajarse|descansar|descanso|lugares\s+m[aá]s\s+bonitos|los\s+lugares\s+m[aá]s\s+bonitos|los\s+mejores\s+lugares|mejores\s+lugares)$/i
-    if (isValidRouteEndpoint(cleanPlaceName) && !isGenericStopPhrase && !NON_PLACE_TARGETS.test(lowerP) && !isTemporalOrDurationPhrase(lowerP) && !isNonTouristicInput(lowerP) && !isVagueDestination(lowerP) && !isGenericFacilityName(cleanPlaceName) && !isLodgingName(cleanPlaceName)) {
-      res.specificPlaces = res.specificPlaces || []
-      if (!res.specificPlaces.some(p => arePlacesSimilar(typeof p === 'string' ? p : p.name, cleanPlaceName))) {
-        res.specificPlaces.push({
-          name: cleanPlaceName,
-          category: 'attraction',
-          type: 'cultural',
-          entityType: 'attraction',
-          ...(targetDay && targetDay > 0 ? { dia: targetDay, day: targetDay } : {})
-        })
+  // Extract user-requested places / stops to add (supports conversational fillers, sequential lists, and single additions)
+  const extractedPlaces = extractRequestedSpecificPlaces(prompt)
+  if (extractedPlaces.length > 0) {
+    res.specificPlaces = res.specificPlaces || []
+    for (const place of extractedPlaces) {
+      if (!res.specificPlaces.some(p => arePlacesSimilar(typeof p === 'string' ? p : p.name, place.name))) {
+        res.specificPlaces.push(place)
       }
     }
   }

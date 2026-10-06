@@ -151,6 +151,7 @@ export const TOUR_TRIP_TYPES = new Set([
   'city_to_city',
   'international_multicity',
   'location_to_destination',
+  'express_tour',
 ])
 
 export const MICRO_DESTINATION_PATTERN = /tayrona|minca|guatap[eé]|valle de cocora|cocora|parque nacional|parque natural|reserva natural|sierra nevada|tatacoa|desierto de la tatacoa|chicamocha|ca[nñ][oó]n|amazonas|eje cafetero|pueblito|monta[nñ]a|cascada|alpin[oa]|alpes|senderismo|mirador|miradores|lago|laguna|volc[aá]n|glaciar|glaciares|bosque|cueva|cuevas|valle\b|geoparque/i
@@ -173,6 +174,10 @@ export function normalizeTourType(value) {
     islas_costeras: 'coastal_islands',
     single_city: 'single_city',
     ciudad_unica: 'single_city',
+    express_tour: 'express_tour',
+    tour_express: 'express_tour',
+    express: 'express_tour',
+    tour_rapido: 'express_tour',
     city_to_city: 'city_to_city',
     entre_ciudades: 'city_to_city',
     road_trip: 'city_to_city',
@@ -249,7 +254,90 @@ export function inferTourType(input = {}, extracted = null) {
     return 'coastal_islands'
   }
 
+  const durationDays = Number(input.durationDays || input.duration_days || extracted?.durationDays || (input.durationHours ? Math.ceil(input.durationHours / 24) : 0))
+  const isExpressIndicator = /\b(tour\s+express|express|tour\s+r[aá]pido|recorrido\s+r[aá]pido)\b/i.test(destinationText)
+  if (durationDays === 1 || isExpressIndicator) {
+    return 'express_tour'
+  }
+
   return 'single_city'
+}
+
+export function evaluateTourRequirements(input = {}, extracted = null) {
+  const merged = { ...input, ...(extracted || {}) }
+  const tourType = inferTourType(input, extracted)
+
+  const city = String(merged.city || merged.destination || merged.destinationPlace || '').trim()
+  const hasCity = Boolean(city.length >= 2 || (Array.isArray(merged.cities) && merged.cities.length > 0))
+
+  const isExpressOrOneDay = tourType === 'express_tour' ||
+    Number(merged.durationDays) === 1 ||
+    (Number(merged.durationHours) > 0 && Number(merged.durationHours) <= 24) ||
+    /\b(un\s+d[íi]a|1\s+d[íi]a|tour\s+express|express|por\s+el\s+d[íi]a|pasa\s*d[íi]a|pasad[íi]a)\b/i.test(`${merged.datesSeason || ''} ${merged.prompt || ''}`)
+
+  const hasTransport = Boolean(merged.transport && String(merged.transport).trim().length > 0 && !/por definir|pendiente/i.test(String(merged.transport)))
+  const hasBudget = Boolean(merged.budget && String(merged.budget).trim().length > 0 && !/por definir|pendiente/i.test(String(merged.budget)))
+
+  // Dates: For 1-day/express tours, dates are optional / not required to build
+  const hasDates = isExpressOrOneDay
+    ? true
+    : Boolean(merged.datesSeason || (Number(merged.durationDays) > 0))
+
+  // Lodging:
+  let hasLodging = false
+  let lodgingNote = ''
+
+  if (isExpressOrOneDay || tourType === 'location_to_destination' || merged.isUserLocationOrigin) {
+    // 1-day tours and corridor/location-to-destination do NOT require lodging
+    hasLodging = true
+  } else if (tourType === 'international_multicity' || tourType === 'city_to_city') {
+    // Multi-city or International tour: Needs lodging strategy across cities
+    const isStayingHome = /\b(casa\s+propia|familiar|amigos|casa\s+de|con\s+familia)\b/i.test(String(merged.accommodationStatus || merged.lodging || ''))
+    const hasPerCityLodging = Boolean(merged.lodgingsPerCity && typeof merged.lodgingsPerCity === 'object' && Object.keys(merged.lodgingsPerCity).length >= 1)
+    const hasExplicitHotelConfirmed = Boolean(
+      (merged.selectedHotel && (typeof merged.selectedHotel === 'string' ? merged.selectedHotel.length > 2 : (merged.selectedHotel.name && merged.selectedHotel.name.length > 2))) ||
+      /\b(hotel(es)?|alojamiento(s)?|hospedaje(s)?)\s+(elegido(s)?|confirmado(s)?|reservado(s)?)/i.test(String(merged.accommodationStatus || ''))
+    )
+
+    if (isStayingHome || hasPerCityLodging || hasExplicitHotelConfirmed) {
+      hasLodging = true
+    } else {
+      hasLodging = false
+      lodgingNote = 'alojamiento por ciudad de estadía (o confirmar si te hospedas en hoteles o casa familiar)'
+    }
+  } else {
+    // Single city / micro destination / coastal multi-day tour
+    const isStayingHome = /\b(casa\s+propia|familiar|amigos|casa\s+de|con\s+familia)\b/i.test(String(merged.accommodationStatus || merged.lodging || ''))
+    const hasHotel = Boolean(
+      (merged.selectedHotel && (typeof merged.selectedHotel === 'string' ? merged.selectedHotel.length > 2 : (merged.selectedHotel.name && merged.selectedHotel.name.length > 2))) ||
+      /hotel elegido|hotel confirmado|alojamiento confirmado/i.test(String(merged.accommodationStatus || ''))
+    )
+    hasLodging = isStayingHome || hasHotel
+    if (!hasLodging) {
+      lodgingNote = 'tu alojamiento u hotel (o confirmar si te hospedas en casa propia/familiar)'
+    }
+  }
+
+  const missing = []
+  if (!hasCity && tourType !== 'location_to_destination') missing.push('el destino')
+  if (!hasDates) missing.push('las fechas o días de viaje')
+  if (!hasLodging) missing.push(lodgingNote || 'tu alojamiento')
+  if (!hasTransport) missing.push('tu medio de transporte')
+  if (!hasBudget) missing.push('tu presupuesto')
+
+  const isComplete = missing.length === 0
+
+  return {
+    tourType,
+    isExpressOrOneDay,
+    hasCity,
+    hasDates,
+    hasLodging,
+    hasTransport,
+    hasBudget,
+    missing,
+    isComplete
+  }
 }
 
 export function geographicScopeFor(input = {}, extracted = null) {
@@ -259,7 +347,7 @@ export function geographicScopeFor(input = {}, extracted = null) {
     [input.prompt, input.destination, input.city].filter(Boolean).join(' ')
   )
 
-  if (tourType === 'single_city') {
+  if (tourType === 'single_city' || tourType === 'express_tour') {
     const isCoastalCorridor = /\b(coveñas|covenas|tol[uú]|san antero|golfo de morrosquillo|san bernardo del viento)\b/i.test(
       [input.prompt, input.destination, input.city].filter(Boolean).join(' ')
     )
@@ -272,7 +360,7 @@ export function geographicScopeFor(input = {}, extracted = null) {
           : 35
     return {
       tourType,
-      mode: 'single_city',
+      mode: tourType === 'express_tour' ? 'express_tour' : 'single_city',
       maxDistanceKm,
       isRegional: false,
       allowNearbyMunicipalities: true,

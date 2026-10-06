@@ -3,9 +3,11 @@ import assert from 'node:assert/strict'
 
 import {
   extractChatInformationFallback,
+  extractRequestedSpecificPlaces,
   generateChatResponse
 } from '../services/openai.js'
 import { isValidSpecificPlace } from '../routes/ai.js'
+import { inferTourType, evaluateTourRequirements } from '../services/destinationService.js'
 
 test('1. extractChatInformationFallback rejects superlative and generic noun phrases as stops', () => {
   const ext = extractChatInformationFallback(
@@ -85,3 +87,94 @@ test('4. generateChatResponse triggers readyToBuild: true when user confirms bui
   assert.equal(res.readyToBuild, true)
   assert.match(res.responseMessage, /generar tu tour/i)
 })
+
+test('5. extractRequestedSpecificPlaces extracts place cleanly even with conversational fillers like "por ejemplo"', () => {
+  const prompt = 'Ahora mismo estoy con unos amigos y quiero ir a, por ejemplo, al Malecón, me han dicho que es bastante famoso'
+  const extracted = extractRequestedSpecificPlaces(prompt)
+  assert.ok(extracted.length >= 1, 'Debe haber extraído al menos 1 lugar')
+  assert.equal(extracted[0].name, 'Malecón')
+
+  const fallback = extractChatInformationFallback(prompt)
+  assert.ok(fallback.specificPlaces && fallback.specificPlaces.length >= 1)
+  assert.equal(fallback.specificPlaces[0].name, 'Malecón')
+})
+
+test('6. extractRequestedSpecificPlaces preserves exact order of multi-stop sequence', () => {
+  const prompt = 'Primero quiero ir al Malecón, luego a Bocas de Ceniza y después a la Casa del Carnaval'
+  const extracted = extractRequestedSpecificPlaces(prompt)
+  assert.equal(extracted.length, 3, 'Debe haber extraído exactamente 3 paradas')
+  assert.equal(extracted[0].name, 'Malecón')
+  assert.equal(extracted[1].name, 'Bocas de Ceniza')
+  assert.equal(extracted[2].name, 'Casa del Carnaval')
+})
+
+test('7. inferTourType identifies 1-day intra-city tours as express_tour', () => {
+  const input = {
+    city: 'Barranquilla',
+    destination: 'Barranquilla',
+    durationDays: 1,
+    prompt: 'Me encuentro en Barranquilla con unos amigos quiero hacer un tour de un dia para ver los lugares mas importantes de la ciudad'
+  }
+  const type = inferTourType(input)
+  assert.equal(type, 'express_tour')
+})
+
+test('8. evaluateTourRequirements allows express / 1-day tours to complete WITHOUT dates and WITHOUT lodging', () => {
+  const check = evaluateTourRequirements({
+    city: 'Barranquilla',
+    tourType: 'express_tour',
+    transport: 'Taxi / Uber',
+    budget: 'Moderado'
+  })
+  assert.equal(check.isComplete, true, '1-day tour must complete without dates or lodging')
+  assert.equal(check.hasLodging, true)
+  assert.equal(check.hasDates, true)
+  assert.deepEqual(check.missing, [])
+})
+
+test('9. evaluateTourRequirements enforces lodging and dates for single-city multi-day tours', () => {
+  const missingLodgingCheck = evaluateTourRequirements({
+    city: 'Barranquilla',
+    tourType: 'single_city',
+    durationDays: 3,
+    transport: 'Auto rentado',
+    budget: 'Moderado'
+  })
+  assert.equal(missingLodgingCheck.isComplete, false, 'Multi-day tour must require lodging')
+  assert.equal(missingLodgingCheck.hasLodging, false)
+  assert.ok(missingLodgingCheck.missing.some(m => /alojamiento|hotel/i.test(m)))
+
+  const completeCheck = evaluateTourRequirements({
+    city: 'Barranquilla',
+    tourType: 'single_city',
+    durationDays: 3,
+    transport: 'Auto rentado',
+    budget: 'Moderado',
+    accommodationStatus: 'casa propia'
+  })
+  assert.equal(completeCheck.isComplete, true, 'Multi-day tour with casa propia must complete')
+})
+
+test('10. evaluateTourRequirements enforces lodging strategy for multi-city / international tours', () => {
+  const multiCityMissing = evaluateTourRequirements({
+    cities: ['Bogotá', 'Medellín'],
+    tourType: 'city_to_city',
+    durationDays: 5,
+    transport: 'Avión / Bus',
+    budget: 'Moderado'
+  })
+  assert.equal(multiCityMissing.isComplete, false, 'Multi-city without lodging strategy must NOT complete')
+  assert.ok(multiCityMissing.missing.some(m => /alojamiento/i.test(m)))
+
+  const multiCityComplete = evaluateTourRequirements({
+    cities: ['Bogotá', 'Medellín'],
+    tourType: 'city_to_city',
+    durationDays: 5,
+    transport: 'Avión / Bus',
+    budget: 'Moderado',
+    accommodationStatus: 'Hoteles reservados en cada ciudad'
+  })
+  assert.equal(multiCityComplete.isComplete, true, 'Multi-city with confirmed lodging per city must complete')
+})
+
+

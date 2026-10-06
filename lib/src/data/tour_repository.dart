@@ -731,7 +731,11 @@ class TourRepository {
           30,
         ),
         order: entry.key,
-        isFallbackImage: item['isFallbackImage'] == true || item['is_fallback_image'] == true,
+        isFallbackImage: item['isFallbackImage'] == true ||
+            item['is_fallback_image'] == true ||
+            item['isDemoImage'] == true ||
+            item['is_demo_image'] == true ||
+            item['isReferenceImage'] == true,
       );
     }).toList();
     final gallery = _stringList(json['galeria_tour'] ?? json['gallery']);
@@ -867,7 +871,13 @@ class TourRepository {
           30,
         ),
         order: entry.key,
-        isFallbackImage: item['is_fallback_image'] == true || item['isFallbackImage'] == true,
+        isFallbackImage: item['is_fallback_image'] == true ||
+            item['isFallbackImage'] == true ||
+            item['isDemoImage'] == true ||
+            item['is_demo_image'] == true ||
+            item['isReferenceImage'] == true ||
+            metadata['isFallbackImage'] == true ||
+            metadata['isDemoImage'] == true,
       );
     }).toList();
     final gallery = _stringList(

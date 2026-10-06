@@ -36,6 +36,9 @@ class TourGuideFormatter {
     clean = clean.replaceAll(RegExp(r'\bsiglo\s+I\b', caseSensitive: false), 'siglo primero');
 
     // Common abbreviations
+    clean = clean.replaceAll(RegExp(r'\bm\.s\.n\.m\.\b', caseSensitive: false), 'metros sobre el nivel del mar');
+    clean = clean.replaceAll(RegExp(r'\ba\.\s*c\.\b', caseSensitive: false), 'antes de Cristo');
+    clean = clean.replaceAll(RegExp(r'\bd\.\s*c\.\b', caseSensitive: false), 'después de Cristo');
     clean = clean.replaceAll(RegExp(r'\bkm/h\b', caseSensitive: false), 'kilómetros por hora');
     clean = clean.replaceAll(RegExp(r'\bkm\b', caseSensitive: false), 'kilómetros');
     clean = clean.replaceAllMapped(RegExp(r'\b(\d+)\s*m\b', caseSensitive: false), (m) => '${m[1]} metros');
@@ -46,10 +49,15 @@ class TourGuideFormatter {
     clean = clean.replaceAll(RegExp(r'\bsto\.\s*', caseSensitive: false), 'Santo ');
     clean = clean.replaceAll(RegExp(r'\bdr\.\s*', caseSensitive: false), 'Doctor ');
     clean = clean.replaceAll(RegExp(r'\bdra\.\s*', caseSensitive: false), 'Doctora ');
+    clean = clean.replaceAll(RegExp(r'\bn[ºo]\.?\s*', caseSensitive: false), 'número ');
     clean = clean.replaceAll(RegExp(r'\bd\.c\.\b', caseSensitive: false), 'Distrito Capital');
 
+    // Strip bracketed citations and footnote numbers like [1], [2], [cita requerida]
+    clean = clean.replaceAll(RegExp(r'\[\s*\d+\s*\]'), '');
+    clean = clean.replaceAll(RegExp(r'\[.*?\]'), '');
+
     // Clean markdown remnants
-    clean = clean.replaceAll(RegExp(r'[*_#•\[\]\(\)]'), ' ');
+    clean = clean.replaceAll(RegExp(r'[*_#•]'), ' ');
     clean = clean.replaceAll(RegExp(r'\s+'), ' ').trim();
 
     return clean;
@@ -73,7 +81,7 @@ class TourGuideFormatter {
   }
 
   /// Formats an engaging tour guide narration for a specific stop,
-  /// capturing the voice of a young adult, energetic, charismatic Colombian tour guide.
+  /// capturing the voice of a warm, charismatic, and enthusiastic local tour guide.
   static String formatStopNarration(
     TourStop stop, {
     int stopIndex = 0,
@@ -104,34 +112,71 @@ class TourGuideFormatter {
       }
     }
 
-    // Build warm, charismatic Colombian guide introduction
+    // Ensure clean description ends with punctuation
+    if (!cleanDesc.endsWith('.') && !cleanDesc.endsWith('!') && !cleanDesc.endsWith('?')) {
+      cleanDesc = '$cleanDesc.';
+    }
+
+    // Build warm, charismatic tour guide script
     final StringBuffer script = StringBuffer();
     if (stopIndex == 0) {
-      script.write('¡Hola, viajero! Qué alegría empezar esta aventura juntos. Nuestra primera parada es $cleanName. ');
+      script.write('¡Hola, viajero! Qué alegría y emoción empezar esta aventura juntos. Nuestra primera parada es $cleanName. ');
     } else if (stopIndex == totalStops - 1 && totalStops > 1) {
-      script.write('¡Y llegamos a nuestra última parada: $cleanName! Qué recorrido tan increíble y especial hemos compartido hoy. ');
+      script.write('¡Y llegamos a nuestra última parada de hoy: $cleanName! Ha sido un recorrido verdaderamente increíble y especial. ');
     } else {
-      final variant = stopIndex % 3;
+      final variant = stopIndex % 4;
       if (variant == 1) {
-        script.write('¡Mira nada más dónde estamos! Llegamos a $cleanName. ');
+        script.write('¡Mira nada más qué belleza de lugar! Llegamos a $cleanName. ');
       } else if (variant == 2) {
         script.write('Nos encontramos ahora en $cleanName, un rincón que de verdad te va a fascinar. ');
+      } else if (variant == 3) {
+        script.write('¡Qué gran parada tenemos aquí! Bienvenidos a $cleanName. ');
       } else {
         script.write('¡Seguimos descubriendo lugares geniales! Aquí estamos en $cleanName. ');
       }
     }
 
-    script.write(cleanDesc);
+    script.write('$cleanDesc ');
 
-    // Curious facts if available
-    if (stop.curiousFacts.isNotEmpty && stop.curiousFacts.first.trim().length > 15) {
-      final fact = stop.curiousFacts.first.trim();
-      script.write(' ¿Sabías qué? $fact.');
+    // Recommended activities
+    if (stop.activities.isNotEmpty) {
+      final firstAct = stop.activities.first.trim();
+      if (firstAct.length > 5 && !firstAct.toLowerCase().contains('visita genérica')) {
+        final cleanAct = firstAct.endsWith('.') ? firstAct : '$firstAct.';
+        script.write('Durante tu visita te recomiendo: $cleanAct ');
+      }
     }
 
-    // Tips or activities if available
-    if (stop.tips.isNotEmpty && stop.tips.first.trim().length > 10) {
-      script.write(' Un tip especial de guía para ti: ${stop.tips.first.trim()}.');
+    // Curious facts & anecdotes
+    if (stop.curiousFacts.isNotEmpty) {
+      final firstFact = stop.curiousFacts.first.trim();
+      if (firstFact.length > 15) {
+        final cleanFact = firstFact.endsWith('.') ? firstFact : '$firstFact.';
+        script.write('¿Sabías qué? $cleanFact ');
+      }
+      if (stop.curiousFacts.length > 1) {
+        final secondFact = stop.curiousFacts[1].trim();
+        if (secondFact.length > 15 && secondFact.length < 120 && secondFact != firstFact) {
+          final cleanSecond = secondFact.endsWith('.') ? secondFact : '$secondFact.';
+          script.write('Además, otro dato muy interesante: $cleanSecond ');
+        }
+      }
+    }
+
+    // Insider guide tip
+    if (stop.tips.isNotEmpty) {
+      final firstTip = stop.tips.first.trim();
+      if (firstTip.length > 10) {
+        final cleanTip = firstTip.endsWith('.') ? firstTip : '$firstTip.';
+        script.write('Un tip especial de guía para ti: $cleanTip ');
+      }
+    }
+
+    // Friendly sign-off
+    if (stopIndex == totalStops - 1 && totalStops > 1) {
+      script.write('¡Aprovecha al máximo este último destino y gracias por compartir esta aventura!');
+    } else {
+      script.write('¡Tómate tu tiempo, disfruta cada detalle y avísame cuando estés listo para continuar!');
     }
 
     return normalizePhonetics(script.toString());

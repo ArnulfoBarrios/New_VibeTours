@@ -624,6 +624,8 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'restaurante la fonda antioquena': { name: 'Restaurante La Fonda Antioqueña', latitude: 9.4020, longitude: -75.6850, city: 'Coveñas', country: 'Colombia' },
 
   // Barranquilla & Área Metropolitana
+  'malecon': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
+  'el malecon': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
   'gran malecon': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
   'gran malecon del rio': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
   'malecon del rio': { name: 'Gran Malecón del Río', latitude: 11.0167, longitude: -74.7895, city: 'Barranquilla', country: 'Colombia' },
@@ -646,13 +648,13 @@ export const KNOWN_ICONIC_LANDMARKS = {
   // Casa del Carnaval y Museo del Carnaval son un mismo complejo cultural.
   // Este punto sólo es un último respaldo offline; en condiciones normales
   // geocodePlace consulta Photon/Nominatim antes de llegar aquí.
-  'casa del carnaval': { name: 'Casa del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
-  'museo del carnaval': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
-  'museo del carnaval de barranquilla': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7876, city: 'Barranquilla', country: 'Colombia' },
+  'casa del carnaval': { name: 'Casa del Carnaval', latitude: 10.9928, longitude: -74.7797, city: 'Barranquilla', country: 'Colombia' },
+  'museo del carnaval': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7797, city: 'Barranquilla', country: 'Colombia' },
+  'museo del carnaval de barranquilla': { name: 'Museo del Carnaval', latitude: 10.9928, longitude: -74.7797, city: 'Barranquilla', country: 'Colombia' },
   'castillo de salgar': { name: 'Castillo de Salgar', latitude: 11.0182, longitude: -74.9417, city: 'Puerto Colombia', country: 'Colombia' },
   'cienaga de mallorquin': { name: 'Ecoparque Ciénaga de Mallorquín', latitude: 11.0350, longitude: -74.8445, city: 'Barranquilla', country: 'Colombia' },
   'ecoparque cienaga de mallorquin': { name: 'Ecoparque Ciénaga de Mallorquín', latitude: 11.0350, longitude: -74.8445, city: 'Barranquilla', country: 'Colombia' },
-  'bocas de ceniza': { name: 'Bocas de Ceniza - Tajamar Occidental', latitude: 11.1065, longitude: -74.8547, city: 'Barranquilla', country: 'Colombia' },
+  'bocas de ceniza': { name: 'Bocas de Ceniza - Acceso Turístico Las Flores', latitude: 11.0505, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia' },
   'barrio el prado': { name: 'Barrio El Prado, Barranquilla', latitude: 10.9985, longitude: -74.7960, city: 'Barranquilla', country: 'Colombia' },
   'teatro amira de la rosa': { name: 'Teatro Amira de la Rosa', latitude: 10.9935, longitude: -74.7896, city: 'Barranquilla', country: 'Colombia' },
   'plaza de san nicolas': { name: 'Plaza de San Nicolás', latitude: 10.9798, longitude: -74.7774, city: 'Barranquilla', country: 'Colombia' },

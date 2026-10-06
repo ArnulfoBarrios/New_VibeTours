@@ -1037,7 +1037,11 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         order: entry.key,
         day: int.tryParse(s['dia']?.toString() ?? '1') ?? 1,
         curiousFacts: List<String>.from(s['datos_curiosos'] ?? []),
-        isFallbackImage: s['isFallbackImage'] == true,
+        isFallbackImage: s['isFallbackImage'] == true ||
+            s['is_fallback_image'] == true ||
+            s['isDemoImage'] == true ||
+            s['is_demo_image'] == true ||
+            s['isReferenceImage'] == true,
       );
     }).toList();
 

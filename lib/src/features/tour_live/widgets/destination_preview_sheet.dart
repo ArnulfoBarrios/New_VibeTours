@@ -350,33 +350,69 @@ class _DestinationPreviewSheetState extends State<DestinationPreviewSheet> {
           child: SizedBox(
             height: 190,
             width: double.infinity,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: images.length,
-              onPageChanged: (idx) => setState(() => _activeImageIndex = idx),
-              itemBuilder: (context, index) {
-                final url = images[index];
-                return CachedNetworkImage(
-                  imageUrl: optimizeImageUrl(url, width: 800, quality: 80),
-                  fit: BoxFit.cover,
-                  placeholder: (context, _) => Container(
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                PageView.builder(
+                  controller: _pageController,
+                  itemCount: images.length,
+                  onPageChanged: (idx) => setState(() => _activeImageIndex = idx),
+                  itemBuilder: (context, index) {
+                    final url = images[index];
+                    return CachedNetworkImage(
+                      imageUrl: optimizeImageUrl(url, width: 800, quality: 80),
+                      fit: BoxFit.cover,
+                      placeholder: (context, _) => Container(
+                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                        child: const Center(
+                          child: Icon(Icons.broken_image_rounded, size: 36, color: Colors.grey),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                if (widget.stop.isFallbackImage)
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.7),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.info_outline_rounded, color: Colors.amber, size: 13),
+                          SizedBox(width: 4),
+                          Text(
+                            'Foto de referencia (demo)',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  errorWidget: (context, url, error) => Container(
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                    child: const Center(
-                      child: Icon(Icons.broken_image_rounded, size: 36, color: Colors.grey),
-                    ),
-                  ),
-                );
-              },
+              ],
             ),
           ),
         ),

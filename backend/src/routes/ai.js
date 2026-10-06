@@ -3236,7 +3236,21 @@ export function buildTourPlanner(input, location = null, places = []) {
     candidatePlaces.map((place, index) => normalizeCandidate(place, index, input, origin)),
   ).filter((place) => place.name)
 
-  const isCorridorRoute = Boolean(input.originPlace || input.destinationPlace || input.tourType === 'location_to_destination' || input.isUserLocationOrigin)
+  const originStr = String(input.originPlace || '').trim()
+  const destStr = String(input.destinationPlace || input.destination || input.city || '').trim()
+  const isIntraCityOrSingleCity = Boolean(
+    input.tourType === 'single_city' ||
+    input.tourType === 'express_tour' ||
+    (originStr && destStr && normalizeKey(originStr) === normalizeKey(destStr))
+  )
+
+  const isCorridorRoute = !isIntraCityOrSingleCity && Boolean(
+    input.tourType === 'city_to_city' ||
+    input.tourType === 'location_to_destination' ||
+    (input.isUserLocationOrigin && !isIntraCityOrSingleCity) ||
+    (input.originPlace === 'user_current_location' && !isIntraCityOrSingleCity) ||
+    (originStr && destStr && normalizeKey(originStr) !== normalizeKey(destStr))
+  )
   let selectedPlaces = []
   const isUserOrigin = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
 
@@ -3526,7 +3540,8 @@ export function buildTourPlanner(input, location = null, places = []) {
         const dayPlaces = daysMap.get(d) || []
         if (dayPlaces.length === 0) continue
 
-        if (dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
+        const isDayFullySpecified = refList.length > 0 && dayPlaces.every(p => refList.some(r => isPlaceMatching(p.name, getName(r))))
+        if (!isDayFullySpecified && dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
           // Lunch / restaurant stop belongs in the middle of the day's itinerary (e.g. Stop 3 out of 5)
           const foodIdx = dayPlaces.findIndex((p) => isFoodStop(p))
           if (foodIdx !== -1) {
@@ -3581,8 +3596,10 @@ export function buildTourPlanner(input, location = null, places = []) {
       }
 
       selectedPlaces = orderPlacesAlongRoute(selectedPlaces, startLoc, endLoc)
-    } else if (selectedPlaces.length > 1 && requestedPlaces.length < 2) {
-      const isCorridorOrLocationToDest = isCorridorRoute || input.tourType === 'location_to_destination' || input.isUserLocationOrigin
+    } else if (selectedPlaces.length > 1 && requestedPlaces.length === 0) {
+      const isCorridorOrLocationToDest = !isIntraCityOrSingleCity && Boolean(
+        isCorridorRoute || input.tourType === 'location_to_destination' || input.isUserLocationOrigin
+      )
       if (!isCorridorOrLocationToDest) {
         const totalDays = Math.max(1, Math.ceil((input.durationHours || 24) / 24))
         if (totalDays <= 1) {
@@ -3602,7 +3619,9 @@ export function buildTourPlanner(input, location = null, places = []) {
     }
   }
 
-  const isCorridorOrLocationToDest = isCorridorRoute || input.tourType === 'location_to_destination' || input.isUserLocationOrigin
+  const isCorridorOrLocationToDest = !isIntraCityOrSingleCity && Boolean(
+    isCorridorRoute || input.tourType === 'location_to_destination' || input.isUserLocationOrigin
+  )
   if (isCorridorOrLocationToDest && selectedPlaces.length > 0) {
     if (isUserOrigin) {
       selectedPlaces = selectedPlaces.filter(p => 
@@ -3649,6 +3668,20 @@ export function buildTourPlanner(input, location = null, places = []) {
         selectedPlaces = [...orderedIntermediates, lastStop]
       }
     }
+  }
+
+  // Pure intra-city or single-city tours: rigorously filter out any ghost start/end points
+  if (isIntraCityOrSingleCity && selectedPlaces.length > 0) {
+    selectedPlaces = selectedPlaces.filter(p => {
+      const pKey = normalizeKey(p.name || '')
+      if (pKey === 'tu ubicacion actual' || pKey === 'tu ubicacion' || p.type === 'start_point' || p.rawTags?.user_current_location === 'true') {
+        return false
+      }
+      if (destStr && (pKey === normalizeKey(destStr) || pKey === normalizeKey(input.city || '')) && p.category !== 'restaurant') {
+        return false
+      }
+      return true
+    })
   }
 
   const distanceKm = estimateRouteDistance(selectedPlaces, origin)
@@ -5602,6 +5635,8 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     candidateId: getCandidateId(matchedPlace) || sourceCandidateId || getCandidateId(candidateFallback),
     nombre: resolvedName,
     isFallbackImage: isFallbackImg,
+    isDemoImage: isFallbackImg,
+    isReferenceImage: isFallbackImg,
     descripcion: description,
     duracion_estimada: durationText,
     actividades: rawActivities,
@@ -5631,6 +5666,9 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     coordinateSource: coordinates.coordinateSource || coordinates.coordinate_source || '',
     coordinatesVerified: coordinates.coordinatesVerified === true,
     imageUrl: publicStop.imagenes[0],
+    isFallbackImage: isFallbackImg,
+    isDemoImage: isFallbackImg,
+    isReferenceImage: isFallbackImg,
     description: publicStop.descripcion,
     activities: publicStop.actividades,
     tips: publicStop.consejos,
@@ -7884,7 +7922,9 @@ function persistTour(tour, route, input, userId) {
             location_info: stop.ubicacion,
             images: stop.imagenes,
             suggested_minutes: minutesFromLabel(stop.duracion_estimada),
-            is_fallback_image: stop.isFallbackImage || false,
+            is_fallback_image: Boolean(stop.isFallbackImage || stop.isDemoImage || stop.isReferenceImage),
+            is_demo_image: Boolean(stop.isFallbackImage || stop.isDemoImage || stop.isReferenceImage),
+            is_reference_image: Boolean(stop.isFallbackImage || stop.isDemoImage || stop.isReferenceImage),
             // Include image_metadata containing day details so the UI loads day groups correctly
             image_metadata: {
               dia: stop.dia ?? 1,
@@ -7892,7 +7932,9 @@ function persistTour(tour, route, input, userId) {
               activities: stop.actividades,
               datos_curiosos: stop.datos_curiosos,
               consejos: stop.consejos,
-              location_info: stop.ubicacion
+              location_info: stop.ubicacion,
+              isFallbackImage: Boolean(stop.isFallbackImage || stop.isDemoImage || stop.isReferenceImage),
+              isDemoImage: Boolean(stop.isFallbackImage || stop.isDemoImage || stop.isReferenceImage),
             }
           }
         })

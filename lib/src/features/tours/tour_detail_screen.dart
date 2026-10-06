@@ -1192,6 +1192,37 @@ Future<void> _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? t
                                 child: const Icon(Icons.place_rounded, size: 48, color: AppTheme.primary),
                               ),
                             ),
+                            if (stop.isFallbackImage)
+                              Positioned(
+                                top: 12,
+                                left: 12,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.72),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Colors.amber.withValues(alpha: 0.7),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(Icons.info_outline_rounded, color: Colors.amber, size: 14),
+                                      SizedBox(width: 5),
+                                      Text(
+                                        'Foto de referencia (demo)',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             Positioned(
                               top: 12,
                               right: 12,
@@ -1596,6 +1627,24 @@ class _StopTileState extends State<_StopTile> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (stop.isFallbackImage) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.info_outline_rounded, size: 12, color: Colors.amber.shade700),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Foto de referencia (demo)',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.amber.shade800,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

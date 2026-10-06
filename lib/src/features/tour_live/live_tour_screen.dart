@@ -2879,6 +2879,24 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
                             ),
                           ),
+                          if (stop.isFallbackImage) ...[
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.info_outline_rounded, size: 10, color: Colors.amber.shade700),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'Foto de referencia (demo)',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.amber.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

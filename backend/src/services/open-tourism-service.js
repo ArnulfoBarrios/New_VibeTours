@@ -1603,6 +1603,11 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
   for (const raw of attractions) {
     const item = enrichWithCoords(raw, 'attraction')
     if (!item) continue
+    const name = item.name
+    const isFood = item.entityType === 'restaurant' || item.category === 'restaurant' ||
+      /\b(restaurante|restaurant|bistro|parrilla|asador|cocina|gastronom|taquer|pizzer|marisqu|cebich)\b/i.test(name) ||
+      restaurants.some(r => arePlaceNamesSemanticallySame(typeof r === 'string' ? r : (r?.name || ''), name, city))
+    if (isFood) continue
     if (cleanAttractions.some((existing) => arePlaceNamesSemanticallySame(existing.name, item.name, city))) {
       continue
     }

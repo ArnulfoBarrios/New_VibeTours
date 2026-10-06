@@ -177,6 +177,9 @@ class TourStop {
     return '';
   }
 
+  bool get isDemoImage => isFallbackImage;
+  bool get isReferenceImage => isFallbackImage;
+
   TourStop copyWith({
     String? name,
     String? imageUrl,
@@ -212,6 +215,8 @@ class TourStop {
     'ubicacion': locationInfo.toCreationJson(),
     'imagenes': images.isEmpty ? [if (imageUrl.isNotEmpty) imageUrl] : images,
     'isFallbackImage': isFallbackImage,
+    'isDemoImage': isFallbackImage,
+    'isReferenceImage': isFallbackImage,
   };
 }
 
