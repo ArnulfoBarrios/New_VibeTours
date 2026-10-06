@@ -282,6 +282,7 @@ const destinationCatalogCache = new GeoCache(12 * 60 * 60 * 1000, 200)
 // because the visible itinerary is assembled before /tours/build runs.
 const CHAT_CANONICAL_DISPLAY_NAMES = {
   'barranquilla-carnaval-house-museum': 'Casa del Carnaval',
+  'barranquilla-gran-malecon-del-rio': 'Gran Malecón del Río',
 }
 
 function normalizeChatPlaceName(value) {
@@ -797,7 +798,8 @@ export async function sanitizeChatItineraryTextWithOsm(text, city = '', country 
  * not rewritten.
  */
 export function collapseCanonicalDuplicateLines(text, city = '') {
-  const seen = new Set()
+  const seenCanonical = new Set()
+  const seenNames = []
   return String(text ?? '')
     .split(/\r?\n/)
     .filter(line => {
@@ -810,14 +812,109 @@ export function collapseCanonicalDuplicateLines(text, city = '') {
         .split(/\s+[—–-]\s+|\s*:\s*/)[0]
         .trim()
       const identity = resolveCanonicalPlaceIdentity(candidate, city)
-      if (!identity) return true
+      if (identity) {
+        const key = `canonical:${identity.id}`
+        if (seenCanonical.has(key)) return false
+        seenCanonical.add(key)
+      }
 
-      const key = `canonical:${identity.id}`
-      if (seen.has(key)) return false
-      seen.add(key)
+      if (seenNames.some(prev => arePlaceNamesSemanticallySame(prev, candidate, city))) {
+        return false
+      }
+      seenNames.push(candidate)
       return true
     })
     .join('\n')
+}
+
+export function ensureCompleteOneDayItineraryText(text, destName = '', realCatalog = null, parsedExtracted = {}, lastUserMsg = '') {
+  if (!text || typeof text !== 'string') return text
+  const day1Match = text.match(/(D[íi]a\s+1\s*:\s*[^\n]*\n)([\s\S]*?)(?=\n\n(?:¿|D[íi]a\s+2|$))/i)
+  if (!day1Match) return text
+
+  const isFoodStop = (n) => {
+    if (!n) return false
+    return isFoodOrDrinkEstablishment(n) ||
+      /\b(restaurante|restaurant|asador|bistro|gastrobar|cevicher|parrilla|comedor|food\s*hall|caim[aá]n\s+del\s+r[ií]o)\b/i.test(n)
+  }
+
+  const rawBullets = day1Match[2]
+    .split(/\r?\n/)
+    .map(line => {
+      const m = line.match(/^\s*(?:[•●▪◦*-]|\d+[.)])\s+(.*)$/)
+      return m ? m[1].replace(/\*{1,2}/g, '').trim() : null
+    })
+    .filter(Boolean)
+
+  if (rawBullets.length === 0) return text
+
+  // 1. Semantic deduplication of raw bullets
+  const uniqueStops = []
+  for (const b of rawBullets) {
+    if (!uniqueStops.some(prev => arePlaceNamesSemanticallySame(prev, b, destName))) {
+      uniqueStops.push(b)
+    }
+  }
+
+  const attractions = uniqueStops.filter(s => !isFoodStop(s))
+  const foods = uniqueStops.filter(s => isFoodStop(s))
+
+  // 2. Backfill attractions if fewer than 4
+  const normDest = String(destName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const catalogAttrs = [
+    ...(realCatalog?.places || []),
+    ...(DESTINATION_ICONIC_LANDMARKS[normDest] || DESTINATION_ICONIC_LANDMARKS[destName.toLowerCase()] || [])
+  ].map(p => typeof p === 'string' ? p : p?.name).filter(Boolean)
+
+  for (const cand of catalogAttrs) {
+    if (attractions.length >= 4) break
+    if (!isFoodStop(cand) && !attractions.some(prev => arePlaceNamesSemanticallySame(prev, cand, destName))) {
+      attractions.push(cand)
+    }
+  }
+
+  // 3. Ensure at least 1 food stop
+  const catalogRests = [
+    ...(realCatalog?.restaurants || []),
+    ...(DESTINATION_ICONIC_RESTAURANTS[normDest] || DESTINATION_ICONIC_RESTAURANTS[destName.toLowerCase()] || [])
+  ].map(r => typeof r === 'string' ? r : r?.name).filter(Boolean)
+
+  const chosenFood = foods[0] || catalogRests[0] || `Almuerzo tradicional en ${destName || 'la ciudad'}`
+
+  // 4. Assemble standard 5-stop 1-day tour: Attr 1, Attr 2, Food (Almuerzo), Attr 3, Attr 4
+  const finalStops = []
+  if (attractions[0]) finalStops.push(attractions[0])
+  if (attractions[1]) finalStops.push(attractions[1])
+  finalStops.push(chosenFood)
+  if (attractions[2]) finalStops.push(attractions[2])
+  if (attractions[3]) finalStops.push(attractions[3])
+
+  // Rebuild Day 1 block cleanly
+  const newDay1Block = `${day1Match[1]}${finalStops.map(s => `• ${s}`).join('\n')}`
+  let updatedText = text.replace(day1Match[0], newDay1Block)
+
+  // 5. Currency normalization: if user mentions pesos or COP, remove spurious USD conversion
+  if (/\b(?:pesos|cop|millones)\b/i.test(lastUserMsg)) {
+    const pesosBudgetMatch = lastUserMsg.match(/\b(\d+(?:[.,]\d+)?\s*(?:millones?(?:\s+de\s+pesos)?|mil(?:\s+pesos)?|pesos))\b/i)
+    if (pesosBudgetMatch) {
+      updatedText = updatedText.replace(/\s*\(\s*~\s*\$\d+[\d.,]*\s*USD\s*\)/gi, ` (${pesosBudgetMatch[1].trim()} COP)`)
+    } else {
+      updatedText = updatedText.replace(/\s*\(\s*~\s*\$\d+[\d.,]*\s*USD\s*\)/gi, '')
+    }
+  }
+
+  // 6. Update parsedExtracted.specificPlaces with the 5 stops
+  if (parsedExtracted && typeof parsedExtracted === 'object') {
+    parsedExtracted.specificPlaces = [
+      ...(attractions[0] ? [{ name: attractions[0], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : []),
+      ...(attractions[1] ? [{ name: attractions[1], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : []),
+      { name: chosenFood, dia: 1, day: 1, category: 'restaurant', entityType: 'restaurant', type: 'food', isRestaurant: true },
+      ...(attractions[2] ? [{ name: attractions[2], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : []),
+      ...(attractions[3] ? [{ name: attractions[3], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : [])
+    ]
+  }
+
+  return updatedText
 }
 
 export function getOpenAiModelConfig() {
@@ -3395,6 +3492,7 @@ Tu estilo es CÁLIDO, AMABLE, DIRECTO, CONCISO Y PROFESIONAL.
 
 DIVISA PREFERIDA DEL VIAJERO: ${userCurrency.toUpperCase()}
 - Toda tarifa estimada, rango de precios de hotel o gasto turístico que menciones DEBE expresarse en ${userCurrency.toUpperCase()} (ejemplo si es COP: ~$410.000 - $650.000 COP/noche; si es USD: ~$100 - $160 USD/noche; si es EUR: ~€90 - €150/noche).
+- PROHIBIDO CONVERTIR DIVISAS: Si el usuario indica o menciona su presupuesto en pesos (COP), conserva obligatoriamente COP (ej: "$3.000.000 COP"). ESTRICTAMENTE PROHIBIDO convertir a USD o dólares si el usuario habló de pesos o si el destino es en Colombia.
 
 MISIÓN Y TRATO CON EL VIAJERO:
 - Tu misión es asesorar y diseñar tours personalizados adaptados a las necesidades y preferencias del usuario.
@@ -3549,7 +3647,14 @@ ETAPA 3: PRESENTACIÓN COMPLETA DEL ITINERARIO POR DÍAS (ENTREGA INMEDIATA)
 - DURACIÓN EXACTA: Debes estructurar EXACTAMENTE ${isOneDayTour ? 1 : Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))} días en el itinerario (desde Día 1 hasta Día ${isOneDayTour ? 1 : Number(known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 2)))}), sin omitir ningún día ni generar días de menos.
 
 Formato OBLIGATORIO del Itinerario:
-Itinerario de Viaje: ${destName || known.destination} (${known.datesSeason || `${known.durationDays || 2} días`})
+${isOneDayTour ? `Itinerario de Viaje: ${destName || known.destination} (1 día)
+
+Día 1: ${destName || 'Destino'}
+• [Atractivo Turístico 1 (ej: ${knownPlacesList[0] || 'Lugar Principal'})]
+• [Atractivo Turístico 2]
+• [Restaurante / Parada gastronómica para almuerzo]
+• [Atractivo Turístico 3]
+• [Atractivo Turístico 4]` : `Itinerario de Viaje: ${destName || known.destination} (${known.datesSeason || `${known.durationDays || 2} días`})
 
 Día 1: ${destName || 'Destino'}
 • [Nombre Real de Lugar 1 propio de ${destName || 'este destino'}]
@@ -3559,7 +3664,7 @@ Día 1: ${destName || 'Destino'}
 Día 2: ${destName || 'Destino'}
 • [Nombre Real de Lugar 3 propio de ${destName || 'este destino'}]
 • [Nombre Real de Lugar 4 propio de ${destName || 'este destino'}]
-• [Nombre Real de Restaurante/Bar propio de ${destName || 'este destino'}]
+• [Nombre Real de Restaurante/Bar propio de ${destName || 'este destino'}]`}
 
 REGLAS CRÍTICAS DEL ITINERARIO:
 1. El mensaje DEBE contener el bloque completo con "Día 1:", "Día 2:", etc. hasta el Día ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))} y sus viñetas.
@@ -3572,8 +3677,10 @@ REGLAS CRÍTICAS DEL ITINERARIO:
      Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas emblemáticas, arquitectura, parques y gastronomía local usando únicamente los POI del catálogo verificado.
    - En destinos con vocación balnearia o micro-destinos (ej: Coveñas, San Andrés, Cancún): Las playas, islas, ciénagas y actividades ecoturísticas del corredor son los atractivos centrales.
    - REGLA DE BALANCE DIARIO OBLIGATORIO:
-      * Cada día DEBE estructurarse con EXACTAMENTE 2 atractivos turísticos y EXACTAMENTE 1 restaurante o bar (3 paradas en total por día), manteniendo siempre el equilibrio entre sitios turísticos y gastronomía.
-      * Si el usuario pide o menciona un lugar o restaurante específico en la conversación, incorpóralo obligatoriamente en el día más adecuado a su recorrido.
+      * EN TOURS DE 1 DÍA / EXPRESS: El recorrido del Día 1 DEBE contener EXACTAMENTE 4 atractivos turísticos distintos y representativos de la ciudad, más EXACTAMENTE 1 restaurante o parada gastronómica para el almuerzo (5 paradas en total para la jornada completa: 4 atractivos + 1 almuerzo).
+      * Si el usuario pidió o mencionó un lugar en especial (ej: Malecón del Río), ese lugar es 1 atractivo y OBLIGATORIAMENTE debes completarlo con OTROS 3 atractivos turísticos distintos del catálogo (ej: Ventana al Mundo, Barrio El Prado, Casa del Carnaval) más 1 restaurante (5 paradas en total).
+      * PROHIBIDO REPETIR LUGARES O ALIAS: Si ya incluiste Gran Malecón del Río, ESTRICTAMENTE PROHIBIDO volver a colocar Malecón del Río. Cada parada debe ser un lugar físico completamente diferente.
+      * EN TOURS DE VARIOS DÍAS (2 O MÁS DÍAS): Cada día debe estructurarse con 2 o 3 atractivos turísticos y 1 restaurante (3 o 4 paradas por día).
       * ESTRICTAMENTE PROHIBIDO llenar un día con 2 o 3 restaurantes y 0 atractivos turísticos.
 6. REGLA ESTRICTA DE UNICIDAD GLOBAL INTER-DÍAS (CERO PARADAS REPETIDAS):
    - Cada atractivo turístico, monumento, museo, parque o restaurante debe aparecer exactamente UNA SOLA VEZ en TODO el itinerario completo (Día 1 a Día N).
@@ -4012,9 +4119,10 @@ REGLAS PARA "accommodationStatus":
           }
         }
       }
+      let verifiedDynamicIconics = []
       if (catPlaces.length < totalPlacesNeeded) {
         const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry, null, null, totalPlacesNeeded).catch(() => [])
-        const verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
+        verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
         for (const di of verifiedDynamicIconics) {
           const diName = typeof di === 'string' ? di : (di?.name || '')
           if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(typeof cp === 'string' ? cp : cp.name, diName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, diName))) {
@@ -4349,6 +4457,16 @@ REGLAS PARA "accommodationStatus":
       destCountry,
       parsedExtracted.selectedHotel || known.selectedHotel
     )
+
+    if (isOneDayTour && /D[íi]a\s+1\s*:/i.test(responseMessage)) {
+      responseMessage = ensureCompleteOneDayItineraryText(
+        responseMessage,
+        destName || known.city || known.destination || '',
+        realCatalog,
+        parsedExtracted,
+        lastUserMsg
+      )
+    }
 
     // Enforce cross-day global uniqueness on specificPlaces: no POI can appear on multiple days
     const rawSpecifics = Array.isArray(parsedExtracted.specificPlaces) && parsedExtracted.specificPlaces.length > 0

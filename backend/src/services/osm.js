@@ -35,6 +35,20 @@ const CANONICAL_PLACE_IDENTITIES = [
     ],
     geocodeQuery: 'Casa del Carnaval, Barranquilla, Colombia',
   },
+  {
+    id: 'barranquilla-gran-malecon-del-rio',
+    city: 'barranquilla',
+    aliases: [
+      'gran malecon del rio',
+      'malecon del rio',
+      'gran malecon',
+      'malecon de barranquilla',
+      'el malecon del rio',
+      'el gran malecon del rio',
+      'malecon del rio magdalena',
+    ],
+    geocodeQuery: 'Gran Malecón del Río, Barranquilla, Colombia',
+  },
 ]
 
 function normalizeIdentityText(value) {
