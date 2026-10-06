@@ -1,5 +1,5 @@
 import { lookupCachedPlace, saveCachedPlace, normalizePlaceNameKey } from './places-cache-service.js'
-import { geocodePlace, isDistinctNameMatch } from './osm.js'
+import { geocodePlace, isDistinctNameMatch, matchIconicLandmark, normalizeGeocodeQuery } from './osm.js'
 import { haversineDistanceKm, cleanAdministrativeCityName } from './destinationService.js'
 import { fetchWithProviderRetry } from './provider-http.js'
 
@@ -692,7 +692,8 @@ export async function resolvePlaceWithCascade(arg1, maybeCity = '', maybeCountry
   // identity before commercial providers. This is deliberately opt-in:
   // discovery for unknown places still follows the provider cascade below,
   // while known landmarks keep their verified physical point.
-  if (options.preferCanonical) {
+  const isIconicLandmarkCandidate = Boolean(matchIconicLandmark(cleanName, normalizeGeocodeQuery(cleanName)))
+  if (options.preferCanonical || isIconicLandmarkCandidate) {
     const canonicalResult = await geocodePlace(fullSearchQuery, cityLat, cityLon, {
       city: cleanCity,
       destination: cleanCity,

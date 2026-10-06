@@ -6912,7 +6912,7 @@ export async function collectTourCandidates(input, location) {
             cityLat: destLat,
             cityLon: destLon,
             maxDistanceKm: geoScope.maxDistanceKm,
-            options: regionalOpts
+            options: { preferCanonical: true, ...regionalOpts }
           }).catch(() => null)
 
           if (!geo) {

@@ -2189,9 +2189,11 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const known = { ...(currentPreferences || {}) }
   const userCurrency = String(known.currency || currentPreferences.currency || 'cop').toLowerCase()
   const history = state?.history || state?.messages || []
-  const rawLastUserMsg = state?.message || history.filter(m => m.role === 'user').slice(-1)[0]?.content || history[history.length - 1]?.content || ''
+  const userMsgFromHistory = (history || []).slice().reverse().find(m => m.role === 'user' || m.sender === 'user')
+  const rawLastUserMsg = state?.message || userMsgFromHistory?.content || userMsgFromHistory?.text || history[history.length - 1]?.content || history[history.length - 1]?.text || ''
   const lastUserMsg = normalizeSpanishNumberWords(rawLastUserMsg)
-  const lastAssistantMsg = (history || []).slice().reverse().find(m => m.role === 'assistant' || m.role === 'bot')?.content || ''
+  const assistantMsgFromHistory = (history || []).slice().reverse().find(m => m.role === 'assistant' || m.role === 'bot' || m.sender === 'assistant' || m.sender === 'ai')
+  const lastAssistantMsg = assistantMsgFromHistory?.content || assistantMsgFromHistory?.text || ''
 
   // Normalize already-confirmed stops before they reach the prompt, fallback
   // itinerary, or structured response. This prevents an old chat state that
@@ -3090,6 +3092,31 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         } else {
           fallbackMsg = `En ${destName} puedes disfrutar de sitios históricos, paseos emblemáticos y gastronomía local. ¿Qué tipo de atractivos te gustaría priorizar en tu visita?`
         }
+      } else if (/\b(cambiar\s+paradas?|modificar\s+paradas?|cambiar\s+lugares|otras?\s+paradas?|cambiar\s+itinerario|cambiar\s+sitios|quiero\s+cambiar\s+lugares)\b/i.test(lastUserMsg)) {
+        const currentSpecifics = (Array.isArray(known.specificPlaces) ? known.specificPlaces : []).map(p => typeof p === 'string' ? p : p.name)
+        const catalogPool = [
+          ...(preset.places || []),
+          ...((preset.candidateCatalog?.places || []).map(p => p?.name || p)),
+          ...((realCatalog?.places || []).map(p => p?.name || p))
+        ].filter(Boolean)
+        const unusedAlternatives = deduplicateChatSpecificPlaces(catalogPool, destName)
+          .map(p => typeof p === 'string' ? p : p.name)
+          .filter(p => !currentSpecifics.some(cp => arePlacesSimilar(cp, p)) && !isFoodOrDrinkEstablishment(p))
+          .slice(0, 4)
+
+        if (unusedAlternatives.length > 0) {
+          fallbackMsg = `¡Con gusto! ¿Qué parada te gustaría cambiar o qué lugar prefieres incluir en tu recorrido por **${destName}**?\n\nAquí tienes algunas excelentes alternativas disponibles:\n` +
+            unusedAlternatives.map(alt => `• **${alt}**: Atractivo destacado para descubrir y disfrutar.`).join('\n') +
+            `\n\nIndícame cuál deseas cambiar (por ejemplo: *"Cambiar por ${unusedAlternatives[0]}"*) o selecciona una de las sugerencias:`
+          fallbackChips = [
+            `Cambiar por ${unusedAlternatives[0]}`,
+            ...(unusedAlternatives[1] ? [`Cambiar por ${unusedAlternatives[1]}`] : []),
+            '🗺️ Generar tour en el mapa'
+          ]
+        } else {
+          fallbackMsg = `¡Claro! Indícame qué lugar o atractivo te gustaría incluir o cambiar en tu recorrido por **${destName}** y lo actualizaré inmediatamente.`
+          fallbackChips = ['🗺️ Generar tour en el mapa']
+        }
       } else if (/\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|men[uú]s|carta|platos)\b/i.test(lastUserMsg)) {
         const foodList = (realCatalog?.restaurants && realCatalog.restaurants.length > 0)
           ? realCatalog.restaurants.slice(0, 4)
@@ -3097,6 +3124,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         fallbackMsg = `¡Restaurantes y platos recomendados en ${destName}! 🍽️\n\n` +
           foodList.map(r => `• **${r.name || r}**: ${r.specialty || r.cuisine || `Platos típicos y especialidad gastronómica de ${destName}`}.`).join('\n') +
           `\n\n¿Deseas incluir estas opciones gastronómicas en tu itinerario?`
+        fallbackChips = ['🍽️ Incluir en el tour', 'Ver más opciones', '🗺️ Generar tour en el mapa']
       } else if (!fbHasLodging && isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg) && !isExplicitlyChoosingHotel(lastUserMsg)) {
         let rawHotels = (realCatalog?.hotels && realCatalog.hotels.length > 0)
           ? realCatalog.hotels
@@ -3322,7 +3350,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     )
 
     const isItineraryStatusInquiry = /\b(c[oó]mo va el itinerario|c[oó]mo va mi itinerario|estado del itinerario)\b/i.test(lastUserMsg)
-    if (!hasLodging && !isItineraryStatusInquiry) {
+    const isFoodInquiry = /\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|men[uú]s|carta|platos)\b/i.test(lastUserMsg)
+    const isChangeStopsInquiry = /\b(cambiar\s+paradas?|modificar\s+paradas?|cambiar\s+lugares|otras?\s+paradas?|cambiar\s+itinerario|cambiar\s+sitios|quiero\s+cambiar\s+lugares)\b/i.test(lastUserMsg)
+    if (!isOneDayTour && !hasLodging && !isItineraryStatusInquiry && !isFoodInquiry && !isChangeStopsInquiry) {
       fallbackChips = fallbackChips.filter(c => !/generar tour|crear tour|armar tour|construir tour/i.test(c))
       if (!fallbackChips.some(c => /casa propia|familiar|propio hospedaje/i.test(c))) {
         fallbackChips.unshift('Tengo mi propio hospedaje')
@@ -4599,6 +4629,7 @@ export function extractRequestedSpecificPlaces(prompt) {
     clean = clean.charAt(0).toUpperCase() + clean.slice(1)
     clean = clean.replace(/\s+(?:por\s+favor|porfa|gracias|adicionales?|podr[aá]\s+ser.*|ser[íi]a\s+bacano.*|ser[íi]a\s+genial.*|y\s+(?:relajarnos|descansar|pasar\s+el\s+rato|disfrutar|conocer|pasear|comer)|para\s+.*)$/i, '').trim()
     clean = clean.replace(/\s+(?:y|e|luego|despu[eé]s)$/i, '').trim()
+    clean = clean.replace(/\s+(?:(?:me\s+)?(?:dicen|han\s+dicho)\s+que.*|que\s+(?:dicen|es)\s+.*|es\s+bastante\s+.*|es\s+muy\s+.*|me\s+han\s+recomendado.*)$/i, '').trim()
     return clean
   }
 
@@ -4661,10 +4692,10 @@ export function extractRequestedSpecificPlaces(prompt) {
     }
   }
 
-  // C. Single / Standard place addition
-  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|conocer|vamos\s+a|adiciona|adicionar|si\s+me\s+puedo\s+ir\s+a|puedo\s+ir\s+a|irme\s+a|ir\s+a|pasar\s+por|conociendo|descubrir)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;])/i
-  const placeMatch = normalizedText.match(addPlaceRegex)
-  if (placeMatch) {
+  // C. Single / Standard place addition (supports modal intentions, conditionals, and iterative scanning)
+  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|quiero\s+ver|quisiera\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|(?:me|nos)\s+gustar[íi]a\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|queremos\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|deseo\s+(?:ver|conocer|visitar|ir\s+a)|deseamos\s+(?:ver|conocer|visitar|ir\s+a)|cambiar\s+(?:por|a)|cambia\s+(?:por|a)|cambio\s+por|conocer|vamos\s+a|adiciona|adicionar|si\s+me\s+puedo\s+ir\s+a|puedo\s+ir\s+a|irme\s+a|ir\s+a|pasar\s+por|conociendo|descubrir)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;\n])/gi
+  let placeMatch
+  while ((placeMatch = addPlaceRegex.exec(normalizedText)) !== null) {
     const rawPlaceName = placeMatch[1].trim()
     const targetDay = placeMatch[2] ? parseInt(placeMatch[2], 10) : null
     addIfValid(rawPlaceName, targetDay)

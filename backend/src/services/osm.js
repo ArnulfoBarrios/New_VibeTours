@@ -430,12 +430,14 @@ export function selectBestPoiResult(results, originalQuery = '') {
   // commercial amenities (restaurants, bars, cafes) must not hijack natural or cultural attractions
   if (!isFoodQuery && candidates.length > 1) {
     const nonFoodCandidates = candidates.filter(r => {
-      const type = String(r.type || r.tags?.osm_value || '').toLowerCase()
-      const key = String(r.tags?.osm_key || r.class || '').toLowerCase()
+      const type = String(r.type || r.tags?.osm_value || r.osm_value || '').toLowerCase()
+      const key = String(r.tags?.osm_key || r.class || r.osm_key || '').toLowerCase()
+      const amenity = String(r.tags?.amenity || '').toLowerCase()
       const name = String(r.name || '').toLowerCase()
       const isCommercialFood = ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'food_court'].includes(type) ||
         ['restaurant', 'cafe', 'bar', 'pub', 'fast_food'].includes(key) ||
-        /\b(restaurante|cafe|cafeter[íi]a|bar|gastrobar)\s+/i.test(name)
+        ['restaurant', 'cafe', 'bar', 'pub', 'fast_food'].includes(amenity) ||
+        /\b(restaurante|cafe|cafeter[íi]a|bar|gastrobar)\b/i.test(name)
       return !isCommercialFood
     })
     if (nonFoodCandidates.length > 0) {
@@ -671,9 +673,14 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'castillo de salgar': { name: 'Castillo de Salgar', latitude: 11.0182, longitude: -74.9417, city: 'Puerto Colombia', country: 'Colombia' },
   'cienaga de mallorquin': { name: 'Ecoparque Ciénaga de Mallorquín', latitude: 11.0350, longitude: -74.8445, city: 'Barranquilla', country: 'Colombia' },
   'ecoparque cienaga de mallorquin': { name: 'Ecoparque Ciénaga de Mallorquín', latitude: 11.0350, longitude: -74.8445, city: 'Barranquilla', country: 'Colombia' },
-  'bocas de ceniza': { name: 'Bocas de Ceniza - Acceso Turístico Las Flores', latitude: 11.0505, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true },
-  'boca de ceniza': { name: 'Bocas de Ceniza - Acceso Turístico Las Flores', latitude: 11.0505, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true },
-  'tajamar de bocas de ceniza': { name: 'Bocas de Ceniza - Acceso Turístico Las Flores', latitude: 11.0505, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true },
+  'bocas de ceniza': { name: 'Bocas de Ceniza', latitude: 11.1065, longitude: -74.8547, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'boca de ceniza': { name: 'Bocas de Ceniza', latitude: 11.1065, longitude: -74.8547, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'bocas de cenizas': { name: 'Bocas de Ceniza', latitude: 11.1065, longitude: -74.8547, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'boca de cenizas': { name: 'Bocas de Ceniza', latitude: 11.1065, longitude: -74.8547, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'tajamar de bocas de ceniza': { name: 'Bocas de Ceniza - Tajamar Occidental', latitude: 11.1065, longitude: -74.8547, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'tajamar occidental': { name: 'Bocas de Ceniza - Tajamar Occidental', latitude: 11.1065, longitude: -74.8547, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'historic' },
+  'acceso a bocas de ceniza': { name: 'Bocas de Ceniza - Acceso Turístico Las Flores', latitude: 11.0505, longitude: -74.8210, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true },
+  'estacion las flores': { name: 'Estación Las Flores - Acceso a Bocas de Ceniza', latitude: 11.0456, longitude: -74.8252, city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true },
   'barrio el prado': { name: 'Barrio El Prado, Barranquilla', latitude: 10.9985, longitude: -74.7960, city: 'Barranquilla', country: 'Colombia' },
   'teatro amira de la rosa': { name: 'Teatro Amira de la Rosa', latitude: 10.9935, longitude: -74.7896, city: 'Barranquilla', country: 'Colombia' },
   'plaza de san nicolas': { name: 'Plaza de San Nicolás', latitude: 10.9798, longitude: -74.7774, city: 'Barranquilla', country: 'Colombia' },
@@ -684,10 +691,10 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'puente pumarejo': { name: 'Puente Pumarejo', latitude: 10.9536, longitude: -74.7533, city: 'Barranquilla', country: 'Colombia', category: 'historic' },
   'parque tomas suri salcedo': { name: 'Parque Tomás Suri Salcedo', latitude: 10.9941, longitude: -74.8043, city: 'Barranquilla', country: 'Colombia' },
   'parque suri salcedo': { name: 'Parque Tomás Suri Salcedo', latitude: 10.9941, longitude: -74.8043, city: 'Barranquilla', country: 'Colombia' },
-  'restaurante cucayo': { name: 'Restaurante Cucayo', latitude: 11.0079, longitude: -74.8175, address: 'Carrera 53 # 85-25', city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'food', isRestaurant: true },
-  'cucayo': { name: 'Restaurante Cucayo', latitude: 11.0079, longitude: -74.8175, address: 'Carrera 53 # 85-25', city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'food', isRestaurant: true },
-  'cucayo sabor costeno': { name: 'Restaurante Cucayo', latitude: 11.0079, longitude: -74.8175, address: 'Carrera 53 # 85-25', city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'food', isRestaurant: true },
-  'cucayo cocina de aqui': { name: 'Restaurante Cucayo', latitude: 11.0079, longitude: -74.8175, address: 'Carrera 53 # 85-25', city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'food', isRestaurant: true },
+  'restaurante cucayo': { name: 'Restaurante Cucayo', latitude: 11.0074, longitude: -74.8174, address: 'Calle 85 # 52-153', city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'food', isRestaurant: true },
+  'cucayo': { name: 'Restaurante Cucayo', latitude: 11.0074, longitude: -74.8174, address: 'Calle 85 # 52-153', city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'food', isRestaurant: true },
+  'cucayo sabor costeno': { name: 'Restaurante Cucayo', latitude: 11.0074, longitude: -74.8174, address: 'Calle 85 # 52-153', city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'food', isRestaurant: true },
+  'cucayo cocina de aqui': { name: 'Restaurante Cucayo', latitude: 11.0074, longitude: -74.8174, address: 'Calle 85 # 52-153', city: 'Barranquilla', country: 'Colombia', coordinatesVerified: true, category: 'food', isRestaurant: true },
   'restaurante narcobollo': { name: 'Restaurante Narcobollo', latitude: 10.99820, longitude: -74.82020, city: 'Barranquilla', country: 'Colombia' },
   'narcobollo': { name: 'Restaurante Narcobollo', latitude: 10.99820, longitude: -74.82020, city: 'Barranquilla', country: 'Colombia' },
   'la cueva': { name: 'Restaurante Bar La Cueva', latitude: 10.9856, longitude: -74.7965, city: 'Barranquilla', country: 'Colombia' },
