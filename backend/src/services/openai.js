@@ -685,26 +685,57 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
 }
 
 function itineraryBulletPlaceName(line) {
-  let candidate = String(line || '')
+  const raw = String(line || '').trim()
+  if (!raw) return ''
+
+  // 1. If line has bold markers, extract the specific bold entity name
+  const boldMatches = [...raw.matchAll(/\*\*([^*]+)\*\*/g)].map(m => m[1].trim())
+  if (boldMatches.length >= 2) {
+    const lastBold = boldMatches[boldMatches.length - 1]
+    if (!/^\d{1,2}:\d{2}|^(?:mañana|tarde|noche|mediodía|almuerzo|cena|atardecer)/i.test(lastBold)) {
+      return lastBold.replace(/[.,;!]+$/, '').trim()
+    }
+  } else if (boldMatches.length === 1) {
+    const singleBold = boldMatches[0]
+    if (!/^\d{1,2}:\d{2}|^(?:mañana|tarde|noche|mediodía|almuerzo|cena|atardecer)/i.test(singleBold)) {
+      return singleBold.replace(/[.,;!]+$/, '').trim()
+    }
+  }
+
+  // 2. Strip leading bullets, numbers and emojis
+  let candidate = raw
     .replace(/^\s*(?:[•●▪◦*-]|\d+[.)])\s*/, '')
-    .replace(/\*{1,2}/g, '')
     .replace(/^[^\p{L}\p{N}]*/u, '')
     .trim()
 
-  const actionMatch = candidate.match(/(?:visita\s+a|recorrido\s+por|almuerzo\s+en|cena\s+en|desayuno\s+en|parada\s+en|conoce\s+|explora\s+)\s*(.+)$/i)
+  // 3. Strip time and stage prefix like "09:00 AM - Mañana:" or "11:00 AM:"
+  candidate = candidate.replace(/^\s*(?:\*\*)?\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?\s*(?:[-–—]\s*[^\n:*]+)?(?:\*\*)?\s*:\s*/i, '').trim()
+
+  // 4. Strip action verbs at the beginning
+  const actionMatch = candidate.match(/(?:visita\s+(?:a\s+|al\s+)?|recorrido\s+(?:en\s+|por\s+)?|degustaci[oó]n\s+(?:de\s+[^:]+?\s+en\s+)?|almuerzo\s+en\s+|cena\s+en\s+|desayuno\s+en\s+|parada\s+en\s+|cierre\s+(?:panor[aá]mico\s+)?en\s+|exploraci[oó]n\s+de\s+|conoce\s+|explora\s+)\s*(.+)$/i)
   if (actionMatch) candidate = actionMatch[1].trim()
-  candidate = candidate.split(/\s*:\s+/)[0].trim()
+
+  candidate = candidate.replace(/\*{1,2}/g, '').trim()
+  if (candidate.includes(':')) {
+    candidate = candidate.split(/\s*:\s+/)[0].trim()
+  }
+  candidate = candidate.replace(/[.,;!]+$/, '').trim()
   return candidate
 }
 
-async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = '') {
+async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = '', trustedPlaces = []) {
   const source = String(text ?? '')
-  if (!/\b(lugares|atracciones|sitios|restaurantes|gastronom[íi]a|hoteles|hospedaje|alojamiento|recomiend|visitar)\b/i.test(source)) {
+  if (!/\b(lugares|atracciones|sitios|restaurantes|gastronom[íi]a|hoteles|hospedaje|alojamiento|recomiend|visitar|paradas)\b/i.test(source)) {
     return source
   }
   if (!/^\s*(?:[•●▪◦*-]|\d+[.)])\s+/m.test(source)) {
     return source
   }
+
+  const trustedNames = (Array.isArray(trustedPlaces) ? trustedPlaces : [])
+    .map(place => typeof place === 'string' ? place : place?.name)
+    .map(name => String(name || '').trim())
+    .filter(Boolean)
 
   const nonPlaceBullet = /^(ubicaci[oó]n|direcci[oó]n|instalaciones|servicios|tarifa|precio|horario|consejo|recomendaci[oó]n)\b/i
   const lines = source.split(/\r?\n/)
@@ -712,6 +743,9 @@ async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = 
     if (!/^\s*(?:[•●▪◦*-]|\d+[.)])\s+/.test(line)) return true
     const candidate = itineraryBulletPlaceName(line)
     if (!candidate || nonPlaceBullet.test(candidate)) return true
+    if (trustedNames.some(tn => arePlacesSimilar(tn, candidate) || tn.toLowerCase().includes(candidate.toLowerCase()) || candidate.toLowerCase().includes(tn.toLowerCase()))) {
+      return true
+    }
     if (isUnmappedOrClosedVenue(candidate) || isGenericFacilityName(candidate) || isNonTouristFacility({ name: candidate })) {
       return false
     }
@@ -727,11 +761,12 @@ async function sanitizeChatRecommendationTextWithOsm(text, city = '', country = 
 
 export async function sanitizeChatItineraryTextWithOsm(text, city = '', country = '', selectedHotel = null, trustedPlaces = []) {
   const sanitized = sanitizeChatItineraryText(text, city, selectedHotel)
-  if (!/itinerario\s+de\s+viaje|\bD[ií]a\s+\d+\s*:/i.test(sanitized)) {
+  const isStructuredItinerary = /itinerario\s+de\s+viaje|\bD[ií]a\s+\d+\s*:|recorrido\s+de\s+\d+\s+paradas|\btour\s+(?:completo\s+)?de\s+1\s+d[ií]a/i.test(sanitized)
+  if (!isStructuredItinerary) {
     if (!/^\s*(?:[•●▪◦*-]|\d+[.)])\s+/m.test(sanitized)) {
       return sanitized
     }
-    return sanitizeChatRecommendationTextWithOsm(sanitized, city, country)
+    return sanitizeChatRecommendationTextWithOsm(sanitized, city, country, trustedPlaces)
   }
 
 
@@ -2810,12 +2845,14 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       const fbHasTransport = hasValidValue(known.transport)
       const fbHasBudget = hasValidValue(known.budget)
       const fbHasCompanions = hasValidValue(known.companions)
-      const fbAllKeyInfoComplete = (isLocationToDestination || isOneDayTour)
+      const fbAllKeyInfoComplete = isLocationToDestination
         ? Boolean(hasCity && hasDurationOrDates)
-        : Boolean(hasCity && hasDurationOrDates && fbHasLodging && fbHasTransport && fbHasBudget)
+        : (isOneDayTour
+          ? Boolean(hasCity && hasDurationOrDates && fbHasTransport && fbHasBudget)
+          : Boolean(hasCity && hasDurationOrDates && fbHasLodging && fbHasTransport && fbHasBudget))
 
       const isDescribingTripIdea = /\b(?:lo\s+que\s+quiero\s+(?:hacer\s+)?es\s+crear|quiero\s+crear\s+un\s+tour\s+(?:en\s+donde|donde)|la\s+idea\s+es\s+crear)\b/i.test(lastUserMsg)
-      const isExplicitBuildRequestedByUser = !isDescribingTripIdea && /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
+      const isExplicitBuildRequestedByUser = !isDescribingTripIdea && /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cr[eé]alo|cr[eé]ala|h[aá]zlo|construy[eé]lo|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
       effectiveReadyToBuild = Boolean(fbAllKeyInfoComplete && isExplicitBuildRequestedByUser)
 
       const isItineraryInquiry = /\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|detalles del d[íi]a|ver d[íi]a)\b/i.test(lastUserMsg)
@@ -3072,21 +3109,31 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           fallbackMsg = `Para tu hospedaje en ${destName}, te recomiendo elegir una opción en el centro de la ciudad o en sus zonas comerciales principales. ¿Deseas quedarte en algún hotel en particular, o en casa propia / familiar?`
           fallbackChips = ['Zona Centro', 'Tengo casa propia / familiar', 'Continuar sin hotel']
         }
-      } else if (!hasCompanions && !fbHasLodging) {
+      } else if (!hasCompanions && !fbHasLodging && !isOneDayTour) {
         fallbackMsg = `¡Excelente! ¿Viajas solo, en pareja, con amigos o en familia con niños a ${destName}?`
-      } else if (!fbHasLodging && hasBudget && hasTransport) {
+      } else if (!fbHasLodging && hasBudget && hasTransport && !isOneDayTour) {
         fallbackMsg = `¡Perfecto! Ya tenemos transporte y presupuesto. ¿En qué hotel o alojamiento se hospedarán en ${destName}? (o indícame si te quedas en casa propia / familiar).`
         fallbackChips = ['🏨 Recomiéndame hoteles', 'Tengo casa propia / familiar']
-      } else if (!isLocationToDestination && !isOneDayTour && (!hasBudget || !hasTransport || !fbHasLodging)) {
+      } else if (!isLocationToDestination && (isOneDayTour ? (!hasBudget || !hasTransport) : (!hasBudget || !hasTransport || !fbHasLodging))) {
         const missing = []
         if (!hasTransport) missing.push('tu medio de transporte')
         if (!hasBudget) missing.push('tu presupuesto')
-        if (!fbHasLodging) missing.push('tu hotel o alojamiento')
+        if (!isOneDayTour && !fbHasLodging) missing.push('tu hotel o alojamiento')
         const hotelNameDisplay = typeof known.selectedHotel === 'string' ? known.selectedHotel : (known.selectedHotel?.name || '')
-        const prefix = (fbHasLodging && hotelNameDisplay)
+        const prefix = (fbHasLodging && hotelNameDisplay && !isOneDayTour)
           ? `¡Genial! Registré **${hotelNameDisplay}** como tu hospedaje. Para continuar planificando tu viaje a ${destName}, `
           : `¡Genial! Para continuar planificando tu viaje a ${destName}, `
         fallbackMsg = `${prefix}¿podrías indicarme: ${missing.join(', ')}?`
+        fallbackChips = []
+        if (!hasTransport) {
+          fallbackChips.push('Auto rentado', 'Taxi / Uber', 'Transporte público', 'Caminando')
+        }
+        if (!hasBudget) {
+          fallbackChips.push('Económico', 'Moderado', 'Lujo')
+        }
+        if (!isOneDayTour && !fbHasLodging) {
+          fallbackChips.push('Tengo mi propio hospedaje', '🏨 Recomiéndame hoteles')
+        }
       } else if (isLocationToDestination || (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging))) {
         if (isLocationToDestination) {
           const corridorBlock = await buildLocationCorridorDayBlocks()
@@ -3162,7 +3209,21 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           ]
 
           const transportTxt = known.transport ? ` en ${known.transport.toLowerCase()}` : ''
-          const companionsTxt = known.companions ? ` con ${known.companions.toLowerCase().replace(/^(con\s+)+/i, '')}` : ''
+          let companionsTxt = ''
+          if (known.companions) {
+            const comp = String(known.companions).toLowerCase().replace(/^(con\s+)+/i, '').trim()
+            if (/^en\s+grupo$/i.test(comp)) {
+              companionsTxt = ' en grupo'
+            } else if (/^en\s+pareja$/i.test(comp)) {
+              companionsTxt = ' en pareja'
+            } else if (/^(solo|sola)$/i.test(comp)) {
+              companionsTxt = ' en solitario'
+            } else if (/^familia$/i.test(comp)) {
+              companionsTxt = ' en familia'
+            } else {
+              companionsTxt = ` con ${comp}`
+            }
+          }
 
           const intro = `¡Excelente plan! Para un tour completo de 1 día${transportTxt}${companionsTxt} en **${destName}**, he preparado un recorrido de 5 paradas con almuerzo a mediodía:`
           const line1 = `1. 🕘 **09:00 AM - Mañana**: Visita a **${stop1}**.`
@@ -4926,8 +4987,8 @@ export function extractChatInformationFallback(prompt) {
     cleanPlaceName = cleanPlaceName.charAt(0).toUpperCase() + cleanPlaceName.slice(1)
     cleanPlaceName = cleanPlaceName.replace(/\s+(?:por\s+favor|porfa|gracias|adicionales?|podr[aá]\s+ser.*|ser[íi]a\s+bacano.*|ser[íi]a\s+genial.*|y\s+(?:relajarnos|descansar|pasar\s+el\s+rato|disfrutar|conocer|pasear|comer)|para\s+.*)$/i, '').trim()
     const lowerP = cleanPlaceName.toLowerCase()
-    const isGenericStopPhrase = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|paradas\s+adicionales|lugares\s+adicionales|otras?\s+paradas?)\b/i.test(lowerP)
-    const NON_PLACE_TARGETS = /^(paradas?|lugares|sitios|atractivos?|actividades|un\s+d[íi]a|\d+\s+d[íi]as?|hotel|hospedaje|alojamiento|tour|itinerario|ruta|relajarnos|relajar|relajarse|descansar|descanso)$/i
+    const isGenericStopPhrase = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|paradas\s+adicionales|lugares\s+adicionales|otras?\s+paradas?|(?:lugares|sitios|atractivos|puntos|zonas|rincones)\s+(?:m[aá]s|mejores|bonitos|lindos|bellos|populares|tur[íi]sticos|emblem[aá]ticos|destacados|principales)|(?:los\s+|las\s+)?(?:mejores|principales|m[aá]s\s+(?:bonitos|lindos|bellos|populares|destacados))\s+(?:lugares|sitios|atractivos|puntos|zonas))\b/i.test(lowerP)
+    const NON_PLACE_TARGETS = /^(paradas?|lugares|sitios|atractivos?|actividades|un\s+d[íi]a|\d+\s+d[íi]as?|hotel|hospedaje|alojamiento|tour|itinerario|ruta|relajarnos|relajar|relajarse|descansar|descanso|lugares\s+m[aá]s\s+bonitos|los\s+lugares\s+m[aá]s\s+bonitos|los\s+mejores\s+lugares|mejores\s+lugares)$/i
     if (isValidRouteEndpoint(cleanPlaceName) && !isGenericStopPhrase && !NON_PLACE_TARGETS.test(lowerP) && !isTemporalOrDurationPhrase(lowerP) && !isNonTouristicInput(lowerP) && !isVagueDestination(lowerP) && !isGenericFacilityName(cleanPlaceName) && !isLodgingName(cleanPlaceName)) {
       res.specificPlaces = res.specificPlaces || []
       if (!res.specificPlaces.some(p => arePlacesSimilar(typeof p === 'string' ? p : p.name, cleanPlaceName))) {

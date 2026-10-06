@@ -294,11 +294,17 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         final readyToBuild = data['readyToBuild'] == true;
         final webSearchDone = data['webSearchDone'] == true;
 
+        final rawChips = (data['actionChips'] as List?)
+            ?.map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+
         final aiMsg = ChatMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           text: responseMessage,
           type: ChatMessageType.ai,
           timestamp: DateTime.now(),
+          actionChips: (rawChips != null && rawChips.isNotEmpty) ? rawChips : null,
         );
 
         Map<String, dynamic>? newHotel = state.selectedHotel;

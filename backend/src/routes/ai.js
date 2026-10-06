@@ -377,6 +377,12 @@ export function isValidSpecificPlace(placeName) {
   const isGenericFragment = /^(local|un local|el local|restaurante|el restaurante|un restaurante|bar|el bar|un bar|caf[ée]|el caf[ée]|un caf[ée]|restaurante local|un restaurante local|bar local|la zona|zona|en la zona|la ciudad|ciudad|en la ciudad|casa propia|alojamiento propio|en casa|casa|casa de un familiar|casa familiar|para explorar|explorar|fiesta nocturna|las cascadas|cascadas|el r[íi]o|r[íi]o|tubbing en el r[íi]o|tubbing|tubing|la playa|playa|playas|las playas|el mar|la costa|la bahía|la bahia|la montaña|la sierra|el parque|la plaza)$/i.test(cleanLower)
   if (isGenericFragment) return false
 
+  // 2.2.1 Descartar frases superlativas o genéricas cualitativas (ej. "los lugares más bonitos", "mejores atractivos", "sitios turísticos")
+  if (/\b(?:lugares|sitios|atractivos|puntos|zonas|rincones)\s+(?:m[aá]s|mejores|bonitos|lindos|bellos|populares|tur[íi]sticos|emblem[aá]ticos|destacados|principales)\b/i.test(cleanLower) ||
+      /\b(?:los\s+|las\s+)?(?:mejores|principales|m[aá]s\s+(?:bonitos|lindos|bellos|populares|destacados))\s+(?:lugares|sitios|atractivos|puntos|zonas)\b/i.test(cleanLower)) {
+    return false
+  }
+
   // 2.3 Descartar estructuras físicas genéricas o no turísticas que no son atracciones (canchas de barrio, paradas de bus, pérgolas)
   if (/^(la\s+)?(p[ée]rgola|cancha|cancha sint[ée]tica|cancha de f[uú]tbol|cancha de microf[uú]tbol|parada de bus|estaci[óo]n de bus|quiosco|kiosco|grader[íi]as)$/i.test(cleanLower) ||
       /\b(cancha sint[ée]tica|cancha de f[uú]tbol|parque cancha)\b/i.test(cleanLower)) {
@@ -1439,7 +1445,8 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     }
 
-    const effectiveReadyToBuild = isLocationRoute
+    const isOneDayTour = Number(updatedPreferences.durationDays) === 1 || Number(updatedPreferences.durationHours) <= 12 || (aiResponse.extractedPreferences && Number(aiResponse.extractedPreferences.durationDays) === 1)
+    const effectiveReadyToBuild = (isLocationRoute || isOneDayTour)
       ? Boolean(aiResponse.readyToBuild)
       : (Boolean(aiResponse.readyToBuild) && isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus))
 

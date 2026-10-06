@@ -1021,6 +1021,42 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
                           hideModifyStops: isBusy,
                         ),
                       ],
+                      if (message.actionChips != null && message.actionChips!.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: message.actionChips!.map((chipText) {
+                            return InkWell(
+                              onTap: isBusy ? null : () {
+                                _sendChipMessage(
+                                  displayPrompt: chipText,
+                                  aiPrompt: chipText,
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.25),
+                                  ),
+                                ),
+                                child: Text(
+                                  chipText,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
                       const SizedBox(height: 6),
                       Align(
                         alignment: Alignment.bottomRight,
