@@ -184,6 +184,32 @@ class _DestinationPreviewSheetState extends State<DestinationPreviewSheet> {
                       letterSpacing: -0.3,
                     ),
                   ),
+                  if (widget.stop.locationInfo.coordinatesVerified) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.verified_rounded, color: Colors.green, size: 14),
+                          SizedBox(width: 5),
+                          Text(
+                            'Ubicación verificada en el mapa',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
 
                   // Image visual preview banner / carousel

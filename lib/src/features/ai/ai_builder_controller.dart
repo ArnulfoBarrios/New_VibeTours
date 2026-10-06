@@ -1021,6 +1021,24 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
           0.0;
       final images = s['imagenes'] is List ? (s['imagenes'] as List) : [];
       final firstImage = images.isNotEmpty ? images.first.toString() : '';
+      final verifiedRaw = ubicacion['coordenadas_verificadas'] ??
+          ubicacion['coordinatesVerified'] ??
+          ubicacion['coordinates_verified'] ??
+          s['coordenadas_verificadas'] ??
+          s['coordinatesVerified'];
+      final isVerified = verifiedRaw == true || verifiedRaw?.toString().toLowerCase() == 'true';
+
+      final locInfo = TourLocationInfo(
+        nombreLugar: (ubicacion['nombre_lugar'] ?? ubicacion['name'] ?? s['nombre'] ?? '').toString(),
+        direccion: (ubicacion['direccion'] ?? ubicacion['address'] ?? '').toString(),
+        ciudad: (ubicacion['ciudad'] ?? ubicacion['city'] ?? tourData['ciudad'] ?? '').toString(),
+        region: (ubicacion['region'] ?? ubicacion['state'] ?? '').toString(),
+        pais: (ubicacion['pais'] ?? ubicacion['country'] ?? tourData['pais'] ?? '').toString(),
+        placeId: (ubicacion['place_id'] ?? ubicacion['placeId'] ?? '').toString(),
+        urlMapa: (ubicacion['url_mapa'] ?? ubicacion['mapUrl'] ?? '').toString(),
+        coordinateSource: (ubicacion['fuente_coordenadas'] ?? ubicacion['coordinateSource'] ?? '').toString(),
+        coordinatesVerified: isVerified,
+      );
 
       return TourStop(
         id: 'stop_${entry.key}',
@@ -1037,6 +1055,8 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         order: entry.key,
         day: int.tryParse(s['dia']?.toString() ?? '1') ?? 1,
         curiousFacts: List<String>.from(s['datos_curiosos'] ?? []),
+        locationInfo: locInfo,
+        images: List<String>.from(images.map((e) => e.toString())),
         isFallbackImage: s['isFallbackImage'] == true ||
             s['is_fallback_image'] == true ||
             s['isDemoImage'] == true ||

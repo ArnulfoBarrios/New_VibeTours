@@ -356,12 +356,6 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      // Metadatos clave: Época, Horario y Punto de encuentro
-                      _buildQuickSpecsCard(context, tour),
-                      const SizedBox(height: 18),
-                      // Público recomendado e Idiomas disponibles
-                      _buildAudienceAndLanguagesSection(context, tour),
-                      const SizedBox(height: 18),
                       if (tour.stops.isNotEmpty) ...[
                         GlassPanel(
                           padding: const EdgeInsets.all(10),
@@ -375,57 +369,9 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
                         ),
                         const SizedBox(height: 18),
                       ],
-                      // ¿Qué incluye y qué NO incluye?
-                      _buildIncludesExcludesSection(context, tour),
+                      // Metadatos clave: Época, Horario y Punto de encuentro
+                      _buildQuickSpecsCard(context, tour),
                       const SizedBox(height: 18),
-                      // Accesibilidad y Aptitudes (Mascotas, Niños, Adultos Mayores)
-                      _buildAccessibilityAndSuitabilitySection(context, tour),
-                      const SizedBox(height: 18),
-                      // Recomendaciones y Consejos
-                      if (tour.recommendations.isNotEmpty || tour.whatToBring.isNotEmpty || tour.tourRules.isNotEmpty) ...[
-                        _buildRecommendationsSection(context, tour),
-                        const SizedBox(height: 18),
-                      ],
-                      SectionHeader(title: l10n.gallery),
-                      SizedBox(
-                        height: 96,
-                        child: ListView.separated(
-                          physics: const BouncingScrollPhysics(),
-                          scrollDirection: Axis.horizontal,
-                          itemCount: tour.gallery.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(width: 10),
-                          itemBuilder: (context, index) => GestureDetector(
-                            onTap: () => ImageViewerDialog.show(
-                              context,
-                              images: tour.gallery,
-                              initialIndex: index,
-                              title: tour.title,
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(18),
-                              child: tour.gallery[index].trim().isEmpty
-                                  ? TravelImageFallback(title: tour.title)
-                                  : CachedNetworkImage(
-                                      imageUrl: tour.gallery[index],
-                                      width: 132,
-                                      fit: BoxFit.cover,
-                                      httpHeaders: const {
-                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                                      },
-                                      placeholder: (context, url) =>
-                                          const SkeletonBox(width: 132),
-                                      errorWidget: (context, url, error) => CachedNetworkImage(
-                                        imageUrl: _getRandomTravelImage(tour.title + index.toString()),
-                                        width: 132,
-                                        fit: BoxFit.cover,
-                                        errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ),
-                      ),
                       SectionHeader(title: l10n.stops),
                       if (tour.stops.isEmpty)
                         const EmptyState(
@@ -435,6 +381,59 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
                         )
                       else
                         _StopsTimelineList(tour: tour),
+                      const SizedBox(height: 18),
+                      Builder(builder: (context) {
+                        final displayGallery = _deduplicateImageUrls(tour.gallery);
+                        if (displayGallery.isEmpty) return const SizedBox.shrink();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SectionHeader(title: l10n.gallery),
+                            SizedBox(
+                              height: 96,
+                              child: ListView.separated(
+                                physics: const BouncingScrollPhysics(),
+                                scrollDirection: Axis.horizontal,
+                                itemCount: displayGallery.length,
+                                separatorBuilder: (context, index) =>
+                                    const SizedBox(width: 10),
+                                itemBuilder: (context, index) => GestureDetector(
+                                  onTap: () => ImageViewerDialog.show(
+                                    context,
+                                    images: displayGallery,
+                                    initialIndex: index,
+                                    title: tour.title,
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(18),
+                                    child: displayGallery[index].trim().isEmpty
+                                        ? TravelImageFallback(title: tour.title)
+                                        : CachedNetworkImage(
+                                            imageUrl: displayGallery[index],
+                                            width: 132,
+                                            fit: BoxFit.cover,
+                                            httpHeaders: const {
+                                              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                                            },
+                                            placeholder: (context, url) =>
+                                                const SkeletonBox(width: 132),
+                                            errorWidget: (context, url, error) => CachedNetworkImage(
+                                              imageUrl: _getRandomTravelImage(tour.title + index.toString()),
+                                              width: 132,
+                                              fit: BoxFit.cover,
+                                              errorWidget: (c, u, e) => TravelImageFallback(title: tour.title),
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                          ],
+                        );
+                      }),
+                      // Detalles y recomendaciones del viaje (colapsable)
+                      _buildCollapsibleLogisticsSection(context, tour),
                       const SizedBox(height: 24),
                       GlassPanel(
                         child: Row(
@@ -1087,6 +1086,93 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
       ),
     );
   }
+
+  Widget _buildCollapsibleLogisticsSection(BuildContext context, Tour tour) {
+    final hasAudience = tour.recommendedAudience.isNotEmpty || tour.availableLanguages.isNotEmpty;
+    final hasIncludes = tour.includes.isNotEmpty || tour.excludes.isNotEmpty;
+    final hasAccessibility = tour.additionalInfo.accesibilidad.isNotEmpty || tour.additionalInfo.mascotasPermitidas;
+    final hasRecommendations = tour.recommendations.isNotEmpty || tour.whatToBring.isNotEmpty || tour.tourRules.isNotEmpty;
+
+    if (!hasAudience && !hasIncludes && !hasAccessibility && !hasRecommendations) {
+      return const SizedBox.shrink();
+    }
+
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: GlassPanel(
+        padding: EdgeInsets.zero,
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.info_outline_rounded, color: AppTheme.primary, size: 20),
+          ),
+          title: Text(
+            'Detalles prácticos y recomendaciones',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          subtitle: Text(
+            'Incluye, qué llevar, accesibilidad y normas',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
+                ),
+          ),
+          children: [
+            const Divider(height: 16),
+            if (hasAudience) ...[
+              _buildAudienceAndLanguagesSection(context, tour),
+              const SizedBox(height: 14),
+            ],
+            if (hasIncludes) ...[
+              _buildIncludesExcludesSection(context, tour),
+              const SizedBox(height: 14),
+            ],
+            if (hasAccessibility) ...[
+              _buildAccessibilityAndSuitabilitySection(context, tour),
+              const SizedBox(height: 14),
+            ],
+            if (hasRecommendations) ...[
+              _buildRecommendationsSection(context, tour),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+List<String> _deduplicateImageUrls(List<String> urls) {
+  final seen = <String>{};
+  final deduped = <String>[];
+  for (final rawUrl in urls) {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) continue;
+    String key = trimmed;
+    try {
+      final uri = Uri.parse(trimmed);
+      if (uri.host.contains('unsplash.com')) {
+        key = '${uri.scheme}://${uri.host}${uri.path}'.toLowerCase();
+      } else if (uri.host.contains('wikimedia.org') || uri.host.contains('wikipedia.org')) {
+        key = uri.pathSegments.isNotEmpty ? uri.pathSegments.last.toLowerCase() : trimmed.toLowerCase();
+      } else {
+        key = '${uri.scheme}://${uri.host}${uri.path}'.toLowerCase();
+      }
+    } catch (_) {
+      key = trimmed.toLowerCase();
+    }
+    if (!seen.contains(key)) {
+      seen.add(key);
+      deduped.add(trimmed);
+    }
+  }
+  return deduped;
 }
 
 class _Metric extends StatelessWidget {
@@ -1126,9 +1212,9 @@ Future<void> _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? t
     ),
     builder: (context) {
       final coverUrl = stop.displayImageUrl;
-      final allImages = stop.images.isNotEmpty
+      final allImages = _deduplicateImageUrls(stop.images.isNotEmpty
           ? stop.images
-          : [if (coverUrl.isNotEmpty) coverUrl];
+          : [if (coverUrl.isNotEmpty) coverUrl]);
 
       final recommendations = stop.tips.isNotEmpty
           ? stop.tips
@@ -1264,6 +1350,34 @@ Future<void> _showStopDetailsSheet(BuildContext context, TourStop stop, {Tour? t
                       ),
                     ],
                   ),
+                  if (stop.locationInfo.coordinatesVerified) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.green.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.verified_rounded, color: Colors.green, size: 14),
+                          SizedBox(width: 5),
+                          Text(
+                            'Ubicación verificada en el mapa',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
 
                   // Voice Guide (Audioguía de IA) Interactive Bar
@@ -1639,6 +1753,24 @@ class _StopTileState extends State<_StopTile> {
                         style: TextStyle(
                           fontSize: 10,
                           color: Colors.amber.shade800,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (stop.locationInfo.coordinatesVerified) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.verified_rounded, size: 12, color: Colors.green.shade600),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Ubicación verificada',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.green.shade700,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

@@ -2601,7 +2601,7 @@ export async function processTourBuild(jobId, input, confirmedPlaces, plannerCon
       punto_encuentro: hotelPuntoEncuentro || publicMeetingPoint,
       public_punto_encuentro: publicMeetingPoint,
       imagen_portada: coverUrl,
-      galeria_tour: unique([
+      galeria_tour: deduplicateImageUrls([
         ...publicStops.flatMap(s => s.imagenes).filter(img => img && !img.includes('photo-1469854523086') && !img.includes('photo-1507525428034')),
         coverUrl,
         ...normalizeList(sourceTour.galeria_tour, [])
@@ -2954,7 +2954,7 @@ async function processTourGeneration(jobId, input) {
         punto_encuentro: hotelPuntoEncuentro || publicMeetingPoint,
         public_punto_encuentro: publicMeetingPoint,
         imagen_portada: sourceTour.imagen_portada ?? sourceTour.coverUrl ?? coverUrl,
-        galeria_tour: unique([
+        galeria_tour: deduplicateImageUrls([
           ...stops.flatMap((stop) => stop.imagenes).filter(img => img && !img.includes('photo-1469854523086') && !img.includes('photo-1507525428034')),
           coverUrl,
           ...(normalizeList(sourceTour.galeria_tour, [])),
@@ -3081,7 +3081,7 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
     horario_recomendado: planner.recommendedSchedule,
     punto_encuentro: normalizeLocationInfo(null, stops[0], input),
     imagen_portada: fallbackCover(input.destination),
-    galeria_tour: stops.flatMap((stop) => stop.imagenes).slice(0, 8),
+    galeria_tour: deduplicateImageUrls(stops.flatMap((stop) => stop.imagenes)).slice(0, 8),
     itinerario: stops,
     orden_paradas: stops.map((stop) => stop.candidateId).filter(Boolean),
     incluye: defaultIncludes(input.type),
@@ -3130,7 +3130,7 @@ export async function buildFallbackTour(planner, input) {
   ])
   planner.selectedPlaces = enrichedPlaces
   const coverUrl = planner.selectedPlaces[0]?.imageUrl ?? fallbackCover(input.destination)
-  const gallery = unique(planner.selectedPlaces.flatMap((place) => place.images)).slice(0, 8)
+  const gallery = deduplicateImageUrls(planner.selectedPlaces.flatMap((place) => place.images)).slice(0, 8)
   const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
   const stopsPerDay = Math.ceil(planner.selectedPlaces.length / totalDays)
 
@@ -5656,7 +5656,7 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
       coordenadas_verificadas: coordinates.coordinatesVerified === true,
       url_mapa: matchedPlace?.urlMapa ?? ubicacion.url_mapa ?? mapUrlFor(coordinates.latitude, coordinates.longitude),
     },
-    imagenes: unique([image, ...images]),
+    imagenes: deduplicateImageUrls([image, ...images]),
   }
   const routeStop = {
     name: resolvedName,
@@ -5924,6 +5924,42 @@ function normalizeAudience(value, type, interests) {
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))]
+}
+
+export function deduplicateImageUrls(values = []) {
+  if (!Array.isArray(values)) return []
+  const seen = new Set()
+  const result = []
+
+  for (const item of values) {
+    if (!item || typeof item !== 'string') continue
+    const trimmed = item.trim()
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) continue
+
+    let key = trimmed
+    try {
+      const url = new URL(trimmed)
+      if (url.hostname.includes('unsplash.com')) {
+        const parts = url.pathname.split('/')
+        key = `unsplash_${parts[parts.length - 1]}`
+      } else if (url.hostname.includes('wikimedia.org')) {
+        const parts = url.pathname.split('/')
+        const filename = parts.find(p => /\.(jpe?g|png|webp|svg)$/i.test(p)) || parts[parts.length - 1]
+        key = `wiki_${filename.toLowerCase()}`
+      } else {
+        key = `${url.hostname}${url.pathname}`.toLowerCase().replace(/\/$/, '')
+      }
+    } catch {
+      key = trimmed.split('?')[0].split('#')[0].toLowerCase()
+    }
+
+    if (!seen.has(key)) {
+      seen.add(key)
+      result.push(trimmed)
+    }
+  }
+
+  return result
 }
 
 function fuzzyNormalizeKey(name) {

@@ -2879,6 +2879,24 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
                             ),
                           ),
+                          if (stop.locationInfo.coordinatesVerified) ...[
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.verified_rounded, size: 11, color: Colors.green.shade600),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'Ubicación verificada',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                           if (stop.isFallbackImage) ...[
                             const SizedBox(height: 2),
                             Row(
@@ -3006,6 +3024,19 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               color: AppTheme.primary,
                             ),
                           ),
+                          if (stop.locationInfo.coordinatesVerified) ...[
+                            const SizedBox(width: 8),
+                            Icon(Icons.verified_rounded, size: 12, color: Colors.green.shade600),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Ubicación verificada',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],
