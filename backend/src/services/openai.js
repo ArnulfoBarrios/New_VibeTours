@@ -163,6 +163,12 @@ export async function fetchGeminiChatCompletion(init = {}, retryOptions = null) 
   }
   delete geminiBody.reasoning_effort
 
+  if (Array.isArray(geminiBody.messages) && geminiBody.messages.length > 0) {
+    while (geminiBody.messages.length > 1 && geminiBody.messages[geminiBody.messages.length - 1]?.role === 'assistant') {
+      geminiBody.messages.pop()
+    }
+  }
+
   const effectiveRetry = retryOptions ?? { attempts: 1, timeoutMs: 7000 }
   const geminiInit = {
     ...init,
@@ -1497,15 +1503,30 @@ async function verifyCatalogEntryOnOsm(entry, city, country, centerLat = null, c
     : String(entry?.name || '').trim()
   if (!name || isUnmappedOrClosedVenue(name)) return null
 
-  let geo = await resolvePlaceWithCascade({
-    name,
-    city,
-    country,
-    cityLat: centerLat,
-    cityLon: centerLon,
-    maxDistanceKm: 65,
-    options: { preferCanonical: true, preferLiveProviders: false }
-  }).catch(() => null)
+  let geo = null
+  if (typeof entry === 'object' && Number.isFinite(Number(entry?.latitude)) && Number.isFinite(Number(entry?.longitude)) && entry?.coordinateSource) {
+    geo = {
+      name,
+      latitude: Number(entry.latitude),
+      longitude: Number(entry.longitude),
+      address: entry.address || '',
+      placeId: entry.placeId || entry.place_id || '',
+      type: entry.type || category,
+      category: entry.category || category,
+      coordinateSource: entry.coordinateSource,
+      tags: entry.tags || {}
+    }
+  } else {
+    geo = await resolvePlaceWithCascade({
+      name,
+      city,
+      country,
+      cityLat: centerLat,
+      cityLon: centerLon,
+      maxDistanceKm: 65,
+      options: { preferCanonical: true, preferLiveProviders: false }
+    }).catch(() => null)
+  }
 
   if (!hasOsmMapRecord(geo)) {
     const simplifiedName = name
@@ -1702,6 +1723,21 @@ export async function suggestHotelsWithOpenAI({ destination = '', country = '', 
   const cleanDest = String(destination || '').trim()
   if (!cleanDest) return []
 
+  // Check cached hotels first (< 5 ms)
+  const cachedHotels = await lookupCachedPlacesForCity(cleanDest, 'hotel').catch(() => [])
+  if (Array.isArray(cachedHotels) && cachedHotels.length >= 3) {
+    const validCached = cachedHotels
+      .filter(h => h && h.name && !isGenericFacilityName(h.name) && !isTriviallyGenericHotelName(h.name, cleanDest))
+      .slice(0, 3)
+    if (validCached.length >= 3) {
+      return validCached.map(h => ({
+        ...h,
+        desc: h.desc || h.description || `Alojamiento verificado ubicado en ${cleanDest}`,
+        stars: h.stars || '4'
+      }))
+    }
+  }
+
   const apiKey = getActiveLlmKey()
 
   const targetDest = `${cleanDest}${country ? `, ${country}` : ''}`.trim()
@@ -1745,11 +1781,15 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
       const data = await response.json()
       const parsed = cleanAndParseJson(data.choices?.[0]?.message?.content, null)
       if (parsed && Array.isArray(parsed.hotels) && parsed.hotels.length > 0) {
-        const candidates = parsed.hotels.filter(h => h && (h.name || h.nombre)).map(h => ({
-          name: h.name || h.nombre,
-          desc: h.desc || h.descripcion || `Alojamiento destacado en ${cleanDest}`,
-          stars: String(h.stars || h.estrellas || '4')
-        })).slice(0, 3)
+        const candidates = parsed.hotels
+          .filter(h => h && (h.name || h.nombre))
+          .map(h => ({
+            name: h.name || h.nombre,
+            desc: h.desc || h.descripcion || `Alojamiento destacado en ${cleanDest}`,
+            stars: String(h.stars || h.estrellas || '4')
+          }))
+          .filter(h => !isGenericFacilityName(h.name) && !isTriviallyGenericHotelName(h.name, cleanDest))
+          .slice(0, 3)
         const verified = await verifiedCatalogEntries(candidates, cleanDest, country, 3, null, null, 'hotel')
         if (verified.length > 0) {
           saveCachedPlacesBatch(verified, cleanDest, 'openai_hotels').catch(() => {})
@@ -1765,37 +1805,51 @@ Devuelve ÚNICAMENTE un JSON con este formato exacto:
     destination: cleanDest,
     country,
     category: 'hotel',
-    limit: 3
+    limit: 4
   }).catch(() => [])
-  if (providerHotels.length > 0) {
-    return providerHotels.map(hotel => ({
+  const validProviders = (providerHotels || [])
+    .filter(h => h && h.name && !isGenericFacilityName(h.name) && !isTriviallyGenericHotelName(h.name, cleanDest))
+    .slice(0, 3)
+  if (validProviders.length > 0) {
+    const mapped = validProviders.map(hotel => ({
       ...hotel,
       desc: hotel.description || `Alojamiento verificado ubicado en ${cleanDest}`,
       stars: hotel.stars || '4'
     }))
+    saveCachedPlacesBatch(mapped, cleanDest, 'provider_hotels').catch(() => {})
+    return mapped
   }
 
   const [hotelsRes, hostalsRes] = await Promise.all([
-    photonSearch(`hotel ${cleanDest}`, 5, null, null, null, null, country).catch(() => []),
-    photonSearch(`hostal ${cleanDest}`, 5, null, null, null, null, country).catch(() => [])
+    photonSearch(`hotel ${cleanDest}`, 6, null, null, null, null, country).catch(() => []),
+    photonSearch(`hostal ${cleanDest}`, 6, null, null, null, null, country).catch(() => [])
   ])
   const combinedHotels = [...hotelsRes, ...hostalsRes]
-    .filter(h => h && h.name && !isGenericFacilityName(h.name))
+    .filter(h => h && h.name && !isGenericFacilityName(h.name) && !isTriviallyGenericHotelName(h.name, cleanDest))
   const seenH = new Set()
   const uniqueH = []
   for (const item of combinedHotels) {
     const k = item.name.toLowerCase().trim()
-    if (!seenH.has(k)) {
+    if (!seenH.has(k) && !uniqueH.some(existing => arePlacesSimilar(existing.name, item.name))) {
       seenH.add(k)
       uniqueH.push({
         name: item.name,
         desc: `Alojamiento verificado ubicado en ${cleanDest}`,
-        stars: '4'
+        stars: '4',
+        latitude: item.latitude,
+        longitude: item.longitude,
+        address: item.address || item.formattedAddress || '',
+        placeId: item.placeId || item.osmId || null,
+        coordinateSource: 'photon'
       })
     }
   }
   if (uniqueH.length > 0) {
-    return verifiedCatalogEntries(uniqueH, cleanDest, country, 3, null, null, 'hotel')
+    const verified = await verifiedCatalogEntries(uniqueH, cleanDest, country, 3, null, null, 'hotel')
+    if (verified.length > 0) {
+      saveCachedPlacesBatch(verified, cleanDest, 'photon_hotels').catch(() => {})
+      return verified
+    }
   }
 
   return []
@@ -2647,34 +2701,46 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         preReqCheck.hasTransport &&
         preReqCheck.hasBudget
       )
-      const needsImmediate = isExplicitItineraryRequest ||
-        isExplicitHotelInquiry ||
-        isExplicitRestaurantInquiry ||
-        isExplicitAttractionInquiry ||
-        isExplicitBuildRequest ||
-        isCompleteOrReadyToPresent ||
-        Boolean(known?.readyToBuild)
+      const isHotelOnlyInquiry = isExplicitHotelInquiry && !isExplicitItineraryRequest && !isExplicitBuildRequest && !isCompleteOrReadyToPresent && !known?.readyToBuild
 
-      if (needsImmediate) {
-        const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
-        const hasSufficientPlaces = (cachedCatalog?.places?.length || 0) >= Math.min(6, minRequiredPlaces)
-        const hasSufficientRests = (cachedCatalog?.restaurants?.length || 0) >= Math.min(3, minRequiredRests)
-        if (cachedCatalog && hasSufficientPlaces && hasSufficientRests) {
-          realCatalog = cachedCatalog
-        } else {
-          realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: reqDays })
-            .catch(err => {
-              console.warn('[generateChatResponse] Catalog lookup error:', err.message)
-              return { places: [], restaurants: [], hotels: [] }
-            })
-          if (cachedCatalog?.places?.length > 0 && (!realCatalog.places || realCatalog.places.length === 0)) {
-            realCatalog.places = cachedCatalog.places
-          }
-        }
+      if (isHotelOnlyInquiry) {
+        // Fast-path: When the user is only asking for hotel recommendations,
+        // resolve only hotels dynamically and fast without blocking on full multi-day catalog queries.
+        const suggestedHotels = await suggestHotelsWithOpenAI({
+          destination: destName,
+          country: destCountry,
+          budget: known.budget || 'Moderado'
+        }).catch(() => [])
+        realCatalog = { places: [], restaurants: [], hotels: suggestedHotels }
       } else {
-        // En turnos conversacionales simples (acompañantes, presupuesto, transporte, fechas),
-        // respondemos inmediatamente sin bloquear en Overpass, OSM ni Photon.
-        realCatalog = { places: [], restaurants: [], hotels: [] }
+        const needsImmediate = isExplicitItineraryRequest ||
+          isExplicitRestaurantInquiry ||
+          isExplicitAttractionInquiry ||
+          isExplicitBuildRequest ||
+          isCompleteOrReadyToPresent ||
+          Boolean(known?.readyToBuild)
+
+        if (needsImmediate) {
+          const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
+          const hasSufficientPlaces = (cachedCatalog?.places?.length || 0) >= Math.min(6, minRequiredPlaces)
+          const hasSufficientRests = (cachedCatalog?.restaurants?.length || 0) >= Math.min(3, minRequiredRests)
+          if (cachedCatalog && hasSufficientPlaces && hasSufficientRests) {
+            realCatalog = cachedCatalog
+          } else {
+            realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: reqDays })
+              .catch(err => {
+                console.warn('[generateChatResponse] Catalog lookup error:', err.message)
+                return { places: [], restaurants: [], hotels: [] }
+              })
+            if (cachedCatalog?.places?.length > 0 && (!realCatalog.places || realCatalog.places.length === 0)) {
+              realCatalog.places = cachedCatalog.places
+            }
+          }
+        } else {
+          // En turnos conversacionales simples (acompañantes, presupuesto, transporte, fechas),
+          // respondemos inmediatamente sin bloquear en Overpass, OSM ni Photon.
+          realCatalog = { places: [], restaurants: [], hotels: [] }
+        }
       }
     }
 
@@ -3236,7 +3302,6 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         isExplicitBuildRequestedByUser ||
         isItineraryInquiry ||
         isPlacesOrFoodInquiry ||
-        isHotelInquiry ||
         (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging))
       )
 
@@ -3517,14 +3582,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             ? preset.hotels
             : []
 
-        if (rawHotels.length === 0 && (known.latitude != null && known.longitude != null)) {
-          const centerLat = known.latitude
-          const centerLon = known.longitude
-          const quickHotels = await photonSearch(`hotel ${cleanAdministrativeCityName(destName)}`, 5, centerLat, centerLon, null, 35000, destCountry).catch(() => [])
-          const validQuick = (quickHotels || []).filter(h => h && h.name && !isGenericFacilityName(h.name) && !isTriviallyGenericHotelName(h.name, destName))
-          if (validQuick.length > 0) {
-            rawHotels = validQuick
-          }
+        if (rawHotels.length === 0) {
+          rawHotels = await suggestHotelsWithOpenAI({
+            destination: destName,
+            country: destCountry,
+            budget: known.budget || 'Moderado'
+          }).catch(() => [])
         }
 
         const deduplicatedHotels = []
@@ -4070,6 +4133,9 @@ REGLAS PARA "accommodationStatus":
       role: m.role === 'assistant' || m.role === 'bot' ? 'assistant' : 'user',
       content: String(m.content || '')
     }))
+    if (state?.message && (!formattedHistory.length || formattedHistory[formattedHistory.length - 1].content !== state.message)) {
+      formattedHistory.push({ role: 'user', content: state.message })
+    }
 
     const response = await fetchOpenAiChatCompletion({
       method: 'POST',
@@ -4723,11 +4789,19 @@ REGLAS PARA "accommodationStatus":
     } else if (!finalHasLodging && !isOneDayTour) {
       // Hospedaje aún pendiente (solo en tours de varios días): PROHIBIDO ofrecer "Generar tour". Ofrecer opciones de hospedaje.
       actionChips = actionChips.filter(c => !/generar tour|crear tour|armar tour|construir tour/i.test(c))
-      if (!actionChips.some(c => /casa propia|familiar/i.test(c))) {
-        actionChips.unshift('Tengo casa propia / familiar')
-      }
-      if (!actionChips.some(c => /hotel|hospedaje/i.test(c))) {
-        actionChips.push('🏨 Recomiéndame hoteles')
+      const isAskingForHotelsNow = isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
+      if (isAskingForHotelsNow && Array.isArray(realCatalog?.hotels) && realCatalog.hotels.length > 0) {
+        const hotelChips = realCatalog.hotels
+          .map(h => typeof h === 'string' ? h : h.name)
+          .filter(h => h && !isTriviallyGenericHotelName(h, destName) && !isGenericFacilityName(h))
+        actionChips = [...hotelChips, 'Tengo casa propia / familiar']
+      } else {
+        if (!actionChips.some(c => /casa propia|familiar/i.test(c))) {
+          actionChips.unshift('Tengo casa propia / familiar')
+        }
+        if (!isAskingForHotelsNow && !actionChips.some(c => /hotel|hospedaje/i.test(c))) {
+          actionChips.push('🏨 Recomiéndame hoteles')
+        }
       }
     } else if ((shouldReconstructItinerary || hasDayHeaders || isAllKeyInfoComplete) && !actionChips.some(c => /generar tour/i.test(c))) {
       actionChips = [

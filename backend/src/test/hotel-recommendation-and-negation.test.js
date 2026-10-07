@@ -105,7 +105,7 @@ test('Hotel Recommendation and Negation Unit Tests', async (t) => {
         assert.notEqual(prefs.accommodationStatus, 'Hotel elegido')
 
         // Bot message must contain hotel recommendations
-        assert.match(res.responseMessage, /opciones recomendadas|Opciones de hospedaje/i)
+        assert.match(res.responseMessage, /opciones recomendadas|Opciones de hospedaje|opciones de alojamiento/i)
         assert.match(res.responseMessage, /Hotel Dann Carlton|Hotel El Prado|GHL Hotel/i)
 
         // Action chips should offer the recommended hotels
