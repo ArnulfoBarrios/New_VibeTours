@@ -1070,9 +1070,18 @@ class AiRecommendation {
     final verifiedRaw = json['coordinatesVerified'] ??
         json['coordinates_verified'] ??
         locationInfo['coordenadas_verificadas'];
+    final rawName = (json['name'] as String? ?? '').trim();
+    final cleanName = () {
+      var s = rawName;
+      if (s.contains(',')) {
+        s = s.split(',').first.trim();
+      }
+      return s.replaceAll(RegExp(r'["“”«»]'), '').trim();
+    }();
+
     return AiRecommendation(
       id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
+      name: cleanName.isNotEmpty ? cleanName : rawName,
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       category: json['category'] as String? ?? '',
@@ -1091,8 +1100,8 @@ class AiRecommendation {
           .toString(),
       coordinatesVerified: verifiedRaw == true || verifiedRaw?.toString().toLowerCase() == 'true',
       locationInfo: TourLocationInfo(
-        nombreLugar: locationInfo['nombre_lugar'] ?? '',
-        direccion: locationInfo['direccion'] ?? '',
+        nombreLugar: locationInfo['nombre_lugar'] ?? (cleanName.isNotEmpty ? cleanName : rawName),
+        direccion: locationInfo['direccion'] ?? (rawName.contains(',') ? rawName : ''),
         ciudad: locationInfo['ciudad'] ?? '',
         region: locationInfo['region'] ?? '',
         pais: locationInfo['pais'] ?? '',

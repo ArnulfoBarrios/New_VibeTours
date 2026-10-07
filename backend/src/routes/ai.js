@@ -8,7 +8,7 @@ import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetch
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
-import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName, FALLBACK_DESTINATION_CENTROIDS } from '../services/destinationService.js'
+import { resolveCanonicalDestination, validateCandidateLocation, haversineDistanceKm, cleanAdministrativeCityName, cleanLandmarkOrPlaceName, FALLBACK_DESTINATION_CENTROIDS } from '../services/destinationService.js'
 import { resolvePlaceWithCascade } from '../services/places-resolver.js'
 import { getCandidateId } from '../services/candidate-catalog.js'
 import { lookupCachedPlacesForCity, saveCachedPlacesBatch } from '../services/places-cache-service.js'
@@ -177,9 +177,13 @@ export function getPlaceEntityType(placeName) {
 export function cleanPlacePhysicalName(placeName) {
   if (!placeName || typeof placeName !== 'string') return ''
   let cleaned = placeName
-    .replace(/[*_#•\[\]\(\)]/g, '')
+    .replace(/[*_#•\[\]\(\)"“”«»]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+
+  if (cleaned.includes(',')) {
+    cleaned = cleaned.split(',')[0].trim()
+  }
 
   cleaned = cleaned.replace(/^(?:tour\s+(?:en\s+barco|en\s+lancha|guiado|panor[áa]mico|por|a|al|hacia)\s+(?:por\s+la|por\s+el|por|la|el|a\s+la|a\s+el|al)?\s*)/i, '')
   cleaned = cleaned.replace(/^(?:paseo\s+(?:en\s+barco|en\s+lancha|en\s+bote|en\s+kayak|en\s+chiva|por|a|al|hacia)\s+(?:por\s+la|por\s+el|por|la|el|a\s+la|a\s+el|al)?\s*)/i, '')
@@ -1058,10 +1062,11 @@ aiRouter.post('/chat', async (req, res, next) => {
           }).catch(() => null)
           if (landmarkGeo?.latitude && landmarkGeo?.longitude) {
             const resolvedCity = cleanAdministrativeCityName(landmarkGeo.city) || cleanAdministrativeCityName(rawDest)
+            const cleanEntity = cleanLandmarkOrPlaceName(landmarkGeo.name || rawDest) || rawDest
             canonical = {
-              displayName: landmarkGeo.name || rawDest,
+              displayName: cleanEntity,
               city: resolvedCity,
-              entityName: landmarkGeo.name || rawDest,
+              entityName: cleanEntity,
               isMicroDestination: false,
               region: '',
               country: landmarkGeo.country || currentPreferences.country || 'Colombia',
@@ -1097,7 +1102,7 @@ aiRouter.post('/chat', async (req, res, next) => {
             ? (currentPreferences.destinationPlace || currentPreferences.destination || currentPreferences.canonicalDestination?.entityName || currentPreferences.city)
             : (currentPreferences.canonicalDestination?.entityName || currentPreferences.canonicalDestination?.city || currentPreferences.destination || currentPreferences.city)
           const newDest = isLocationToDest
-            ? (canonical.displayName || canonical.entityName || rawDest || canonical.city)
+            ? cleanLandmarkOrPlaceName(canonical.entityName || rawDest || canonical.displayName || canonical.city)
             : (canonical.entityName || canonical.city)
           if (prevDest && newDest && prevDest.toLowerCase() !== newDest.toLowerCase() && !isLocationToDest) {
             delete updatedPreferences.specificPlaces
@@ -1105,7 +1110,8 @@ aiRouter.post('/chat', async (req, res, next) => {
           }
           if (isLocationToDest) {
             updatedPreferences.canonicalDestination = canonical
-            const landmarkTarget = canonical.displayName || canonical.entityName || rawDest || updatedPreferences.destinationPlace || currentPreferences.destinationPlace || currentPreferences.destination
+            const rawTarget = canonical.entityName || rawDest || canonical.displayName || updatedPreferences.destinationPlace || currentPreferences.destinationPlace || currentPreferences.destination
+            const landmarkTarget = cleanLandmarkOrPlaceName(rawTarget) || rawTarget
             updatedPreferences.destination = landmarkTarget
             updatedPreferences.destinationPlace = landmarkTarget
             updatedPreferences.city = cleanAdministrativeCityName(canonical.city) || cleanAdministrativeCityName(landmarkTarget)
@@ -3344,7 +3350,9 @@ export function buildTourPlanner(input, location = null, places = []) {
     : Math.max(baseStopTarget, requestedCount)
 
   if (isCorridorRoute) {
-    const destName = input.destinationPlace || input.destination || ''
+    const rawDestName = input.destinationPlace || input.destination || ''
+    const cleanDest = cleanLandmarkOrPlaceName(rawDestName)
+    const destName = cleanDest || rawDestName
     const destKey = normalizeKey(destName)
     
     // Origin place candidate (only used as a tourist stop if genuine landmark, NOT user current location)
@@ -3359,14 +3367,16 @@ export function buildTourPlanner(input, location = null, places = []) {
       p.rawTags?.end_point === 'true' || 
       p.type === 'end_point' || 
       (destKey && normalizeKey(p.name) === destKey) || 
+      (cleanDest && arePlacesSimilar(p.name, cleanDest)) ||
+      (rawDestName && arePlacesSimilar(p.name, rawDestName)) ||
       (destKey.length >= 4 && normalizeKey(p.name).includes(destKey))
     )
     if (!endPlaceCandidate && destName) {
-      const refDest = refList.find(r => arePlacesSimilar(typeof r === 'object' ? r.name : r, destName))
+      const refDest = refList.find(r => arePlacesSimilar(typeof r === 'object' ? r.name : r, destName) || arePlacesSimilar(typeof r === 'object' ? r.name : r, cleanDest))
       const lat = (refDest && Number.isFinite(Number(refDest.latitude))) ? Number(refDest.latitude) : Number(location?.latitude || 0)
       const lon = (refDest && Number.isFinite(Number(refDest.longitude))) ? Number(refDest.longitude) : Number(location?.longitude || 0)
       endPlaceCandidate = normalizeCandidate({
-        name: destName,
+        name: cleanDest || destName,
         latitude: lat,
         longitude: lon,
         type: 'end_point',
@@ -3387,8 +3397,12 @@ export function buildTourPlanner(input, location = null, places = []) {
     // Intermediates candidate pool: EXCLUDE startPlaceCandidate (if user location) and endPlaceCandidate
     let intermediates = normalized.filter(p => {
       const isStart = (isUserOrigin && (normalizeKey(p.name).includes('tu ubicacion') || p.type === 'start_point' || p.rawTags?.start_point === 'true')) ||
-        (startPlaceCandidate && normalizeKey(p.name) === normalizeKey(startPlaceCandidate.name))
-      const isEnd = endPlaceCandidate && (normalizeKey(p.name) === normalizeKey(endPlaceCandidate.name) || (destKey.length >= 4 && normalizeKey(p.name) === destKey))
+        (startPlaceCandidate && (normalizeKey(p.name) === normalizeKey(startPlaceCandidate.name) || arePlacesSimilar(p.name, startPlaceCandidate.name)))
+      const isEnd = (endPlaceCandidate && (normalizeKey(p.name) === normalizeKey(endPlaceCandidate.name) || arePlacesSimilar(p.name, endPlaceCandidate.name))) ||
+        (destName && arePlacesSimilar(p.name, destName)) ||
+        (cleanDest && arePlacesSimilar(p.name, cleanDest)) ||
+        (rawDestName && arePlacesSimilar(p.name, rawDestName)) ||
+        (destKey.length >= 4 && normalizeKey(p.name) === destKey)
       return !isStart && !isEnd
     })
 
@@ -3452,9 +3466,19 @@ export function buildTourPlanner(input, location = null, places = []) {
     if (startPlaceCandidate && !isUserOrigin && !normalizeKey(startPlaceCandidate.name).includes('tu ubicacion')) {
       selectedPlaces.push(startPlaceCandidate)
     }
-    selectedPlaces.push(...pickedIntermediates)
+    for (const inter of pickedIntermediates) {
+      if (endPlaceCandidate && arePlacesSimilar(inter.name, endPlaceCandidate.name)) continue
+      if (cleanDest && arePlacesSimilar(inter.name, cleanDest)) continue
+      if (destName && arePlacesSimilar(inter.name, destName)) continue
+      selectedPlaces.push(inter)
+    }
     if (endPlaceCandidate) {
-      selectedPlaces.push(endPlaceCandidate)
+      const finalEndName = cleanDest || cleanLandmarkOrPlaceName(endPlaceCandidate.name) || endPlaceCandidate.name
+      selectedPlaces.push({
+        ...endPlaceCandidate,
+        name: finalEndName,
+        address: endPlaceCandidate.address || (endPlaceCandidate.name !== finalEndName ? endPlaceCandidate.name : '')
+      })
     }
   } else {
     const scored = normalized
@@ -3710,30 +3734,58 @@ export function buildTourPlanner(input, location = null, places = []) {
       )
     }
 
-    const destName = input.destinationPlace || input.destination || ''
+    const rawDestName = input.destinationPlace || input.destination || ''
+    const cleanDest = cleanLandmarkOrPlaceName(rawDestName)
+    const destName = cleanDest || rawDestName
     const destKey = normalizeKey(destName)
     if (destName) {
-      const destIdx = selectedPlaces.findIndex(p => {
+      // Find ALL places matching the destination to completely avoid duplicate entries
+      const matchingIndices = []
+      for (let i = 0; i < selectedPlaces.length; i++) {
+        const p = selectedPlaces[i]
         const k = normalizeKey(p.name || '')
-        return k === destKey || (destKey.length >= 4 && (k.includes(destKey) || destKey.includes(k)))
-      })
-      if (destIdx !== -1 && destIdx !== selectedPlaces.length - 1) {
-        const [destItem] = selectedPlaces.splice(destIdx, 1)
-        selectedPlaces.push(destItem)
-      } else if (destIdx === -1) {
-        const refDest = refList.find(r => arePlacesSimilar(typeof r === 'object' ? r.name : r, destName))
+        if (k === destKey || 
+            arePlacesSimilar(p.name, destName) || 
+            arePlacesSimilar(p.name, cleanDest) || 
+            arePlacesSimilar(p.name, rawDestName) ||
+            (destKey.length >= 4 && (k.includes(destKey) || destKey.includes(k)))) {
+          matchingIndices.push(i)
+        }
+      }
+
+      let destStop = null
+      if (matchingIndices.length > 0) {
+        const bestIdx = matchingIndices[matchingIndices.length - 1]
+        const origStop = selectedPlaces[bestIdx]
+        const cleanStopName = cleanDest || cleanLandmarkOrPlaceName(origStop.name) || origStop.name
+        destStop = {
+          ...origStop,
+          name: cleanStopName,
+          address: origStop.address || (origStop.name !== cleanStopName ? origStop.name : '')
+        }
+        selectedPlaces = selectedPlaces.filter((_, idx) => !matchingIndices.includes(idx))
+      } else {
+        const refDest = refList.find(r => arePlacesSimilar(typeof r === 'object' ? r.name : r, destName) || arePlacesSimilar(typeof r === 'object' ? r.name : r, cleanDest))
         const lat = (refDest && Number.isFinite(Number(refDest.latitude))) ? Number(refDest.latitude) : Number(location?.latitude || 0)
         const lon = (refDest && Number.isFinite(Number(refDest.longitude))) ? Number(refDest.longitude) : Number(location?.longitude || 0)
-        const resolvedEnd = normalizeCandidate({
-          name: destName,
+        destStop = normalizeCandidate({
+          name: cleanDest || destName,
           latitude: lat,
           longitude: lon,
           type: 'end_point',
           category: 'attraction',
           rawTags: { end_point: 'true', requested_place: 'true' }
         }, 0, input, origin)
-        selectedPlaces.push(resolvedEnd)
       }
+
+      // Ensure no remaining intermediate has a similar name to the destination stop
+      selectedPlaces = selectedPlaces.filter(p => 
+        !arePlacesSimilar(p.name, destStop.name) && 
+        !arePlacesSimilar(p.name, destName) && 
+        !arePlacesSimilar(p.name, cleanDest)
+      )
+
+      selectedPlaces.push(destStop)
     }
     const userStartLat = Number(input.latitude ?? location?.latitude)
     const userStartLon = Number(input.longitude ?? location?.longitude)

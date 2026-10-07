@@ -1,6 +1,6 @@
 import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
-import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor, evaluateTourRequirements } from './destinationService.js'
+import { cleanAdministrativeCityName, cleanLandmarkOrPlaceName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor, evaluateTourRequirements } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection, KNOWN_ICONIC_LANDMARKS } from './osm.js'
 import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate } from './candidate-catalog.js'
@@ -2419,7 +2419,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     rawDestName = known.destinationPlace || known.destination
   }
 
-  const destName = cleanAdministrativeCityName(rawDestName)
+  const destName = cleanAdministrativeCityName(cleanLandmarkOrPlaceName(rawDestName) || rawDestName)
   const hasCity = Boolean(destName && !isVagueDestination(destName))
   const knownCityNormalized = destName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const centroidCountry = FALLBACK_DESTINATION_CENTROIDS[knownCityNormalized]?.country || ''
@@ -3004,9 +3004,10 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       })
     }
 
-    dayStops.push(`• ${destName}`)
+    const cleanDestTitle = cleanLandmarkOrPlaceName(destName) || destName
+    dayStops.push(`• ${cleanDestTitle}`)
     specificPlacesToSave.push({
-      name: destName,
+      name: cleanDestTitle,
       dia: 1,
       day: 1,
       category: 'attraction',
@@ -3018,7 +3019,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     })
 
     known.specificPlaces = specificPlacesToSave
-    return `Itinerario de Viaje: En ruta hacia ${destName} (1 día)\n\nDía 1: En ruta hacia ${destName}\n${dayStops.join('\n')}`
+    return `Itinerario de Viaje: En ruta hacia ${cleanDestTitle} (1 día)\n\nDía 1: En ruta hacia ${cleanDestTitle}\n${dayStops.join('\n')}`
   }
 
   async function runFallbackChatResponse() {
@@ -3190,14 +3191,16 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             '🌇 02:45 PM - Tarde',
             '🏁 04:30 PM - Llegada a destino'
           ]
+          const cleanDestTitle = cleanLandmarkOrPlaceName(destName) || destName
           const detailLines = stops.map((s, idx) => {
-            const name = typeof s === 'string' ? s : s.name
+            const rawName = typeof s === 'string' ? s : s.name
+            const name = cleanLandmarkOrPlaceName(rawName) || rawName
             const label = timeLabels[idx] || `Parada ${idx + 1}`
             const isRest = s?.entityType === 'restaurant' || s?.category === 'restaurant' || s?.type === 'food'
             const verb = idx === stops.length - 1 ? 'Llegada a' : (isRest ? 'Almuerzo en' : 'Visita a')
             return `• ${label}: ${verb} **${name}**`
           })
-          fallbackMsg = `Aquí tienes el itinerario detallado de tu recorrido desde tu ubicación actual hasta **${destName}**:\n\nDía 1: En ruta hacia ${destName}\n\n` +
+          fallbackMsg = `Aquí tienes el itinerario detallado de tu recorrido desde tu ubicación actual hasta **${cleanDestTitle}**:\n\nDía 1: En ruta hacia ${cleanDestTitle}\n\n` +
             `${detailLines.join('\n')}\n\n` +
             `¿Deseas confirmar este recorrido y generar el tour en el mapa?`
           fallbackChips = ['🗺️ Generar tour en el mapa', 'Modificar paradas']
@@ -4078,30 +4081,33 @@ REGLAS PARA "accommodationStatus":
         '🌇 02:45 PM - Tarde',
         '🏁 04:30 PM - Llegada a destino'
       ]
+      const cleanDestTitle = cleanLandmarkOrPlaceName(destName) || destName
       const detailLines = stops.map((s, idx) => {
-        const name = typeof s === 'string' ? s : s.name
+        const rawName = typeof s === 'string' ? s : s.name
+        const name = cleanLandmarkOrPlaceName(rawName) || rawName
         const label = timeLabels[idx] || `Parada ${idx + 1}`
         const isRest = s?.entityType === 'restaurant' || s?.category === 'restaurant' || s?.type === 'food'
         const verb = idx === stops.length - 1 ? 'Llegada a' : (isRest ? 'Almuerzo en' : 'Visita a')
         return `• ${label}: ${verb} **${name}**`
       })
-      responseMessage = `Aquí tienes el itinerario detallado de tu recorrido desde tu ubicación actual hasta **${destName}**:\n\nDía 1: En ruta hacia ${destName}\n\n` +
+      responseMessage = `Aquí tienes el itinerario detallado de tu recorrido desde tu ubicación actual hasta **${cleanDestTitle}**:\n\nDía 1: En ruta hacia ${cleanDestTitle}\n\n` +
         `${detailLines.join('\n')}\n\n` +
         `¿Deseas confirmar este recorrido y generar el tour en el mapa?`
       actionChips = ['🗺️ Generar tour en el mapa', 'Modificar paradas']
       parsedExtracted.specificPlaces = stops
       parsedExtracted.tourType = 'location_to_destination'
-      parsedExtracted.destinationPlace = destName
-      parsedExtracted.destination = destName
+      parsedExtracted.destinationPlace = cleanDestTitle
+      parsedExtracted.destination = cleanDestTitle
     } else if (shouldReconstructItinerary) {
       if (isLocationToDestination) {
+        const cleanDestTitle = cleanLandmarkOrPlaceName(destName) || destName
         const corridorBlock = await buildLocationCorridorDayBlocks()
-        responseMessage = `¡Perfecto! Diseñé un tour de 1 día desde tu ubicación hasta **${destName}**, pasando por atractivos en el camino:\n\n${corridorBlock}\n\n¿Qué te parece este recorrido? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
+        responseMessage = `¡Perfecto! Diseñé un tour de 1 día desde tu ubicación hasta **${cleanDestTitle}**, pasando por atractivos en el camino:\n\n${corridorBlock}\n\n¿Qué te parece este recorrido? ¿Deseas hacer algún cambio o procedemos a generar el tour en el mapa?`
         actionChips = ['🗺️ Generar tour en el mapa', 'Modificar paradas', 'Ver detalles']
         parsedExtracted.specificPlaces = known.specificPlaces
         parsedExtracted.tourType = 'location_to_destination'
-        parsedExtracted.destinationPlace = destName
-        parsedExtracted.destination = destName
+        parsedExtracted.destinationPlace = cleanDestTitle
+        parsedExtracted.destination = cleanDestTitle
       } else {
       let placesList = deduplicateChatSpecificPlaces(
         (parsedExtracted.specificPlaces || known.specificPlaces || []),

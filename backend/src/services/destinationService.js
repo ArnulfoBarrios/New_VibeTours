@@ -144,6 +144,16 @@ export function cleanAdministrativeCityName(rawName = '') {
   return cleaned.trim()
 }
 
+export function cleanLandmarkOrPlaceName(rawName = '') {
+  if (!rawName || typeof rawName !== 'string') return ''
+  let cleaned = rawName.trim()
+  if (cleaned.includes(',')) {
+    cleaned = cleaned.split(',')[0].trim()
+  }
+  cleaned = cleaned.replace(/["“”«»]/g, '').replace(/\s+/g, ' ').trim()
+  return cleaned
+}
+
 export const TOUR_TRIP_TYPES = new Set([
   'micro_destination',
   'coastal_islands',

@@ -558,6 +558,19 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         }
         
         final recs = (data['recommendations'] as List).map((e) => AiRecommendation.fromJson(e)).toList();
+        final uniqueRecs = <AiRecommendation>[];
+        for (final r in recs) {
+          final isDupe = uniqueRecs.any((existing) =>
+            (r.id.isNotEmpty && existing.id == r.id) ||
+            existing.name.toLowerCase().trim() == r.name.toLowerCase().trim() ||
+            (existing.latitude != 0.0 &&
+             (existing.latitude - r.latitude).abs() < 0.0001 &&
+             (existing.longitude - r.longitude).abs() < 0.0001)
+          );
+          if (!isDupe) {
+            uniqueRecs.add(r);
+          }
+        }
         final context = data['plannerContext'] as Map<String, dynamic>;
 
         AiTourRequest finalRequest = state.request!;
@@ -577,11 +590,11 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         
         state = state.copyWith(request: finalRequest);
 
-        if (recs.isNotEmpty) {
+        if (uniqueRecs.isNotEmpty) {
           state = state.copyWith(
             isLoading: false, 
             plannerContext: context,
-            recommendations: recs,
+            recommendations: uniqueRecs,
           );
         }
 
@@ -1054,9 +1067,21 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
           s['coordinatesVerified'];
       final isVerified = verifiedRaw == true || verifiedRaw?.toString().toLowerCase() == 'true';
 
+      final rawStopName = (s['nombre'] ?? ubicacion['nombre_lugar'] ?? ubicacion['name'] ?? 'Parada ${entry.key + 1}').toString().trim();
+      final cleanStopName = () {
+        var n = rawStopName;
+        if (n.contains(',')) {
+          n = n.split(',').first.trim();
+        }
+        return n.replaceAll(RegExp(r'["“”«»]'), '').trim();
+      }();
+      final finalName = cleanStopName.isNotEmpty ? cleanStopName : rawStopName;
+      final rawAddr = (ubicacion['direccion'] ?? ubicacion['address'] ?? '').toString();
+      final finalAddr = rawAddr.isNotEmpty ? rawAddr : (rawStopName.contains(',') ? rawStopName : '');
+
       final locInfo = TourLocationInfo(
-        nombreLugar: (ubicacion['nombre_lugar'] ?? ubicacion['name'] ?? s['nombre'] ?? '').toString(),
-        direccion: (ubicacion['direccion'] ?? ubicacion['address'] ?? '').toString(),
+        nombreLugar: finalName,
+        direccion: finalAddr,
         ciudad: (ubicacion['ciudad'] ?? ubicacion['city'] ?? tourData['ciudad'] ?? '').toString(),
         region: (ubicacion['region'] ?? ubicacion['state'] ?? '').toString(),
         pais: (ubicacion['pais'] ?? ubicacion['country'] ?? tourData['pais'] ?? '').toString(),
@@ -1068,7 +1093,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
 
       return TourStop(
         id: 'stop_${entry.key}',
-        name: s['nombre']?.toString() ?? 'Parada ${entry.key + 1}',
+        name: finalName,
         location: GeoPoint(
           latitude: lat,
           longitude: lon,
@@ -1091,7 +1116,19 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
       );
     }).toList();
 
-    stops.addAll(rawStops);
+    final uniqueStops = <TourStop>[];
+    for (final stop in rawStops) {
+      final isDuplicate = uniqueStops.any((existing) =>
+        existing.name.toLowerCase().trim() == stop.name.toLowerCase().trim() ||
+        (existing.location.latitude != 0.0 &&
+         (existing.location.latitude - stop.location.latitude).abs() < 0.0001 &&
+         (existing.location.longitude - stop.location.longitude).abs() < 0.0001)
+      );
+      if (!isDuplicate) {
+        uniqueStops.add(stop);
+      }
+    }
+    stops.addAll(uniqueStops.asMap().entries.map((entry) => entry.value.copyWith(order: entry.key)));
 
     final currentUser = ref.read(authServiceProvider).currentUser;
     final recommendedSchedule = tourData['horario_recomendado']?.toString() ?? '';

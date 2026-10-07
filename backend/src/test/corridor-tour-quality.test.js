@@ -4,7 +4,8 @@ import { isValidTouristAttraction, getPlaceEntityType, buildTourPlanner, collect
 import { isLodgingName, generateChatResponse, extractChatInformationFallback } from '../services/openai.js'
 import { inferStopSubcategory } from '../services/open-tourism-service.js'
 import { imageForPlace } from '../services/imageSearch.js'
-import { computeCorridorProjection, isWithinCorridor } from '../services/osm.js'
+import { computeCorridorProjection, isWithinCorridor, arePlacesSimilar } from '../services/osm.js'
+import { cleanLandmarkOrPlaceName } from '../services/destinationService.js'
 
 describe('Corridor Tour Quality & Fix Verifications', () => {
   it('1. Hotel & Lodging filter should strictly reject commercial hotels', () => {
@@ -519,6 +520,76 @@ describe('Corridor Tour Quality & Fix Verifications', () => {
       assert.ok(p.latitude !== 0 || p.longitude !== 0, `Stop ${p.name} must never have (0, 0) coordinates`)
       assert.ok(Number.isFinite(p.latitude), `Stop ${p.name} must have finite latitude`)
       assert.ok(Number.isFinite(p.longitude), `Stop ${p.name} must have finite longitude`)
+    }
+  })
+
+  it('17. cleanLandmarkOrPlaceName extracts concise landmark titles and arePlacesSimilar recognizes addresses', () => {
+    const rawNominatimAddress = 'Estadio Moderno "Julio Torres", 25, Avenida Calle 30, San Roque, Localidad Suroriente, Perímetro Urbano Barranquilla, Barranquilla, Atlántico, RAP Caribe, 080012, Colombia'
+    const clean = cleanLandmarkOrPlaceName(rawNominatimAddress)
+    assert.equal(clean, 'Estadio Moderno Julio Torres')
+
+    const withQuotes = 'Estadio Moderno "Julio Torres"'
+    assert.equal(cleanLandmarkOrPlaceName(withQuotes), 'Estadio Moderno Julio Torres')
+
+    const withCityComma = 'Gran Malecón del Río, Barranquilla'
+    assert.equal(cleanLandmarkOrPlaceName(withCityComma), 'Gran Malecón del Río')
+
+    assert.equal(cleanLandmarkOrPlaceName('Ventana al Mundo'), 'Ventana al Mundo')
+
+    // arePlacesSimilar matches raw address with clean venue
+    assert.ok(arePlacesSimilar(rawNominatimAddress, 'Estadio Moderno Julio Torres'))
+    assert.ok(arePlacesSimilar('Estadio Moderno Julio Torres', rawNominatimAddress))
+    assert.ok(arePlacesSimilar(rawNominatimAddress, 'Estadio Moderno'))
+  })
+
+  it('18. buildTourPlanner prevents duplicate destination stops when input has raw Nominatim address and specificPlaces has clean name', () => {
+    const rawNominatimAddress = 'Estadio Moderno "Julio Torres", 25, Avenida Calle 30, San Roque, Localidad Suroriente, Perímetro Urbano Barranquilla, Barranquilla, Atlántico, RAP Caribe, 080012, Colombia'
+    const input = {
+      destination: rawNominatimAddress,
+      destinationPlace: rawNominatimAddress,
+      originPlace: 'user_current_location',
+      tourType: 'location_to_destination',
+      isUserLocationOrigin: true,
+      latitude: 10.9254,
+      longitude: -74.7958,
+      durationHours: 8,
+      durationDays: 1,
+      specificPlaces: [
+        { name: 'Ventana al Mundo', latitude: 11.0331, longitude: -74.8314 },
+        { name: 'Gran Malecón del Río', latitude: 11.0180, longitude: -74.7960 },
+        { name: 'Restaurante El Caimán del Río', category: 'restaurant', entityType: 'restaurant', latitude: 11.0180, longitude: -74.7960 },
+        { name: 'Catedral Metropolitana María Reina', latitude: 10.9900, longitude: -74.7800 },
+        { name: 'Estadio Moderno Julio Torres', latitude: 10.9700, longitude: -74.7750 }
+      ]
+    }
+
+    const testPlaces = [
+      { name: 'Ventana al Mundo', latitude: 11.0331, longitude: -74.8314 },
+      { name: 'Gran Malecón del Río', latitude: 11.0180, longitude: -74.7960 },
+      { name: 'Restaurante El Caimán del Río', category: 'restaurant', entityType: 'restaurant', latitude: 11.0180, longitude: -74.7960 },
+      { name: 'Catedral Metropolitana María Reina', latitude: 10.9900, longitude: -74.7800 },
+      { name: 'Estadio Moderno Julio Torres', latitude: 10.9700, longitude: -74.7750 }
+    ]
+
+    const planner = buildTourPlanner(input, { latitude: 10.9254, longitude: -74.7958 }, testPlaces)
+
+    // 1. Must NOT produce 6 stops with duplicate stadium
+    assert.equal(planner.selectedPlaces.length, 5, `Expected exactly 5 stops, got ${planner.selectedPlaces.length}`)
+
+    // 2. Destination must be strictly at the end, and only appear ONCE
+    const stadiumOccurrences = planner.selectedPlaces.filter(p => arePlacesSimilar(p.name, 'Estadio Moderno Julio Torres'))
+    assert.equal(stadiumOccurrences.length, 1, 'Estadio Moderno must appear exactly once in the entire tour')
+
+    // 3. Final stop name must be clean and not bloated with raw address
+    const lastStop = planner.selectedPlaces[planner.selectedPlaces.length - 1]
+    assert.equal(lastStop.name, 'Estadio Moderno Julio Torres')
+    assert.ok(!lastStop.name.includes('San Roque'), 'Stop name must not contain street address details')
+    assert.ok(!lastStop.name.includes('080012'), 'Stop name must not contain postal code')
+
+    // 4. Intermediate stops must not contain the destination
+    const intermediateStops = planner.selectedPlaces.slice(0, 4)
+    for (const stop of intermediateStops) {
+      assert.ok(!arePlacesSimilar(stop.name, 'Estadio Moderno Julio Torres'), `Intermediate stop "${stop.name}" must not be Estadio Moderno`)
     }
   })
 })

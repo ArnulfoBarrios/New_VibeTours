@@ -1305,8 +1305,12 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
               }
               const city = cleanAdministrativeCityName(rawCity)
               const country = address.country || ''
+              const cleanName = (validResult.name || validResult.display_name?.split(',')?.[0] || lookupQuery || '')
+                .replace(/["“”«»]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
               const res = {
-                name: validResult.display_name,
+                name: cleanName || validResult.name || validResult.display_name,
                 latitude: rLat,
                 longitude: rLon,
                 city,
@@ -2265,6 +2269,16 @@ export function arePlacesSimilar(a, b) {
   const normB = clean(strB)
   if (!normA || !normB) return false
   if (normA === normB) return true
+
+  // Handle address strings where the first segment is the actual landmark
+  if (strA.includes(',') || strB.includes(',')) {
+    const firstA = clean(strA.includes(',') ? strA.split(',')[0] : strA)
+    const firstB = clean(strB.includes(',') ? strB.split(',')[0] : strB)
+    if (firstA && firstB) {
+      if (firstA === firstB) return true
+      if (firstA.length >= 6 && firstB.length >= 6 && (firstA.includes(firstB) || firstB.includes(firstA))) return true
+    }
+  }
 
   // Universal connector-insensitive comparison (e.g. "Malecón Cúcuta" vs "Malecón de Cúcuta", "Central Park" vs "The Central Park")
   const stripConnectors = (str) =>
