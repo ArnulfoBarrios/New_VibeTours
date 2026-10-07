@@ -117,6 +117,7 @@ class LocationService {
 class VoiceGuideService {
   VoiceGuideService(this._sqliteService) {
     _initTts();
+    _initAudioListeners();
   }
 
   final SqliteService _sqliteService;
@@ -126,6 +127,7 @@ class VoiceGuideService {
   double _currentMultiplier = 1.06;
   String _selectedOpenAiVoice = 'nova';
   int _speechGeneration = 0;
+  VoidCallback? onPlaybackFinished;
 
   // In-memory cache for synthesized speech MP3 bytes
   static final Map<String, Uint8List> _speechMemoryCache = {};
@@ -142,6 +144,12 @@ class VoiceGuideService {
     }
   }
 
+  void _initAudioListeners() {
+    _audioPlayer.onPlayerComplete.listen((_) {
+      onPlaybackFinished?.call();
+    });
+  }
+
   Future<void> _initTts() async {
     try {
       if (defaultTargetPlatform == TargetPlatform.android) {
@@ -153,6 +161,15 @@ class VoiceGuideService {
     } catch (e) {
       debugPrint('TTS engine setting note: $e');
     }
+    _tts.setCompletionHandler(() {
+      onPlaybackFinished?.call();
+    });
+    _tts.setCancelHandler(() {
+      onPlaybackFinished?.call();
+    });
+    _tts.setErrorHandler((dynamic msg) {
+      onPlaybackFinished?.call();
+    });
     await setLanguage('es');
     await setSpeedMultiplier(1.06);
     await _tts.setPitch(1.05); // Natural young adult female pitch, lively and warm

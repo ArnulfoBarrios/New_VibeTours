@@ -1759,24 +1759,6 @@ class _StopTileState extends State<_StopTile> {
                     ],
                   ),
                 ],
-                if (stop.locationInfo.coordinatesVerified) ...[
-                  const SizedBox(height: 3),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.verified_rounded, size: 12, color: Colors.green.shade600),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Ubicación verificada',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.green.shade700,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),

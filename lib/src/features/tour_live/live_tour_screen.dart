@@ -176,6 +176,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   void _onSelectDay(Tour tour, int day) {
     final targetIndex = tour.stops.indexWhere((s) => s.day == day);
     if (targetIndex != -1) {
+      unawaited(ref.read(voiceGuideProvider).stop());
+      ref.read(liveTourPlaybackProvider.notifier).setPlaying(false);
       setState(() {
         _selectedDay = day;
         _activeStop = targetIndex;
@@ -348,6 +350,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     _micPulseAnimation = Tween<double>(begin: 1.0, end: 1.35).animate(
       CurvedAnimation(parent: _micPulseController, curve: Curves.easeInOut),
     );
+    ref.read(voiceGuideProvider).onPlaybackFinished = () {
+      if (mounted) {
+        ref.read(liveTourPlaybackProvider.notifier).setPlaying(false);
+      }
+    };
   }
 
   void _enrichGenericStops(Tour tour) async {
@@ -889,7 +896,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   void dispose() {
     unawaited(WakelockPlus.disable());
     _positionSubscription?.cancel();
-    unawaited(ref.read(voiceGuideProvider).stop());
+    final voiceGuide = ref.read(voiceGuideProvider);
+    voiceGuide.onPlaybackFinished = null;
+    unawaited(voiceGuide.stop());
     ref.read(liveTourPlaybackProvider.notifier).stopTour();
     _micPulseController.dispose();
     super.dispose();
@@ -1496,12 +1505,15 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       if (mounted) {
         final playback = ref.read(liveTourPlaybackProvider);
         final currentUser = ref.read(authServiceProvider).currentUser;
-        if (playback.tour?.id != tour.id || playback.currentStopIndex != _activeStop) {
+        if (playback.tour?.id != tour.id) {
           ref.read(liveTourPlaybackProvider.notifier).startTour(
                 tour,
                 initialStopIndex: _activeStop,
                 userId: currentUser?.id ?? 'guest',
+                isPlaying: false,
               );
+        } else if (playback.currentStopIndex != _activeStop) {
+          ref.read(liveTourPlaybackProvider.notifier).setCurrentStopIndex(_activeStop);
         }
       }
     });
@@ -2879,24 +2891,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
                             ),
                           ),
-                          if (stop.locationInfo.coordinatesVerified) ...[
-                            const SizedBox(height: 2),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.verified_rounded, size: 11, color: Colors.green.shade600),
-                                const SizedBox(width: 3),
-                                Text(
-                                  'Ubicación verificada',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green.shade700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
                           if (stop.isFallbackImage) ...[
                             const SizedBox(height: 2),
                             Row(
@@ -3016,27 +3010,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                         children: [
                           Icon(Icons.visibility_outlined, size: 12, color: AppTheme.primary),
                           const SizedBox(width: 4),
-                          Text(
-                            'Toca para ver cómo luce',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.primary,
-                            ),
-                          ),
-                          if (stop.locationInfo.coordinatesVerified) ...[
-                            const SizedBox(width: 8),
-                            Icon(Icons.verified_rounded, size: 12, color: Colors.green.shade600),
-                            const SizedBox(width: 3),
-                            Text(
-                              'Ubicación verificada',
+                          Flexible(
+                            child: Text(
+                              'Toca para ver cómo luce',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green.shade700,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primary,
                               ),
                             ),
-                          ],
+                          ),
                         ],
                       ),
                     ],
@@ -3615,6 +3600,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   void _onAdvanceToStop(Tour tour, int nextIndex, int day) {
+    unawaited(ref.read(voiceGuideProvider).stop());
+    ref.read(liveTourPlaybackProvider.notifier).setPlaying(false);
     setState(() {
       _activeStop = nextIndex;
       _selectedDay = day;

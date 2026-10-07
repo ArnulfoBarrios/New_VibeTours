@@ -377,7 +377,7 @@ class _WeatherAlertBanner extends StatelessWidget {
     if (!weather.isRainyOrStormy) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      padding: const EdgeInsets.only(left: 20, right: 20, top: 0, bottom: 16),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(

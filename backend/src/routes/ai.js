@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, getRealDestinationCatalog, isLodgingName, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, fetchOpenAiChatCompletion, hasActiveLlm, getActiveLlmKey, cleanAndParseJson, getRealDestinationCatalog, isLodgingName, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
@@ -8210,9 +8210,7 @@ Devuelve ÚNICAMENTE un JSON válido con este esquema:
 aiRouter.post('/chat/route-assistant', async (req, res, next) => {
   try {
     const { userQuery, latitude, longitude, tourContext } = routeAssistantSchema.parse(req.body)
-    const apiKey = process.env.OPENAI_API_KEY
-
-    if (!apiKey) {
+    if (!hasActiveLlm()) {
       return res.status(503).json({
         isRelatedToTravel: false,
         responseText: 'El asistente de voz no está disponible en este momento.',
@@ -8234,36 +8232,37 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
 
     let aiResult = null
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 15000)
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const payload = buildOpenAiPayload({
+        messages: [
+          { role: 'system', content: ROUTE_ASSISTANT_SYSTEM_PROMPT },
+          { role: 'user', content: userMessage }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+        reasoning_effort: 'low'
+      })
+
+      const response = await fetchOpenAiChatCompletion({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${getActiveLlmKey()}`
         },
-        body: JSON.stringify(buildOpenAiPayload({
-          messages: [
-            { role: 'system', content: ROUTE_ASSISTANT_SYSTEM_PROMPT },
-            { role: 'user', content: userMessage }
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.3,
-          reasoning_effort: 'low'
-        })),
-        signal: controller.signal
-      })
-      clearTimeout(timeout)
+        body: JSON.stringify(payload)
+      }, { attempts: 2, timeoutMs: 15000 })
 
-      if (response.ok) {
+      if (response && response.ok) {
         const json = await response.json()
         const content = json.choices?.[0]?.message?.content
         if (content) {
-          aiResult = JSON.parse(content)
+          aiResult = cleanAndParseJson(content, null)
         }
+      } else if (response) {
+        const errBody = await response.text().catch(() => '')
+        console.warn(`[route-assistant] LLM HTTP ${response.status} error:`, errBody)
       }
     } catch (err) {
-      console.warn('[route-assistant] OpenAI call error:', err.message)
+      console.warn('[route-assistant] LLM call error:', err.message)
     }
 
     if (!aiResult) {

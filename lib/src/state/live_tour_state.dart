@@ -43,12 +43,12 @@ class LiveTourPlaybackState {
 class LiveTourPlaybackNotifier extends StateNotifier<LiveTourPlaybackState> {
   LiveTourPlaybackNotifier() : super(const LiveTourPlaybackState());
 
-  void startTour(Tour tour, {int initialStopIndex = 0, String? userId}) {
+  void startTour(Tour tour, {int initialStopIndex = 0, String? userId, bool isPlaying = false}) {
     state = LiveTourPlaybackState(
       tour: tour,
       userId: userId,
       currentStopIndex: initialStopIndex,
-      isPlaying: true,
+      isPlaying: isPlaying,
       isLiveActive: true,
     );
   }
