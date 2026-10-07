@@ -1349,7 +1349,7 @@ export async function discoverProviderFallbackCandidates({ destination, country,
 
 export function isMalformedItinerary(text) {
   if (!text || typeof text !== 'string') return false
-  return (
+  if (
     /(?:D[íi]a\s*\d+:[^\n]*\n(?:\s*•\s*(?:Restaurante|Gastronom[íi]a|Caf[ée]|Bar)[^\n]*\n){2,})/i.test(text) ||
     /\b(?:Nordest[aã]o|Cal\s+Bandarra|Vers[aá]\s+Gastronomia|Albertu's)\b/i.test(text) ||
     /\bPlaza\s+(?:descanso(?:\s*\d+)?|hospital)\b/i.test(text) ||
@@ -1362,7 +1362,41 @@ export function isMalformedItinerary(text) {
     /\bRestaurante\s+El\s+Gran\s+Pez\b/i.test(text) ||
     /\bRestaurante\s+Sabores\s+del\s+Mar\b/i.test(text) ||
     /\bRestaurante\s+La\s+Iguana\b/i.test(text)
-  )
+  ) {
+    return true
+  }
+
+  // Detect empty or incomplete days in multi-day itineraries
+  const dayHeaderMatches = [...text.matchAll(/(?:^|\n)\s*(?:#{1,4}\s*)?D[íi]a\s*(\d+)\b[^\n]*/gi)]
+  if (dayHeaderMatches.length >= 2) {
+    // 1. Two consecutive day headers with no stops in between
+    if (/(?:D[íi]a\s*\d+:[^\n]*\s*(?:\r?\n\s*)+(?:#{1,4}\s*)?D[íi]a\s*\d+[:\s\-–])/i.test(text)) {
+      return true
+    }
+
+    // 2. Any day header that has zero bullet points or activities before the next day header or end of itinerary
+    for (let i = 0; i < dayHeaderMatches.length; i++) {
+      const startIdx = dayHeaderMatches[i].index + dayHeaderMatches[i][0].length
+      const endIdx = (i + 1 < dayHeaderMatches.length)
+        ? dayHeaderMatches[i + 1].index
+        : text.length
+      const daySlice = text.slice(startIdx, endIdx)
+      const hasBullet = /[•\-\*]\s+[^\n]+/i.test(daySlice)
+      const hasNumberedStop = /(?:^|\n)\s*\d+[\.\)]\s+[^\n]+/i.test(daySlice)
+      const hasTimeLabel = /\b(?:mañana|mediod[íi]a|almuerzo|tarde|noche|\d{1,2}:\d{2})\s*:/i.test(daySlice)
+      if (!hasBullet && !hasNumberedStop && !hasTimeLabel) {
+        return true
+      }
+    }
+
+    // 3. Insufficient stops count across multi-day tour (less than 1.5 stops per day on average)
+    const totalBullets = (text.match(/(?:^|\n)\s*[•\-\*]\s+[^\n]+/g) || []).length
+    if (totalBullets < Math.max(2, dayHeaderMatches.length * 1.5)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 
@@ -2470,7 +2504,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     const cached = destinationCatalogCache.get(cacheKey)
     const minRequiredPlaces = Math.max(14, reqDays * 2)
     const minRequiredRests = Math.max(8, reqDays)
-    if (cached && (reqDays < 8 || ((cached.places?.length || 0) >= minRequiredPlaces && (cached.restaurants?.length || 0) >= minRequiredRests))) {
+    if (cached && ((cached.places?.length || 0) >= minRequiredPlaces && (cached.restaurants?.length || 0) >= minRequiredRests)) {
       realCatalog = cached
     } else {
       const isExplicitItineraryRequest = /\b(itinerario|itinerarios|plan de viaje|cómo va el itinerario|mostrar el itinerario|muéstrame el itinerario|ver el itinerario|detalles del d[íi]a|ver d[íi]a|d[íi]a\s*\d+)\b/i.test(lastUserMsg)
@@ -2478,11 +2512,27 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       const isExplicitRestaurantInquiry = /\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|carta|platos)\b/i.test(lastUserMsg)
       const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(lastUserMsg)
       const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(lastUserMsg)
-      const needsImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitRestaurantInquiry || isExplicitAttractionInquiry || isExplicitBuildRequest || Boolean(known?.readyToBuild)
+      const preReqCheck = evaluateTourRequirements(known, null)
+      const isCompleteOrReadyToPresent = preReqCheck.isComplete || Boolean(
+        hasCity &&
+        (Boolean(known.durationDays || known.datesSeason)) &&
+        preReqCheck.hasLodging &&
+        preReqCheck.hasTransport &&
+        preReqCheck.hasBudget
+      )
+      const needsImmediate = isExplicitItineraryRequest ||
+        isExplicitHotelInquiry ||
+        isExplicitRestaurantInquiry ||
+        isExplicitAttractionInquiry ||
+        isExplicitBuildRequest ||
+        isCompleteOrReadyToPresent ||
+        Boolean(known?.readyToBuild)
 
       if (needsImmediate) {
         const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
-        if (cachedCatalog && (cachedCatalog.places?.length > 0 || cachedCatalog.restaurants?.length > 0 || cachedCatalog.hotels?.length > 0)) {
+        const hasSufficientPlaces = (cachedCatalog?.places?.length || 0) >= Math.min(6, minRequiredPlaces)
+        const hasSufficientRests = (cachedCatalog?.restaurants?.length || 0) >= Math.min(3, minRequiredRests)
+        if (cachedCatalog && hasSufficientPlaces && hasSufficientRests) {
           realCatalog = cachedCatalog
         } else {
           realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: reqDays })
@@ -2490,6 +2540,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
               console.warn('[generateChatResponse] Catalog lookup error:', err.message)
               return { places: [], restaurants: [], hotels: [] }
             })
+          if (cachedCatalog?.places?.length > 0 && (!realCatalog.places || realCatalog.places.length === 0)) {
+            realCatalog.places = cachedCatalog.places
+          }
         }
       } else {
         // En turnos conversacionales simples (acompañantes, presupuesto, transporte, fechas),
@@ -4043,7 +4096,11 @@ REGLAS PARA "accommodationStatus":
       (finalHasTransport || finalHasBudget)
     )
 
-    const itineraryMalformed = (hasDayHeaders || mentionsPresentingItinerary) && isMalformedItinerary(responseMessage)
+    const expectedDaysCount = Number(parsedExtracted.durationDays || known.durationDays || (/\b(semanita|una semana|7 d[íi]as|carnaval)\b/i.test(`${known.datesSeason || ''} ${lastUserMsg}`) ? 7 : (known.datesSeason?.includes('puente') ? 3 : 0)))
+    const emittedDayHeaders = (responseMessage.match(/(?:^|\n)\s*(?:#{1,4}\s*)?D[íi]a\s*\d+\b/gi) || []).length
+    const hasMissingDays = expectedDaysCount >= 2 && emittedDayHeaders > 0 && emittedDayHeaders < expectedDaysCount
+
+    const itineraryMalformed = ((hasDayHeaders || mentionsPresentingItinerary) && isMalformedItinerary(responseMessage)) || hasMissingDays
     const isDetailInquiry = /\b(ver detalles|detalles|detalles del d[íi]a|c[oó]mo es el itinerario|ver itinerario|itinerario detallado|mostrar detalles)\b/i.test(lastUserMsg)
 
     const shouldReconstructItinerary = !isUserExplicitlyOrderingBuild && (
@@ -4482,7 +4539,7 @@ REGLAS PARA "accommodationStatus":
         })
       }
 
-      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [] }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction', entityType: s.entityType || (s.entityType === 'restaurant' ? 'restaurant' : 'attraction'), isRestaurant: s.entityType === 'restaurant' || s.isRestaurant === true, ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))) }
+      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [] }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction', entityType: s.entityType || (s.entityType === 'restaurant' ? 'restaurant' : 'attraction'), isRestaurant: s.entityType === 'restaurant' || s.isRestaurant === true, ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))); known.specificPlaces = parsedExtracted.specificPlaces }
       reconstructed += isUserAskingForMoreStops
         ? '¿Deseas confirmar este itinerario ampliado y generar tu tour en el mapa?'
         : '¿Deseas confirmar este itinerario y generar tu tour en el mapa?'
@@ -4971,7 +5028,7 @@ export function extractRequestedSpecificPlaces(prompt) {
   }
 
   // C. Single / Standard place addition (supports modal intentions, conditionals, and iterative scanning)
-  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar|quiero\s+visitar|quiero\s+ir\s+a|quiero\s+conocer|quiero\s+ver|quisiera\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|(?:me|nos)\s+gustar[íi]a\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|queremos\s+(?:ver|conocer|visitar|ir\s+a|pasar\s+por|recorrer)|deseo\s+(?:ver|conocer|visitar|ir\s+a)|deseamos\s+(?:ver|conocer|visitar|ir\s+a)|cambiar\s+(?:por|a)|cambia\s+(?:por|a)|cambio\s+por|conocer|vamos\s+a|adiciona|adicionar|si\s+me\s+puedo\s+ir\s+a|puedo\s+ir\s+a|irme\s+a|ir\s+a|pasar\s+por|conociendo|descubrir|(?:uno\s+de\s+los\s+lugares|un\s+lugar)\s+(?:a\s+los\s+que\s+quiero\s+ir|al\s+que\s+quiero\s+ir|que\s+quiero\s+(?:visitar|conocer|ver))\s+es(?:\s+(?:el|la))?)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;\n])/gi
+  const addPlaceRegex = /\b(?:agrega|agregar|a[ñn]ade|a[ñn]adir|incluye|incluir|visita|visitar(?:\s+(?:el|la|los|las|al))?|quiero\s+visitar(?:\s+(?:el|la|los|las|al))?|quiero\s+ir\s+(?:al|a\s+la|a\s+el|a)|quiero\s+conocer(?:\s+(?:el|la|los|las|al))?|quiero\s+ver(?:\s+(?:el|la|los|las|al))?|quisiera\s+(?:ver|conocer|visitar|ir\s+(?:al|a\s+la|a\s+el|a)|pasar\s+por|recorrer)|(?:me|nos)\s+gustar[íi]a\s+(?:ver|conocer|visitar|ir\s+(?:al|a\s+la|a\s+el|a)|pasar\s+por|recorrer)|queremos\s+(?:ver|conocer|visitar|ir\s+(?:al|a\s+la|a\s+el|a)|pasar\s+por|recorrer)|deseo\s+(?:ver|conocer|visitar|ir\s+(?:al|a\s+la|a\s+el|a))|deseamos\s+(?:ver|conocer|visitar|ir\s+(?:al|a\s+la|a\s+el|a))|cambiar\s+(?:por|a)|cambia\s+(?:por|a)|cambio\s+por|conocer(?:\s+(?:el|la|los|las|al))?|vamos\s+(?:al|a\s+la|a\s+el|a)|adiciona|adicionar|si\s+me\s+puedo\s+ir\s+(?:al|a\s+la|a\s+el|a)|puedo\s+ir\s+(?:al|a\s+la|a\s+el|a)|irme\s+(?:al|a\s+la|a\s+el|a)|ir\s+(?:al|a\s+la|a\s+el|a)|pasar\s+por|conociendo|descubrir|(?:uno\s+de\s+los\s+lugares|un\s+lugar)\s+(?:a\s+los\s+que\s+quiero\s+ir|al\s+que\s+quiero\s+ir|que\s+quiero\s+(?:visitar|conocer|ver))\s+es(?:\s+(?:el|la))?)\s+([A-ZÁÉÍÓÚa-záéíóúñ0-9\s'-]{3,50}?)(?:\s+(?:el\s+d[íi]a|para\s+el\s+d[íi]a|en\s+el\s+d[íi]a|d[íi]a)\s*(\d+)|$|[.,;\n])/gi
   let placeMatch
   while ((placeMatch = addPlaceRegex.exec(normalizedText)) !== null) {
     const rawPlaceName = placeMatch[1].trim()
@@ -5291,7 +5348,7 @@ export function extractChatInformationFallback(prompt) {
   } else if (isNegatedOrAskingLodging || /\b(recomi[eé]ndame hoteles|hoteles|opciones de hotel|buscar hotel|sin hotel|no tengo hotel|no tenemos hotel|dame recomendaciones)\b/i.test(text)) {
     delete res.selectedHotel
     res.accommodationStatus = 'Recomiéndame hoteles'
-  } else if (/\b(casa propia|mi casa|casa familiar|tengo hospedaje|tengo hotel|ya tengo hotel|tengo donde quedarme)\b/i.test(text)) {
+  } else if (/\b(?:casa propia|mi casa|casa familiar|(?:ya\s+)?(?:tengo|tenemos|cuento con|contamos con)\s+(?:alojamiento|hospedaje|hotel|estancia|donde quedarnos?|donde hospedarme)|tengo donde quedarme)\b/i.test(text)) {
     res.selectedHotel = 'Casa propia / familiar'
     res.accommodationStatus = 'Casa propia / familiar'
   } else if (!isNegatedOrAskingLodging && /\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar)\b/i.test(text)) {
