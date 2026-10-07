@@ -3166,23 +3166,36 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           `¿Tienes ya alguna opción reservada con nombre propio o prefieres que tomemos una de estas como base para tu recorrido?`
       } else if (hasCity && /\b(ver detalles|detalles|detalles del d[íi]a\s*(\d+)|ver detalles del d[íi]a\s*(\d+)|ver d[íi]a\s*(\d+)|d[íi]a\s*(\d+))\b/i.test(lastUserMsg)) {
         if (isLocationToDestination) {
-          if (!Array.isArray(known.specificPlaces) || known.specificPlaces.length === 0) {
+          if (!Array.isArray(known.specificPlaces) || known.specificPlaces.length < 3) {
             await buildLocationCorridorDayBlocks()
           }
-          const stops = known.specificPlaces || []
+          let stops = [...(known.specificPlaces || [])]
+          if (destName && stops.length >= 2) {
+            const destIdx = stops.findIndex(s => {
+              const sName = typeof s === 'string' ? s : (s?.name || '')
+              return arePlacesSimilar(sName, destName)
+            })
+            if (destIdx !== -1 && destIdx !== stops.length - 1) {
+              const [destItem] = stops.splice(destIdx, 1)
+              stops.push(destItem)
+            } else if (destIdx === -1) {
+              stops.push({ name: destName, dia: 1, day: 1, category: 'attraction', entityType: 'attraction' })
+            }
+          }
+          known.specificPlaces = stops
           const timeLabels = [
-            '🌅 **09:00 AM - Mañana**',
-            '🏛️ **10:45 AM - Media Mañana**',
-            '🍽️ **12:30 PM - Almuerzo**',
-            '🌇 **02:45 PM - Tarde**',
-            '🏁 **04:30 PM - Llegada / Cierre**'
+            '🌅 09:00 AM - Mañana',
+            '🏛️ 10:45 AM - Media Mañana',
+            '🍽️ 12:30 PM - Almuerzo',
+            '🌇 02:45 PM - Tarde',
+            '🏁 04:30 PM - Llegada a destino'
           ]
           const detailLines = stops.map((s, idx) => {
             const name = typeof s === 'string' ? s : s.name
-            const label = timeLabels[idx] || `• **Parada ${idx + 1}**`
+            const label = timeLabels[idx] || `Parada ${idx + 1}`
             const isRest = s?.entityType === 'restaurant' || s?.category === 'restaurant' || s?.type === 'food'
             const verb = idx === stops.length - 1 ? 'Llegada a' : (isRest ? 'Almuerzo en' : 'Visita a')
-            return `• ${label}: ${verb} ${name}`
+            return `• ${label}: ${verb} **${name}**`
           })
           fallbackMsg = `Aquí tienes el itinerario detallado de tu recorrido desde tu ubicación actual hasta **${destName}**:\n\nDía 1: En ruta hacia ${destName}\n\n` +
             `${detailLines.join('\n')}\n\n` +
@@ -4041,29 +4054,42 @@ REGLAS PARA "accommodationStatus":
     )
 
     if (isLocationToDestination && isDetailInquiry) {
-      if (!Array.isArray(known.specificPlaces) || known.specificPlaces.length === 0) {
+      if (!Array.isArray(known.specificPlaces) || known.specificPlaces.length < 3) {
         await buildLocationCorridorDayBlocks()
       }
-      const stops = known.specificPlaces || []
+      let stops = [...(known.specificPlaces || [])]
+      if (destName && stops.length >= 2) {
+        const destIdx = stops.findIndex(s => {
+          const sName = typeof s === 'string' ? s : (s?.name || '')
+          return arePlacesSimilar(sName, destName)
+        })
+        if (destIdx !== -1 && destIdx !== stops.length - 1) {
+          const [destItem] = stops.splice(destIdx, 1)
+          stops.push(destItem)
+        } else if (destIdx === -1) {
+          stops.push({ name: destName, dia: 1, day: 1, category: 'attraction', entityType: 'attraction' })
+        }
+      }
+      known.specificPlaces = stops
       const timeLabels = [
-        '🌅 **09:00 AM - Mañana**',
-        '🏛️ **10:45 AM - Media Mañana**',
-        '🍽️ **12:30 PM - Almuerzo**',
-        '🌇 **02:45 PM - Tarde**',
-        '🏁 **04:30 PM - Llegada / Cierre**'
+        '🌅 09:00 AM - Mañana',
+        '🏛️ 10:45 AM - Media Mañana',
+        '🍽️ 12:30 PM - Almuerzo',
+        '🌇 02:45 PM - Tarde',
+        '🏁 04:30 PM - Llegada a destino'
       ]
       const detailLines = stops.map((s, idx) => {
         const name = typeof s === 'string' ? s : s.name
-        const label = timeLabels[idx] || `• **Parada ${idx + 1}**`
+        const label = timeLabels[idx] || `Parada ${idx + 1}`
         const isRest = s?.entityType === 'restaurant' || s?.category === 'restaurant' || s?.type === 'food'
         const verb = idx === stops.length - 1 ? 'Llegada a' : (isRest ? 'Almuerzo en' : 'Visita a')
-        return `• ${label}: ${verb} ${name}`
+        return `• ${label}: ${verb} **${name}**`
       })
       responseMessage = `Aquí tienes el itinerario detallado de tu recorrido desde tu ubicación actual hasta **${destName}**:\n\nDía 1: En ruta hacia ${destName}\n\n` +
         `${detailLines.join('\n')}\n\n` +
         `¿Deseas confirmar este recorrido y generar el tour en el mapa?`
       actionChips = ['🗺️ Generar tour en el mapa', 'Modificar paradas']
-      parsedExtracted.specificPlaces = known.specificPlaces
+      parsedExtracted.specificPlaces = stops
       parsedExtracted.tourType = 'location_to_destination'
       parsedExtracted.destinationPlace = destName
       parsedExtracted.destination = destName

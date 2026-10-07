@@ -349,37 +349,54 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
 
             final numDays = (updatedPreferences['durationDays'] as num?)?.toDouble() ?? 1.0;
             final durHours = (updatedPreferences['durationHours'] as num?)?.toDouble() ?? (numDays >= 2 ? numDays * 24 : 8.0);
+            String sanitizePlaceName(String raw) {
+              var s = raw.trim();
+              s = s.replaceAll(RegExp(r'^(?:•|\-|\*|\d+[\.\)])\s*'), '');
+              s = s.replaceAll(RegExp(r'^(?:[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE0E}\u{FE0F}\u{200D}]\s*)+', unicode: true), '');
+              s = s.replaceAll(RegExp(r'^(?:\d{1,2}:\d{2}\s*(?:AM|PM)?\s*[-–—]?\s*)?(?:(?:media\s+)?mañana|almuerzo|tarde|noche|llegada(?:\s*a\s*destino|\s*\/\s*cierre)?|cierre|parada\s*\d+)[\s:—–-]*', caseSensitive: false), '');
+              s = s.replaceAll(RegExp(r'^(?:visita\s+(?:a\s+la|al?|a)?|recorrido\s+(?:por\s+el?|por)?|almuerzo\s+en|llegada\s+(?:a\s+la|al?|a)?)\s*', caseSensitive: false), '');
+              s = s.replaceAll(RegExp(r'[*_#]'), '').trim();
+              return s;
+            }
+
+            bool isPureStage(String s) {
+              final lower = s.toLowerCase().trim();
+              return RegExp(r'^(?:\d{1,2}:\d{2}\s*(?:am|pm)?\s*[-–—]?\s*)?(?:media\s+mañana|mañana|almuerzo|tarde|noche|llegada|cierre|parada\s+\d+)$', caseSensitive: false).hasMatch(lower);
+            }
+
             final rawSpecPlaces = updatedPreferences['specificPlaces'] as List? ?? [];
             final specPlaces = rawSpecPlaces.map((e) {
               if (e is Map) {
                 final m = Map<String, dynamic>.from(e);
-                final name = (m['name'] ?? '').toString().trim();
+                final rawName = (m['name'] ?? '').toString().trim();
+                final cleanName = sanitizePlaceName(rawName);
+                if (cleanName.isEmpty || isPureStage(cleanName)) return null;
+                m['name'] = cleanName;
                 final dia = m['dia'] ?? m['day'];
-                if (name.isNotEmpty && dia != null) {
-                  m['name'] = name;
+                if (dia != null) {
                   m['dia'] = dia;
                   m['day'] = dia;
-                  return m;
                 }
-                if (name.isNotEmpty) {
-                  m['name'] = name;
-                  return m;
-                }
-                return e;
+                return m;
               }
               final str = e.toString().trim();
               if (str.startsWith('{') && str.contains('name:')) {
                 final mName = RegExp(r'name\s*:\s*([^,\}]+)').firstMatch(str);
                 final mDia = RegExp(r'(?:dia|day)\s*:\s*(\d+)').firstMatch(str);
                 final name = mName?.group(1)?.trim() ?? '';
+                final cleanName = sanitizePlaceName(name);
+                if (cleanName.isEmpty || isPureStage(cleanName)) return null;
                 final dia = mDia != null ? int.tryParse(mDia.group(1)!) : null;
-                if (name.isNotEmpty && dia != null) {
-                  return {'name': name, 'dia': dia, 'day': dia};
+                if (dia != null) {
+                  return {'name': cleanName, 'dia': dia, 'day': dia};
                 }
-                if (name.isNotEmpty) return name;
+                return cleanName;
               }
-              return str;
+              final cleanStr = sanitizePlaceName(str);
+              if (cleanStr.isEmpty || isPureStage(cleanStr)) return null;
+              return cleanStr;
             }).where((item) {
+              if (item == null) return false;
               if (item is Map) return (item['name'] as String? ?? '').isNotEmpty;
               return (item as String).isNotEmpty;
             }).toList();
@@ -1018,12 +1035,16 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
     final rawStops = (tourData['itinerario'] as List).asMap().entries.map((entry) {
       final s = entry.value is Map ? (entry.value as Map) : <String, dynamic>{};
       final ubicacion = s['ubicacion'] is Map ? (s['ubicacion'] as Map) : <String, dynamic>{};
-      final lat = (ubicacion['latitud'] as num?)?.toDouble() ??
+      var lat = (ubicacion['latitud'] as num?)?.toDouble() ??
           (ubicacion['latitude'] as num?)?.toDouble() ??
           0.0;
-      final lon = (ubicacion['longitud'] as num?)?.toDouble() ??
+      var lon = (ubicacion['longitud'] as num?)?.toDouble() ??
           (ubicacion['longitude'] as num?)?.toDouble() ??
           0.0;
+      if (lat == 0.0 && lon == 0.0 && state.request != null) {
+        lat = state.request!.latitude ?? 0.0;
+        lon = state.request!.longitude ?? 0.0;
+      }
       final images = s['imagenes'] is List ? (s['imagenes'] as List) : [];
       final firstImage = images.isNotEmpty ? images.first.toString() : '';
       final verifiedRaw = ubicacion['coordenadas_verificadas'] ??

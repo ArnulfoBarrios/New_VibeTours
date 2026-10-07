@@ -460,6 +460,12 @@ export function isValidSpecificPlace(placeName) {
   const isCityOnly = /^(?:a\s+|en\s+|hacia\s+|por\s+|desde\s+)?(cartagena|barranquilla|medell[íi]n|bogot[áa]|santa marta|canc[úu]n|miami|roma|madrid|barcelona|par[íi]s|toledo|cusco|orlando|nueva york|new york|cali|colombia|magdalena|bol[íi]var|antioquia|distrito tur[íi]stico|distrito)$/i.test(cleanLower)
   if (isCityOnly) return false
 
+  // 8. Descartar horarios, etapas temporales del día y etiquetas de parada aisladas
+  if (/\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/i.test(cleanLower) ||
+      /^(\d{1,2}:\d{2}\s*(?:am|pm)?\s*[-–—]?\s*)?(?:media\s+mañana|mañana|almuerzo|tarde|noche|llegada\s*\/\s*cierre|cierre|llegada\s+a\s+destino|parada\s+\d+)$/i.test(cleanLower)) {
+    return false
+  }
+
   return true
 }
 
@@ -471,7 +477,24 @@ export function extractPoisFromText(text) {
 
   function cleanAndAddCandidate(rawCandidate, day) {
     if (!rawCandidate || typeof rawCandidate !== 'string') return
-    let raw = rawCandidate.trim()
+    let raw = rawCandidate
+      .replace(/^(?:•|\-|\*|\d+[\.\)])\s*/, '')
+      .replace(/^[\p{Extended_Pictographic}\uFE0E\uFE0F\u200D\s]+/u, '')
+      .trim()
+
+    // 0. Descartar si es exclusivamente una etiqueta de horario o etapa del día
+    const isPureStageOrTime = /\b\d{1,2}:\d{2}\s*(?:AM|PM)?\b/i.test(raw) ||
+      /^(\d{1,2}:\d{2}\s*(?:am|pm)?\s*[-–—]?\s*)?(?:media\s+mañana|mañana|almuerzo|tarde|noche|llegada\s*\/\s*cierre|cierre|parada\s+\d+)$/i.test(raw)
+    if (isPureStageOrTime) {
+      const colonIdx = raw.indexOf(':')
+      if (colonIdx !== -1) {
+        const afterColon = raw.slice(colonIdx + 1).trim()
+        if (afterColon) {
+          cleanAndAddCandidate(afterColon, day)
+        }
+      }
+      return
+    }
 
     // 1. Extraer recomendaciones específicas de restaurantes/lugares dentro de paréntesis
     // ej: "Cena en un restaurante local (recomiendo Restaurante El Celler para disfrutar de comida típica)"
@@ -539,30 +562,42 @@ export function extractPoisFromText(text) {
       continue
     }
 
+    // CRITICAL: Únicamente procesar líneas con viñetas (•, -, *), numeradas (1., 2.) o con flechas (->)
+    // Nunca extraer negritas de oraciones conversacionales o de saludo (ej. "Diseñé un tour hasta **Destino**...")
+    const isBulletOrNumbered = /^(?:•|\-|\*|\d+[\.\)])/.test(line)
+    const hasSequenceArrow = /->|—|–|>/.test(line)
+    if (!isBulletOrNumbered && !hasSequenceArrow) {
+      continue
+    }
+
     // 1. Extraer elementos separados por flechas (-> o —) en la línea
-    if (/->|—|–|>/.test(line)) {
+    if (hasSequenceArrow) {
       const content = line.replace(/^(?:•|\-|\*|\d+[\.\)])?\s*D[íi]a\s*\d+\s*:\s*/i, '')
       const parts = content.split(/->|—|–|>/)
       for (const part of parts) {
         cleanAndAddCandidate(part, currentDay)
       }
     } else {
+      // Limpiar viñeta y prefijos de horario/etapa
+      let content = line.replace(/^(?:•|\-|\*|\d+[\.\)])\s*/, '')
+      content = content.replace(/^[\p{Extended_Pictographic}\uFE0E\uFE0F\u200D\s]+/u, '')
+      content = content.replace(/^(?:(?:\*\*)?\d{1,2}:\d{2}\s*(?:AM|PM)?\s*[-–—]?\s*(?:[^\n:*]{2,30})?(?:\*\*)?\s*[:—\-]\s*)/i, '')
+
       // 2. Extraer negritas específicas si las hay (**Nombre**)
       const boldRegex = /\*\*([^*\n]{3,60})\*\*/g
       let bm
       let foundBold = false
-      while ((bm = boldRegex.exec(line)) !== null) {
-        cleanAndAddCandidate(bm[1], currentDay)
-        foundBold = true
+      while ((bm = boldRegex.exec(content)) !== null) {
+        const boldCand = bm[1].replace(ACTION_PREFIX_REGEX, '').trim()
+        if (isValidSpecificPlace(boldCand)) {
+          cleanAndAddCandidate(boldCand, currentDay)
+          foundBold = true
+        }
       }
 
-      // 3. Extraer ítems numerados o con viñetas estándar si no hubo flechas ni negritas
+      // 3. Extraer contenido limpio de la viñeta si no hubo negritas
       if (!foundBold) {
-        const regex = /^(?:\d+[\.\)]|[•\-\*])\s*(?:(?:🌅|🍽️|🌇|🌙|🌟)?\s*(?:Mañana|Almuerzo|Tarde|Noche|Cena|Visita al?|Recorrido por|Paseo en|Explora(?:r)?|Actividad|Gastronom[íi]a|Check-in|Check-out|Check|Llegada|Salida|Despedida)(?:\s+\d+)?\s*[:—\-]\s*)?\*{0,2}([^:\n\.\(\—]{3,60})\*{0,2}\s*[:—\-]?/i
-        const m = line.match(regex)
-        if (m) {
-          cleanAndAddCandidate(m[1], currentDay)
-        }
+        cleanAndAddCandidate(content, currentDay)
       }
     }
   }
@@ -1343,7 +1378,11 @@ aiRouter.post('/chat', async (req, res, next) => {
           }
         })
 
-        extractedFromMsg.push(...enrichedPois)
+        if (isLocationRoute && aiSpecifics.length >= 3) {
+          extractedFromMsg.push(...aiSpecifics)
+        } else {
+          extractedFromMsg.push(...enrichedPois)
+        }
       } else {
         // Extraer lugares estructurados devueltos por OpenAI si están disponibles
         if (Array.isArray(aiResponse.extractedPreferences?.specificPlaces) && aiResponse.extractedPreferences.specificPlaces.length > 0) {
@@ -1459,6 +1498,19 @@ aiRouter.post('/chat', async (req, res, next) => {
           updatedPreferences.country || '',
           updatedPreferences.selectedHotel || null
         )
+      }
+      if (isLocationRoute && validatedSpecifics.length >= 2) {
+        const destName = updatedPreferences.destinationPlace || updatedPreferences.destination || ''
+        if (destName) {
+          const destIdx = validatedSpecifics.findIndex(p => {
+            const pName = typeof p === 'object' ? (p.name || '') : String(p)
+            return arePlacesSimilar(pName, destName)
+          })
+          if (destIdx !== -1 && destIdx !== validatedSpecifics.length - 1) {
+            const [destItem] = validatedSpecifics.splice(destIdx, 1)
+            validatedSpecifics.push(destItem)
+          }
+        }
       }
       if (validatedSpecifics.length > 0) {
         updatedPreferences.specificPlaces = validatedSpecifics
@@ -3745,8 +3797,25 @@ export function buildTourPlanner(input, location = null, places = []) {
 
 function normalizeCandidate(place, index, input, origin) {
   const name = place.name?.toString().trim() || `${input.destination} parada ${index + 1}`
-  const latitude = Number(place.latitude ?? 0)
-  const longitude = Number(place.longitude ?? 0)
+  let latitude = Number(place.latitude)
+  let longitude = Number(place.longitude)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || (latitude === 0 && longitude === 0)) {
+    const infoLat = Number(place.locationInfo?.latitud ?? place.locationInfo?.latitude)
+    const infoLon = Number(place.locationInfo?.longitud ?? place.locationInfo?.longitude)
+    if (Number.isFinite(infoLat) && Number.isFinite(infoLon) && !(infoLat === 0 && infoLon === 0)) {
+      latitude = infoLat
+      longitude = infoLon
+    } else if (origin && Number.isFinite(origin.latitude) && Number.isFinite(origin.longitude) && !(origin.latitude === 0 && origin.longitude === 0)) {
+      latitude = origin.latitude
+      longitude = origin.longitude
+    } else if (input && Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude)) && !(Number(input.latitude) === 0 && Number(input.longitude) === 0)) {
+      latitude = Number(input.latitude)
+      longitude = Number(input.longitude)
+    } else {
+      latitude = 0
+      longitude = 0
+    }
+  }
   const distanceMeters = origin ? haversineMeters(origin.latitude, origin.longitude, latitude, longitude) : 0
   const category = normalizeCategory(place)
   const broadGroup = groupForCategory(category, input.type)

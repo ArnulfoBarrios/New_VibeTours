@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { isValidTouristAttraction, getPlaceEntityType, buildTourPlanner, collectCorridorCandidates, orderPlacesAlongRoute } from '../routes/ai.js'
+import { isValidTouristAttraction, getPlaceEntityType, buildTourPlanner, collectCorridorCandidates, orderPlacesAlongRoute, extractPoisFromText } from '../routes/ai.js'
 import { isLodgingName, generateChatResponse, extractChatInformationFallback } from '../services/openai.js'
 import { inferStopSubcategory } from '../services/open-tourism-service.js'
 import { imageForPlace } from '../services/imageSearch.js'
@@ -444,6 +444,82 @@ describe('Corridor Tour Quality & Fix Verifications', () => {
     assert.equal(ordered[2].name, 'Midday Restaurant', 'Restaurant should be in the middle')
     assert.equal(ordered[3].name, 'Mid-North Attraction', 'Fourth stop should precede arrival')
     assert.equal(ordered[4].name, 'Target Destination', 'Target destination should be final stop')
+  })
+
+  it('15. extractPoisFromText on Ver detalles messages extracts genuine venues, never timetable labels, and preserves destination last', () => {
+    const detailMsg = 'Aquí tienes el itinerario detallado de tu recorrido desde tu ubicación actual hasta **Estadio Moderno Julio Torres**:\n\n' +
+      'Día 1: En ruta hacia Estadio Moderno Julio Torres\n\n' +
+      '• 🌅 09:00 AM - Mañana: Visita a **Ventana al Mundo**\n' +
+      '• 🏛️ 10:45 AM - Media Mañana: Visita a **Caimán del Río**\n' +
+      '• 🍽️ 12:30 PM - Almuerzo: Almuerzo en **Restaurante El Pulpo**\n' +
+      '• 🌇 02:45 PM - Tarde: Visita a **Museo del Carnaval**\n' +
+      '• 🏁 04:30 PM - Llegada a destino: **Estadio Moderno Julio Torres**\n\n' +
+      '¿Deseas confirmar este recorrido y generar el tour en el mapa?'
+
+    const pois = extractPoisFromText(detailMsg)
+    assert.equal(pois.length, 5, `Expected exactly 5 stops, got ${pois.length}`)
+
+    // 1. No timetable label strings like "Media Mañana", "Almuerzo", "Tarde", "09:00 AM"
+    for (const p of pois) {
+      const name = typeof p === 'object' ? p.name : p
+      assert.ok(!/\b\d{1,2}:\d{2}\s*(?:AM|PM)?\b/i.test(name), `Stop name must not contain hours: ${name}`)
+      assert.ok(!/^(?:media\s+mañana|mañana|almuerzo|tarde|noche|llegada|cierre|parada\s*\d+)$/i.test(name), `Stop name must not be a timetable label: ${name}`)
+    }
+
+    // 2. Exact venues extracted
+    assert.equal(pois[0].name, 'Ventana al Mundo')
+    assert.equal(pois[1].name, 'Caimán del Río')
+    assert.equal(pois[2].name, 'Restaurante El Pulpo')
+    assert.equal(pois[3].name, 'Museo del Carnaval')
+    assert.equal(pois[4].name, 'Estadio Moderno Julio Torres')
+
+    // 3. Destination is strictly the final stop
+    assert.equal(pois[pois.length - 1].name, 'Estadio Moderno Julio Torres')
+    assert.notEqual(pois[0].name, 'Estadio Moderno Julio Torres', 'Destination must NOT be stop #1')
+  })
+
+  it('16. buildTourPlanner prevents (0, 0) coordinates and positions destination at the very end', () => {
+    const input = {
+      destination: 'Estadio Moderno Julio Torres',
+      destinationPlace: 'Estadio Moderno Julio Torres',
+      originPlace: 'user_current_location',
+      tourType: 'location_to_destination',
+      isUserLocationOrigin: true,
+      latitude: 10.9254,
+      longitude: -74.7958,
+      durationHours: 8,
+      durationDays: 1,
+      selectedPlaces: [
+        'Ventana al Mundo',
+        'Caimán del Río',
+        'Restaurante El Pulpo',
+        'Museo del Carnaval',
+        'Estadio Moderno Julio Torres'
+      ]
+    }
+
+    // Test with missing coordinates on one candidate
+    const testPlaces = [
+      { name: 'Ventana al Mundo', latitude: 11.0331, longitude: -74.8314 },
+      { name: 'Caimán del Río', latitude: 11.0180, longitude: -74.7960 },
+      { name: 'Restaurante El Pulpo', category: 'restaurant' }, // Missing coords!
+      { name: 'Museo del Carnaval', latitude: 10.9900, longitude: -74.7800 },
+      { name: 'Estadio Moderno Julio Torres', latitude: 10.9700, longitude: -74.7750 }
+    ]
+
+    const planner = buildTourPlanner(input, { latitude: 10.9254, longitude: -74.7958 }, testPlaces)
+    assert.ok(planner.selectedPlaces.length >= 4)
+
+    // 1. Destination must be strictly at the end
+    const last = planner.selectedPlaces[planner.selectedPlaces.length - 1]
+    assert.equal(last.name, 'Estadio Moderno Julio Torres')
+
+    // 2. NO place must have (0, 0) coordinates (no Atlantic ocean Null Island)
+    for (const p of planner.selectedPlaces) {
+      assert.ok(p.latitude !== 0 || p.longitude !== 0, `Stop ${p.name} must never have (0, 0) coordinates`)
+      assert.ok(Number.isFinite(p.latitude), `Stop ${p.name} must have finite latitude`)
+      assert.ok(Number.isFinite(p.longitude), `Stop ${p.name} must have finite longitude`)
+    }
   })
 })
 
