@@ -20,7 +20,7 @@ class SplashView extends StatelessWidget {
     Widget content = Stack(
       children: [
         Center(
-          child: _buildCenterLogo(),
+          child: _buildCenterLogo(isDark: isDark),
         ),
         Positioned(
           left: 0,
@@ -57,9 +57,13 @@ class SplashView extends StatelessWidget {
     );
   }
 
-  Widget _buildCenterLogo() {
+  Widget _buildCenterLogo({required bool isDark}) {
+    final splashIconPath = isDark
+        ? 'assets/images/splash_icon_dark.png'
+        : 'assets/images/splash_icon.png';
+
     return Image.asset(
-      'assets/images/splash_icon.png',
+      splashIconPath,
       width: 92,
       height: 92,
       fit: BoxFit.contain,

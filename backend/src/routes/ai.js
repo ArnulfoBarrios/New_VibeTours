@@ -1051,13 +1051,35 @@ aiRouter.post('/chat', async (req, res, next) => {
         }
         if (canonical) {
           // If destination changed, clear previous specific places and hotel to prevent cross-destination pollution
-          const prevDest = currentPreferences.canonicalDestination?.entityName || currentPreferences.canonicalDestination?.city || currentPreferences.destination || currentPreferences.city
-          const newDest = canonical.entityName || canonical.city
-          if (prevDest && newDest && prevDest.toLowerCase() !== newDest.toLowerCase()) {
+          const isLocationToDest = Boolean(
+            isExplicitLocationToDestination ||
+            updatedPreferences.tourType === 'location_to_destination' ||
+            currentPreferences.tourType === 'location_to_destination' ||
+            updatedPreferences.isUserLocationOrigin ||
+            currentPreferences.isUserLocationOrigin
+          )
+          const prevDest = isLocationToDest
+            ? (currentPreferences.destinationPlace || currentPreferences.destination || currentPreferences.canonicalDestination?.entityName || currentPreferences.city)
+            : (currentPreferences.canonicalDestination?.entityName || currentPreferences.canonicalDestination?.city || currentPreferences.destination || currentPreferences.city)
+          const newDest = isLocationToDest
+            ? (canonical.displayName || canonical.entityName || rawDest || canonical.city)
+            : (canonical.entityName || canonical.city)
+          if (prevDest && newDest && prevDest.toLowerCase() !== newDest.toLowerCase() && !isLocationToDest) {
             delete updatedPreferences.specificPlaces
             delete updatedPreferences.selectedHotel
           }
-          if (canonical.isMicroDestination && (currentPreferences.destination || currentPreferences.city) && !isExplicitCityChange && !isExplicitLocationToDestination) {
+          if (isLocationToDest) {
+            updatedPreferences.canonicalDestination = canonical
+            const landmarkTarget = canonical.displayName || canonical.entityName || rawDest || updatedPreferences.destinationPlace || currentPreferences.destinationPlace || currentPreferences.destination
+            updatedPreferences.destination = landmarkTarget
+            updatedPreferences.destinationPlace = landmarkTarget
+            updatedPreferences.city = cleanAdministrativeCityName(canonical.city) || cleanAdministrativeCityName(landmarkTarget)
+            updatedPreferences.tourType = 'location_to_destination'
+            updatedPreferences.isUserLocationOrigin = true
+            updatedPreferences.durationDays = 1
+            updatedPreferences.durationHours = 8
+            updatedPreferences.accommodationStatus = 'Alojamiento no requerido / Tour de 1 día'
+          } else if (canonical.isMicroDestination && (currentPreferences.destination || currentPreferences.city) && !isExplicitCityChange && !isExplicitLocationToDestination) {
             // Keep macro base city, do not let microdestination overwrite it
             updatedPreferences.canonicalDestination = canonical
             updatedPreferences.destination = currentPreferences.destination || currentPreferences.city
@@ -3238,19 +3260,24 @@ export function buildTourPlanner(input, location = null, places = []) {
 
   const originStr = String(input.originPlace || '').trim()
   const destStr = String(input.destinationPlace || input.destination || input.city || '').trim()
-  const isIntraCityOrSingleCity = Boolean(
+  const isLocationToDestTour = Boolean(
+    input.tourType === 'location_to_destination' ||
+    input.isUserLocationOrigin ||
+    input.originPlace === 'user_current_location'
+  )
+  const isIntraCityOrSingleCity = !isLocationToDestTour && Boolean(
     input.tourType === 'single_city' ||
     input.tourType === 'express_tour' ||
     (originStr && destStr && normalizeKey(originStr) === normalizeKey(destStr))
   )
 
-  const isCorridorRoute = !isIntraCityOrSingleCity && Boolean(
+  const isCorridorRoute = isLocationToDestTour || (!isIntraCityOrSingleCity && Boolean(
     input.tourType === 'city_to_city' ||
     input.tourType === 'location_to_destination' ||
     (input.isUserLocationOrigin && !isIntraCityOrSingleCity) ||
     (input.originPlace === 'user_current_location' && !isIntraCityOrSingleCity) ||
     (originStr && destStr && normalizeKey(originStr) !== normalizeKey(destStr))
-  )
+  ))
   let selectedPlaces = []
   const isUserOrigin = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
 
@@ -3541,7 +3568,7 @@ export function buildTourPlanner(input, location = null, places = []) {
         if (dayPlaces.length === 0) continue
 
         const isDayFullySpecified = refList.length > 0 && dayPlaces.every(p => refList.some(r => isPlaceMatching(p.name, getName(r))))
-        if (!isDayFullySpecified && dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
+        if (!isLocationToDestTour && !isDayFullySpecified && dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
           // Lunch / restaurant stop belongs in the middle of the day's itinerary (e.g. Stop 3 out of 5)
           const foodIdx = dayPlaces.findIndex((p) => isFoodStop(p))
           if (foodIdx !== -1) {
@@ -3597,9 +3624,9 @@ export function buildTourPlanner(input, location = null, places = []) {
 
       selectedPlaces = orderPlacesAlongRoute(selectedPlaces, startLoc, endLoc)
     } else if (selectedPlaces.length > 1 && requestedPlaces.length === 0) {
-      const isCorridorOrLocationToDest = !isIntraCityOrSingleCity && Boolean(
+      const isCorridorOrLocationToDest = isLocationToDestTour || (!isIntraCityOrSingleCity && Boolean(
         isCorridorRoute || input.tourType === 'location_to_destination' || input.isUserLocationOrigin
-      )
+      ))
       if (!isCorridorOrLocationToDest) {
         const totalDays = Math.max(1, Math.ceil((input.durationHours || 24) / 24))
         if (totalDays <= 1) {
@@ -3619,9 +3646,9 @@ export function buildTourPlanner(input, location = null, places = []) {
     }
   }
 
-  const isCorridorOrLocationToDest = !isIntraCityOrSingleCity && Boolean(
+  const isCorridorOrLocationToDest = isLocationToDestTour || (!isIntraCityOrSingleCity && Boolean(
     isCorridorRoute || input.tourType === 'location_to_destination' || input.isUserLocationOrigin
-  )
+  ))
   if (isCorridorOrLocationToDest && selectedPlaces.length > 0) {
     if (isUserOrigin) {
       selectedPlaces = selectedPlaces.filter(p => 

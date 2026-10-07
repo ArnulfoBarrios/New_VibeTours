@@ -329,7 +329,12 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
 
         // Construir el tour ÚNICAMENTE si el backend confirmó que tenemos todos los datos necesarios (readyToBuild == true)
         if (readyToBuild) {
-          final rawDest = (updatedPreferences['city'] ?? updatedPreferences['destination'] ?? '').toString();
+          final isLocationToDestEarly = updatedPreferences['tourType']?.toString() == 'location_to_destination' ||
+              updatedPreferences['isUserLocationOrigin'] == true ||
+              updatedPreferences['originPlace']?.toString() == 'user_current_location';
+          final rawDest = isLocationToDestEarly
+              ? (updatedPreferences['destinationPlace'] ?? updatedPreferences['destination'] ?? updatedPreferences['city'] ?? '').toString()
+              : (updatedPreferences['city'] ?? updatedPreferences['destination'] ?? '').toString();
           final dest = rawDest.replaceFirst(RegExp(r'^(destino|lugar|ciudad|ubicación|ubicacion|location|destination|pais|país)\s*:\s*', caseSensitive: false), '').trim();
           if (dest.isNotEmpty) {
             final profile = ref.read(touristProfileProvider).valueOrNull ?? TouristProfileV2.empty;
@@ -395,7 +400,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
 
             final request = AiTourRequest(
               prompt: text,
-              destination: canonical?.displayName ?? dest.toString(),
+              destination: isLocationToDest ? (updatedPreferences['destinationPlace'] ?? updatedPreferences['destination'] ?? dest.toString()) : (canonical?.displayName ?? dest.toString()),
               country: canonical?.country ?? updatedPreferences['country']?.toString() ?? '',
               city: isMicro ? (canonical?.entityName ?? dest.toString()) : (canonical?.city ?? dest.toString()),
               canonicalDestination: canonical,
@@ -411,7 +416,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
               budget: updatedPreferences['budget']?.toString(),
               selectedPlaces: specPlaces,
               originPlace: isLocationToDest ? 'user_current_location' : (updatedPreferences['originPlace']?.toString()),
-              destinationPlace: isLocationToDest ? dest.toString() : (updatedPreferences['destinationPlace']?.toString()),
+              destinationPlace: isLocationToDest ? (updatedPreferences['destinationPlace'] ?? updatedPreferences['destination'] ?? dest.toString()) : (updatedPreferences['destinationPlace']?.toString()),
               tourType: isLocationToDest ? 'location_to_destination' : (updatedPreferences['tourType']?.toString()),
               isUserLocationOrigin: isLocationToDest ? true : (updatedPreferences['isUserLocationOrigin'] == true),
             );

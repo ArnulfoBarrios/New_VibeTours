@@ -27,7 +27,9 @@ void main() {
       expect(scaffold.backgroundColor, Colors.white);
 
       final images = tester.widgetList<Image>(find.byType(Image)).toList();
+      final centerLogo = images[0].image as AssetImage;
       final emotivaImage = images[1].image as AssetImage;
+      expect(centerLogo.assetName, 'assets/images/splash_icon.png');
       expect(emotivaImage.assetName, 'assets/images/emotiva_logo_light.png');
     });
 
@@ -46,7 +48,9 @@ void main() {
       expect(scaffold.backgroundColor, const Color(0xFF000000));
 
       final images = tester.widgetList<Image>(find.byType(Image)).toList();
+      final centerLogo = images[0].image as AssetImage;
       final emotivaImage = images[1].image as AssetImage;
+      expect(centerLogo.assetName, 'assets/images/splash_icon_dark.png');
       expect(emotivaImage.assetName, 'assets/images/emotiva_logo_dark.png');
     });
   });

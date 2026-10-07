@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { isValidTouristAttraction, getPlaceEntityType, buildTourPlanner, collectCorridorCandidates } from '../routes/ai.js'
+import { isValidTouristAttraction, getPlaceEntityType, buildTourPlanner, collectCorridorCandidates, orderPlacesAlongRoute } from '../routes/ai.js'
 import { isLodgingName, generateChatResponse, extractChatInformationFallback } from '../services/openai.js'
 import { inferStopSubcategory } from '../services/open-tourism-service.js'
 import { imageForPlace } from '../services/imageSearch.js'
@@ -341,5 +341,110 @@ describe('Corridor Tour Quality & Fix Verifications', () => {
     const suriImg = await imageForPlaceWithStatus('Parque Tomás Suri Salcedo', 'Barranquilla', 'nature', 0)
     assert.ok(suriImg.url && !suriImg.url.includes('photo-1506744038136-46273834b3fb'), 'Parque Suri Salcedo must not have Yosemite mountain photo')
   })
+
+  it('13. location_to_destination clicking "Ver detalles" preserves stops, formats schedule breakdown, and keeps destination landmark intact', async () => {
+    // Turn 1: User asks for tour from current location to Ventana al Mundo
+    const turn1UserMsg = 'Quiero un tour desde mi ubicación hasta la Ventana al Mundo'
+    const turn1Res = await generateChatResponse(
+      { history: [{ role: 'user', content: turn1UserMsg }] },
+      '',
+      '',
+      {
+        city: 'Barranquilla',
+        country: 'Colombia',
+        destination: 'Ventana al Mundo',
+        destinationPlace: 'Ventana al Mundo',
+        tourType: 'location_to_destination',
+        originPlace: 'user_current_location',
+        isUserLocationOrigin: true,
+        userGpsLatitude: 10.9180,
+        userGpsLongitude: -74.7640
+      },
+      []
+    )
+
+    const turn1Places = turn1Res.specificPlaces || turn1Res.extractedPreferences?.specificPlaces || []
+    assert.ok(turn1Places.length >= 3, `Expected at least 3 stops, got ${turn1Places.length}`)
+    // Final stop must be Ventana al Mundo
+    const finalTurn1 = turn1Places[turn1Places.length - 1]
+    assert.ok(
+      (finalTurn1.name || '').toLowerCase().includes('ventana'),
+      `Final stop must be Ventana al Mundo, got ${finalTurn1.name}`
+    )
+    // Origin must NOT be a stop
+    assert.ok(
+      !turn1Places.some(p => (p.name || '').toLowerCase().includes('ubicaci')),
+      'User origin must not be an itinerary stop'
+    )
+
+    // Turn 2: User clicks "Ver detalles"
+    const turn2UserMsg = 'Ver detalles'
+    const turn2Res = await generateChatResponse(
+      {
+        history: [
+          { role: 'user', content: turn1UserMsg },
+          { role: 'assistant', content: turn1Res.responseMessage },
+          { role: 'user', content: turn2UserMsg }
+        ]
+      },
+      '',
+      '',
+      {
+        city: 'Barranquilla',
+        country: 'Colombia',
+        destination: 'Ventana al Mundo',
+        destinationPlace: 'Ventana al Mundo',
+        tourType: 'location_to_destination',
+        originPlace: 'user_current_location',
+        isUserLocationOrigin: true,
+        userGpsLatitude: 10.9180,
+        userGpsLongitude: -74.7640,
+        specificPlaces: turn1Places
+      },
+      []
+    )
+
+    const turn2Places = turn2Res.specificPlaces || turn2Res.extractedPreferences?.specificPlaces || []
+    // Stops must not be emptied or randomized
+    assert.equal(turn2Places.length, turn1Places.length, 'Stop count must remain consistent after clicking Ver detalles')
+    assert.equal(turn2Places[turn2Places.length - 1].name, finalTurn1.name, 'Final destination stop must remain Ventana al Mundo')
+
+    // Response must contain a detailed schedule breakdown with times
+    assert.ok(
+      /09:00|10:45|12:30|02:45|04:30|itinerario detallado/i.test(turn2Res.responseMessage),
+      `Expected detailed schedule in response, got: ${turn2Res.responseMessage}`
+    )
+    // Destination name in prompt and extracted preferences must remain Ventana al Mundo
+    const extractedDest = turn2Res.extractedPreferences?.destinationPlace || turn2Res.extractedPreferences?.destination
+    assert.ok(
+      (extractedDest || '').toLowerCase().includes('ventana'),
+      `Extracted destination must remain Ventana al Mundo, got ${extractedDest}`
+    )
+    // Action chips should offer to generate tour on the map
+    assert.ok(
+      (turn2Res.actionChips || []).some(c => /generar tour/i.test(c)),
+      'Action chips must offer Generar tour'
+    )
+  })
+
+  it('14. Generic location_to_destination corridor ordering: 4 attractions + 1 lunch restaurant in ascending distance order', () => {
+    const origin = { latitude: 10.9180, longitude: -74.7640 } // South
+    const endPoint = { latitude: 11.0250, longitude: -74.8250 } // North
+    const dummyPlaces = [
+      { name: 'Target Destination', latitude: 11.0250, longitude: -74.8250, category: 'attraction' },
+      { name: 'South Attraction', latitude: 10.9350, longitude: -74.7800, category: 'attraction' },
+      { name: 'Midday Restaurant', latitude: 10.9700, longitude: -74.7950, category: 'restaurant', entityType: 'restaurant' },
+      { name: 'Mid-North Attraction', latitude: 10.9900, longitude: -74.8050, category: 'attraction' },
+      { name: 'Early-Mid Attraction', latitude: 10.9500, longitude: -74.7900, category: 'attraction' }
+    ]
+
+    const ordered = orderPlacesAlongRoute(dummyPlaces, origin, endPoint)
+    assert.equal(ordered[0].name, 'South Attraction', 'First stop should be closest to origin')
+    assert.equal(ordered[1].name, 'Early-Mid Attraction', 'Second stop should follow route progression')
+    assert.equal(ordered[2].name, 'Midday Restaurant', 'Restaurant should be in the middle')
+    assert.equal(ordered[3].name, 'Mid-North Attraction', 'Fourth stop should precede arrival')
+    assert.equal(ordered[4].name, 'Target Destination', 'Target destination should be final stop')
+  })
 })
+
 
