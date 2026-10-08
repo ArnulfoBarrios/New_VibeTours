@@ -175,4 +175,75 @@ test('10. evaluateTourRequirements enforces lodging strategy for multi-city / in
   assert.equal(multiCityComplete.isComplete, true, 'Multi-city with confirmed lodging per city must complete')
 })
 
+test('11. generateChatResponse on 1-day tour expands stops when user requests "Agregar más lugares"', async () => {
+  const initialItinerary = `Itinerario de Viaje: Santa Marta (1 día)
+
+Día 1: Santa Marta
+• Parque de Los Novios
+• Catedral Basílica de Santa Marta
+• Restaurante Donde Chucho
+• Quinta de San Pedro Alejandrino
+• Sendero Peatonal El Ziruma
+
+¿Deseas confirmar este itinerario y generar tu tour en el mapa?`
+
+  const state = {
+    history: [
+      { role: 'user', content: 'vamos en carro y presupuesto de lujo a Santa Marta' },
+      { role: 'assistant', content: initialItinerary },
+      { role: 'user', content: 'Agregar más lugares' }
+    ]
+  }
+
+  const res = await generateChatResponse(state, '', '', {
+    city: 'Santa Marta',
+    destination: 'Santa Marta',
+    durationDays: 1,
+    companions: 'Con amigos',
+    transport: 'Carro',
+    budget: 'Lujo'
+  })
+
+  assert.equal(res.readyToBuild, false)
+  // Must contain an expanded itinerary with at least 6 stops
+  const bullets = (res.responseMessage.match(/[•\-\*]\s+[^\n]+/g) || [])
+  assert.ok(bullets.length >= 6, `Expected at least 6 stops in expanded 1-day tour, got ${bullets.length}: ${res.responseMessage}`)
+  // Must not contain "Monumento Nacional"
+  assert.ok(!res.responseMessage.toLowerCase().includes('monumento nacional'), 'Must not include generic Monumento Nacional')
+  assert.ok(Array.isArray(res.specificPlaces) && res.specificPlaces.length >= 6, 'specificPlaces must be updated to at least 6 stops')
+})
+
+test('12. isGenericFacilityName rejects orphan "Monumento Nacional" and generic labels', async () => {
+  const { isGenericFacilityName } = await import('../services/osm.js')
+  assert.equal(isGenericFacilityName('Monumento Nacional'), true)
+  assert.equal(isGenericFacilityName('Patrimonio Cultural'), true)
+  assert.equal(isGenericFacilityName('Centro Histórico'), true)
+  assert.equal(isGenericFacilityName('Parque Nacional'), true)
+  assert.equal(isGenericFacilityName('Quinta de San Pedro Alejandrino'), false)
+  assert.equal(isGenericFacilityName('Catedral Basílica de Santa Marta'), false)
+})
+
+test('13. clusterStopsIntoCoherentDays on 1-day tour does not mix distant peripheral Tayrona into urban cluster', async () => {
+  const { clusterStopsIntoCoherentDays } = await import('../services/open-tourism-service.js')
+  const attractions = [
+    { name: 'Parque de Los Novios', latitude: 11.2435, longitude: -74.2115 },
+    { name: 'Catedral Basílica de Santa Marta', latitude: 11.2443, longitude: -74.2104 },
+    { name: 'Quinta de San Pedro Alejandrino', latitude: 11.2330, longitude: -74.1802 },
+    { name: 'Camellón Rodrigo de Bastidas', latitude: 11.2450, longitude: -74.2140 },
+    { name: 'Parque Nacional Natural Tayrona', latitude: 11.3120, longitude: -73.9310 }
+  ]
+  const restaurants = [
+    { name: 'Restaurante Donde Chucho', latitude: 11.2430, longitude: -74.2110 }
+  ]
+  const clustered = clusterStopsIntoCoherentDays(attractions, restaurants, {
+    numDays: 1,
+    city: 'Santa Marta',
+    allowExpandedDay: true
+  })
+  assert.equal(clustered.length, 1)
+  const stopNames = clustered[0].stops.map(s => s.name)
+  assert.ok(!stopNames.some(n => /Tayrona/i.test(n)), 'Tayrona must not be included in a 1-day urban tour')
+  assert.ok(stopNames.length >= 5, 'Must keep available compatible urban stops')
+})
+
 

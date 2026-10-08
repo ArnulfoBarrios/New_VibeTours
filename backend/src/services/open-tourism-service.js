@@ -110,9 +110,32 @@ export function isLowQualityOrFastFoodVenue(name = '', tags = {}) {
   return false
 }
 
+export function isGenericFacilityName(rawName = '') {
+  if (!rawName || typeof rawName !== 'string') return true
+  const clean = rawName.trim().toLowerCase()
+  if (clean.length < 3) return true
+  const genericList = [
+    'restaurante', 'restaurant', 'bar', 'café', 'cafe', 'cafetería', 'cafeteria',
+    'comidas rápidas', 'comidas rapidas', 'fast food', 'hotel', 'hostal', 'hostel',
+    'posada', 'alojamiento', 'atractivo', 'monumento', 'parque', 'plaza', 'mirador',
+    'tienda', 'panadería', 'panaderia', 'kiosko', 'kiosco', 'puesto', 'estadero',
+    'museo', 'catedral', 'iglesia', 'parroquia', 'capilla', 'muelle', 'malecon', 'malecón', 'turismo'
+  ]
+  if (genericList.includes(clean)) return true
+  if (/^(restaurante|restaurant|bar|café|cafe|hotel|hostal|atractivo)\s*#?\d*$/i.test(clean)) return true
+  if (/^(?:plaza|parque|plazoleta|zona)\s+(?:descanso(?:\s*\d+)?|hospital|salud|clinica|ips|eps)$/i.test(clean)) return true
+  if (/^descanso\s*\d+$/i.test(clean)) return true
+  // Filter out orphan administrative or generic heritage labels without a distinctive proper name (e.g. "Monumento Nacional")
+  if (/^(?:monumento|patrimonio|edificio|sitio|atractivo|bien)\s+(?:nacional|cultural|historico|histórico|turistico|turístico|distrital|municipal|de\s+la\s+nacion|de\s+la\s+nación)$/i.test(clean)) return true
+  if (/^(?:monumento\s+nacional|patrimonio\s+nacional|patrimonio\s+cultural)$/i.test(clean)) return true
+  if (/^(?:parque\s+nacional|plaza\s+de\s+mercado|plaza\s+de\s+mercado\s+central|centro\s+comercial|zona\s+rosa|centro\s+hist[oó]rico|centro)$/i.test(clean)) return true
+  return false
+}
+
 export function scoreTouristAttraction(place = {}, wikipediaKeySet = new Set()) {
   const name = String(place.name || place.nombre || '').trim()
   if (!name) return -1000
+  if (isGenericFacilityName(name)) return -1000
   const tags = { ...(place.tags || {}), ...(place.rawTags || {}) }
   const normName = normalizeTextKey(name)
 
@@ -148,7 +171,7 @@ export function rankAndFilterTouristAttractions(places = [], wikipediaLandmarks 
   )
 
   const scored = (places || [])
-    .filter((p) => p && (p.name || p.nombre))
+    .filter((p) => p && (p.name || p.nombre) && !isGenericFacilityName(p.name || p.nombre))
     .map((p) => ({
       ...p,
       touristScore: scoreTouristAttraction(p, wikiSet)
@@ -162,6 +185,7 @@ export function rankAndFilterTouristAttractions(places = [], wikipediaLandmarks 
   for (const item of sorted) {
     const itemName = String(item.name || item.nombre || '').trim()
     const itemCity = String(item.city || '').trim()
+    if (isGenericFacilityName(itemName)) continue
     if (!deduped.some((existing) => arePlaceNamesSemanticallySame(existing.name || existing.nombre, itemName, itemCity))) {
       deduped.push(item)
     }
@@ -1625,12 +1649,14 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
   }
 
   // If attractions are insufficient to fill all days (4 for 1-day tour, at least 2 per day for multi-day), pull from candidatePool
-  const targetAttractionsCount = numDays === 1 ? 4 : numDays * 2
-  const maxAttractionsToPull = numDays === 1 ? 4 : numDays * 3
+  const isExpressExpanded = numDays === 1 && Boolean(options.allowExpandedDay || options.isMoreStops)
+  const targetAttractionsCount = numDays === 1 ? (isExpressExpanded ? 5 : 4) : numDays * 2
+  const maxAttractionsToPull = numDays === 1 ? (isExpressExpanded ? 6 : 4) : numDays * 3
   if (cleanAttractions.length < targetAttractionsCount && candidatePool.length > 0) {
     for (const raw of candidatePool) {
       if (cleanAttractions.length >= maxAttractionsToPull) break
       const name = typeof raw === 'string' ? raw : (raw?.name || '')
+      if (isGenericFacilityName(name)) continue
       const isFood = raw?.entityType === 'restaurant' || raw?.category === 'restaurant' ||
         /\b(restaurante|restaurant|bistro|parrilla|asador|cocina|gastronom|taquer|pizzer|marisqu|cebich)\b/i.test(name)
       if (isFood) continue
@@ -1638,6 +1664,9 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       if (!item) continue
       if (cleanAttractions.some((existing) => arePlaceNamesSemanticallySame(existing.name, item.name, city))) continue
       if (cleanRestaurants.some((r) => arePlaceNamesSemanticallySame(r.name, item.name, city))) continue
+      if (numDays === 1 && cleanAttractions.length > 0 && !areStopsCompatibleInSameDay(cleanAttractions[0], item, cityCenter, city)) {
+        continue
+      }
       cleanAttractions.push(item)
     }
   }
@@ -1787,12 +1816,18 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     }
     clusters.sort((a, b) => b.length - a.length)
 
-    // Ensure no day is left with only 1 stop when enough attractions exist
+    // Ensure days receive compatible extra attractions up to maxDayAttractions without merging incompatible peripheral trips
+    const maxDayAttractions = numDays === 1 ? (isExpressExpanded ? 5 : 4) : 2
     while (clusters.length > numDays) {
       const extraCluster = clusters.pop()
-      const underFilledIndex = clusters.findIndex(c => c.length < 2)
-      if (underFilledIndex !== -1) {
-        clusters[underFilledIndex].push(...extraCluster)
+      for (const item of extraCluster) {
+        const targetCluster = clusters.find(c => {
+          if (c.length >= maxDayAttractions) return false
+          return c.every(existing => areStopsCompatibleInSameDay(existing, item, cityCenter, city))
+        })
+        if (targetCluster) {
+          targetCluster.push(item)
+        }
       }
     }
   }
@@ -1829,17 +1864,21 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     }
   }
 
-  // Density Invariant: Every day of a trip should have at least 2 attractions (morning + afternoon stops)
+  // Density Invariant: Every day of a trip should have at least 2 attractions (or 4-5 for 1-day express tour)
+  const minRequiredPerDay = isExpressExpanded ? 5 : (numDays === 1 ? 4 : 2)
   for (let i = 0; i < clusters.length && i < numDays; i++) {
-    if (clusters[i].length < 2 && cleanAttractions.length > 1) {
+    while (clusters[i].length < minRequiredPerDay && cleanAttractions.length > clusters[i].length) {
       const existingNames = new Set(clusters[i].map(s => (s.name || '').toLowerCase()))
       const partner = cleanAttractions.find(a =>
         a && a.name &&
         !existingNames.has(a.name.toLowerCase()) &&
-        !arePlaceNamesSemanticallySame(clusters[i][0].name, a.name, city)
+        !arePlaceNamesSemanticallySame(clusters[i][0].name, a.name, city) &&
+        (numDays !== 1 || clusters[i].every(existing => areStopsCompatibleInSameDay(existing, a, cityCenter, city)))
       )
       if (partner) {
         clusters[i].push(partner)
+      } else {
+        break
       }
     }
   }

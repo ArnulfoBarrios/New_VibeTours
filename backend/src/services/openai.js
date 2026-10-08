@@ -1934,6 +1934,10 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       }
     }
 
+    realPlaces = rankAndFilterTouristAttractions(
+      realPlaces.filter(p => !isGenericFacilityName(typeof p === 'string' ? p : p?.name)),
+      presetIconics
+    )
     if (realPlaces.length >= minRequiredPlaces && realRests.length >= minRequiredRests) {
       const candidateCatalog = createUnifiedCandidateCatalog({
         places: realPlaces,
@@ -2232,7 +2236,10 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     ...presetIconics,
     ...(Array.isArray(dynamicIconics) ? dynamicIconics.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean) : [])
   ]
-  realPlaces = rankAndFilterTouristAttractions(realPlaces, allPriorityIconics)
+  realPlaces = rankAndFilterTouristAttractions(
+    realPlaces.filter(p => !isGenericFacilityName(typeof p === 'string' ? p : p?.name)),
+    allPriorityIconics
+  )
   realRests = rankAndFilterTouristRestaurants(realRests)
 
   const unifiedRadiusKm = /\b(cove[nñ]as|tol[uú]|san\s+antero|golfo\s+de\s+morrosquillo)\b/i.test(clean)
@@ -3688,14 +3695,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           }
           const chosenRestaurant = getPlaceName(chosenRestaurantObj)
 
-          // 3. Pick 4 attractions
-          const chosenAttractions = allAttractionCandidates.slice(0, 4)
-          while (chosenAttractions.length < 4) {
+          // 3. Pick attractions (4 base, or 5 if expanding 1-day tour)
+          const isUserAskingMoreStopsFb = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|aumentar\s+(las\s+)?paradas|sumar\s+(m[aá]s\s+)?paradas|paradas\s+adicionales|agrega\s+m[aá]s|a[ñn]ade\s+m[aá]s|incluye\s+m[aá]s|agregar\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades)|a[ñn]adir\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades))\b/i.test(lastUserMsg)
+          const targetAttrsCount = isUserAskingMoreStopsFb ? 5 : 4
+          const filteredCandidates = allAttractionCandidates.filter(p => !isGenericFacilityName(getPlaceName(p)))
+          const chosenAttractions = filteredCandidates.slice(0, targetAttrsCount)
+          while (chosenAttractions.length < targetAttrsCount) {
             const fallbackAttractions = [
               { name: 'Centro Histórico y Plaza Principal', category: 'attraction' },
               { name: 'Paseo Turístico y Mirador Panorámico', category: 'attraction' },
               { name: 'Museo o Espacio Cultural Emblemático', category: 'attraction' },
-              { name: 'Parque o Corredor Ecológico Destacado', category: 'attraction' }
+              { name: 'Parque o Corredor Ecológico Destacado', category: 'attraction' },
+              { name: 'Malecón o Paseo Costero / Fluvial', category: 'attraction' }
             ]
             const nextFb = fallbackAttractions.find(fb => !chosenAttractions.some(ca => arePlaceNamesSemanticallySame(getPlaceName(ca), fb.name, destName)))
             if (!nextFb) break
@@ -3707,15 +3718,20 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const stop3Lunch = chosenRestaurant
           const stop4 = getPlaceName(chosenAttractions[2])
           const stop5 = getPlaceName(chosenAttractions[3])
+          const stop6 = chosenAttractions.length >= 5 ? getPlaceName(chosenAttractions[4]) : null
 
-          // Update known.specificPlaces with the 5 stops so the planner uses them verbatim
-          known.specificPlaces = [
+          // Update known.specificPlaces with the stops so the planner uses them verbatim
+          const stopsToSave = [
             { ...(chosenAttractions[0] || {}), name: stop1, dia: 1, day: 1, category: 'attraction' },
             { ...(chosenAttractions[1] || {}), name: stop2, dia: 1, day: 1, category: 'attraction' },
             { ...(chosenRestaurantObj || {}), name: stop3Lunch, dia: 1, day: 1, category: 'restaurant', entityType: 'restaurant', type: 'food', isRestaurant: true },
             { ...(chosenAttractions[2] || {}), name: stop4, dia: 1, day: 1, category: 'attraction' },
             { ...(chosenAttractions[3] || {}), name: stop5, dia: 1, day: 1, category: 'attraction' }
           ]
+          if (stop6) {
+            stopsToSave.push({ ...(chosenAttractions[4] || {}), name: stop6, dia: 1, day: 1, category: 'attraction' })
+          }
+          known.specificPlaces = stopsToSave
 
           const transportTxt = known.transport ? ` en ${known.transport.toLowerCase()}` : ''
           let companionsTxt = ''
@@ -3734,13 +3750,18 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             }
           }
 
-          const intro = `¡Excelente plan! Para un tour completo de 1 día${transportTxt}${companionsTxt} en **${destName}**, he preparado un recorrido de 5 paradas con almuerzo a mediodía:`
+          const totalStopsCount = stopsToSave.length
+          const intro = isUserAskingMoreStopsFb
+            ? `¡Por supuesto! Para un tour ampliado de 1 día${transportTxt}${companionsTxt} en **${destName}**, he enriquecido el recorrido con ${totalStopsCount} paradas incluyendo paradas adicionales:`
+            : `¡Excelente plan! Para un tour completo de 1 día${transportTxt}${companionsTxt} en **${destName}**, he preparado un recorrido de 5 paradas con almuerzo a mediodía:`
           const line1 = `1. 🕘 **09:00 AM - Mañana**: Visita a **${stop1}**.`
           const line2 = `2. 🕚 **11:00 AM - Media mañana**: Recorrido en **${stop2}**.`
           const line3 = `3. 🍽️ **12:30 PM - Mediodía (Almuerzo)**: Degustación de gastronomía local en **${stop3Lunch}**.`
-          const line4 = `4. 🕒 **03:00 PM - Tarde**: Exploración de **${stop4}**.`
-          const line5 = `5. 🌅 **05:30 PM - Atardecer**: Cierre panorámico en **${stop5}**.`
-          const question = `¿Te gusta este itinerario de 5 paradas o deseas cambiar algún lugar antes de generar el tour en el mapa?`
+          const line4 = `4. 🕒 **02:45 PM - Tarde**: Exploración de **${stop4}**.`
+          const line5 = stop6
+            ? `5. 🕓 **04:30 PM - Media tarde**: Parada cultural en **${stop5}**.\n6. 🌅 **06:15 PM - Atardecer**: Cierre panorámico en **${stop6}**.`
+            : `5. 🌅 **05:30 PM - Atardecer**: Cierre panorámico en **${stop5}**.`
+          const question = `¿Te gusta este itinerario ${isUserAskingMoreStopsFb ? 'ampliado ' : ''}de ${totalStopsCount} paradas o deseas cambiar algún lugar antes de generar el tour en el mapa?`
 
           fallbackMsg = `${intro}\n\n${line1}\n${line2}\n${line3}\n${line4}\n${line5}\n\n${question}`
           fallbackChips = ['🗺️ Generar tour en el mapa', 'Cambiar paradas', 'Ver opciones de comida']
@@ -3931,7 +3952,7 @@ REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
    - AISLAMIENTO METROPOLITANO ESTRICTO (PROHIBIDO FUGAS INTER-CIUDAD):
      * Todos los atractivos y restaurantes recomendados DEBEN estar ubicados DENTRO del municipio o área metropolitana inmediata de "${destName || 'el destino'}".
      * ESTRICTAMENTE PROHIBIDO sugerir lugares que pertenezcan a OTRA ciudad vecina o distante. Cada ciudad tiene sus propios restaurantes y atractivos emblemáticos; usa únicamente los nombres presentes en el catálogo verificado.
-   - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias o cadenas de hipermercados/supermercados cotidianos (como Alkosto, Éxito, Olímpica, Carulla, Jumbo, Makro, Ara, D1, Homecenter, etc.) como paradas turísticas.
+   - PROHIBIDO incluir puestos de policía, CAIs, puntos de información turística, oficinas administrativas, bancos, farmacias, cadenas de hipermercados/supermercados cotidianos (como Alkosto, Éxito, Olímpica, Carulla, Jumbo, Makro, Ara, D1, Homecenter, etc.) o rótulos/designaciones genéricas sin nombre propio auténtico (ej: "Monumento Nacional", "Patrimonio Cultural", "Centro Histórico", "Plaza de Mercado", "Parque Nacional") como paradas turísticas. Toda parada debe ser un sitio turístico específico con su nombre propio auténtico.
     - REGLA CRÍTICA DE CARTOGRAFÍA Y FUENTES:
       * El tour y tus recomendaciones deben estar anclados al 100% en lugares reales presentes en el catálogo verificado por las fuentes cartográficas configuradas.
       * ESTRICTAMENTE PROHIBIDO inventar plazas, parques, malecones, restaurantes u hoteles que no estén en ese catálogo.
@@ -4046,7 +4067,7 @@ REGLAS CRÍTICAS DEL ITINERARIO:
      Debes estructurar un itinerario variado y rico, combinando monumentos históricos, malecones, museos, plazas emblemáticas, arquitectura, parques y gastronomía local usando únicamente los POI del catálogo verificado.
    - En destinos con vocación balnearia o micro-destinos (ej: Coveñas, San Andrés, Cancún): Las playas, islas, ciénagas y actividades ecoturísticas del corredor son los atractivos centrales.
    - REGLA DE BALANCE DIARIO OBLIGATORIO:
-      * EN TOURS DE 1 DÍA / EXPRESS: El recorrido del Día 1 DEBE contener EXACTAMENTE 4 atractivos turísticos distintos y representativos de la ciudad, más EXACTAMENTE 1 restaurante o parada gastronómica para el almuerzo (5 paradas en total para la jornada completa: 4 atractivos + 1 almuerzo).
+      * EN TOURS DE 1 DÍA / EXPRESS: Inicialmente el recorrido del Día 1 contiene 4 atractivos turísticos distintos y representativos de la ciudad, más 1 restaurante o parada gastronómica para el almuerzo (5 paradas en total para la jornada completa: 4 atractivos + 1 almuerzo). SIN EMBARGO, si el usuario solicita agregar más lugares o paradas ("Agregar más lugares"), DEBES ampliar obligatoriamente el Día 1 a 6 o 7 paradas en total (5 o 6 atractivos turísticos representativos + 1 parada gastronómica dentro del mismo circuito geográfico contiguo), mostrando el itinerario completo con las nuevas paradas integradas.
       * Si el usuario pidió o mencionó un lugar en especial (ej: Malecón del Río), ese lugar es 1 atractivo y OBLIGATORIAMENTE debes completarlo con OTROS 3 atractivos turísticos distintos del catálogo (ej: Ventana al Mundo, Barrio El Prado, Casa del Carnaval) más 1 restaurante (5 paradas en total).
       * PROHIBIDO REPETIR LUGARES O ALIAS: Si ya incluiste Gran Malecón del Río, ESTRICTAMENTE PROHIBIDO volver a colocar Malecón del Río. Cada parada debe ser un lugar físico completamente diferente.
       * EN TOURS DE VARIOS DÍAS (2 O MÁS DÍAS): Cada día debe estructurarse con 2 o 3 atractivos turísticos y 1 restaurante (3 o 4 paradas por día).
@@ -4075,10 +4096,11 @@ REGLAS CRÍTICAS DEL ITINERARIO:
    - Al final del itinerario, incluye solo 1 pregunta directa de acción (máximo 1 o 2 oraciones).
 
 ETAPA DE AJUSTE O AMPLIACIÓN DE ITINERARIO (AÑADIR O CAMBIAR PARADAS):
-- Si el usuario pide agregar más paradas, añadir más sitios, o enriquecer el plan ("puedes agregar más paradas", "añade más paradas", "más lugares", etc.):
+- Si el usuario pide agregar más paradas, añadir más sitios, o enriquecer el plan ("puedes agregar más paradas", "añade más paradas", "más lugares", "agregar más lugares", etc.):
   1. ACEPTA CON ENTUSIASMO.
-  2. MUESTRA OBLIGATORIAMENTE EL ITINERARIO COMPLETO ACTUALIZADO (desde Día 1 hasta Día ${Number(known.durationDays || (known.datesSeason?.includes('puente') ? 3 : 2))}) agregando 1 o 2 paradas adicionales reales a cada día (3 a 4 paradas por día).
-  3. ESTÁ TOTALMENTE PROHIBIDO responder únicamente con un texto explicativo o evasivo. Si dices que agregaste paradas, el bloque completo de días con sus viñetas DEBE estar impreso en tu respuesta.
+  2. En tours de varios días: agrega 1 o 2 paradas adicionales a cada día (3 a 4 paradas por día). En tours de 1 día / express: amplía el Día 1 de 5 a 6 o 7 paradas en total incorporando atractivos reales y representativos del mismo sector geográfico contiguo.
+  3. MUESTRA OBLIGATORIAMENTE EL ITINERARIO COMPLETO ACTUALIZADO con las nuevas paradas visibles en viñetas (•).
+  4. ESTRICTAMENTE PROHIBIDO responder únicamente con un texto explicativo o devolver las mismas paradas anteriores sin añadir ninguna nueva.
 
 ETAPA 4: GENERACIÓN DEL TOUR ("readyToBuild": true)
 - Si el usuario pide generar el tour:
@@ -4232,10 +4254,13 @@ REGLAS PARA "accommodationStatus":
       )
     }
 
-    // Filtrar estrictamente cualquier hotel que se haya colado en specificPlaces
+    // Filtrar estrictamente cualquier hotel o rótulo genérico que se haya colado en specificPlaces
     if (Array.isArray(parsedExtracted.specificPlaces)) {
       parsedExtracted.specificPlaces = parsedExtracted.specificPlaces.filter(p => {
         const pName = typeof p === 'string' ? p : (p?.name || '')
+        if (isGenericFacilityName(pName)) {
+          return false
+        }
         const pNameLower = pName.toLowerCase()
         if (/\b(hotel|hostal|resort|inn|lodging|alojamiento|the meeting point|imperial|yivinaca|monaco real|colonial inn|canadiense)\b/i.test(pNameLower)) {
           return false
@@ -4248,6 +4273,15 @@ REGLAS PARA "accommodationStatus":
         destName || known.city || known.destination || ''
       )
     }
+
+    // Sanitizar cualquier viñeta que contenga un rótulo genérico sin nombre propio (ej: "• Monumento Nacional")
+    responseMessage = responseMessage.replace(/^[•\-\*]\s*([^\n]+)$/gm, (match, pName) => {
+      const cleanP = pName.replace(/^\*+|\*+$/g, '').trim()
+      if (isGenericFacilityName(cleanP)) {
+        return ''
+      }
+      return match
+    }).replace(/\n{3,}/g, '\n\n').trim()
 
     // Evaluar estado completo de información clave mediante Single Source of Truth
     const finalReqCheck = evaluateTourRequirements(known, parsedExtracted)
@@ -4295,7 +4329,7 @@ REGLAS PARA "accommodationStatus":
     const isUserExplicitlyOrderingBuild = /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|est[aá]\s+perfecto\s+(genera|crea)|listo\s+(genera|crea|para\s+generar)|ya\s+no\s+hay\s+nada\s+genera|vale\s+(genera|crea)|procede\s+a\s+(generar|crear|construir)|si\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|s[íi]\s+(genera|crea)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|(genera|crea|haz)\s+(el\s+|la\s+)?(tour|itinerario|ruta)\s+porfa|quiero\s+(que\s+)?(se\s+)?gener(ar|es|a|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|ok(ay)?\s+(listo\s+)?(quiero\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)?|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje))\b/i.test(lastUserMsg)
 
     // Detección de petición de agregar paradas
-    const isGenericMoreStopsRequest = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|aumentar\s+(las\s+)?paradas|sumar\s+(m[aá]s\s+)?paradas|paradas\s+adicionales|agrega\s+m[aá]s|a[ñn]ade\s+m[aá]s|incluye\s+m[aá]s)\b/i.test(lastUserMsg)
+    const isGenericMoreStopsRequest = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|aumentar\s+(las\s+)?paradas|sumar\s+(m[aá]s\s+)?paradas|paradas\s+adicionales|agrega\s+m[aá]s|a[ñn]ade\s+m[aá]s|incluye\s+m[aá]s|agregar\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades)|a[ñn]adir\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades))\b/i.test(lastUserMsg)
     const isAddingStopsOrPlaces = /\b(agr(egar?|ega|egues?|eguen?)|a[ñn](adir?|ade|ades?|adan?)|inclu(ir?|ye|yes?|yan?)|sumar)\b/i.test(lastUserMsg) || isGenericMoreStopsRequest
     const isUserAskingForMoreStops = isGenericMoreStopsRequest || isAddingStopsOrPlaces
     const hasDayHeaders = /(?:^|\n)\s*(?:#{1,4}\s*)?d[íi]a\s*1\b/i.test(responseMessage) ||
@@ -4318,7 +4352,18 @@ REGLAS PARA "accommodationStatus":
 
     const isModifyingOrRequestingItinerary = userRequestedItinerary || isUserAskingForMoreStops || isAddingStopsOrPlaces || isDetailInquiry
 
+    const historicalStops = hasItineraryAlreadyInHistory
+      ? extractStopsFromItineraryText(itineraryAssistantMsg?.content || itineraryAssistantMsg?.text || '')
+      : []
+    const currentEmittedStops = extractStopsFromItineraryText(responseMessage)
+    const isOneDayTourScope = Number(parsedExtracted.durationDays || known.durationDays || 0) === 1 || Boolean(isOneDayTour)
+    const failedToExpandOneDayTour = isOneDayTourScope && isUserAskingForMoreStops && hasItineraryAlreadyInHistory && (
+      currentEmittedStops.length <= historicalStops.length ||
+      currentEmittedStops.every(cs => historicalStops.some(hs => arePlacesSimilar(typeof cs === 'string' ? cs : cs.name, typeof hs === 'string' ? hs : hs.name)))
+    )
+
     const shouldReconstructItinerary = !isUserExplicitlyOrderingBuild && (
+      failedToExpandOneDayTour ||
       (isLocationToDestination && !isDetailInquiry) ||
       userRequestedItinerary ||
       itineraryMalformed ||
@@ -4399,7 +4444,8 @@ REGLAS PARA "accommodationStatus":
         }
       }
       const dName = destName || known.destination || 'tu destino'
-      const perDayPlacesCount = isGenericMoreStopsRequest ? 3 : 2
+      const isExpressExpandedRecon = daysCount === 1 && (isUserAskingForMoreStops || isGenericMoreStopsRequest)
+      const perDayPlacesCount = isExpressExpandedRecon ? 5 : (isGenericMoreStopsRequest ? 3 : (daysCount === 1 ? 4 : 2))
       const totalPlacesNeeded = daysCount * perDayPlacesCount
 
       const cat = (realCatalog && (realCatalog.places || []).length >= totalPlacesNeeded && (realCatalog.restaurants || []).length >= daysCount)
@@ -4663,10 +4709,11 @@ REGLAS PARA "accommodationStatus":
       let attrCursor = 0
       let restCursor = 0
 
-      // Dynamically scale attractions per day if explicit pool provides higher density, up to 4/day.
-      const basePerDay = isGenericMoreStopsRequest ? 3 : 2
+      // Dynamically scale attractions per day if explicit pool provides higher density, up to 4/day (or 5 for expanded 1-day tour).
+      const basePerDay = isExpressExpandedRecon ? 5 : (isGenericMoreStopsRequest ? 3 : (daysCount === 1 ? 4 : 2))
       const explicitPlacesPerDay = Math.floor(cleanExplicitPool.length / Math.max(daysCount, 1))
-      const targetPerDay = Math.min(4, Math.max(basePerDay, explicitPlacesPerDay))
+      const maxCap = isExpressExpandedRecon ? 5 : 4
+      const targetPerDay = Math.min(maxCap, Math.max(basePerDay, explicitPlacesPerDay))
       const attractionsPerDay = uniqueAttractions.length >= (daysCount * targetPerDay)
         ? targetPerDay
         : Math.min(targetPerDay, Math.max(1, Math.floor(uniqueAttractions.length / Math.max(daysCount, 1))))
@@ -4755,7 +4802,7 @@ REGLAS PARA "accommodationStatus":
         })
       }
 
-      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [] }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction', entityType: s.entityType || (s.entityType === 'restaurant' ? 'restaurant' : 'attraction'), isRestaurant: s.entityType === 'restaurant' || s.isRestaurant === true, ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))); known.specificPlaces = parsedExtracted.specificPlaces }
+      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [], allowExpandedDay: isExpressExpandedRecon, isMoreStops: isUserAskingForMoreStops }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction', entityType: s.entityType || (s.entityType === 'restaurant' ? 'restaurant' : 'attraction'), isRestaurant: s.entityType === 'restaurant' || s.isRestaurant === true, ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))); known.specificPlaces = parsedExtracted.specificPlaces }
       reconstructed += isUserAskingForMoreStops
         ? '¿Deseas confirmar este itinerario ampliado y generar tu tour en el mapa?'
         : '¿Deseas confirmar este itinerario y generar tu tour en el mapa?'

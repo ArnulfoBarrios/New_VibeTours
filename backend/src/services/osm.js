@@ -1,6 +1,7 @@
 import { GeoCache } from './geoCache.js'
 import { cleanAdministrativeCityName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache } from './destinationService.js'
-import { rankAndFilterTouristAttractions, isNeighborhoodOrMinorPark, isLowQualityOrFastFoodVenue, arePlaceNamesSemanticallySame } from './open-tourism-service.js'
+import { rankAndFilterTouristAttractions, isNeighborhoodOrMinorPark, isLowQualityOrFastFoodVenue, arePlaceNamesSemanticallySame, isGenericFacilityName } from './open-tourism-service.js'
+export { isGenericFacilityName }
 
 const USER_AGENT = 'VIBETOURS/1.0 contact=ops@vibetours.app'
 
@@ -1748,27 +1749,7 @@ function isAccommodation(type) {
   ].includes(type)
 }
 
-export function isGenericFacilityName(rawName = '') {
-  if (!rawName || typeof rawName !== 'string') return true
-  const clean = rawName.trim().toLowerCase()
-  if (clean.length < 3) return true
-  const genericList = [
-    'restaurante', 'restaurant', 'bar', 'café', 'cafe', 'cafetería', 'cafeteria',
-    'comidas rápidas', 'comidas rapidas', 'fast food', 'hotel', 'hostal', 'hostel',
-    'posada', 'alojamiento', 'atractivo', 'monumento', 'parque', 'plaza', 'mirador',
-    'tienda', 'panadería', 'panaderia', 'kiosko', 'kiosco', 'puesto', 'estadero',
-    'museo', 'catedral', 'iglesia', 'parroquia', 'capilla', 'muelle', 'malecon', 'malecón', 'turismo'
-  ]
-  if (genericList.includes(clean)) return true
-  if (/^(restaurante|restaurant|bar|café|cafe|hotel|hostal|atractivo)\s*#?\d*$/i.test(clean)) return true
-  if (/^(?:plaza|parque|plazoleta|zona)\s+(?:descanso(?:\s*\d+)?|hospital|salud|clinica|ips|eps)$/i.test(clean)) return true
-  if (/^descanso\s*\d+$/i.test(clean)) return true
-  // Filter out orphan administrative or generic heritage labels without a distinctive proper name (e.g. "Monumento Nacional")
-  if (/^(?:monumento|patrimonio|edificio|sitio|atractivo|bien)\s+(?:nacional|cultural|historico|histórico|turistico|turístico|distrital|municipal|de\s+la\s+nacion|de\s+la\s+nación)$/i.test(clean)) return true
-  if (/^(?:monumento\s+nacional|patrimonio\s+nacional|patrimonio\s+cultural)$/i.test(clean)) return true
-  if (/^(?:parque\s+nacional|plaza\s+de\s+mercado|plaza\s+de\s+mercado\s+central|centro\s+comercial|zona\s+rosa|centro\s+hist[oó]rico|centro)$/i.test(clean)) return true
-  return false
-}
+
 
 export function isFoodOrDrinkEstablishment(name = '') {
   if (!name || typeof name !== 'string') return false
