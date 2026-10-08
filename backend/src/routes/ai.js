@@ -8420,6 +8420,14 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
                 address: aiResult.destinationAddress,
                 type: 'hotel'
               }
+            } else if (centerLat != null && centerLon != null) {
+              targetDestination = {
+                name: aiResult.destinationAddress,
+                latitude: centerLat,
+                longitude: centerLon,
+                address: aiResult.destinationAddress,
+                type: 'hotel'
+              }
             }
           }
           if (!targetDestination && tourContext.hotelLat && tourContext.hotelLon) {

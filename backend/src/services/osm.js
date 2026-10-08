@@ -206,8 +206,16 @@ export function normalizeGeocodeQuery(query) {
   if (!query || typeof query !== 'string') return ''
   let cleaned = query.trim().replace(/^(destino|lugar|ciudad|ubicaci[oó]n|location|destination|pais|pa[íi]s)\s*:\s*/i, '').trim()
   
+  // Expand common Colombian street abbreviations for better OSM/Photon geocoding
+  cleaned = cleaned.replace(/\b(cra|cr|kra)\b\.?/gi, 'Carrera ')
+  cleaned = cleaned.replace(/\b(cll|cl)\b\.?/gi, 'Calle ')
+  cleaned = cleaned.replace(/\b(av|avda)\b\.?/gi, 'Avenida ')
+  cleaned = cleaned.replace(/\b(diag|dg)\b\.?/gi, 'Diagonal ')
+  cleaned = cleaned.replace(/\b(transv|tv)\b\.?/gi, 'Transversal ')
+
   // Strip punctuation and dots (e.g. EE.UU. -> EEUU)
   cleaned = cleaned.replace(/[.\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+  cleaned = cleaned.replace(/\s+/g, ' ').trim()
 
   // Map Spanish country names and abbreviations to international OSM English names
   cleaned = cleaned.replace(/\b(ee\s*uu|eeuu|usa|us|estados\s+unidos)\b/gi, 'United States')
@@ -304,6 +312,12 @@ export function isDistinctNameMatch(query, candidateName) {
   return hasTokenMatch
 }
 
+export function hasPhysicalAddressPattern(address) {
+  if (!address || typeof address !== 'string') return false
+  const lower = address.toLowerCase().trim()
+  return /\b(calle|cll|cra|carrera|kra|av|avenida|diagonal|diag|transversal|transv|autopista|v[íi]a|km|manzana|mz|#|no\.?|con|esquina)\b/i.test(lower)
+}
+
 export function selectBestPoiResult(results, originalQuery = '') {
   if (!Array.isArray(results) || results.length === 0) return null
   const lowerQuery = String(originalQuery || '').toLowerCase()
@@ -331,13 +345,16 @@ export function selectBestPoiResult(results, originalQuery = '') {
   // 1. Strict Distinct Name Matching Guard:
   // If originalQuery contains specific semantic tokens (e.g. "Romántico", "Cucayo", "Narcobollo"),
   // we MUST NOT accept a candidate that completely lacks that token (e.g. "Museo del Carnaval").
+  // However, for physical street addresses (e.g. "Cra 54 #70"), candidates are street nodes or intersections,
+  // so we should not discard candidates if the address pattern is present.
   if (originalQuery && candidates.length > 0) {
+    const isAddressQuery = hasPhysicalAddressPattern(originalQuery)
     const qTokens = getDistinctSemanticTokens(originalQuery)
     if (qTokens.length > 0) {
       const matched = candidates.filter(r => isDistinctNameMatch(originalQuery, r.name))
       if (matched.length > 0) {
         candidates = matched
-      } else {
+      } else if (!isAddressQuery) {
         // None of the candidates match the distinct name tokens.
         // Return null to avoid falsely pinning an unrelated landmark.
         return null
@@ -1278,7 +1295,8 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
               if (!hasIslandWord && type !== 'island' && type !== 'islet') return false
             }
 
-            if (lookupQuery && !isDistinctNameMatch(lookupQuery, r.display_name || r.name || '')) return false
+            const isAddressQuery = hasPhysicalAddressPattern(lookupQuery) || hasPhysicalAddressPattern(nq)
+            if (lookupQuery && !isAddressQuery && !isDistinctNameMatch(lookupQuery, r.display_name || r.name || '')) return false
             return true
           })
 

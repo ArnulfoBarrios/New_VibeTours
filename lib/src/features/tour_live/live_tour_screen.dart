@@ -454,7 +454,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         }
         if ((place.latitude == 0.0 && place.longitude == 0.0) && place.name.isNotEmpty) {
           try {
-            final results = await DiscoveryRepository().searchPlaces('${place.name}, ${tour.city}');
+            final results = await DiscoveryRepository().searchLodgingOrAddress(place.name, city: tour.city);
             if (results.isNotEmpty) {
               place = _NearbyFoodPlace(
                 name: place.name,
@@ -594,24 +594,25 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                           });
                           try {
                             final refLoc = _currentPoint ?? (tour.stops.isNotEmpty ? tour.stops.first.location : null);
-                            final results = await DiscoveryRepository().searchPlaces(
-                              '$query, ${tour.city}',
+                            final results = await DiscoveryRepository().searchLodgingOrAddress(
+                              query,
+                              city: tour.city,
                               userLat: refLoc?.latitude,
                               userLon: refLoc?.longitude,
                             );
                             if (results.isEmpty) {
                               setDialogState(() {
                                 isSearching = false;
-                                searchError = 'No se encontró el lugar. Intenta con otra dirección.';
+                                searchError = 'No se encontró el lugar. Intenta con otra dirección o nombre.';
                               });
                               return;
                             }
                             final place = results.first;
                             final hotelPlace = _NearbyFoodPlace(
-                              name: place.name,
+                              name: place.name.isNotEmpty ? place.name : query,
                               latitude: place.location.latitude,
                               longitude: place.location.longitude,
-                              type: place.category,
+                              type: 'hotel',
                             );
                             await _saveUserLodging(tour.city, hotelPlace);
                             if (dialogContext.mounted) {

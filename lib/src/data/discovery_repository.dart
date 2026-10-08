@@ -896,6 +896,200 @@ class DiscoveryRepository {
     return const [];
   }
 
+  /// Searches for lodging or a physical address specifically for user accommodations.
+  /// Unlike [searchPlaces], this method does not apply tourism blacklists, expands
+  /// Colombian street nomenclature, normalizes '#' characters, and supports residential/hotel addresses.
+  Future<List<NearbyPlace>> searchLodgingOrAddress(
+    String query, {
+    String? city,
+    double? userLat,
+    double? userLon,
+  }) async {
+    final raw = query.trim();
+    if (raw.length < 2) return const [];
+
+    // 1. Normalize address query: replace '#' with space and expand abbreviations
+    String cleaned = raw
+        .replaceAll(RegExp(r'[#№]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    cleaned = cleaned
+        .replaceAll(RegExp(r'\b(?:cra|cr|kra)\b\.?', caseSensitive: false), 'Carrera')
+        .replaceAll(RegExp(r'\b(?:cll|cl)\b\.?', caseSensitive: false), 'Calle')
+        .replaceAll(RegExp(r'\b(?:av|avda)\b\.?', caseSensitive: false), 'Avenida')
+        .replaceAll(RegExp(r'\b(?:diag|dg)\b\.?', caseSensitive: false), 'Diagonal')
+        .replaceAll(RegExp(r'\b(?:transv|tv)\b\.?', caseSensitive: false), 'Transversal');
+
+    final citySuffix = (city != null &&
+            city.trim().isNotEmpty &&
+            !cleaned.toLowerCase().contains(city.trim().toLowerCase()))
+        ? ', ${city.trim()}'
+        : '';
+    final primaryQuery = '$cleaned$citySuffix';
+
+    // 2. Try Photon with coordinates bias
+    try {
+      final uri = Uri.parse('https://photon.komoot.io/api/').replace(
+        queryParameters: {
+          'q': primaryQuery,
+          'limit': '8',
+          if (userLat != null && userLon != null) ...{
+            'lat': userLat.toString(),
+            'lon': userLon.toString(),
+          },
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final features = json['features'] as List<dynamic>? ?? const [];
+        final List<NearbyPlace> places = [];
+
+        for (int i = 0; i < features.length; i++) {
+          if (features[i] is! Map) continue;
+          final feat = Map<String, dynamic>.from(features[i] as Map);
+          final properties = feat['properties'] is Map
+              ? Map<String, dynamic>.from(feat['properties'] as Map)
+              : const <String, dynamic>{};
+          final geometry = feat['geometry'] is Map
+              ? Map<String, dynamic>.from(feat['geometry'] as Map)
+              : const <String, dynamic>{};
+          final coordinates = geometry['coordinates'] is List
+              ? geometry['coordinates'] as List
+              : const [];
+          if (coordinates.length < 2) continue;
+
+          final lat = _double(coordinates[1]);
+          final lng = _double(coordinates[0]);
+          if (lat == 0.0 || lng == 0.0) continue;
+
+          final rawName = properties['name']?.toString().trim();
+          final street = properties['street']?.toString().trim() ?? '';
+          final housenumber = properties['housenumber']?.toString().trim() ?? '';
+
+          String resolvedName;
+          if (rawName != null && rawName.isNotEmpty) {
+            resolvedName = rawName;
+          } else if (street.isNotEmpty) {
+            resolvedName = housenumber.isNotEmpty ? '$street # $housenumber' : street;
+          } else {
+            resolvedName = raw;
+          }
+
+          final typeStr = properties['osm_value']?.toString() ??
+              properties['type']?.toString() ??
+              'hotel';
+          places.add(NearbyPlace(
+            id: 'lodging-photon-$i',
+            name: resolvedName,
+            type: _typeLabel(typeStr),
+            distanceMeters: (userLat != null && userLon != null)
+                ? _distanceMeters(userLat, userLon, lat, lng).round()
+                : 0,
+            location: GeoPoint(latitude: lat, longitude: lng),
+            category: 'hotel',
+            imageUrl: '',
+            thumbnailUrl: '',
+            statusLabel: 'Alojamiento',
+            isOpenNow: true,
+            sourceTags: properties,
+          ));
+        }
+
+        if (places.isNotEmpty) {
+          return places;
+        }
+      }
+    } catch (_) {}
+
+    // 3. Nominatim OpenStreetMap fallback (excellent for Latin American street nomenclature)
+    try {
+      final uri = Uri.parse('https://nominatim.openstreetmap.org/search').replace(
+        queryParameters: {
+          'q': primaryQuery,
+          'format': 'jsonv2',
+          'limit': '5',
+          'addressdetails': '1',
+        },
+      );
+      final response = await http
+          .get(uri, headers: const {'User-Agent': 'VibeToursApp/1.0'})
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final rawList = jsonDecode(response.body) as List<dynamic>? ?? const [];
+        final List<NearbyPlace> places = [];
+
+        for (int i = 0; i < rawList.length; i++) {
+          if (rawList[i] is! Map) continue;
+          final item = Map<String, dynamic>.from(rawList[i] as Map);
+          final lat = _double(item['lat']);
+          final lng = _double(item['lon']);
+          if (lat == 0.0 || lng == 0.0) continue;
+
+          final displayName = (item['display_name'] ?? '').toString();
+          final firstName = (item['name'] ?? displayName.split(',').first).toString().trim();
+          final resolvedName = firstName.isNotEmpty ? firstName : raw;
+
+          places.add(NearbyPlace(
+            id: 'lodging-nom-$i',
+            name: resolvedName,
+            type: 'Hotel / Alojamiento',
+            distanceMeters: (userLat != null && userLon != null)
+                ? _distanceMeters(userLat, userLon, lat, lng).round()
+                : 0,
+            location: GeoPoint(latitude: lat, longitude: lng),
+            category: 'hotel',
+            imageUrl: '',
+            thumbnailUrl: '',
+            statusLabel: 'Alojamiento',
+            isOpenNow: true,
+            sourceTags: item,
+          ));
+        }
+
+        if (places.isNotEmpty) {
+          return places;
+        }
+      }
+    } catch (_) {}
+
+    // 4. Fallback to backend discovery search
+    for (final base in AppConfig.apiBaseUrls) {
+      try {
+        final uri = Uri.parse('$base/discovery/search?q=${Uri.encodeComponent(primaryQuery)}');
+        final response = await http.get(uri).timeout(const Duration(seconds: 5));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          final list = json['places'] as List<dynamic>? ?? [];
+          if (list.isNotEmpty) {
+            return list.map((item) {
+              final map = item as Map<String, dynamic>;
+              final name = (map['name'] ?? raw).toString();
+              return NearbyPlace(
+                id: 'lodging-backend-${map['id'] ?? name}',
+                name: name,
+                type: 'Hotel / Alojamiento',
+                distanceMeters: 0,
+                location: GeoPoint(
+                  latitude: (map['latitude'] as num?)?.toDouble() ?? 0.0,
+                  longitude: (map['longitude'] as num?)?.toDouble() ?? 0.0,
+                ),
+                category: 'hotel',
+                imageUrl: '',
+                thumbnailUrl: '',
+                statusLabel: 'Alojamiento',
+                isOpenNow: true,
+              );
+            }).where((p) => p.location.latitude != 0.0 && p.location.longitude != 0.0).toList();
+          }
+        }
+      } catch (_) {}
+    }
+
+    return const [];
+  }
+
   /// Reverse geocodes a coordinate to obtain a readable place name and address.
   Future<Map<String, String>> reverseGeocode(double lat, double lon) async {
     for (final base in AppConfig.apiBaseUrls) {
