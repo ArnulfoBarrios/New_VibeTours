@@ -1315,6 +1315,36 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
       _message('No tienes conexión a internet. Para publicar o enviar un tour a revisión debes estar en línea.');
       return;
     }
+
+    if (!mounted) return;
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.verified_user_rounded, color: AppTheme.primary),
+            SizedBox(width: 8),
+            Expanded(child: Text('Términos de Publicación')),
+          ],
+        ),
+        content: const Text(
+          'Al enviar este tour a revisión y publicación comunitaria, declaras que tienes derechos sobre las fotos y el contenido cargado, y que la ruta no transgrede la propiedad privada, zonas restringidas ni las normas comunitarias de VIBETOURS.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Aceptar y Enviar'),
+          ),
+        ],
+      ),
+    );
+    if (agreed != true) return;
+
     final tour = _buildTour();
     late final Tour savedTour;
     try {

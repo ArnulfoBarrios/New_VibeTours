@@ -4,10 +4,15 @@ import assert from 'node:assert/strict'
 import {
   extractChatInformationFallback,
   extractRequestedSpecificPlaces,
+  extractStopsFromItineraryText,
   generateChatResponse
 } from '../services/openai.js'
 import { isValidSpecificPlace } from '../routes/ai.js'
 import { inferTourType, evaluateTourRequirements } from '../services/destinationService.js'
+import { tripPhotonCircuit } from '../services/osm.js'
+
+process.env.NODE_ENV = 'test'
+tripPhotonCircuit(3600000)
 
 test('1. extractChatInformationFallback rejects superlative and generic noun phrases as stops', () => {
   const ext = extractChatInformationFallback(
@@ -363,6 +368,93 @@ test('17. generateChatResponse executes explicit swap "Cambiar Parque Washington
   assert.ok(!specificNames.includes('Parque Washington'), 'specificPlaces must not include Parque Washington')
   assert.equal(specificNames.length, 5, 'Must maintain exact 5 stops in 1-day tour')
 })
+
+test('18. extractStopsFromItineraryText ignores suggested alternatives block and extracts only the current stops', async () => {
+  const assistantMsg = `¡Con gusto! ¿Qué parada te gustaría cambiar de tu recorrido por **Cartagena**?
+
+Paradas actuales:
+1. Torre del Reloj
+2. Museo del Oro
+3. Restaurante Nuevo Asia (Almuerzo)
+4. Museo de Arte Moderno de Cartagena
+5. Museo Naval del Caribe
+
+Aquí tienes algunas excelentes alternativas disponibles:
+• Casa Museo Rafael Núñez
+• Museo San Pedro Claver
+• Islas del Rosario
+• Ciudad Amurallada
+
+Indícame cuál deseas cambiar:`
+
+  const stops = extractStopsFromItineraryText(assistantMsg)
+  assert.equal(stops.length, 5, `Must extract exactly 5 current stops, got ${stops.length}`)
+  const stopNames = stops.map(s => s.name)
+  assert.deepEqual(stopNames, [
+    'Torre del Reloj',
+    'Museo del Oro',
+    'Restaurante Nuevo Asia',
+    'Museo de Arte Moderno de Cartagena',
+    'Museo Naval del Caribe'
+  ])
+  assert.ok(!stopNames.includes('Casa Museo Rafael Núñez'), 'Must not include alternative suggestions')
+  assert.ok(!stopNames.includes('Museo San Pedro Claver'), 'Must not include alternative suggestions')
+  assert.ok(!stopNames.includes('Islas del Rosario'), 'Must not include alternative suggestions')
+  assert.ok(!stopNames.includes('Ciudad Amurallada'), 'Must not include alternative suggestions')
+})
+
+test('19. generateChatResponse on swap after assistant suggestions maintains exact stop count and ignores alternatives', async () => {
+  const assistantAsk = `¡Con gusto! ¿Qué parada te gustaría cambiar de tu recorrido por **Cartagena**?
+
+Paradas actuales:
+1. Torre del Reloj
+2. Museo del Oro
+3. Restaurante Nuevo Asia (Almuerzo)
+4. Museo de Arte Moderno de Cartagena
+5. Museo Naval del Caribe
+
+Aquí tienes algunas excelentes alternativas disponibles:
+• Casa Museo Rafael Núñez
+• Museo San Pedro Claver
+• Islas del Rosario
+• Ciudad Amurallada
+
+Indícame cuál deseas cambiar:`
+
+  const state = {
+    history: [
+      { role: 'user', content: 'vamos a Cartagena por 1 día' },
+      { role: 'assistant', content: assistantAsk },
+      { role: 'user', content: 'Cambia el Museo de Arte Moderno de Cartagena por las islas del rosario' }
+    ]
+  }
+
+  const res = await generateChatResponse(state, '', '', {
+    city: 'Cartagena',
+    destination: 'Cartagena',
+    durationDays: 1,
+    transport: 'Caminando',
+    budget: 'Moderado',
+    companions: 'con amigos'
+  })
+
+  assert.ok(res.responseMessage.includes('Las Islas del Rosario'), 'Updated message must contain Las Islas del Rosario')
+  assert.ok(!res.responseMessage.includes('Museo de Arte Moderno de Cartagena'), 'Museo de Arte Moderno must have been replaced')
+  assert.ok(!res.responseMessage.includes('Casa Museo Rafael Núñez'), 'Must not absorb Casa Museo Rafael Núñez')
+  assert.ok(!res.responseMessage.includes('Museo San Pedro Claver'), 'Must not absorb Museo San Pedro Claver')
+  assert.ok(!res.responseMessage.includes('Ciudad Amurallada'), 'Must not absorb Ciudad Amurallada')
+
+  const specificNames = (res.specificPlaces || []).map(p => typeof p === 'string' ? p : p.name)
+  assert.equal(specificNames.length, 5, `Must maintain exact 5 stops in tour, got ${specificNames.length}`)
+  assert.ok(specificNames.includes('Las Islas del Rosario'))
+  assert.ok(!specificNames.includes('Museo de Arte Moderno de Cartagena'))
+
+  // Verify list numbering is clean 1 to 5 without gaps
+  const numberedLines = (res.responseMessage.match(/^\d+\.\s+[^\n]+/gm) || [])
+  assert.equal(numberedLines.length, 5, `Must have exactly 5 numbered lines, got ${numberedLines.length}`)
+  assert.doesNotMatch(res.responseMessage, /\b[6789]\.\s+/i, 'Must not jump to 6, 7, 8 or 9')
+})
+
 
 
 

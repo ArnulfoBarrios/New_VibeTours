@@ -1,4 +1,5 @@
 import { GeoCache } from './geoCache.js'
+import { isWikipediaCountryMismatch } from './imageSearch.js'
 
 const USER_AGENT = 'VIBETOURS/1.0 (https://vibetours.app; ops@vibetours.app)'
 const placeEnrichmentCache = new GeoCache(24 * 60 * 60 * 1000, 600)
@@ -815,7 +816,7 @@ export async function fetchWikipediaSummaryByTitle(title, lang = 'es') {
   }
 }
 
-async function searchWikipediaSummaryByQuery(query, lang = 'es', placeName = '', city = '') {
+async function searchWikipediaSummaryByQuery(query, lang = 'es', placeName = '', city = '', country = '') {
   if (!query) return null
 
   try {
@@ -831,28 +832,32 @@ async function searchWikipediaSummaryByQuery(query, lang = 'es', placeName = '',
         if (!hit?.title) continue
         const candidateSummary = await fetchWikipediaSummaryByTitle(hit.title, lang)
         if (candidateSummary && !isGenericMunicipalitySummary(candidateSummary, placeName, city, hit.snippet)) {
+          if (country && isWikipediaCountryMismatch(candidateSummary.extract || candidateSummary.description, country)) {
+            continue
+          }
           return candidateSummary
         }
       }
     }
 
     if (lang !== 'en') {
-      return await searchWikipediaSummaryByQuery(query, 'en', placeName, city)
+      return await searchWikipediaSummaryByQuery(query, 'en', placeName, city, country)
     }
     return null
   } catch {
     if (lang !== 'en') {
-      return await searchWikipediaSummaryByQuery(query, 'en', placeName, city).catch(() => null)
+      return await searchWikipediaSummaryByQuery(query, 'en', placeName, city, country).catch(() => null)
     }
     return null
   }
 }
 
-export async function enrichPlaceWithOpenData(place = {}, city = '', lang = 'es') {
+export async function enrichPlaceWithOpenData(place = {}, city = '', lang = 'es', country = '') {
   const placeName = String(place.name || place.nombre || '').trim()
   if (!placeName) return { ...place }
 
-  const cacheKey = `open_poi_v2_${lang}_${city.toLowerCase()}_${placeName.toLowerCase()}`
+  const placeCountry = String(place.country || country || '').trim()
+  const cacheKey = `open_poi_v3_${lang}_${placeCountry.toLowerCase()}_${city.toLowerCase()}_${placeName.toLowerCase()}`
   const cached = placeEnrichmentCache.get(cacheKey)
   if (cached) return { ...place, ...cached }
 
@@ -870,7 +875,9 @@ export async function enrichPlaceWithOpenData(place = {}, city = '', lang = 'es'
       : [lang, osmMeta.wikipediaTag]
     const candidate = await fetchWikipediaSummaryByTitle(tagTitle, tagLang || lang)
     if (candidate && !isGenericMunicipalitySummary(candidate, placeName, city)) {
-      wikiSummary = candidate
+      if (!placeCountry || !isWikipediaCountryMismatch(candidate.extract || candidate.description, placeCountry)) {
+        wikiSummary = candidate
+      }
     }
   }
 
@@ -882,14 +889,20 @@ export async function enrichPlaceWithOpenData(place = {}, city = '', lang = 'es'
     if (wikidataInfo?.wikiTitle) {
       const candidate = await fetchWikipediaSummaryByTitle(wikidataInfo.wikiTitle, wikidataInfo.resolvedLang)
       if (candidate && !isGenericMunicipalitySummary(candidate, placeName, city)) {
-        wikiSummary = candidate
+        if (!placeCountry || !isWikipediaCountryMismatch(candidate.extract || candidate.description, placeCountry)) {
+          wikiSummary = candidate
+        }
       }
     }
   }
 
   if (!isDiningVenue && !wikiSummary) {
-    const searchQuery = city ? `${placeName} ${city}` : placeName
-    wikiSummary = await searchWikipediaSummaryByQuery(searchQuery, lang, placeName, city)
+    const contextualQuery = [placeName, city, placeCountry].filter(Boolean).join(', ')
+    wikiSummary = await searchWikipediaSummaryByQuery(contextualQuery, lang, placeName, city, placeCountry)
+    if (!wikiSummary && placeCountry) {
+      const fallbackQuery = city ? `${placeName} ${city}` : placeName
+      wikiSummary = await searchWikipediaSummaryByQuery(fallbackQuery, lang, placeName, city, placeCountry)
+    }
   }
 
   const cleanHistory =
@@ -897,14 +910,15 @@ export async function enrichPlaceWithOpenData(place = {}, city = '', lang = 'es'
       ? place.history
       : ''
 
+  const verifiedImage = wikiSummary?.imageUrl || ''
   const enrichedFields = {
     subcategory,
     history: wikiSummary?.extract || cleanHistory || '',
     shortDescription: shortDescription || wikiSummary?.description || '',
-    imageUrl: place.imageUrl || wikiSummary?.imageUrl || '',
-    images: Array.isArray(place.images) && place.images.length > 0
-      ? place.images
-      : (wikiSummary?.imageUrl ? [wikiSummary.imageUrl] : []),
+    imageUrl: verifiedImage || place.imageUrl || '',
+    images: verifiedImage
+      ? [verifiedImage, ...(Array.isArray(place.images) ? place.images.filter(img => img !== verifiedImage) : [])]
+      : (Array.isArray(place.images) && place.images.length > 0 ? place.images : []),
     osmMeta
   }
 

@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/design/app_theme.dart';
@@ -1082,26 +1081,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         icon: Icons.description_outlined,
                         iconColor: Colors.blue,
                         title: l10n.termsOfService,
-                        onTap: () async {
-                          final url = Uri.parse('https://new-vibe-tours-d2vy.vercel.app/legal?tab=terms');
-                          try {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                          } catch (e) {
-                            debugPrint('Could not launch $url: $e');
-                          }
-                        },
+                        onTap: () => context.push('/legal/terms'),
                       ),
                       _SettingsListTile(
                         icon: Icons.privacy_tip_outlined,
                         iconColor: Colors.blue,
                         title: l10n.privacyPolicy,
-                        onTap: () async {
-                          final url = Uri.parse('https://new-vibe-tours-d2vy.vercel.app/legal?tab=privacy');
-                          try {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                          } catch (e) {
-                            debugPrint('Could not launch $url: $e');
-                          }
+                        onTap: () => context.push('/legal/privacy'),
+                      ),
+                      _SettingsListTile(
+                        icon: Icons.code_rounded,
+                        iconColor: Colors.blue,
+                        title: 'Licencias y Atribuciones',
+                        onTap: () {
+                          showLicensePage(
+                            context: context,
+                            applicationName: 'VIBETOURS',
+                            applicationVersion: '1.5.0',
+                            applicationLegalese:
+                                '© 2026 VibeTours. Todos los derechos reservados.\n\nDatos de mapas y geocodificación provistos por © OpenStreetMap contributors (licencia ODbL, https://www.openstreetmap.org/copyright).\nArtículos históricos y resúmenes provistos por Wikipedia bajo licencia Creative Commons CC BY-SA.\nOptimización de rutas asistida por TomTom y OSRM.',
+                          );
                         },
                       ),
                     ],

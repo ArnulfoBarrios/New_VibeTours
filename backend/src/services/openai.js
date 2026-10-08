@@ -663,6 +663,24 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
       return null
     }
 
+    // If place is already an approved itinerary stop from history, preserve it without blocking on network geocoding
+    if (typeof place === 'object' && (place.dia != null || place.day != null || place.coordinatesVerified)) {
+      const cached = await lookupCachedPlace(rawName, city).catch(() => null)
+      if (cached && Number.isFinite(cached.latitude)) {
+        return {
+          ...place,
+          name: rawName,
+          latitude: cached.latitude,
+          longitude: cached.longitude,
+          address: cached.address || place.address || `${rawName}, ${city}`,
+          placeId: cached.placeId || place.placeId || '',
+          coordinateSource: cached.coordinateSource || 'cache',
+          coordinatesVerified: true
+        }
+      }
+      return place
+    }
+
     const geo = await resolveOsmBackedChatPlace(place, city, country, selectedHotel)
     if (!geo) {
       return null
@@ -795,7 +813,18 @@ export async function sanitizeChatItineraryTextWithOsm(text, city = '', country 
     return Boolean(await resolveOsmBackedChatPlace(candidate, city, country, selectedHotel))
   }))
 
-  return lines.filter((_, index) => checks[index]).join('\n')
+  const filteredLines = lines.filter((_, index) => checks[index])
+  let listIndex = 1
+  const renumbered = filteredLines.map(line => {
+    if (/^\s*\d+\.\s+/.test(line)) {
+      return line.replace(/^\s*\d+(\.\s+)/, `${listIndex++}$1`)
+    }
+    if (/^(?:D[íi]a\s+\d+|Paradas\s+actuales)/i.test(line)) {
+      listIndex = 1
+    }
+    return line
+  })
+  return renumbered.join('\n')
 }
 
 /**
@@ -1268,6 +1297,14 @@ export function extractStopsFromItineraryText(text = '') {
   for (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed) continue
+
+    // Stop extracting stops if we reach an alternatives or suggestions section
+    if (
+      /\b(?:aqu[íi]\s+tienes\s+(?:algunas\s+)?(?:excelentes\s+)?alternativas|alternativas(?:\s+disponibles)?|otras\s+alternativas|sugerencias|lugares\s+recomendados|opciones\s+recomendadas|opciones\s+de\s+(?:comida|restaurante|alojamiento)|restaurantes\s+recomendados|hoteles\s+recomendados)\b/i.test(trimmed) ||
+      (stops.length > 0 && /^(?:ind[íi]came\s+cu[aá]l|¿deseas\s+confirmar|¿te\s+gusta|¿qu[ée]\s+te\s+parece|¿est[áa]\s+todo\s+listo)\b/i.test(trimmed))
+    ) {
+      break
+    }
 
     const dayMatch = trimmed.match(/(?:^|\b|\*{1,2}|#{1,4}\s*)D[íi]a\s*(\d+)\b/i)
     if (dayMatch && !/[•\-\*]\s+/i.test(trimmed)) {
@@ -2524,6 +2561,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     return /(?:^|\n)\s*(?:#{1,4}\s*)?d[íi]a\s*1\b/i.test(text) ||
       /\b(?:d[íi]a\s*1\s*[:\-–]|\*\*d[íi]a\s*1\*\*)/i.test(text) ||
       /\b(?:itinerario(?:\s+de\s+viaje)?|recorrido\s+de\s+\d+\s+paradas)\b/i.test(text) ||
+      /\bparadas\s+actuales\b/i.test(text) ||
       /(?:^|\n)\s*1\.\s+(?:\*{1,2})?[A-ZÁÉÍÓÚ]/i.test(text)
   })
 
@@ -2726,6 +2764,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       )
       const isHotelOnlyInquiry = isExplicitHotelInquiry && !isExplicitItineraryRequest && !isExplicitBuildRequest && !isCompleteOrReadyToPresent && !known?.readyToBuild
 
+      const isPlaceSwapTurn = Boolean(
+        /\b(cambiar\s+paradas?|modificar\s+paradas?|cambiar\s+lugares|otras?\s+paradas?|cambiar\s+itinerario|cambiar\s+sitios|quiero\s+cambiar\s+lugares)\b/i.test(lastUserMsg) ||
+        /\b(?:cambiar|cambia|reemplazar|reemplaza|sustituir)\s+por\s+/i.test(lastUserMsg) ||
+        /\b(?:cambia|cambiar|reemplaza|reemplazar|sustituye|sustituir|quita|quitar)\s+.+\s+(?:por|y\s+(?:poner|meter|agrega|agregar|a[ñn]ade|a[ñn]adir))\s+/i.test(lastUserMsg) ||
+        (/\b(?:por\s+cu[aá]l\s+de\s+tus\s+paradas\s+actuales\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\b/i.test(lastAssistantMsg) && !isExplicitBuildRequest) ||
+        (/\b(?:por\s+qu[ée]\s+(?:nuevo\s+)?lugar\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\b/i.test(lastAssistantMsg) && !isExplicitBuildRequest) ||
+        (/\b(?:cambiar|cambia|quitar|quita|eliminar)\s+/i.test(lastUserMsg) && (known.specificPlaces || []).some(s => arePlacesSimilar(typeof s === 'string' ? s : (s?.name || ''), lastUserMsg.replace(/^(?:cambiar|cambia|quitar|quita|eliminar)\s+(?:a\s+|el\s+|la\s+|al\s+)?/i, '').trim())))
+      )
+
       if (isHotelOnlyInquiry) {
         // Fast-path: When the user is only asking for hotel recommendations,
         // resolve only hotels dynamically and fast without blocking on full multi-day catalog queries.
@@ -2735,6 +2782,11 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           budget: known.budget || 'Moderado'
         }).catch(() => [])
         realCatalog = { places: [], restaurants: [], hotels: suggestedHotels }
+      } else if (isPlaceSwapTurn && ((known.specificPlaces && known.specificPlaces.length > 0) || hasItineraryAlreadyInHistory)) {
+        // Fast-path: When the user is swapping or modifying an existing itinerary's stops,
+        // do not block on external live Overpass/Photon full-city queries.
+        const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
+        realCatalog = cachedCatalog || { places: [], restaurants: [], hotels: [] }
       } else {
         const needsImmediate = isExplicitItineraryRequest ||
           isExplicitRestaurantInquiry ||
@@ -3321,11 +3373,21 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       const isItineraryInquiry = /\b(itinerario|itinerarios|plan|plan de viaje|cómo va|cómo queda|mostrar el itinerario|muéstrame el itinerario|detalles del d[íi]a|ver d[íi]a)\b/i.test(lastUserMsg)
       const isPlacesOrFoodInquiry = /\b(actividad|actividades|qu[ée] hacer|lugares|atracciones|visitar|restaurante|restaurantes|comida|comer|gastronom[íi]a)\b/i.test(lastUserMsg)
       const isHotelInquiry = isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
+      const isFbPlaceSwapTurn = Boolean(
+        /\b(cambiar\s+paradas?|modificar\s+paradas?|cambiar\s+lugares|otras?\s+paradas?|cambiar\s+itinerario|cambiar\s+sitios|quiero\s+cambiar\s+lugares)\b/i.test(lastUserMsg) ||
+        /\b(?:cambiar|cambia|reemplazar|reemplaza|sustituir)\s+por\s+/i.test(lastUserMsg) ||
+        /\b(?:cambia|cambiar|reemplaza|reemplazar|sustituye|sustituir|quita|quitar)\s+.+\s+(?:por|y\s+(?:poner|meter|agrega|agregar|a[ñn]ade|a[ñn]adir))\s+/i.test(lastUserMsg) ||
+        (/\b(?:por\s+cu[aá]l\s+de\s+tus\s+paradas\s+actuales\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\b/i.test(lastAssistantMsg) && !isExplicitBuildRequestedByUser) ||
+        (/\b(?:por\s+qu[ée]\s+(?:nuevo\s+)?lugar\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\b/i.test(lastAssistantMsg) && !isExplicitBuildRequestedByUser) ||
+        (/\b(?:cambiar|cambia|quitar|quita|eliminar)\s+/i.test(lastUserMsg) && (known.specificPlaces || []).some(s => arePlacesSimilar(typeof s === 'string' ? s : (s?.name || ''), lastUserMsg.replace(/^(?:cambiar|cambia|quitar|quita|eliminar)\s+(?:a\s+|el\s+|la\s+|al\s+)?/i, '').trim())))
+      )
       const fbNeedsCatalog = Boolean(
-        isExplicitBuildRequestedByUser ||
-        isItineraryInquiry ||
-        isPlacesOrFoodInquiry ||
-        (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging))
+        !isFbPlaceSwapTurn && (
+          isExplicitBuildRequestedByUser ||
+          isItineraryInquiry ||
+          isPlacesOrFoodInquiry ||
+          (hasDurationOrDates && (fbAllKeyInfoComplete || fbHasLodging))
+        )
       )
 
       let preset = (realCatalog?.hotels?.length > 0 || realCatalog?.places?.length > 0) ? realCatalog : null
@@ -3566,10 +3628,13 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       ) {
         const swapRequest = extractPlaceSwapRequest(lastUserMsg, known.specificPlaces, lastAssistantMsg)
         const currentSpecifics = (Array.isArray(known.specificPlaces) ? known.specificPlaces : []).map(p => typeof p === 'string' ? p : p.name)
+        const cleanKey = (destName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+        const presetIconics = DESTINATION_ICONIC_LANDMARKS[cleanKey] || DESTINATION_ICONIC_LANDMARKS[(destName || '').toLowerCase()] || []
         const catalogPool = [
           ...(preset.places || []),
           ...((preset.candidateCatalog?.places || []).map(p => p?.name || p)),
-          ...((realCatalog?.places || []).map(p => p?.name || p))
+          ...((realCatalog?.places || []).map(p => p?.name || p)),
+          ...presetIconics
         ].filter(Boolean)
         const unusedAlternatives = deduplicateChatSpecificPlaces(catalogPool, destName)
           .map(p => typeof p === 'string' ? p : p.name)
@@ -5001,11 +5066,18 @@ REGLAS PARA "accommodationStatus":
 
     // Final textual guard: the visible chat itinerary must obey the same
     // canonical identity rules as the structured map payload.
+    const allTrustedPlaces = [
+      ...(realCatalog?.places || []),
+      ...(realCatalog?.restaurants || []),
+      ...(Array.isArray(known.specificPlaces) ? known.specificPlaces : []),
+      ...(Array.isArray(parsedExtracted.specificPlaces) ? parsedExtracted.specificPlaces : [])
+    ]
     responseMessage = await sanitizeChatItineraryTextWithOsm(
       responseMessage,
       destName || known.city || known.destination || '',
       destCountry,
-      parsedExtracted.selectedHotel || known.selectedHotel
+      parsedExtracted.selectedHotel || known.selectedHotel,
+      allTrustedPlaces
     )
 
     if (!isLocationToDestination && isOneDayTour && /D[íi]a\s+1\s*:/i.test(responseMessage)) {

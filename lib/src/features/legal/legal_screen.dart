@@ -115,6 +115,62 @@ class LegalScreen extends StatelessWidget {
               },
             ),
           ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+              child: GlassPanel(
+                radius: 24,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          color: AppTheme.primary,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Atribuciones y Datos Abiertos',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '• Datos geoespaciales y mapas vectoriales provistos por © OpenStreetMap contributors bajo licencia Open Database License (ODbL).\n'
+                      '• Síntesis y datos históricos referenciales provistos por Wikipedia bajo licencia Creative Commons Attribution-ShareAlike (CC BY-SA 4.0).\n'
+                      '• Optimización de rutas asistida por TomTom API y OSRM.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                            height: 1.45,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        showLicensePage(
+                          context: context,
+                          applicationName: 'VIBETOURS',
+                          applicationVersion: '1.5.0',
+                          applicationLegalese:
+                              '© 2026 VibeTours. Todos los derechos reservados.\n\nDatos de mapas provistos por © OpenStreetMap contributors (licencia ODbL).\nArtículos de Wikipedia bajo licencia CC BY-SA 4.0.',
+                        );
+                      },
+                      icon: const Icon(Icons.code_rounded, size: 18),
+                      label: const Text('Ver licencias de código abierto'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

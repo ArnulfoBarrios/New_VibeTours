@@ -23,6 +23,7 @@ class PublicProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(publicUserProfileProvider(userId));
+    final currentUserId = ref.watch(authUserProvider).valueOrNull?.id;
 
     return PremiumScaffold(
       safeBottom: true,
@@ -55,6 +56,42 @@ class PublicProfileScreen extends ConsumerWidget {
                       ),
                 ),
                 centerTitle: true,
+                actions: [
+                  if (currentUserId != null && currentUserId != userId)
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert_rounded),
+                      tooltip: 'Opciones de usuario',
+                      onSelected: (val) {
+                        if (val == 'report') {
+                          _showReportUserDialog(context, ref, userId, fullName);
+                        } else if (val == 'block') {
+                          _showBlockUserDialog(context, ref, userId, fullName);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Row(
+                            children: [
+                              Icon(Icons.flag_outlined, size: 18, color: Colors.orange),
+                              SizedBox(width: 8),
+                              Text('Reportar usuario'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'block',
+                          child: Row(
+                            children: [
+                              Icon(Icons.block_rounded, size: 18, color: Colors.redAccent),
+                              SizedBox(width: 8),
+                              Text('Bloquear usuario', style: TextStyle(color: Colors.redAccent)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
               SliverPadding(
                 padding: const EdgeInsets.all(20.0),
@@ -963,4 +1000,122 @@ class _PublicCreatedToursSection extends ConsumerWidget {
       ],
     );
   }
+}
+
+void _showReportUserDialog(BuildContext context, WidgetRef ref, String userId, String userName) {
+  final reasons = [
+    'Perfil falso o suplantación',
+    'Contenido inapropiado u ofensivo',
+    'Comportamiento abusivo o acoso',
+    'Spam o fraude',
+    'Otro motivo',
+  ];
+  var selectedReason = reasons.first;
+  final detailsController = TextEditingController();
+
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Reportar Usuario'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('¿Por qué deseas reportar a $userName?'),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: selectedReason,
+              isExpanded: true,
+              items: reasons
+                  .map((r) => DropdownMenuItem(value: r, child: Text(r, overflow: TextOverflow.ellipsis)))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => selectedReason = val);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: detailsController,
+              decoration: const InputDecoration(
+                hintText: 'Detalles adicionales (opcional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final nav = Navigator.of(context);
+              final scaffold = ScaffoldMessenger.of(context);
+              try {
+                await ref.read(moderationRepositoryProvider).reportContent(
+                  reportedUserId: userId,
+                  reason: selectedReason,
+                  details: detailsController.text,
+                );
+                nav.pop();
+                scaffold.showSnackBar(
+                  const SnackBar(content: Text('Reporte enviado al equipo de moderación.')),
+                );
+              } catch (e) {
+                scaffold.showSnackBar(
+                  const SnackBar(content: Text('Error al enviar reporte.')),
+                );
+              }
+            },
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showBlockUserDialog(BuildContext context, WidgetRef ref, String userId, String userName) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Bloquear Usuario'),
+      content: Text(
+        'Si bloqueas a $userName, dejarás de ver sus tours creados y sus comentarios en la plataforma. ¿Deseas continuar?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.redAccent,
+          ),
+          onPressed: () async {
+            final nav = Navigator.of(context);
+            final scaffold = ScaffoldMessenger.of(context);
+            try {
+              await ref.read(blockedUsersProvider.notifier).blockUser(userId);
+              nav.pop();
+              if (context.mounted) {
+                context.pop(); // Go back from profile
+              }
+              scaffold.showSnackBar(
+                SnackBar(content: Text('Has bloqueado a $userName.')),
+              );
+            } catch (e) {
+              scaffold.showSnackBar(
+                const SnackBar(content: Text('Error al bloquear usuario.')),
+              );
+            }
+          },
+          child: const Text('Bloquear'),
+        ),
+      ],
+    ),
+  );
 }

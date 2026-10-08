@@ -165,7 +165,12 @@ export function isImageSemanticallyCompatible(imageUrl = '', placeName = '', cat
     ]
     const isExplicitAutoMuseum = /\b(museo\s+del?\s+autom[oó]vil|museo\s+del?\s+transporte)\b/i.test(lowerPlace)
     if (!isExplicitAutoMuseum) {
-      forbiddenForPoi.push('car', 'coche', 'auto', 'vehiculo', 'automovil', 'sports_car', 'sportscar', 'speedway')
+      const urlPathOnly = lowerUrl.split('?')[0].replace(/%20/g, '_')
+      const hasVehicleTerm = /(?:^|[^a-z0-9])(sports?_car|sportscar|supercar|racing|drift|speedway|coche|coches|vehiculo|automovil|automoviles)(?:[^a-z0-9]|$)/i.test(urlPathOnly) ||
+        (/(?:^|[^a-z0-9])cars?(?:[^a-z0-9]|$)/i.test(urlPathOnly) && !/\b(cartagena|caribe|caracas|carnaval|carmen|carrusel)\b/i.test(urlPathOnly))
+      if (hasVehicleTerm) {
+        return false
+      }
     }
     if (forbiddenForPoi.some(term => lowerUrl.includes(term))) {
       return false
@@ -250,6 +255,23 @@ export function isWikiTitleRelevant(articleTitle, placeName, city = '') {
     return matchingTokens.length >= 2
   }
   return matchingTokens.length >= 1
+}
+
+export function isWikipediaCountryMismatch(text = '', expectedCountry = '') {
+  if (!text || !expectedCountry) return false
+  const expLower = expectedCountry.toLowerCase().trim()
+  const lowerText = text.toLowerCase()
+
+  const knownCountries = ['colombia', 'españa', 'spain', 'méxico', 'mexico', 'argentina', 'chile', 'perú', 'peru', 'estados unidos', 'italia', 'francia']
+  const otherCountries = knownCountries.filter(c => !expLower.includes(c) && !c.includes(expLower))
+
+  const mentionsOther = otherCountries.some(other => {
+    const regex = new RegExp(`\\b(en|de|provincia de|departamento de|región de)\\s+${other}\\b`, 'i')
+    return regex.test(lowerText) || lowerText.includes(`(${other})`)
+  })
+
+  const mentionsExpected = lowerText.includes(expLower)
+  return mentionsOther && !mentionsExpected
 }
 
 export async function imageForPlace(placeName, city, countryOrCategory = 'Colombia', indexSeed = 0, options = {}) {
@@ -419,7 +441,8 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
         // Anti-sports team check: reject sports clubs when destination or landmark was requested
         const isSportsTeamSummary = /\b(club de f[uú]tbol|equipo de f[uú]tbol|club deportivo|instituci[oó]n deportiva|entidad deportiva|football club|soccer club|club de baloncesto)\b/i.test(descAndExtract)
         const isExplicitSportsQuery = /\b(club|deportivo|f[uú]tbol|futbol|soccer|fc|estadio|stadium|arena)\b/i.test(placeName)
-        if (isSportsTeamSummary && !isExplicitSportsQuery) {
+        // Anti-country mismatch check: reject if article belongs to an explicitly different country
+        if (cleanCountry && isWikipediaCountryMismatch(descAndExtract, cleanCountry)) {
           continue
         }
 
@@ -461,6 +484,9 @@ async function wikipediaSummaryImage(placeName, city = '', country = '') {
         const isSportsTeamSummary = /\b(club de f[uú]tbol|equipo de f[uú]tbol|club deportivo|instituci[oó]n deportiva|entidad deportiva|football club|soccer club|club de baloncesto)\b/i.test(descAndExtract)
         const isExplicitSportsQuery = /\b(club|deportivo|f[uú]tbol|futbol|soccer|fc|estadio|stadium|arena)\b/i.test(placeName)
         if (isSportsTeamSummary && !isExplicitSportsQuery) {
+          continue
+        }
+        if (cleanCountry && isWikipediaCountryMismatch(descAndExtract, cleanCountry)) {
           continue
         }
         const imageUrl = json.thumbnail?.source || json.originalimage?.source

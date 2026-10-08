@@ -3190,7 +3190,7 @@ export async function buildFallbackTour(planner, input) {
   const [enrichedPlaces, cityGuide] = await Promise.all([
     Promise.all(
       (planner.selectedPlaces || []).map((place, index) =>
-        enrichPlaceWithOpenData(place, targetCity, targetLang)
+        enrichPlaceWithOpenData(place, targetCity, targetLang, input.country || '')
           .then((enriched) => {
             const openDetails = buildDeterministicStopDetails(enriched, {
               city: targetCity,
@@ -5709,14 +5709,19 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     tags: source.etiquetas || source.tags || []
   })
   
-  const existingImageUrl = source.imageUrl || images[0] || matchedPlace?.imageUrl || candidateFallback?.imageUrl || coordinates?.imageUrl || ''
+  const isVerifiedPhoto = (url) => typeof url === 'string' && (url.includes('wikimedia.org') || url.includes('wikipedia.org'))
+  const verifiedImageFromList = images.find(isVerifiedPhoto) || ''
+  const isSourceFallback = Boolean(source.isFallbackImage || source.isDemoImage || source.isReferenceImage)
+  const existingImageUrl = (!isSourceFallback && source.imageUrl && !source.imageUrl.includes('photo-1469854523086-cc02fe5d8800'))
+    ? source.imageUrl
+    : (verifiedImageFromList || source.imageUrl || matchedPlace?.imageUrl || candidateFallback?.imageUrl || coordinates?.imageUrl || '')
   let image = ''
   let isFallbackImg = false
 
-  // Si ya tenemos una URL válida de imagen de la fase previa, reutilizarla directamente sin consultar APIs externas
+  // Si ya tenemos una URL válida de imagen verificada o de la fase previa, reutilizarla directamente sin consultar APIs externas
   if (existingImageUrl && !existingImageUrl.includes('photo-1469854523086-cc02fe5d8800') && (!options?.assignedUrls || !options.assignedUrls.has(existingImageUrl))) {
     image = existingImageUrl
-    isFallbackImg = Boolean(source.isFallbackImage)
+    isFallbackImg = isSourceFallback && !isVerifiedPhoto(existingImageUrl)
     options?.assignedUrls?.add(image)
   } else {
     const imageStatus = await Promise.race([
@@ -5806,8 +5811,14 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
       coordenadas_verificadas: coordinates.coordinatesVerified === true,
       url_mapa: matchedPlace?.urlMapa ?? ubicacion.url_mapa ?? mapUrlFor(coordinates.latitude, coordinates.longitude),
     },
-    imagenes: deduplicateImageUrls([image, ...images]),
+    imagenes: deduplicateImageUrls([
+      ...(isVerifiedPhoto(image) ? [image] : []),
+      ...images,
+      ...(image && !isVerifiedPhoto(image) ? [image] : [])
+    ]),
   }
+  const primaryStopImage = publicStop.imagenes[0] || image || ''
+  const isVerifiedPrimary = isVerifiedPhoto(primaryStopImage)
   const routeStop = {
     name: resolvedName,
     candidateId: getCandidateId(matchedPlace) || sourceCandidateId || getCandidateId(candidateFallback),
@@ -5815,10 +5826,10 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     longitude: coordinates.longitude,
     coordinateSource: coordinates.coordinateSource || coordinates.coordinate_source || '',
     coordinatesVerified: coordinates.coordinatesVerified === true,
-    imageUrl: publicStop.imagenes[0],
-    isFallbackImage: isFallbackImg,
-    isDemoImage: isFallbackImg,
-    isReferenceImage: isFallbackImg,
+    imageUrl: primaryStopImage,
+    isFallbackImage: isFallbackImg && !isVerifiedPrimary,
+    isDemoImage: isFallbackImg && !isVerifiedPrimary,
+    isReferenceImage: isFallbackImg && !isVerifiedPrimary,
     description: publicStop.descripcion,
     activities: publicStop.actividades,
     tips: publicStop.consejos,

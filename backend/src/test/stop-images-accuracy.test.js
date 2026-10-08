@@ -62,4 +62,18 @@ describe('Stop Images Accuracy and Semantic Compatibility Tests', () => {
     assert.equal(isImageSemanticallyCompatible('https://images.unsplash.com/photo-dining.jpg', 'Cocina 33', 'restaurant'), true)
     assert.equal(isImageSemanticallyCompatible('https://images.unsplash.com/photo-food.jpg', 'Palo de Mango', 'restaurant'), true)
   })
+
+  it('should not reject genuine Cartagena landmark images due to substring car in filename', () => {
+    const relojUrl = 'https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fe/024_Torre_del_Reloj_Cartagena_Colombia.JPG/330px-024_Torre_del_Reloj_Cartagena_Colombia.JPG'
+    const murallaUrl = 'https://upload.wikimedia.org/wikipedia/commons/d/d6/Ciudad_Amurallada%2C_Cartagena_de_Indias.jpg'
+    assert.equal(isImageSemanticallyCompatible(relojUrl, 'Torre del Reloj', 'historic'), true, 'Must allow Cartagena landmark image')
+    assert.equal(isImageSemanticallyCompatible(murallaUrl, 'Ciudad Amurallada', 'historic'), true, 'Must allow Ciudad Amurallada image')
+  })
+
+  it('should fetch genuine Torre del Reloj Cartagena image without resorting to a fallback pool', async () => {
+    const result = await imageForPlaceWithStatus('Torre del Reloj', 'Cartagena', 'historic', 0, { country: 'Colombia' })
+    assert.ok(result && result.url, 'Must return an image result')
+    assert.equal(result.isFallback, false, 'Image must not be a fallback')
+    assert.ok(result.url.includes('Torre_del_Reloj') || result.url.includes('wikimedia.org'), 'Must be an authentic landmark photo')
+  })
 })

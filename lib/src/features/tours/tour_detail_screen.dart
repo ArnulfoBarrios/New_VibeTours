@@ -2049,12 +2049,12 @@ String _getStopEmoji(TourStop stop) {
   return '';
 }
 
-class _ReviewTile extends StatelessWidget {
+class _ReviewTile extends ConsumerWidget {
   const _ReviewTile({required this.comment});
   final TourComment comment;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -2148,6 +2148,32 @@ class _ReviewTile extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
                     ),
+              ),
+              PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.more_vert_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
+                ),
+                padding: EdgeInsets.zero,
+                tooltip: 'Opciones de reseña',
+                onSelected: (value) {
+                  if (value == 'report') {
+                    _showReportCommentDialog(context, ref, comment);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'report',
+                    child: Row(
+                      children: [
+                        Icon(Icons.flag_outlined, size: 18, color: Colors.redAccent),
+                        SizedBox(width: 8),
+                        Text('Reportar reseña', style: TextStyle(color: Colors.redAccent)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -2520,6 +2546,84 @@ void _showReportDialog(BuildContext context, WidgetRef ref, Tour tour) {
                 scaffold.showSnackBar(const SnackBar(content: Text('Reporte enviado correctamente.')));
               } catch (e) {
                 scaffold.showSnackBar(const SnackBar(content: Text('Error al enviar reporte.')));
+              }
+            },
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showReportCommentDialog(BuildContext context, WidgetRef ref, TourComment comment) {
+  final reasons = [
+    'Contenido ofensivo o inapropiado',
+    'Spam o publicidad no deseada',
+    'Acoso, difamación o discurso de odio',
+    'Información engañosa o peligrosa',
+    'Otro motivo',
+  ];
+  var selectedReason = reasons.first;
+  final detailsController = TextEditingController();
+
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Reportar Reseña'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('¿Por qué deseas reportar esta reseña?'),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: selectedReason,
+              isExpanded: true,
+              items: reasons
+                  .map((r) => DropdownMenuItem(value: r, child: Text(r, overflow: TextOverflow.ellipsis)))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => selectedReason = val);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: detailsController,
+              decoration: const InputDecoration(
+                hintText: 'Detalles adicionales (opcional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final nav = Navigator.of(context);
+              final scaffold = ScaffoldMessenger.of(context);
+              try {
+                await ref.read(moderationRepositoryProvider).reportContent(
+                  tourId: comment.tourId,
+                  commentId: comment.id,
+                  reportedUserId: comment.userId,
+                  reason: selectedReason,
+                  details: detailsController.text,
+                );
+                nav.pop();
+                scaffold.showSnackBar(
+                  const SnackBar(content: Text('Reporte de reseña enviado correctamente.')),
+                );
+              } catch (e) {
+                scaffold.showSnackBar(
+                  const SnackBar(content: Text('Error al enviar reporte de reseña.')),
+                );
               }
             },
             child: const Text('Enviar'),
