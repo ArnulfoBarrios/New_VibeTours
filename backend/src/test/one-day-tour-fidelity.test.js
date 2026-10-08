@@ -60,7 +60,7 @@ test('3. generateChatResponse creates 5 stops with midday lunch and proper gramm
   // Must not have grammatical flaw "con en grupo"
   assert.doesNotMatch(res.responseMessage, /con\s+en\s+grupo/i)
   // Must preserve all 5 stops without deleting them in sanitizer
-  const bullets = (res.responseMessage.match(/[•\-\*]\s+[^\n]+/g) || [])
+  const bullets = (res.responseMessage.match(/(?:[•\-\*]|\d+\.)\s+[^\n]+/g) || [])
   assert.ok(bullets.length >= 4, `Expected at least 4-5 stops in 1-day itinerary, got ${bullets.length}`)
   assert.ok(bullets.some(b => /Cucayo|restaurante/i.test(b)), 'Must include midday lunch stop')
 })
@@ -206,7 +206,7 @@ Día 1: Santa Marta
 
   assert.equal(res.readyToBuild, false)
   // Must contain an expanded itinerary with at least 6 stops
-  const bullets = (res.responseMessage.match(/[•\-\*]\s+[^\n]+/g) || [])
+  const bullets = (res.responseMessage.match(/(?:[•\-\*]|\d+\.)\s+[^\n]+/g) || [])
   assert.ok(bullets.length >= 6, `Expected at least 6 stops in expanded 1-day tour, got ${bullets.length}: ${res.responseMessage}`)
   // Must not contain "Monumento Nacional"
   assert.ok(!res.responseMessage.toLowerCase().includes('monumento nacional'), 'Must not include generic Monumento Nacional')
@@ -245,5 +245,124 @@ test('13. clusterStopsIntoCoherentDays on 1-day tour does not mix distant periph
   assert.ok(!stopNames.some(n => /Tayrona/i.test(n)), 'Tayrona must not be included in a 1-day urban tour')
   assert.ok(stopNames.length >= 5, 'Must keep available compatible urban stops')
 })
+
+test('14. generateChatResponse outputs clean stops without emojis or timetable stamps', async () => {
+  const state = {
+    history: [
+      { role: 'user', content: 'me encuentro en Barranquilla, voy con amigos en auto rentado, presupuesto moderado por 1 día' }
+    ]
+  }
+  const res = await generateChatResponse(state, '', '', {
+    destination: 'Barranquilla',
+    city: 'Barranquilla',
+    durationDays: 1,
+    transport: 'Auto rentado',
+    budget: 'Moderado',
+    companions: 'con amigos'
+  })
+
+  assert.ok(res.responseMessage, 'Must produce a response')
+  assert.doesNotMatch(res.responseMessage, /09:00\s*AM|11:00\s*AM|12:30\s*PM|02:45\s*PM/i, 'Must not include fixed clock timestamps')
+  assert.doesNotMatch(res.responseMessage, /[🕒🕘🕚🍽️🌇🌅🏁]/, 'Must not include clock or timetable emojis')
+  assert.doesNotMatch(res.responseMessage, /Visita a|Recorrido en|Cierre panorámico/i, 'Must not include narrative filler phrases')
+})
+
+test('15. generateChatResponse on "Cambiar por La Troja" asks which stop to replace without adding 6th stop', async () => {
+  const initialItinerary = `Itinerario de Viaje: Barranquilla (1 día)
+
+Día 1: Barranquilla
+1. Bocas de Cenizas
+2. Gran Malecón del Río
+3. El Prado Restaurante (Almuerzo)
+4. Malecón de Puerto Colombia
+5. Parque Washington
+
+¿Deseas confirmar este itinerario y generar tu tour en el mapa?`
+
+  const state = {
+    history: [
+      { role: 'user', content: 'vamos en auto rentado y presupuesto moderado a Barranquilla por 1 día' },
+      { role: 'assistant', content: initialItinerary },
+      { role: 'user', content: 'Cambiar por La Troja' }
+    ]
+  }
+
+  const res = await generateChatResponse(state, '', '', {
+    city: 'Barranquilla',
+    destination: 'Barranquilla',
+    durationDays: 1,
+    transport: 'Auto rentado',
+    budget: 'Moderado',
+    companions: 'con amigos'
+  })
+
+  // Must ask which stop to replace
+  assert.match(res.responseMessage, /por\s+cu[aá]l\s+de\s+tus\s+paradas/i)
+  assert.ok(res.responseMessage.includes('La Troja'))
+  // Must offer chips to replace the existing stops
+  assert.ok(res.actionChips.some(c => /Parque Washington|Puerto Colombia|Bocas de Cenizas/i.test(c)))
+})
+
+test('16. generateChatResponse completes swap when user chooses stop to replace', async () => {
+  const assistantAsk = `¡De acuerdo! ¿Por cuál de tus paradas actuales deseas cambiar **La Troja**?
+
+1. Bocas de Cenizas
+2. Gran Malecón del Río
+3. Malecón de Puerto Colombia
+4. Parque Washington`
+
+  const state = {
+    history: [
+      { role: 'user', content: 'vamos en auto rentado y presupuesto moderado a Barranquilla por 1 día' },
+      { role: 'assistant', content: '1. Bocas de Cenizas\n2. Gran Malecón del Río\n3. El Prado Restaurante (Almuerzo)\n4. Malecón de Puerto Colombia\n5. Parque Washington' },
+      { role: 'user', content: 'Cambiar por La Troja' },
+      { role: 'assistant', content: assistantAsk },
+      { role: 'user', content: 'Por Parque Washington' }
+    ]
+  }
+
+  const res = await generateChatResponse(state, '', '', {
+    city: 'Barranquilla',
+    destination: 'Barranquilla',
+    durationDays: 1,
+    transport: 'Auto rentado',
+    budget: 'Moderado',
+    companions: 'con amigos'
+  })
+
+  assert.ok(res.responseMessage.includes('La Troja'), 'Updated message must contain La Troja')
+  assert.ok(!res.responseMessage.includes('Parque Washington'), 'Parque Washington must have been replaced')
+  const specificNames = (res.specificPlaces || []).map(p => typeof p === 'string' ? p : p.name)
+  assert.ok(specificNames.includes('La Troja'), 'specificPlaces must include La Troja')
+  assert.ok(!specificNames.includes('Parque Washington'), 'specificPlaces must not include Parque Washington')
+  assert.equal(specificNames.length, 5, 'Must maintain exact 5 stops in 1-day tour')
+})
+
+test('17. generateChatResponse executes explicit swap "Cambiar Parque Washington por La Troja" in one turn', async () => {
+  const state = {
+    history: [
+      { role: 'user', content: 'vamos en auto rentado y presupuesto moderado a Barranquilla por 1 día' },
+      { role: 'assistant', content: '1. Bocas de Cenizas\n2. Gran Malecón del Río\n3. El Prado Restaurante (Almuerzo)\n4. Malecón de Puerto Colombia\n5. Parque Washington' },
+      { role: 'user', content: 'Cambiar Parque Washington por La Troja' }
+    ]
+  }
+
+  const res = await generateChatResponse(state, '', '', {
+    city: 'Barranquilla',
+    destination: 'Barranquilla',
+    durationDays: 1,
+    transport: 'Auto rentado',
+    budget: 'Moderado',
+    companions: 'con amigos'
+  })
+
+  assert.ok(res.responseMessage.includes('La Troja'), 'Updated message must contain La Troja')
+  assert.ok(!res.responseMessage.includes('Parque Washington'), 'Parque Washington must be replaced')
+  const specificNames = (res.specificPlaces || []).map(p => typeof p === 'string' ? p : p.name)
+  assert.ok(specificNames.includes('La Troja'), 'specificPlaces must include La Troja')
+  assert.ok(!specificNames.includes('Parque Washington'), 'specificPlaces must not include Parque Washington')
+  assert.equal(specificNames.length, 5, 'Must maintain exact 5 stops in 1-day tour')
+})
+
 
 

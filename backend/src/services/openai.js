@@ -1298,12 +1298,15 @@ export function extractStopsFromItineraryText(text = '') {
       }
 
       placeName = placeName.replace(/[*_#`]/g, '').trim()
+      const hasLunchLabel = /\s*\((?:almuerzo|cena|desayuno)\)/i.test(placeName)
+      placeName = placeName.replace(/\s*\((?:almuerzo|cena|desayuno)\)/gi, '').trim()
 
       if (!placeName || placeName.length < 3) continue
       if (/^(almuerzo libre|descanso|check-in|check in|tiempo libre|traslado|regreso al hotel|retorno al hotel|desayuno|cena libre)$/i.test(placeName)) continue
       if (isGenericFacilityName(placeName) || isUnmappedOrClosedVenue(placeName)) continue
 
       const isRest = isRestByAction ||
+        hasLunchLabel ||
         isFoodOrDrinkEstablishment(placeName) ||
         /\b(restaurante|cafe|café|cebicheria|cevicheria|bistro|trattoria|bar|gastrobar)\b/i.test(placeName)
 
@@ -2515,18 +2518,28 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const lastAssistantMsg = assistantMsgFromHistory?.content || assistantMsgFromHistory?.text || ''
 
   // Detect if an itinerary was already presented in earlier conversation turns
-  const itineraryAssistantMsg = (history || []).slice().reverse().find(m => {
+  const itineraryAssistantMsgs = (history || []).filter(m => {
     if (m.role !== 'assistant' && m.role !== 'bot' && m.sender !== 'assistant' && m.sender !== 'ai') return false
     const text = m.content || m.text || ''
-    return /(?:^|\n)\s*(?:#{1,4}\s*)?d[íi]a\s*1\b/i.test(text) || /\b(?:d[íi]a\s*1\s*[:\-–]|\*\*d[íi]a\s*1\*\*)/i.test(text)
+    return /(?:^|\n)\s*(?:#{1,4}\s*)?d[íi]a\s*1\b/i.test(text) ||
+      /\b(?:d[íi]a\s*1\s*[:\-–]|\*\*d[íi]a\s*1\*\*)/i.test(text) ||
+      /\b(?:itinerario(?:\s+de\s+viaje)?|recorrido\s+de\s+\d+\s+paradas)\b/i.test(text) ||
+      /(?:^|\n)\s*1\.\s+(?:\*{1,2})?[A-ZÁÉÍÓÚ]/i.test(text)
   })
 
+  const itineraryAssistantMsg = itineraryAssistantMsgs[itineraryAssistantMsgs.length - 1] || null
   const hasItineraryAlreadyInHistory = Boolean(itineraryAssistantMsg)
   if (hasItineraryAlreadyInHistory) {
-    const historicalStops = extractStopsFromItineraryText(itineraryAssistantMsg.content || itineraryAssistantMsg.text || '')
-    if (historicalStops.length > 0) {
-      if (!Array.isArray(known.specificPlaces) || known.specificPlaces.length < historicalStops.length) {
-        known.specificPlaces = historicalStops
+    let bestHistoricalStops = []
+    for (const m of itineraryAssistantMsgs.slice().reverse()) {
+      const stops = extractStopsFromItineraryText(m.content || m.text || '')
+      if (stops.length > bestHistoricalStops.length) {
+        bestHistoricalStops = stops
+      }
+    }
+    if (bestHistoricalStops.length > 0) {
+      if (!Array.isArray(known.specificPlaces) || known.specificPlaces.length < bestHistoricalStops.length) {
+        known.specificPlaces = bestHistoricalStops
       }
     }
   }
@@ -2613,7 +2626,10 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       if (Array.isArray(fallbackExtracted.interests) && fallbackExtracted.interests.length > 0) {
         known.interests = Array.from(new Set([...(known.interests || []), ...fallbackExtracted.interests]))
       }
-      if (Array.isArray(fallbackExtracted.specificPlaces) && fallbackExtracted.specificPlaces.length > 0) {
+      const isUserSwappingStop = /\b(?:cambiar\s+por|cambia\s+por|reemplaza(?:r)?\s+por|sustituye\s+por|quita(?:r)?\b|cambiar\s+paradas?)\b/i.test(lastUserMsg) ||
+        /\b(?:por\s+cu[aá]l\s+de\s+tus\s+paradas|por\s+qu[ée]\s+nuevo\s+lugar)\b/i.test(lastAssistantMsg) ||
+        /^(?:por|cambiar|cambia|quitar|quita|eliminar)\s+/i.test(lastUserMsg)
+      if (Array.isArray(fallbackExtracted.specificPlaces) && fallbackExtracted.specificPlaces.length > 0 && !isUserSwappingStop) {
         known.specificPlaces = deduplicateChatSpecificPlaces([
           ...(known.specificPlaces || []),
           ...fallbackExtracted.specificPlaces
@@ -3436,21 +3452,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             }
           }
           known.specificPlaces = stops
-          const timeLabels = [
-            '🌅 09:00 AM - Mañana',
-            '🏛️ 10:45 AM - Media Mañana',
-            '🍽️ 12:30 PM - Almuerzo',
-            '🌇 02:45 PM - Tarde',
-            '🏁 04:30 PM - Llegada a destino'
-          ]
           const cleanDestTitle = cleanLandmarkOrPlaceName(destName) || destName
           const detailLines = stops.map((s, idx) => {
             const rawName = typeof s === 'string' ? s : s.name
             const name = cleanLandmarkOrPlaceName(rawName) || rawName
-            const label = timeLabels[idx] || `Parada ${idx + 1}`
-            const isRest = s?.entityType === 'restaurant' || s?.category === 'restaurant' || s?.type === 'food'
-            const verb = idx === stops.length - 1 ? 'Llegada a' : (isRest ? 'Almuerzo en' : 'Visita a')
-            return `• ${label}: ${verb} **${name}**`
+            const isRest = s?.entityType === 'restaurant' || s?.category === 'restaurant' || s?.type === 'food' || isFoodOrDrinkEstablishment(name)
+            return `${idx + 1}. **${name}**${isRest ? ' (Almuerzo)' : ''}`
           })
           fallbackMsg = `Aquí tienes el itinerario detallado de tu recorrido desde tu ubicación actual hasta **${cleanDestTitle}**:\n\nDía 1: En ruta hacia ${cleanDestTitle}\n\n` +
             `${detailLines.join('\n')}\n\n` +
@@ -3464,9 +3471,9 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const p2 = rawSpecifics[1] || preset.places?.[1]
           const r1 = preset.restaurants?.[0]?.name
           const detailLines = [
-            p1 ? `• 🌅 **09:00 AM - Mañana**: Visita a ${p1}` : '',
-            r1 ? `• 🍽️ **12:30 PM - Almuerzo**: ${r1}` : '',
-            p2 ? `• 🌇 **03:30 PM - Tarde**: Recorrido por ${p2}` : '',
+            p1 ? `1. **${p1}**` : '',
+            r1 ? `2. **${r1}** (Almuerzo)` : '',
+            p2 ? `3. **${p2}**` : '',
           ].filter(Boolean)
           fallbackMsg = `Día 1: ${destName}\n\n` +
             (detailLines.length > 0 ? `${detailLines.join('\n')}\n\n` : 'No encontré suficientes lugares verificados en OpenStreetMap para completar este día.\n\n') +
@@ -3549,7 +3556,15 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         } else {
           fallbackMsg = `En ${destName} puedes disfrutar de sitios históricos, paseos emblemáticos y gastronomía local. ¿Qué tipo de atractivos te gustaría priorizar en tu visita?`
         }
-      } else if (/\b(cambiar\s+paradas?|modificar\s+paradas?|cambiar\s+lugares|otras?\s+paradas?|cambiar\s+itinerario|cambiar\s+sitios|quiero\s+cambiar\s+lugares)\b/i.test(lastUserMsg)) {
+      } else if (
+        /\b(cambiar\s+paradas?|modificar\s+paradas?|cambiar\s+lugares|otras?\s+paradas?|cambiar\s+itinerario|cambiar\s+sitios|quiero\s+cambiar\s+lugares)\b/i.test(lastUserMsg) ||
+        /\b(?:cambiar|cambia|reemplazar|reemplaza|sustituir)\s+por\s+/i.test(lastUserMsg) ||
+        /\b(?:cambia|cambiar|reemplaza|reemplazar|sustituye|sustituir|quita|quitar)\s+.+\s+(?:por|y\s+(?:poner|meter|agrega|agregar|a[ñn]ade|a[ñn]adir))\s+/i.test(lastUserMsg) ||
+        (/\b(?:por\s+cu[aá]l\s+de\s+tus\s+paradas\s+actuales\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\b/i.test(lastAssistantMsg) && !isExplicitBuildRequestedByUser) ||
+        (/\b(?:por\s+qu[ée]\s+(?:nuevo\s+)?lugar\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\b/i.test(lastAssistantMsg) && !isExplicitBuildRequestedByUser) ||
+        (/\b(?:cambiar|cambia|quitar|quita|eliminar)\s+/i.test(lastUserMsg) && (known.specificPlaces || []).some(s => arePlacesSimilar(typeof s === 'string' ? s : (s?.name || ''), lastUserMsg.replace(/^(?:cambiar|cambia|quitar|quita|eliminar)\s+(?:a\s+|el\s+|la\s+|al\s+)?/i, '').trim())))
+      ) {
+        const swapRequest = extractPlaceSwapRequest(lastUserMsg, known.specificPlaces, lastAssistantMsg)
         const currentSpecifics = (Array.isArray(known.specificPlaces) ? known.specificPlaces : []).map(p => typeof p === 'string' ? p : p.name)
         const catalogPool = [
           ...(preset.places || []),
@@ -3558,21 +3573,64 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         ].filter(Boolean)
         const unusedAlternatives = deduplicateChatSpecificPlaces(catalogPool, destName)
           .map(p => typeof p === 'string' ? p : p.name)
-          .filter(p => !currentSpecifics.some(cp => arePlacesSimilar(cp, p)) && !isFoodOrDrinkEstablishment(p))
+          .filter(p => !currentSpecifics.some(cp => arePlacesSimilar(cp, p)) && !isFoodOrDrinkEstablishment(p) && !isGenericFacilityName(p))
           .slice(0, 4)
 
-        if (unusedAlternatives.length > 0) {
-          fallbackMsg = `¡Con gusto! ¿Qué parada te gustaría cambiar o qué lugar prefieres incluir en tu recorrido por **${destName}**?\n\nAquí tienes algunas excelentes alternativas disponibles:\n` +
-            unusedAlternatives.map(alt => `• **${alt}**: Atractivo destacado para descubrir y disfrutar.`).join('\n') +
-            `\n\nIndícame cuál deseas cambiar (por ejemplo: *"Cambiar por ${unusedAlternatives[0]}"*) o selecciona una de las sugerencias:`
+        if (swapRequest?.placeToRemove && swapRequest?.placeToAdd) {
+          known.specificPlaces = executePlaceSwap(known.specificPlaces, swapRequest.placeToRemove, swapRequest.placeToAdd)
+          const cleanStops = known.specificPlaces.map((s, idx) => {
+            const sName = typeof s === 'string' ? s : (s?.name || '')
+            const cleanDisplayName = sName.replace(/\s*\((?:almuerzo|cena|desayuno)\)/gi, '').trim()
+            const isRest = s?.isRestaurant === true || s?.category === 'restaurant' || s?.type === 'food' || isFoodOrDrinkEstablishment(cleanDisplayName)
+            return `${idx + 1}. **${cleanDisplayName}**${isRest ? ' (Almuerzo)' : ''}`
+          }).join('\n')
+
+          fallbackMsg = `¡Listo! He actualizado tu itinerario con **${swapRequest.placeToAdd}**:\n\n${cleanStops}\n\n¿Deseas confirmar este itinerario y generar tu tour en el mapa?`
+          fallbackChips = ['🗺️ Generar tour en el mapa', 'Cambiar otra parada', 'Ver opciones de comida']
+        } else if (swapRequest?.placeToAdd && !swapRequest?.placeToRemove) {
+          const currentAttrs = (known.specificPlaces || []).filter(s => {
+            const sName = typeof s === 'string' ? s : (s?.name || '')
+            return !isFoodOrDrinkEstablishment(sName) && s?.category !== 'restaurant' && s?.entityType !== 'restaurant'
+          })
+          const stopsList = currentAttrs.map((s, idx) => {
+            const sName = typeof s === 'string' ? s : (s?.name || '')
+            return `${idx + 1}. **${sName}**`
+          }).join('\n')
+
+          fallbackMsg = `¡De acuerdo! ¿Por cuál de tus paradas actuales deseas cambiar **${swapRequest.placeToAdd}**?\n\n${stopsList}\n\nIndícame cuál de ellas deseas sustituir:`
           fallbackChips = [
-            `Cambiar por ${unusedAlternatives[0]}`,
-            ...(unusedAlternatives[1] ? [`Cambiar por ${unusedAlternatives[1]}`] : []),
+            ...currentAttrs.map(s => `Por ${typeof s === 'string' ? s : s.name}`),
+            '🗺️ Generar tour en el mapa'
+          ]
+        } else if (swapRequest?.placeToRemove && !swapRequest?.placeToAdd) {
+          fallbackMsg = `¡Con gusto! ¿Por qué nuevo lugar te gustaría cambiar **${swapRequest.placeToRemove}**?\n\n` +
+            (unusedAlternatives.length > 0 ? `Aquí tienes algunas excelentes alternativas disponibles en **${destName}**:\n${unusedAlternatives.map(alt => `• **${alt}**`).join('\n')}\n\n` : '') +
+            `Indícame qué lugar prefieres o selecciona una de las sugerencias:`
+          fallbackChips = [
+            ...unusedAlternatives.slice(0, 3).map(alt => `Cambiar por ${alt}`),
             '🗺️ Generar tour en el mapa'
           ]
         } else {
-          fallbackMsg = `¡Claro! Indícame qué lugar o atractivo te gustaría incluir o cambiar en tu recorrido por **${destName}** y lo actualizaré inmediatamente.`
-          fallbackChips = ['🗺️ Generar tour en el mapa']
+          const currentAttrs = (known.specificPlaces || []).filter(s => {
+            const sName = typeof s === 'string' ? s : (s?.name || '')
+            return !isFoodOrDrinkEstablishment(sName) && s?.category !== 'restaurant' && s?.entityType !== 'restaurant'
+          })
+          const currentStopsList = (known.specificPlaces || []).map((s, idx) => {
+            const sName = typeof s === 'string' ? s : (s?.name || '')
+            const isRest = s?.isRestaurant === true || s?.category === 'restaurant' || s?.type === 'food' || isFoodOrDrinkEstablishment(sName)
+            return `${idx + 1}. **${sName}**${isRest ? ' (Almuerzo)' : ''}`
+          }).join('\n')
+
+          fallbackMsg = `¡Con gusto! ¿Qué parada te gustaría cambiar de tu recorrido por **${destName}**?\n\n` +
+            (currentStopsList ? `**Paradas actuales:**\n${currentStopsList}\n\n` : '') +
+            (unusedAlternatives.length > 0 ? `Aquí tienes algunas excelentes alternativas disponibles:\n${unusedAlternatives.map(alt => `• **${alt}**`).join('\n')}\n\n` : '') +
+            `Indícame cuál deseas cambiar (por ejemplo: *"Cambiar ${typeof currentAttrs[currentAttrs.length - 1] === 'string' ? currentAttrs[currentAttrs.length - 1] : (currentAttrs[currentAttrs.length - 1]?.name || 'una parada')}"*) o qué nuevo lugar prefieres incluir:`
+          fallbackChips = [
+            ...currentAttrs.slice(0, 2).map(s => `Cambiar ${typeof s === 'string' ? s : s.name}`),
+            ...(unusedAlternatives[0] ? [`Cambiar por ${unusedAlternatives[0]}`] : []),
+            ...(unusedAlternatives[1] ? [`Cambiar por ${unusedAlternatives[1]}`] : []),
+            '🗺️ Generar tour en el mapa'
+          ]
         }
       } else if (/\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|men[uú]s|carta|platos)\b/i.test(lastUserMsg)) {
         const foodList = (realCatalog?.restaurants && realCatalog.restaurants.length > 0)
@@ -3754,13 +3812,13 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           const intro = isUserAskingMoreStopsFb
             ? `¡Por supuesto! Para un tour ampliado de 1 día${transportTxt}${companionsTxt} en **${destName}**, he enriquecido el recorrido con ${totalStopsCount} paradas incluyendo paradas adicionales:`
             : `¡Excelente plan! Para un tour completo de 1 día${transportTxt}${companionsTxt} en **${destName}**, he preparado un recorrido de 5 paradas con almuerzo a mediodía:`
-          const line1 = `1. 🕘 **09:00 AM - Mañana**: Visita a **${stop1}**.`
-          const line2 = `2. 🕚 **11:00 AM - Media mañana**: Recorrido en **${stop2}**.`
-          const line3 = `3. 🍽️ **12:30 PM - Mediodía (Almuerzo)**: Degustación de gastronomía local en **${stop3Lunch}**.`
-          const line4 = `4. 🕒 **02:45 PM - Tarde**: Exploración de **${stop4}**.`
+          const line1 = `1. **${stop1}**`
+          const line2 = `2. **${stop2}**`
+          const line3 = `3. **${stop3Lunch}** (Almuerzo)`
+          const line4 = `4. **${stop4}**`
           const line5 = stop6
-            ? `5. 🕓 **04:30 PM - Media tarde**: Parada cultural en **${stop5}**.\n6. 🌅 **06:15 PM - Atardecer**: Cierre panorámico en **${stop6}**.`
-            : `5. 🌅 **05:30 PM - Atardecer**: Cierre panorámico en **${stop5}**.`
+            ? `5. **${stop5}**\n6. **${stop6}**`
+            : `5. **${stop5}**`
           const question = `¿Te gusta este itinerario ${isUserAskingMoreStopsFb ? 'ampliado ' : ''}de ${totalStopsCount} paradas o deseas cambiar algún lugar antes de generar el tour en el mapa?`
 
           fallbackMsg = `${intro}\n\n${line1}\n${line2}\n${line3}\n${line4}\n${line5}\n\n${question}`
@@ -4099,8 +4157,20 @@ ETAPA DE AJUSTE O AMPLIACIÓN DE ITINERARIO (AÑADIR O CAMBIAR PARADAS):
 - Si el usuario pide agregar más paradas, añadir más sitios, o enriquecer el plan ("puedes agregar más paradas", "añade más paradas", "más lugares", "agregar más lugares", etc.):
   1. ACEPTA CON ENTUSIASMO.
   2. En tours de varios días: agrega 1 o 2 paradas adicionales a cada día (3 a 4 paradas por día). En tours de 1 día / express: amplía el Día 1 de 5 a 6 o 7 paradas en total incorporando atractivos reales y representativos del mismo sector geográfico contiguo.
-  3. MUESTRA OBLIGATORIAMENTE EL ITINERARIO COMPLETO ACTUALIZADO con las nuevas paradas visibles en viñetas (•).
+  3. MUESTRA OBLIGATORIAMENTE EL ITINERARIO COMPLETO ACTUALIZADO con las nuevas paradas visibles en viñetas (•) o lista limpia.
   4. ESTRICTAMENTE PROHIBIDO responder únicamente con un texto explicativo o devolver las mismas paradas anteriores sin añadir ninguna nueva.
+
+- REGLAS DE REEMPLAZO O CAMBIO DE PARADAS (CAMBIAR PARADAS):
+  1. Si el usuario pide cambiar paradas en general ("Cambiar paradas", "modificar paradas", etc.):
+     * Pregúntale cuál de sus paradas actuales desea sustituir y muestra la lista limpia de sus paradas actuales junto con atractivos alternativos del catálogo.
+     * PROHIBIDO asumir o borrar automáticamente ninguna parada sin consultar al usuario.
+  2. Si el usuario indica un nuevo lugar para incluir (ej: "Cambiar por La Troja"):
+     * Si no ha indicado qué parada actual quitar, pregúntale: "¿Por cuál de tus paradas actuales deseas cambiar [Nuevo Lugar]?" y ofrece las paradas actuales como botones de acción ("Por [Parada 1]", "Por [Parada 2]", etc.).
+  3. Si el usuario indica qué parada actual reemplazar (ej: "Cambiar Parque Washington por La Troja" o responde "Por Parque Washington"):
+     * SUSTITUYE esa parada exacta por el nuevo lugar en esa misma posición del itinerario.
+     * Mantén el número de paradas del tour (5 paradas en tour de 1 día: 4 atractivos + 1 almuerzo).
+     * MUESTRA OBLIGATORIAMENTE el itinerario completo actualizado con el nuevo lugar.
+     * PROHIBIDO agregar el lugar como una parada extra al final cuando se pide cambiar parada.
 
 ETAPA 4: GENERACIÓN DEL TOUR ("readyToBuild": true)
 - Si el usuario pide generar el tour:
@@ -4392,21 +4462,12 @@ REGLAS PARA "accommodationStatus":
         }
       }
       known.specificPlaces = stops
-      const timeLabels = [
-        '🌅 09:00 AM - Mañana',
-        '🏛️ 10:45 AM - Media Mañana',
-        '🍽️ 12:30 PM - Almuerzo',
-        '🌇 02:45 PM - Tarde',
-        '🏁 04:30 PM - Llegada a destino'
-      ]
       const cleanDestTitle = cleanLandmarkOrPlaceName(destName) || destName
       const detailLines = stops.map((s, idx) => {
         const rawName = typeof s === 'string' ? s : s.name
         const name = cleanLandmarkOrPlaceName(rawName) || rawName
-        const label = timeLabels[idx] || `Parada ${idx + 1}`
-        const isRest = s?.entityType === 'restaurant' || s?.category === 'restaurant' || s?.type === 'food'
-        const verb = idx === stops.length - 1 ? 'Llegada a' : (isRest ? 'Almuerzo en' : 'Visita a')
-        return `• ${label}: ${verb} **${name}**`
+        const isRest = s?.entityType === 'restaurant' || s?.category === 'restaurant' || s?.type === 'food' || isFoodOrDrinkEstablishment(name)
+        return `${idx + 1}. **${name}**${isRest ? ' (Almuerzo)' : ''}`
       })
       responseMessage = `Aquí tienes el itinerario detallado de tu recorrido desde tu ubicación actual hasta **${cleanDestTitle}**:\n\nDía 1: En ruta hacia ${cleanDestTitle}\n\n` +
         `${detailLines.join('\n')}\n\n` +
@@ -5321,6 +5382,179 @@ export function extractRequestedSpecificPlaces(prompt) {
   return results
 }
 
+export function capitalizePlaceName(name) {
+  if (!name || typeof name !== 'string') return ''
+  const lowerArticles = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'en', 'y', 'a', 'al'])
+  return name.trim().split(/\s+/).map((word, idx) => {
+    const lower = word.toLowerCase()
+    if (idx > 0 && lowerArticles.has(lower)) {
+      return lower
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1)
+  }).join(' ')
+}
+
+export function cleanSwapPlaceName(raw) {
+  if (!raw || typeof raw !== 'string') return ''
+  let cleaned = raw.trim()
+    .replace(/^["'`]+|["'`]+$/g, '')
+    .replace(/[.,;!?]+$/, '')
+    .trim()
+
+  cleaned = cleaned.replace(/^(?:por\s+(?:favor\s+)?|y\s+(?:poner|meter|agrega|agregar|a[ñn]ade|a[ñn]adir)\s+|poner\s+|meter\s+|a\s+|al\s+)/i, '').trim()
+
+  const isProperArticleVenue = /^(?:la\s+troja|la\s+cueva|el\s+prado|el\s+caim[aá]n|el\s+rodadero|la\s+quinta|el\s+ziruma|el\s+pe[ñn]ol|la\s+piedra|la\s+candelaria|el\s+poblado|la\s+macarena|el\s+castillo|los\s+novios|las\s+b[oó]vedas|la\s+popa|el\s+tigre|el\s+totumo)\b/i.test(cleaned)
+
+  if (!isProperArticleVenue) {
+    const articleGenericMatch = cleaned.match(/^(?:el|la|los|las)\s+(parque|museo|restaurante|catedral|teatro|muelle|playa|castillo|zoologico|zool[oó]gico|centro|monumento|mirador|malecon|malec[oó]n|estaci[oó]n|avenida|calle)\b/i)
+    if (articleGenericMatch) {
+      cleaned = cleaned.replace(/^(?:el|la|los|las)\s+/i, '').trim()
+    }
+  }
+
+  if (/^troja$/i.test(cleaned)) cleaned = 'La Troja'
+  else if (/^cueva$/i.test(cleaned)) cleaned = 'La Cueva'
+  else if (/^rodadero$/i.test(cleaned)) cleaned = 'El Rodadero'
+
+  return capitalizePlaceName(cleaned)
+}
+
+export function findMatchingStop(candidate, currentStops = []) {
+  if (!candidate || !Array.isArray(currentStops) || currentStops.length === 0) return null
+  const cleanCand = candidate.trim().toLowerCase()
+  const candWithoutArticle = cleanCand.replace(/^(?:el|la|los|las|al|a\s+la|a|un|una)\s+/i, '').trim()
+  return currentStops.find(s => {
+    const sName = (typeof s === 'string' ? s : (s?.name || '')).trim().toLowerCase()
+    const sWithoutArticle = sName.replace(/^(?:el|la|los|las|al|a\s+la|a|un|una)\s+/i, '').trim()
+    return sName === cleanCand ||
+      sName === candWithoutArticle ||
+      sWithoutArticle === candWithoutArticle ||
+      arePlacesSimilar(sName, cleanCand) ||
+      arePlacesSimilar(sName, candWithoutArticle) ||
+      sName.includes(candWithoutArticle) ||
+      candWithoutArticle.includes(sName)
+  }) || null
+}
+
+export function extractPlaceSwapRequest(prompt = '', currentStops = [], lastAssistantMsg = '') {
+  if (!prompt || typeof prompt !== 'string') return null
+  const cleanPrompt = prompt.trim()
+
+  // 1. Explicit swap: "Cambiar/reemplazar/quitar/sustituir [LugarA] por/y poner [LugarB]"
+  // e.g. "Cambiar Parque Washington por La Troja"
+  // "Quitar Bocas de Cenizas y poner La Troja"
+  const explicitSwapMatch = cleanPrompt.match(
+    /\b(?:cambia|cambiar|reemplaza|reemplazar|sustituye|sustituir|quita|quitar)\s+(?:a\s+|al\s+)?(.+?)\s+(?:por|y\s+(?:poner|meter|agrega|agregar|a[ñn]ade|a[ñn]adir))\s+(?:a\s+|al\s+)?(.+?)(?:[.,;!?]|$)/i
+  )
+  if (explicitSwapMatch) {
+    const rawOld = cleanSwapPlaceName(explicitSwapMatch[1])
+    const rawNew = cleanSwapPlaceName(explicitSwapMatch[2])
+    const matchedOld = findMatchingStop(rawOld, currentStops)
+    const oldStopName = matchedOld ? (typeof matchedOld === 'string' ? matchedOld : matchedOld.name) : rawOld
+    if (oldStopName && rawNew) {
+      return {
+        placeToRemove: oldStopName,
+        placeToAdd: rawNew,
+        type: 'explicit_swap'
+      }
+    }
+  }
+
+  // 2. Answering which stop to replace: e.g. "Por Parque Washington", "Quita Parque Washington", "Parque Washington"
+  // when assistant previously asked: "¿Por cuál de tus paradas actuales deseas cambiar **La Troja**?"
+  const assistantAskingWhichToReplace = /\b(?:por\s+cu[aá]l\s+de\s+tus\s+paradas\s+actuales\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\s+\*\*?([^*?]+)\*\*?/i.exec(lastAssistantMsg || '')
+  if (assistantAskingWhichToReplace) {
+    const pendingNewPlace = assistantAskingWhichToReplace[1].trim()
+    const cleanUserTarget = cleanPrompt.replace(/^(?:por|quitar|quita|eliminar|elimina|cambiar|cambia)\s+/i, '')
+    const matchedStop = findMatchingStop(cleanUserTarget, currentStops)
+    if (matchedStop) {
+      const sName = typeof matchedStop === 'string' ? matchedStop : matchedStop.name
+      return {
+        placeToRemove: sName,
+        placeToAdd: pendingNewPlace,
+        type: 'answering_replacement_target'
+      }
+    }
+  }
+
+  // 3. Answering what new place to put in: e.g. "La Troja", "Cambiar por La Troja"
+  // when assistant previously asked: "¿Por qué nuevo lugar te gustaría cambiar **Parque Washington**?"
+  const assistantAskingWhatToPutIn = /\b(?:por\s+qu[ée]\s+(?:nuevo\s+)?lugar\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\s+\*\*?([^*?]+)\*\*?/i.exec(lastAssistantMsg || '')
+  if (assistantAskingWhatToPutIn) {
+    const pendingOldPlace = assistantAskingWhatToPutIn[1].trim()
+    const cleanNewPlace = cleanSwapPlaceName(cleanPrompt.replace(/^(?:cambiar\s+por|cambia\s+por|reemplazar\s+por|sustituir\s+por|por|poner)\s+/i, ''))
+    if (cleanNewPlace.length >= 3) {
+      return {
+        placeToRemove: pendingOldPlace,
+        placeToAdd: cleanNewPlace,
+        type: 'answering_new_place'
+      }
+    }
+  }
+
+  // 4. User selects a new place to swap in without specifying what to remove:
+  // e.g. "Cambiar por La Troja", "Cambia por La Troja", "Reemplazar por La Troja"
+  const newPlaceOnlyMatch = cleanPrompt.match(
+    /\b(?:cambiar|cambia|reemplazar|reemplaza|sustituir)\s+por\s+(.+?)(?:[.,;!?]|$)/i
+  )
+  if (newPlaceOnlyMatch) {
+    const rawNew = cleanSwapPlaceName(newPlaceOnlyMatch[1])
+    return {
+      placeToRemove: null,
+      placeToAdd: rawNew,
+      type: 'new_place_selected'
+    }
+  }
+
+  // 5. User selects an existing stop to remove:
+  // e.g. "Cambiar Parque Washington", "Quitar Parque Washington", "Eliminar Parque Washington"
+  const oldPlaceMatch = cleanPrompt.match(
+    /\b(?:cambiar|cambia|quitar|quita|eliminar|elimina|sustituir)\s+(?:a\s+|el\s+|la\s+|al\s+)?(.+?)(?:[.,;!?]|$)/i
+  )
+  if (oldPlaceMatch && Array.isArray(currentStops) && currentStops.length > 0) {
+    const matchedStop = findMatchingStop(oldPlaceMatch[1], currentStops)
+    if (matchedStop) {
+      const sName = typeof matchedStop === 'string' ? matchedStop : matchedStop.name
+      return {
+        placeToRemove: sName,
+        placeToAdd: null,
+        type: 'old_place_selected'
+      }
+    }
+  }
+
+  return null
+}
+
+export function executePlaceSwap(specificPlaces = [], placeToRemove = '', placeToAdd = '') {
+  if (!Array.isArray(specificPlaces) || specificPlaces.length === 0 || !placeToRemove || !placeToAdd) {
+    return specificPlaces
+  }
+  const cleanRemove = placeToRemove.trim().toLowerCase()
+  const idx = specificPlaces.findIndex(s => {
+    const sName = (typeof s === 'string' ? s : (s?.name || '')).trim().toLowerCase()
+    return arePlacesSimilar(sName, cleanRemove) ||
+      sName.includes(cleanRemove) ||
+      cleanRemove.includes(sName)
+  })
+  if (idx === -1) {
+    return specificPlaces
+  }
+  const oldItem = specificPlaces[idx]
+  const isFood = isFoodOrDrinkEstablishment(placeToAdd)
+  const newItem = {
+    ...(typeof oldItem === 'object' ? { dia: oldItem.dia, day: oldItem.day } : {}),
+    name: placeToAdd,
+    category: isFood ? 'restaurant' : 'attraction',
+    type: isFood ? 'food' : 'cultural',
+    entityType: isFood ? 'restaurant' : 'attraction',
+    isRestaurant: isFood
+  }
+  const updated = [...specificPlaces]
+  updated[idx] = newItem
+  return updated
+}
+
 export function extractChatInformationFallback(prompt) {
   const res = {}
   const normalized = normalizeSpanishNumberWords(prompt || '')
@@ -5647,7 +5881,8 @@ export function extractChatInformationFallback(prompt) {
     /\b(pr[oó]ximo mes|fin de semana|d[íi]as?|semanas?|pareja|familia|amigos|solo|econ[oó]mico|moderado|lujo|caminando|auto|taxi|hotel|hospedaje)\b/i.test(text)
   )
 
-  const isCommandOrControl = /\b(gener(ar|es|a|e|en|al)?|cre(ar|es|a|e|en)?|inicia(r)?|finaliza(r)?|constru(ye|ir)|dise[ñn](ar|a|es|e)?|est[aá]\s+perfecto|listo|procede|adelante|vamos|armar?|hazlo|de acuerdo|dale|genial|ok|comenzar|ver|mostrar|detalles|men[uú]|platos|comida|restaurantes?|hoteles?|atracciones|actividades|itinerario|itinerarios)\b/i.test(text)
+  const isCommandOrControl = /\b(gener(ar|es|a|e|en|al)?|cre(ar|es|a|e|en)?|inicia(r)?|finaliza(r)?|constru(ye|ir)|dise[ñn](ar|a|es|e)?|est[aá]\s+perfecto|listo|procede|adelante|vamos|armar?|hazlo|de acuerdo|dale|genial|ok|comenzar|ver|mostrar|detalles|men[uú]|platos|comida|restaurantes?|hoteles?|atracciones|actividades|itinerario|itinerarios|cambiar|cambia|reemplazar|reemplaza|sustituir|quitar|quita|eliminar|elimina)\b/i.test(text) ||
+    /^(?:por|cambiar|cambia|quitar|quita|eliminar)\s+/i.test(cleanForRoutes)
 
   if (!res.destination) {
     const formatDestinationProperCase = (str = '') => {
@@ -5725,8 +5960,9 @@ export function extractChatInformationFallback(prompt) {
   })
 
   // Extract user-requested places / stops to add (supports conversational fillers, sequential lists, and single additions)
+  const isSwapOrChangePhrase = /\b(?:cambiar\s+por|cambia\s+por|reemplaza(?:r)?\s+por|sustituye\s+por|quita(?:r)?\b|cambiar\s+paradas?)\b/i.test(prompt)
   const extractedPlaces = extractRequestedSpecificPlaces(prompt)
-  if (extractedPlaces.length > 0) {
+  if (extractedPlaces.length > 0 && !isSwapOrChangePhrase) {
     res.specificPlaces = res.specificPlaces || []
     for (const place of extractedPlaces) {
       if (!res.specificPlaces.some(p => arePlacesSimilar(typeof p === 'string' ? p : p.name, place.name))) {
