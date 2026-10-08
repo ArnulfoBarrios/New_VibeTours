@@ -433,6 +433,16 @@ class AppLocalizationsEs extends AppLocalizations {
       'Usa VIBETOURS como guía de apoyo. Confirma condiciones reales antes de desplazarte.';
 
   @override
+  String get legalOpenFullWeb => 'Ver documento completo en la web';
+
+  @override
+  String get legalWebNotice =>
+      'Consulta los términos completos, actualizados y detallados en nuestro portal legal oficial.';
+
+  @override
+  String get errorOpeningWeb => 'No se pudo abrir el navegador web.';
+
+  @override
   String get pqrsTitle => 'Nueva Solicitud';
 
   @override
@@ -965,102 +975,102 @@ class AppLocalizationsEs extends AppLocalizations {
       'Revisa el estado de tus solicitudes y las respuestas del administrador en la pestaña \'Historial\'.';
 
   @override
-  String get privSec1Title => 'Datos que recopilamos';
+  String get privSec1Title => 'Datos personales recopilados';
 
   @override
   String get privSec1Body =>
-      'Podemos procesar email, identificador de usuario, nombre visible, foto de perfil, biografía, preferencias turísticas, favoritos, tours creados, tours realizados, calificación de tours, historial de solicitudes, ubicación aproximada y datos técnicos del dispositivo necesarios para operar y optimizar la app.';
+      'Procesamos tu correo, ID de usuario, perfil, preferencias de viaje, historial de tours y favoritos. Aplicamos minimización de datos conforme al RGPD, recolectando solo lo indispensable para operar la app.';
 
   @override
-  String get privSec2Title => 'Uso de ubicación y permisos';
+  String get privSec2Title => 'Ubicación GPS en primer plano';
 
   @override
   String get privSec2Body =>
-      'La ubicación precisa o aproximada se utiliza para calcular clima local, lugares cercanos, eventos de la zona, progreso durante un tour, distancia restante y recomendaciones en tiempo real. Puedes revocar el permiso desde los ajustes del sistema, aunque algunas funciones dependerán de la ubicación manual.';
+      'Usamos tu ubicación precisa exclusivamente durante tours activos para calcular distancias, clima y activar audioguías cercanas (Foreground Service con notificación). VibeTours nunca rastrea tu ubicación de forma oculta ni con la app cerrada.';
 
   @override
-  String get privSec3Title => 'Inteligencia Artificial y Recomendaciones';
+  String get privSec3Title => 'Dictado de voz y micrófono';
 
   @override
   String get privSec3Body =>
-      'Las solicitudes al planificador IA pueden incluir destino, ciudad, país, duración, tipo de tour, idioma y texto libre. Usamos estos datos anónimamente para generar rutas lógicas, descripciones, paradas e imágenes. No compartimos tus datos personales con los proveedores de IA, solo los parámetros de búsqueda.';
+      'El micrófono se activa únicamente al pulsar el botón de dictado o modo manos libres. La voz se procesa de forma transitoria en la memoria del dispositivo; no grabamos ni almacenamos tus audios en servidores.';
 
   @override
-  String get privSec4Title => 'Almacenamiento, Seguridad y Sincronización';
+  String get privSec4Title => 'Inteligencia Artificial (Cero Reentrenamiento)';
 
   @override
   String get privSec4Body =>
-      'Tus datos de cuenta y preferencias (moneda, idioma, logros) se almacenan de manera segura en Supabase con políticas de seguridad de nivel de fila (RLS). La app móvil solo utiliza claves públicas para el acceso, asegurando que tus datos están protegidos contra accesos no autorizados.';
+      'Las consultas al planificador IA contienen solo parámetros de viaje anonimizados. Por acuerdo contractual con nuestros proveedores, tus datos personales nunca se emplean para entrenar modelos públicos de IA.';
 
   @override
-  String get privSec5Title => 'Contenido compartido y Público';
+  String get privSec5Title => 'Seguridad, Almacenamiento y Supabase';
 
   @override
   String get privSec5Body =>
-      'Si decides publicar tours, dejar comentarios, valoraciones o enviar solicitudes, este contenido estará asociado a tu cuenta. Los tours marcados como privados y los borradores no serán visibles para la comunidad.';
+      'Tus datos se guardan con cifrado AES-256 en Supabase, protegidos por políticas de seguridad de nivel de fila (RLS). Nadie salvo tú y tu sesión autenticada tiene acceso a tu información privada.';
 
   @override
-  String get privSec6Title => 'Terceros y Analíticas';
+  String get privSec6Title => 'Publicidad (AdMob) y Diagnóstico Técnico';
 
   @override
   String get privSec6Body =>
-      'Podemos compartir datos anonimizados con servicios de analítica para entender cómo se utiliza la aplicación y mejorar nuestros algoritmos de recomendación. Nunca venderemos tus datos a terceros para fines publicitarios.';
+      'Nunca vendemos tus datos a terceros. Para mantener tours gratuitos mostramos publicidad a través de Google AdMob y recolectamos métricas de estabilidad anónimas con Firebase Crashlytics.';
 
   @override
-  String get privSec7Title => 'Retención y eliminación de datos';
+  String get privSec7Title => 'Tus Derechos y Eliminación de Cuenta';
 
   @override
   String get privSec7Body =>
-      'Conservamos tus datos mientras tu cuenta esté activa o sea necesario para prestar el servicio, seguridad, soporte y obligaciones legales. Puedes solicitar una copia de tus datos o su eliminación definitiva a través del módulo de Soporte o contactando a soporte técnico.';
+      'Puedes acceder, rectificar o eliminar tu cuenta y todos tus datos personales de manera inmediata desde Perfil > Ajustes > Eliminar cuenta, o enviando un correo formal a emotivavibetours@gmail.com.';
 
   @override
-  String get termsSec1Title => 'Aceptación y Uso de la aplicación';
+  String get termsSec1Title => 'Naturaleza del Servicio y Requisitos de Edad';
 
   @override
   String get termsSec1Body =>
-      'Al usar VIBETOURS, aceptas estos términos en su totalidad. La app ofrece descubrimiento, creación y recorrido de tours turísticos. El usuario se compromete a usar la app de forma responsable, respetando normativas locales, el medio ambiente y evitando zonas restringidas, propiedades privadas o peligrosas.';
+      'VIBETOURS es una plataforma tecnológica de mediación cultural e itinerarios guiados; no es agencia de viajes ni servicio de emergencias. El uso general requiere al menos 14 años; crear y publicar tours requiere 18 años.';
 
   @override
-  String get termsSec2Title => 'Exactitud de Mapas, Rutas y Precios';
+  String get termsSec2Title => 'Exactitud de Mapas, Horarios y Tarifas';
 
   @override
   String get termsSec2Body =>
-      'Los mapas, tiempos, distancias, rutas y precios (incluso convertidos a diferentes monedas) son estimaciones referenciales. Pueden existir cierres, cambios de horario, variaciones cambiarias, clima adverso o riesgos. Verifica siempre la información con fuentes oficiales antes de desplazarte o realizar compras.';
+      'Mapas vectoriales, distancias y tiempos se basan en OpenStreetMap y TomTom como estimaciones referenciales. Están sujetos a obras, clima o cambios de horarios. Es tu deber validar fuentes oficiales antes de viajar.';
 
   @override
-  String get termsSec3Title => 'Contenido generado por IA (VibeTour IA)';
+  String get termsSec3Title => 'Seguridad Peatonal y Asunción de Riesgos';
 
   @override
   String get termsSec3Body =>
-      'Los tours generados por nuestra Inteligencia Artificial son recomendaciones automatizadas basadas en bases de datos turísticas. Aunque nos esforzamos por ofrecer lugares reales y rutas coherentes, VIBETOURS no garantiza su precisión absoluta. El usuario debe validar horarios, accesibilidad y existencia real del lugar.';
+      'Caminar en vía pública conlleva riesgos ajenos a VibeTours (tráfico, clima, terreno). Participas voluntariamente bajo tu propia responsabilidad. Mantén atención a tu entorno y respeta normas viales locales.';
 
   @override
-  String get termsSec4Title => 'Propiedad Intelectual y Derechos de Autor';
+  String get termsSec4Title => 'Itinerarios con Inteligencia Artificial (IA)';
 
   @override
   String get termsSec4Body =>
-      'Todo el contenido original de la app pertenece a VIBETOURS. Al crear y hacer público un tour en nuestra plataforma, nos concedes una licencia no exclusiva para mostrarlo, promocionarlo y adaptarlo dentro del servicio.';
+      'Los tours generados por VibeTour AI son recomendaciones automáticas para inspirar tu viaje. Aunque buscamos la mayor coherencia, la IA puede presentar imprecisiones; valida siempre la accesibilidad y seguridad del lugar.';
 
   @override
-  String get termsSec5Title => 'Responsabilidad del usuario y Riesgos';
+  String get termsSec5Title => 'Tours Comunitarios y Free Tours';
 
   @override
   String get termsSec5Body =>
-      'El turismo al aire libre implica riesgos inherentes. El usuario es el único responsable de su seguridad, su salud, sus pertenencias y su comportamiento. VIBETOURS no actúa como agencia de viajes ni reemplaza a guías oficiales, autoridades o servicios de emergencia.';
+      'Los guías y creadores comunitarios son independientes de VibeTours. En Free Tours, las aportaciones son voluntarias en mano; no cobramos comisiones. Si reservas plaza presencial, cancélala con tiempo si no asistirás.';
 
   @override
-  String get termsSec6Title => 'Directrices de Publicación de Tours y Reseñas';
+  String get termsSec6Title => 'Normas de Comunidad y Propiedad Intelectual';
 
   @override
   String get termsSec6Body =>
-      'Queda estrictamente prohibido publicar contenido falso, difamatorio, ofensivo, discriminatorio, peligroso, spam o que infrinja derechos de autor o privacidad. VIBETOURS se reserva el derecho de moderar, ocultar o eliminar contenido y suspender cuentas que violen estas reglas.';
+      'Prohibido publicar contenido ofensivo, fraudulento, de odio o que infrinja derechos de autor. Moderamos y retiramos contenido infractor en un plazo máximo de 24 horas. El software y diseño pertenecen a VibeTours.';
 
   @override
-  String get termsSec7Title => 'Soporte y Solicitudes';
+  String get termsSec7Title => 'Cancelación de Cuenta y Soporte Oficial';
 
   @override
   String get termsSec7Body =>
-      'Todas las consultas, solicitudes y sugerencias deben canalizarse a través del módulo de Soporte integrado en la app. El tiempo objetivo de respuesta es menor a 24 horas hábiles, sujeto a disponibilidad técnica y complejidad del requerimiento.';
+      'VibeTours puede suspender cuentas por infracciones graves. Puedes darte de baja cuando desees. Para soporte, consultas o reportes, contáctanos en la app o vía emotivavibetours@gmail.com (respuesta en menos de 24-48h).';
 
   @override
   String get helpBody4d =>

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/design/app_theme.dart';
 import '../../core/design/premium_components.dart';
@@ -10,7 +11,36 @@ class LegalScreen extends StatelessWidget {
 
   final String kind;
 
+  static const _legalWebBaseUrl = 'https://new-vibe-tours-d2vy.vercel.app/legal';
+
   bool get _isPrivacy => kind == 'privacy';
+
+  Future<void> _openLegalWeb(BuildContext context) async {
+    final tab = _isPrivacy ? 'privacy' : 'terms';
+    final uri = Uri.parse('$_legalWebBaseUrl?tab=$tab');
+    final l10n = AppLocalizations.of(context);
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.errorOpeningWeb),
+          ),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.errorOpeningWeb),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,12 +68,13 @@ class LegalScreen extends StatelessWidget {
 
     final sections = _isPrivacy ? privacySections : termsSections;
     return PremiumScaffold(
+      safeTop: true,
       safeBottom: true,
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               child: Row(
                 children: [
                   IconButton.filledTonal(
@@ -67,21 +98,71 @@ class LegalScreen extends StatelessWidget {
           ),
           SliverToBoxAdapter(
             child: GlassPanel(
-              margin: const EdgeInsets.fromLTRB(20, 24, 20, 18),
+              margin: const EdgeInsets.fromLTRB(20, 20, 20, 16),
               radius: 28,
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.verified_user_rounded,
-                    color: AppTheme.primary,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.verified_user_rounded,
+                          color: AppTheme.primary,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _isPrivacy
+                                  ? l10n.legalPrivacyDesc
+                                  : l10n.legalTermsDesc,
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              l10n.legalWebNotice,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.72),
+                                    height: 1.35,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      _isPrivacy
-                          ? l10n.legalPrivacyDesc
-                          : l10n.legalTermsDesc,
-                      style: Theme.of(context).textTheme.bodyLarge,
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      onPressed: () => _openLegalWeb(context),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      label: Text(
+                        l10n.legalOpenFullWeb,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                 ],
@@ -150,21 +231,35 @@ class LegalScreen extends StatelessWidget {
                           ),
                     ),
                     const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        showLicensePage(
-                          context: context,
-                          applicationName: 'VIBETOURS',
-                          applicationVersion: '1.5.0',
-                          applicationLegalese:
-                              '© 2026 VibeTours. Todos los derechos reservados.\n\nDatos de mapas provistos por © OpenStreetMap contributors (licencia ODbL).\nArtículos de Wikipedia bajo licencia CC BY-SA 4.0.',
-                        );
-                      },
-                      icon: const Icon(Icons.code_rounded, size: 18),
-                      label: const Text('Ver licencias de código abierto'),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () {
+                            showLicensePage(
+                              context: context,
+                              applicationName: 'VIBETOURS',
+                              applicationVersion: '1.5.0',
+                              applicationLegalese:
+                                  '© 2026 VibeTours. Todos los derechos reservados.\n\nDatos de mapas provistos por © OpenStreetMap contributors (licencia ODbL).\nArtículos de Wikipedia bajo licencia CC BY-SA 4.0.',
+                            );
+                          },
+                          icon: const Icon(Icons.code_rounded, size: 18),
+                          label: const Text('Ver licencias de código abierto'),
+                        ),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () => _openLegalWeb(context),
+                          icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                          label: Text(l10n.legalOpenFullWeb),
+                        ),
+                      ],
                     ),
                   ],
                 ),
