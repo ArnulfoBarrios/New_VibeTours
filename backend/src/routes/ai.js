@@ -555,6 +555,14 @@ export function extractPoisFromText(text) {
     const line = rawLine.trim()
     if (!line) continue
 
+    // Stop extracting stops if we reach an alternatives or suggestions section
+    if (
+      /\b(?:aqu[íi]\s+tienes\s+(?:algunas\s+)?(?:excelentes\s+)?alternativas|alternativas(?:\s+disponibles)?|otras\s+alternativas|sugerencias|lugares\s+recomendados|opciones\s+recomendadas|opciones\s+de\s+(?:comida|restaurante|alojamiento)|restaurantes\s+recomendados|hoteles\s+recomendados)\b/i.test(line) ||
+      (found.length > 0 && /^(?:ind[íi]came\s+cu[aá]l|¿deseas\s+confirmar|¿te\s+gusta|¿qu[ée]\s+te\s+parece|¿est[áa]\s+todo\s+listo)\b/i.test(line))
+    ) {
+      break
+    }
+
     const dayMatch = line.match(/(?:•|\-|\*|\d+[\.\)])?\s*D[íi]a\s*(\d+)/i)
     if (dayMatch) {
       currentDay = parseInt(dayMatch[1], 10)
@@ -1267,7 +1275,10 @@ aiRouter.post('/chat', async (req, res, next) => {
       // Extraer de la respuesta del asistente ÚNICAMENTE si es un itinerario estructurado confirmado
       const isConfirmedItineraryMsg = Boolean(
         aiResponse.readyToBuild ||
-        (aiResponse.responseMessage && /\b(itinerario de viaje|itinerario finalizado|itinerario actualizado|d[íi]a 1:)\b/i.test(aiResponse.responseMessage))
+        (aiResponse.responseMessage && (
+          /\b(itinerario\s+de\s+viaje|itinerario\s+finalizado|itinerario\s+actualizado|actualizado\s+(?:tu|el)?\s*itinerario|itinerario\s+con\b|recorrido\s+de\s+\d+\s+paradas|tour\s+(?:completo\s+)?de\s+1\s+d[íi]a|d[íi]a\s*1\s*:)\b/i.test(aiResponse.responseMessage) ||
+          /(?:^|\n)\s*1\.\s+\*\*?[A-ZÁÉÍÓÚÑ]/i.test(aiResponse.responseMessage)
+        ))
       )
 
       let confirmedPois = []
@@ -1479,7 +1490,10 @@ aiRouter.post('/chat', async (req, res, next) => {
     } else {
       const isConfirmedItineraryMsg = Boolean(
         aiResponse.readyToBuild ||
-        (aiResponse.responseMessage && /\b(itinerario de viaje|itinerario finalizado|itinerario actualizado|d[íi]a 1:)\b/i.test(aiResponse.responseMessage))
+        (aiResponse.responseMessage && (
+          /\b(itinerario\s+de\s+viaje|itinerario\s+finalizado|itinerario\s+actualizado|actualizado\s+(?:tu|el)?\s*itinerario|itinerario\s+con\b|recorrido\s+de\s+\d+\s+paradas|tour\s+(?:completo\s+)?de\s+1\s+d[íi]a|d[íi]a\s*1\s*:)\b/i.test(aiResponse.responseMessage) ||
+          /(?:^|\n)\s*1\.\s+\*\*?[A-ZÁÉÍÓÚÑ]/i.test(aiResponse.responseMessage)
+        ))
       )
 
       const rawCombined = [
@@ -1496,7 +1510,12 @@ aiRouter.post('/chat', async (req, res, next) => {
             const pName = typeof p === 'object' ? (p.name || '') : String(p)
             return isValidSpecificPlace(pName) && !isNonTouristFacility({ name: pName })
           }))
-        : deduplicatePlacesByName(rawCombined)
+        : ((Array.isArray(aiResponse.specificPlaces) && aiResponse.specificPlaces.length >= 2)
+          ? deduplicatePlacesByName(aiResponse.specificPlaces.filter(p => {
+              const pName = typeof p === 'object' ? (p.name || '') : String(p)
+              return isValidSpecificPlace(pName) && !isNonTouristFacility({ name: pName })
+            }))
+          : deduplicatePlacesByName(rawCombined))
 
       let validatedSpecifics = combinedSpecifics
       if (validatedSpecifics.length > 0 && updatedPreferences.city && !isLocationRoute) {
@@ -3293,7 +3312,9 @@ export function buildTourPlanner(input, location = null, places = []) {
     for (const ref of refList) {
       const refName = typeof ref === 'string' ? ref.trim() : String(ref?.name || '').trim()
       if (!refName) continue
-      const existing = candidatePlaces.find(p => arePlacesSimilar(p.name || '', refName))
+      const refKey = normalizePlaceKey(refName)
+      const exactMatch = candidatePlaces.find(p => normalizePlaceKey(p.name || '') === refKey)
+      const existing = exactMatch || candidatePlaces.find(p => arePlacesSimilar(p.name || '', refName))
       if (existing) {
         if (typeof ref === 'object') {
           Object.assign(existing, {

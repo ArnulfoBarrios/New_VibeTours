@@ -416,7 +416,7 @@ const FACILITY_TYPE_TOKENS = new Set([
   'parque', 'plaza', 'museo', 'casa', 'puente', 'catedral', 'iglesia', 'pasaje', 'ronda',
   'malecon', 'mirador', 'restaurante', 'arte', 'playa', 'centro', 'comercial', 'mall', 'shopping',
   'barrio', 'teatro', 'estadio', 'coliseo', 'mercado', 'monumento', 'estatua',
-  'laguna', 'cienaga', 'isla', 'reserva'
+  'laguna', 'cienaga', 'isla', 'reserva', 'cultural', 'complejo', 'palacio', 'castillo', 'bosque'
 ])
 
 function getEntityFamily(name = '') {
@@ -475,7 +475,9 @@ export function arePlaceNamesSemanticallySame(nameA = '', nameB = '', city = '')
         (famA === 'riverwalk' && famB === 'park') ||
         (famA === 'park' && famB === 'riverwalk') ||
         (famA === 'religious' && famB === 'plaza') ||
-        (famA === 'plaza' && famB === 'religious')
+        (famA === 'plaza' && famB === 'religious') ||
+        (famA === 'museum' && (famB === 'park' || famB === 'landmark' || famB === 'plaza')) ||
+        (famB === 'museum' && (famA === 'park' || famA === 'landmark' || famA === 'plaza'))
       if (sameFamilyOrCompatible) return true
     }
   }

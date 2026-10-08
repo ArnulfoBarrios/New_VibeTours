@@ -2558,6 +2558,10 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const itineraryAssistantMsgs = (history || []).filter(m => {
     if (m.role !== 'assistant' && m.role !== 'bot' && m.sender !== 'assistant' && m.sender !== 'ai') return false
     const text = m.content || m.text || ''
+    // If it's merely asking which stop to replace or what new place to put in, it is NOT an itinerary message
+    if (/\b(?:por\s+cu[aá]l\s+de\s+tus\s+paradas\s+actuales\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar|por\s+qu[ée]\s+(?:nuevo\s+)?lugar\s+(?:deseas|te\s+gustar[íi]a)\s+cambiar)\b/i.test(text)) {
+      return false
+    }
     return /(?:^|\n)\s*(?:#{1,4}\s*)?d[íi]a\s*1\b/i.test(text) ||
       /\b(?:d[íi]a\s*1\s*[:\-–]|\*\*d[íi]a\s*1\*\*)/i.test(text) ||
       /\b(?:itinerario(?:\s+de\s+viaje)?|recorrido\s+de\s+\d+\s+paradas)\b/i.test(text) ||
@@ -2568,6 +2572,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const itineraryAssistantMsg = itineraryAssistantMsgs[itineraryAssistantMsgs.length - 1] || null
   const hasItineraryAlreadyInHistory = Boolean(itineraryAssistantMsg)
   if (hasItineraryAlreadyInHistory) {
+    const latestStops = extractStopsFromItineraryText(itineraryAssistantMsg?.content || itineraryAssistantMsg?.text || '')
     let bestHistoricalStops = []
     for (const m of itineraryAssistantMsgs.slice().reverse()) {
       const stops = extractStopsFromItineraryText(m.content || m.text || '')
@@ -2575,9 +2580,34 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         bestHistoricalStops = stops
       }
     }
-    if (bestHistoricalStops.length > 0) {
-      if (!Array.isArray(known.specificPlaces) || known.specificPlaces.length < bestHistoricalStops.length) {
-        known.specificPlaces = bestHistoricalStops
+
+    const targetStops = (latestStops.length >= bestHistoricalStops.length && latestStops.length >= 2)
+      ? latestStops
+      : (bestHistoricalStops.length > 0 ? bestHistoricalStops : latestStops)
+
+    if (targetStops.length > 0) {
+      const existingPlaces = Array.isArray(known.specificPlaces) ? known.specificPlaces : []
+      if (!Array.isArray(known.specificPlaces) || known.specificPlaces.length !== targetStops.length) {
+        known.specificPlaces = targetStops.map(ls => {
+          const match = existingPlaces.find(ep => {
+            const epName = typeof ep === 'string' ? ep : (ep?.name || '')
+            return arePlacesSimilar(epName, ls.name)
+          })
+          if (match && typeof match === 'object' && Number.isFinite(Number(match.latitude)) && Number.isFinite(Number(match.longitude))) {
+            return {
+              ...ls,
+              ...(typeof match === 'object' ? match : {}),
+              name: ls.name,
+              dia: ls.dia || ls.day,
+              day: ls.dia || ls.day,
+              latitude: Number(match.latitude),
+              longitude: Number(match.longitude),
+              coordinateSource: match.coordinateSource || 'osm',
+              coordinatesVerified: true
+            }
+          }
+          return ls
+        })
       }
     }
   }
@@ -4065,9 +4095,11 @@ REGLA UNIVERSAL DE AGRUPAMIENTO GEOGRÁFICO Y DISTRIBUCIÓN POR DÍAS:
      * Sector Neguanje / Palangana (Playas y Bahías): Playa Cristal, Bahía Concha, Neguanje, Cinto.
    - Prohibido mezclar en el mismo día atractivos de sectores opuestos que requieren diferentes accesos vehiculares.
 
-IDENTIDADES FÍSICAS CANÓNICAS:
-- "Casa del Carnaval" y "Museo del Carnaval" en Barranquilla son el mismo complejo y la misma parada física.
-- Nunca los presentes como dos paradas, ni los asignes a días distintos. Usa un solo nombre, preferiblemente "Casa del Carnaval".
+REGLA UNIVERSAL DE NO REDUNDANCIA Y EXCLUSIÓN MUTUA DE COMPLEJOS (CERO DUPLICIDAD EN CUALQUIER CIUDAD DEL MUNDO):
+- Si dos puntos de interés pertenecen al mismo complejo arquitectónico, parque o predio cultural (por ejemplo: un museo dentro de un parque cultural, un castillo y su bosque anexo, un palacio y sus jardines, o variantes con nombres similares):
+  * ESTRICTAMENTE PROHIBIDO incluir ambos en el mismo tour o asignarlos a días distintos.
+  * Selecciona exclusivamente UNO de ellos (el más emblemático o representativo) para todo el viaje.
+  * Nunca envíes al viajero dos veces al mismo predio/complejo en días diferentes. Utiliza siempre el espacio restante para un atractivo turístico completamente diferente y único de la ciudad.
 
 REGLAS DE ORO DE SELECCIÓN DE LUGARES Y BALANCE DIARIO:
 1. SELECCIÓN DE ATRACTIVOS ICÓNICOS Y REALES (NIVEL TURISMO INTERNACIONAL, CERO HARDCODEO):

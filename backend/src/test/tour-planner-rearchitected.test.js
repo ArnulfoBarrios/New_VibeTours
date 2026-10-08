@@ -376,8 +376,10 @@ test('buildTourPlanner must preserve exact chat requested places and their chron
   assert.ok(planner.selectedPlaces.length >= 6)
   // First place must be Catedral Metropolitana (index 0 in specificPlaces)
   assert.equal(planner.selectedPlaces[0].name, 'Catedral Metropolitana')
-  // Second requested place must be Restaurante La Cueva (index 2 in specificPlaces)
-  assert.equal(planner.selectedPlaces[1].name, 'Restaurante La Cueva')
+  // Second requested place must be Puente Pumarejo (index 1 in specificPlaces)
+  assert.equal(planner.selectedPlaces[1].name, 'Puente Pumarejo')
+  // Third requested place must be Restaurante La Cueva (index 2 in specificPlaces)
+  assert.equal(planner.selectedPlaces[2].name, 'Restaurante La Cueva')
   // No random sports court should displace requested places
   assert.ok(!planner.selectedPlaces.slice(0, 5).some(p => p.name === 'Parque Cancha Barranquilla'))
 })

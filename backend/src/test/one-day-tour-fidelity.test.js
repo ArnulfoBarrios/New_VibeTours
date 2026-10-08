@@ -7,7 +7,7 @@ import {
   extractStopsFromItineraryText,
   generateChatResponse
 } from '../services/openai.js'
-import { isValidSpecificPlace } from '../routes/ai.js'
+import { isValidSpecificPlace, extractPoisFromText } from '../routes/ai.js'
 import { inferTourType, evaluateTourRequirements } from '../services/destinationService.js'
 import { tripPhotonCircuit } from '../services/osm.js'
 
@@ -455,6 +455,74 @@ Indícame cuál deseas cambiar:`
   assert.doesNotMatch(res.responseMessage, /\b[6789]\.\s+/i, 'Must not jump to 6, 7, 8 or 9')
 })
 
+test('20. 2-turn swap and generate tour preserves exact 5 stops without resurrecting replaced stop', async () => {
+  const initialItinerary = `Itinerario de Viaje: Barranquilla (1 día)
 
+Día 1: Barranquilla
+ 1. **Bocas de Ceniza**
+ 2. **Gran Malecón del Río**
+ 3. **Barrio El Prado**
+ 4. **Malecón de Puerto Colombia**
+ 5. **Parque Washington** (Almuerzo)
 
+¿Qué te parece este itinerario? ¿Deseas hacer algún cambio o está listo para generar el tour?`
 
+  // Turn 1: User asks to swap Malecón de Puerto Colombia with Casa del Carnaval
+  const turn1History = [
+    { role: 'user', content: 'vamos a Barranquilla por 1 día en auto rentado y presupuesto moderado con amigos' },
+    { role: 'assistant', content: initialItinerary },
+    { role: 'user', content: 'Cambiar Malecón de puerto Colombia por Casa del Carnaval' }
+  ]
+
+  const turn1Prefs = {
+    city: 'Barranquilla',
+    destination: 'Barranquilla',
+    durationDays: 1,
+    transport: 'Auto rentado',
+    budget: 'Moderado',
+    companions: 'con amigos',
+    specificPlaces: [
+      'Bocas de Ceniza',
+      'Gran Malecón del Río',
+      'Barrio El Prado',
+      'Malecón de Puerto Colombia',
+      'Parque Washington'
+    ]
+  }
+
+  const turn1Res = await generateChatResponse({ history: turn1History }, '', '', turn1Prefs)
+
+  assert.ok(turn1Res.responseMessage.includes('Casa del Carnaval'), 'Turn 1 message must include Casa del Carnaval')
+  assert.ok(!turn1Res.responseMessage.includes('Malecón de Puerto Colombia'), 'Turn 1 message must exclude replaced stop')
+
+  const turn1Pois = extractPoisFromText(turn1Res.responseMessage)
+  assert.equal(turn1Pois.length, 5, `extractPoisFromText must find exactly 5 stops, got ${turn1Pois.length}`)
+  const turn1PoiNames = turn1Pois.map(p => typeof p === 'string' ? p : p.name)
+  assert.ok(turn1PoiNames.includes('Casa del Carnaval'))
+  assert.ok(!turn1PoiNames.includes('Malecón de Puerto Colombia'))
+
+  const turn1SpecificNames = (turn1Res.specificPlaces || []).map(p => typeof p === 'string' ? p : p.name)
+  assert.equal(turn1SpecificNames.length, 5, `Turn 1 specificPlaces must have exactly 5 stops, got ${turn1SpecificNames.length}`)
+  assert.ok(turn1SpecificNames.includes('Casa del Carnaval'))
+  assert.ok(!turn1SpecificNames.includes('Malecón de Puerto Colombia'))
+
+  // Turn 2: User clicks "🗺️ Generar tour en el mapa"
+  const turn2History = [
+    ...turn1History,
+    { role: 'assistant', content: turn1Res.responseMessage },
+    { role: 'user', content: '🗺️ Generar tour en el mapa' }
+  ]
+
+  const turn2Prefs = {
+    ...turn1Prefs,
+    specificPlaces: turn1Res.specificPlaces
+  }
+
+  const turn2Res = await generateChatResponse({ history: turn2History }, '', '', turn2Prefs)
+
+  assert.equal(turn2Res.readyToBuild, true, 'Turn 2 must be readyToBuild: true')
+  const turn2SpecificNames = (turn2Res.specificPlaces || []).map(p => typeof p === 'string' ? p : p.name)
+  assert.equal(turn2SpecificNames.length, 5, `Turn 2 specificPlaces must retain exactly 5 stops, got ${turn2SpecificNames.length}`)
+  assert.ok(turn2SpecificNames.includes('Casa del Carnaval'), 'Turn 2 must retain Casa del Carnaval')
+  assert.ok(!turn2SpecificNames.includes('Malecón de Puerto Colombia'), 'Turn 2 must never resurrect Malecón de Puerto Colombia')
+})

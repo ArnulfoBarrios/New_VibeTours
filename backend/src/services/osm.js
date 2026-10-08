@@ -2334,4 +2334,38 @@ export function arePlacesSimilar(a, b) {
   return false
 }
 
+/**
+ * Universal Venue / Compound Mutual Exclusion Guard.
+ * Evaluates whether two places represent the same site, compound, or architectural complex
+ * anywhere in the world (e.g. "Musée du Louvre" vs "Palais du Louvre", "Museo del Caribe" vs
+ * "Parque Cultural del Caribe", "Castillo de Chapultepec" vs "Bosque de Chapultepec")
+ * using semantic identity, root landmark stripping, and proximity geofencing (< 120m).
+ */
+export function isSameCompoundOrLandmark(placeA, placeB, city = '') {
+  if (!placeA || !placeB) return false
+  const nameA = typeof placeA === 'string' ? placeA.trim() : String(placeA.name || placeA.nombre || '').trim()
+  const nameB = typeof placeB === 'string' ? placeB.trim() : String(placeB.name || placeB.nombre || '').trim()
+  if (!nameA || !nameB) return false
+
+  const cityHint = city || (typeof placeA === 'object' && placeA.city ? placeA.city : (typeof placeB === 'object' && placeB.city ? placeB.city : ''))
+  if (arePlaceNamesSemanticallySame(nameA, nameB, cityHint)) return true
+  if (arePlacesSimilar(nameA, nameB)) return true
+
+  // Compound Proximity Guard: if both have valid coordinates within 120m and share a root token
+  const latA = Number(placeA.latitude ?? placeA.lat)
+  const lonA = Number(placeA.longitude ?? placeA.lon)
+  const latB = Number(placeB.latitude ?? placeB.lat)
+  const lonB = Number(placeB.longitude ?? placeB.lon)
+  if (Number.isFinite(latA) && Number.isFinite(lonA) && Number.isFinite(latB) && Number.isFinite(lonB) && (latA !== 0 || lonA !== 0)) {
+    const dist = haversineMeters(latA, lonA, latB, lonB)
+    if (dist < 120) {
+      const stopWords = new Set(['el', 'la', 'los', 'las', 'de', 'del', 'en', 'para', 'san', 'santa', 'the', 'and', 'of'])
+      const tokensA = nameA.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[\s,.-]+/).filter(t => t.length >= 4 && !stopWords.has(t))
+      const tokensB = nameB.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[\s,.-]+/).filter(t => t.length >= 4 && !stopWords.has(t))
+      if (tokensA.some(t => tokensB.includes(t))) return true
+    }
+  }
+  return false
+}
+
 
