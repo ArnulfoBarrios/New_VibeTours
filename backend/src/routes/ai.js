@@ -61,8 +61,10 @@ const handleSpeech = async (req, res, next) => {
   }
 }
 
-aiRouter.post('/speech', handleSpeech)
-aiRouter.post('/tts', handleSpeech)
+import { speechLimiter, tourGenerationLimiter } from '../middleware/rate-limiter.js'
+
+aiRouter.post('/speech', speechLimiter, handleSpeech)
+aiRouter.post('/tts', speechLimiter, handleSpeech)
 
 // Almacenamiento en memoria para trabajos de generación asíncrona
 const tourJobs = new Map()
@@ -1546,7 +1548,7 @@ aiRouter.post('/chat', async (req, res, next) => {
   }
 })
 
-aiRouter.post('/tours/generate', async (req, res, next) => {
+aiRouter.post('/tours/generate', tourGenerationLimiter, async (req, res, next) => {
   try {
     const input = requestSchema.parse(req.body)
     applyTourType(input)

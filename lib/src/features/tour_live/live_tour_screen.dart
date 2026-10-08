@@ -454,7 +454,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         }
         if ((place.latitude == 0.0 && place.longitude == 0.0) && place.name.isNotEmpty) {
           try {
-            final results = await DiscoveryRepository().searchLodgingOrAddress(place.name, city: tour.city);
+            final refLoc = _currentPoint ?? (tour.stops.isNotEmpty ? tour.stops.first.location : null);
+            final results = await DiscoveryRepository().searchLodgingOrAddress(
+              place.name,
+              city: tour.city,
+              userLat: refLoc?.latitude,
+              userLon: refLoc?.longitude,
+            );
             if (results.isNotEmpty) {
               place = _NearbyFoodPlace(
                 name: place.name,

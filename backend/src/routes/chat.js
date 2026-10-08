@@ -7,6 +7,7 @@ import { getWikipediaContext } from '../services/wikipedia.js'
 import { optimizeRoute } from '../services/tomtom.js'
 import { collectTourCandidates, buildTourPlanner, buildFallbackTour } from './ai.js'
 import { resolveCanonicalDestination, cleanAdministrativeCityName } from '../services/destinationService.js'
+import { chatLimiter } from '../middleware/rate-limiter.js'
 
 export const chatRouter = Router()
 
@@ -42,7 +43,7 @@ chatRouter.post('/start', async (req, res, next) => {
   }
 })
 
-chatRouter.post('/message', async (req, res, next) => {
+chatRouter.post('/message', chatLimiter, async (req, res, next) => {
   try {
     const { sessionId, message, location } = req.body
     if (!sessionId || (!message && !location)) {

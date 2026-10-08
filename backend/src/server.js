@@ -14,9 +14,13 @@ import { discoveryRouter } from './routes/discovery.js'
 import { toursRouter } from './routes/tours.js'
 import { routesRouter } from './routes/routes.js'
 import { getProviderStatus, logProviderStatus } from './services/provider-config.js'
+import { generalApiLimiter } from './middleware/rate-limiter.js'
 
 const app = express()
 const port = Number(process.env.PORT ?? 3000)
+
+// Enable proxy trusting for Vercel and reverse proxies (ensures accurate client IP resolution)
+app.set('trust proxy', 1)
 
 logProviderStatus()
 
@@ -50,6 +54,9 @@ app.get(['/health', '/api/health'], (req, res) => {
   })
 })
 
+// Apply general API rate limiting to all /api routes
+app.use('/api', generalApiLimiter)
+
 app.use('/api/tours', toursRouter)
 app.use('/api/routes', routesRouter)
 app.use('/api/ai', aiRouter)
@@ -76,4 +83,3 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 export default app
-

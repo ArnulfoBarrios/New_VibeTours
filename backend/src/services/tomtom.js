@@ -48,7 +48,7 @@ export async function searchTomTomPlaces({ query = '', category = '', lat = null
     if (category && hasCoords) {
       url = `https://api.tomtom.com/search/2/categorySearch/${encodeURIComponent(category)}.json?key=${apiKey}&lat=${Number(lat)}&lon=${Number(lon)}&radius=${radiusMeters}&limit=${limit}`
     } else if (query && hasCoords) {
-      url = `https://api.tomtom.com/search/2/poiSearch/${encodeURIComponent(query)}.json?key=${apiKey}&lat=${Number(lat)}&lon=${Number(lon)}&radius=${radiusMeters}&limit=${limit}`
+      url = `https://api.tomtom.com/search/2/search/${encodeURIComponent(query)}.json?key=${apiKey}&lat=${Number(lat)}&lon=${Number(lon)}&radius=${radiusMeters}&limit=${limit}`
     } else if (query) {
       url = `https://api.tomtom.com/search/2/search/${encodeURIComponent(query)}.json?key=${apiKey}&limit=${limit}`
     } else {

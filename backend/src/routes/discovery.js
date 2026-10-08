@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import { overpassAttractions, photonSearch, reverseGeocodeLocation } from '../services/osm.js'
+import { searchTomTomPlaces } from '../services/tomtom.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 
 export const discoveryRouter = Router()
@@ -28,16 +29,37 @@ discoveryRouter.get('/search', async (req, res, next) => {
   try {
     const query = z.object({
       q: z.string().trim().min(2),
-      limit: z.coerce.number().int().min(1).max(12).optional().default(8)
+      limit: z.coerce.number().int().min(1).max(12).optional().default(8),
+      lat: z.coerce.number().optional(),
+      lon: z.coerce.number().optional()
     }).parse(req.query)
-    const places = await photonSearch(query.q, query.limit)
+    let places = await photonSearch(query.q, query.limit, query.lat, query.lon).catch(() => [])
+    if (!places || places.length === 0) {
+      const tomtomResults = await searchTomTomPlaces({
+        query: query.q,
+        lat: query.lat,
+        lon: query.lon,
+        radiusMeters: 45000,
+        limit: query.limit
+      }).catch(() => [])
+      if (tomtomResults && tomtomResults.length > 0) {
+        places = tomtomResults.map(t => ({
+          name: t.name,
+          city: '',
+          country: '',
+          type: t.category || 'place',
+          latitude: t.latitude,
+          longitude: t.longitude
+        }))
+      }
+    }
     res.json({
       places: places.map((place, index) => ({
         id: `search-${index}`,
         name: place.name,
-        city: place.city,
-        country: place.country,
-        type: 'place',
+        city: place.city || '',
+        country: place.country || '',
+        type: place.type || 'place',
         latitude: place.latitude,
         longitude: place.longitude
       }))

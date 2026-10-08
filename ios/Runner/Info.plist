@@ -41,6 +41,12 @@
 		<string>VIBETOURS usa el microfono para comandos de voz en modo manos libres.</string>
 		<key>NSSpeechRecognitionUsageDescription</key>
 		<string>VIBETOURS usa reconocimiento de voz para controlar recorridos sin tocar la pantalla.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>VIBETOURS necesita acceso a tu galería de fotos para que puedas personalizar tu foto de perfil y adjuntar imágenes a tus tours o reseñas.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>VIBETOURS necesita acceso a la cámara para que puedas tomar fotografías para tu perfil o documentar paradas durante tus recorridos.</string>
+		<key>NSUserTrackingUsageDescription</key>
+		<string>Este identificador se utilizará para mostrarte anuncios relevantes y recomendaciones personalizadas según tus destinos de viaje.</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
