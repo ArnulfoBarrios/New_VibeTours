@@ -6,8 +6,12 @@ import {
   isCoastalMappedTouristStop,
   isCoastalOpenStreetMapNode,
   isCoastalTransferStop,
+  isCoastalIslandsTour,
+  resolveCoastalCatalogEntries,
 } from '../services/coastal-islands-policy.js'
 import { coastalWikipediaSummary } from '../services/imageSearch.js'
+import { overpassAttractions } from '../services/osm.js'
+import { buildHotelRecommendationReply, sanitizeInternalTravelLanguage } from '../services/openai.js'
 import { buildFallbackTour, buildTourPlanner, normalizeStop, rebuildCoastalChatItinerary } from '../routes/ai.js'
 
 const originalFetch = globalThis.fetch
@@ -63,6 +67,32 @@ const coastalCandidates = [
 ]
 
 describe('coastal_islands stop policy', () => {
+  it('queries mapped islands and beaches from OSM within the coastal corridor', async () => {
+    const originalFetch = globalThis.fetch
+    let overpassQuery = ''
+    globalThis.fetch = async (_url, options = {}) => {
+      overpassQuery = options.body?.get?.('data') || ''
+      return new Response(JSON.stringify({
+        elements: [{
+          type: 'node',
+          id: 987654321,
+          lat: 9.7818,
+          lon: -75.8723,
+          tags: { name: 'Isla Múcura', place: 'islet', tourism: 'attraction' }
+        }]
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
+
+    try {
+      const places = await overpassAttractions(9.47213, -75.71234, 65000, { coastalIslands: true })
+      assert.match(overpassQuery, /\["natural"~"beach\|island\|islet"\]/)
+      assert.match(overpassQuery, /\["place"~"island\|islet"\]/)
+      assert.ok(places.some(place => place.name === 'Isla Múcura' && place.placeId === 'node/987654321'))
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it('accepts mapped attractions and OSM restaurant nodes, while rejecting ungrounded or structural stops', () => {
     const island = coastalCandidates[0]
     const restaurantNode = coastalCandidates[1]
@@ -79,6 +109,57 @@ describe('coastal_islands stop policy', () => {
     assert.equal(isCoastalMappedTouristStop(coastalCandidates[4]), false)
     assert.equal(isCoastalMappedTouristStop(coastalCandidates[5]), false)
     assert.equal(isCoastalTransferStop('Muelle de Coveñas'), true)
+  })
+
+  it('rehydrates legacy coastal catalog names only from their exact mapped candidate', () => {
+    const catalog = {
+      places: [
+        'Isla Múcura',
+        'Islas de San Bernardo',
+        'Muelle de Coveñas',
+        'Playa sin registro',
+      ],
+      restaurants: ['Restaurante Palafito', 'Restaurante sin nodo'],
+      candidateCatalog: {
+        places: [coastalCandidates[0], coastalCandidates[3], coastalCandidates[4]],
+        restaurants: [coastalCandidates[1]],
+      },
+    }
+
+    assert.deepEqual(
+      resolveCoastalCatalogEntries(catalog.places, catalog.candidateCatalog, 'places').map(place => place.name),
+      ['Isla Múcura'],
+    )
+    assert.deepEqual(
+      resolveCoastalCatalogEntries(catalog.restaurants, catalog.candidateCatalog, 'restaurants').map(place => place.name),
+      ['Restaurante Palafito'],
+    )
+  })
+
+  it('lists every available hotel in the chat message and buttons from one list', () => {
+    const reply = buildHotelRecommendationReply('Coveñas', [
+      { name: 'Estela del Mar' },
+      { name: 'Hotel Stiphen' },
+      { name: 'Hotel Unión' },
+    ])
+    const listedNames = [...reply.responseMessage.matchAll(/^• (.+)$/gm)].map(match => match[1])
+
+    assert.deepEqual(listedNames, ['Estela del Mar', 'Hotel Stiphen', 'Hotel Unión'])
+    assert.deepEqual(reply.actionChips.slice(0, 3), listedNames)
+    assert.equal(reply.responseMessage.includes('catálogo'), false)
+  })
+
+  it('removes internal catalog diagnostics from traveler-facing text', () => {
+    const message = sanitizeInternalTravelLanguage(
+      'El catálogo verificado no muestra nombres legibles de playas ni islas de Coveñas, así que prefiero no inventar paradas. No encontré lugares en OpenStreetMap. ¿Amplío la búsqueda?',
+      'Coveñas',
+    )
+
+    assert.equal(message.includes('catálogo verificado'), false)
+    assert.equal(message.includes('nombres legibles'), false)
+    assert.equal(message.includes('OpenStreetMap'), false)
+    assert.match(message, /lugares confirmados en Coveñas/)
+    assert.match(message, /¿Amplío la búsqueda\?/)
   })
 
   it('moves islands to separate days and drops restaurant-only days', () => {
@@ -141,6 +222,55 @@ describe('coastal_islands stop policy', () => {
         `${tourType} should keep its existing non-OSM candidate policy`,
       )
     }
+    for (const tourType of ['city_to_city', 'international_multicity', 'location_to_destination']) {
+      assert.equal(isCoastalIslandsTour({ tourType }), false, `${tourType} must not enter coastal policy`)
+    }
+  })
+
+  it('does not trust AI-supplied OSM-shaped metadata when the mapped candidate catalog is empty', () => {
+    const fabricatedStop = osmPlace('Restaurante aislado sin catálogo', 'node', 987654321, 9.42, -75.69, {
+      tags: { amenity: 'restaurant' },
+      category: 'restaurant',
+    })
+    const planner = buildTourPlanner({
+      ...coastalInput,
+      specificPlaces: [fabricatedStop],
+    }, { latitude: 9.4, longitude: -75.68 }, [])
+
+    assert.deepEqual(planner.selectedPlaces, [])
+  })
+
+  it('keeps mapped coastal coordinates even when the AI response provides different coordinates', async () => {
+    const previousFetch = globalThis.fetch
+    globalThis.fetch = async () => ({ ok: false, json: async () => ({}) })
+    try {
+      const island = {
+        ...coastalCandidates[0],
+        name: 'Isla Testigo de Coordenadas',
+      }
+      const normalized = await normalizeStop({
+        nombre: island.name,
+        latitude: 9.42,
+        longitude: -75.68,
+      }, 0, {
+        ...coastalInput,
+        latitude: 9.4,
+        longitude: -75.68,
+      }, null, [island], null, {})
+
+      assert.equal(normalized.publicStop.ubicacion.latitud, island.latitude)
+      assert.equal(normalized.publicStop.ubicacion.longitud, island.longitude)
+      assert.equal(normalized.publicStop.ubicacion.coordenadas_verificadas, true)
+    } finally {
+      globalThis.fetch = previousFetch
+    }
+  })
+
+  it('rejects an unmapped coastal stop instead of attaching a different candidate coordinate', async () => {
+    await assert.rejects(
+      () => normalizeStop({ nombre: 'Restaurante inventado en Português' }, 0, coastalInput, null, [coastalCandidates[0]], null, {}),
+      error => error.code === 'UNMAPPED_COASTAL_STOP',
+    )
   })
 
   it('finds the page summary from Wikipedia, caches it, and does one summary request', async () => {

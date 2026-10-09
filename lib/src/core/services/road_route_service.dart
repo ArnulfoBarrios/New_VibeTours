@@ -136,6 +136,7 @@ class RoadRouteService {
     double? originHeading,
     RouteTravelMode travelMode = RouteTravelMode.driving,
     bool coastalIslands = false,
+    bool coastalIslandDestination = false,
   }) {
     if (points.length < 2) {
       return Future.value(RoadRouteResult(geometry: points));
@@ -144,6 +145,7 @@ class RoadRouteService {
       preferLiveTraffic && hasLiveTrafficProvider ? 'traffic' : 'road',
       travelMode.name,
       if (coastalIslands) 'coastal_islands',
+      if (coastalIslands && coastalIslandDestination) 'coastal_island_destination',
       points.map(_pointKey).join('|'),
       if (originHeading != null) 'h_${originHeading.round()}',
       if (preferLiveTraffic && hasLiveTrafficProvider)
@@ -161,6 +163,7 @@ class RoadRouteService {
       originHeading: originHeading,
       travelMode: travelMode,
       coastalIslands: coastalIslands,
+      coastalIslandDestination: coastalIslands && coastalIslandDestination,
     );
     _inFlightRoutes[key] = future;
     if (!forceRefresh) _routeCache[key] = future;
@@ -187,6 +190,7 @@ class RoadRouteService {
     double? originHeading,
     required RouteTravelMode travelMode,
     required bool coastalIslands,
+    required bool coastalIslandDestination,
   }) async {
     final geometry = <GeoPoint>[];
     final maritimeSegments = <List<GeoPoint>>[];
@@ -259,7 +263,9 @@ class RoadRouteService {
       // route does not reach the destination. Resolve that before the generic
       // hiking fallback, which otherwise fabricates a walk across open water.
       final requiresPortTransfer =
-          roadRoute == null || _looksLikeMaritimeTransfer(roadRoute, start, end);
+          (coastalIslands && coastalIslandDestination) ||
+          roadRoute == null ||
+          _looksLikeMaritimeTransfer(roadRoute, start, end);
       if (coastalIslands && !isFlightMode && requiresPortTransfer) {
         attemptedCoastalMaritimeRoute = true;
         coastalMaritimeRoute = await _buildMaritimeAwareRoute(start, end);
@@ -273,6 +279,24 @@ class RoadRouteService {
           totalTravelTimeSeconds += coastalMaritimeRoute.travelTimeSeconds ?? 0;
           totalTrafficDelaySeconds += coastalMaritimeRoute.trafficDelaySeconds ?? 0;
           usesLiveTraffic = usesLiveTraffic || coastalMaritimeRoute.usesLiveTraffic;
+          continue;
+        }
+
+        // Keep island access classified as a maritime transfer even when the
+        // map provider has no port record to draw. Never replace this leg with
+        // a fabricated walking route across the water.
+        if (coastalIslands && coastalIslandDestination) {
+          final landGeometry = roadRoute?.geometry ?? const <GeoPoint>[];
+          _appendGeometry(geometry, landGeometry.isNotEmpty ? landGeometry : [start]);
+          usesMaritimeTransfer = true;
+          transitAdviceMessage =
+              '⛵ Este destino requiere un trayecto por mar. No encontramos un muelle cartografiado cercano para trazar el embarque; confirma el punto de salida con el operador local.';
+          if (roadRoute != null) {
+            totalDistanceMeters += roadRoute.distanceMeters;
+            totalTravelTimeSeconds += roadRoute.travelTimeSeconds ?? 0;
+            totalTrafficDelaySeconds += roadRoute.trafficDelaySeconds ?? 0;
+            usesLiveTraffic = usesLiveTraffic || roadRoute.usesLiveTraffic;
+          }
           continue;
         }
       }
@@ -948,8 +972,12 @@ out center tags 10;
     GeoPoint start,
     GeoPoint end,
   ) async {
-    final startPorts = await _findPortsNear(start, role: 'Puerto salida');
-    final endPorts = await _findPortsNear(end, role: 'Puerto llegada');
+    final portResults = await Future.wait<List<RoutePortWaypoint>>([
+      _findPortsNear(start, role: 'Puerto salida'),
+      _findPortsNear(end, role: 'Puerto llegada'),
+    ]);
+    final startPorts = portResults[0];
+    final endPorts = portResults[1];
     final startPort = startPorts.isEmpty ? null : startPorts.first;
     final endPort = endPorts.isEmpty ? null : endPorts.first;
     if (startPort == null && endPort == null) return null;

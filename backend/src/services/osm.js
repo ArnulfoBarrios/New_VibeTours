@@ -1450,7 +1450,7 @@ export function tripPhotonCircuit(durationMs = (process.env.NODE_ENV === 'test' 
   console.warn(`[osm] Photon circuit breaker tripped for ${durationMs / 1000}s`)
 }
 
-export async function photonSearch(query, limit = 8, lat = null, lon = null, bbox = null, maxDistanceMeters = null, targetCountry = null) {
+export async function photonSearch(query, limit = 8, lat = null, lon = null, bbox = null, maxDistanceMeters = null, targetCountry = null, options = {}) {
   if (!query || isPhotonCircuitOpen()) return []
   const key = `photon_${query.toLowerCase().trim()}_${limit}_${lat ?? ''}_${lon ?? ''}_${bbox ?? ''}_${maxDistanceMeters ?? ''}_${(targetCountry || '').toLowerCase().trim()}`
   const cached = photonCache.get(key)
@@ -1467,7 +1467,10 @@ export async function photonSearch(query, limit = 8, lat = null, lon = null, bbo
     url.searchParams.set('lon', String(lon))
   }
   try {
-    const timeoutMs = process.env.NODE_ENV === 'test' ? 4000 : 4500
+    const requestedTimeoutMs = Number(options?.timeoutMs)
+    const timeoutMs = Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0
+      ? Math.min(requestedTimeoutMs, 4500)
+      : (process.env.NODE_ENV === 'test' ? 4000 : 4500)
     const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
     if (!response.ok) {
       if (response.status === 429 || response.status >= 500) {
@@ -1571,8 +1574,11 @@ async function fetchOverpassWithMirrors(query, timeoutMs = 4000) {
   return null
 }
 
-export async function overpassAttractions(latitude, longitude, radius = 8000) {
-  const effectiveRadius = Math.min(Math.max(radius, 8000), 15000)
+export async function overpassAttractions(latitude, longitude, radius = 8000, options = {}) {
+  const coastalIslands = options?.coastalIslands === true
+  const effectiveRadius = coastalIslands
+    ? 65000
+    : Math.min(Math.max(radius, 8000), 15000)
   const parkRadius = Math.min(effectiveRadius, 9000)
   const cacheKey = `${latitude.toFixed(2)}_${longitude.toFixed(2)}_${effectiveRadius}`
   const cached = attractionsCache.get(cacheKey)
@@ -1584,6 +1590,8 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
     [out:json][timeout:8];
     (
       nwr(around:${effectiveRadius},${latitude},${longitude})["tourism"~"attraction|museum|viewpoint|gallery|theme_park|zoo|aquarium|artwork"]["name"];
+      ${coastalIslands ? `nwr(around:${effectiveRadius},${latitude},${longitude})["natural"~"beach|island|islet"]["name"];
+      nwr(around:${effectiveRadius},${latitude},${longitude})["place"~"island|islet"]["name"];` : ''}
       nwr(around:${effectiveRadius},${latitude},${longitude})["historic"~"monument|memorial|ruins|castle|archaeological_site|church|cathedral|city_gate|fort|heritage"]["name"];
       nwr(around:${effectiveRadius},${latitude},${longitude})["amenity"~"arts_centre|theatre|ferry_terminal"]["name"];
       nwr(around:${parkRadius},${latitude},${longitude})["man_made"="pier"]["name"];
@@ -1625,6 +1633,10 @@ export async function overpassAttractions(latitude, longitude, radius = 8000) {
     }
 
     if (results.length === 0) {
+      if (coastalIslands) {
+        console.warn('[osm] coastal Overpass query returned empty or timed out; skipping duplicate discovery calls')
+        return []
+      }
       console.warn('[osm] overpassAttractions returned empty or timed out, using multi-category Photon fallback...')
       const [cathedrals, museums, parks, plazas, viewpoints, monuments, theaters] = await Promise.all([
         photonSearch('catedral', 5, latitude, longitude, null, 25000).catch(() => []),
@@ -1973,7 +1985,7 @@ export async function overpassHotels(latitude, longitude, budget = 'moderate', r
  * Search for nearby food/restaurant places via Overpass API.
  * Used by the voice route assistant for the SEARCH_RESTAURANTS action.
  */
-export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
+export async function overpassNearbyFood(latitude, longitude, radius = 1000, options = {}) {
   const effectiveRadius = Math.min(Number(radius) || 5000, 8000)
   const query = `
     [out:json][timeout:15];
@@ -2022,7 +2034,7 @@ export async function overpassNearbyFood(latitude, longitude, radius = 1000) {
   } catch (error) {
     console.warn('[osm] overpassNearbyFood query failed:', error.message)
   }
-  return photonFoodFallback(latitude, longitude)
+  return options?.skipPhotonFallback ? [] : photonFoodFallback(latitude, longitude)
 }
 
 export async function photonFoodFallback(latitude, longitude) {

@@ -13,7 +13,8 @@ import {
   isCoastalArchipelagoOverview,
   isCoastalIslandsTour,
   isCoastalMappedTouristStop,
-  isCoastalRestaurant
+  isCoastalRestaurant,
+  resolveCoastalCatalogEntries
 } from './coastal-islands-policy.js'
 
 import {
@@ -725,6 +726,50 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
     city
   )
   return coastalIslands ? verified.filter(isCoastalMappedTouristStop) : verified
+}
+
+export function buildHotelRecommendationReply(destination, hotels = []) {
+  const names = []
+  for (const hotel of Array.isArray(hotels) ? hotels : []) {
+    const name = String(typeof hotel === 'string' ? hotel : hotel?.name || '').trim()
+    if (!name || isTriviallyGenericHotelName(name, destination) || isGenericFacilityName(name)) continue
+    if (!names.some(existing => arePlacesSimilar(existing, name))) names.push(name)
+  }
+
+  if (names.length === 0) {
+    return {
+      responseMessage: `No encontré hoteles confirmados en ${destination || 'el destino'}. ¿Quieres que amplíe la búsqueda a zonas cercanas?`,
+      actionChips: ['🏨 Buscar en zonas cercanas', 'Tengo casa propia / familiar']
+    }
+  }
+
+  return {
+    responseMessage: `Estas son las opciones de alojamiento disponibles en ${destination || 'el destino'}:\n${names.map(name => `• ${name}`).join('\n')}\n\n¿Cuál prefieren reservar?`,
+    actionChips: [...names, 'Tengo casa propia / familiar']
+  }
+}
+
+export function sanitizeInternalTravelLanguage(message, destination = '') {
+  const place = String(destination || 'el destino').trim()
+  return String(message || '')
+    .replace(
+      /(?:el\s+)?cat[aá]logo\s+verificado\s+no\s+muestra\s+nombres\s+legibles\s+de[^.!?\n]*(?:[.!?]|$)/gi,
+      `Aún no encontré suficientes lugares confirmados en ${place} para completar el itinerario.`
+    )
+    .replace(/\bcat[aá]logo\s+verificado\b/gi, 'lugares confirmados en el mapa')
+    .replace(/\bnombres\s+legibles\s+de\s+(?:playas|islas|lugares)\b/gi, 'suficientes lugares')
+    .replace(/\bOpenFreeMap(?:\s*\/\s*OpenStreetMap)?\b/gi, 'el mapa')
+    .replace(/\bOpenStreetMap(?:\s*\/\s*OpenFreeMap)?\b/gi, 'el mapa')
+    .replace(/\bOSM\b/gi, 'el mapa')
+}
+
+function normalizeCoastalCatalog(catalog) {
+  if (!catalog || typeof catalog !== 'object') return catalog
+  return {
+    ...catalog,
+    places: resolveCoastalCatalogEntries(catalog.places, catalog.candidateCatalog, 'places'),
+    restaurants: resolveCoastalCatalogEntries(catalog.restaurants, catalog.candidateCatalog, 'restaurants')
+  }
 }
 
 function isCoastalTransferName(name) {
@@ -1924,10 +1969,15 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const clean = cleanAdministrativeCityName(destName).toLowerCase()
   const normalizedCountry = String(countryName || '').trim().toLowerCase()
   const requestedDays = Math.max(1, Number(options?.requestedDays || options?.numDays || options?.daysCount || 7))
+  const coastalIslands = isCoastalIslandsTour(options)
   const cacheKey = `catalog_osm_v5_${clean}_${normalizedCountry}_${requestedDays >= 8 ? requestedDays : 'std'}`
   const cached = destinationCatalogCache.get(cacheKey)
-  const minRequiredPlaces = Math.max(14, requestedDays * 2)
-  const minRequiredRests = Math.max(8, requestedDays)
+  const minRequiredPlaces = coastalIslands
+    ? Math.max(4, Math.min(6, requestedDays + 1))
+    : Math.max(14, requestedDays * 2)
+  const minRequiredRests = coastalIslands
+    ? Math.max(1, Math.min(3, requestedDays))
+    : Math.max(8, requestedDays)
   if (cached && (cached.places?.length >= minRequiredPlaces) && (cached.restaurants?.length >= minRequiredRests)) return cached
 
   const capitalCity = clean ? clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Destino'
@@ -1965,7 +2015,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
     const cleanKey = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
     const presetIconics = DESTINATION_ICONIC_LANDMARKS[cleanKey] || DESTINATION_ICONIC_LANDMARKS[clean] || []
-    if (presetIconics.length > 0) {
+    if (!coastalIslands && presetIconics.length > 0) {
       const verifiedIconics = await verifyCatalogEntriesOnOsm(presetIconics, clean, targetCountry, presetIconics.length, userLat, userLon)
       for (const vi of verifiedIconics) {
         if (!realPlaces.some(rp => arePlacesSimilar(rp, vi.name))) {
@@ -1975,7 +2025,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     const presetRests = DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[clean] || []
-    if (presetRests.length > 0) {
+    if (!coastalIslands && presetRests.length > 0) {
       const verifiedRests = await verifyCatalogEntriesOnOsm(presetRests, clean, targetCountry, presetRests.length, userLat, userLon, 'restaurant')
       for (const pr of verifiedRests) {
         if (!realRests.some(r => arePlacesSimilar(r.name, pr.name))) {
@@ -1985,7 +2035,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     const presetHotels = DESTINATION_ICONIC_HOTELS[cleanKey] || DESTINATION_ICONIC_HOTELS[clean] || []
-    if (presetHotels.length > 0 && realHotels.length < 3) {
+    if (!coastalIslands && presetHotels.length > 0 && realHotels.length < 3) {
       const verifiedHotels = await verifyCatalogEntriesOnOsm(presetHotels, clean, targetCountry, presetHotels.length, userLat, userLon, 'hotel')
       for (const vh of verifiedHotels) {
         if (!realHotels.some(h => arePlacesSimilar(h.name, vh.name))) {
@@ -2027,7 +2077,9 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
         longitude: userLon,
         hotels: realHotels,
         restaurants: realRests,
-        places: realPlaces.map(p => typeof p === 'string' ? p : p.name),
+        places: coastalIslands
+          ? realPlaces
+          : realPlaces.map(place => typeof place === 'string' ? place : place?.name).filter(Boolean),
         coordinatesMap,
         candidateCatalog,
         catalogSources: ['places_cache_db'],
@@ -2054,7 +2106,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   // 1.1 Resolve iconic / priority landmarks FIRST (curated presets or dynamic iconic query)
   const cleanKey = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const presetIconics = DESTINATION_ICONIC_LANDMARKS[cleanKey] || DESTINATION_ICONIC_LANDMARKS[clean] || []
-  if (presetIconics.length > 0) {
+  if (!coastalIslands && presetIconics.length > 0) {
     const verifiedIconics = await verifyCatalogEntriesOnOsm(presetIconics, clean, targetCountry, presetIconics.length, lat, lon)
     for (const vi of verifiedIconics) {
       if (!realPlaces.some(rp => arePlacesSimilar(rp, vi.name))) {
@@ -2065,9 +2117,11 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
   // Presets serve as initial priority seeds, NOT as an artificial ceiling.
   // Elastic target: At least 2 attractions per day (e.g. 14 for 7d, 18 for 9d, 28 for 14d)
-  const minLandmarksTarget = Math.max(14, requestedDays * 2)
+  const minLandmarksTarget = coastalIslands
+    ? Math.max(4, Math.min(6, requestedDays + 1))
+    : Math.max(14, requestedDays * 2)
   let dynamicIconics = []
-  if (realPlaces.length < minLandmarksTarget) {
+  if (!coastalIslands && realPlaces.length < minLandmarksTarget) {
     dynamicIconics = await fetchCityIconicLandmarks(clean, targetCountry, lat, lon, minLandmarksTarget).catch(() => [])
     const verifiedDynamic = await verifyCatalogEntriesOnOsm(dynamicIconics, clean, targetCountry, Math.max(14, minLandmarksTarget), lat, lon)
 
@@ -2080,7 +2134,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
   // 1.2 Resolve iconic restaurants FIRST
   const presetRests = DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[clean] || []
-  if (presetRests.length > 0) {
+  if (!coastalIslands && presetRests.length > 0) {
     const verifiedRests = await verifyCatalogEntriesOnOsm(presetRests, clean, targetCountry, presetRests.length, lat, lon, 'restaurant')
     for (const pr of verifiedRests) {
       if (!realRests.some(r => arePlacesSimilar(r.name, pr.name))) {
@@ -2091,7 +2145,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
   // 1.2.1 Resolve iconic hotels from presets if available
   const presetHotels = DESTINATION_ICONIC_HOTELS[cleanKey] || DESTINATION_ICONIC_HOTELS[clean] || []
-  if (presetHotels.length > 0 && realHotels.length === 0) {
+  if (!coastalIslands && presetHotels.length > 0 && realHotels.length === 0) {
     const verifiedHotels = await verifyCatalogEntriesOnOsm(presetHotels, clean, targetCountry, presetHotels.length, lat, lon, 'hotel')
     for (const vh of verifiedHotels) {
       if (!realHotels.some(h => arePlacesSimilar(h.name, vh.name))) {
@@ -2102,20 +2156,27 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
   // 1.3 Query live OpenStreetMap POIs (Overpass and Photon) only when complements are needed
   // Elastic target: At least 1 restaurant per day (e.g. 8 for 7d, 9 for 9d, 14 for 14d)
-  const minRestsTarget = Math.max(8, requestedDays)
-  const needsOsmComplement = (realPlaces.length < minLandmarksTarget || realRests.length < minRestsTarget || realHotels.length < 2) && lat && lon
+  const minRestsTarget = coastalIslands
+    ? Math.max(1, Math.min(3, requestedDays))
+    : Math.max(8, requestedDays)
+  const needsOsmComplement = (
+    realPlaces.length < minLandmarksTarget ||
+    realRests.length < minRestsTarget ||
+    (!coastalIslands && realHotels.length < 2)
+  ) && lat && lon
   if (needsOsmComplement) {
-    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 6000))
-    const searchRadiusM = requestedDays > 7 ? 40000 : 25000
+    const osmDiscoveryTimeoutMs = coastalIslands ? 4000 : 6000
+    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), osmDiscoveryTimeoutMs))
+    const searchRadiusM = coastalIslands ? 65000 : (requestedDays > 7 ? 40000 : 25000)
     const [osmHotels, osmRests, osmAttractions] = await Promise.all([
-      realHotels.length < 2
+      !coastalIslands && realHotels.length < 2
         ? Promise.race([overpassHotels(lat, lon, 'moderate', 15000).catch(() => []), timeoutPromise])
         : Promise.resolve([]),
       realRests.length < minRestsTarget
-        ? Promise.race([overpassNearbyFood(lat, lon, searchRadiusM).catch(() => []), timeoutPromise])
+        ? Promise.race([overpassNearbyFood(lat, lon, searchRadiusM, { skipPhotonFallback: coastalIslands }).catch(() => []), timeoutPromise])
         : Promise.resolve([]),
       realPlaces.length < minLandmarksTarget
-        ? Promise.race([overpassAttractions(lat, lon, searchRadiusM).catch(() => []), timeoutPromise])
+        ? Promise.race([overpassAttractions(lat, lon, searchRadiusM, { coastalIslands }).catch(() => []), timeoutPromise])
         : Promise.resolve([])
     ])
 
@@ -2181,9 +2242,20 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
             : ['turismo', 'museo', 'plaza', 'parque', 'mirador'])
         : []
 
-      const allSearchQueries = [...baseQueries, ...directCategoryQueries]
+      const allSearchQueries = coastalIslands
+        ? [`playa ${clean}`, `isla ${clean}`, `turismo ${clean}`]
+        : [...baseQueries, ...directCategoryQueries]
       const photonResults = await Promise.all(
-        allSearchQueries.map(q => photonSearch(q, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => []))
+        allSearchQueries.map(q => photonSearch(
+          q,
+          6,
+          lat,
+          lon,
+          null,
+          searchRadiusM,
+          targetCountry,
+          coastalIslands ? { timeoutMs: 2500 } : {}
+        ).catch(() => []))
       )
       const additional = photonResults.flat().filter(p => {
         if (!p || !p.name || isGenericFacilityName(p.name) || isNonTouristFacility(p.tags) || isNonTouristFacility({ name: p.name }) || isFoodOrDrinkEstablishment(p.name) || isUnmappedOrClosedVenue(p.name)) return false
@@ -2203,7 +2275,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       }
     }
 
-    if (realHotels.length < 3 && lat && lon) {
+    if (!coastalIslands && realHotels.length < 3 && lat && lon) {
       const photonHotels = await photonSearch(`hotel ${clean}`, 6, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
       for (const ph of photonHotels) {
         if (!ph || !ph.name || isGenericFacilityName(ph.name) || isNonTouristFacility(ph.tags) || isNonTouristFacility({ name: ph.name })) continue
@@ -2214,12 +2286,19 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
 
     if (realRests.length < minRestsTarget && lat && lon) {
-      const [rests1, rests2, rests3, restsDirect] = await Promise.all([
-        photonSearch(`restaurante ${clean}`, 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`gastronomia ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch(`comida ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
-        photonSearch('restaurante', 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
-      ])
+      const [rests1, rests2, rests3, restsDirect] = await Promise.all(coastalIslands
+        ? [
+            photonSearch(`restaurante ${clean}`, 10, lat, lon, null, searchRadiusM, targetCountry, { timeoutMs: 2500 }).catch(() => []),
+            Promise.resolve([]),
+            Promise.resolve([]),
+            Promise.resolve([])
+          ]
+        : [
+            photonSearch(`restaurante ${clean}`, 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+            photonSearch(`gastronomia ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+            photonSearch(`comida ${clean}`, 8, lat, lon, null, searchRadiusM, targetCountry).catch(() => []),
+            photonSearch('restaurante', 10, lat, lon, null, searchRadiusM, targetCountry).catch(() => [])
+          ])
       for (const pr of [...rests1, ...rests2, ...rests3, ...restsDirect]) {
         if (!pr || !pr.name || isGenericFacilityName(pr.name) || isNonTouristFacility(pr.tags) || isNonTouristFacility({ name: pr.name }) || isUnmappedOrClosedVenue(pr.name)) continue
         if (!realRests.some(r => arePlacesSimilar(r.name || r, pr.name))) {
@@ -2230,7 +2309,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   }
 
   // 2. Dynamic global travel intelligence: Fetch authentic profile from OpenAI only when catalog lacks sufficient entities
-  const needsDynamicProfile = realPlaces.length < 8 || realRests.length < 3 || realHotels.length < 2
+  const needsDynamicProfile = !coastalIslands && (realPlaces.length < 8 || realRests.length < 3 || realHotels.length < 2)
   if (needsDynamicProfile) {
     try {
       const dynamicProfile = await fetchDynamicDestinationProfile(clean, targetCountry).catch(() => null)
@@ -2260,7 +2339,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     } catch (_) {}
   }
 
-  if (realRests.length < 10 && lat && lon) {
+  if (!coastalIslands && realRests.length < 10 && lat && lon) {
     const extraFood = await photonSearch(`restaurante ${clean}`, 12, lat, lon, null, 30000, targetCountry).catch(() => [])
     for (const ef of extraFood) {
       if (ef?.name && !isGenericFacilityName(ef.name) && !isNonTouristFacility({ name: ef.name }) && !isUnmappedOrClosedVenue(ef.name) && !isLowQualityOrFastFoodVenue(ef.name, ef.tags)) {
@@ -2276,7 +2355,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  if (realPlaces.filter(place => place?.name || typeof place === 'string').length < 6) {
+  if (!coastalIslands && realPlaces.filter(place => place?.name || typeof place === 'string').length < 6) {
     const aiPlaces = await suggestPlacesWithOpenAI({ destination: capitalCity, country: targetCountry, count: 8 }).catch(() => [])
     for (const ap of aiPlaces) {
       if (ap?.name && !realPlaces.some(cp => arePlacesSimilar(cp, ap.name))) {
@@ -2285,7 +2364,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  if (realHotels.length === 0) {
+  if (!coastalIslands && realHotels.length === 0) {
     const aiHotels = await suggestHotelsWithOpenAI({ destination: capitalCity, country: targetCountry }).catch(() => [])
     if (aiHotels.length > 0) {
       realHotels.push(...aiHotels)
@@ -2317,14 +2396,17 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       restaurants: realRests,
       hotels: realHotels
     },
-    seeds: {
-      places: allPriorityIconics,
-      restaurants: presetRests,
-      hotels: presetHotels
-    },
+    seeds: coastalIslands
+      ? { places: [], restaurants: [], hotels: [] }
+      : {
+          places: allPriorityIconics,
+          restaurants: presetRests,
+          hotels: presetHotels
+        },
     // The existing collection above already queries OSM/Photon. The catalog
     // enriches it with the commercial providers without duplicating requests.
-    discoverOsm: false
+    discoverOsm: false,
+    discoverProviders: !coastalIslands
   }).catch(error => {
     console.warn('[candidate-catalog] Unified catalog build failed:', error?.message || error)
     return { places: [], restaurants: [], hotels: [] }
@@ -2343,10 +2425,13 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       prioritizedIds.add(match.id || match.candidateId || match.name)
     }
   }
-  const cleanPlaces = [
+  const cleanPlaceCandidates = [
     ...prioritizedPlaceCandidates,
     ...catalogPlaceCandidates.filter(candidate => !prioritizedIds.has(candidate.id || candidate.candidateId || candidate.name))
-  ].map(candidate => candidate.name)
+  ]
+  const cleanPlaces = coastalIslands
+    ? cleanPlaceCandidates
+    : cleanPlaceCandidates.map(candidate => candidate.name).filter(Boolean)
   const cleanHotels = []
   for (const candidate of (unifiedCatalog.hotels || [])) {
     const hName = candidate?.name
@@ -2801,8 +2886,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     const reqDays = Number(known.durationDays) || 0
     const cacheKey = `catalog_osm_v5_${destName.toLowerCase()}_${(destCountry || '').toLowerCase()}_${reqDays >= 8 ? reqDays : 'std'}`
     const cached = destinationCatalogCache.get(cacheKey)
-    const minRequiredPlaces = Math.max(14, reqDays * 2)
-    const minRequiredRests = Math.max(8, reqDays)
+    const minRequiredPlaces = coastalIslands
+      ? Math.max(4, Math.min(6, (reqDays || 1) + 1))
+      : Math.max(14, reqDays * 2)
+    const minRequiredRests = coastalIslands
+      ? Math.max(1, Math.min(3, reqDays || 1))
+      : Math.max(8, reqDays)
     if (cached && ((cached.places?.length || 0) >= minRequiredPlaces && (cached.restaurants?.length || 0) >= minRequiredRests)) {
       realCatalog = cached
     } else {
@@ -2859,7 +2948,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           if (cachedCatalog && hasSufficientPlaces && hasSufficientRests) {
             realCatalog = cachedCatalog
           } else {
-            realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: reqDays })
+            realCatalog = await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: reqDays, tourType: known.tourType })
               .catch(err => {
                 console.warn('[generateChatResponse] Catalog lookup error:', err.message)
                 return { places: [], restaurants: [], hotels: [] }
@@ -2927,12 +3016,26 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       }
     }
 
-    if (isCoastalIslandsTour(known) && realCatalog) {
-      realCatalog = {
-        ...realCatalog,
-        places: (realCatalog.places || []).filter(isCoastalMappedTouristStop),
-        restaurants: (realCatalog.restaurants || []).filter(isCoastalMappedTouristStop),
-      }
+  }
+
+  const coastalIslands = isCoastalIslandsTour(known)
+  if (coastalIslands && realCatalog) {
+    realCatalog = normalizeCoastalCatalog(realCatalog)
+  }
+
+  // Hotel cards and their chat summary must come from the same verified list.
+  // This coastal-only fast path avoids a second model call after hotel lookup.
+  if (coastalIslands && isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)) {
+    const hotelReply = buildHotelRecommendationReply(destName, realCatalog?.hotels || [])
+    return {
+      ...hotelReply,
+      extractedPreferences: {
+        ...known,
+        accommodationStatus: 'Recomiéndame hoteles'
+      },
+      specificPlaces: known.specificPlaces || [],
+      destinationSuggestions: [],
+      readyToBuild: false
     }
   }
 
@@ -3465,24 +3568,35 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
             known.city || 'Destino',
             known.country || 'Local',
             known.latitude,
-            known.longitude
+            known.longitude,
+            { requestedDays: known.durationDays, tourType: known.tourType }
           ).catch(() => ({ places: [], restaurants: [], hotels: [] }))
         }
       }
       if (!preset) {
         preset = { places: [], restaurants: [], hotels: [] }
       }
+      if (isCoastalIslandsTour(known)) {
+        preset = normalizeCoastalCatalog(preset)
+      }
       if (!isLocationToDestination && (!preset.restaurants || preset.restaurants.length === 0) && destName) {
         const cachedRests = await lookupCachedPlacesForCity(destName, 'restaurant').catch(() => [])
         if (cachedRests?.length > 0) {
-          preset.restaurants = cachedRests.map(r => r.name || r)
+          preset.restaurants = isCoastalIslandsTour(known)
+            ? cachedRests
+            : cachedRests.map(r => r.name || r)
         }
       }
       if (!isLocationToDestination && (!preset.places || preset.places.length === 0) && destName) {
         const cachedAttrs = await lookupCachedPlacesForCity(destName, 'attraction').catch(() => [])
         if (cachedAttrs?.length > 0) {
-          preset.places = cachedAttrs.map(a => a.name || a)
+          preset.places = isCoastalIslandsTour(known)
+            ? cachedAttrs
+            : cachedAttrs.map(a => a.name || a)
         }
+      }
+      if (isCoastalIslandsTour(known)) {
+        preset = normalizeCoastalCatalog(preset)
       }
       trustedFallbackPlaces = [
         ...(preset?.places || []),
@@ -4165,10 +4279,10 @@ REGLAS CRÍTICAS DE RESTAURANTES Y GASTRONOMÍA:
 ${verifiedFoodText ? `\nESTABLECIMIENTOS GASTRONÓMICOS REALES VERIFICADOS EN EL MAPA:\n${verifiedFoodText}\n` : ''}
 
 ${realCatalog && hasCity ? `
-CATÁLOGO VERIFICADO DE ${destName.toUpperCase()} (${destCountry || 'DESTINO'}):
+${coastalIslands ? 'REFERENCIAS DE LUGARES' : 'CATÁLOGO VERIFICADO'} DE ${destName.toUpperCase()} (${destCountry || 'DESTINO'}):
 • Hoteles: ${realCatalog.hotels?.map(h => h.name).join(', ') || 'N/A'}
 • Restaurantes y bares: ${realCatalog.restaurants?.map(r => r.name).join(', ') || 'N/A'}
-• Atractivos y patrimonio: ${realCatalog.places?.join(', ') || 'N/A'}
+• Atractivos y patrimonio: ${realCatalog.places?.map(p => typeof p === 'string' ? p : p?.name).filter(Boolean).join(', ') || 'N/A'}
 ` : ''}
 
 REGLA DE NATURALIDAD Y CERO INVENCIONES:
@@ -4648,12 +4762,12 @@ REGLAS PARA "accommodationStatus":
         ? realCatalog
         : (realCatalog && (realCatalog.places || []).length >= totalPlacesNeeded && (realCatalog.restaurants || []).length >= daysCount)
           ? realCatalog
-          : (hasCity ? await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: daysCount }).catch(() => null) : null) || realCatalog
+          : (hasCity ? await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: daysCount, tourType: known.tourType }).catch(() => null) : null) || realCatalog
       if (isCoastalItinerary && cat) {
         cat = {
           ...cat,
-          places: (cat.places || []).filter(isCoastalMappedTouristStop),
-          restaurants: (cat.restaurants || []).filter(isCoastalMappedTouristStop),
+          places: resolveCoastalCatalogEntries(cat.places, cat.candidateCatalog, 'places'),
+          restaurants: resolveCoastalCatalogEntries(cat.restaurants, cat.candidateCatalog, 'restaurants'),
         }
       }
 

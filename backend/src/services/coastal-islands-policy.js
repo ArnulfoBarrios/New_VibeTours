@@ -53,7 +53,10 @@ function hasOsmIdentity(place) {
 
 export function isCoastalIslandsTour(value) {
   if (typeof value === 'string') return normalizedText(value) === 'coastal islands'
-  return normalizedText(value?.tourType ?? value?.tour_type ?? value?.type) === 'coastal islands'
+  return normalizedText(
+    value?.tourType ?? value?.tour_type ?? value?.itineraryType ??
+    value?.itinerary_type ?? value?.tipo_recorrido ?? value?.type
+  ) === 'coastal islands'
 }
 
 export function isCoastalRestaurant(place) {
@@ -77,6 +80,7 @@ export function isCoastalArchipelagoOverview(placeOrName) {
     ? placeOrName
     : placeOrName?.name ?? placeOrName?.nombre)
   return /^(?:archipielago de )?islas de san bernardo$/.test(name) ||
+    /^(?:archipielago de san bernardo|san bernardo archipielago)$/.test(name) ||
     /^(?:san bernardo )?archipelago(?: of)? san bernardo$/.test(name)
 }
 
@@ -110,6 +114,47 @@ export function isCoastalMappedTouristStop(place) {
   if (!name || !hasOsmIdentity(place)) return false
   if (isCoastalArchipelagoOverview(name) || isCoastalTransferStop(place)) return false
   return !isCoastalRestaurant(place) || isCoastalOpenStreetMapNode(place)
+}
+
+function coastalCatalogNameKey(value) {
+  return normalizedText(value)
+}
+
+/**
+ * Rehydrates legacy name-only coastal catalogs from their mapped candidate
+ * records. Plain names are never trusted as stop locations.
+ */
+export function resolveCoastalCatalogEntries(entries, candidateCatalog = {}, kind = 'places') {
+  const isRestaurantList = kind === 'restaurants'
+  const candidatePool = [
+    ...(Array.isArray(candidateCatalog?.[kind]) ? candidateCatalog[kind] : []),
+    ...(Array.isArray(candidateCatalog?.all) ? candidateCatalog.all : []),
+  ].filter(candidate => candidate && typeof candidate === 'object')
+  const result = []
+  const seen = new Set()
+
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const entryName = typeof entry === 'string'
+      ? entry.trim()
+      : String(entry?.name ?? entry?.nombre ?? '').trim()
+    if (!entryName) continue
+
+    const canonical = typeof entry === 'object' && isCoastalMappedTouristStop(entry)
+      ? entry
+      : candidatePool.find(candidate =>
+          coastalCatalogNameKey(candidate?.name ?? candidate?.nombre) === coastalCatalogNameKey(entryName) &&
+          isCoastalMappedTouristStop(candidate)
+        )
+    if (!canonical) continue
+    if (isRestaurantList !== isCoastalRestaurant(canonical)) continue
+
+    const key = coastalCatalogNameKey(canonical.name ?? canonical.nombre)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    result.push(canonical)
+  }
+
+  return result
 }
 
 export function assignCoastalIslandDays(stops, requestedDays = 1) {

@@ -1068,8 +1068,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                               ? 'Toca aquí para trazar ruta a la terminal'
                                               : liveRoute.usesFlightTransfer
                                                   ? 'Toca aquí para trazar ruta al aeropuerto'
-                                                  : liveRoute.usesMaritimeTransfer
-                                                      ? 'Toca aquí para trazar ruta al muelle'
+                                              : liveRoute.usesMaritimeTransfer
+                                                      ? liveRoute.ports.isNotEmpty
+                                                          ? 'Toca aquí para trazar ruta al muelle'
+                                                          : 'Confirma el punto de embarque local'
                                                       : liveRoute.walkingSegments.isNotEmpty
                                                           ? 'Toca aquí para ver el sendero a pie'
                                                           : 'Toca aquí para trazar ruta al transbordo',
@@ -1734,6 +1736,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             requestToken: _routeRequestToken,
             travelMode: route.travelMode,
             coastalIslands: tour.itineraryType == 'coastal_islands',
+            coastalIslandDestination: _isActiveCoastalIslandDestination(tour),
           ),
         );
       }
@@ -1800,6 +1803,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             originHeading: _currentHeading,
             travelMode: travelMode,
             coastalIslands: tour.itineraryType == 'coastal_islands',
+            coastalIslandDestination: _isActiveCoastalIslandDestination(tour),
           )
           .timeout(const Duration(seconds: 8));
     } catch (error) {
@@ -1879,6 +1883,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           requestToken: requestToken,
           travelMode: travelMode,
           coastalIslands: tour.itineraryType == 'coastal_islands',
+          coastalIslandDestination: _isActiveCoastalIslandDestination(tour),
         ),
       );
     }
@@ -1892,6 +1897,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     required int requestToken,
     required RouteTravelMode travelMode,
     bool coastalIslands = false,
+    bool coastalIslandDestination = false,
   }) async {
     if (_isTrafficRefreshing) return;
     _isTrafficRefreshing = true;
@@ -1904,6 +1910,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         originHeading: _currentHeading,
         travelMode: travelMode,
         coastalIslands: coastalIslands,
+        coastalIslandDestination: coastalIslandDestination,
       );
 
       if (!mounted ||
@@ -1935,6 +1942,30 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ? const Duration(seconds: 15)
         : const Duration(seconds: 30);
     return now.difference(last) > minInterval;
+  }
+
+  bool _isActiveCoastalIslandDestination(Tour tour) {
+    if (tour.itineraryType != 'coastal_islands') return false;
+    final destinationName = _selectedVoicePlace?.name ??
+        (_navigatingToHotel || _activeStop >= tour.stops.length
+            ? ''
+            : tour.stops[_activeStop].name);
+    final normalized = destinationName
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+    if (normalized == 'islas de san bernardo' ||
+        normalized == 'archipielago de san bernardo' ||
+        normalized == 'san bernardo archipielago') {
+      return false;
+    }
+    return RegExp(r'\b(isla|islas|islote|islotes|island|islands|islet|cayo|cayos)\b')
+        .hasMatch(normalized);
   }
 
   bool _isCurrentRouteContext(int stopIndex, GeoPoint destination) {

@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText, coastalWikipediaSummary } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection } from '../services/osm.js'
-import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, fetchOpenAiChatCompletion, hasActiveLlm, getActiveLlmKey, cleanAndParseJson, getRealDestinationCatalog, isLodgingName, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
+import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, fetchOpenAiChatCompletion, hasActiveLlm, getActiveLlmKey, cleanAndParseJson, getRealDestinationCatalog, isLodgingName, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, sanitizeInternalTravelLanguage, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
 import { classifyUserIntent, INTENT_TYPES } from '../services/intentClassifier.js'
 import { supabase } from '../services/supabase.js'
@@ -716,7 +716,10 @@ aiRouter.post('/chat', async (req, res, next) => {
             canonical.country || currentPreferences.country || 'Colombia',
             Number(canonical.latitude),
             Number(canonical.longitude),
-            { requestedDays: Number(currentPreferences.durationDays || quickExtracted?.durationDays || 0) }
+            {
+              requestedDays: Number(currentPreferences.durationDays || quickExtracted?.durationDays || 0),
+              tourType: currentPreferences.tourType || quickExtracted?.tourType
+            }
           ).catch(() => null)
         })
       : Promise.resolve(null)
@@ -1327,7 +1330,7 @@ aiRouter.post('/chat', async (req, res, next) => {
             return txt.includes('location_to_destination') || txt.includes('desde mi ubicación') || txt.includes('desde mi ubicacion') || txt.includes('desde mi posición') || txt.includes('desde mi posicion')
           })
         )
-        const chatCatalog = (!isLocationRoute && chatCity) ? await getRealDestinationCatalog(chatCity, chatCountry, updatedPreferences.latitude, updatedPreferences.longitude, { requestedDays: maxDay || 7 }).catch(() => null) : null
+        const chatCatalog = (!isLocationRoute && chatCity) ? await getRealDestinationCatalog(chatCity, chatCountry, updatedPreferences.latitude, updatedPreferences.longitude, { requestedDays: maxDay || 7, tourType: updatedPreferences.tourType }).catch(() => null) : null
         const aiSpecifics = Array.isArray(aiResponse.extractedPreferences?.specificPlaces)
           ? aiResponse.extractedPreferences.specificPlaces
           : []
@@ -1579,6 +1582,13 @@ aiRouter.post('/chat', async (req, res, next) => {
     const effectiveReadyToBuild = (isLocationRoute || isOneDayTour)
       ? Boolean(aiResponse.readyToBuild)
       : (Boolean(aiResponse.readyToBuild) && isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus))
+
+    if (isCoastalIslandsTour(updatedPreferences) || isCoastalIslandsTour(aiResponse.extractedPreferences)) {
+      finalResponseMessage = sanitizeInternalTravelLanguage(
+        finalResponseMessage,
+        updatedPreferences.city || updatedPreferences.destination || ''
+      )
+    }
 
     res.json({
       responseMessage: finalResponseMessage,
@@ -3377,7 +3387,7 @@ export function buildTourPlanner(input, location = null, places = []) {
     : (Array.isArray(input.selectedPlaces) ? input.selectedPlaces : [])
 
   let candidatePlaces = Array.isArray(places) && places.length > 0 ? [...places] : []
-  if (candidatePlaces.length === 0) {
+  if (candidatePlaces.length === 0 && !isCoastalIslands) {
     candidatePlaces = [...refList]
   } else if (refList.length > 0) {
     for (const ref of refList) {
@@ -3388,16 +3398,27 @@ export function buildTourPlanner(input, location = null, places = []) {
       const existing = exactMatch || candidatePlaces.find(p => arePlacesSimilar(p.name || '', refName))
       if (existing) {
         if (typeof ref === 'object') {
-          Object.assign(existing, {
-            ...ref,
-            rawTags: { ...(existing.rawTags || {}), requested_place: 'true' },
-            isRequested: true,
-          })
+          if (isCoastalIslands) {
+            // Keep the mapped candidate's identity and coordinates canonical;
+            // chat text may contribute its requested day and generated content.
+            for (const key of ['dia', 'day', 'description', 'descripcion', 'activities', 'actividades', 'tips', 'consejos', 'suggestedMinutes', 'duracion_estimada']) {
+              if (ref[key] != null) existing[key] = ref[key]
+            }
+            existing.rawTags = { ...(existing.rawTags || {}), requested_place: 'true' }
+            existing.isRequested = true
+          } else {
+            Object.assign(existing, {
+              ...ref,
+              rawTags: { ...(existing.rawTags || {}), requested_place: 'true' },
+              isRequested: true,
+            })
+          }
         } else {
           existing.isRequested = true
           existing.rawTags = { ...(existing.rawTags || {}), requested_place: 'true' }
         }
       } else {
+        if (isCoastalIslands) continue
         const item = typeof ref === 'object' ? { ...ref } : { name: refName }
         item.rawTags = { ...(item.rawTags || {}), requested_place: 'true' }
         item.isRequested = true
@@ -5709,15 +5730,13 @@ function sanitizeStopTitle(rawName) {
 export async function normalizeStop(stop, index, input, anchorPlace = null, candidatePlaces = [], calculatedDay = null, options = {}) {
   const source = stop && typeof stop === 'object' ? stop : {}
   const ubicacion = source.ubicacion ?? source.locationInfo ?? {}
+  const isCoastalStop = isCoastalIslandsTour(input)
   const candidateIndex = (index < candidatePlaces.length) ? index : (candidatePlaces.length > 0 ? (index % candidatePlaces.length) : 0)
-  const candidateFallback = candidatePlaces[candidateIndex] ?? anchorPlace ?? candidatePlaces[0] ?? null
+  const positionalFallback = candidatePlaces[candidateIndex] ?? anchorPlace ?? candidatePlaces[0] ?? null
 
   let rawName = [source.nombre, source.name, ubicacion.nombre_lugar]
       .map((value) => value == null ? "" : value.toString().trim())
       .find((value) => value.length > 0) ?? ''
-
-  const isGenericPlaceholder = !rawName || /parada \d+/i.test(rawName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(rawName)
-  const sourceName = isGenericPlaceholder ? (candidateFallback?.name ?? `${input.destination} ${index + 1}`) : rawName
 
   const sourceCandidateId = readPlanCandidateId(source)
   const idMatchedPlace = sourceCandidateId
@@ -5729,18 +5748,47 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     error.candidateId = sourceCandidateId
     throw error
   }
-  const matchedPlace = idMatchedPlace || findCandidatePlace(sourceName, candidatePlaces)
+
+  const normalizedRawName = normalizePlaceKey(rawName)
+  const exactNameMatchedPlace = normalizedRawName
+    ? candidatePlaces.find(candidate => normalizePlaceKey(candidate?.name || '') === normalizedRawName)
+    : null
+  const candidateFallback = isCoastalStop
+    ? (idMatchedPlace || exactNameMatchedPlace)
+    : positionalFallback
+  const isGenericPlaceholder = !rawName || /parada \d+/i.test(rawName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(rawName)
+  const sourceName = isGenericPlaceholder ? (candidateFallback?.name ?? (isCoastalStop ? '' : `${input.destination} ${index + 1}`)) : rawName
+  const matchedPlace = isCoastalStop
+    ? (idMatchedPlace || exactNameMatchedPlace)
+    : (idMatchedPlace || findCandidatePlace(sourceName, candidatePlaces))
+
+  if (isCoastalStop && (!matchedPlace || !isCoastalMappedTouristStop(matchedPlace))) {
+    const error = new Error(`La parada "${sourceName || rawName || 'sin nombre'}" no coincide con un lugar costero confirmado en el mapa.`)
+    error.code = 'UNMAPPED_COASTAL_STOP'
+    error.placeName = sourceName || rawName
+    throw error
+  }
+
   const startPlace = candidatePlaces[0] ?? null
   const endPlace = candidatePlaces[candidatePlaces.length - 1] ?? null
-  let coordinates = await resolveStopCoordinates({
-    source,
-    input,
-    name: sourceName,
-    matchedPlace,
-    fallbackPlace: candidateFallback,
-    startPlace,
-    endPlace,
-  })
+  let coordinates = isCoastalStop
+    ? {
+        latitude: Number(matchedPlace.latitude),
+        longitude: Number(matchedPlace.longitude),
+        address: matchedPlace.address || '',
+        placeId: matchedPlace.placeId || matchedPlace.place_id || matchedPlace.id || '',
+        coordinatesVerified: true,
+        coordinateSource: matchedPlace.coordinateSource || matchedPlace.coordinate_source || matchedPlace.source || ''
+      }
+    : await resolveStopCoordinates({
+        source,
+        input,
+        name: sourceName,
+        matchedPlace,
+        fallbackPlace: candidateFallback,
+        startPlace,
+        endPlace,
+      })
   if (!coordinates || coordinates.unresolved || !hasUsableCoordinates(coordinates.latitude, coordinates.longitude)) {
     if (candidateFallback && hasUsableCoordinates(candidateFallback.latitude, candidateFallback.longitude)) {
       coordinates = {
@@ -5818,7 +5866,6 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
   description = description.replace(/^(Atracci[oó]n(\s*\/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*/i, '').trim()
 
   const isGenericDesc = isGenericDescription(description, resolvedName)
-  const isCoastalStop = isCoastalIslandsTour(input)
   let wikipediaUrl = ''
   let descriptionSource = description && !isGenericDesc ? 'ai' : 'generated_fallback'
   let coastalWikiPromise = null
@@ -7136,7 +7183,7 @@ export async function collectTourCandidates(input, location) {
     const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
     const hasUnresolvedSpecifics = mergedSpecifics.some(p => !p || typeof p !== 'object' || !p.coordinatesVerified || !Number.isFinite(Number(p.latitude)))
     const catalog = (hasUnresolvedSpecifics && destLat != null && destLon != null)
-      ? await getRealDestinationCatalog(city, country, destLat, destLon).catch(() => null)
+      ? await getRealDestinationCatalog(city, country, destLat, destLon, { requestedDays: input.durationDays, tourType: input.tourType }).catch(() => null)
       : null
 
     const specificSettled = await Promise.allSettled(

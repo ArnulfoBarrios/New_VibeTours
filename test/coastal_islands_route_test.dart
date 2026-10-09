@@ -50,9 +50,7 @@ void main() {
           final isIslandRoute =
               (requestedDestination.latitude - island.latitude).abs() < 0.00001 &&
               (requestedDestination.longitude - island.longitude).abs() < 0.00001;
-          final routeEnd = isIslandRoute
-              ? const GeoPoint(latitude: 9.44, longitude: -75.68)
-              : requestedDestination;
+          final routeEnd = requestedDestination;
           final startPair = coordinatePath.split(';').first.split(',');
           final routeStart = GeoPoint(
             latitude: double.parse(startPair[1]),
@@ -89,6 +87,7 @@ void main() {
       final result = await service.resolveRoute(
         [mainland, island],
         coastalIslands: true,
+        coastalIslandDestination: true,
       );
 
       expect(result.usesMaritimeTransfer, isTrue);
@@ -170,11 +169,14 @@ void main() {
           GeoPoint(latitude: 9.62, longitude: -75.8),
         ],
         coastalIslands: true,
+        coastalIslandDestination: true,
       );
 
+      expect(result.usesMaritimeTransfer, isTrue);
       expect(result.walkingSegments, isEmpty);
       expect(walkingRequests, 0);
       expect(result.transitAdviceMessage, isNot(contains('a pie')));
+      expect(result.transitAdviceMessage, contains('trayecto por mar'));
     });
   });
 }
