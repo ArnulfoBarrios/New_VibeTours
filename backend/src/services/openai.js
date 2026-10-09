@@ -927,10 +927,20 @@ export function collapseCanonicalDuplicateLines(text, city = '') {
     .join('\n')
 }
 
-export function ensureCompleteOneDayItineraryText(text, destName = '', realCatalog = null, parsedExtracted = {}, lastUserMsg = '') {
+export function ensureCompleteOneDayItineraryText(text, destName = '', realCatalog = null, parsedExtracted = {}, lastUserMsg = '', options = {}) {
   if (!text || typeof text !== 'string') return text
   const day1Match = text.match(/(D[íi]a\s+1\s*:\s*[^\n]*\n)([\s\S]*?)(?=\n\n(?:¿|D[íi]a\s+2|$))/i)
   if (!day1Match) return text
+  const coastalIslands = isCoastalIslandsTour(options)
+  const verifiedCoastalPlaces = coastalIslands
+    ? resolveCoastalCatalogEntries(realCatalog?.places, realCatalog?.candidateCatalog, 'places')
+    : []
+  const verifiedCoastalRestaurants = coastalIslands
+    ? resolveCoastalCatalogEntries(realCatalog?.restaurants, realCatalog?.candidateCatalog, 'restaurants')
+    : []
+  const coastalCandidateFor = (name, candidates) => candidates.find(candidate =>
+    arePlacesSimilar(candidate.name, name)
+  )
 
   const isFoodStop = (n) => {
     if (!n) return false
@@ -956,14 +966,28 @@ export function ensureCompleteOneDayItineraryText(text, destName = '', realCatal
     }
   }
 
-  const attractions = uniqueStops.filter(s => !isFoodStop(s))
-  const foods = uniqueStops.filter(s => isFoodStop(s))
+  const attractions = coastalIslands
+    ? uniqueStops
+      .filter(s => !isFoodStop(s))
+      .map(name => coastalCandidateFor(name, verifiedCoastalPlaces))
+      .filter(Boolean)
+      .map(candidate => candidate.name)
+    : uniqueStops.filter(s => !isFoodStop(s))
+  const foods = coastalIslands
+    ? uniqueStops
+      .filter(isFoodStop)
+      .map(name => coastalCandidateFor(name, verifiedCoastalRestaurants))
+      .filter(Boolean)
+      .map(candidate => candidate.name)
+    : uniqueStops.filter(s => isFoodStop(s))
 
   // 2. Backfill attractions if fewer than 4
   const normDest = String(destName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   const catalogAttrs = [
-    ...(realCatalog?.places || []),
-    ...(DESTINATION_ICONIC_LANDMARKS[normDest] || DESTINATION_ICONIC_LANDMARKS[destName.toLowerCase()] || [])
+    ...(coastalIslands ? verifiedCoastalPlaces : [
+      ...(realCatalog?.places || []),
+      ...(DESTINATION_ICONIC_LANDMARKS[normDest] || DESTINATION_ICONIC_LANDMARKS[destName.toLowerCase()] || [])
+    ])
   ].map(p => typeof p === 'string' ? p : p?.name).filter(Boolean)
 
   for (const cand of catalogAttrs) {
@@ -975,17 +999,19 @@ export function ensureCompleteOneDayItineraryText(text, destName = '', realCatal
 
   // 3. Ensure at least 1 food stop
   const catalogRests = [
-    ...(realCatalog?.restaurants || []),
-    ...(DESTINATION_ICONIC_RESTAURANTS[normDest] || DESTINATION_ICONIC_RESTAURANTS[destName.toLowerCase()] || [])
+    ...(coastalIslands ? verifiedCoastalRestaurants : [
+      ...(realCatalog?.restaurants || []),
+      ...(DESTINATION_ICONIC_RESTAURANTS[normDest] || DESTINATION_ICONIC_RESTAURANTS[destName.toLowerCase()] || [])
+    ])
   ].map(r => typeof r === 'string' ? r : r?.name).filter(Boolean)
 
-  const chosenFood = foods[0] || catalogRests[0] || `Almuerzo tradicional en ${destName || 'la ciudad'}`
+  const chosenFood = foods[0] || catalogRests[0] || (coastalIslands ? null : `Almuerzo tradicional en ${destName || 'la ciudad'}`)
 
   // 4. Assemble standard 5-stop 1-day tour: Attr 1, Attr 2, Food (Almuerzo), Attr 3, Attr 4
   const finalStops = []
   if (attractions[0]) finalStops.push(attractions[0])
   if (attractions[1]) finalStops.push(attractions[1])
-  finalStops.push(chosenFood)
+  if (chosenFood) finalStops.push(chosenFood)
   if (attractions[2]) finalStops.push(attractions[2])
   if (attractions[3]) finalStops.push(attractions[3])
 
@@ -1005,13 +1031,30 @@ export function ensureCompleteOneDayItineraryText(text, destName = '', realCatal
 
   // 6. Update parsedExtracted.specificPlaces with the 5 stops
   if (parsedExtracted && typeof parsedExtracted === 'object') {
-    parsedExtracted.specificPlaces = [
-      ...(attractions[0] ? [{ name: attractions[0], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : []),
-      ...(attractions[1] ? [{ name: attractions[1], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : []),
-      { name: chosenFood, dia: 1, day: 1, category: 'restaurant', entityType: 'restaurant', type: 'food', isRestaurant: true },
-      ...(attractions[2] ? [{ name: attractions[2], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : []),
-      ...(attractions[3] ? [{ name: attractions[3], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : [])
-    ]
+    const makeCoastalSpecific = (name, candidates, category) => {
+      const candidate = coastalCandidateFor(name, candidates)
+      if (!candidate) return null
+      return {
+        ...candidate,
+        dia: 1,
+        day: 1,
+        category,
+        entityType: category,
+        ...(category === 'restaurant' ? { type: 'food', isRestaurant: true } : {})
+      }
+    }
+    parsedExtracted.specificPlaces = coastalIslands
+      ? [
+          ...attractions.map(name => makeCoastalSpecific(name, verifiedCoastalPlaces, 'attraction')),
+          ...(chosenFood ? [makeCoastalSpecific(chosenFood, verifiedCoastalRestaurants, 'restaurant')] : [])
+        ].filter(Boolean)
+      : [
+          ...(attractions[0] ? [{ name: attractions[0], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : []),
+          ...(attractions[1] ? [{ name: attractions[1], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : []),
+          ...(chosenFood ? [{ name: chosenFood, dia: 1, day: 1, category: 'restaurant', entityType: 'restaurant', type: 'food', isRestaurant: true }] : []),
+          ...(attractions[2] ? [{ name: attractions[2], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : []),
+          ...(attractions[3] ? [{ name: attractions[3], dia: 1, day: 1, category: 'attraction', entityType: 'attraction' }] : [])
+        ]
   }
 
   return updatedText
@@ -2371,7 +2414,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     }
   }
 
-  const allPriorityIconics = [
+  const allPriorityIconics = coastalIslands ? [] : [
     ...presetIconics,
     ...(Array.isArray(dynamicIconics) ? dynamicIconics.map(d => typeof d === 'string' ? d : d?.name).filter(Boolean) : [])
   ]
@@ -5297,7 +5340,8 @@ REGLAS PARA "accommodationStatus":
         destName || known.city || known.destination || '',
         realCatalog,
         parsedExtracted,
-        lastUserMsg
+        lastUserMsg,
+        { tourType: known.tourType }
       )
     }
 

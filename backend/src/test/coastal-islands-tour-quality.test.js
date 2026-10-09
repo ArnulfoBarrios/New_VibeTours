@@ -10,8 +10,15 @@ import {
   resolveCoastalCatalogEntries,
 } from '../services/coastal-islands-policy.js'
 import { coastalWikipediaSummary } from '../services/imageSearch.js'
-import { overpassAttractions } from '../services/osm.js'
-import { buildHotelRecommendationReply, sanitizeInternalTravelLanguage } from '../services/openai.js'
+import { KNOWN_ICONIC_LANDMARKS, overpassAttractions } from '../services/osm.js'
+import {
+  buildHotelRecommendationReply,
+  DESTINATION_ICONIC_HOTELS,
+  DESTINATION_ICONIC_LANDMARKS,
+  DESTINATION_ICONIC_RESTAURANTS,
+  ensureCompleteOneDayItineraryText,
+  sanitizeInternalTravelLanguage,
+} from '../services/openai.js'
 import { buildFallbackTour, buildTourPlanner, normalizeStop, rebuildCoastalChatItinerary } from '../routes/ai.js'
 
 const originalFetch = globalThis.fetch
@@ -67,6 +74,39 @@ const coastalCandidates = [
 ]
 
 describe('coastal_islands stop policy', () => {
+  it('does not use Coveñas/Tolú presets to backfill coastal stops or invent an unmapped meal', () => {
+    const island = coastalCandidates[0]
+    const catalog = {
+      places: ['Isla Múcura', 'Islas de San Bernardo', 'Playa Divina'],
+      restaurants: ['Restaurante Las Acacias'],
+      candidateCatalog: {
+        places: [island],
+        restaurants: [],
+      },
+    }
+    const parsed = {}
+    const response = ensureCompleteOneDayItineraryText(
+      'Itinerario de Viaje: Coveñas (este sábado)\n\nDía 1: Coveñas\n• Islas de San Bernardo\n• Playa Divina\n• Restaurante Las Acacias\n\n¿Deseas confirmar el itinerario?',
+      'Coveñas',
+      catalog,
+      parsed,
+      '',
+      { tourType: 'coastal_islands' },
+    )
+
+    assert.match(response, /Isla Múcura/)
+    assert.doesNotMatch(response, /Islas de San Bernardo|Playa Divina|Las Acacias|Almuerzo tradicional/)
+    assert.deepEqual(parsed.specificPlaces.map(place => place.name), ['Isla Múcura'])
+    assert.equal(parsed.specificPlaces[0].placeId, island.placeId)
+  })
+
+  it('keeps city presets available to non-coastal tour modes', () => {
+    assert.ok(DESTINATION_ICONIC_LANDMARKS.covenas.includes('Isla Múcura'))
+    assert.ok(DESTINATION_ICONIC_RESTAURANTS.covenas.some(restaurant => restaurant.name === 'Restaurante Coveñas'))
+    assert.ok(DESTINATION_ICONIC_HOTELS.covenas.some(hotel => hotel.name === 'Hotel Palma Linda'))
+    assert.ok(KNOWN_ICONIC_LANDMARKS['isla mucura'])
+  })
+
   it('queries mapped islands and beaches from OSM within the coastal corridor', async () => {
     const originalFetch = globalThis.fetch
     let overpassQuery = ''
