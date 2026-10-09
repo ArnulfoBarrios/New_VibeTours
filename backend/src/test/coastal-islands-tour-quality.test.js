@@ -8,6 +8,7 @@ import {
   isCoastalTransferStop,
   isCoastalIslandsTour,
   resolveCoastalCatalogEntries,
+  resolveChatTourTypeAfterExtraction,
 } from '../services/coastal-islands-policy.js'
 import { coastalWikipediaSummary } from '../services/imageSearch.js'
 import { KNOWN_ICONIC_LANDMARKS, overpassAttractions } from '../services/osm.js'
@@ -100,11 +101,53 @@ describe('coastal_islands stop policy', () => {
     assert.equal(parsed.specificPlaces[0].placeId, island.placeId)
   })
 
-  it('keeps city presets available to non-coastal tour modes', () => {
-    assert.ok(DESTINATION_ICONIC_LANDMARKS.covenas.includes('Isla Múcura'))
-    assert.ok(DESTINATION_ICONIC_RESTAURANTS.covenas.some(restaurant => restaurant.name === 'Restaurante Coveñas'))
+  it('removes unverified Coveñas/Tolú attraction and restaurant presets', () => {
+    assert.equal(DESTINATION_ICONIC_LANDMARKS.covenas, undefined)
+    assert.equal(DESTINATION_ICONIC_LANDMARKS.coveñas, undefined)
+    assert.equal(DESTINATION_ICONIC_LANDMARKS.tolu, undefined)
+    assert.equal(DESTINATION_ICONIC_LANDMARKS['santiago de tolu'], undefined)
+    assert.equal(DESTINATION_ICONIC_RESTAURANTS.covenas, undefined)
+    assert.equal(DESTINATION_ICONIC_RESTAURANTS.coveñas, undefined)
+    assert.equal(DESTINATION_ICONIC_RESTAURANTS['golfo de morrosquillo'], undefined)
     assert.ok(DESTINATION_ICONIC_HOTELS.covenas.some(hotel => hotel.name === 'Hotel Palma Linda'))
-    assert.ok(KNOWN_ICONIC_LANDMARKS['isla mucura'])
+    assert.equal(KNOWN_ICONIC_LANDMARKS['isla mucura'], undefined)
+    assert.equal(KNOWN_ICONIC_LANDMARKS['islas de san bernardo'], undefined)
+  })
+
+  it('keeps coastal policy when one-day extraction downgrades it to express', () => {
+    assert.equal(resolveChatTourTypeAfterExtraction(
+      { tourType: 'coastal_islands' },
+      { tourType: 'express_tour' },
+      'Ya tenemos hotel',
+    ), 'coastal_islands')
+    assert.equal(resolveChatTourTypeAfterExtraction(
+      { tourType: 'express_tour' },
+      { tourType: 'express_tour' },
+      'Quiero ver las islas alrededor de Coveñas',
+    ), 'coastal_islands')
+    assert.equal(resolveChatTourTypeAfterExtraction(
+      { tourType: 'coastal_islands' },
+      { tourType: 'express_tour' },
+      'Un tour de un día',
+      { destinationChanged: true },
+    ), 'express_tour')
+    assert.equal(resolveChatTourTypeAfterExtraction(
+      { tourType: 'coastal_islands' },
+      {},
+      'Un tour de un día',
+      { destinationChanged: true },
+    ), '')
+  })
+
+  it('removes internal catalog diagnostics when rebuilding an empty coastal itinerary', () => {
+    const rebuilt = rebuildCoastalChatItinerary(
+      'Los lugares confirmados en el mapa de Coveñas no contienen nombres confirmados de islas.\n\nItinerario de Viaje: Coveñas (1 día)\n\nDía 1: Coveñas\n• Isla Múcura',
+      [],
+      'Coveñas',
+      1,
+    )
+    assert.doesNotMatch(rebuilt, /lugares confirmados en el mapa|nombres confirmados de islas|Itinerario de Viaje|Isla Múcura/)
+    assert.match(rebuilt, /No encontré suficientes opciones/)
   })
 
   it('queries mapped islands and beaches from OSM within the coastal corridor', async () => {

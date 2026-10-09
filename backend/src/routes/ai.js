@@ -16,7 +16,8 @@ import {
   assignCoastalIslandDays,
   isCoastalIslandsTour,
   isCoastalMappedTouristStop,
-  isCoastalRestaurant
+  isCoastalRestaurant,
+  resolveChatTourTypeAfterExtraction
 } from '../services/coastal-islands-policy.js'
 
 import {
@@ -897,6 +898,36 @@ aiRouter.post('/chat', async (req, res, next) => {
     const updatedPreferences = {
       ...currentPreferences,
       ...validExtracted
+    }
+    const priorDestinationKey = destinationKey(
+      currentPreferences.canonicalDestination?.city ||
+      currentPreferences.canonicalDestination?.entityName ||
+      currentPreferences.city ||
+      currentPreferences.destination
+    )
+    const mergedDestinationKey = destinationKey(
+      updatedPreferences.canonicalDestination?.city ||
+      updatedPreferences.canonicalDestination?.entityName ||
+      updatedPreferences.city ||
+      updatedPreferences.destination
+    )
+    const destinationChanged = Boolean(
+      priorDestinationKey && mergedDestinationKey && priorDestinationKey !== mergedDestinationKey
+    )
+    const conversationUserText = [
+      ...(Array.isArray(history) ? history.filter(item => item?.role === 'user').map(item => item.content || item.text || '') : []),
+      message
+    ].join(' ')
+    const resolvedChatTourType = resolveChatTourTypeAfterExtraction(
+      currentPreferences,
+      validExtracted,
+      conversationUserText,
+      { destinationChanged }
+    )
+    if (destinationChanged && !resolvedChatTourType) {
+      delete updatedPreferences.tourType
+    } else {
+      updatedPreferences.tourType = resolvedChatTourType || updatedPreferences.tourType
     }
     if (latitude && longitude) {
       updatedPreferences.userGpsLatitude = latitude
@@ -3986,7 +4017,9 @@ export function rebuildCoastalChatItinerary(sourceText, stops, destination, requ
   if (!marker) return text
 
   const start = marker.index + (text.slice(marker.index).startsWith('\n') ? 1 : 0)
-  const intro = text.slice(0, start).trim()
+  const rawIntro = text.slice(0, start).trim()
+  const containsInternalCatalogDiagnostic = /\b(?:cat[aá]logo\s+verificado|lugares\s+confirmados?\s+en\s+el\s+mapa|nombres\s+(?:legibles|confirmados)\s+de|openstreetmap|openfreemap|\bOSM\b)\b/i.test(rawIntro)
+  const intro = containsInternalCatalogDiagnostic ? '' : rawIntro
   const confirmation = text.match(/¿Deseas confirmar este itinerario(?: ampliado)? y generar tu tour en el mapa\?/i)?.[0] || ''
   const days = new Map()
   for (const stop of Array.isArray(stops) ? stops : []) {
@@ -3998,7 +4031,7 @@ export function rebuildCoastalChatItinerary(sourceText, stops, destination, requ
   }
 
   if (days.size === 0) {
-    const notice = `No pude confirmar paradas turísticas y gastronómicas verificadas en el mapa para ${destination}. No voy a incluir ubicaciones sin un punto cartográfico real.`
+    const notice = `No encontré suficientes opciones para proponer un itinerario confiable en ${destination}. ¿Quieres que amplíe la búsqueda a zonas cercanas?`
     return [intro, notice].filter(Boolean).join('\n\n')
   }
 

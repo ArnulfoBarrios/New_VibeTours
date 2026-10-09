@@ -1139,52 +1139,6 @@ export const DESTINATION_ICONIC_LANDMARKS = Object.freeze({
     'Catedral Metropolitana María Reina',
     'Teatro Amira de la Rosa'
   ],
-  'covenas': [
-    'Segunda Ensenada de Coveñas',
-    'Ciénaga de la Caimanera',
-    'Islas de San Bernardo',
-    'Isla Múcura',
-    'Isla Tintipán',
-    'Playa Palo Blanco',
-    'Punta de Piedra',
-    'Malecón de Santiago de Tolú',
-    'Bahía de Cispatá',
-    'Volcán de Lodo de San Antero',
-    'Playa La Coquerita',
-    'Santa Cruz del Islote'
-  ],
-  'coveñas': [
-    'Segunda Ensenada de Coveñas',
-    'Ciénaga de la Caimanera',
-    'Islas de San Bernardo',
-    'Isla Múcura',
-    'Isla Tintipán',
-    'Playa Palo Blanco',
-    'Punta de Piedra',
-    'Malecón de Santiago de Tolú',
-    'Bahía de Cispatá',
-    'Volcán de Lodo de San Antero',
-    'Playa La Coquerita',
-    'Santa Cruz del Islote'
-  ],
-  'tolu': [
-    'Malecón de Santiago de Tolú',
-    'Islas de San Bernardo',
-    'Isla Múcura',
-    'Isla Tintipán',
-    'Ciénaga de la Caimanera',
-    'Playa El Francés',
-    'Segunda Ensenada de Coveñas'
-  ],
-  'santiago de tolu': [
-    'Malecón de Santiago de Tolú',
-    'Islas de San Bernardo',
-    'Isla Múcura',
-    'Isla Tintipán',
-    'Ciénaga de la Caimanera',
-    'Playa El Francés',
-    'Segunda Ensenada de Coveñas'
-  ],
   'san antero': [
     'Bahía de Cispatá',
     'Volcán de Lodo de San Antero',
@@ -1225,30 +1179,6 @@ export const DESTINATION_ICONIC_LANDMARKS = Object.freeze({
 })
 
 export const DESTINATION_ICONIC_RESTAURANTS = Object.freeze({
-  'golfo de morrosquillo': [
-    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones frente al mar' },
-    { name: 'Restaurante Coveñas', specialty: 'Pescados frescos, mariscos y cazuela caribeña' },
-    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches frescos en la playa' },
-    { name: 'Restaurante el Montañero', specialty: 'Gastronomía típica colombiana y asados frente a la costa' },
-    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' },
-    { name: 'Restaurante Esmeralda', specialty: 'Comida tradicional costeña y frutos del mar en San Antero' }
-  ],
-  'covenas': [
-    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones frente al mar' },
-    { name: 'Restaurante Coveñas', specialty: 'Pescados frescos, mariscos y cazuela caribeña' },
-    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches frescos en la playa' },
-    { name: 'Restaurante el Montañero', specialty: 'Gastronomía típica colombiana y asados frente a la costa' },
-    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' },
-    { name: 'Restaurante Esmeralda', specialty: 'Comida tradicional costeña y frutos del mar en San Antero' }
-  ],
-  'coveñas': [
-    { name: 'Donde Valerio en Tolú', specialty: 'Pescado frito tradicional y patacones frente al mar' },
-    { name: 'Restaurante Coveñas', specialty: 'Pescados frescos, mariscos y cazuela caribeña' },
-    { name: 'Kiosko El Pescador', specialty: 'Comida de mar y ceviches frescos en la playa' },
-    { name: 'Restaurante el Montañero', specialty: 'Gastronomía típica colombiana y asados frente a la costa' },
-    { name: 'Kioskos Típicos Ciénaga de la Caimanera', specialty: 'Ostras frescas y gastronomía típica de manglar' },
-    { name: 'Restaurante Esmeralda', specialty: 'Comida tradicional costeña y frutos del mar en San Antero' }
-  ],
   'barranquilla': [
     { name: 'Restaurante La Cueva', specialty: 'Gastronomía Caribe y tertulia cultural' },
     { name: 'Cucayo', specialty: 'Comida tradicional costeña y arroz con cucayo' },
@@ -2013,7 +1943,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const normalizedCountry = String(countryName || '').trim().toLowerCase()
   const requestedDays = Math.max(1, Number(options?.requestedDays || options?.numDays || options?.daysCount || 7))
   const coastalIslands = isCoastalIslandsTour(options)
-  const cacheKey = `catalog_osm_v5_${clean}_${normalizedCountry}_${requestedDays >= 8 ? requestedDays : 'std'}`
+  const cacheMode = coastalIslands ? 'coastal' : 'general'
+  const cacheKey = `catalog_osm_v6_${cacheMode}_${clean}_${normalizedCountry}_${requestedDays >= 8 ? requestedDays : 'std'}`
   const cached = destinationCatalogCache.get(cacheKey)
   const minRequiredPlaces = coastalIslands
     ? Math.max(4, Math.min(6, requestedDays + 1))

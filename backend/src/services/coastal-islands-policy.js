@@ -59,6 +59,24 @@ export function isCoastalIslandsTour(value) {
   ) === 'coastal islands'
 }
 
+/** Preserve coastal safeguards when extraction labels an island day as express. */
+export function resolveChatTourTypeAfterExtraction(current = {}, extracted = {}, conversationText = '', options = {}) {
+  const currentType = normalizedText(current?.tourType ?? current?.tour_type ?? current?.type).replace(/\s+/g, '_')
+  const extractedType = normalizedText(extracted?.tourType ?? extracted?.tour_type ?? extracted?.type).replace(/\s+/g, '_')
+  const routeTypes = new Set(['location_to_destination', 'city_to_city', 'international_multicity'])
+  if (routeTypes.has(currentType)) return currentType
+  if (routeTypes.has(extractedType)) return extractedType
+
+  const explicitCoastal = extractedType === 'coastal_islands' ||
+    (currentType === 'coastal_islands' && !options.destinationChanged)
+  const islandIntent = /\b(islas?|islotes?|cayos?|archipi[eé]lago|island\s+hopping|isla\s+m[uú]cura|isla\s+tintip[aá]n|san\s+bernardo)\b/i.test(
+    String(conversationText || '')
+  )
+  if (explicitCoastal || (!options.destinationChanged && islandIntent)) return 'coastal_islands'
+  if (options.destinationChanged) return extractedType
+  return extractedType || currentType || ''
+}
+
 export function isCoastalRestaurant(place) {
   const tags = place?.rawTags ?? place?.tags ?? {}
   const category = normalizedText(
