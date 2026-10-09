@@ -2840,6 +2840,8 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   const knownPlacesList = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
     ? known.specificPlaces.map(p => typeof p === 'string' ? p : p.name).filter(Boolean)
     : []
+  const shouldDeferCoastalCatalog = isCoastalIslandsTour(known) &&
+    !Number(known.durationDays) && !Number(known.durationHours)
 
   const verifiedFoodText = (Array.isArray(nearbyFoodPlaces) && nearbyFoodPlaces.length > 0)
     ? nearbyFoodPlaces.slice(0, 8).map(f => `• **${f.name}** (${f.type || 'restaurante'}, ${f.cuisine ? `cocina ${f.cuisine}` : 'gastronomía local'})`).join('\n')
@@ -2912,12 +2914,12 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
         realCatalog = cachedCatalog || { places: [], restaurants: [], hotels: [] }
       } else {
-        const needsImmediate = isExplicitItineraryRequest ||
+        const needsImmediate = !shouldDeferCoastalCatalog && (isExplicitItineraryRequest ||
           isExplicitRestaurantInquiry ||
           isExplicitAttractionInquiry ||
           isExplicitBuildRequest ||
           isCompleteOrReadyToPresent ||
-          Boolean(known?.readyToBuild)
+          Boolean(known?.readyToBuild))
 
         if (needsImmediate) {
           const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
@@ -3528,7 +3530,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         (/\b(?:cambiar|cambia|quitar|quita|eliminar)\s+/i.test(lastUserMsg) && (known.specificPlaces || []).some(s => arePlacesSimilar(typeof s === 'string' ? s : (s?.name || ''), lastUserMsg.replace(/^(?:cambiar|cambia|quitar|quita|eliminar)\s+(?:a\s+|el\s+|la\s+|al\s+)?/i, '').trim())))
       )
       const fbNeedsCatalog = Boolean(
-        !isFbPlaceSwapTurn && (
+        !shouldDeferCoastalCatalog && !isFbPlaceSwapTurn && (
           isExplicitBuildRequestedByUser ||
           isItineraryInquiry ||
           isPlacesOrFoodInquiry ||

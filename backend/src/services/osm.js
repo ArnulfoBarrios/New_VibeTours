@@ -1505,8 +1505,53 @@ const OVERPASS_SERVERS = [
 let overpassServerCursor = 0
 const attractionsCache = new GeoCache(30 * 60 * 1000, 300)
 
-async function fetchOverpassWithMirrors(query, timeoutMs = 4000) {
+async function fetchOverpassWithMirrors(query, timeoutMs = 4000, options = {}) {
   const startIndex = overpassServerCursor++ % OVERPASS_SERVERS.length
+  if (options.parallelFallbacks) {
+    const controllers = OVERPASS_SERVERS.map(() => new AbortController())
+    const deadline = setTimeout(() => controllers.forEach(controller => controller.abort()), timeoutMs)
+    const attempts = OVERPASS_SERVERS.map(async (_serverUrl, index) => {
+      const controller = controllers[index]
+      const serverUrl = OVERPASS_SERVERS[(startIndex + index) % OVERPASS_SERVERS.length]
+      if (index > 0) {
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(resolve, index * 800)
+          controller.signal.addEventListener('abort', () => {
+            clearTimeout(timer)
+            reject(new Error('Overpass mirror deadline exceeded'))
+          }, { once: true })
+        })
+      }
+      if (controller.signal.aborted) throw new Error('Overpass mirror deadline exceeded')
+
+      const response = await fetch(serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': USER_AGENT
+        },
+        body: new URLSearchParams({ data: query }),
+        signal: controller.signal
+      })
+      if (!response.ok) throw new Error(`Overpass mirror returned ${response.status}`)
+      const json = await response.json()
+      // An empty response from one mirror should not hide a populated response from another.
+      if (!Array.isArray(json?.elements) || json.elements.length === 0) {
+        throw new Error('Overpass mirror returned no mapped elements')
+      }
+      return json
+    })
+
+    try {
+      return await Promise.any(attempts)
+    } catch {
+      return null
+    } finally {
+      clearTimeout(deadline)
+      controllers.forEach(controller => controller.abort())
+    }
+  }
+
   for (let i = 0; i < OVERPASS_SERVERS.length; i++) {
     const serverUrl = OVERPASS_SERVERS[(startIndex + i) % OVERPASS_SERVERS.length]
     try {
@@ -1555,7 +1600,9 @@ export async function overpassAttractions(latitude, longitude, radius = 8000, op
     out center tags 120;
   `
   try {
-    const json = await fetchOverpassWithMirrors(query, 4500)
+    const json = coastalIslands
+      ? await fetchOverpassWithMirrors(query, 3500, { parallelFallbacks: true })
+      : await fetchOverpassWithMirrors(query, 4500)
     let results = []
     if (json && json.elements) {
       const mapped = json.elements

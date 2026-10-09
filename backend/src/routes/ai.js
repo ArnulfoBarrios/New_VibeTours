@@ -1320,6 +1320,16 @@ aiRouter.post('/chat', async (req, res, next) => {
       nearbyFoodPlaces
     )
     let finalResponseMessage = aiResponse.responseMessage
+    const coastalDurationKnown = Number(updatedPreferences.durationDays) > 0 ||
+      Number(updatedPreferences.durationHours) > 0
+    if (isCoastalIslandsTour(updatedPreferences) && !coastalDurationKnown) {
+      finalResponseMessage = deferCoastalItineraryUntilDuration(finalResponseMessage)
+      aiResponse.responseMessage = finalResponseMessage
+      aiResponse.readyToBuild = false
+      aiResponse.actionChips = (aiResponse.actionChips || []).filter(chip =>
+        !/(?:confirmar|generar\s+(?:el\s+)?tour|cambiar\s+paradas?)/i.test(String(chip))
+      )
+    }
 
     // Extraer lugares SOLO si ya se eligió la ciudad destino y provienen de elecciones explícitas o de un itinerario estructurado confirmado
     const hasConfirmedCity = Boolean(updatedPreferences.city || updatedPreferences.destination)
@@ -1628,7 +1638,13 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     }
 
-    if (isCoastalIslandsTour(updatedPreferences) && /(?:Itinerario de Viaje:|(?:^|\n)\s*D[ií]a\s*1\s*:)/i.test(finalResponseMessage || '')) {
+    if (isCoastalIslandsTour(updatedPreferences) && !coastalDurationKnown) {
+      finalResponseMessage = deferCoastalItineraryUntilDuration(finalResponseMessage)
+      aiResponse.readyToBuild = false
+      aiResponse.actionChips = (aiResponse.actionChips || []).filter(chip =>
+        !/(?:confirmar|generar\s+(?:el\s+)?tour|cambiar\s+paradas?)/i.test(String(chip))
+      )
+    } else if (isCoastalIslandsTour(updatedPreferences) && /(?:Itinerario de Viaje:|(?:^|\n)\s*D[ií]a\s*1\s*:)/i.test(finalResponseMessage || '')) {
       const coastalStops = updatedPreferences.specificPlaces || []
       finalResponseMessage = rebuildCoastalChatItinerary(
         finalResponseMessage,
@@ -4065,6 +4081,7 @@ export function rebuildCoastalChatItinerary(sourceText, stops, destination, requ
   }
 
   if (days.size === 0) {
+    if (!(Number(requestedDays) > 0)) return intro
     const notice = `No encontré suficientes opciones para proponer un itinerario confiable en ${destination}. ¿Quieres que amplíe la búsqueda a zonas cercanas?`
     return [intro, notice].filter(Boolean).join('\n\n')
   }
@@ -4075,6 +4092,16 @@ export function rebuildCoastalChatItinerary(sourceText, stops, destination, requ
     .map(([day, names]) => `Día ${day}: ${destination}\n${names.map(name => `• ${name}`).join('\n')}`)
   const header = `Itinerario de Viaje: ${destination} (${totalDays} ${totalDays === 1 ? 'día' : 'días'})`
   return [intro, header, ...blocks, confirmation].filter(Boolean).join('\n\n')
+}
+
+export function deferCoastalItineraryUntilDuration(sourceText) {
+  const text = String(sourceText || '').trim()
+  const marker = /Itinerario de Viaje:|(?:^|\n)\s*D[ií]a\s*1\s*:/i.exec(text)
+  const intro = marker ? text.slice(0, marker.index).trim() : text
+  return intro
+    .replace(/(?:No encontr[eé] suficientes (?:opciones|lugares|paradas)[^.!?\n]*(?:[.!?]|$)|A[uú]n no encontr[eé] suficientes (?:lugares|opciones)[^.!?\n]*(?:[.!?]|$)|No encontr[eé] lugares tur[ií]sticos verificables[^.!?\n]*(?:[.!?]|$))(?:\s*¿(?:Quieres|Deseas) que ampl[ií]e la b[uú]squeda[^?]*\?)?/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 function normalizeCandidate(place, index, input, origin) {

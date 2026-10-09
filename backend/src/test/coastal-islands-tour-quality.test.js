@@ -18,9 +18,10 @@ import {
   DESTINATION_ICONIC_LANDMARKS,
   DESTINATION_ICONIC_RESTAURANTS,
   ensureCompleteOneDayItineraryText,
+  extractChatInformationFallback,
   sanitizeInternalTravelLanguage,
 } from '../services/openai.js'
-import { buildFallbackTour, buildTourPlanner, normalizeStop, rebuildCoastalChatItinerary } from '../routes/ai.js'
+import { buildFallbackTour, buildTourPlanner, deferCoastalItineraryUntilDuration, normalizeStop, rebuildCoastalChatItinerary } from '../routes/ai.js'
 
 const originalFetch = globalThis.fetch
 after(() => {
@@ -126,6 +127,16 @@ describe('coastal_islands stop policy', () => {
       'Quiero ver las islas alrededor de Coveñas',
     ), 'coastal_islands')
     assert.equal(resolveChatTourTypeAfterExtraction(
+      { tourType: 'single_city', city: 'Coveñas' },
+      { tourType: 'single_city' },
+      'Quiero ver los lugares más bonitos',
+    ), 'coastal_islands')
+    assert.equal(resolveChatTourTypeAfterExtraction(
+      { tourType: 'single_city', city: 'Cartagena' },
+      { tourType: 'single_city' },
+      'Quiero ver los lugares más bonitos',
+    ), 'single_city')
+    assert.equal(resolveChatTourTypeAfterExtraction(
       { tourType: 'express_tour', city: 'Coveñas', specificPlaces: [{ name: 'Isla Múcura', dia: 1 }] },
       { tourType: 'express_tour' },
       'Ya tenemos el hotel',
@@ -160,10 +171,42 @@ describe('coastal_islands stop policy', () => {
     assert.match(rebuilt, /No encontré suficientes opciones/)
   })
 
+  it('asks for trip duration without a premature empty-catalog notice or itinerary buttons', () => {
+    const reply = deferCoastalItineraryUntilDuration(
+      '¡Coveñas es excelente! ¿Cuántos días te quedarás? No encontré suficientes opciones para proponer un itinerario confiable en Coveñas. ¿Quieres que amplíe la búsqueda a zonas cercanas?\n\nItinerario de Viaje: Coveñas (1 día)\nDía 1: Coveñas\n• Isla Múcura',
+    )
+    assert.match(reply, /¿Cuántos días te quedarás\?/)
+    assert.doesNotMatch(reply, /No encontré|amplíe la búsqueda|Itinerario de Viaje|Isla Múcura/)
+
+    const noMarkerReply = deferCoastalItineraryUntilDuration(
+      '¿Cuántos días te quedarás? Aún no encontré suficientes lugares confirmados en Coveñas para completar el itinerario. ¿Deseas que amplíe la búsqueda a zonas cercanas?',
+    )
+    assert.equal(noMarkerReply, '¿Cuántos días te quedarás?')
+    assert.equal(rebuildCoastalChatItinerary(
+      '¿Cuántos días te quedarás?\n\nItinerario de Viaje: Coveñas\nDía 1: Coveñas',
+      [],
+      'Coveñas',
+      0,
+    ), '¿Cuántos días te quedarás?')
+  })
+
+  it('extracts the four-day reply that should trigger the coastal catalog search', () => {
+    const extracted = extractChatInformationFallback('Voy a durar cuatro días.')
+    assert.equal(extracted.durationDays, 4)
+    assert.equal(extracted.durationHours, 96)
+  })
+
   it('queries mapped islands and beaches from OSM within the coastal corridor', async () => {
     const originalFetch = globalThis.fetch
     let overpassQuery = ''
+    let requestCount = 0
     globalThis.fetch = async (_url, options = {}) => {
+      requestCount += 1
+      if (requestCount === 1) {
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(new Error('first mirror timed out')), { once: true })
+        })
+      }
       overpassQuery = options.body?.get?.('data') || ''
       return new Response(JSON.stringify({
         elements: [{
@@ -178,6 +221,7 @@ describe('coastal_islands stop policy', () => {
 
     try {
       const places = await overpassAttractions(9.47213, -75.71234, 65000, { coastalIslands: true })
+      assert.ok(requestCount >= 2, 'a slow first mirror should trigger a staggered fallback')
       assert.match(overpassQuery, /\["natural"~"beach\|island\|islet"\]/)
       assert.match(overpassQuery, /\["place"~"island\|islet"\]/)
       assert.ok(places.some(place => place.name === 'Isla Múcura' && place.placeId === 'node/987654321'))

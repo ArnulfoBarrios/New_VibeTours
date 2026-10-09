@@ -92,7 +92,10 @@ export function resolveChatTourTypeAfterExtraction(current = {}, extracted = {},
   const islandIntent = /\b(islas?|islotes?|cayos?|archipi[eé]lago|island\s+hopping|isla\s+m[uú]cura|isla\s+tintip[aá]n|san\s+bernardo)\b/i.test(
     [conversationText, ...savedStopNames].join(' ')
   )
-  if (explicitCoastal || (!options.destinationChanged && hasMorrosquilloDestination && islandIntent)) return 'coastal_islands'
+  const coastalSightseeingIntent = /\b(lugares?|sitios?|atracciones?|visitar|ver|conocer|playas?|tur[ií]sticos?|bonit[oa]s?)\b/i.test(conversationText)
+  if (explicitCoastal || (!options.destinationChanged && hasMorrosquilloDestination && (islandIntent || coastalSightseeingIntent))) {
+    return 'coastal_islands'
+  }
   if (options.destinationChanged) return extractedType
   return extractedType || currentType || ''
 }
