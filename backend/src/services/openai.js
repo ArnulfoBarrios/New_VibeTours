@@ -16,6 +16,13 @@ import {
   isCoastalRestaurant,
   resolveCoastalCatalogEntries
 } from './coastal-islands-policy.js'
+import {
+  findCuratedCoastalStop,
+  getCuratedCoastalDestinationKey,
+  getCuratedCoastalStops,
+  ensureCuratedCoastalStopsInItinerary,
+  isCuratedCoastalCandidate
+} from './coastal-destination-catalog.js'
 
 import {
   enrichPlaceWithOpenData,
@@ -671,7 +678,16 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
     if (!rawName || isTemporalOrDurationPhrase(rawName) || isChatHotelStop(rawName, selectedHotel) || isUnmappedOrClosedVenue(rawName)) {
       return null
     }
-    if (coastalIslands && (isCoastalArchipelagoOverview(rawName) || isCoastalTransferName(rawName))) return null
+    const curatedPlace = coastalIslands ? findCuratedCoastalStop(rawName, city) : null
+    if (coastalIslands && (isCoastalArchipelagoOverview(rawName) || (!curatedPlace && isCoastalTransferName(rawName)))) return null
+    if (curatedPlace) {
+      const chatDetails = place && typeof place === 'object'
+        ? Object.fromEntries(['dia', 'day', 'description', 'descripcion', 'activities', 'actividades', 'tips', 'consejos', 'suggestedMinutes', 'duracion_estimada']
+          .filter(key => place[key] != null)
+          .map(key => [key, place[key]]))
+        : {}
+      return { ...curatedPlace, ...chatDetails }
+    }
 
     // If place is already an approved itinerary stop from history, preserve it without blocking on network geocoding
     if (typeof place === 'object' && (place.dia != null || place.day != null || place.coordinatesVerified)) {
@@ -773,6 +789,40 @@ function normalizeCoastalCatalog(catalog) {
     ...catalog,
     places: resolveCoastalCatalogEntries(catalog.places, catalog.candidateCatalog, 'places'),
     restaurants: resolveCoastalCatalogEntries(catalog.restaurants, catalog.candidateCatalog, 'restaurants')
+  }
+}
+
+function mergeCuratedCoastalPlaces(places, destination) {
+  const curated = getCuratedCoastalStops(destination)
+  if (curated.length === 0) return Array.isArray(places) ? places : []
+  const existing = (Array.isArray(places) ? places : []).filter(place => {
+    const name = typeof place === 'string' ? place : place?.name ?? place?.nombre
+    return !curated.some(stop => name && arePlacesSimilar(name, stop.name))
+  })
+  return [...existing, ...curated]
+}
+
+function prioritizeCuratedCoastalPlaces(places, destination) {
+  const curated = getCuratedCoastalStops(destination)
+  if (curated.length === 0) return places
+  const order = new Map(curated.map((place, index) => [place.candidateId, index]))
+  return [...places].sort((left, right) => {
+    const leftOrder = order.get(left?.candidateId ?? left?.placeId)
+    const rightOrder = order.get(right?.candidateId ?? right?.placeId)
+    const leftRank = leftOrder == null ? Number.MAX_SAFE_INTEGER : leftOrder
+    const rightRank = rightOrder == null ? Number.MAX_SAFE_INTEGER : rightOrder
+    return leftRank - rightRank
+  })
+}
+
+function prioritizeCoastalCandidateCatalog(catalog, destination) {
+  if (!catalog || getCuratedCoastalDestinationKey(destination) === '') return catalog
+  const places = prioritizeCuratedCoastalPlaces(catalog.places || catalog.attractions || [], destination)
+  return {
+    ...catalog,
+    places,
+    attractions: places,
+    all: [...places, ...(catalog.restaurants || []), ...(catalog.hotels || [])],
   }
 }
 
@@ -1948,7 +1998,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const requestedDays = Math.max(1, Number(options?.requestedDays || options?.numDays || options?.daysCount || 7))
   const coastalIslands = isCoastalIslandsTour(options)
   const cacheMode = coastalIslands ? 'coastal' : 'general'
-  const cacheKey = `catalog_osm_v6_${cacheMode}_${clean}_${normalizedCountry}_${requestedDays >= 8 ? requestedDays : 'std'}`
+  const cacheKey = `catalog_osm_v7_${cacheMode}_${clean}_${normalizedCountry}_${requestedDays >= 8 ? requestedDays : 'std'}`
   const cached = destinationCatalogCache.get(cacheKey)
   const minRequiredPlaces = coastalIslands
     ? Math.max(4, Math.min(6, requestedDays + 1))
@@ -1965,6 +2015,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   let realRests = []
   let realPlaces = []
   let realEvents = []
+  const curatedCoastalPlaces = coastalIslands ? getCuratedCoastalStops(clean) : []
 
   // 0. Check Database & LRU Memory cache (places_cache) in 0 ms
   const cachedCityCatalog = await getCachedCityCatalog(clean).catch(() => null)
@@ -2026,15 +2077,16 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       realPlaces.filter(p => !isGenericFacilityName(typeof p === 'string' ? p : p?.name)),
       presetIconics
     )
+    realPlaces = mergeCuratedCoastalPlaces(realPlaces, clean)
     if (realPlaces.length >= minRequiredPlaces && realRests.length >= minRequiredRests) {
-      const candidateCatalog = createUnifiedCandidateCatalog({
+      const candidateCatalog = prioritizeCoastalCandidateCatalog(createUnifiedCandidateCatalog({
         places: realPlaces,
         restaurants: realRests,
         hotels: realHotels,
         events: realEvents,
         city: capitalCity,
         country: targetCountry
-      })
+      }), clean)
       const coordinatesMap = {}
       for (const p of candidateCatalog.all || []) {
         if (p?.name && Number.isFinite(p.latitude) && Number.isFinite(p.longitude)) {
@@ -2060,7 +2112,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
           : realPlaces.map(place => typeof place === 'string' ? place : place?.name).filter(Boolean),
         coordinatesMap,
         candidateCatalog,
-        catalogSources: ['places_cache_db'],
+        catalogSources: ['places_cache_db', ...(curatedCoastalPlaces.length > 0 ? ['curated_coastal'] : [])],
         events: realEvents || []
       }
       destinationCatalogCache.set(cacheKey, result)
@@ -2357,13 +2409,14 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     realPlaces.filter(p => !isGenericFacilityName(typeof p === 'string' ? p : p?.name)),
     allPriorityIconics
   )
+  realPlaces = mergeCuratedCoastalPlaces(realPlaces, clean)
   realRests = rankAndFilterTouristRestaurants(realRests)
 
   const unifiedRadiusKm = /\b(cove[nñ]as|tol[uú]|san\s+antero|golfo\s+de\s+morrosquillo)\b/i.test(clean)
     ? 65
     : 35
 
-  const unifiedCatalog = await createUnifiedCandidateCatalog({
+  const unifiedCatalog = prioritizeCoastalCandidateCatalog(await createUnifiedCandidateCatalog({
     destination: clean,
     country: targetCountry,
     centerLat: lat,
@@ -2388,7 +2441,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   }).catch(error => {
     console.warn('[candidate-catalog] Unified catalog build failed:', error?.message || error)
     return { places: [], restaurants: [], hotels: [] }
-  })
+  }), clean)
 
   const catalogPlaceCandidates = unifiedCatalog.places || []
   const prioritizedPlaceCandidates = []
@@ -2476,7 +2529,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     events: realEvents || []
   }
 
-  const toCache = (unifiedCatalog?.all || []).map(candidate => ({
+  const toCache = (unifiedCatalog?.all || []).filter(candidate => candidate.coordinateSource !== 'curated_coastal').map(candidate => ({
     name: candidate.name,
     city: capitalCity,
     latitude: candidate.latitude,
@@ -2864,7 +2917,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   if (hasCity && !isLocationToDestination) {
     const coastalIslands = isCoastalIslandsTour(known)
     const reqDays = Number(known.durationDays) || 0
-    const cacheKey = `catalog_osm_v5_${destName.toLowerCase()}_${(destCountry || '').toLowerCase()}_${reqDays >= 8 ? reqDays : 'std'}`
+    const cacheKey = `catalog_osm_v7_${coastalIslands ? 'coastal' : 'general'}_${cleanAdministrativeCityName(destName).toLowerCase()}_${(destCountry || '').trim().toLowerCase()}_${reqDays >= 8 ? reqDays : 'std'}`
     const cached = destinationCatalogCache.get(cacheKey)
     const minRequiredPlaces = coastalIslands
       ? Math.max(4, Math.min(6, (reqDays || 1) + 1))
@@ -3591,17 +3644,42 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
           coordinatesMap: preset.coordinatesMap || {},
           candidatePlaces: [...(preset.candidateCatalog?.all || []), ...(preset.candidateCatalog?.places || []), ...(preset.restaurants || [])]
         })
-        known.specificPlaces = clustered.flatMap(dp =>
+        const clusteredStops = clustered.flatMap(dp =>
           dp.stops.map(s => ({
+            ...s,
             name: s.name,
             dia: dp.day,
             day: dp.day,
             category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction',
             type: s.entityType === 'restaurant' ? 'food' : 'cultural',
             entityType: s.entityType || 'attraction',
+            candidateId: s.candidateId || s.placeId || s.id || '',
+            placeId: s.placeId || s.id || '',
+            coordinateSource: s.coordinateSource || '',
+            curatedDestinationKey: s.curatedDestinationKey || '',
+            curatedSection: s.curatedSection || '',
+            curatedStopId: s.curatedStopId || '',
             ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {})
           }))
-        )
+        ).filter(stop => !isCoastalIslandsTour(known) || !isCoastalRestaurant(stop) || isCoastalMappedTouristStop(stop))
+        const coastalStops = isCoastalIslandsTour(known)
+          ? assignCoastalIslandDays(
+              ensureCuratedCoastalStopsInItinerary(clusteredStops, destName, numDays),
+              numDays
+            )
+          : clusteredStops
+        known.specificPlaces = coastalStops
+        if (isCoastalIslandsTour(known)) {
+          const byDay = new Map()
+          for (const stop of coastalStops) {
+            const day = Number(stop.dia || stop.day || 1)
+            if (!byDay.has(day)) byDay.set(day, [])
+            byDay.get(day).push(stop.name)
+          }
+          return [...byDay.entries()]
+            .sort(([left], [right]) => left - right)
+            .map(([day, names]) => `Día ${day}: ${destName}\n${names.map(name => ` • ${name}`).join('\n')}`)
+        }
         return clustered
           .filter(dp => dp.stops.length > 0)
           .map(dp => `Día ${dp.day}: ${destName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`)
@@ -3979,9 +4057,23 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
 
           // 3. Pick attractions (4 base, or 5 if expanding 1-day tour)
           const isUserAskingMoreStopsFb = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|aumentar\s+(las\s+)?paradas|sumar\s+(m[aá]s\s+)?paradas|paradas\s+adicionales|agrega\s+m[aá]s|a[ñn]ade\s+m[aá]s|incluye\s+m[aá]s|agregar\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades)|a[ñn]adir\s+(m[aá]s\s+)?(lugares|sitios|paradas|actividades))\b/i.test(lastUserMsg)
-          const targetAttrsCount = isUserAskingMoreStopsFb ? 5 : 4
+      const targetAttrsCount = isUserAskingMoreStopsFb ? 5 : 4
           const filteredCandidates = allAttractionCandidates.filter(p => !isGenericFacilityName(getPlaceName(p)))
-          const chosenAttractions = filteredCandidates.slice(0, targetAttrsCount)
+          let chosenAttractions = filteredCandidates.slice(0, targetAttrsCount)
+          const curatedDestinationKey = isCoastalIslandsTour(known)
+            ? getCuratedCoastalDestinationKey(destName)
+            : ''
+          if (curatedDestinationKey) {
+            const curatedStops = getCuratedCoastalStops(destName)
+            const localStops = curatedStops.filter(stop => stop.curatedSection === curatedDestinationKey)
+            const islandStops = curatedStops.filter(stop => stop.curatedSection === 'islands')
+            const firstLocal = chosenAttractions.find(stop => isCuratedCoastalCandidate(stop) && stop.curatedSection === curatedDestinationKey) || localStops[0]
+            const firstIsland = chosenAttractions.find(stop => isCuratedCoastalCandidate(stop) && stop.curatedSection === 'islands') || islandStops[0]
+            const remainder = chosenAttractions.filter(stop =>
+              getPlaceName(stop) !== getPlaceName(firstLocal) && getPlaceName(stop) !== getPlaceName(firstIsland)
+            )
+            chosenAttractions = [firstLocal, firstIsland, ...remainder].filter(Boolean).slice(0, targetAttrsCount)
+          }
           while (chosenAttractions.length < targetAttrsCount) {
             const fallbackAttractions = [
               { name: 'Centro Histórico y Plaza Principal', category: 'attraction' },
@@ -4263,6 +4355,13 @@ ${coastalIslands ? 'REFERENCIAS DE LUGARES' : 'CATÁLOGO VERIFICADO'} DE ${destN
 • Hoteles: ${realCatalog.hotels?.map(h => h.name).join(', ') || 'N/A'}
 • Restaurantes y bares: ${realCatalog.restaurants?.map(r => r.name).join(', ') || 'N/A'}
 • Atractivos y patrimonio: ${realCatalog.places?.map(p => typeof p === 'string' ? p : p?.name).filter(Boolean).join(', ') || 'N/A'}
+` : ''}
+
+${isCoastalIslandsTour(known) && getCuratedCoastalDestinationKey(destName) ? `EXCEPCIÓN CARTOGRÁFICA LOCAL PARA ${destName.toUpperCase()}:
+- Los atractivos con coordenadas de la lista anterior son paradas válidas aunque OpenStreetMap/OpenFreeMap no dibuje un marcador para ellas.
+- Prioriza atractivos de ${getCuratedCoastalDestinationKey(destName) === 'covenas' ? 'Coveñas' : 'Santiago de Tolú'} y añade visitas a islas individuales del archipiélago de San Bernardo según la duración.
+- Distribuye las visitas a islas en días distintos cuando haya más de un día disponible. No uses "Islas de San Bernardo" como una parada: elige islas por su nombre individual.
+- No inventes restaurantes ni puertos como atractivos. Recomienda restaurantes únicamente si aparecen como nodos verificados en el mapa.
 ` : ''}
 
 REGLA DE NATURALIDAD Y CERO INVENCIONES:

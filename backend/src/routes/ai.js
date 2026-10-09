@@ -19,6 +19,13 @@ import {
   isCoastalRestaurant,
   resolveChatTourTypeAfterExtraction
 } from '../services/coastal-islands-policy.js'
+import {
+  ensureCuratedCoastalStopsInItinerary,
+  findCuratedCoastalStop,
+  getCuratedCoastalDestinationKey,
+  getCuratedCoastalStops,
+  isCuratedCoastalCoordinateStop
+} from '../services/coastal-destination-catalog.js'
 
 import {
   enrichPlaceWithOpenData,
@@ -1581,35 +1588,49 @@ aiRouter.post('/chat', async (req, res, next) => {
         updatedPreferences.tourType = generatedCoastalType
       }
 
+      const coastalCatalogDestination = updatedPreferences.city || updatedPreferences.destination || updatedPreferences.destinationPlace || ''
+      const isAllowedChatSpecific = place => {
+        const placeName = typeof place === 'object' ? (place?.name || '') : String(place || '')
+        const hasCuratedCoastalIdentity = isCoastalIslandsTour(updatedPreferences) &&
+          Boolean(findCuratedCoastalStop(placeName, coastalCatalogDestination))
+        return isValidSpecificPlace(placeName) &&
+          (hasCuratedCoastalIdentity || !isNonTouristFacility({ name: placeName }))
+      }
+
       const rawCombined = [
         ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
         ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
         ...extractedFromMsg
-      ].filter(p => {
-        const pName = typeof p === 'object' ? (p.name || '') : String(p)
-        return isValidSpecificPlace(pName) && !isNonTouristFacility({ name: pName })
-      })
+      ].filter(isAllowedChatSpecific)
 
       const combinedSpecifics = (isConfirmedItineraryMsg && extractedFromMsg.length >= 2)
-        ? deduplicatePlacesByName(extractedFromMsg.filter(p => {
-            const pName = typeof p === 'object' ? (p.name || '') : String(p)
-            return isValidSpecificPlace(pName) && !isNonTouristFacility({ name: pName })
-          }))
+        ? deduplicatePlacesByName(extractedFromMsg.filter(isAllowedChatSpecific))
         : ((Array.isArray(aiResponse.specificPlaces) && aiResponse.specificPlaces.length >= 2)
-          ? deduplicatePlacesByName(aiResponse.specificPlaces.filter(p => {
-              const pName = typeof p === 'object' ? (p.name || '') : String(p)
-              return isValidSpecificPlace(pName) && !isNonTouristFacility({ name: pName })
-            }))
+          ? deduplicatePlacesByName(aiResponse.specificPlaces.filter(isAllowedChatSpecific))
           : deduplicatePlacesByName(rawCombined))
 
       let validatedSpecifics = combinedSpecifics
-      if (validatedSpecifics.length > 0 && updatedPreferences.city && !isLocationRoute) {
+      const chatValidationCity = updatedPreferences.city || updatedPreferences.destination || updatedPreferences.destinationPlace || ''
+      if (validatedSpecifics.length > 0 && chatValidationCity && !isLocationRoute) {
         validatedSpecifics = await filterChatSpecificPlacesByOsm(
           validatedSpecifics,
-          updatedPreferences.city,
+          chatValidationCity,
           updatedPreferences.country || '',
           updatedPreferences.selectedHotel || null,
           { tourType: updatedPreferences.tourType }
+        )
+      }
+      const curatedDestinationKey = isCoastalIslandsTour(updatedPreferences)
+        ? getCuratedCoastalDestinationKey(updatedPreferences.city || updatedPreferences.destination || updatedPreferences.destinationPlace || '')
+        : ''
+      const curatedDestinationName = curatedDestinationKey === 'covenas'
+        ? 'Coveñas'
+        : curatedDestinationKey === 'tolu' ? 'Santiago de Tolú' : ''
+      if (curatedDestinationName && isConfirmedItineraryMsg && coastalDurationKnown) {
+        const itineraryDays = updatedPreferences.durationDays || Math.ceil((updatedPreferences.durationHours || 24) / 24)
+        validatedSpecifics = assignCoastalIslandDays(
+          ensureCuratedCoastalStopsInItinerary(validatedSpecifics, curatedDestinationName, itineraryDays),
+          itineraryDays
         )
       }
       if (isLocationRoute && validatedSpecifics.length >= 2) {
@@ -3462,6 +3483,9 @@ export async function buildFallbackTour(planner, input) {
 
 export function buildTourPlanner(input, location = null, places = []) {
   const isCoastalIslands = isCoastalIslandsTour(input)
+  const curatedDestinationKey = isCoastalIslands
+    ? getCuratedCoastalDestinationKey(input.city || input.destinationPlace || input.destination || '')
+    : ''
   const origin = location ? { latitude: location.latitude, longitude: location.longitude } : null
   const refList = (Array.isArray(input.specificPlaces) && input.specificPlaces.length > 0)
     ? input.specificPlaces
@@ -3878,9 +3902,17 @@ export function buildTourPlanner(input, location = null, places = []) {
       }
     }
 
-    if (isCoastalIslands && requestedPlaces.length === 0) {
+    if (isCoastalIslands && requestedPlaces.length === 0 && !curatedDestinationKey) {
       const totalDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
       selectedPlaces = assignCoastalIslandDays(selectedPlaces, totalDays)
+    }
+    if (curatedDestinationKey) {
+      const totalDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
+      const destinationName = curatedDestinationKey === 'covenas' ? 'Coveñas' : 'Santiago de Tolú'
+      selectedPlaces = assignCoastalIslandDays(
+        ensureCuratedCoastalStopsInItinerary(selectedPlaces, destinationName, totalDays),
+        totalDays
+      )
     }
 
     // Filtrar cualquier coincidencia con el hotel/alojamiento para que no aparezca como parada turística
@@ -3921,7 +3953,7 @@ export function buildTourPlanner(input, location = null, places = []) {
         const totalDays = Math.max(1, Math.ceil((input.durationHours || 24) / 24))
         if (totalDays <= 1) {
           selectedPlaces = sortPlacesByProximity(selectedPlaces, origin)
-        } else {
+        } else if (!isCoastalIslands) {
           const chunkSize = Math.ceil(selectedPlaces.length / totalDays)
           const chunked = []
           for (let d = 0; d < totalDays; d++) {
@@ -4160,6 +4192,9 @@ function normalizeCandidate(place, index, input, origin) {
       longitude
     }),
     coordinateSource: place.coordinateSource ?? place.coordinate_source ?? '',
+    curatedDestinationKey: place.curatedDestinationKey || '',
+    curatedSection: place.curatedSection || '',
+    curatedStopId: place.curatedStopId || '',
     coordinatesVerified: isVerifiedCoordinatePlace(place),
     coordinates_verified: isVerifiedCoordinatePlace(place),
     imageUrl: images[0] ?? '',
@@ -4181,8 +4216,12 @@ function scorePlace(place, input) {
     return 10000 // TOP PRIORITY: 100% inclusion for user/chat requested places
   }
 
+  const isCuratedCoastal = isCoastalIslandsTour(input) && isCuratedCoastalCoordinateStop(
+    place,
+    input.destination || input.city || input.destinationPlace || ''
+  )
   const distanceKm = place.distanceMeters / 1000
-  if (distanceKm > 45 && !place.isUserSelected) {
+  if (distanceKm > 45 && !place.isUserSelected && !isCuratedCoastal) {
     return -9999
   }
   const typeScore = typeAffinityScore(input.type, place.category, place.name, place.tags)
@@ -4228,6 +4267,9 @@ function scorePlace(place, input) {
     if (isIslandStop) {
       finalScore += 45 // Substantial boost to prioritize islands over minor mainland stops
     }
+  }
+  if (isCuratedCoastal) {
+    finalScore += place.curatedSection === 'islands' ? 180 : 240
   }
 
   // Significant boost for certified iconic tourism attractions (Wikipedia, TomTom, iconic landmarks)
@@ -6056,7 +6098,6 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
       descriptionSource = 'wikipedia_not_found_ai_fallback'
     }
   }
-
   // Normalizar lista de actividades priorizando las generadas específicamente para este lugar por la IA
   let rawActivities = normalizeList(richObj?.actividades ?? source.actividades ?? source.activities, [])
   if (!isCoastalStop && rawName && rawName.toLowerCase() !== resolvedName.toLowerCase() && rawName.length > 5) {
@@ -7182,9 +7223,21 @@ export async function collectTourCandidates(input, location) {
   const geoScope = geographicScopeFor(input)
   const isMicroDest = geoScope.tourType === 'micro_destination' || Boolean(input.canonicalDestination?.isMicroDestination)
 
-  const city = isMicroDest
+  const requestedCoastalDestination = input.destination || input.city || input.destinationPlace ||
+    input.canonicalDestination?.entityName || input.canonicalDestination?.city || location?.city || ''
+  const curatedDestinationKey = isCoastalIslandsTour(input)
+    ? getCuratedCoastalDestinationKey(requestedCoastalDestination)
+    : ''
+  const curatedDestinationName = curatedDestinationKey === 'covenas'
+    ? 'Coveñas'
+    : curatedDestinationKey === 'tolu' ? 'Santiago de Tolú' : ''
+  const city = curatedDestinationName || (isMicroDest
     ? (input.canonicalDestination?.entityName || input.destination || location?.city || input.city || '')
-    : (location?.city || input.city || input.destination || '')
+    : (location?.city || input.city || input.destination || ''))
+  const curatedCoastalPlaces = curatedDestinationName ? getCuratedCoastalStops(curatedDestinationName) : []
+  const isCuratedCoastalStop = place => Boolean(
+    curatedCoastalPlaces.length > 0 && isCuratedCoastalCoordinateStop(place, curatedDestinationName)
+  )
   let country = location?.country || input.country || ''
 
   let canonicalDest = input.canonicalDestination
@@ -7298,14 +7351,18 @@ export async function collectTourCandidates(input, location) {
           placeName = (rawPlace.name || '').trim()
           placeDay = rawPlace.dia || rawPlace.day || null
         }
+        const curatedSpecific = curatedCoastalPlaces.length > 0
+          ? findCuratedCoastalStop(placeName, curatedDestinationName)
+          : null
+        if (curatedSpecific) placeName = curatedSpecific.name
         if (!isValidSpecificPlace(placeName) || isTemporalOrDurationPhrase(placeName) || isNonTouristFacility({ name: placeName })) return null
 
         // If rawPlace already has verified coordinates from chat SSOT, preserve and reuse them directly
-        let geo = null
-        if (rawPlace && typeof rawPlace === 'object' && Number.isFinite(Number(rawPlace.latitude)) && Number.isFinite(Number(rawPlace.longitude)) && rawPlace.coordinatesVerified) {
+        let geo = curatedSpecific
+        if (!curatedSpecific && rawPlace && typeof rawPlace === 'object' && Number.isFinite(Number(rawPlace.latitude)) && Number.isFinite(Number(rawPlace.longitude)) && rawPlace.coordinatesVerified) {
           const rawLat = Number(rawPlace.latitude)
           const rawLon = Number(rawPlace.longitude)
-          if (!isWithinCoastalCorridorBounds(rawLat, rawLon, city)) {
+          if (!isCuratedCoastalStop(rawPlace) && !isWithinCoastalCorridorBounds(rawLat, rawLon, city)) {
             console.warn(`[collectTourCandidates] Discarding place outside coastal corridor: ${placeName} (${rawLat}, ${rawLon} en ${city})`)
             return null
           }
@@ -7413,7 +7470,7 @@ export async function collectTourCandidates(input, location) {
         }
 
         // 5. Strict rejection of unlocatable or out-of-bounds places (zero synthetic jitter coordinates)
-        if (!geo || !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm)) {
+        if (!geo || (!isCuratedCoastalStop(geo) && !validateCandidateLocation(geo, canonicalDest, geoScope.maxDistanceKm))) {
           console.warn(`[tour-ai] Discarding unverified or out-of-bounds place "${placeName}" in ${city}. No synthetic coordinates generated.`)
           return null
         }
@@ -7424,7 +7481,7 @@ export async function collectTourCandidates(input, location) {
         if (finalLat && finalLon) {
           const originLat = location?.latitude || canonicalDest?.latitude
           const originLon = location?.longitude || canonicalDest?.longitude
-          if (originLat && originLon) {
+          if (!isCuratedCoastalStop(geo) && originLat && originLon) {
             const distKm = haversineMeters(finalLat, finalLon, originLat, originLon) / 1000
             const maxBound = geoScope.maxDistanceKm
             if (distKm > maxBound) {
@@ -7434,6 +7491,7 @@ export async function collectTourCandidates(input, location) {
           }
 
           return {
+            ...geo,
             name: placeName,
             latitude: finalLat,
             longitude: finalLon,
@@ -7449,9 +7507,11 @@ export async function collectTourCandidates(input, location) {
             address: geo?.address || geo?.name || `${placeName}, ${geo?.city || city}`,
             description: '',
             placeId: geo.placeId || geo.place_id || geo.id || '',
+            candidateId: geo.candidateId || geo.candidate_id || geo.placeId || geo.id || '',
             coordinateSource: geo.coordinateSource || geo.coordinate_source || 'osm',
             coordinatesVerified: true,
             tags: {
+              ...(geo.tags || {}),
               requested_place: 'true',
               grounded_geocoded: 'true',
               coordinates_verified: 'true',
@@ -7507,7 +7567,11 @@ export async function collectTourCandidates(input, location) {
         if (!placeName || !isValidSpecificPlace(placeName) || isNonTouristFacility({ name: placeName })) continue
 
         const cleanPName = cleanPlacePhysicalName(placeName) || placeName
-        let directGeo = (raw && typeof raw === 'object' && Number.isFinite(Number(raw.latitude)) && Number.isFinite(Number(raw.longitude)) && raw.coordinatesVerified) ? { name: placeName, latitude: Number(raw.latitude), longitude: Number(raw.longitude), city, country, address: raw.address || `${placeName}, ${city}`, coordinateSource: raw.coordinateSource || 'osm', coordinatesVerified: true } : null
+        const curatedSpecific = curatedCoastalPlaces.length > 0
+          ? findCuratedCoastalStop(placeName, curatedDestinationName)
+          : null
+        if (curatedSpecific) placeName = curatedSpecific.name
+        let directGeo = curatedSpecific || ((raw && typeof raw === 'object' && Number.isFinite(Number(raw.latitude)) && Number.isFinite(Number(raw.longitude)) && raw.coordinatesVerified) ? { name: placeName, latitude: Number(raw.latitude), longitude: Number(raw.longitude), city, country, address: raw.address || `${placeName}, ${city}`, coordinateSource: raw.coordinateSource || 'osm', coordinatesVerified: true } : null)
 
         // 1. Fast check against preloaded catalog coordinatesMap (0 network calls)
         if (catalog?.coordinatesMap) {
@@ -7548,7 +7612,7 @@ export async function collectTourCandidates(input, location) {
           }
         }
 
-        if (directGeo && !hasOsmMapRecord(directGeo)) {
+        if (directGeo && !hasOsmMapRecord(directGeo) && !isCuratedCoastalStop(directGeo)) {
           directGeo = null
         }
 
@@ -7559,7 +7623,7 @@ export async function collectTourCandidates(input, location) {
         let address = directGeo?.name || `${placeName}, ${city}`
 
         if (directGeo && Number.isFinite(directGeo.latitude) && Number.isFinite(directGeo.longitude)) {
-          if (validateCandidateLocation(directGeo, canonicalDest, geoScope.maxDistanceKm)) {
+          if (isCuratedCoastalStop(directGeo) || validateCandidateLocation(directGeo, canonicalDest, geoScope.maxDistanceKm)) {
             finalLat = Number(directGeo.latitude)
             finalLon = Number(directGeo.longitude)
           }
@@ -7575,6 +7639,7 @@ export async function collectTourCandidates(input, location) {
         const isCulturalVenue = /\b(museo|zoo|acuario|catedral|iglesia|parque|carnaval|estadio|monumento|teatro)\b/i.test(placeName)
         const isRestaurant = isExplicitDining && (!isCulturalVenue || (typeof raw === 'object' && raw.isRestaurant))
         geocodedSpecifics.push({
+          ...directGeo,
           name: placeName,
           latitude: finalLat,
           longitude: finalLon,
@@ -7590,9 +7655,11 @@ export async function collectTourCandidates(input, location) {
           address,
           description: '',
           placeId: directGeo?.placeId || directGeo?.place_id || directGeo?.id || '',
+          candidateId: directGeo?.candidateId || directGeo?.candidate_id || directGeo?.placeId || directGeo?.id || '',
           coordinateSource: directGeo?.coordinateSource || directGeo?.coordinate_source || tagSource,
           coordinatesVerified: true,
           tags: {
+            ...(directGeo?.tags || {}),
             requested_place: 'true',
             grounded_geocoded: 'true',
             coordinates_verified: 'true',
@@ -7769,11 +7836,12 @@ export async function collectTourCandidates(input, location) {
     : []
   
   // Prioritize specific chat places, geocoded iconic landmarks, Wikipedia POIs, and TomTom POIs first in the pool
-  let pool = [...geocodedSpecifics, ...geocodedIconics, ...geocodedWiki, ...cleanTomTom, ...overpassPlaces, ...photonPlaces]
+  let pool = [...geocodedSpecifics, ...curatedCoastalPlaces, ...geocodedIconics, ...geocodedWiki, ...cleanTomTom, ...overpassPlaces, ...photonPlaces]
 
   // Proximity filter against subzone centroid to prevent mixing distant downtown POIs with nature reserves
   if (validSpecifics.length > 0 && searchCenterLat && searchCenterLon) {
     pool = pool.filter(place => {
+      if (isCuratedCoastalStop(place)) return true
       if (!hasUsableCoordinates(place.latitude, place.longitude)) return false
       const distToCentroid = haversineMeters(place.latitude, place.longitude, searchCenterLat, searchCenterLon) / 1000
       return distToCentroid <= (isRegionalOrNature ? Math.min(geoScope.maxDistanceKm, 22) : Math.min(geoScope.maxDistanceKm, 12))
@@ -7840,7 +7908,7 @@ export async function collectTourCandidates(input, location) {
 
   const normalizedPool = dedupeByProximity(uniqueByName(pool))
     .filter((place) => place && place.name)
-    .filter((place) => hasOsmMapRecord(place))
+    .filter((place) => hasOsmMapRecord(place) || isCuratedCoastalStop(place))
     .filter((place) => isCandidateNearDestination(place, input, location))
     .filter((place) => isValidTouristAttraction(place, input))
 
@@ -7918,7 +7986,16 @@ export async function collectTourCandidates(input, location) {
     })
   }
 
-  selected = selected.filter(hasOsmMapRecord)
+  selected = selected.filter(place => hasOsmMapRecord(place) || isCuratedCoastalStop(place))
+
+  if (curatedCoastalPlaces.length > 0) {
+    const totalDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
+    selected = assignCoastalIslandDays(
+      ensureCuratedCoastalStopsInItinerary(selected, curatedDestinationName, totalDays),
+      totalDays
+    )
+    source = 'curated-coastal-destination+map-data'
+  }
 
   if (selected.length < 3) {
     console.info('[tour-ai] Activating open-source tourism & TomTom discovery fallback for:', { destination: input.destination, city, country })
@@ -8010,6 +8087,11 @@ export async function collectTourCandidates(input, location) {
 
 export function isValidTouristAttraction(place, input) {
   if (!place || !place.name) return false
+
+  if (isCoastalIslandsTour(input) && isCuratedCoastalCoordinateStop(
+    place,
+    input.destination || input.city || input.destinationPlace || ''
+  )) return true
 
   const name = place.name.trim()
   const nameKey = normalizeKey(name)
@@ -8218,6 +8300,10 @@ export function isValidTouristAttraction(place, input) {
 }
 
 function isCandidateNearDestination(place, input, location) {
+  if (isCoastalIslandsTour(input) && isCuratedCoastalCoordinateStop(
+    place,
+    input.destination || input.city || input.destinationPlace || ''
+  )) return true
   if (!location) return true
   if (place.tags?.requested_place === 'true' || place.category === 'requested' || place.isUserSelected === true) {
     return true

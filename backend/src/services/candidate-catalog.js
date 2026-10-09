@@ -16,6 +16,7 @@ import {
   searchGeoapifyPlaces,
   searchMapboxPlaces
 } from './places-resolver.js'
+import { isCuratedCoastalCandidate } from './coastal-destination-catalog.js'
 
 const TRUSTED_SOURCES = new Set([
   'osm',
@@ -27,7 +28,8 @@ const TRUSTED_SOURCES = new Set([
   'cache',
   'cache_memory',
   'cache_db',
-  'wikipedia-geosearch'
+  'wikipedia-geosearch',
+  'curated_coastal'
 ])
 
 const CATEGORY_LIMITS = Object.freeze({
@@ -210,7 +212,7 @@ export function validateCandidateIdentityAndCategory(candidate, {
     candidate?.catalogNameVerified === true &&
     requestedSignals.some(signal => !signal.startsWith('catalog:'))
 
-  if (!name || isGenericFacilityName(name)) reasons.push('identity:name_missing_or_generic')
+  if (!name || (!isCuratedCoastalCandidate(candidate) && isGenericFacilityName(name))) reasons.push('identity:name_missing_or_generic')
   if (latitude == null || longitude == null || (latitude === 0 && longitude === 0)) reasons.push('identity:coordinates_missing')
   if (!isTrustedSource(source)) reasons.push('identity:untrusted_source')
   const providerCoordinatesVerified = candidate?.rawCoordinatesVerified === true || candidate?.coordinatesVerified === true
@@ -353,9 +355,10 @@ function isTrustedSource(source) {
 
 function isCandidateAllowed(candidate, category) {
   const name = candidate.name
-  if (!name || isGenericFacilityName(name)) return false
+  const trustedCuratedCoastalStop = isCuratedCoastalCandidate(candidate)
+  if (!name || (!trustedCuratedCoastalStop && isGenericFacilityName(name))) return false
   const tags = { ...(candidate.tags || {}), name }
-  if (isNonTouristFacility(tags)) return false
+  if (!trustedCuratedCoastalStop && isNonTouristFacility(tags)) return false
 
   const providerType = normalizeIdentityText(candidate.providerType)
   const providerPlace = normalizeIdentityText(tags.place || tags.place_type || tags.result_type)
@@ -364,7 +367,7 @@ function isCandidateAllowed(candidate, category) {
     return false
   }
 
-  if (category === 'attraction' && /^(?:comuna|barrio|sector|vereda|corregimiento|per[ií]metro urbano|zona|[aá]rea|cancha|campo deportivo|gimnasio|[áa]rbol|tree|arbusto|bush)\b/i.test(name)) {
+  if (category === 'attraction' && !trustedCuratedCoastalStop && /^(?:comuna|barrio|sector|vereda|corregimiento|per[ií]metro urbano|zona|[aá]rea|cancha|campo deportivo|gimnasio|[áa]rbol|tree|arbusto|bush)\b/i.test(name)) {
     return false
   }
 
@@ -428,6 +431,9 @@ export function normalizeRealCandidate(raw, {
     providerCategory: String(raw?.providerCategory || raw?.category || '').trim(),
     catalogCategoryEvidence: String(raw?.catalogCategoryEvidence || '').trim(),
     catalogNameVerified: raw?.catalogNameVerified === true,
+    curatedDestinationKey: String(raw?.curatedDestinationKey || '').trim(),
+    curatedSection: String(raw?.curatedSection || '').trim(),
+    curatedStopId: String(raw?.curatedStopId || '').trim(),
     description: String(raw?.desc || raw?.description || '').trim(),
     specialty: String(raw?.specialty || '').trim(),
     stars: raw?.stars == null ? '' : String(raw.stars),

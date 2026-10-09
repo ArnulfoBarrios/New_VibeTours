@@ -1,3 +1,5 @@
+import { isCuratedCoastalCoordinateStop } from './coastal-destination-catalog.js'
+
 const OSM_PRIMITIVES = new Set(['node', 'way', 'relation'])
 const OSM_SOURCES = /^(?:osm|openstreetmap|osm[_-]?(?:nominatim|overpass)|nominatim|photon)(?:$|[_:-])/i
 
@@ -152,8 +154,12 @@ export function isCoastalOpenStreetMapNode(place) {
 
 export function isCoastalMappedTouristStop(place) {
   const name = String(place?.name ?? place?.nombre ?? '').trim()
-  if (!name || !hasOsmIdentity(place)) return false
-  if (isCoastalArchipelagoOverview(name) || isCoastalTransferStop(place)) return false
+  const curated = isCuratedCoastalCoordinateStop(
+    place,
+    place?.curatedDestinationKey ?? place?.city ?? place?.destination ?? ''
+  )
+  if (!name || (!hasOsmIdentity(place) && !curated)) return false
+  if (isCoastalArchipelagoOverview(name) || (!curated && isCoastalTransferStop(place))) return false
   return !isCoastalRestaurant(place) || isCoastalOpenStreetMapNode(place)
 }
 

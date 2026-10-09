@@ -371,7 +371,7 @@ describe('coastal_islands stop policy', () => {
     }
   })
 
-  it('does not trust AI-supplied OSM-shaped metadata when the mapped candidate catalog is empty', () => {
+  it('uses only the curated coastal places when the mapped candidate catalog is empty', () => {
     const fabricatedStop = osmPlace('Restaurante aislado sin catálogo', 'node', 987654321, 9.42, -75.69, {
       tags: { amenity: 'restaurant' },
       category: 'restaurant',
@@ -381,7 +381,11 @@ describe('coastal_islands stop policy', () => {
       specificPlaces: [fabricatedStop],
     }, { latitude: 9.4, longitude: -75.68 }, [])
 
-    assert.deepEqual(planner.selectedPlaces, [])
+    assert.ok(planner.selectedPlaces.some(stop => stop.curatedSection === 'covenas'))
+    assert.ok(planner.selectedPlaces.some(stop => stop.curatedSection === 'islands'))
+    assert.equal(planner.selectedPlaces.some(stop => stop.name === fabricatedStop.name), false)
+    assert.equal(planner.selectedPlaces.some(stop => /almuerzo tradicional|cena y gastronom[ií]a local/i.test(stop.name)), false)
+    assert.ok(planner.selectedPlaces.every(stop => isCoastalMappedTouristStop(stop)))
   })
 
   it('keeps mapped coastal coordinates even when the AI response provides different coordinates', async () => {
