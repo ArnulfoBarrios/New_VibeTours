@@ -1733,6 +1733,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                     : _activeStop,
             requestToken: _routeRequestToken,
             travelMode: route.travelMode,
+            coastalIslands: tour.itineraryType == 'coastal_islands',
           ),
         );
       }
@@ -1798,6 +1799,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             forceRefresh: force,
             originHeading: _currentHeading,
             travelMode: travelMode,
+            coastalIslands: tour.itineraryType == 'coastal_islands',
           )
           .timeout(const Duration(seconds: 8));
     } catch (error) {
@@ -1876,6 +1878,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           stopIndex: stopIndex,
           requestToken: requestToken,
           travelMode: travelMode,
+          coastalIslands: tour.itineraryType == 'coastal_islands',
         ),
       );
     }
@@ -1888,6 +1891,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     required int stopIndex,
     required int requestToken,
     required RouteTravelMode travelMode,
+    bool coastalIslands = false,
   }) async {
     if (_isTrafficRefreshing) return;
     _isTrafficRefreshing = true;
@@ -1899,6 +1903,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         forceRefresh: true,
         originHeading: _currentHeading,
         travelMode: travelMode,
+        coastalIslands: coastalIslands,
       );
 
       if (!mounted ||

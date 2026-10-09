@@ -2039,4 +2039,78 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get enableLocationBtn => 'Enable location';
+
+  @override
+  String get licensesTitle => 'Licenses & Attributions';
+
+  @override
+  String get licensesSubtitle =>
+      'Open-source software and data powering VIBETOURS';
+
+  @override
+  String get licensesSearchPlaceholder => 'Search library or package...';
+
+  @override
+  String get licensesOpenSourceSection => 'Open Source Libraries';
+
+  @override
+  String get licensesDataAttributions => 'Attributions & Open Data';
+
+  @override
+  String get licensesCountSingular => '1 license';
+
+  @override
+  String licensesCountPlural(int count) {
+    return '$count licenses';
+  }
+
+  @override
+  String licensesNoResults(String query) {
+    return 'No licenses found for \"$query\"';
+  }
+
+  @override
+  String get licensesCopy => 'Copy text';
+
+  @override
+  String get licensesCopied => 'License text copied to clipboard';
+
+  @override
+  String licensesAllPackagesCount(int count) {
+    return '$count installed packages';
+  }
+
+  @override
+  String get premiumComingSoonBadge => 'COMING SOON';
+
+  @override
+  String get premiumComingSoonTitle => 'VIBETOURS Premium';
+
+  @override
+  String get premiumComingSoonDescription =>
+      'We are preparing our Premium plan to elevate your travel experience. It will be available in an upcoming update.';
+
+  @override
+  String get premiumFeatureAiLimitsTitle => 'Extended AI Limits';
+
+  @override
+  String get premiumFeatureAiLimitsDesc =>
+      'Higher daily quota for AI-assisted travel itineraries and questions.';
+
+  @override
+  String get premiumFeatureRoutesTitle => 'More Complete Tours';
+
+  @override
+  String get premiumFeatureRoutesDesc =>
+      'Support for longer routes and detailed waypoints.';
+
+  @override
+  String get premiumFeaturePriorityTitle => 'Priority Access';
+
+  @override
+  String get premiumFeaturePriorityDesc =>
+      'Faster response times and early access to upcoming features.';
+
+  @override
+  String get premiumUnderstoodBtn => 'Got it!';
 }

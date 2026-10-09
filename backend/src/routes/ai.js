@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import crypto from 'crypto'
 
-import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText } from '../services/imageSearch.js'
+import { imageForPlace, imageForPlaceWithStatus, wikipediaSummaryText, coastalWikipediaSummary } from '../services/imageSearch.js'
 import { geocodePlace, overpassAttractions, photonSearch, overpassHotels, overpassNearbyCities, reverseGeocodeUserCountry, reverseGeocodeLocation, overpassNearbyFood, photonFoodFallback, arePlacesSimilar, isNonTouristFacility, isFoodOrDrinkEstablishment, isDistinctNameMatch, hasVerifiedCoordinates, hasOsmMapRecord, canonicalPlaceId, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection } from '../services/osm.js'
 import { planWithOpenAI, extractLocation, suggestFallbackPlacesWithOpenAI, fetchCityIconicLandmarks, generateCustomPlaceReasons, generateRichPlaceDescriptionsBatch, extractChatInformation, extractChatInformationFallback, generateChatResponse, filterChatSpecificPlacesByOsm, isTemporalOrDurationPhrase, isNonTouristicInput, getDestinationPresets, generateSpeechAudio, buildOpenAiPayload, fetchOpenAiChatCompletion, hasActiveLlm, getActiveLlmKey, cleanAndParseJson, getRealDestinationCatalog, isLodgingName, isLodgingCategoryOrGeneric, isLodgingExplicitlyConfirmed, isExplicitlyChoosingHotel, isLodgingNegationOrUncertainty, isLodgingRecommendationInquiry, formatHotelPriceRange, getHotelPriceDisplay, deterministicJitter, isValidRouteEndpoint, DESTINATION_ICONIC_LANDMARKS, DESTINATION_ICONIC_RESTAURANTS } from '../services/openai.js'
 import { searchWebForTravel } from '../services/webSearch.js'
@@ -12,6 +12,12 @@ import { resolveCanonicalDestination, validateCandidateLocation, haversineDistan
 import { resolvePlaceWithCascade } from '../services/places-resolver.js'
 import { getCandidateId } from '../services/candidate-catalog.js'
 import { lookupCachedPlacesForCity, saveCachedPlacesBatch } from '../services/places-cache-service.js'
+import {
+  assignCoastalIslandDays,
+  isCoastalIslandsTour,
+  isCoastalMappedTouristStop,
+  isCoastalRestaurant
+} from '../services/coastal-islands-policy.js'
 
 import {
   enrichPlaceWithOpenData,
@@ -1265,6 +1271,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences,
       nearbyFoodPlaces
     )
+    let finalResponseMessage = aiResponse.responseMessage
 
     // Extraer lugares SOLO si ya se eligió la ciudad destino y provienen de elecciones explícitas o de un itinerario estructurado confirmado
     const hasConfirmedCity = Boolean(updatedPreferences.city || updatedPreferences.destination)
@@ -1523,7 +1530,8 @@ aiRouter.post('/chat', async (req, res, next) => {
           validatedSpecifics,
           updatedPreferences.city,
           updatedPreferences.country || '',
-          updatedPreferences.selectedHotel || null
+          updatedPreferences.selectedHotel || null,
+          { tourType: updatedPreferences.tourType }
         )
       }
       if (isLocationRoute && validatedSpecifics.length >= 2) {
@@ -1540,9 +1548,30 @@ aiRouter.post('/chat', async (req, res, next) => {
         }
       }
       if (validatedSpecifics.length > 0) {
+        if (isCoastalIslandsTour(updatedPreferences)) {
+          validatedSpecifics = assignCoastalIslandDays(
+            validatedSpecifics,
+            updatedPreferences.durationDays || 1
+          )
+        }
         updatedPreferences.specificPlaces = validatedSpecifics
       } else {
         delete updatedPreferences.specificPlaces
+      }
+    }
+
+    if (isCoastalIslandsTour(updatedPreferences) && /(?:Itinerario de Viaje:|(?:^|\n)\s*D[ií]a\s*1\s*:)/i.test(finalResponseMessage || '')) {
+      const coastalStops = updatedPreferences.specificPlaces || []
+      finalResponseMessage = rebuildCoastalChatItinerary(
+        finalResponseMessage,
+        coastalStops,
+        updatedPreferences.city || updatedPreferences.destination || 'Coveñas',
+        updatedPreferences.durationDays || 1
+      )
+      aiResponse.specificPlaces = coastalStops
+      if (coastalStops.length === 0) aiResponse.readyToBuild = false
+      if (aiResponse.extractedPreferences && typeof aiResponse.extractedPreferences === 'object') {
+        aiResponse.extractedPreferences.specificPlaces = coastalStops
       }
     }
 
@@ -1552,7 +1581,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       : (Boolean(aiResponse.readyToBuild) && isLodgingExplicitlyConfirmed(updatedPreferences.selectedHotel, updatedPreferences.accommodationStatus))
 
     res.json({
-      responseMessage: aiResponse.responseMessage,
+      responseMessage: finalResponseMessage,
       actionChips: aiResponse.actionChips || [],
       destinationSuggestions: aiResponse.destinationSuggestions || [],
       readyToBuild: effectiveReadyToBuild,
@@ -2989,9 +3018,13 @@ async function processTourGeneration(jobId, input) {
       const routeStops = normalizedStops.map((stop) => stop.routeStop)
       const targetCity = input.city || input.destination || ''
       const targetCountry = input.country || 'Colombia'
-      const coverUrl = (planner?.selectedPlaces?.[0]?.imageUrl && !planner.selectedPlaces[0].imageUrl.includes('fallback'))
-        ? planner.selectedPlaces[0].imageUrl
-        : (await imageForPlace(targetCity, targetCity, targetCountry).catch(() => null) || fallbackCover(input.destination || targetCity))
+      const isCoastalItinerary = isCoastalIslandsTour(input)
+      const firstStop = stops[0]
+      const coverUrl = isCoastalItinerary
+        ? (firstStop?.imagenes?.[0] || getReliableCategoryFallbackImage(firstStop?.nombre || targetCity, 'island'))
+        : ((planner?.selectedPlaces?.[0]?.imageUrl && !planner.selectedPlaces[0].imageUrl.includes('fallback'))
+          ? planner.selectedPlaces[0].imageUrl
+          : (await imageForPlace(targetCity, targetCity, targetCountry).catch(() => null) || fallbackCover(input.destination || targetCity)))
 
       let hotelPuntoEncuentro = null
       if (selectedHotel?.name) {
@@ -3029,6 +3062,7 @@ async function processTourGeneration(jobId, input) {
           sourceTour.resumen_corto ??
           'Experiencia creada para descubrir con una ruta lógica, tiempos realistas y paradas variadas.',
         tipo_tour: sourceTour.tipo_tour ?? input.type,
+        tipo_recorrido: input.tourType || '',
         subcategorias: normalizeList(sourceTour.subcategorias, [typeLabel(input.type)]),
         descripcion_tour:
           sourceTour.descripcion_tour ??
@@ -3054,11 +3088,14 @@ async function processTourGeneration(jobId, input) {
         horario_recomendado: sourceTour.horario_recomendado ?? planner.recommendedSchedule,
         punto_encuentro: hotelPuntoEncuentro || publicMeetingPoint,
         public_punto_encuentro: publicMeetingPoint,
-        imagen_portada: sourceTour.imagen_portada ?? sourceTour.coverUrl ?? coverUrl,
+        imagen_portada: isCoastalItinerary
+          ? coverUrl
+          : (sourceTour.imagen_portada ?? sourceTour.coverUrl ?? coverUrl),
+        imagen_portada_es_demo: isCoastalItinerary && Boolean(firstStop?.isDemoImage),
         galeria_tour: deduplicateImageUrls([
           ...stops.flatMap((stop) => stop.imagenes).filter(img => img && !img.includes('photo-1469854523086') && !img.includes('photo-1507525428034')),
           coverUrl,
-          ...(normalizeList(sourceTour.galeria_tour, [])),
+          ...(isCoastalItinerary ? [] : normalizeList(sourceTour.galeria_tour, [])),
         ]).slice(0, 8),
         itinerario: stops,
         orden_paradas: stops.map((stop) => stop.candidateId).filter(Boolean),
@@ -3109,7 +3146,7 @@ async function processTourGeneration(jobId, input) {
         throw assemblyError
       }
       console.error('[tour-ai] assembly-failed', { message: assemblyError?.message ?? String(assemblyError), fallbackReason, ollamaError: ollamaError ? (ollamaError.message ?? String(ollamaError)) : null })
-      const emergencyTour = buildEmergencyTour(input, planner, fallbackReason)
+      const emergencyTour = await buildEmergencyTour(input, planner, fallbackReason, sourceTour)
       const emergencyRoute = {
         durationHours: input.durationHours,
         distanceKm: Number(planner.distanceKm),
@@ -3134,40 +3171,63 @@ async function processTourGeneration(jobId, input) {
   }
 }
 
-function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
+async function buildEmergencyTour(input, planner, fallbackReason = 'unknown', sourceTour = null) {
   const city = input.city || input.destination || 'Destino'
   const country = input.country || 'Global'
   const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
+  const isCoastalItinerary = isCoastalIslandsTour(input)
   const selectedPlaces = Array.isArray(planner.selectedPlaces) ? planner.selectedPlaces : []
-  const stops = selectedPlaces.map((place, index) => ({
-    dia: Number(place.dia || place.day || (Math.floor((index * totalDays) / Math.max(1, selectedPlaces.length)) + 1)),
-    parada: index + 1,
-    candidateId: getCandidateId(place),
-    nombre: place.name,
-    descripcion: buildStopDescription(place, input),
-    duracion_estimada: `${25 + (index * 10)} minutos`,
-    actividades: buildActivities(place, input.type),
-    datos_curiosos: buildCuriousFacts(place, input.type),
-    consejos: buildTips(place, input.type),
-    ubicacion: {
-      nombre_lugar: place.name,
-      direccion: place.address || city,
-      ciudad: place.city || city,
-      region: place.region || '',
-      pais: place.country || country,
-      candidateId: getCandidateId(place),
-      place_id: getCandidateId(place) || place.placeId || place.id || '',
-      latitud: place.latitude,
-      longitud: place.longitude,
-      url_mapa: mapUrlFor(place.latitude, place.longitude),
-    },
-    imagenes: place.images || [],
-  }))
+  const coastalDetails = isCoastalItinerary
+    ? await Promise.all(selectedPlaces.map(place => coastalWikipediaSummary(place.name, city, country).catch(() => null)))
+    : []
+  const stops = selectedPlaces.map((place, index) => {
+    const candidateId = getCandidateId(place)
+    const aiStop = (sourceTour?.itinerario || []).find(stop =>
+      readPlanCandidateId(stop) === candidateId || arePlacesSimilar(stop?.nombre || stop?.name || '', place.name)
+    )
+    const image = isCoastalItinerary
+      ? getReliableCategoryFallbackImage(place.name, place.category || 'island')
+      : null
+    const wiki = coastalDetails[index]
+    return {
+      dia: Number(place.dia || place.day || (Math.floor((index * totalDays) / Math.max(1, selectedPlaces.length)) + 1)),
+      parada: index + 1,
+      candidateId,
+      nombre: place.name,
+      descripcion: wiki?.text || aiStop?.descripcion || buildStopDescription(place, input),
+      descripcion_fuente: wiki?.text ? 'wikipedia' : (aiStop?.descripcion ? 'ai' : 'generated_fallback'),
+      wikipedia_url: wiki?.url || '',
+      duracion_estimada: `${25 + (index * 10)} minutos`,
+      actividades: Array.isArray(aiStop?.actividades) && aiStop.actividades.length > 0
+        ? aiStop.actividades
+        : buildActivities(place, input.type),
+      datos_curiosos: buildCuriousFacts(place, input.type),
+      consejos: buildTips(place, input.type),
+      ...(isCoastalItinerary ? { isFallbackImage: true, isDemoImage: true, isReferenceImage: true } : {}),
+      ubicacion: {
+        nombre_lugar: place.name,
+        direccion: place.address || city,
+        ciudad: place.city || city,
+        region: place.region || '',
+        pais: place.country || country,
+        candidateId,
+        place_id: candidateId || place.placeId || place.id || '',
+        latitud: place.latitude,
+        longitud: place.longitude,
+        url_mapa: mapUrlFor(place.latitude, place.longitude),
+      },
+      imagenes: isCoastalItinerary ? [image] : (place.images || []),
+    }
+  })
+  const coastalCover = isCoastalItinerary
+    ? (stops[0]?.imagenes?.[0] || getReliableCategoryFallbackImage(city, 'island'))
+    : fallbackCover(input.destination)
   return {
     id: `ai-emergency-${Date.now()}`,
     nombre_tour: buildTourTitle(input, planner),
     resumen_corto: `${buildShortSummary(input, planner)}. Fallback: respuesta generada sin Ollama.`,
     tipo_tour: input.type,
+    tipo_recorrido: input.tourType || '',
     subcategorias: planner.subcategorias,
     descripcion_tour: buildTourDescription(input, planner),
     experiencia_destacada: buildFeaturedExperience(input, planner),
@@ -3181,7 +3241,8 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
     mejor_epoca: planner.bestSeason,
     horario_recomendado: planner.recommendedSchedule,
     punto_encuentro: normalizeLocationInfo(null, stops[0], input),
-    imagen_portada: fallbackCover(input.destination),
+    imagen_portada: coastalCover,
+    imagen_portada_es_demo: isCoastalItinerary,
     galeria_tour: deduplicateImageUrls(stops.flatMap((stop) => stop.imagenes)).slice(0, 8),
     itinerario: stops,
     orden_paradas: stops.map((stop) => stop.candidateId).filter(Boolean),
@@ -3206,31 +3267,38 @@ function buildEmergencyTour(input, planner, fallbackReason = 'unknown') {
 export async function buildFallbackTour(planner, input) {
   const targetCity = input.city || input.destination || ''
   const targetLang = input.language || 'es'
-  const [enrichedPlaces, cityGuide] = await Promise.all([
-    Promise.all(
-      (planner.selectedPlaces || []).map((place, index) =>
-        enrichPlaceWithOpenData(place, targetCity, targetLang, input.country || '')
-          .then((enriched) => {
-            const openDetails = buildDeterministicStopDetails(enriched, {
-              city: targetCity,
-              destination: input.destination,
-              stopIndex: index
-            })
-            return {
-              ...place,
-              ...enriched,
-              openDescription: openDetails.description,
-              openCuriousFacts: openDetails.curiousFacts,
-              openTips: openDetails.tips, openActivities: openDetails.activities, openDurationText: openDetails.durationText
-            }
-          })
-          .catch(() => place)
-      )
-    ),
-    fetchWikivoyageCityGuide(targetCity, input.country || '', targetLang).catch(() => null)
-  ])
+  const isCoastalItinerary = isCoastalIslandsTour(input)
+  // Coastal stop descriptions and photos are resolved by normalizeStop against
+  // the actual island/restaurant. Avoid duplicate city-level lookups here.
+  const [enrichedPlaces, cityGuide] = isCoastalItinerary
+    ? [planner.selectedPlaces || [], null]
+    : await Promise.all([
+        Promise.all(
+          (planner.selectedPlaces || []).map((place, index) =>
+            enrichPlaceWithOpenData(place, targetCity, targetLang, input.country || '')
+              .then((enriched) => {
+                const openDetails = buildDeterministicStopDetails(enriched, {
+                  city: targetCity,
+                  destination: input.destination,
+                  stopIndex: index
+                })
+                return {
+                  ...place,
+                  ...enriched,
+                  openDescription: openDetails.description,
+                  openCuriousFacts: openDetails.curiousFacts,
+                  openTips: openDetails.tips, openActivities: openDetails.activities, openDurationText: openDetails.durationText
+                }
+              })
+              .catch(() => place)
+          )
+        ),
+        fetchWikivoyageCityGuide(targetCity, input.country || '', targetLang).catch(() => null)
+      ])
   planner.selectedPlaces = enrichedPlaces
-  const coverUrl = planner.selectedPlaces[0]?.imageUrl ?? fallbackCover(input.destination)
+  const coverUrl = isCoastalItinerary
+    ? getReliableCategoryFallbackImage(planner.selectedPlaces[0]?.name || targetCity, planner.selectedPlaces[0]?.category || 'island')
+    : (planner.selectedPlaces[0]?.imageUrl ?? fallbackCover(input.destination))
   const gallery = deduplicateImageUrls(planner.selectedPlaces.flatMap((place) => place.images)).slice(0, 8)
   const totalDays = Math.max(1, Math.ceil(input.durationHours / 24))
   const stopsPerDay = Math.ceil(planner.selectedPlaces.length / totalDays)
@@ -3264,6 +3332,7 @@ export async function buildFallbackTour(planner, input) {
     nombre_tour: buildTourTitle(input, planner),
     resumen_corto: buildShortSummary(input, planner),
     tipo_tour: input.type,
+    tipo_recorrido: input.tourType || '',
     subcategorias: planner.subcategorias,
     descripcion_tour: buildTourDescription(input, planner),
     experiencia_destacada: buildFeaturedExperience(input, planner),
@@ -3278,6 +3347,7 @@ export async function buildFallbackTour(planner, input) {
     horario_recomendado: planner.recommendedSchedule,
     punto_encuentro: normalizeLocationInfo(null, itinerary[0], input),
     imagen_portada: coverUrl,
+    imagen_portada_es_demo: isCoastalItinerary,
     galeria_tour: gallery,
     itinerario: itinerary,
     orden_paradas: itinerary.map((stop) => stop.candidateId).filter(Boolean),
@@ -3300,6 +3370,7 @@ export async function buildFallbackTour(planner, input) {
 }
 
 export function buildTourPlanner(input, location = null, places = []) {
+  const isCoastalIslands = isCoastalIslandsTour(input)
   const origin = location ? { latitude: location.latitude, longitude: location.longitude } : null
   const refList = (Array.isArray(input.specificPlaces) && input.specificPlaces.length > 0)
     ? input.specificPlaces
@@ -3335,9 +3406,16 @@ export function buildTourPlanner(input, location = null, places = []) {
     }
   }
 
+  // Island-coast tours only use actual OSM features. This keeps ports out of
+  // the tourist-stop list and prevents an unmapped chat mention from inheriting
+  // the destination centroid as its coordinates.
+  if (isCoastalIslands) {
+    candidatePlaces = candidatePlaces.filter(isCoastalMappedTouristStop)
+  }
+
   const normalized = uniqueByName(
     candidatePlaces.map((place, index) => normalizeCandidate(place, index, input, origin)),
-  ).filter((place) => place.name)
+  ).filter((place) => place.name && (!isCoastalIslands || isCoastalMappedTouristStop(place)))
 
   const originStr = String(input.originPlace || '').trim()
   const destStr = String(input.destinationPlace || input.destination || input.city || '').trim()
@@ -3589,6 +3667,10 @@ export function buildTourPlanner(input, location = null, places = []) {
         }
       })
 
+      if (isCoastalIslands) {
+        selectedPlaces = assignCoastalIslandDays(selectedPlaces, totalDays)
+      }
+
       // Ordenar estrictamente por día y dentro del día preservar el orden secuencial exacto del chat
       selectedPlaces.sort((a, b) => {
         const dayDiff = (Number(a.dia || a.day || 1) - Number(b.dia || b.day || 1))
@@ -3629,7 +3711,8 @@ export function buildTourPlanner(input, location = null, places = []) {
 
         // 1. Backfill attractions if day is empty or underfilled (< 2 attractions)
         const currentAttractions = dayPlaces.filter(p => !isFoodStop(p))
-        while (currentAttractions.length < 2 && availableAttractions.length > 0) {
+        const attractionsPerDay = isCoastalIslands ? 0 : 2
+        while (currentAttractions.length < attractionsPerDay && availableAttractions.length > 0) {
           const cand = availableAttractions.shift()
           if (!cand || !cand.name) continue
           const key = normalizePlaceKey(cand.name)
@@ -3643,7 +3726,7 @@ export function buildTourPlanner(input, location = null, places = []) {
 
         // 2. Add 1 restaurant if day has no restaurant and restaurants are available
         const hasFood = dayPlaces.some(p => isFoodStop(p))
-        if (!hasFood && availableRestaurants.length > 0) {
+        if (!isCoastalIslands && !hasFood && availableRestaurants.length > 0) {
           const restIdx = availableRestaurants.findIndex(r => !usedNames.has(normalizePlaceKey(r.name)))
           if (restIdx !== -1) {
             const [rest] = availableRestaurants.splice(restIdx, 1)
@@ -3665,6 +3748,7 @@ export function buildTourPlanner(input, location = null, places = []) {
       for (let d = 1; d <= totalDays; d++) {
         const dayPlaces = daysMap.get(d) || []
         if (dayPlaces.length === 0) continue
+        if (isCoastalIslands && !dayPlaces.some(p => !isFoodStop(p))) continue
 
         const isDayFullySpecified = refList.length > 0 && dayPlaces.every(p => refList.some(r => isPlaceMatching(p.name, getName(r))))
         if (!isLocationToDestTour && !isDayFullySpecified && dayPlaces.length >= 3 && dayPlaces.some(p => p.latitude && p.longitude)) {
@@ -3690,6 +3774,11 @@ export function buildTourPlanner(input, location = null, places = []) {
         const expanded = scored.filter((place) => !selectedPlaces.some((picked) => normalizeKey(picked.name) === normalizeKey(place.name)))
         selectedPlaces.push(...expanded.slice(0, Math.max(0, Math.min(stopTarget, 3) - selectedPlaces.length)))
       }
+    }
+
+    if (isCoastalIslands && requestedPlaces.length === 0) {
+      const totalDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
+      selectedPlaces = assignCoastalIslandDays(selectedPlaces, totalDays)
     }
 
     // Filtrar cualquier coincidencia con el hotel/alojamiento para que no aparezca como parada turística
@@ -3870,6 +3959,36 @@ export function buildTourPlanner(input, location = null, places = []) {
   }
 }
 
+export function rebuildCoastalChatItinerary(sourceText, stops, destination, requestedDays = 1) {
+  const text = String(sourceText || '').trim()
+  const marker = /Itinerario de Viaje:|(?:^|\n)\s*D[ií]a\s*1\s*:/i.exec(text)
+  if (!marker) return text
+
+  const start = marker.index + (text.slice(marker.index).startsWith('\n') ? 1 : 0)
+  const intro = text.slice(0, start).trim()
+  const confirmation = text.match(/¿Deseas confirmar este itinerario(?: ampliado)? y generar tu tour en el mapa\?/i)?.[0] || ''
+  const days = new Map()
+  for (const stop of Array.isArray(stops) ? stops : []) {
+    const name = String(stop?.name || stop?.nombre || '').trim()
+    if (!name) continue
+    const day = Math.max(1, Number(stop?.dia || stop?.day || 1))
+    if (!days.has(day)) days.set(day, [])
+    days.get(day).push(name)
+  }
+
+  if (days.size === 0) {
+    const notice = `No pude confirmar paradas turísticas y gastronómicas verificadas en el mapa para ${destination}. No voy a incluir ubicaciones sin un punto cartográfico real.`
+    return [intro, notice].filter(Boolean).join('\n\n')
+  }
+
+  const totalDays = Math.max(Number(requestedDays) || 1, ...days.keys())
+  const blocks = [...days.entries()]
+    .sort(([dayA], [dayB]) => dayA - dayB)
+    .map(([day, names]) => `Día ${day}: ${destination}\n${names.map(name => `• ${name}`).join('\n')}`)
+  const header = `Itinerario de Viaje: ${destination} (${totalDays} ${totalDays === 1 ? 'día' : 'días'})`
+  return [intro, header, ...blocks, confirmation].filter(Boolean).join('\n\n')
+}
+
 function normalizeCandidate(place, index, input, origin) {
   const name = place.name?.toString().trim() || `${input.destination} parada ${index + 1}`
   let latitude = Number(place.latitude)
@@ -3895,6 +4014,9 @@ function normalizeCandidate(place, index, input, origin) {
   const category = normalizeCategory(place)
   const broadGroup = groupForCategory(category, input.type)
   const tags = normalizeTags(place.tags)
+  const osmIdentity = String(place.placeId ?? place.place_id ?? place.osmId ?? place.osm_id ?? '')
+  const parsedOsmType = osmIdentity.match(/(?:^|[:/])(node|way|relation)[/:]\d+(?:$|\b)/i)?.[1]?.toLowerCase()
+  const osmType = String(place.osmType ?? place.osm_type ?? place.geometryType ?? tags.osmType ?? tags.osm_type ?? parsedOsmType ?? '').toLowerCase()
   const images = unique([
     place.imageUrl,
     ...(Array.isArray(place.images) ? place.images : []),
@@ -3913,6 +4035,9 @@ function normalizeCandidate(place, index, input, origin) {
     region: place.region,
     address: place.address ?? '',
     placeId: place.placeId ?? place.place_id ?? place.id ?? '',
+    osmType,
+    osm_type: osmType,
+    osmId: place.osmId ?? place.osm_id ?? (parsedOsmType ? osmIdentity.match(/(?:^|[:/])(?:node|way|relation)[/:](\d+)/i)?.[1] : ''),
     candidateId: getCandidateId({
       ...place,
       placeId: place.placeId ?? place.place_id ?? place.id ?? '',
@@ -5693,8 +5818,23 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
   description = description.replace(/^(Atracci[oó]n(\s*\/\s*Restaurante)?|Restaurante|Atracci[oó]n|Lugar|Destino|Punto)\s*:\s*/i, '').trim()
 
   const isGenericDesc = isGenericDescription(description, resolvedName)
+  const isCoastalStop = isCoastalIslandsTour(input)
+  let wikipediaUrl = ''
+  let descriptionSource = description && !isGenericDesc ? 'ai' : 'generated_fallback'
+  let coastalWikiPromise = null
 
-  if (isGenericDesc) {
+  if (isCoastalStop) {
+    coastalWikiPromise = coastalWikipediaSummary(
+      resolvedName,
+      input.city || input.destination,
+      input.country
+    ).catch(() => null)
+    if (isGenericDesc) {
+      const rawCat = matchedPlace?.category || candidateFallback?.category || source.categoria || source.category || source.type || 'lugar'
+      description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
+      descriptionSource = 'wikipedia_not_found'
+    }
+  } else if (isGenericDesc) {
     if (richObj?.descripcion && !isGenericDescription(richObj.descripcion, resolvedName)) {
       description = richObj.descripcion
     } else {
@@ -5733,9 +5873,9 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
   const isVerifiedPhoto = (url) => typeof url === 'string' && (url.includes('wikimedia.org') || url.includes('wikipedia.org'))
   const verifiedImageFromList = images.find(isVerifiedPhoto) || ''
   const isSourceFallback = Boolean(source.isFallbackImage || source.isDemoImage || source.isReferenceImage)
-  const existingImageUrl = (!isSourceFallback && source.imageUrl && !source.imageUrl.includes('photo-1469854523086-cc02fe5d8800'))
+  const existingImageUrl = !isCoastalStop && (!isSourceFallback && source.imageUrl && !source.imageUrl.includes('photo-1469854523086-cc02fe5d8800'))
     ? source.imageUrl
-    : (verifiedImageFromList || source.imageUrl || matchedPlace?.imageUrl || candidateFallback?.imageUrl || coordinates?.imageUrl || '')
+    : (!isCoastalStop ? (verifiedImageFromList || source.imageUrl || matchedPlace?.imageUrl || candidateFallback?.imageUrl || coordinates?.imageUrl || '') : '')
   let image = ''
   let isFallbackImg = false
 
@@ -5756,12 +5896,29 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     ]).catch(() => ({ url: "", isFallback: true }))
     image = imageStatus.url || existingImageUrl
     isFallbackImg = imageStatus.isFallback
+    if (!image && isCoastalStop) {
+      image = getReliableCategoryFallbackImage(resolvedName, placeCategory, options?.assignedUrls)
+      isFallbackImg = true
+    }
     if (image) options?.assignedUrls?.add(image)
+  }
+
+  // Look up Wikipedia while the image provider is working, keeping the
+  // additional coastal enrichment inside one parallel latency window.
+  if (isCoastalStop) {
+    const wikiPage = await coastalWikiPromise
+    if (wikiPage?.text) {
+      description = wikiPage.text
+      wikipediaUrl = wikiPage.url || ''
+      descriptionSource = 'wikipedia'
+    } else if (!isGenericDesc && description) {
+      descriptionSource = 'wikipedia_not_found_ai_fallback'
+    }
   }
 
   // Normalizar lista de actividades priorizando las generadas específicamente para este lugar por la IA
   let rawActivities = normalizeList(richObj?.actividades ?? source.actividades ?? source.activities, [])
-  if (rawName && rawName.toLowerCase() !== resolvedName.toLowerCase() && rawName.length > 5) {
+  if (!isCoastalStop && rawName && rawName.toLowerCase() !== resolvedName.toLowerCase() && rawName.length > 5) {
     const activityPhrase = rawName.trim()
     if (!rawActivities.includes(activityPhrase)) {
       rawActivities = [activityPhrase, ...rawActivities]
@@ -5814,6 +5971,8 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     isDemoImage: isFallbackImg,
     isReferenceImage: isFallbackImg,
     descripcion: description,
+    descripcion_fuente: descriptionSource,
+    wikipedia_url: wikipediaUrl,
     duracion_estimada: durationText,
     actividades: rawActivities,
     datos_curiosos,
@@ -5834,7 +5993,7 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     },
     imagenes: deduplicateImageUrls([
       ...(isVerifiedPhoto(image) ? [image] : []),
-      ...images,
+      ...(isCoastalStop ? [] : images),
       ...(image && !isVerifiedPhoto(image) ? [image] : [])
     ]),
   }

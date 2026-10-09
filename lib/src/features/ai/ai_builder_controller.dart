@@ -1149,6 +1149,10 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         (e) => e.name == tourData['tipo_tour'] || tourTypeLabel(e).toLowerCase() == tourData['tipo_tour'].toString().toLowerCase(),
         orElse: () => TourType.custom,
       ),
+      itineraryType: tourData['tipo_recorrido']?.toString() ??
+          state.request?.tourType ??
+          state.preferences['tourType']?.toString() ??
+          '',
       description: tourData['descripcion_tour'] ?? '',
       coverUrl: tourData['imagen_portada'] ?? '',
       gallery: List<String>.from(tourData['galeria_tour'] ?? []),

@@ -745,5 +745,47 @@
   "tourResetAll": "Reset all tutorials",
   "tourResetAllSuccess": "Tutorials reset. They will show when visiting each screen.",
   "nearbyEnableLocationPrompt": "Enable your location to explore attractions and tourist spots around you.",
-  "enableLocationBtn": "Enable location"
+  "enableLocationBtn": "Enable location",
+  "licensesTitle": "Licenses & Attributions",
+  "licensesSubtitle": "Open-source software and data powering VIBETOURS",
+  "licensesSearchPlaceholder": "Search library or package...",
+  "licensesOpenSourceSection": "Open Source Libraries",
+  "licensesDataAttributions": "Attributions & Open Data",
+  "licensesCountSingular": "1 license",
+  "licensesCountPlural": "{count} licenses",
+  "@licensesCountPlural": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "licensesNoResults": "No licenses found for \"{query}\"",
+  "@licensesNoResults": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "licensesCopy": "Copy text",
+  "licensesCopied": "License text copied to clipboard",
+  "licensesAllPackagesCount": "{count} installed packages",
+  "@licensesAllPackagesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "premiumComingSoonBadge": "COMING SOON",
+  "premiumComingSoonTitle": "VIBETOURS Premium",
+  "premiumComingSoonDescription": "We are preparing our Premium plan to elevate your travel experience. It will be available in an upcoming update.",
+  "premiumFeatureAiLimitsTitle": "Extended AI Limits",
+  "premiumFeatureAiLimitsDesc": "Higher daily quota for AI-assisted travel itineraries and questions.",
+  "premiumFeatureRoutesTitle": "More Complete Tours",
+  "premiumFeatureRoutesDesc": "Support for longer routes and detailed waypoints.",
+  "premiumFeaturePriorityTitle": "Priority Access",
+  "premiumFeaturePriorityDesc": "Faster response times and early access to upcoming features.",
+  "premiumUnderstoodBtn": "Got it!"
 }

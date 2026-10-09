@@ -64,6 +64,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
   bool _styleLoaded = false;
   bool _hasMapError = false;
   Line? _routeLine;
+  final List<Line> _maritimeLines = [];
   Circle? _userPuckCircle;
   Circle? _userPuckHalo;
   Circle? _destinationCircle;
@@ -526,6 +527,17 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     _initialWalkingSegments.clear();
   }
 
+  Future<void> _clearMaritimeLines() async {
+    final controller = _controller;
+    if (controller == null) return;
+    for (final line in _maritimeLines) {
+      try {
+        await controller.removeLine(line);
+      } catch (_) {}
+    }
+    _maritimeLines.clear();
+  }
+
   Future<void> _clearAdditionalWaypoints() async {
     final controller = _controller;
     if (controller == null) return;
@@ -910,6 +922,7 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     // Traffic refreshes create a new immutable result but deliberately reuse
     // the same geometry list. Do not redraw the map for metadata-only changes.
     return !identical(previous.geometry, current.geometry) ||
+        !identical(previous.maritimeSegments, current.maritimeSegments) ||
         previous.usesMaritimeTransfer != current.usesMaritimeTransfer ||
         !identical(previous.walkingSegments, current.walkingSegments);
   }
@@ -994,15 +1007,11 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     // Trim only the already-traversed part. The geometry sent to the map is
     // still the complete remaining route from the current position to the
     // destination; it is never a partial chunk selected by the zoom level.
-    // A maritime transfer is represented by the banner and its terminal
-    // action. Do not paint either the sea segment or a land-to-destination
-    // connector in this mode; tapping the banner starts a separate route to
-    // the terminal where a normal road line can be shown.
-    final lineGeometry = widget.route?.usesMaritimeTransfer == true
-        ? const <LatLng>[]
-        : visualPosition != null && _fullGeometry.length >= 2
-            ? _getZeroGapTrimmedGeometry(visualPosition)
-            : _fullGeometry;
+    // Road geometry ends at the boarding point; the separate boat geometry
+    // below reaches the island without drawing a false walking connector.
+    final lineGeometry = visualPosition != null && _fullGeometry.length >= 2
+        ? _getZeroGapTrimmedGeometry(visualPosition)
+        : _fullGeometry;
 
     // Draw Destination POI marker
     if (_destinationCircle == null) {
@@ -1118,6 +1127,35 @@ class _LiveNavigationMapState extends ConsumerState<LiveNavigationMap>
     // Clear previous walking annotations before drawing new ones
     await _clearWalkingAnnotations();
     if (!_isCurrentLiveRouteRender(requestId)) return;
+
+    await _clearMaritimeLines();
+    if (!_isCurrentLiveRouteRender(requestId)) return;
+
+    for (final maritimeSegment in widget.route?.maritimeSegments ?? const <List<GeoPoint>>[]) {
+      if (!_isCurrentLiveRouteRender(requestId)) return;
+      final segmentPoints = [
+        for (final point in maritimeSegment)
+          LatLng(point.latitude, point.longitude),
+      ];
+      if (segmentPoints.length > 1) {
+        try {
+          final line = await controller.addLine(
+            LineOptions(
+              geometry: segmentPoints,
+              lineColor: '#236FC4',
+              lineWidth: 6,
+              lineOpacity: 0.9,
+              lineJoin: 'round',
+            ),
+          );
+          if (!_isCurrentLiveRouteRender(requestId)) {
+            await controller.removeLine(line);
+            return;
+          }
+          _maritimeLines.add(line);
+        } catch (_) {}
+      }
+    }
 
     // Draw walking / hiking trail approach segments in live navigation
     final walkingSegments = widget.route?.usesMaritimeTransfer == true

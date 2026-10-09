@@ -12,6 +12,7 @@ import 'features/creator/tour_creator_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/home/place_route_screen.dart';
 import 'features/legal/legal_screen.dart';
+import 'features/legal/licenses_screen.dart';
 import 'features/profile/achievements_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/profile/public_profile_screen.dart';
@@ -162,6 +163,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/tourist_preferences',
         builder: (context, state) => const TouristPreferencesScreen(isOnboarding: true),
+      ),
+      GoRoute(
+        path: '/legal/licenses',
+        builder: (context, state) => const LicensesScreen(),
       ),
       GoRoute(
         path: '/legal/:kind',

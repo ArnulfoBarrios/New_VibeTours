@@ -414,6 +414,12 @@ export function normalizeRealCandidate(raw, {
     latitude,
     longitude,
     placeId: candidateSourceId(raw),
+    osmType: String(
+      raw?.osmType ?? raw?.osm_type ?? raw?.geometryType ?? raw?.geometry_type ??
+      raw?.tags?.osmType ?? raw?.tags?.osm_type ?? raw?.properties?.osm_type ??
+      (['node', 'way', 'relation'].includes(String(raw?.type || '').toLowerCase()) ? raw.type : '') ??
+      ''
+    ).toLowerCase(),
     coordinateSource: source,
     coordinatesVerified: true,
     rawCoordinatesVerified: raw?.coordinatesVerified === true || raw?.coordinates_verified === true,
@@ -428,6 +434,12 @@ export function normalizeRealCandidate(raw, {
     price: String(raw?.price || '').trim(),
     relevance: Number(raw?.relevance ?? raw?.score ?? 0)
   }
+
+  const osmIdentity = String(candidate.placeId || '')
+  const parsedOsmIdentity = osmIdentity.match(/(?:^|[:/])(node|way|relation)[/:](\d+)(?:$|\b)/i)
+  if (!candidate.osmType && parsedOsmIdentity) candidate.osmType = parsedOsmIdentity[1].toLowerCase()
+  candidate.osm_type = candidate.osmType
+  candidate.osmId = String(raw?.osmId ?? raw?.osm_id ?? raw?.properties?.osm_id ?? parsedOsmIdentity?.[2] ?? '')
 
   const providerIdentity = getProviderIdentity(raw, source)
   candidate.providerId = providerIdentity.id

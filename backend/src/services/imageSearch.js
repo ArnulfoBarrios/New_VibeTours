@@ -1,5 +1,8 @@
 import { isFoodOrDrinkEstablishment } from './osm.js'
 
+const coastalWikipediaCache = new Map()
+const coastalWikipediaInflight = new Map()
+
 const KNOWN_LANDMARK_IMAGES = {
   // Coveñas & Golfo de Morrosquillo
   'playa blanca covenas': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
@@ -592,6 +595,78 @@ export async function wikipediaSummaryText(placeName, city = '', country = '') {
     } catch {}
   }
   return null
+}
+
+export async function coastalWikipediaSummary(placeName, city = '', country = '') {
+  const cleaned = String(placeName || '').replace(/\(.*?\)/g, '').replace(/_/g, ' ').trim()
+  if (cleaned.length < 3) return null
+  const cleanCity = String(city || '').replace(/_/g, ' ').trim()
+  const cleanCountry = String(country || '').replace(/_/g, ' ').trim()
+  const key = `${cleaned}|${cleanCity}|${cleanCountry}`.toLowerCase()
+  const cached = coastalWikipediaCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.value
+  if (coastalWikipediaInflight.has(key)) return coastalWikipediaInflight.get(key)
+
+  const request = (async () => {
+    try {
+      const searchUrl = `https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(`${cleaned} ${cleanCity} ${cleanCountry}`.trim())}&utf8=&format=json&origin=*`
+      const searchResponse = await fetch(searchUrl, {
+        headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' },
+        signal: AbortSignal.timeout(2200),
+      })
+      if (!searchResponse.ok) return null
+      const searchData = await searchResponse.json()
+      const placeWords = cleaned.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .split(/\s+/).filter(word => word.length >= 4 && !/^(islas?|del|las?|los|san|santa)$/.test(word))
+      const hits = (searchData?.query?.search || []).filter(hit => {
+        const title = String(hit?.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        const snippet = String(hit?.snippet || '').replace(/<[^>]+>/g, ' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        return hit?.title && (placeWords.length === 0 || placeWords.some(word => title.includes(word) || snippet.includes(word)))
+      }).slice(0, 1)
+
+      const summaries = await Promise.all(hits.map(async hit => {
+        try {
+          const slug = encodeURIComponent(String(hit.title).replace(/\s+/g, '_'))
+          const response = await fetch(`https://es.wikipedia.org/api/rest_v1/page/summary/${slug}`, {
+            headers: { 'User-Agent': 'VIBETOURS/1.0 (ops@vibetours.app)' },
+            signal: AbortSignal.timeout(2200),
+          })
+          if (!response.ok) return null
+          const data = await response.json()
+          const extract = String(data?.extract || '').trim()
+          if (extract.length <= 40 || /puede referirse a/i.test(extract)) return null
+          if (/\b(is the|is a|was a|located in|town of|municipality of)\b/i.test(extract)) return null
+          const extractWords = extract.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          if (placeWords.length > 0 && !placeWords.some(word => extractWords.includes(word))) return null
+          return {
+            text: extract,
+            title: data.title || hit.title,
+            url: data.content_urls?.desktop?.page || `https://es.wikipedia.org/wiki/${slug}`,
+          }
+        } catch {
+          return null
+        }
+      }))
+      return summaries.find(Boolean) || null
+    } catch {
+      return null
+    }
+  })()
+
+  coastalWikipediaInflight.set(key, request)
+  try {
+    const value = await request
+    coastalWikipediaCache.set(key, {
+      value,
+      expiresAt: Date.now() + (value ? 6 * 60 * 60 * 1000 : 5 * 60 * 1000),
+    })
+    while (coastalWikipediaCache.size > 400) {
+      coastalWikipediaCache.delete(coastalWikipediaCache.keys().next().value)
+    }
+    return value
+  } finally {
+    coastalWikipediaInflight.delete(key)
+  }
 }
 
 async function wikimediaGeoImage(lat, lon, radiusMeters = 1000, indexSeed = 0) {

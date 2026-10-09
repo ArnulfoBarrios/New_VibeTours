@@ -752,5 +752,47 @@
   "tourResetAll": "Reiniciar todos los tutoriales",
   "tourResetAllSuccess": "Tutoriales reiniciados. Se mostrarán al visitar cada pantalla.",
   "nearbyEnableLocationPrompt": "Activa tu ubicación para explorar atracciones y lugares turísticos a tu alrededor.",
-  "enableLocationBtn": "Activar ubicación"
+  "enableLocationBtn": "Activar ubicación",
+  "licensesTitle": "Licencias y Atribuciones",
+  "licensesSubtitle": "Software de código abierto y datos que impulsan VIBETOURS",
+  "licensesSearchPlaceholder": "Buscar librería o paquete...",
+  "licensesOpenSourceSection": "Librerías de código abierto",
+  "licensesDataAttributions": "Atribuciones y Datos Abiertos",
+  "licensesCountSingular": "1 licencia",
+  "licensesCountPlural": "{count} licencias",
+  "@licensesCountPlural": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "licensesNoResults": "No se encontraron licencias para \"{query}\"",
+  "@licensesNoResults": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "licensesCopy": "Copiar texto",
+  "licensesCopied": "Texto de licencia copiado al portapapeles",
+  "licensesAllPackagesCount": "{count} paquetes instalados",
+  "@licensesAllPackagesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "premiumComingSoonBadge": "PRÓXIMAMENTE",
+  "premiumComingSoonTitle": "VIBETOURS Premium",
+  "premiumComingSoonDescription": "Estamos preparando nuestro plan Premium para llevar tus viajes al siguiente nivel. Estará disponible en una próxima actualización.",
+  "premiumFeatureAiLimitsTitle": "Límites de IA extendidos",
+  "premiumFeatureAiLimitsDesc": "Mayor cantidad de itinerarios y consultas diarias asistidas por inteligencia artificial.",
+  "premiumFeatureRoutesTitle": "Tours más completos",
+  "premiumFeatureRoutesDesc": "Capacidad para rutas más largas y paradas detalladas.",
+  "premiumFeaturePriorityTitle": "Acceso prioritario",
+  "premiumFeaturePriorityDesc": "Tiempos de respuesta más rápidos y acceso anticipado a nuevas herramientas.",
+  "premiumUnderstoodBtn": "¡Entendido!"
 }

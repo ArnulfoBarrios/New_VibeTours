@@ -135,6 +135,7 @@ class RoadRouteService {
     bool forceRefresh = false,
     double? originHeading,
     RouteTravelMode travelMode = RouteTravelMode.driving,
+    bool coastalIslands = false,
   }) {
     if (points.length < 2) {
       return Future.value(RoadRouteResult(geometry: points));
@@ -142,6 +143,7 @@ class RoadRouteService {
     final key = [
       preferLiveTraffic && hasLiveTrafficProvider ? 'traffic' : 'road',
       travelMode.name,
+      if (coastalIslands) 'coastal_islands',
       points.map(_pointKey).join('|'),
       if (originHeading != null) 'h_${originHeading.round()}',
       if (preferLiveTraffic && hasLiveTrafficProvider)
@@ -158,6 +160,7 @@ class RoadRouteService {
       preferLiveTraffic: preferLiveTraffic && hasLiveTrafficProvider,
       originHeading: originHeading,
       travelMode: travelMode,
+      coastalIslands: coastalIslands,
     );
     _inFlightRoutes[key] = future;
     if (!forceRefresh) _routeCache[key] = future;
@@ -183,6 +186,7 @@ class RoadRouteService {
     required bool preferLiveTraffic,
     double? originHeading,
     required RouteTravelMode travelMode,
+    required bool coastalIslands,
   }) async {
     final geometry = <GeoPoint>[];
     final maritimeSegments = <List<GeoPoint>>[];
@@ -249,8 +253,33 @@ class RoadRouteService {
         travelMode: travelMode,
       );
 
+      RoadRouteResult? coastalMaritimeRoute;
+      var attemptedCoastalMaritimeRoute = false;
+      // Coastal island destinations need a boat transfer whenever the land
+      // route does not reach the destination. Resolve that before the generic
+      // hiking fallback, which otherwise fabricates a walk across open water.
+      final requiresPortTransfer =
+          roadRoute == null || _looksLikeMaritimeTransfer(roadRoute, start, end);
+      if (coastalIslands && !isFlightMode && requiresPortTransfer) {
+        attemptedCoastalMaritimeRoute = true;
+        coastalMaritimeRoute = await _buildMaritimeAwareRoute(start, end);
+        if (coastalMaritimeRoute != null) {
+          _appendGeometry(geometry, coastalMaritimeRoute.geometry);
+          maritimeSegments.addAll(coastalMaritimeRoute.maritimeSegments);
+          ports.addAll(coastalMaritimeRoute.ports);
+          usesMaritimeTransfer = true;
+          transitAdviceMessage = coastalMaritimeRoute.transitAdviceMessage;
+          totalDistanceMeters += coastalMaritimeRoute.distanceMeters;
+          totalTravelTimeSeconds += coastalMaritimeRoute.travelTimeSeconds ?? 0;
+          totalTrafficDelaySeconds += coastalMaritimeRoute.trafficDelaySeconds ?? 0;
+          usesLiveTraffic = usesLiveTraffic || coastalMaritimeRoute.usesLiveTraffic;
+          continue;
+        }
+      }
+
       // 2.1 Check for hiking / walking trail approach when destination is off-road
-      if (roadRoute != null && travelMode != RouteTravelMode.flight && travelMode != RouteTravelMode.walking) {
+      if (roadRoute != null && travelMode != RouteTravelMode.flight && travelMode != RouteTravelMode.walking &&
+          (!coastalIslands || !requiresPortTransfer)) {
         final hybrid = await _tryResolveHikingTrail(
           start: start,
           end: end,
@@ -275,6 +304,7 @@ class RoadRouteService {
 
       // 2.2 Pure walking route if both points are off-road within pedestrian distance
       if ((roadRoute == null || travelMode == RouteTravelMode.walking) &&
+          (!coastalIslands || !requiresPortTransfer) &&
           travelMode != RouteTravelMode.flight &&
           directDistance <= 35000) {
         var pureWalking = await _fetchBRouterWalkingRoute(start, end);
@@ -292,10 +322,6 @@ class RoadRouteService {
           continue;
         }
       }
-
-      final requiresPortTransfer =
-          roadRoute == null ||
-          _looksLikeMaritimeTransfer(roadRoute, start, end);
 
       if (!requiresPortTransfer) {
         final roadGeo = roadRoute.geometry;
@@ -366,7 +392,9 @@ class RoadRouteService {
       }
 
       // 3. Fallbacks when no direct land connection exists (e.g. islands, water bodies)
-      final maritimeRoute = await _buildMaritimeAwareRoute(start, end);
+      final maritimeRoute = attemptedCoastalMaritimeRoute
+          ? coastalMaritimeRoute
+          : await _buildMaritimeAwareRoute(start, end);
       if (maritimeRoute != null) {
         _appendGeometry(geometry, maritimeRoute.geometry);
         maritimeSegments.addAll(maritimeRoute.maritimeSegments);

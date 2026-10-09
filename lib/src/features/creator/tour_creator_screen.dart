@@ -162,12 +162,14 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
   @override
   Widget build(BuildContext context) {
     final mapStyle = ref.watch(mapStyleProvider);
+    final topSafeArea = MediaQuery.paddingOf(context).top;
     final bottomSafeArea = MediaQuery.paddingOf(context).bottom;
     final navBarHeight = 84.0;
     final totalBottomNavSpace = bottomSafeArea + navBarHeight;
+    final totalTopSpace = topSafeArea > 0 ? topSafeArea + 12.0 : 16.0;
 
     return ListView(
-      padding: EdgeInsets.fromLTRB(17, 14, 17, totalBottomNavSpace + 30),
+      padding: EdgeInsets.fromLTRB(17, totalTopSpace, 17, totalBottomNavSpace + 30),
       children: [
         _CreatorHeader(onBack: () => context.go('/creator')),
             const SizedBox(height: 28),

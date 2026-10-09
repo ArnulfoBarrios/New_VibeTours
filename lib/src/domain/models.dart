@@ -265,6 +265,7 @@ class Tour {
     this.additionalInfo = TourAdditionalInfo.standard,
     this.matchAffinity,
     this.startDate,
+    this.itineraryType = '',
   });
 
   final String id;
@@ -310,6 +311,9 @@ class Tour {
   final TourAdditionalInfo additionalInfo;
   final int? matchAffinity;
   final DateTime? startDate;
+  /// AI itinerary subtype (for example, coastal_islands), separate from the
+  /// public-facing TourType category.
+  final String itineraryType;
 
   Tour copyWith({
     String? id,
@@ -355,6 +359,7 @@ class Tour {
     TourBudget? budget,
     TourAdditionalInfo? additionalInfo,
     int? matchAffinity,
+    String? itineraryType,
   }) => Tour(
     id: id ?? this.id,
     ownerId: ownerId ?? this.ownerId,
@@ -399,6 +404,7 @@ class Tour {
     additionalInfo: additionalInfo ?? this.additionalInfo,
     matchAffinity: matchAffinity ?? this.matchAffinity,
     startDate: startDate ?? this.startDate,
+    itineraryType: itineraryType ?? this.itineraryType,
   );
 
   GeoPoint get center => stops.isEmpty
@@ -421,6 +427,7 @@ class Tour {
     'nombre_tour': title,
     'resumen_corto': shortSummary.isEmpty ? description : shortSummary,
     'tipo_tour': tourTypeLabel(type),
+    'tipo_recorrido': itineraryType,
     'fecha_inicio': startDate?.toIso8601String(),
     'subcategorias': subcategories.isEmpty ? tags : subcategories,
     'descripcion_tour': description,

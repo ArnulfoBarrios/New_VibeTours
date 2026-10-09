@@ -384,6 +384,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  void _showPremiumComingSoonModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => const _PremiumComingSoonSheet(),
+    );
+  }
+
   void _showCurrencySelection(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -641,7 +653,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final user = ref.watch(authUserProvider).valueOrNull;
+    final userAsync = ref.watch(authUserProvider);
+    if (userAsync.isLoading) {
+      return const Scaffold(
+        body: ProfileSkeletonLoader(),
+      );
+    }
+    final user = userAsync.valueOrNull;
     final metadata = user?.userMetadata ?? {};
     final rawFullName = metadata['custom_full_name']?.toString() ?? metadata['full_name']?.toString() ?? metadata['name']?.toString() ?? 'Usuario';
     final name = rawFullName.split(' ').first;
@@ -957,7 +975,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ],
                   ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0, curve: Curves.easeOutQuad),
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () => const _ProfileStatsSkeletonLoader(),
                   error: (err, stack) => Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
@@ -985,9 +1003,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(height: 24),
                 _DigitalPassportSection(
                   userName: name,
-                  stats: statsAsync.valueOrNull ?? {},
+                  stats: statsAsync.valueOrNull ?? const {},
                   hasCustomBio: (metadata['bio']?.toString().trim().isNotEmpty ?? false),
                   hasCustomAvatar: avatarUrl != null && avatarUrl.trim().isNotEmpty,
+                  isLoading: statsAsync.isLoading,
                 ),
                 const SizedBox(height: 24),
                 
@@ -1008,7 +1027,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         icon: Icons.workspace_premium_outlined,
                         iconColor: Colors.blue,
                         title: l10n.goPremium,
-                        onTap: () {},
+                        onTap: () => _showPremiumComingSoonModal(context),
                       ),
                       _SettingsListTile(
                         icon: Icons.monetization_on_outlined,
@@ -1092,16 +1111,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _SettingsListTile(
                         icon: Icons.code_rounded,
                         iconColor: Colors.blue,
-                        title: 'Licencias y Atribuciones',
-                        onTap: () {
-                          showLicensePage(
-                            context: context,
-                            applicationName: 'VIBETOURS',
-                            applicationVersion: '1.5.0',
-                            applicationLegalese:
-                                '© 2026 VibeTours. Todos los derechos reservados.\n\nDatos de mapas y geocodificación provistos por © OpenStreetMap contributors (licencia ODbL, https://www.openstreetmap.org/copyright).\nArtículos históricos y resúmenes provistos por Wikipedia bajo licencia Creative Commons CC BY-SA.\nOptimización de rutas asistida por TomTom y OSRM.',
-                          );
-                        },
+                        title: l10n.licensesTitle,
+                        onTap: () => context.push('/legal/licenses'),
                       ),
                     ],
                   ),
@@ -1899,6 +1910,222 @@ class _SettingsListTile extends StatelessWidget {
   }
 }
 
+class _PremiumComingSoonSheet extends StatelessWidget {
+  const _PremiumComingSoonSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 5,
+              margin: const EdgeInsets.only(bottom: 22),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFB703), Color(0xFFFB8500)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFB8500).withValues(alpha: 0.35),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.workspace_premium_rounded,
+                color: Colors.white,
+                size: 36,
+              ),
+            ).animate().scale(duration: 350.ms, curve: Curves.easeOutBack),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFB703).withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: const Color(0xFFFFB703).withValues(alpha: 0.35),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                l10n.premiumComingSoonBadge,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: const Color(0xFFFFB703),
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ).animate().fadeIn(delay: 80.ms, duration: 300.ms),
+            const SizedBox(height: 12),
+            Text(
+              l10n.premiumComingSoonTitle,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ).animate().fadeIn(delay: 120.ms, duration: 300.ms),
+            const SizedBox(height: 8),
+            Text(
+              l10n.premiumComingSoonDescription,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                height: 1.4,
+              ),
+            ).animate().fadeIn(delay: 160.ms, duration: 300.ms),
+            const SizedBox(height: 22),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.black.withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                ),
+              ),
+              child: Column(
+                children: [
+                  _PremiumFeatureRow(
+                    icon: Icons.bolt_rounded,
+                    iconColor: const Color(0xFFFFB703),
+                    title: l10n.premiumFeatureAiLimitsTitle,
+                    description: l10n.premiumFeatureAiLimitsDesc,
+                  ),
+                  Divider(
+                    height: 16,
+                    thickness: 0.6,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                  ),
+                  _PremiumFeatureRow(
+                    icon: Icons.alt_route_rounded,
+                    iconColor: AppTheme.primary,
+                    title: l10n.premiumFeatureRoutesTitle,
+                    description: l10n.premiumFeatureRoutesDesc,
+                  ),
+                  Divider(
+                    height: 16,
+                    thickness: 0.6,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                  ),
+                  _PremiumFeatureRow(
+                    icon: Icons.rocket_launch_rounded,
+                    iconColor: AppTheme.violet,
+                    title: l10n.premiumFeaturePriorityTitle,
+                    description: l10n.premiumFeaturePriorityDesc,
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(delay: 200.ms, duration: 300.ms).slideY(begin: 0.04, end: 0),
+            const SizedBox(height: 22),
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 0,
+              ),
+              child: Text(
+                l10n.premiumUnderstoodBtn,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+            ).animate().fadeIn(delay: 240.ms, duration: 300.ms),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumFeatureRow extends StatelessWidget {
+  const _PremiumFeatureRow({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: iconColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ThemeToggleTile extends ConsumerWidget {
   const _ThemeToggleTile();
 
@@ -2156,15 +2383,18 @@ class _DigitalPassportSection extends StatelessWidget {
   final Map<String, dynamic> stats;
   final bool hasCustomBio;
   final bool hasCustomAvatar;
+  final bool isLoading;
 
   const _DigitalPassportSection({
     required this.userName,
     required this.stats,
     this.hasCustomBio = false,
     this.hasCustomAvatar = false,
+    this.isLoading = false,
   });
 
   void _openAchievementsScreen(BuildContext context) {
+    if (isLoading) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AchievementsScreen(
@@ -2300,6 +2530,7 @@ class _DigitalPassportSection extends StatelessWidget {
                         accentColor: AppTheme.primary,
                         value: '$totalKmWalked km',
                         label: l10n.statsTravelled,
+                        isLoading: isLoading,
                       ),
                     ),
                     VerticalDivider(
@@ -2313,6 +2544,7 @@ class _DigitalPassportSection extends StatelessWidget {
                         accentColor: AppTheme.violet,
                         value: '$totalStopsExplored',
                         label: l10n.statsStops,
+                        isLoading: isLoading,
                       ),
                     ),
                     VerticalDivider(
@@ -2323,12 +2555,13 @@ class _DigitalPassportSection extends StatelessWidget {
                     Expanded(
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
-                        onTap: () => _openAchievementsScreen(context),
+                        onTap: isLoading ? null : () => _openAchievementsScreen(context),
                         child: _PassportStat(
                           icon: Icons.workspace_premium_rounded,
                           accentColor: Colors.amber.shade700,
                           value: '$unlockedCount / ${badges.length}',
                           label: l10n.statsBadges,
+                          isLoading: isLoading,
                         ),
                       ),
                     ),
@@ -2338,7 +2571,7 @@ class _DigitalPassportSection extends StatelessWidget {
               const SizedBox(height: 18),
               InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => _openAchievementsScreen(context),
+                onTap: isLoading ? null : () => _openAchievementsScreen(context),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
@@ -2351,44 +2584,65 @@ class _DigitalPassportSection extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Progreso de medallas ($unlockedCount/${badges.length})',
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                          if (isLoading)
+                            const SkeletonBox(
+                              height: 14,
+                              width: 140,
+                              borderRadius: BorderRadius.all(Radius.circular(4)),
+                            )
+                          else
+                            Text(
+                              'Progreso de medallas ($unlockedCount/${badges.length})',
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                '${(progressValue * 100).round()}%',
-                                style: const TextStyle(
-                                  color: AppTheme.primary,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
+                          if (isLoading)
+                            const SkeletonBox(
+                              height: 14,
+                              width: 36,
+                              borderRadius: BorderRadius.all(Radius.circular(4)),
+                            )
+                          else
+                            Row(
+                              children: [
+                                Text(
+                                  '${(progressValue * 100).round()}%',
+                                  style: const TextStyle(
+                                    color: AppTheme.primary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                size: 16,
-                                color: AppTheme.primary,
-                              ),
-                            ],
-                          ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 16,
+                                  color: AppTheme.primary,
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: progressValue,
-                          minHeight: 6,
-                          backgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
-                          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                      if (isLoading)
+                        const SkeletonBox(
+                          height: 6,
+                          width: double.infinity,
+                          borderRadius: BorderRadius.all(Radius.circular(6)),
+                        )
+                      else
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: progressValue,
+                            minHeight: 6,
+                            backgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                            valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -2406,68 +2660,94 @@ class _DigitalPassportSection extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            TextButton.icon(
-              onPressed: () => _openAchievementsScreen(context),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              icon: const Icon(Icons.grid_view_rounded, size: 15, color: AppTheme.primary),
-              label: Text(
-                'Ver los ${badges.length} logros',
-                style: const TextStyle(
-                  color: AppTheme.primary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
+            if (isLoading)
+              const SkeletonBox(
+                height: 16,
+                width: 96,
+                borderRadius: BorderRadius.all(Radius.circular(6)),
+              )
+            else
+              TextButton.icon(
+                onPressed: () => _openAchievementsScreen(context),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.grid_view_rounded, size: 15, color: AppTheme.primary),
+                label: Text(
+                  'Ver los ${badges.length} logros',
+                  style: const TextStyle(
+                    color: AppTheme.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (int i = 0; i < previewBadges.take(6).length; i++) ...[
-                if (i > 0) const SizedBox(width: 10),
-                _BadgeChip(
-                  badge: previewBadges[i],
-                  onTap: () => _openAchievementsScreen(context),
-                ),
-              ],
-              const SizedBox(width: 10),
-              InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => _openAchievementsScreen(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.arrow_forward_rounded, size: 18, color: AppTheme.primary),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Ver todos (${badges.length})',
-                        style: const TextStyle(
-                          color: AppTheme.primary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+        if (isLoading)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            child: Row(
+              children: List.generate(
+                4,
+                (i) => Padding(
+                  padding: EdgeInsets.only(right: i == 3 ? 0 : 10),
+                  child: const SkeletonBox(
+                    height: 52,
+                    width: 130,
+                    borderRadius: BorderRadius.all(Radius.circular(16)),
                   ),
                 ),
               ),
-            ],
+            ),
+          )
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (int i = 0; i < previewBadges.take(6).length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  _BadgeChip(
+                    badge: previewBadges[i],
+                    onTap: () => _openAchievementsScreen(context),
+                  ),
+                ],
+                const SizedBox(width: 10),
+                InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => _openAchievementsScreen(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.arrow_forward_rounded, size: 18, color: AppTheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Ver todos (${badges.length})',
+                          style: const TextStyle(
+                            color: AppTheme.primary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -2478,12 +2758,14 @@ class _PassportStat extends StatelessWidget {
   final Color accentColor;
   final String value;
   final String label;
+  final bool isLoading;
 
   const _PassportStat({
     required this.icon,
     required this.accentColor,
     required this.value,
     required this.label,
+    this.isLoading = false,
   });
 
   @override
@@ -2501,14 +2783,21 @@ class _PassportStat extends StatelessWidget {
           child: Icon(icon, color: accentColor, size: 18),
         ),
         const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w900,
-            fontSize: 15,
+        if (isLoading)
+          const SkeletonBox(
+            height: 18,
+            width: 48,
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+          )
+        else
+          Text(
+            value,
+            style: TextStyle(
+              color: theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+            ),
           ),
-        ),
         const SizedBox(height: 2),
         Text(
           label,
@@ -2619,3 +2908,120 @@ class _BadgeChip extends StatelessWidget {
     );
   }
 }
+
+class _ProfileStatsSkeletonLoader extends StatelessWidget {
+  const _ProfileStatsSkeletonLoader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(
+          child: SkeletonBox(
+            height: 104,
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+          ),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: SkeletonBox(
+            height: 104,
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+          ),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: SkeletonBox(
+            height: 104,
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class ProfileSkeletonLoader extends StatelessWidget {
+  const ProfileSkeletonLoader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Column(
+        children: [
+          Container(
+            height: 280,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppTheme.primary,
+                  AppTheme.violet.withValues(alpha: 0.8),
+                  AppTheme.primaryDeep,
+                ],
+              ),
+            ),
+            child: const Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SkeletonBox(
+                  height: 96,
+                  width: 96,
+                  borderRadius: BorderRadius.all(Radius.circular(48)),
+                ),
+                SizedBox(height: 12),
+                SkeletonBox(
+                  height: 24,
+                  width: 140,
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                ),
+                SizedBox(height: 8),
+                SkeletonBox(
+                  height: 14,
+                  width: 180,
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
+                ),
+                SizedBox(height: 24),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 20, 16, 40),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Bio panel placeholder
+                SkeletonBox(
+                  height: 90,
+                  width: double.infinity,
+                  borderRadius: BorderRadius.all(Radius.circular(20)),
+                ),
+                SizedBox(height: 16),
+                // 3 Stats cards placeholder
+                _ProfileStatsSkeletonLoader(),
+                SizedBox(height: 24),
+                // Digital Passport placeholder
+                SkeletonBox(
+                  height: 240,
+                  width: double.infinity,
+                  borderRadius: BorderRadius.all(Radius.circular(24)),
+                ),
+                SizedBox(height: 24),
+                // Settings/Preferences panel placeholder
+                SkeletonBox(
+                  height: 160,
+                  width: double.infinity,
+                  borderRadius: BorderRadius.all(Radius.circular(20)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

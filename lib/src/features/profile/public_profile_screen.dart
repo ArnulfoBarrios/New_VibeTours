@@ -11,6 +11,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../state/app_state.dart';
 import 'achievements_screen.dart';
 import 'achievements_service.dart';
+import 'profile_screen.dart';
 
 class PublicProfileScreen extends ConsumerWidget {
   const PublicProfileScreen({
@@ -128,9 +129,7 @@ class PublicProfileScreen extends ConsumerWidget {
           );
         },
         loading: () => const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
+          body: ProfileSkeletonLoader(),
         ),
         error: (error, _) => Scaffold(
           appBar: AppBar(

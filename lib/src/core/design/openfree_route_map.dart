@@ -25,6 +25,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
     this.myLocationEnabled = false,
     this.useRoadRouting = true,
     this.showPortWaypoints = true,
+    this.coastalIslands = false,
     this.routeOverride,
     this.currentLocation,
     this.trackingMode = false,
@@ -48,6 +49,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
     bool myLocationEnabled = false,
     bool useRoadRouting = true,
     bool showPortWaypoints = true,
+    bool coastalIslands = false,
     RoadRouteResult? routeOverride,
     GeoPoint? currentLocation,
     bool trackingMode = false,
@@ -71,6 +73,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
       myLocationEnabled: myLocationEnabled,
       useRoadRouting: useRoadRouting,
       showPortWaypoints: showPortWaypoints,
+      coastalIslands: coastalIslands,
       routeOverride: routeOverride,
       currentLocation: currentLocation,
       trackingMode: trackingMode,
@@ -94,6 +97,7 @@ class OpenFreeRouteMap extends ConsumerStatefulWidget {
   final bool myLocationEnabled;
   final bool useRoadRouting;
   final bool showPortWaypoints;
+  final bool coastalIslands;
   final RoadRouteResult? routeOverride;
   final GeoPoint? currentLocation;
   final bool trackingMode;
@@ -392,7 +396,8 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     final routeChanged =
         !_arePointsEqual(oldWidget.points, widget.points) ||
         oldWidget.styleUrl != widget.styleUrl ||
-        oldWidget.routeOverride != widget.routeOverride;
+        oldWidget.routeOverride != widget.routeOverride ||
+        oldWidget.coastalIslands != widget.coastalIslands;
     
     final locationChanged = oldWidget.currentLocation != widget.currentLocation;
     final headingChanged = oldWidget.trackingHeading != widget.trackingHeading;
@@ -784,7 +789,10 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
     }
 
     try {
-      final resolvedRoute = await _routeService.resolveRoute(widget.points);
+      final resolvedRoute = await _routeService.resolveRoute(
+        widget.points,
+        coastalIslands: widget.coastalIslands,
+      );
       if (!mounted || requestId != _drawRequest) return;
       
       if (resolvedRoute.geometry.isNotEmpty) {
@@ -935,9 +943,28 @@ class _OpenFreeRouteMapState extends ConsumerState<OpenFreeRouteMap>
 
     if (animId != _currentAnimationId || !mounted) return;
 
-    // Maritime segments are informational only. They must never be painted
-    // as a line in the general map because a straight port-to-port segment
-    // looks like a road or walking route crossing the water.
+    // Draw the boat leg separately from road geometry so users can see the
+    // sea route without making it look like a road or hiking trail.
+    for (final maritimeSegment in route.maritimeSegments) {
+      if (animId != _currentAnimationId || !mounted) return;
+      final segmentPoints = [
+        for (final point in maritimeSegment)
+          LatLng(point.latitude, point.longitude),
+      ];
+      if (segmentPoints.length > 1) {
+        try {
+          await controller.addLine(
+            LineOptions(
+              geometry: segmentPoints,
+              lineColor: '#236FC4',
+              lineWidth: 5,
+              lineOpacity: 0.9,
+              lineJoin: 'round',
+            ),
+          );
+        } catch (_) {}
+      }
+    }
 
     // Draw walking / hiking trail approach segments with Google Maps-style
     // dotted trail and hiking boots icon. The route service only supplies

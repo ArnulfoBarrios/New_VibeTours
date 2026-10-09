@@ -660,10 +660,16 @@ class _MetaPill extends StatelessWidget {
 }
 
 class SkeletonBox extends StatefulWidget {
-  const SkeletonBox({super.key, this.height, this.width});
+  const SkeletonBox({
+    super.key,
+    this.height,
+    this.width,
+    this.borderRadius,
+  });
 
   final double? height;
   final double? width;
+  final BorderRadiusGeometry? borderRadius;
 
   @override
   State<SkeletonBox> createState() => _SkeletonBoxState();
@@ -704,7 +710,7 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
           height: widget.height,
           width: widget.width,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: widget.borderRadius ?? BorderRadius.circular(20),
             gradient: LinearGradient(
               begin: Alignment(slideValue - 1.0, 0.0),
               end: Alignment(slideValue + 1.0, 0.0),

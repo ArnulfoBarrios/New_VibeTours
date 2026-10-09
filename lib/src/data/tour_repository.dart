@@ -751,6 +751,7 @@ class TourRepository {
       country: json['country']?.toString() ?? request.country,
       city: json['city']?.toString() ?? request.city,
       type: request.type,
+      itineraryType: json['tipo_recorrido']?.toString() ?? request.tourType ?? '',
       description:
           json['descripcion_tour']?.toString() ??
           json['description']?.toString() ??
@@ -933,6 +934,14 @@ class TourRepository {
       country: country.ifEmpty('Mundo'),
       city: city.ifEmpty('Mundo'),
       type: _tourTypeFromText(source['tipo_tour'] ?? json['type']),
+      itineraryType: (source['tipo_recorrido'] ??
+              json['tipo_recorrido'] ??
+              (json['creation_json'] is Map
+                  ? (json['creation_json'] as Map)['tipo_recorrido']
+                  : null) ??
+              json['tour_type'])
+          ?.toString() ??
+          '',
       description:
           source['descripcion_tour']?.toString() ??
           json['description']?.toString() ??

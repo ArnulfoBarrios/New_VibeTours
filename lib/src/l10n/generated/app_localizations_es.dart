@@ -2052,4 +2052,78 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get enableLocationBtn => 'Activar ubicación';
+
+  @override
+  String get licensesTitle => 'Licencias y Atribuciones';
+
+  @override
+  String get licensesSubtitle =>
+      'Software de código abierto y datos que impulsan VIBETOURS';
+
+  @override
+  String get licensesSearchPlaceholder => 'Buscar librería o paquete...';
+
+  @override
+  String get licensesOpenSourceSection => 'Librerías de código abierto';
+
+  @override
+  String get licensesDataAttributions => 'Atribuciones y Datos Abiertos';
+
+  @override
+  String get licensesCountSingular => '1 licencia';
+
+  @override
+  String licensesCountPlural(int count) {
+    return '$count licencias';
+  }
+
+  @override
+  String licensesNoResults(String query) {
+    return 'No se encontraron licencias para \"$query\"';
+  }
+
+  @override
+  String get licensesCopy => 'Copiar texto';
+
+  @override
+  String get licensesCopied => 'Texto de licencia copiado al portapapeles';
+
+  @override
+  String licensesAllPackagesCount(int count) {
+    return '$count paquetes instalados';
+  }
+
+  @override
+  String get premiumComingSoonBadge => 'PRÓXIMAMENTE';
+
+  @override
+  String get premiumComingSoonTitle => 'VIBETOURS Premium';
+
+  @override
+  String get premiumComingSoonDescription =>
+      'Estamos preparando nuestro plan Premium para llevar tus viajes al siguiente nivel. Estará disponible en una próxima actualización.';
+
+  @override
+  String get premiumFeatureAiLimitsTitle => 'Límites de IA extendidos';
+
+  @override
+  String get premiumFeatureAiLimitsDesc =>
+      'Mayor cantidad de itinerarios y consultas diarias asistidas por inteligencia artificial.';
+
+  @override
+  String get premiumFeatureRoutesTitle => 'Tours más completos';
+
+  @override
+  String get premiumFeatureRoutesDesc =>
+      'Capacidad para rutas más largas y paradas detalladas.';
+
+  @override
+  String get premiumFeaturePriorityTitle => 'Acceso prioritario';
+
+  @override
+  String get premiumFeaturePriorityDesc =>
+      'Tiempos de respuesta más rápidos y acceso anticipado a nuevas herramientas.';
+
+  @override
+  String get premiumUnderstoodBtn => '¡Entendido!';
 }

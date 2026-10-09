@@ -8,6 +8,13 @@ import { resolvePlaceWithCascade, resolveProviderDestinationCenter, searchGeoapi
 import { fetchWithProviderRetry } from './provider-http.js'
 import { generateSpeechAudio } from './ttsService.js'
 import { lookupCachedPlace, lookupCachedPlacesForCity, getCachedCityCatalog, saveCachedPlacesBatch } from './places-cache-service.js'
+import {
+  assignCoastalIslandDays,
+  isCoastalArchipelagoOverview,
+  isCoastalIslandsTour,
+  isCoastalMappedTouristStop,
+  isCoastalRestaurant
+} from './coastal-islands-policy.js'
 
 import {
   enrichPlaceWithOpenData,
@@ -655,20 +662,24 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
   return null
 }
 
-export async function filterChatSpecificPlacesByOsm(places = [], city = '', country = '', selectedHotel = null) {
+export async function filterChatSpecificPlacesByOsm(places = [], city = '', country = '', selectedHotel = null, options = {}) {
+  const coastalIslands = isCoastalIslandsTour(options)
   const input = Array.isArray(places) ? places : []
   const settled = await Promise.all(input.map(async place => {
     const rawName = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
     if (!rawName || isTemporalOrDurationPhrase(rawName) || isChatHotelStop(rawName, selectedHotel) || isUnmappedOrClosedVenue(rawName)) {
       return null
     }
+    if (coastalIslands && (isCoastalArchipelagoOverview(rawName) || isCoastalTransferName(rawName))) return null
 
     // If place is already an approved itinerary stop from history, preserve it without blocking on network geocoding
     if (typeof place === 'object' && (place.dia != null || place.day != null || place.coordinatesVerified)) {
+      if (coastalIslands && isCoastalMappedTouristStop(place)) return place
       const cached = await lookupCachedPlace(rawName, city).catch(() => null)
       if (cached && Number.isFinite(cached.latitude)) {
-        return {
+        const resolved = {
           ...place,
+          ...cached,
           name: rawName,
           latitude: cached.latitude,
           longitude: cached.longitude,
@@ -677,8 +688,9 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
           coordinateSource: cached.coordinateSource || 'cache',
           coordinatesVerified: true
         }
+        return !coastalIslands || isCoastalMappedTouristStop(resolved) ? resolved : null
       }
-      return place
+      if (!coastalIslands) return place
     }
 
     const geo = await resolveOsmBackedChatPlace(place, city, country, selectedHotel)
@@ -686,9 +698,9 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
       return null
     }
 
-    if (typeof place === 'string') return geo.name || rawName
-    return {
+    const resolved = {
       ...place,
+      ...geo,
       name: String(place?.name || geo.name || rawName).trim(),
       latitude: geo.latitude,
       longitude: geo.longitude,
@@ -700,15 +712,23 @@ export async function filterChatSpecificPlacesByOsm(places = [], city = '', coun
       type: place.type || geo.type || '',
       isReferentialLocation: Boolean(geo.isReferentialLocation)
     }
+    if (coastalIslands && !isCoastalMappedTouristStop(resolved)) return null
+    if (typeof place === 'string') return coastalIslands ? resolved : (geo.name || rawName)
+    return resolved
   }))
 
-  return deduplicateChatSpecificPlaces(
+  const verified = deduplicateChatSpecificPlaces(
     settled.filter(Boolean).filter(place => {
       const name = typeof place === 'string' ? place : place?.name
       return !isChatHotelStop(name, selectedHotel)
     }),
     city
   )
+  return coastalIslands ? verified.filter(isCoastalMappedTouristStop) : verified
+}
+
+function isCoastalTransferName(name) {
+  return /\b(puerto|muelle|embarcadero|marina|terminal mar[ií]timo|ferry terminal)\b/i.test(String(name || ''))
 }
 
 function itineraryBulletPlaceName(line) {
@@ -2745,7 +2765,13 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   }
 
   if (hasCity && !isLocationToDestination && Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0) {
-    known.specificPlaces = await filterChatSpecificPlacesByOsm(known.specificPlaces, destName, destCountry, known.selectedHotel)
+    known.specificPlaces = await filterChatSpecificPlacesByOsm(
+      known.specificPlaces,
+      destName,
+      destCountry,
+      known.selectedHotel,
+      { tourType: known.tourType }
+    )
   }
   let hasDurationOrDates = Boolean(known.durationDays || known.datesSeason)
   const knownPlacesList = (Array.isArray(known.specificPlaces) && known.specificPlaces.length > 0)
@@ -2771,6 +2797,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
   // Grounding Data: Instant cache retrieval or non-blocking background pre-warming
   let realCatalog = null
   if (hasCity && !isLocationToDestination) {
+    const coastalIslands = isCoastalIslandsTour(known)
     const reqDays = Number(known.durationDays) || 0
     const cacheKey = `catalog_osm_v5_${destName.toLowerCase()}_${(destCountry || '').toLowerCase()}_${reqDays >= 8 ? reqDays : 'std'}`
     const cached = destinationCatalogCache.get(cacheKey)
@@ -2828,7 +2855,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         if (needsImmediate) {
           const cachedCatalog = await getCachedCityCatalog(destName).catch(() => null)
           const hasSufficientPlaces = (cachedCatalog?.places?.length || 0) >= Math.min(6, minRequiredPlaces)
-          const hasSufficientRests = (cachedCatalog?.restaurants?.length || 0) >= Math.min(3, minRequiredRests)
+          const hasSufficientRests = coastalIslands || (cachedCatalog?.restaurants?.length || 0) >= Math.min(3, minRequiredRests)
           if (cachedCatalog && hasSufficientPlaces && hasSufficientRests) {
             realCatalog = cachedCatalog
           } else {
@@ -2897,6 +2924,14 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         const cleanHotel = rawHotel.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
         known.selectedHotel = cleanHotel
         known.accommodationStatus = 'Hotel elegido'
+      }
+    }
+
+    if (isCoastalIslandsTour(known) && realCatalog) {
+      realCatalog = {
+        ...realCatalog,
+        places: (realCatalog.places || []).filter(isCoastalMappedTouristStop),
+        restaurants: (realCatalog.restaurants || []).filter(isCoastalMappedTouristStop),
       }
     }
   }
@@ -4227,6 +4262,7 @@ REGLAS CRÍTICAS DEL ITINERARIO:
       * PROHIBIDO REPETIR LUGARES O ALIAS: Si ya incluiste Gran Malecón del Río, ESTRICTAMENTE PROHIBIDO volver a colocar Malecón del Río. Cada parada debe ser un lugar físico completamente diferente.
       * EN TOURS DE VARIOS DÍAS (2 O MÁS DÍAS): Cada día debe estructurarse con 2 o 3 atractivos turísticos y 1 restaurante (3 o 4 paradas por día).
       * ESTRICTAMENTE PROHIBIDO llenar un día con 2 o 3 restaurantes y 0 atractivos turísticos.
+${isCoastalIslandsTour(known) ? `   - REGLAS EXCLUSIVAS PARA COASTAL_ISLANDS: Distribuye las islas específicas en días distintos; no programes dos islas diferentes el mismo día. "Islas de San Bernardo" es el nombre del archipiélago, no una parada: usa islas individuales verificadas. Puertos, muelles y embarcaderos son puntos de transbordo, nunca atractivos turísticos. Recomienda restaurantes solo si el catálogo confirma un nodo OSM real; si no hay uno, omite la parada gastronómica en vez de inventarla. No uses coordenadas ni nombres sin registro cartográfico.` : ''}
 6. REGLA ESTRICTA DE UNICIDAD GLOBAL INTER-DÍAS (CERO PARADAS REPETIDAS):
    - Cada atractivo turístico, monumento, museo, parque o restaurante debe aparecer exactamente UNA SOLA VEZ en TODO el itinerario completo (Día 1 a Día N).
    - PROHIBIDO TERMINANTEMENTE repetir el mismo lugar o restaurante en dos días distintos. Si ya visitaron un restaurante o atractivo en días previos, NO puede volver a aparecer en los días posteriores. Cada día DEBE tener paradas nuevas, diferentes y auténticas.
@@ -4417,7 +4453,8 @@ REGLAS PARA "accommodationStatus":
         parsedExtracted.specificPlaces,
         destName,
         destCountry,
-        parsedExtracted.selectedHotel || known.selectedHotel
+        parsedExtracted.selectedHotel || known.selectedHotel,
+        { tourType: known.tourType }
       )
     }
 
@@ -4602,13 +4639,23 @@ REGLAS PARA "accommodationStatus":
         }
       }
       const dName = destName || known.destination || 'tu destino'
+      const isCoastalItinerary = isCoastalIslandsTour(known)
       const isExpressExpandedRecon = daysCount === 1 && (isUserAskingForMoreStops || isGenericMoreStopsRequest)
       const perDayPlacesCount = isExpressExpandedRecon ? 5 : (isGenericMoreStopsRequest ? 3 : (daysCount === 1 ? 4 : 2))
       const totalPlacesNeeded = daysCount * perDayPlacesCount
 
-      const cat = (realCatalog && (realCatalog.places || []).length >= totalPlacesNeeded && (realCatalog.restaurants || []).length >= daysCount)
+      let cat = isCoastalItinerary
         ? realCatalog
-        : (hasCity ? await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: daysCount }).catch(() => null) : null) || realCatalog
+        : (realCatalog && (realCatalog.places || []).length >= totalPlacesNeeded && (realCatalog.restaurants || []).length >= daysCount)
+          ? realCatalog
+          : (hasCity ? await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: daysCount }).catch(() => null) : null) || realCatalog
+      if (isCoastalItinerary && cat) {
+        cat = {
+          ...cat,
+          places: (cat.places || []).filter(isCoastalMappedTouristStop),
+          restaurants: (cat.restaurants || []).filter(isCoastalMappedTouristStop),
+        }
+      }
 
       // 1. Recolectar y enriquecer restaurantes para asegurar variedad y cantidad suficiente
       const rawRestsPool = [
@@ -4619,6 +4666,7 @@ REGLAS PARA "accommodationStatus":
       const validRests = rawRestsPool.filter(r => {
         const rName = typeof r === 'string' ? r : (r?.name || '')
         if (!rName || rName.trim().length === 0) return false
+        if (isCoastalItinerary && !isCoastalMappedTouristStop(r)) return false
         if (isGenericFacilityName(rName) || isNonTouristFacility({ name: rName }) || isUnmappedOrClosedVenue(rName)) return false
         if (/\b(zool[óo]gico|zoo|acuario|museo|catedral|iglesia|parque|carnaval|estadio)\b/i.test(rName)) return false
         return true
@@ -4632,7 +4680,7 @@ REGLAS PARA "accommodationStatus":
       }
 
       // Si faltan restaurantes para cubrir todos los días, enriquecer con la ciudad cabecera o búsquedas geográficas acotadas
-      if (uniqueRests.length < daysCount) {
+      if (!isCoastalItinerary && uniqueRests.length < daysCount) {
         const hubCity = known.city && known.city !== dName ? known.city : null
         if (hubCity) {
           const hubCat = await getRealDestinationCatalog(hubCity, destCountry).catch(() => null)
@@ -4644,7 +4692,7 @@ REGLAS PARA "accommodationStatus":
           }
         }
       }
-      if (uniqueRests.length < daysCount) {
+      if (!isCoastalItinerary && uniqueRests.length < daysCount) {
         let dLat = cat?.latitude || known.latitude || null
         let dLon = cat?.longitude || known.longitude || null
         if (!dLat || !dLon) {
@@ -4691,7 +4739,7 @@ REGLAS PARA "accommodationStatus":
           }
         }
       }
-      if (uniqueRests.length < daysCount) {
+      if (!isCoastalItinerary && uniqueRests.length < daysCount) {
         const dynamicProfile = await fetchDynamicDestinationProfile(dName, destCountry).catch(() => null)
         const verifiedProfileRestaurants = await verifiedCatalogEntries(
           dynamicProfile?.restaurants || [],
@@ -4726,11 +4774,12 @@ REGLAS PARA "accommodationStatus":
       // 2. Obtener atractivos del catálogo dinámico y enriquecer si faltan paradas, EXCLUYENDO rigurosamente restaurantes
       let catPlaces = (cat?.places || []).filter(p => {
         const pName = typeof p === 'string' ? p : (p?.name || '')
+        if (isCoastalItinerary && !isCoastalMappedTouristStop(p)) return false
         if (!pName || isGenericFacilityName(pName) || isUnmappedOrClosedVenue(pName) || isNonTouristFacility({ name: pName }) || isFoodOrDrinkEstablishment(pName) || isLodgingName(pName)) return false
         if (uniqueRests.some(r => arePlacesSimilar(r.name, pName))) return false
         return true
       })
-      if (catPlaces.length < totalPlacesNeeded) {
+      if (!isCoastalItinerary && catPlaces.length < totalPlacesNeeded) {
         const cleanKey = dName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
         const corridorPlaces = DESTINATION_ICONIC_LANDMARKS[cleanKey] || []
         const verifiedCorridorPlaces = await verifiedCatalogEntries(
@@ -4750,9 +4799,15 @@ REGLAS PARA "accommodationStatus":
         }
       }
       let verifiedDynamicIconics = []
-      if (catPlaces.length < totalPlacesNeeded) {
+      if (!isCoastalItinerary && catPlaces.length < totalPlacesNeeded) {
         const dynamicIconics = await fetchCityIconicLandmarks(dName, destCountry, null, null, totalPlacesNeeded).catch(() => [])
-        verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(dynamicIconics, dName, destCountry)
+        verifiedDynamicIconics = await filterChatSpecificPlacesByOsm(
+          dynamicIconics,
+          dName,
+          destCountry,
+          null,
+          { tourType: known.tourType }
+        )
         for (const di of verifiedDynamicIconics) {
           const diName = typeof di === 'string' ? di : (di?.name || '')
           if (diName && !isGenericFacilityName(diName) && !isUnmappedOrClosedVenue(diName) && !isNonTouristFacility({ name: diName }) && !isFoodOrDrinkEstablishment(diName) && !isLodgingName(diName) && !catPlaces.some(cp => arePlacesSimilar(typeof cp === 'string' ? cp : cp.name, diName)) && !uniqueRests.some(r => arePlacesSimilar(r.name, diName))) {
@@ -4780,7 +4835,7 @@ REGLAS PARA "accommodationStatus":
           }
         }
       }
-      if (catPlaces.length < totalPlacesNeeded) {
+      if (!isCoastalItinerary && catPlaces.length < totalPlacesNeeded) {
         let dLat = cat?.latitude || known.latitude || null
         let dLon = cat?.longitude || known.longitude || null
         if (!dLat || !dLon) {
@@ -4838,11 +4893,21 @@ REGLAS PARA "accommodationStatus":
         }
       }
 
-      const cleanExplicitPool = placeNames.filter(p => {
+      let cleanExplicitPool = placeNames.filter(p => {
         if (!p || isGenericFacilityName(p) || isUnmappedOrClosedVenue(p) || isNonTouristFacility({ name: p }) || isFoodOrDrinkEstablishment(p) || isLodgingName(p)) return false
         if (uniqueRests.some(r => arePlacesSimilar(r.name, p))) return false
         return true
       })
+      if (isCoastalItinerary) {
+        const structuredCandidates = [
+          ...catPlaces,
+          ...(parsedExtracted.specificPlaces || []),
+          ...(known.specificPlaces || [])
+        ].filter(item => item && typeof item === 'object' && isCoastalMappedTouristStop(item))
+        cleanExplicitPool = placeNames
+          .map(name => structuredCandidates.find(candidate => arePlacesSimilar(candidate.name, name)))
+          .filter(Boolean)
+      }
       const rawAttractions = [...cleanExplicitPool, ...catPlaces]
       const uniqueAttractions = deduplicateChatSpecificPlaces(rawAttractions, dName)
         .map(p => typeof p === 'string' ? p : p.name)
@@ -6157,6 +6222,7 @@ export async function planWithOpenAI({
   city,
   durationHours,
   type,
+  tourType = null,
   language = 'es',
   prompt = '',
   touristProfileSummary = '',
@@ -6171,6 +6237,9 @@ export async function planWithOpenAI({
 
   const cleanCity = cleanAdministrativeCityName(city || destination || '')
   const targetCountry = country || 'Colombia'
+  const coastalRules = isCoastalIslandsTour({ tourType })
+    ? `\n10. REGLAS COASTAL_ISLANDS: Una isla específica por día, siempre que haya suficientes días; nunca uses "Islas de San Bernardo" como parada, porque es el nombre del archipiélago. No incluyas puertos o muelles como visitas turísticas. Los restaurantes solo pueden ser candidatos del catálogo respaldados por un nodo OSM.`
+    : ''
 
   const totalDays = Math.max(1, Number(userPreferences?.durationDays || Math.ceil((durationHours || 24) / 24) || 1))
   const selectedPlaces = places.slice(0, 30).map((p, i) => ({
@@ -6282,7 +6351,7 @@ REGLAS DE CALIDAD:
 6. Para cada parada, redacta una narración de guía de voz inmersiva de 60 a 90 palabras, con la voz de una guía turística apasionada, joven, extrovertida y cálida, con ritmo fluido, pausas naturales y emoción genuina para narración de audio en vivo (TTS).
 7. Integra notas dinámicas de consejos y datos curiosos específicos por parada.
 8. REGLA ESTRICTA PARA 'mejor_epoca': Si el viaje cuenta con fechas o evento especial indicado (${defaultBestSeason !== 'Todo el año' ? `"${defaultBestSeason}"` : 'como un festival o mes específico'}), 'mejor_epoca' DEBE reflejar exactamente ese rango de fechas o festividad (ej: "${defaultBestSeason}"). De lo contrario, indica "Todo el año" (siempre con 'ñ').
-9. REGLA OBLIGATORIA PARA 'ubicacion.direccion': Para cada parada (especialmente restaurantes, locales gastronómicos, tiendas y cafés), DEBES proporcionar la dirección física real o el cruce de calles (ej: 'Cra. 49C # 76-80', 'Calle 72 con Cra. 53'). La identidad y las coordenadas finales serán tomadas por el backend desde el candidateId, no desde estos campos.`
+9. REGLA OBLIGATORIA PARA 'ubicacion.direccion': Para cada parada (especialmente restaurantes, locales gastronómicos, tiendas y cafés), DEBES proporcionar la dirección física real o el cruce de calles (ej: 'Cra. 49C # 76-80', 'Calle 72 con Cra. 53'). La identidad y las coordenadas finales serán tomadas por el backend desde el candidateId, no desde estos campos.${coastalRules}`
 
   // For tours with more than 4 stops, split into dynamic parallel chunks of max 4 places so generation completes in ~12-16s regardless of stops count
   if (selectedPlaces.length > 4) {
@@ -6297,7 +6366,7 @@ REGLAS DE CALIDAD:
         const isFirstChunk = idx === 0
         const chunkSystem = isFirstChunk
           ? system
-          : `Eres Tour Planner AI 🤖, el motor oficial de itinerarios de VibeTours.
+          : `Eres Tour Planner AI 🤖, el motor oficial de itinerarios de VibeTours.${coastalRules}
 Tu tarea es generar ÚNICAMENTE el bloque ${idx + 1} de paradas del itinerario para ${cleanCity}, ${targetCountry}.
 Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
 {

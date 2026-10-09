@@ -363,6 +363,8 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
                           child: OpenFreeRouteMap.fromStops(
                             stops: tour.stops,
                             styleUrl: mapStyle,
+                            coastalIslands:
+                                tour.itineraryType == 'coastal_islands',
                             height: 230,
                             fitPadding: const EdgeInsets.all(34),
                           ),

@@ -239,17 +239,9 @@ class LegalScreen extends StatelessWidget {
                           style: OutlinedButton.styleFrom(
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          onPressed: () {
-                            showLicensePage(
-                              context: context,
-                              applicationName: 'VIBETOURS',
-                              applicationVersion: '1.5.0',
-                              applicationLegalese:
-                                  '© 2026 VibeTours. Todos los derechos reservados.\n\nDatos de mapas provistos por © OpenStreetMap contributors (licencia ODbL).\nArtículos de Wikipedia bajo licencia CC BY-SA 4.0.',
-                            );
-                          },
+                          onPressed: () => context.push('/legal/licenses'),
                           icon: const Icon(Icons.code_rounded, size: 18),
-                          label: const Text('Ver licencias de código abierto'),
+                          label: Text(l10n.licensesOpenSourceSection),
                         ),
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(

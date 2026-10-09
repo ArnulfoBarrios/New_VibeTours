@@ -3746,6 +3746,132 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Activar ubicación'**
   String get enableLocationBtn;
+
+  /// No description provided for @licensesTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Licencias y Atribuciones'**
+  String get licensesTitle;
+
+  /// No description provided for @licensesSubtitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Software de código abierto y datos que impulsan VIBETOURS'**
+  String get licensesSubtitle;
+
+  /// No description provided for @licensesSearchPlaceholder.
+  ///
+  /// In es, this message translates to:
+  /// **'Buscar librería o paquete...'**
+  String get licensesSearchPlaceholder;
+
+  /// No description provided for @licensesOpenSourceSection.
+  ///
+  /// In es, this message translates to:
+  /// **'Librerías de código abierto'**
+  String get licensesOpenSourceSection;
+
+  /// No description provided for @licensesDataAttributions.
+  ///
+  /// In es, this message translates to:
+  /// **'Atribuciones y Datos Abiertos'**
+  String get licensesDataAttributions;
+
+  /// No description provided for @licensesCountSingular.
+  ///
+  /// In es, this message translates to:
+  /// **'1 licencia'**
+  String get licensesCountSingular;
+
+  /// No description provided for @licensesCountPlural.
+  ///
+  /// In es, this message translates to:
+  /// **'{count} licencias'**
+  String licensesCountPlural(int count);
+
+  /// No description provided for @licensesNoResults.
+  ///
+  /// In es, this message translates to:
+  /// **'No se encontraron licencias para \"{query}\"'**
+  String licensesNoResults(String query);
+
+  /// No description provided for @licensesCopy.
+  ///
+  /// In es, this message translates to:
+  /// **'Copiar texto'**
+  String get licensesCopy;
+
+  /// No description provided for @licensesCopied.
+  ///
+  /// In es, this message translates to:
+  /// **'Texto de licencia copiado al portapapeles'**
+  String get licensesCopied;
+
+  /// No description provided for @licensesAllPackagesCount.
+  ///
+  /// In es, this message translates to:
+  /// **'{count} paquetes instalados'**
+  String licensesAllPackagesCount(int count);
+
+  /// No description provided for @premiumComingSoonBadge.
+  ///
+  /// In es, this message translates to:
+  /// **'PRÓXIMAMENTE'**
+  String get premiumComingSoonBadge;
+
+  /// No description provided for @premiumComingSoonTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'VIBETOURS Premium'**
+  String get premiumComingSoonTitle;
+
+  /// No description provided for @premiumComingSoonDescription.
+  ///
+  /// In es, this message translates to:
+  /// **'Estamos preparando nuestro plan Premium para llevar tus viajes al siguiente nivel. Estará disponible en una próxima actualización.'**
+  String get premiumComingSoonDescription;
+
+  /// No description provided for @premiumFeatureAiLimitsTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Límites de IA extendidos'**
+  String get premiumFeatureAiLimitsTitle;
+
+  /// No description provided for @premiumFeatureAiLimitsDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Mayor cantidad de itinerarios y consultas diarias asistidas por inteligencia artificial.'**
+  String get premiumFeatureAiLimitsDesc;
+
+  /// No description provided for @premiumFeatureRoutesTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Tours más completos'**
+  String get premiumFeatureRoutesTitle;
+
+  /// No description provided for @premiumFeatureRoutesDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Capacidad para rutas más largas y paradas detalladas.'**
+  String get premiumFeatureRoutesDesc;
+
+  /// No description provided for @premiumFeaturePriorityTitle.
+  ///
+  /// In es, this message translates to:
+  /// **'Acceso prioritario'**
+  String get premiumFeaturePriorityTitle;
+
+  /// No description provided for @premiumFeaturePriorityDesc.
+  ///
+  /// In es, this message translates to:
+  /// **'Tiempos de respuesta más rápidos y acceso anticipado a nuevas herramientas.'**
+  String get premiumFeaturePriorityDesc;
+
+  /// No description provided for @premiumUnderstoodBtn.
+  ///
+  /// In es, this message translates to:
+  /// **'¡Entendido!'**
+  String get premiumUnderstoodBtn;
 }
 
 class _AppLocalizationsDelegate
