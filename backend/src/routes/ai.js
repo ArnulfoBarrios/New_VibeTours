@@ -162,6 +162,20 @@ function destinationKey(value) {
 }
 
 function applyTourType(input, extracted = null) {
+  const coastalPlaceNames = [
+    ...(Array.isArray(input?.specificPlaces) ? input.specificPlaces : []),
+    ...(Array.isArray(input?.selectedPlaces) ? input.selectedPlaces : []),
+    ...(Array.isArray(extracted?.specificPlaces) ? extracted.specificPlaces : []),
+  ].map(place => typeof place === 'string' ? place : place?.name || '')
+  const coastalType = resolveChatTourTypeAfterExtraction(
+    input,
+    extracted || {},
+    [input?.prompt || '', ...coastalPlaceNames].join(' ')
+  )
+  if (coastalType === 'coastal_islands') {
+    input.tourType = coastalType
+    return input
+  }
   input.tourType = inferTourType(input, extracted)
   return input
 }
@@ -1536,6 +1550,26 @@ aiRouter.post('/chat', async (req, res, next) => {
           /(?:^|\n)\s*1\.\s+\*\*?[A-ZÁÉÍÓÚÑ]/i.test(aiResponse.responseMessage)
         ))
       )
+
+      // The model can emit a valid-looking coastal itinerary while labeling
+      // the turn as express_tour (often after a lodging selection). Detect
+      // the subtype from the generated itinerary before the OSM-only filter.
+      const generatedCoastalType = resolveChatTourTypeAfterExtraction(
+        {
+          ...updatedPreferences,
+          specificPlaces: [
+            ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),
+            ...(Array.isArray(aiResponse.specificPlaces) ? aiResponse.specificPlaces : []),
+            ...(Array.isArray(aiResponse.extractedPreferences?.specificPlaces) ? aiResponse.extractedPreferences.specificPlaces : []),
+            ...extractedFromMsg,
+          ],
+        },
+        aiResponse.extractedPreferences || {},
+        [conversationUserText, finalResponseMessage || ''].join(' ')
+      )
+      if (generatedCoastalType === 'coastal_islands') {
+        updatedPreferences.tourType = generatedCoastalType
+      }
 
       const rawCombined = [
         ...(Array.isArray(updatedPreferences.specificPlaces) ? updatedPreferences.specificPlaces : []),

@@ -126,6 +126,16 @@ describe('coastal_islands stop policy', () => {
       'Quiero ver las islas alrededor de Coveñas',
     ), 'coastal_islands')
     assert.equal(resolveChatTourTypeAfterExtraction(
+      { tourType: 'express_tour', city: 'Coveñas', specificPlaces: [{ name: 'Isla Múcura', dia: 1 }] },
+      { tourType: 'express_tour' },
+      'Ya tenemos el hotel',
+    ), 'coastal_islands')
+    assert.equal(resolveChatTourTypeAfterExtraction(
+      { tourType: 'express_tour', city: 'Cartagena', specificPlaces: [{ name: 'Isla Barú', dia: 1 }] },
+      { tourType: 'express_tour' },
+      'Ya tenemos el hotel',
+    ), 'express_tour')
+    assert.equal(resolveChatTourTypeAfterExtraction(
       { tourType: 'coastal_islands' },
       { tourType: 'express_tour' },
       'Un tour de un día',
@@ -243,6 +253,13 @@ describe('coastal_islands stop policy', () => {
     assert.equal(message.includes('OpenStreetMap'), false)
     assert.match(message, /lugares confirmados en Coveñas/)
     assert.match(message, /¿Amplío la búsqueda\?/)
+
+    const alternateDiagnostic = sanitizeInternalTravelLanguage(
+      'El catálogo verificado de Coveñas no contiene atractivos ni restaurantes confirmados; ¿deseas ampliar la búsqueda?',
+      'Coveñas',
+    )
+    assert.equal(alternateDiagnostic.includes('catálogo verificado'), false)
+    assert.equal(alternateDiagnostic.includes('no contiene'), false)
   })
 
   it('moves islands to separate days and drops restaurant-only days', () => {

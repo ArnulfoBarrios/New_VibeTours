@@ -16,6 +16,7 @@ import '../../core/design/live_navigation_map.dart';
 import '../../core/design/premium_components.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/road_route_service.dart';
+import '../../core/utils/coastal_island_route_policy.dart';
 import '../../core/utils/transport_utils.dart';
 import '../../core/tour/tour_builder.dart';
 import '../../core/tour/tour_controller.dart';
@@ -1735,7 +1736,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                     : _activeStop,
             requestToken: _routeRequestToken,
             travelMode: route.travelMode,
-            coastalIslands: tour.itineraryType == 'coastal_islands',
+            coastalIslands: _isCoastalIslandsTour(tour),
             coastalIslandDestination: _isActiveCoastalIslandDestination(tour),
           ),
         );
@@ -1802,7 +1803,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             forceRefresh: force,
             originHeading: _currentHeading,
             travelMode: travelMode,
-            coastalIslands: tour.itineraryType == 'coastal_islands',
+            coastalIslands: _isCoastalIslandsTour(tour),
             coastalIslandDestination: _isActiveCoastalIslandDestination(tour),
           )
           .timeout(const Duration(seconds: 8));
@@ -1882,7 +1883,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           stopIndex: stopIndex,
           requestToken: requestToken,
           travelMode: travelMode,
-          coastalIslands: tour.itineraryType == 'coastal_islands',
+          coastalIslands: _isCoastalIslandsTour(tour),
           coastalIslandDestination: _isActiveCoastalIslandDestination(tour),
         ),
       );
@@ -1945,27 +1946,20 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   bool _isActiveCoastalIslandDestination(Tour tour) {
-    if (tour.itineraryType != 'coastal_islands') return false;
+    if (!_isCoastalIslandsTour(tour)) return false;
     final destinationName = _selectedVoicePlace?.name ??
         (_navigatingToHotel || _activeStop >= tour.stops.length
             ? ''
             : tour.stops[_activeStop].name);
-    final normalized = destinationName
-        .toLowerCase()
-        .replaceAll('á', 'a')
-        .replaceAll('é', 'e')
-        .replaceAll('í', 'i')
-        .replaceAll('ó', 'o')
-        .replaceAll('ú', 'u')
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .trim();
-    if (normalized == 'islas de san bernardo' ||
-        normalized == 'archipielago de san bernardo' ||
-        normalized == 'san bernardo archipielago') {
-      return false;
-    }
-    return RegExp(r'\b(isla|islas|islote|islotes|island|islands|islet|cayo|cayos)\b')
-        .hasMatch(normalized);
+    return isCoastalIslandStopName(destinationName);
+  }
+
+  bool _isCoastalIslandsTour(Tour tour) {
+    return isCoastalIslandTourRoute(
+      itineraryType: tour.itineraryType,
+      city: tour.city,
+      stopNames: tour.stops.map((stop) => stop.name),
+    );
   }
 
   bool _isCurrentRouteContext(int stopIndex, GeoPoint destination) {

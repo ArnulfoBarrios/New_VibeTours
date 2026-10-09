@@ -166,6 +166,17 @@ test('Geographic Topologies & Fallback Chat Intelligence', async (t) => {
 
     const routeTour = applyTourType({ isMultiCity: true, originPlace: 'Medellín', destinationPlace: 'Guatapé' })
     assert.equal(routeTour.tourType, 'city_to_city')
+
+    const coastalBuild = applyTourType({
+      destination: 'Coveñas',
+      durationDays: 4,
+      tourType: 'express_tour',
+      selectedPlaces: [{ name: 'Isla Múcura' }, { name: 'Isla Tintipán' }],
+    })
+    assert.equal(coastalBuild.tourType, 'coastal_islands')
+
+    const urbanExpress = applyTourType({ destination: 'Medellín', durationDays: 1, tourType: 'express_tour' })
+    assert.equal(urbanExpress.tourType, 'express_tour')
   })
 
   await t.test('should trigger readyToBuild: true for location_to_destination on "Adelante crea el tour" without lodging/transport/budget restrictions', async () => {

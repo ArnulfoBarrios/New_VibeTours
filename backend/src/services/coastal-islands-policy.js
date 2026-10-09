@@ -69,10 +69,30 @@ export function resolveChatTourTypeAfterExtraction(current = {}, extracted = {},
 
   const explicitCoastal = extractedType === 'coastal_islands' ||
     (currentType === 'coastal_islands' && !options.destinationChanged)
-  const islandIntent = /\b(islas?|islotes?|cayos?|archipi[eé]lago|island\s+hopping|isla\s+m[uú]cura|isla\s+tintip[aá]n|san\s+bernardo)\b/i.test(
-    String(conversationText || '')
+  const destinationNames = [
+    conversationText,
+    current?.city,
+    current?.destination,
+    current?.destinationPlace,
+    current?.canonicalDestination?.city,
+    current?.canonicalDestination?.entityName,
+    extracted?.city,
+    extracted?.destination,
+    extracted?.destinationPlace,
+    extracted?.canonicalDestination?.city,
+    extracted?.canonicalDestination?.entityName,
+  ]
+  const hasMorrosquilloDestination = destinationNames.some(value =>
+    /\b(covenas|tolu|san antero|golfo de morrosquillo)\b/.test(normalizedText(value))
   )
-  if (explicitCoastal || (!options.destinationChanged && islandIntent)) return 'coastal_islands'
+  const savedStopNames = [
+    ...(Array.isArray(current?.specificPlaces) ? current.specificPlaces : []),
+    ...(Array.isArray(extracted?.specificPlaces) ? extracted.specificPlaces : []),
+  ].map(place => typeof place === 'string' ? place : place?.name || '')
+  const islandIntent = /\b(islas?|islotes?|cayos?|archipi[eé]lago|island\s+hopping|isla\s+m[uú]cura|isla\s+tintip[aá]n|san\s+bernardo)\b/i.test(
+    [conversationText, ...savedStopNames].join(' ')
+  )
+  if (explicitCoastal || (!options.destinationChanged && hasMorrosquilloDestination && islandIntent)) return 'coastal_islands'
   if (options.destinationChanged) return extractedType
   return extractedType || currentType || ''
 }

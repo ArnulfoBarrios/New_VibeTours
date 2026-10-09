@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:vibetoursapp/src/core/services/road_route_service.dart';
+import 'package:vibetoursapp/src/core/utils/coastal_island_route_policy.dart';
 import 'package:vibetoursapp/src/domain/models.dart';
 
 void main() {
@@ -11,6 +12,26 @@ void main() {
 
   group('coastal_islands marine routing', () {
     setUp(() => RoadRouteService.clearCache());
+
+    test('recovers a missing coastal subtype from Morrosquillo island stops', () {
+      expect(
+        isCoastalIslandTourRoute(
+          itineraryType: 'express_tour',
+          city: 'Coveñas',
+          stopNames: const ['Isla Múcura'],
+        ),
+        isTrue,
+      );
+      expect(
+        isCoastalIslandTourRoute(
+          itineraryType: 'single_city',
+          city: 'Cartagena',
+          stopNames: const ['Isla Barú'],
+        ),
+        isFalse,
+      );
+      expect(isCoastalIslandStopName('Islas de San Bernardo'), isFalse);
+    });
 
     test('prefers the port and boat transfer over the fabricated walking leg', () async {
       var walkingRequests = 0;

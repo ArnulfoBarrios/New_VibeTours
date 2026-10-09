@@ -753,7 +753,11 @@ export function sanitizeInternalTravelLanguage(message, destination = '') {
   const place = String(destination || 'el destino').trim()
   return String(message || '')
     .replace(
-      /(?:el\s+)?cat[aá]logo\s+verificado\s+no\s+muestra\s+nombres\s+legibles\s+de[^.!?\n]*(?:[.!?]|$)/gi,
+      /(?:el\s+)?cat[aá]logo\s+(?:verificado|confirmado)[^.!?\n]*(?:no\s+(?:contiene|muestra|incluye|tiene)|(?:carece|est[aá]\s+vac[ií]o))[^.!?\n]*(?:[.!?;]|$)/gi,
+      `Aún no encontré suficientes lugares confirmados en ${place} para completar el itinerario.`
+    )
+    .replace(
+      /[^.!?\n]*(?:no\s+(?:est[aá]\s+en|aparece\s+en)\s+(?:el\s+)?cat[aá]logo)[^.!?\n]*(?:[.!?;]|$)/gi,
       `Aún no encontré suficientes lugares confirmados en ${place} para completar el itinerario.`
     )
     .replace(/\bcat[aá]logo\s+verificado\b/gi, 'lugares confirmados en el mapa')
