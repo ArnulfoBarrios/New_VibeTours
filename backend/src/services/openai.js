@@ -769,26 +769,68 @@ export function sanitizeInternalTravelLanguage(message, destination = '') {
   const place = String(destination || 'el destino').trim()
   return String(message || '')
     .replace(
-      /(?:el\s+)?cat[aá]logo\s+(?:verificado|confirmado)[^.!?\n]*(?:no\s+(?:contiene|muestra|incluye|tiene)|(?:carece|est[aá]\s+vac[ií]o))[^.!?\n]*(?:[.!?;]|$)/gi,
+      /(?:el\s+)?cat[aá]logo\s+(?:verificado|confirmado|actual)[^.!?\n]*(?:no\s+(?:contiene|muestra|incluye|tiene|contamos\s+con)|(?:carece|est[aá]\s+vac[ií]o))[^.!?\n]*(?:[.!?;]|$)/gi,
+      `Aún no encontré suficientes lugares confirmados en ${place} para completar el itinerario.`
+    )
+    .replace(
+      /[^.!?\n]*(?:en\s+nuestro\s+cat[aá]logo\s+actual\s+no\s+contamos\s+con|no\s+contamos\s+con\s+atractivos\s+ni\s+restaurantes\s+verificados)[^.!?\n]*(?:[.!?;]|$)/gi,
       `Aún no encontré suficientes lugares confirmados en ${place} para completar el itinerario.`
     )
     .replace(
       /[^.!?\n]*(?:no\s+(?:est[aá]\s+en|aparece\s+en)\s+(?:el\s+)?cat[aá]logo)[^.!?\n]*(?:[.!?;]|$)/gi,
       `Aún no encontré suficientes lugares confirmados en ${place} para completar el itinerario.`
     )
-    .replace(/\bcat[aá]logo\s+verificado\b/gi, 'lugares confirmados en el mapa')
+    .replace(/\bcat[aá]logo\s+(?:verificado|actual)\b/gi, 'lugares confirmados en el mapa')
     .replace(/\bnombres\s+legibles\s+de\s+(?:playas|islas|lugares)\b/gi, 'suficientes lugares')
     .replace(/\bOpenFreeMap(?:\s*\/\s*OpenStreetMap)?\b/gi, 'el mapa')
     .replace(/\bOpenStreetMap(?:\s*\/\s*OpenFreeMap)?\b/gi, 'el mapa')
     .replace(/\bOSM\b/gi, 'el mapa')
 }
 
-function normalizeCoastalCatalog(catalog) {
+function normalizeCoastalCatalog(catalog, destination = '') {
   if (!catalog || typeof catalog !== 'object') return catalog
+  const targetDest = destination || catalog.name || catalog.city || ''
+  const curated = getCuratedCoastalStops(targetDest)
+  const mergedRawPlaces = mergeCuratedCoastalPlaces(catalog.places, targetDest)
+  const existingCandidatePlaces = Array.isArray(catalog.candidateCatalog?.places)
+    ? catalog.candidateCatalog.places
+    : []
+  const mergedCandidatePlaces = mergeCuratedCoastalPlaces(existingCandidatePlaces, targetDest)
+  const existingCandidateAll = Array.isArray(catalog.candidateCatalog?.all)
+    ? catalog.candidateCatalog.all
+    : []
+  const mergedCandidateAll = mergeCuratedCoastalPlaces(existingCandidateAll, targetDest)
+  const candidateCatalog = curated.length > 0
+    ? {
+        ...(catalog.candidateCatalog || {}),
+        places: mergedCandidatePlaces,
+        attractions: mergedCandidatePlaces,
+        all: mergedCandidateAll
+      }
+    : catalog.candidateCatalog
+  const coordinatesMap = { ...(catalog.coordinatesMap || {}) }
+  for (const stop of curated) {
+    const key = String(stop?.name || '').toLowerCase().trim()
+    if (key && Number.isFinite(Number(stop.latitude)) && Number.isFinite(Number(stop.longitude)) && !coordinatesMap[key]) {
+      coordinatesMap[key] = {
+        latitude: Number(stop.latitude),
+        longitude: Number(stop.longitude),
+        coordinateSource: stop.coordinateSource || 'curated_coastal_bank',
+        coordinatesVerified: true,
+        placeId: stop.placeId || stop.candidateId || ''
+      }
+    }
+  }
+  const resolvedPlaces = prioritizeCuratedCoastalPlaces(
+    resolveCoastalCatalogEntries(mergedRawPlaces, candidateCatalog, 'places'),
+    targetDest
+  )
   return {
     ...catalog,
-    places: resolveCoastalCatalogEntries(catalog.places, catalog.candidateCatalog, 'places'),
-    restaurants: resolveCoastalCatalogEntries(catalog.restaurants, catalog.candidateCatalog, 'restaurants')
+    candidateCatalog,
+    coordinatesMap,
+    places: resolvedPlaces,
+    restaurants: resolveCoastalCatalogEntries(catalog.restaurants, candidateCatalog, 'restaurants')
   }
 }
 
@@ -2932,7 +2974,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
       const isExplicitHotelInquiry = isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
       const isExplicitRestaurantInquiry = /\b(restaurante|restaurantes|comida|comer|gastronom[íi]a|cenar|almorzar|men[uú]|carta|platos)\b/i.test(lastUserMsg)
       const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(lastUserMsg)
-      const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(lastUserMsg)
+      const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(lastUserMsg)
       const preReqCheck = evaluateTourRequirements(known, null)
       const isCompleteOrReadyToPresent = preReqCheck.isComplete || Boolean(
         hasCity &&
@@ -3025,7 +3067,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
     return isLodgingExplicitlyConfirmed(hotel, status)
   }
 
-  const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesit(?:o|amos)\s+(?:hotel|alojamiento|hospedaje)|no requier(?:o|en|imos)\s+(?:hotel|alojamiento|hospedaje)|nos\s+(?:vamos\s+a\s+)?quedar\s+en\s+la\s+playa|quedarnos?\s+en\s+la\s+playa|dormir\s+en\s+la\s+playa|acampar|camping|en\s+carpa|en\s+hamaca|sin\s+(?:hotel|alojamiento|hospedaje)\s+porque|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
+  const isHomeOrLocalLodging = /\b(en mi casa|mi casa|nuestra casa|casa propia|casa familiar|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|(?:una\s+|la\s+|nuestra\s+)?(?:casa|finca|apartamento|caba[ñn]a)\s+(?:propia|familiar|nuestra|que\s+tenemos)|quedar(?:nos)?\s+en\s+(?:una\s+|la\s+|nuestra\s+)?casa|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|(?:ya\s+)?(?:tengo|tenemos|cuento con|contamos con)\s+(?:una\s+)?(?:casa|finca|apartamento|alojamiento|hospedaje|hotel|estancia|donde quedarnos?|donde hospedarme)|no necesit(?:o|amos)\s+(?:hotel|alojamiento|hospedaje)|no requier(?:o|en|imos)\s+(?:hotel|alojamiento|hospedaje)|nos\s+(?:vamos\s+a\s+)?quedar\s+en\s+la\s+playa|quedarnos?\s+en\s+la\s+playa|dormir\s+en\s+la\s+playa|acampar|camping|en\s+carpa|en\s+hamaca|sin\s+(?:hotel|alojamiento|hospedaje)\s+porque|alojamiento propio|hospedaje propio|en casa)\b/i.test(lastUserMsg)
   const isNegatedLodgingTurn = !isHomeOrLocalLodging && (isLodgingNegationOrUncertainty(lastUserMsg) || isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg))
   if (isHomeOrLocalLodging) {
     const isBeachOrCamp = /playa|acampar|camping|carpa|hamaca/i.test(lastUserMsg)
@@ -3053,7 +3095,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
 
   const coastalIslands = isCoastalIslandsTour(known)
   if (coastalIslands && realCatalog) {
-    realCatalog = normalizeCoastalCatalog(realCatalog)
+    realCatalog = normalizeCoastalCatalog(realCatalog, destName)
   }
 
   // Hotel cards and their chat summary must come from the same verified list.
@@ -3610,7 +3652,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         preset = { places: [], restaurants: [], hotels: [] }
       }
       if (isCoastalIslandsTour(known)) {
-        preset = normalizeCoastalCatalog(preset)
+        preset = normalizeCoastalCatalog(preset, destName)
       }
       if (!isLocationToDestination && (!preset.restaurants || preset.restaurants.length === 0) && destName) {
         const cachedRests = await lookupCachedPlacesForCity(destName, 'restaurant').catch(() => [])
@@ -3629,7 +3671,7 @@ export async function generateChatResponse(state, backendInstruction = '', webSe
         }
       }
       if (isCoastalIslandsTour(known)) {
-        preset = normalizeCoastalCatalog(preset)
+        preset = normalizeCoastalCatalog(preset, destName)
       }
       trustedFallbackPlaces = [
         ...(preset?.places || []),
@@ -4843,11 +4885,7 @@ REGLAS PARA "accommodationStatus":
           ? realCatalog
           : (hasCity ? await getRealDestinationCatalog(destName, destCountry, known.latitude, known.longitude, { requestedDays: daysCount, tourType: known.tourType }).catch(() => null) : null) || realCatalog
       if (isCoastalItinerary && cat) {
-        cat = {
-          ...cat,
-          places: resolveCoastalCatalogEntries(cat.places, cat.candidateCatalog, 'places'),
-          restaurants: resolveCoastalCatalogEntries(cat.restaurants, cat.candidateCatalog, 'restaurants'),
-        }
+        cat = normalizeCoastalCatalog(cat, dName)
       }
 
       // 1. Recolectar y enriquecer restaurantes para asegurar variedad y cantidad suficiente
@@ -5218,7 +5256,40 @@ REGLAS PARA "accommodationStatus":
         })
       }
 
-      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [], allowExpandedDay: isExpressExpandedRecon, isMoreStops: isUserAskingForMoreStops }); if (clusteredRecon.length > 0) { reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` + clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'; parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({ name: s.name, dia: dp.day, day: dp.day, type: s.entityType === 'restaurant' ? 'food' : 'cultural', category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction', entityType: s.entityType || (s.entityType === 'restaurant' ? 'restaurant' : 'attraction'), isRestaurant: s.entityType === 'restaurant' || s.isRestaurant === true, ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {}) }))); known.specificPlaces = parsedExtracted.specificPlaces }
+      const clusteredRecon = clusterStopsIntoCoherentDays(uniqueAttractions, uniqueRests, { numDays: daysCount, city: dName, coordinatesMap: cat?.coordinatesMap || {}, candidatePlaces: cat?.candidateCatalog?.places || [], allowExpandedDay: isExpressExpandedRecon, isMoreStops: isUserAskingForMoreStops })
+      if (clusteredRecon.length > 0) {
+        parsedExtracted.specificPlaces = clusteredRecon.flatMap(dp => dp.stops.map(s => ({
+          name: s.name,
+          dia: dp.day,
+          day: dp.day,
+          type: s.entityType === 'restaurant' ? 'food' : 'cultural',
+          category: s.entityType === 'restaurant' ? 'restaurant' : 'attraction',
+          entityType: s.entityType || (s.entityType === 'restaurant' ? 'restaurant' : 'attraction'),
+          isRestaurant: s.entityType === 'restaurant' || s.isRestaurant === true,
+          ...(s.latitude != null && s.longitude != null ? { latitude: s.latitude, longitude: s.longitude, coordinatesVerified: true } : {})
+        })))
+        if (isCoastalItinerary && getCuratedCoastalDestinationKey(dName)) {
+          parsedExtracted.specificPlaces = assignCoastalIslandDays(
+            ensureCuratedCoastalStopsInItinerary(parsedExtracted.specificPlaces, dName, daysCount),
+            daysCount
+          )
+          const byDay = new Map()
+          for (const stop of parsedExtracted.specificPlaces) {
+            const day = Number(stop.dia || stop.day || 1)
+            if (!byDay.has(day)) byDay.set(day, [])
+            byDay.get(day).push(stop.name)
+          }
+          reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` +
+            [...byDay.entries()]
+              .sort(([left], [right]) => left - right)
+              .map(([day, names]) => `Día ${day}: ${dName}\n${names.map(name => ` • ${name}`).join('\n')}`)
+              .join('\n\n') + '\n\n'
+        } else {
+          reconstructed = `${prefixIntro}Itinerario de Viaje: ${dName} (${known.datesSeason || `${daysCount} días`})\n\n` +
+            clusteredRecon.filter(dp => dp.stops.length > 0).map(dp => `Día ${dp.day}: ${dName}\n${dp.stops.map(s => ` • ${s.name}`).join('\n')}`).join('\n\n') + '\n\n'
+        }
+        known.specificPlaces = parsedExtracted.specificPlaces
+      }
       reconstructed += isUserAskingForMoreStops
         ? '¿Deseas confirmar este itinerario ampliado y generar tu tour en el mapa?'
         : '¿Deseas confirmar este itinerario y generar tu tour en el mapa?'
@@ -5546,11 +5617,26 @@ Devuelve ÚNICAMENTE un JSON con:
         })
       }
 
+      const fallbackCheck = extractChatInformationFallback(userMessage)
       if (!parsed.specificPlaces || parsed.specificPlaces.length === 0) {
-        const fallbackCheck = extractChatInformationFallback(userMessage)
         if (fallbackCheck.specificPlaces && fallbackCheck.specificPlaces.length > 0) {
           parsed.specificPlaces = fallbackCheck.specificPlaces
         }
+      }
+      if (!parsed.durationDays && fallbackCheck.durationDays) {
+        parsed.durationDays = fallbackCheck.durationDays
+        parsed.durationHours = fallbackCheck.durationHours || fallbackCheck.durationDays * 24
+      }
+      if (
+        (fallbackCheck.accommodationStatus === 'Casa propia / familiar' ||
+          fallbackCheck.accommodationStatus === 'Alojamiento particular / Camping') &&
+        (!parsed.accommodationStatus || parsed.accommodationStatus === 'Por definir')
+      ) {
+        parsed.accommodationStatus = fallbackCheck.accommodationStatus
+        parsed.selectedHotel = fallbackCheck.selectedHotel
+      }
+      if (fallbackCheck.tourType === 'coastal_islands' && (!parsed.tourType || parsed.tourType === 'single_city' || parsed.tourType === 'express_tour')) {
+        parsed.tourType = 'coastal_islands'
       }
 
       if (parsed.destination && !parsed.city) {
@@ -6068,7 +6154,10 @@ export function extractChatInformationFallback(prompt) {
   }
 
   if (!res.tourType) {
-    if (/\b(isla|islas|cayo|cayos|archipi[eé]lago|playas?\s+v[íi]rgenes|island\s+hopping)\b/i.test(text)) {
+    if (
+      /\b(isla|islas|cayo|cayos|archipi[eé]lago|playas?\s+v[íi]rgenes|island\s+hopping)\b/i.test(text) ||
+      Boolean(getCuratedCoastalDestinationKey(res.city || res.destination || ''))
+    ) {
       res.tourType = 'coastal_islands'
     } else if (/\b(senderismo|mirador|miradores|alpino|alpes|lago|laguna|volc[aá]n|glaciar|parque\s+natural|parque\s+nacional|reserva\s+natural|microdestino)\b/i.test(text)) {
       res.tourType = 'micro_destination'
@@ -6227,7 +6316,7 @@ export function extractChatInformationFallback(prompt) {
   } else if (isNegatedOrAskingLodging || /\b(recomi[eé]ndame hoteles|hoteles|opciones de hotel|buscar hotel|sin hotel|no tengo hotel|no tenemos hotel|dame recomendaciones)\b/i.test(text)) {
     delete res.selectedHotel
     res.accommodationStatus = 'Recomiéndame hoteles'
-  } else if (/\b(?:casa propia|mi casa|casa familiar|(?:ya\s+)?(?:tengo|tenemos|cuento con|contamos con)\s+(?:alojamiento|hospedaje|hotel|estancia|donde quedarnos?|donde hospedarme)|tengo donde quedarme)\b/i.test(text)) {
+  } else if (/\b(?:casa propia|mi casa|nuestra casa|casa familiar|en casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|(?:una\s+|la\s+|nuestra\s+)?(?:casa|finca|apartamento|caba[ñn]a)\s+(?:propia|familiar|nuestra|que\s+tenemos)|quedar(?:nos)?\s+en\s+(?:una\s+|la\s+|nuestra\s+)?casa|(?:ya\s+)?(?:tengo|tenemos|cuento con|contamos con)\s+(?:una\s+)?(?:casa|finca|apartamento|alojamiento|hospedaje|hotel|estancia|donde quedarnos?|donde hospedarme)|tengo donde quedarme|alojamiento propio|hospedaje propio)\b/i.test(text)) {
     res.selectedHotel = 'Casa propia / familiar'
     res.accommodationStatus = 'Casa propia / familiar'
   } else if (!isNegatedOrAskingLodging && /\b(s[íi]\s+(ese\s+es|ah[íi]\s+es|correcto|de\s+acuerdo)|ese\s+es\s+el\s+hotel|ah[íi]\s+nos\s+vamos\s+a\s+quedar)\b/i.test(text)) {
@@ -6309,8 +6398,13 @@ export function extractChatInformationFallback(prompt) {
     }
   }
 
+  if (!res.tourType && getCuratedCoastalDestinationKey(res.city || res.destination || '')) {
+    res.tourType = 'coastal_islands'
+  }
+
   // Infer Geographic Topology for the tour
   res.tourType = inferTourType({
+    tourType: res.tourType,
     destination: res.destination,
     city: res.city,
     isUserLocationOrigin: res.isUserLocationOrigin,

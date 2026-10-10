@@ -238,12 +238,6 @@ export function ensureCuratedCoastalStopsInItinerary(stops, destination, request
   }
 
   const curatedTownStops = catalog.filter(stop => stop.curatedSection === destinationKey)
-  const hasCuratedTownStop = result.some(stop => curatedTownStops.some(candidate => hasSimilar(candidate.name, stop)))
-  if (!hasCuratedTownStop) {
-    const firstTownStop = curatedTownStops[0]
-    if (firstTownStop) addToLeastLoadedDay(firstTownStop)
-  }
-
   let currentIslandCount = result.filter(stop =>
     isIslandStop(stop)
   ).length
@@ -253,6 +247,40 @@ export function ensureCuratedCoastalStopsInItinerary(stops, destination, request
     if (result.some(stop => hasSimilar(island.name, stop))) continue
     addToLeastLoadedDay(island)
     currentIslandCount++
+  }
+
+  // Ensure automatic islands sit on distinct days before balancing local mainland stops
+  const usedIslandDays = new Set()
+  for (const stop of result) {
+    if (!isIslandStop(stop)) continue
+    let d = Math.min(totalDays, normalizeDay(stop))
+    if (usedIslandDays.has(d)) {
+      d = Array.from({ length: totalDays }, (_, index) => index + 1)
+        .find(day => !usedIslandDays.has(day)) ?? d
+    }
+    usedIslandDays.add(d)
+    stop.dia = d
+    stop.day = d
+  }
+
+  const hasCuratedTownStop = result.some(stop => curatedTownStops.some(candidate => hasSimilar(candidate.name, stop)))
+  if (!hasCuratedTownStop && curatedTownStops[0]) {
+    const firstDay = 1
+    result.unshift({ ...curatedTownStops[0], dia: firstDay, day: firstDay })
+  }
+
+  // Populate each day of the itinerary with curated local stops so multi-day trips
+  // cover the destination's beaches, ciénagas and coastal landmarks across all days.
+  for (let day = 1; day <= totalDays; day++) {
+    const dayHasIsland = result.some(stop => normalizeDay(stop) === day && isIslandStop(stop))
+    const minStopsForDay = totalDays === 1 ? 2 : (dayHasIsland ? 2 : 3)
+    while (result.filter(stop => normalizeDay(stop) === day).length < minStopsForDay) {
+      const nextTownStop = curatedTownStops.find(candidate =>
+        !result.some(existing => hasSimilar(candidate.name, existing))
+      )
+      if (!nextTownStop) break
+      result.push({ ...nextTownStop, dia: day, day: day })
+    }
   }
 
   return result

@@ -700,7 +700,7 @@ aiRouter.post('/chat', async (req, res, next) => {
     // explícitamente confirme o solicite armar el itinerario / tour.
     const isExplicitBuildOrItineraryRequest = Boolean(
       currentPreferences?.readyToBuild ||
-      /\b(gener(ar|es|a|e|en|al)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(el\s+|la\s+)?(tour|itinerario|ruta)|armar?\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje)|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(el\s+|la\s+)?(tour|itinerario|ruta)|c[oó]mo\s+(va|queda)\s+(el\s+|mi\s+)?itinerario|mostrar?\s+(el\s+|mi\s+)?itinerario|mu[eé]strame\s+(el\s+|mi\s+)?itinerario|ver\s+(el\s+|mi\s+)?itinerario|plan\s+de\s+viaje|detalles\s+del\s+d[íi]a)\b/i.test(message)
+      /\b(gener(ar|es|a|e|en|al)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|armar?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta|viaje)|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|c[oó]mo\s+(va|queda)\s+(el\s+|mi\s+)?itinerario|mostrar?\s+(el\s+|mi\s+)?itinerario|mu[eé]strame\s+(el\s+|mi\s+)?itinerario|ver\s+(el\s+|mi\s+)?itinerario|plan\s+de\s+viaje|detalles\s+del\s+d[íi]a)\b/i.test(message)
     )
     const quickExtracted = extractChatInformationFallback(message)
     const isLocationRequestEarly = Boolean(
@@ -975,7 +975,7 @@ aiRouter.post('/chat', async (req, res, next) => {
 
     const isOnlyInquiringHotel = /\b(m[aá]s informaci[oó]n|informaci[oó]n del?|informaci[oó]n sobre|detalles del?|cu[eé]ntame m[aá]s|cu[eé]ntame sobre|c[oó]mo es el|qu[eé] tal es el|precios? del?|servicios del?)\b/i.test(message)
     const isChoosingHotel = isExplicitlyChoosingHotel(message)
-    const isHomeOrLocalLodging = /\b(en mi casa|mi casa|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|ya tengo hospedaje|ya tengo alojamiento|ya tengo hotel|ya tengo donde quedarme|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(message)
+    const isHomeOrLocalLodging = /\b(en mi casa|mi casa|nuestra casa|casa propia|casa familiar|casa de un familiar|casa de familiares|casa de un amigo|casa de amigos|casa de mis padres|(?:una\s+|la\s+|nuestra\s+)?(?:casa|finca|apartamento|caba[ñn]a)\s+(?:propia|familiar|nuestra|que\s+tenemos)|quedar(?:nos)?\s+en\s+(?:una\s+|la\s+|nuestra\s+)?casa|vivo aqu[íi]|vivo en la ciudad|es mi ciudad|(?:ya\s+)?(?:tengo|tenemos|cuento con|contamos con)\s+(?:una\s+)?(?:casa|finca|apartamento|alojamiento|hospedaje|hotel|estancia|donde quedarnos?|donde hospedarme)|no necesito hotel|no requiero hotel|alojamiento propio|hospedaje propio|en casa)\b/i.test(message)
     const lastAssistantMsgForLodging = [...(history || [])].reverse().find(h => h && (h.role === 'assistant' || h.role === 'bot'))?.content || ''
     const isNegatedOrAskingLodging = isLodgingNegationOrUncertainty(message) || isLodgingRecommendationInquiry(message, lastAssistantMsgForLodging)
 
@@ -1247,7 +1247,7 @@ aiRouter.post('/chat', async (req, res, next) => {
       const isExplicitItineraryRequest = /\b(itinerario|itinerarios|plan de viaje|cómo va el itinerario|mostrar el itinerario|muéstrame el itinerario|ver el itinerario|detalles del d[íi]a|ver d[íi]a|d[íi]a\s*\d+)\b/i.test(message)
       const isExplicitHotelInquiry = /\b(recomi[eé]ndame hoteles|qu[eé] hoteles|opciones de hotel|d[oó]nde hospedarm[eé]|d[oó]nde quedarm[eé]|recomiendas alg[uú]n hotel|informaci[oó]n del? hotel)\b/i.test(message)
       const isExplicitAttractionInquiry = /\b(qu[eé] lugares|qu[eé] sitios|qu[eé] atracciones|qu[eé] ver|qu[eé] hacer|sitios tur[íi]sticos|lugares tur[íi]sticos)\b/i.test(message)
-      const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(el\s+|la\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(message)
+      const isExplicitBuildRequest = /\b(generar|genera|crear|crea|construye|iniciar|finaliza|armar)\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|mapa)\b/i.test(message)
       const needsCatalogImmediate = isExplicitItineraryRequest || isExplicitHotelInquiry || isExplicitAttractionInquiry || isExplicitBuildRequest || Boolean(updatedPreferences?.readyToBuild)
 
       if (needsCatalogImmediate) {
@@ -1375,7 +1375,7 @@ aiRouter.post('/chat', async (req, res, next) => {
         const chatCountry = updatedPreferences.country || ''
         const itineraryDays = confirmedPois.map(p => Number(p.dia || p.day || 1)).filter(d => d > 0)
         const maxDay = itineraryDays.length > 0 ? Math.max(...itineraryDays) : 0
-        if (maxDay >= 1) {
+        if (maxDay >= 1 && (!updatedPreferences.durationDays || maxDay > updatedPreferences.durationDays)) {
           updatedPreferences.durationDays = maxDay
           updatedPreferences.durationHours = maxDay === 1 ? 8 : maxDay * 24
         }
@@ -4100,7 +4100,7 @@ export function rebuildCoastalChatItinerary(sourceText, stops, destination, requ
 
   const start = marker.index + (text.slice(marker.index).startsWith('\n') ? 1 : 0)
   const rawIntro = text.slice(0, start).trim()
-  const containsInternalCatalogDiagnostic = /\b(?:cat[aá]logo\s+verificado|lugares\s+confirmados?\s+en\s+el\s+mapa|nombres\s+(?:legibles|confirmados)\s+de|openstreetmap|openfreemap|\bOSM\b)\b/i.test(rawIntro)
+  const containsInternalCatalogDiagnostic = /\b(?:cat[aá]logo\s+(?:verificado|confirmado|actual)|no\s+contamos\s+con\s+atractivos|lugares\s+confirmados?\s+en\s+el\s+mapa|nombres\s+(?:legibles|confirmados)\s+de|openstreetmap|openfreemap|\bOSM\b)\b/i.test(rawIntro)
   const intro = containsInternalCatalogDiagnostic ? '' : rawIntro
   const confirmation = text.match(/¿Deseas confirmar este itinerario(?: ampliado)? y generar tu tour en el mapa\?/i)?.[0] || ''
   const days = new Map()

@@ -13,8 +13,8 @@ import {
   isCoastalMappedTouristStop,
   assignCoastalIslandDays,
 } from '../services/coastal-islands-policy.js'
-import { filterChatSpecificPlacesByOsm } from '../services/openai.js'
-import { buildTourPlanner, isValidSpecificPlace } from '../routes/ai.js'
+import { extractChatInformationFallback, filterChatSpecificPlacesByOsm } from '../services/openai.js'
+import { buildTourPlanner, isValidSpecificPlace, rebuildCoastalChatItinerary } from '../routes/ai.js'
 
 const EXPECTED_COORDINATES = {
   'Playa Primera Ensenada': [9.406388, -75.669701],
@@ -140,11 +140,53 @@ describe('curated coastal destination coordinates', () => {
     const localStops = itinerary.filter(stop => stop.curatedSection === 'covenas')
     const islands = itinerary.filter(stop => stop.curatedSection === 'islands')
 
-    assert.ok(localStops.length >= 1)
+    assert.ok(localStops.length >= 6)
     assert.equal(islands.length, 3)
     assert.equal(new Set(islands.map(stop => stop.dia)).size, 3)
+    assert.deepEqual([...new Set(itinerary.map(stop => stop.dia))].sort((a, b) => a - b), [1, 2, 3, 4])
     assert.equal(itinerary.some(stop => stop.name === 'Islas de San Bernardo'), false)
     assert.ok(itinerary.every(stop => stop.candidateId && stop.coordinatesVerified))
+  })
+
+  it('extracts 4-day Coveñas prompt with private house lodging and populates all 4 days with curated Coveñas and island stops', () => {
+    const prompt = 'Quiero crear un tour a Coveñas, en donde pueda ver los lugares más importantes de la zona. Voy a durar 4 días, voy a ir con unos amigos y me voy a mover en taxi. Tenemos un presupuesto de unos 10 millones y nos vamos a quedar en una casa que tenemos allá.'
+    const extracted = extractChatInformationFallback(prompt)
+
+    assert.equal(extracted.city, 'Coveñas')
+    assert.equal(extracted.durationDays, 4)
+    assert.equal(extracted.accommodationStatus, 'Casa propia / familiar')
+    assert.equal(extracted.transport, 'Taxi / Uber')
+    assert.equal(extracted.budget, 'Lujo')
+    assert.equal(extracted.companions, 'Con amigos')
+    assert.equal(extracted.tourType, 'coastal_islands')
+
+    const partialAiStops = [
+      findCuratedCoastalStop('Ciénaga La Caimanera', 'Coveñas'),
+      findCuratedCoastalStop('Playa Segunda Ensenada', 'Coveñas'),
+    ].map((stop, idx) => ({ ...stop, dia: idx + 1, day: idx + 1 }))
+
+    const fullStops = assignCoastalIslandDays(
+      ensureCuratedCoastalStopsInItinerary(partialAiStops, 'Coveñas', extracted.durationDays),
+      extracted.durationDays,
+    )
+    const rebuiltChat = rebuildCoastalChatItinerary(
+      '¡Qué gran plan! Te comento con total transparencia que en nuestro catálogo actual no contamos con atractivos ni restaurantes verificados dentro del casco urbano de Coveñas.\n\nItinerario de Viaje: Coveñas (2 días)\n\nDía 1: Coveñas\n• Ciénaga La Caimanera\n\nDía 2: Coveñas\n• Playa Segunda Ensenada\n\n¿Deseas confirmar este itinerario y generar tu tour en el mapa?',
+      fullStops,
+      'Coveñas',
+      extracted.durationDays,
+    )
+
+    assert.equal(rebuiltChat.includes('catálogo actual'), false)
+    assert.match(rebuiltChat, /Itinerario de Viaje: Coveñas \(4 días\)/)
+    assert.match(rebuiltChat, /Día 1: Coveñas/)
+    assert.match(rebuiltChat, /Día 2: Coveñas/)
+    assert.match(rebuiltChat, /Día 3: Coveñas/)
+    assert.match(rebuiltChat, /Día 4: Coveñas/)
+    assert.match(rebuiltChat, /Playa Primera Ensenada/)
+    assert.match(rebuiltChat, /Playa La Coquerita/)
+    assert.match(rebuiltChat, /Isla Tintipán/)
+    assert.match(rebuiltChat, /Isla Múcura/)
+    assert.match(rebuiltChat, /Santa Cruz del Islote/)
   })
 
   it('limits automatic islands to one per day while preserving explicitly requested islands', () => {
