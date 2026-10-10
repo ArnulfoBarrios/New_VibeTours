@@ -14,7 +14,7 @@ import {
   assignCoastalIslandDays,
 } from '../services/coastal-islands-policy.js'
 import { extractChatInformationFallback, filterChatSpecificPlacesByOsm } from '../services/openai.js'
-import { buildTourPlanner, isValidSpecificPlace, rebuildCoastalChatItinerary } from '../routes/ai.js'
+import { buildTourPlanner, isValidSpecificPlace, processTourBuild, rebuildCoastalChatItinerary } from '../routes/ai.js'
 
 const EXPECTED_COORDINATES = {
   'Playa Primera Ensenada': [9.406388, -75.669701],
@@ -234,5 +234,69 @@ describe('curated coastal destination coordinates', () => {
     assert.ok(islands.every(stop => isCuratedCoastalCoordinateStop(stop, 'Santiago de Tolú')))
     assert.equal(isCoastalIslandsTour({ tourType: 'express_tour', destination: 'Santiago de Tolú' }), false)
     assert.equal(getCuratedCoastalStops('Cartagena').length, 0)
+  })
+
+  it('builds a 4-day Coveñas tour without 500 error when confirmedPlaces are serialized via Flutter AiRecommendation.toJson()', async () => {
+    const previousFetch = globalThis.fetch
+    globalThis.fetch = async () => ({ ok: false, json: async () => ({}) })
+    try {
+      const itinerary = assignCoastalIslandDays(
+        ensureCuratedCoastalStopsInItinerary([], 'Coveñas', 4),
+        4,
+      )
+      // Simulate Flutter AiRecommendation.fromJson -> AiRecommendation.toJson()
+      const flutterConfirmedPlaces = itinerary.map((place, index) => ({
+        id: place.placeId || `rec-${index}`,
+        name: String(place.name || '').includes(',') ? String(place.name).split(',')[0].trim() : place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        coordinateSource: place.coordinateSource,
+        coordinatesVerified: true,
+        category: place.category || 'turismo',
+        imageUrl: '',
+        description: place.description || '',
+        reason: 'Seleccionado en el mapa',
+        durationMinutes: place.minutes || 60,
+        dia: place.dia,
+        day: place.day,
+        locationInfo: {
+          nombre_lugar: place.name,
+          direccion: '',
+          ciudad: 'Coveñas',
+          region: 'Sucre',
+          pais: 'Colombia',
+          place_id: place.placeId,
+          fuente_coordenadas: place.coordinateSource,
+          coordenadas_verificadas: true,
+          url_mapa: '',
+        },
+      }))
+
+      assert.ok(flutterConfirmedPlaces.every(p => isCoastalMappedTouristStop(p)))
+
+      const built = await processTourBuild(
+        null,
+        {
+          destination: 'Coveñas, Colombia',
+          city: 'Coveñas',
+          country: 'Colombia',
+          tourType: 'coastal_islands',
+          type: 'custom',
+          durationDays: 4,
+          durationHours: 96,
+          language: 'es',
+        },
+        flutterConfirmedPlaces,
+        {},
+      )
+
+      assert.ok(built?.tour)
+      const builtStops = built.tour.itinerario || built.tour.stops || []
+      assert.equal(builtStops.length, flutterConfirmedPlaces.length)
+      const builtDays = [...new Set(builtStops.map(stop => stop.dia || stop.day))].sort((a, b) => a - b)
+      assert.deepEqual(builtDays, [1, 2, 3, 4])
+    } finally {
+      globalThis.fetch = previousFetch
+    }
   })
 })

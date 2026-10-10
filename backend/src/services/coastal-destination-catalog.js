@@ -111,12 +111,22 @@ const STOPS_BY_ID = new Map(ALL_STOPS.map(stop => [
 function matchesCuratedRecord(place, stop) {
   if (!place || !stop) return false
   const expectedId = `${CURATED_SOURCE}:${stop.section}:${stop.id}`
-  const placeId = String(place.candidateId ?? place.candidate_id ?? place.placeId ?? place.place_id ?? place.id ?? '').trim()
-  const source = String(place.coordinateSource ?? place.coordinate_source ?? place.source ?? '').trim().toLowerCase()
+  const placeId = String(
+    place.candidateId ?? place.candidate_id ?? place.placeId ?? place.place_id ??
+    place.locationInfo?.place_id ?? place.ubicacion?.place_id ?? place.id ?? ''
+  ).trim()
+  const source = String(
+    place.coordinateSource ?? place.coordinate_source ??
+    place.locationInfo?.fuente_coordenadas ?? place.ubicacion?.fuente_coordenadas ??
+    place.source ?? ''
+  ).trim().toLowerCase()
   const latitude = Number(place.latitude ?? place.lat ?? place.latitud)
   const longitude = Number(place.longitude ?? place.lon ?? place.lng ?? place.longitud)
+  const placeName = normalizePlaceName(place.name ?? place.nombre ?? place.locationInfo?.nombre_lugar ?? place.ubicacion?.nombre_lugar)
+  const stopName = normalizePlaceName(stop.name)
+  const stopShortName = normalizePlaceName(String(stop.name || '').split(',')[0])
   return placeId === expectedId && source === CURATED_SOURCE &&
-    normalizePlaceName(place.name ?? place.nombre) === normalizePlaceName(stop.name) &&
+    (placeName === stopName || (Boolean(stopShortName) && placeName === stopShortName)) &&
     Math.abs(latitude - stop.latitude) < 0.000001 &&
     Math.abs(longitude - stop.longitude) < 0.000001
 }
@@ -152,16 +162,31 @@ export function findCuratedCoastalStop(name, destination) {
 
 export function isCuratedCoastalCoordinateStop(place, destination = '') {
   if (!place) return false
-  const destinationKey = normalizeDestination(destination || place.curatedDestinationKey || '')
-  if (!destinationKey || normalizeDestination(place.curatedDestinationKey || destinationKey) !== destinationKey) return false
-  const placeId = String(place.candidateId ?? place.candidate_id ?? place.placeId ?? place.place_id ?? place.id ?? '').trim()
+  const placeId = String(
+    place.candidateId ?? place.candidate_id ?? place.placeId ?? place.place_id ??
+    place.locationInfo?.place_id ?? place.ubicacion?.place_id ?? place.id ?? ''
+  ).trim()
   const stop = STOPS_BY_ID.get(placeId)
   if (!matchesCuratedRecord(place, stop)) return false
+
+  const effectiveDest = destination ||
+    place.curatedDestinationKey ||
+    place.city ||
+    place.destination ||
+    place.locationInfo?.ciudad ||
+    place.ubicacion?.ciudad ||
+    (stop.section !== 'islands' ? stop.section : 'covenas')
+  const destinationKey = normalizeDestination(effectiveDest)
+  if (!destinationKey) return false
+  if (place.curatedDestinationKey && normalizeDestination(place.curatedDestinationKey) !== destinationKey) return false
   return stop.section === destinationKey || stop.section === 'islands'
 }
 
 export function isCuratedCoastalCandidate(place) {
-  const placeId = String(place?.candidateId ?? place?.candidate_id ?? place?.placeId ?? place?.place_id ?? place?.id ?? '').trim()
+  const placeId = String(
+    place?.candidateId ?? place?.candidate_id ?? place?.placeId ?? place?.place_id ??
+    place?.locationInfo?.place_id ?? place?.ubicacion?.place_id ?? place?.id ?? ''
+  ).trim()
   const stop = STOPS_BY_ID.get(placeId)
   return Boolean(stop && matchesCuratedRecord(place, stop))
 }

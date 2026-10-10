@@ -2066,15 +2066,21 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
 
         const aiReason = customReasonsMap[place.name] || null
         const placeDesc = place.description || place.history || ''
+        const resolvedPlaceId = place.placeId || getCandidateId(place) || place.id || `rec-${index}`
 
         return {
-          id: place.placeId || place.id || `rec-${index}`,
+          id: resolvedPlaceId,
+          placeId: resolvedPlaceId,
+          candidateId: getCandidateId(place) || resolvedPlaceId,
           name: place.name,
           latitude: place.latitude,
           longitude: place.longitude,
           coordinateSource: place.coordinateSource || place.coordinate_source || '',
           coordinatesVerified: isVerifiedCoordinatePlace(place),
           category: place.category || 'turismo',
+          city: place.city || input.city || '',
+          destination: place.destination || input.destination || input.city || '',
+          curatedDestinationKey: place.curatedDestinationKey || '',
           imageUrl,
           description: placeDesc,
           reason: buildRecommendationReason(place, input, aiReason),
@@ -2087,7 +2093,7 @@ aiRouter.post('/tours/recommend', async (req, res, next) => {
             ciudad: place.city || input.city || '',
             region: place.region || '',
             pais: place.country || input.country || '',
-            place_id: place.placeId,
+            place_id: resolvedPlaceId,
             fuente_coordenadas: place.coordinateSource || place.coordinate_source || '',
             coordenadas_verificadas: isVerifiedCoordinatePlace(place),
             url_mapa: mapUrlFor(place.latitude, place.longitude)
@@ -2621,12 +2627,25 @@ export async function processTourBuild(jobId, input, confirmedPlaces, plannerCon
       : (Array.isArray(confirmedPlaces) ? confirmedPlaces : [])
 
     const planner = {
-      selectedPlaces: cleanConfirmedPlaces.map((p, i) => ({
-        ...p,
-        placeId: p.placeId || p.locationInfo?.place_id || p.id,
-        order: i,
-        minutes: p.durationMinutes
-      })),
+      selectedPlaces: cleanConfirmedPlaces.map((p, i) => {
+        const destCity = p.city || p.locationInfo?.ciudad || p.ubicacion?.ciudad || input.city || input.destination || ''
+        const curatedMatch = isCoastalIslandsTour(input)
+          ? findCuratedCoastalStop(p.name || p.nombre, destCity)
+          : null
+        const resolvedPlaceId = p.placeId || p.locationInfo?.place_id || p.ubicacion?.place_id || p.id || curatedMatch?.placeId || ''
+        return {
+          ...(curatedMatch || {}),
+          ...p,
+          name: curatedMatch?.name || p.name,
+          placeId: resolvedPlaceId,
+          candidateId: p.candidateId || p.candidate_id || curatedMatch?.candidateId || resolvedPlaceId,
+          city: destCity,
+          destination: p.destination || input.destination || destCity,
+          curatedDestinationKey: p.curatedDestinationKey || curatedMatch?.curatedDestinationKey || getCuratedCoastalDestinationKey(destCity),
+          order: i,
+          minutes: p.durationMinutes || p.minutes || curatedMatch?.minutes
+        }
+      }),
       ...plannerContext,
       distanceKm: estimateRouteDistance(cleanConfirmedPlaces, null),
       timeProfile: {
@@ -3469,7 +3488,7 @@ export async function buildFallbackTour(planner, input) {
     que_llevar: defaultWhatToBring(input.type),
     normas_del_tour: defaultRules(),
     etiquetas: ['AI Planner', typeLabel(input.type), input.city || input.destination],
-    palabras_clave: unique([input.destination, input.city, input.country, input.type, ...input.touristInterests]),
+    palabras_clave: unique([input.destination, input.city, input.country, input.type, ...(Array.isArray(input.touristInterests) ? input.touristInterests : [])]),
     categoria_principal: input.type,
     presupuesto_estimado_usd: normalizeBudget(null, input),
     informacion_adicional: {
@@ -5887,7 +5906,11 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
 
   const normalizedRawName = normalizePlaceKey(rawName)
   const exactNameMatchedPlace = normalizedRawName
-    ? candidatePlaces.find(candidate => normalizePlaceKey(candidate?.name || '') === normalizedRawName)
+    ? candidatePlaces.find(candidate => {
+        const candidateName = String(candidate?.name || '')
+        return normalizePlaceKey(candidateName) === normalizedRawName ||
+          normalizePlaceKey(candidateName.split(',')[0]) === normalizedRawName
+      })
     : null
   const candidateFallback = isCoastalStop
     ? (idMatchedPlace || exactNameMatchedPlace)
@@ -5898,7 +5921,15 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     ? (idMatchedPlace || exactNameMatchedPlace)
     : (idMatchedPlace || findCandidatePlace(sourceName, candidatePlaces))
 
-  if (isCoastalStop && (!matchedPlace || !isCoastalMappedTouristStop(matchedPlace))) {
+  const matchedPlaceWithContext = matchedPlace
+    ? {
+        ...matchedPlace,
+        city: matchedPlace.city || matchedPlace.locationInfo?.ciudad || matchedPlace.ubicacion?.ciudad || input?.city || input?.destination || '',
+        destination: matchedPlace.destination || input?.destination || input?.city || '',
+      }
+    : null
+
+  if (isCoastalStop && (!matchedPlaceWithContext || !isCoastalMappedTouristStop(matchedPlaceWithContext))) {
     const error = new Error(`La parada "${sourceName || rawName || 'sin nombre'}" no coincide con un lugar costero confirmado en el mapa.`)
     error.code = 'UNMAPPED_COASTAL_STOP'
     error.placeName = sourceName || rawName

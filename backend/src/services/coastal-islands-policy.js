@@ -28,7 +28,8 @@ function osmPrimitive(place) {
   if (OSM_PRIMITIVES.has(explicitType)) return explicitType
 
   const identities = [
-    place?.placeId, place?.place_id, place?.osmId, place?.osm_id,
+    place?.placeId, place?.place_id, place?.id, place?.osmId, place?.osm_id,
+    place?.locationInfo?.place_id, place?.ubicacion?.place_id,
     place?.providerId, place?.providerKey,
     place?.providerIds?.osm, place?.providerIds?.nominatim,
     place?.tags?.place_id, place?.tags?.osm_id,
@@ -43,11 +44,13 @@ function osmPrimitive(place) {
 function hasOsmIdentity(place) {
   const source = String(
     place?.coordinateSource ?? place?.coordinate_source ?? place?.source ??
-    place?.fuente_coordenadas ?? ''
+    place?.fuente_coordenadas ?? place?.locationInfo?.fuente_coordenadas ??
+    place?.ubicacion?.fuente_coordenadas ?? ''
   ).trim()
   const primitive = osmPrimitive(place)
   const cachedOsmIdentity = /^cache/i.test(source) && Boolean(primitive) && [
-    place?.placeId, place?.place_id, place?.osmId, place?.osm_id,
+    place?.placeId, place?.place_id, place?.id, place?.osmId, place?.osm_id,
+    place?.locationInfo?.place_id, place?.ubicacion?.place_id,
     place?.providerIds?.osm, place?.providerIds?.nominatim
   ].some(value => /(?:^|[:/])(?:node|way|relation)[/:]\d+(?:$|\b)/i.test(String(value || '')))
   return coordinatePair(place) && Boolean(primitive) && (OSM_SOURCES.test(source) || cachedOsmIdentity)
@@ -156,7 +159,8 @@ export function isCoastalMappedTouristStop(place) {
   const name = String(place?.name ?? place?.nombre ?? '').trim()
   const curated = isCuratedCoastalCoordinateStop(
     place,
-    place?.curatedDestinationKey ?? place?.city ?? place?.destination ?? ''
+    place?.curatedDestinationKey ?? place?.city ?? place?.destination ??
+    place?.locationInfo?.ciudad ?? place?.ubicacion?.ciudad ?? ''
   )
   if (!name || (!hasOsmIdentity(place) && !curated)) return false
   if (isCoastalArchipelagoOverview(name) || (!curated && isCoastalTransferStop(place))) return false
