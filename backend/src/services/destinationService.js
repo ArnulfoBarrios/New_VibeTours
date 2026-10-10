@@ -552,9 +552,23 @@ export async function resolveCanonicalDestination(query, options = {}) {
 
         const candidateObjects = results.map(item => {
           const address = item.address || {}
-          let rawCity = address.city || address.town || address.village || address.municipality || address.county || address.state_district || ''
-          const city = cleanAdministrativeCityName(rawCity) || cleanAdministrativeCityName(cleaned)
-          const region = address.state || address.region || address.county || ''
+          const entity = item.name ? cleanAdministrativeCityName(item.name.split(',')[0]) : ''
+          const cleanedInputCity = cleanAdministrativeCityName(cleaned)
+          const itemType = String(item.type || '').toLowerCase()
+          const addressType = String(item.addresstype || '').toLowerCase()
+          const isNaturalOrMicroEntity = /\b(parque|reserva|isla|islas|playa|valle|cayo|archipi[ée]lago|embalse|lago|laguna|cañ[oó]n|sierra|nevado|volc[aá]n|cascada|bah[íi]a|cabo|punta)\b/i.test(entity)
+          const isSettlementItem = !isNaturalOrMicroEntity && Boolean(
+            entity && (
+              ['city', 'town', 'village', 'municipality', 'administrative', 'suburb', 'quarter', 'borough', 'hamlet'].includes(itemType) ||
+              ['city', 'town', 'village', 'municipality', 'suburb'].includes(addressType) ||
+              /per[íi]metro\s+urbano|casco\s+urbano|cabecera\s+municipal|zona\s+urbana/i.test(item.name || item.display_name || '') ||
+              (cleanedInputCity && entity.toLowerCase() === cleanedInputCity.toLowerCase())
+            )
+          )
+          const explicitSettlement = address.city || address.town || address.village || address.municipality || ''
+          let rawCity = explicitSettlement || (isSettlementItem ? entity : '') || address.county || address.state_district || ''
+          const city = cleanAdministrativeCityName(rawCity) || cleanedInputCity
+          const region = address.state || address.region || (address.county && cleanAdministrativeCityName(address.county).toLowerCase() !== city.toLowerCase() ? address.county : '') || ''
           const countryRaw = address.country || ''
           const countryCode = (address.country_code || '').toUpperCase()
           const country = formatCountryName(countryRaw, countryCode)
@@ -562,14 +576,13 @@ export async function resolveCanonicalDestination(query, options = {}) {
           const lon = Number(item.lon)
 
           // Format clean displayName e.g. "Parque Nacional Natural Tayrona, Santa Marta, Colombia" or "Santa Marta, Magdalena, Colombia"
-          const entity = item.name ? cleanAdministrativeCityName(item.name.split(',')[0]) : ''
           const isEntityDifferentFromCity = Boolean(entity && city && entity.toLowerCase() !== city.toLowerCase())
           const isMicro = Boolean(
             item.category === 'boundary' && item.type === 'national_park' ||
             item.category === 'leisure' && (item.type === 'nature_reserve' || item.type === 'park') ||
             isEntityDifferentFromCity ||
             /\b(parque|reserva|isla|islas|playa|valle|cayo|archipi[ée]lago|embalse|lago|laguna|cañ[oó]n|sierra|nevado)\b/i.test(cleaned) ||
-            /\b(parque|reserva|isla|islas|playa|valle|cayo|archipi[ée]lago|embalse|lago|laguna|cañ[oó]n|sierra|nevado)\b/i.test(entity)
+            isNaturalOrMicroEntity
           )
           const firstPart = isEntityDifferentFromCity ? `${entity}, ${city}` : (city || entity || cleaned)
           const displayParts = [firstPart, (region && region !== city && !firstPart.includes(region)) ? region : '', country].filter(Boolean)

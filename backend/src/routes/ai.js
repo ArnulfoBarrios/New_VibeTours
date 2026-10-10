@@ -676,14 +676,31 @@ aiRouter.post('/chat', async (req, res, next) => {
       })
     }
 
-    // Solo usar GPS del usuario como coordenadas iniciales si no hay destino previo confirmado
-    if (latitude && longitude && !currentPreferences.canonicalDestination && !currentPreferences.destination && !currentPreferences.city) {
-      currentPreferences.latitude = latitude
-      currentPreferences.longitude = longitude
+    const quickExtracted = extractChatInformationFallback(message)
+    const isLocationRequestEarly = Boolean(
+      currentPreferences?.tourType === 'location_to_destination' ||
+      currentPreferences?.isUserLocationOrigin ||
+      (currentPreferences?.originPlace === 'user_current_location') ||
+      quickExtracted?.tourType === 'location_to_destination' ||
+      quickExtracted?.isUserLocationOrigin ||
+      (quickExtracted?.originPlace === 'user_current_location') ||
+      /\b(desde\s+mi\s+ubicaci[oó]n|de\s+mi\s+ubicaci[oó]n|saliendo\s+de\s+mi\s+ubicaci[oó]n|desde\s+donde\s+estoy|desde\s+aqu[íi]|desde\s+ac[aá])\b/i.test(message)
+    )
+    const isNearbyUserQuery = /\b(cerca de mi|cerca de m[íi]|mi zona|mi ubicaci[óo]n|mi ciudad|aqu[íi]|propio pa[íi]s|en mi pa[íi]s|cercano|cercanos)\b/i.test(message)
+
+    // Preservar siempre el GPS real del dispositivo en userGpsLatitude/userGpsLongitude (para tours desde ubicación actual)
+    // y solo copiarlo a latitude/longitude cuando el tour sea desde la ubicación del usuario o pida lugares "cerca de mí".
+    if (latitude && longitude) {
+      currentPreferences.userGpsLatitude = latitude
+      currentPreferences.userGpsLongitude = longitude
+      if (isLocationRequestEarly || (isNearbyUserQuery && !currentPreferences.canonicalDestination && !currentPreferences.destination && !currentPreferences.city)) {
+        currentPreferences.latitude = latitude
+        currentPreferences.longitude = longitude
+      }
     }
 
     // Si el usuario pide atracciones "cerca de mi zona / cerca de mí" y no hay destino previo, geocodificar su ciudad actual
-    if (latitude && longitude && !currentPreferences.destination && !currentPreferences.city && /\b(cerca de mi|cerca de m[íi]|mi zona|mi ubicaci[óo]n|mi ciudad|aqu[íi]|propio pa[íi]s|en mi pa[íi]s|cercano|cercanos)\b/i.test(message)) {
+    if (latitude && longitude && !currentPreferences.destination && !currentPreferences.city && isNearbyUserQuery && !isLocationRequestEarly) {
       try {
         const geoResult = await reverseGeocodeLocation(latitude, longitude)
         if (geoResult?.city) {
@@ -701,13 +718,6 @@ aiRouter.post('/chat', async (req, res, next) => {
     const isExplicitBuildOrItineraryRequest = Boolean(
       currentPreferences?.readyToBuild ||
       /\b(gener(ar|es|a|e|en|al)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|cre(ar|es|a|e|en)?\s+(?:el\s+|la\s+|un\s+|una\s+|mi\s+|nuestro\s+)?(tour|itinerario|ruta|viaje|plan|mapa)|inicia(r)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|finaliza(r)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|constru(ye|ir)\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta|viaje)|dise[ñn](ar|a|es|e)?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|armar?\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta|viaje)|adelante\s+(con\s+el\s+tour|genera|crea|construye|procede)|vamos\s+(a\s+)?(generar|crear)\s+(?:el\s+|la\s+|un\s+|una\s+)?(tour|itinerario|ruta)|c[oó]mo\s+(va|queda)\s+(el\s+|mi\s+)?itinerario|mostrar?\s+(el\s+|mi\s+)?itinerario|mu[eé]strame\s+(el\s+|mi\s+)?itinerario|ver\s+(el\s+|mi\s+)?itinerario|plan\s+de\s+viaje|detalles\s+del\s+d[íi]a)\b/i.test(message)
-    )
-    const quickExtracted = extractChatInformationFallback(message)
-    const isLocationRequestEarly = Boolean(
-      quickExtracted?.tourType === 'location_to_destination' ||
-      quickExtracted?.isUserLocationOrigin ||
-      (quickExtracted?.originPlace === 'user_current_location') ||
-      /\b(desde\s+mi\s+ubicaci[oó]n|de\s+mi\s+ubicaci[oó]n|saliendo\s+de\s+mi\s+ubicaci[oó]n|desde\s+donde\s+estoy|desde\s+aqu[íi]|desde\s+ac[aá])\b/i.test(message)
     )
     const existingCanonical = currentPreferences.canonicalDestination
     const preloadDestination = existingCanonical?.city ||
@@ -953,7 +963,13 @@ aiRouter.post('/chat', async (req, res, next) => {
     if (latitude && longitude) {
       updatedPreferences.userGpsLatitude = latitude
       updatedPreferences.userGpsLongitude = longitude
-      if (!updatedPreferences.destination && !updatedPreferences.city && !updatedPreferences.canonicalDestination) {
+      const isLocOrigin = Boolean(
+        isLocationRequestEarly ||
+        updatedPreferences.tourType === 'location_to_destination' ||
+        updatedPreferences.isUserLocationOrigin ||
+        updatedPreferences.originPlace === 'user_current_location'
+      )
+      if (isLocOrigin || (isNearbyUserQuery && !updatedPreferences.destination && !updatedPreferences.city && !updatedPreferences.canonicalDestination)) {
         updatedPreferences.latitude = latitude
         updatedPreferences.longitude = longitude
       }
@@ -1339,7 +1355,12 @@ aiRouter.post('/chat', async (req, res, next) => {
     }
 
     // Extraer lugares SOLO si ya se eligió la ciudad destino y provienen de elecciones explícitas o de un itinerario estructurado confirmado
-    const hasConfirmedCity = Boolean(updatedPreferences.city || updatedPreferences.destination)
+    const hasConfirmedCity = Boolean(
+      updatedPreferences.city ||
+      updatedPreferences.destination ||
+      aiResponse.extractedPreferences?.city ||
+      aiResponse.extractedPreferences?.destination
+    )
     const isAskingCityRecomms = !hasConfirmedCity && /\b(recomien|recomiend|qué me recomiendas|dónde ir|opciones|destinos)\b/i.test(message)
     const extractedFromMsg = []
 
@@ -1371,8 +1392,8 @@ aiRouter.post('/chat', async (req, res, next) => {
       if (isConfirmedItineraryMsg && confirmedPois.length >= 2) {
         // SSOT: El itinerario estructurado visible en el mensaje del chat es la verdad absoluta.
         // Reconciliar confirmedPois con aiResponse.extractedPreferences.specificPlaces y el catálogo para conservar coordenadas y tipado de restaurante.
-        const chatCity = updatedPreferences.city || updatedPreferences.destination || ''
-        const chatCountry = updatedPreferences.country || ''
+        const chatCity = updatedPreferences.city || updatedPreferences.destination || aiResponse.extractedPreferences?.city || aiResponse.extractedPreferences?.destination || ''
+        const chatCountry = updatedPreferences.country || aiResponse.extractedPreferences?.country || ''
         const itineraryDays = confirmedPois.map(p => Number(p.dia || p.day || 1)).filter(d => d > 0)
         const maxDay = itineraryDays.length > 0 ? Math.max(...itineraryDays) : 0
         if (maxDay >= 1 && (!updatedPreferences.durationDays || maxDay > updatedPreferences.durationDays)) {
@@ -1392,7 +1413,9 @@ aiRouter.post('/chat', async (req, res, next) => {
             return txt.includes('location_to_destination') || txt.includes('desde mi ubicación') || txt.includes('desde mi ubicacion') || txt.includes('desde mi posición') || txt.includes('desde mi posicion')
           })
         )
-        const chatCatalog = (!isLocationRoute && chatCity) ? await getRealDestinationCatalog(chatCity, chatCountry, updatedPreferences.latitude, updatedPreferences.longitude, { requestedDays: maxDay || 7, tourType: updatedPreferences.tourType }).catch(() => null) : null
+        const chatCatalogLat = updatedPreferences.canonicalDestination?.latitude ?? null
+        const chatCatalogLon = updatedPreferences.canonicalDestination?.longitude ?? null
+        const chatCatalog = (!isLocationRoute && chatCity) ? await getRealDestinationCatalog(chatCity, chatCountry, chatCatalogLat, chatCatalogLon, { requestedDays: maxDay || 7, tourType: updatedPreferences.tourType }).catch(() => null) : null
         const aiSpecifics = Array.isArray(aiResponse.extractedPreferences?.specificPlaces)
           ? aiResponse.extractedPreferences.specificPlaces
           : []
@@ -1556,6 +1579,37 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences.tourType === 'location_to_destination' ||
       updatedPreferences.isUserLocationOrigin
     )
+
+    const postAiCity = updatedPreferences.city || updatedPreferences.destination || ''
+    if (!isLocationRoute && postAiCity) {
+      const hasMatchingCanonical = updatedPreferences.canonicalDestination &&
+        Number.isFinite(Number(updatedPreferences.canonicalDestination.latitude)) &&
+        Number.isFinite(Number(updatedPreferences.canonicalDestination.longitude)) &&
+        arePlacesSimilar(updatedPreferences.canonicalDestination.city || updatedPreferences.canonicalDestination.entity || '', postAiCity)
+      if (!hasMatchingCanonical) {
+        try {
+          const resolvedPostCanonical = await resolveCanonicalDestination(
+            `${postAiCity}${updatedPreferences.country ? `, ${updatedPreferences.country}` : ''}`,
+            null,
+            null
+          )
+          if (resolvedPostCanonical?.latitude && resolvedPostCanonical?.longitude) {
+            updatedPreferences.canonicalDestination = resolvedPostCanonical
+            updatedPreferences.latitude = resolvedPostCanonical.latitude
+            updatedPreferences.longitude = resolvedPostCanonical.longitude
+            if (resolvedPostCanonical.city && resolvedPostCanonical.city !== 'Unknown') {
+              updatedPreferences.city = resolvedPostCanonical.city
+              updatedPreferences.destination = resolvedPostCanonical.city
+            }
+            if (resolvedPostCanonical.country && resolvedPostCanonical.country !== 'Unknown') {
+              updatedPreferences.country = resolvedPostCanonical.country
+            }
+          }
+        } catch (_err) {
+          // ignore
+        }
+      }
+    }
 
     if ((!hasConfirmedCity || isAskingCityRecomms) && !isLocationRoute) {
       delete updatedPreferences.specificPlaces
@@ -2185,11 +2239,37 @@ aiRouter.post('/tours/build', async (req, res, next) => {
     const { request: input, places, plannerContext } = buildSchema.parse(req.body)
     applyTourType(input, plannerContext)
     
+    if (Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude))) {
+      input.userGpsLatitude = input.userGpsLatitude ?? Number(input.latitude)
+      input.userGpsLongitude = input.userGpsLongitude ?? Number(input.longitude)
+    }
+
+    const isUserOriginBuild = Boolean(
+      input.isUserLocationOrigin ||
+      input.originPlace === 'user_current_location' ||
+      input.tourType === 'location_to_destination'
+    )
     const destQuery = input.city || input.destination || ''
     const firstPlaceWithCoords = Array.isArray(places) ? places.find(p => Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude))) : null
-    if (firstPlaceWithCoords) {
-      input.latitude = input.latitude || Number(firstPlaceWithCoords.latitude)
-      input.longitude = input.longitude || Number(firstPlaceWithCoords.longitude)
+
+    if (!isUserOriginBuild && destQuery) {
+      const canonical = (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude && arePlacesSimilar(input.canonicalDestination.city || input.canonicalDestination.displayName || '', destQuery))
+        ? input.canonicalDestination
+        : await resolveCanonicalDestination(destQuery).catch(() => null)
+      if (canonical && Number.isFinite(Number(canonical.latitude)) && Number.isFinite(Number(canonical.longitude))) {
+        input.canonicalDestination = canonical
+        input.latitude = Number(canonical.latitude)
+        input.longitude = Number(canonical.longitude)
+        input.city = cleanAdministrativeCityName(canonical.city || input.city || destQuery)
+        input.country = canonical.country || input.country || 'Colombia'
+      }
+    }
+
+    if (firstPlaceWithCoords && (!input.canonicalDestination || isUserOriginBuild)) {
+      const pLat = Number(firstPlaceWithCoords.latitude)
+      const pLon = Number(firstPlaceWithCoords.longitude)
+      input.latitude = isUserOriginBuild ? (input.latitude || pLat) : pLat
+      input.longitude = isUserOriginBuild ? (input.longitude || pLon) : pLon
       input.city = input.city || firstPlaceWithCoords.city || firstPlaceWithCoords.locationInfo?.ciudad || destQuery
       input.country = input.country || firstPlaceWithCoords.country || firstPlaceWithCoords.locationInfo?.pais || 'Colombia'
       if (!input.canonicalDestination) {
@@ -2197,27 +2277,18 @@ aiRouter.post('/tours/build', async (req, res, next) => {
           displayName: input.city,
           city: input.city,
           country: input.country,
-          latitude: input.latitude,
-          longitude: input.longitude,
+          latitude: pLat,
+          longitude: pLon,
           placeId: String(firstPlaceWithCoords.placeId || firstPlaceWithCoords.id || '')
         }
       }
     } else if ((!input.latitude || !input.longitude || !input.city || !input.country) && destQuery) {
-      const canonical = await resolveCanonicalDestination(destQuery).catch(() => null)
-      if (canonical) {
-        input.canonicalDestination = canonical
-        input.latitude = input.latitude || canonical.latitude
-        input.longitude = input.longitude || canonical.longitude
-        input.city = input.city || canonical.city
-        input.country = input.country || canonical.country
-      } else {
-        const location = await geocodePlace(destQuery).catch(() => null)
-        if (location) {
-          input.city = input.city || location.city || ''
-          input.country = input.country || location.country || ''
-          input.latitude = input.latitude || location.latitude
-          input.longitude = input.longitude || location.longitude
-        }
+      const location = await geocodePlace(destQuery).catch(() => null)
+      if (location) {
+        input.city = input.city || location.city || ''
+        input.country = input.country || location.country || ''
+        input.latitude = input.latitude || location.latitude
+        input.longitude = input.longitude || location.longitude
       }
     }
 
@@ -2589,11 +2660,33 @@ export async function processTourBuild(jobId, input, confirmedPlaces, plannerCon
     if (job) Object.assign(job, updates)
   }
 
+  if (Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude))) {
+    input.userGpsLatitude = input.userGpsLatitude ?? Number(input.latitude)
+    input.userGpsLongitude = input.userGpsLongitude ?? Number(input.longitude)
+  }
+
+  const isUserOrigin = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
   const destQuery = input.city || input.destination || ''
   const firstConfirmedWithCoords = Array.isArray(confirmedPlaces) ? confirmedPlaces.find(p => Number.isFinite(Number(p?.latitude)) && Number.isFinite(Number(p?.longitude))) : null
-  if (firstConfirmedWithCoords) {
-    input.latitude = input.latitude || Number(firstConfirmedWithCoords.latitude)
-    input.longitude = input.longitude || Number(firstConfirmedWithCoords.longitude)
+
+  if (!isUserOrigin && destQuery) {
+    const canonical = (input.canonicalDestination?.latitude && input.canonicalDestination?.longitude && arePlacesSimilar(input.canonicalDestination.city || input.canonicalDestination.displayName || '', destQuery))
+      ? input.canonicalDestination
+      : await resolveCanonicalDestination(destQuery).catch(() => null)
+    if (canonical && Number.isFinite(Number(canonical.latitude)) && Number.isFinite(Number(canonical.longitude))) {
+      input.canonicalDestination = canonical
+      input.latitude = Number(canonical.latitude)
+      input.longitude = Number(canonical.longitude)
+      input.city = cleanAdministrativeCityName(canonical.city || input.city || destQuery)
+      input.country = canonical.country || input.country || 'Colombia'
+    }
+  }
+
+  if (firstConfirmedWithCoords && (!input.canonicalDestination || isUserOrigin)) {
+    const pLat = Number(firstConfirmedWithCoords.latitude)
+    const pLon = Number(firstConfirmedWithCoords.longitude)
+    input.latitude = isUserOrigin ? (input.latitude || pLat) : pLat
+    input.longitude = isUserOrigin ? (input.longitude || pLon) : pLon
     input.city = input.city || firstConfirmedWithCoords.city || firstConfirmedWithCoords.locationInfo?.ciudad || destQuery
     input.country = input.country || firstConfirmedWithCoords.country || firstConfirmedWithCoords.locationInfo?.pais || 'Colombia'
     if (!input.canonicalDestination) {
@@ -2601,24 +2694,14 @@ export async function processTourBuild(jobId, input, confirmedPlaces, plannerCon
         displayName: input.city,
         city: input.city,
         country: input.country,
-        latitude: input.latitude,
-        longitude: input.longitude,
+        latitude: pLat,
+        longitude: pLon,
         placeId: String(firstConfirmedWithCoords.placeId || firstConfirmedWithCoords.id || '')
       }
-    }
-  } else if ((!input.latitude || !input.longitude || !input.canonicalDestination) && destQuery) {
-    const canonical = await resolveCanonicalDestination(destQuery).catch(() => null)
-    if (canonical) {
-      input.canonicalDestination = canonical
-      input.latitude = input.latitude || canonical.latitude
-      input.longitude = input.longitude || canonical.longitude
-      input.city = input.city || canonical.city
-      input.country = input.country || canonical.country
     }
   }
 
   try {
-    const isUserOrigin = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
     const cleanConfirmedPlaces = isUserOrigin
       ? (Array.isArray(confirmedPlaces) ? confirmedPlaces : []).filter(p => {
           const pName = (p?.name || '').toLowerCase()
@@ -2919,6 +3002,11 @@ async function processTourGeneration(jobId, input) {
   }
 
   try {
+    if (Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude))) {
+      input.userGpsLatitude = input.userGpsLatitude ?? Number(input.latitude)
+      input.userGpsLongitude = input.userGpsLongitude ?? Number(input.longitude)
+    }
+
     console.info('[tour-ai] generate:start', { jobId: jobId || 'sync', destination: input.destination, city: input.city, country: input.country, durationHours: input.durationHours, type: input.type })
     
     let canonicalDest = input.canonicalDestination
@@ -2967,6 +3055,11 @@ async function processTourGeneration(jobId, input) {
 
     // Anchor input to canonical destination
     input.canonicalDestination = canonicalDest
+    const isUserOriginGen = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
+    if (!isUserOriginGen) {
+      input.latitude = canonicalDest.latitude
+      input.longitude = canonicalDest.longitude
+    }
     if (!input.isMultiCity && (!Array.isArray(input.cities) || input.cities.length <= 1)) {
       input.destination = canonicalDest.displayName
       input.city = canonicalDest.city
@@ -3601,12 +3694,14 @@ export function buildTourPlanner(input, location = null, places = []) {
     const destName = cleanDest || rawDestName
     const destKey = normalizeKey(destName)
     
+    const gpsOriginLat = Number(input.userGpsLatitude ?? input.latitude)
+    const gpsOriginLon = Number(input.userGpsLongitude ?? input.longitude)
     // Origin place candidate (only used as a tourist stop if genuine landmark, NOT user current location)
     const startPlaceCandidate = normalized.find(p => 
       p.rawTags?.start_point === 'true' || 
       p.type === 'start_point' || 
       (input.originPlace && normalizeKey(p.name) === normalizeKey(input.originPlace))
-    ) || (Number.isFinite(Number(input.latitude)) && Number.isFinite(Number(input.longitude)) ? { name: 'Tu ubicación actual', latitude: Number(input.latitude), longitude: Number(input.longitude), type: 'start_point' } : null)
+    ) || (Number.isFinite(gpsOriginLat) && Number.isFinite(gpsOriginLon) ? { name: 'Tu ubicación actual', latitude: gpsOriginLat, longitude: gpsOriginLon, type: 'start_point' } : null)
 
     // End place candidate (Destination)
     let endPlaceCandidate = normalized.find(p => 
@@ -3632,8 +3727,8 @@ export function buildTourPlanner(input, location = null, places = []) {
     }
 
     const startLoc = {
-      latitude: Number(input.latitude ?? location?.latitude ?? startPlaceCandidate?.latitude ?? 0),
-      longitude: Number(input.longitude ?? location?.longitude ?? startPlaceCandidate?.longitude ?? 0)
+      latitude: Number.isFinite(gpsOriginLat) ? gpsOriginLat : Number(location?.latitude ?? startPlaceCandidate?.latitude ?? 0),
+      longitude: Number.isFinite(gpsOriginLon) ? gpsOriginLon : Number(location?.longitude ?? startPlaceCandidate?.longitude ?? 0)
     }
     const endLoc = endPlaceCandidate ? {
       latitude: Number(endPlaceCandidate.latitude ?? location?.latitude ?? 0),
@@ -6238,6 +6333,17 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
 
   const isCorridor = Boolean(input.originPlace && input.destinationPlace && startPlace && endPlace)
   let canonicalDest = input.canonicalDestination
+  const cleanCity = cleanAdministrativeCityName(input.city || input.destination || '')
+  if (!canonicalDest && cleanCity) {
+    canonicalDest = await resolveCanonicalDestination(cleanCity).catch(() => null)
+    if (canonicalDest) {
+      input.canonicalDestination = canonicalDest
+      if (!isCorridor) {
+        input.latitude = canonicalDest.latitude
+        input.longitude = canonicalDest.longitude
+      }
+    }
+  }
   if (!canonicalDest && hasUsableCoordinates(input.latitude, input.longitude)) {
     canonicalDest = {
       latitude: input.latitude,
@@ -6245,15 +6351,6 @@ export async function resolveStopCoordinates({ source, input, name, matchedPlace
       displayName: input.city || input.destination,
       city: input.city,
       country: input.country
-    }
-  }
-  const cleanCity = cleanAdministrativeCityName(input.city || input.destination || '')
-  if (!canonicalDest && cleanCity) {
-    canonicalDest = await resolveCanonicalDestination(cleanCity).catch(() => null)
-    if (canonicalDest) {
-      input.canonicalDestination = canonicalDest
-      if (!input.latitude) input.latitude = canonicalDest.latitude
-      if (!input.longitude) input.longitude = canonicalDest.longitude
     }
   }
   const destLat = canonicalDest?.latitude ?? input.latitude ?? null
@@ -6927,8 +7024,8 @@ export async function collectCorridorCandidates(input, location) {
   let endPlace = null
   
   if (input.originPlace === 'user_current_location' || input.isUserLocationOrigin || input.tourType === 'location_to_destination') {
-    let userLat = Number(input.latitude ?? 0)
-    let userLon = Number(input.longitude ?? 0)
+    let userLat = Number(input.userGpsLatitude ?? input.latitude ?? 0)
+    let userLon = Number(input.userGpsLongitude ?? input.longitude ?? 0)
     if (!userLat && location?.latitude) userLat = Number(location.latitude)
     if (!userLon && location?.longitude) userLon = Number(location.longitude)
     if (userLat && userLon) {
@@ -7280,16 +7377,16 @@ export async function collectTourCandidates(input, location) {
   }
 
   // Obtenemos primero las coordenadas del centro del destino para validar el radio
-  const cityGeo = (location?.latitude && location?.longitude)
-    ? location
-    : (canonicalDest?.latitude && canonicalDest?.longitude)
-      ? canonicalDest
+  const cityGeo = (canonicalDest?.latitude && canonicalDest?.longitude)
+    ? canonicalDest
+    : (location?.latitude && location?.longitude)
+      ? location
       : await geocodePlace(`${city} ${country}`.trim()).catch(() => null)
   let cityCenterLat = cityGeo?.latitude ?? canonicalDest?.latitude ?? null
   let cityCenterLon = cityGeo?.longitude ?? canonicalDest?.longitude ?? null
 
-  // If cityCenterLat is still unresolved, check input GPS or known fallback centroids
-  if (cityCenterLat == null && input.latitude && input.longitude) {
+  // If cityCenterLat is still unresolved, check known fallback centroids or input GPS (only when no city name was provided)
+  if (cityCenterLat == null && !city && !input.destination && input.latitude && input.longitude) {
     cityCenterLat = Number(input.latitude)
     cityCenterLon = Number(input.longitude)
   }
@@ -7388,7 +7485,7 @@ export async function collectTourCandidates(input, location) {
         if (curatedSpecific) placeName = curatedSpecific.name
         if (!isValidSpecificPlace(placeName) || isTemporalOrDurationPhrase(placeName) || isNonTouristFacility({ name: placeName })) return null
 
-        // If rawPlace already has verified coordinates from chat SSOT, preserve and reuse them directly
+        // If rawPlace already has verified coordinates from chat SSOT, preserve and reuse them ONLY if within destination bounds
         let geo = curatedSpecific
         if (!curatedSpecific && rawPlace && typeof rawPlace === 'object' && Number.isFinite(Number(rawPlace.latitude)) && Number.isFinite(Number(rawPlace.longitude)) && rawPlace.coordinatesVerified) {
           const rawLat = Number(rawPlace.latitude)
@@ -7397,17 +7494,24 @@ export async function collectTourCandidates(input, location) {
             console.warn(`[collectTourCandidates] Discarding place outside coastal corridor: ${placeName} (${rawLat}, ${rawLon} en ${city})`)
             return null
           }
-          geo = {
-            name: placeName,
-            latitude: rawLat,
-            longitude: rawLon,
-            city: rawPlace.city || city,
-            country: rawPlace.country || country,
-            address: rawPlace.address || `${placeName}, ${city}`,
-            placeId: rawPlace.placeId || rawPlace.id || '',
-            coordinateSource: rawPlace.coordinateSource || 'osm',
-            coordinatesVerified: true,
-            isReferentialLocation: Boolean(rawPlace.isReferentialLocation)
+          const withinTargetBounds = !canonicalDest || validateCandidateLocation(
+            { latitude: rawLat, longitude: rawLon, name: placeName, city: rawPlace.city || city },
+            canonicalDest,
+            geoScope.maxDistanceKm
+          )
+          if (withinTargetBounds) {
+            geo = {
+              name: placeName,
+              latitude: rawLat,
+              longitude: rawLon,
+              city: rawPlace.city || city,
+              country: rawPlace.country || country,
+              address: rawPlace.address || `${placeName}, ${city}`,
+              placeId: rawPlace.placeId || rawPlace.id || '',
+              coordinateSource: rawPlace.coordinateSource || 'osm',
+              coordinatesVerified: true,
+              isReferentialLocation: Boolean(rawPlace.isReferentialLocation)
+            }
           }
         }
 
@@ -7852,10 +7956,19 @@ export async function collectTourCandidates(input, location) {
   const radiusWide = Math.round(geoScope.maxDistanceKm * 1000)
 
   // Calculate subzone centroid if user has specific requested places (e.g. Tayrona cluster, Minca, etc.)
-  let searchCenterLat = input.canonicalDestination?.latitude || location?.latitude || cityCenterLat
-  let searchCenterLon = input.canonicalDestination?.longitude || location?.longitude || cityCenterLon
+  const baseCityLat = input.canonicalDestination?.latitude || location?.latitude || cityCenterLat
+  const baseCityLon = input.canonicalDestination?.longitude || location?.longitude || cityCenterLon
+  let searchCenterLat = baseCityLat
+  let searchCenterLon = baseCityLon
 
-  const validSpecifics = geocodedSpecifics.filter(p => hasUsableCoordinates(p.latitude, p.longitude))
+  const validSpecifics = geocodedSpecifics.filter(p => {
+    if (!hasUsableCoordinates(p.latitude, p.longitude)) return false
+    if (baseCityLat && baseCityLon) {
+      const distKm = haversineMeters(p.latitude, p.longitude, baseCityLat, baseCityLon) / 1000
+      if (distKm > Math.max(geoScope.maxDistanceKm || 45, 55)) return false
+    }
+    return true
+  })
   if (validSpecifics.length > 0) {
     searchCenterLat = validSpecifics.reduce((acc, p) => acc + p.latitude, 0) / validSpecifics.length
     searchCenterLon = validSpecifics.reduce((acc, p) => acc + p.longitude, 0) / validSpecifics.length

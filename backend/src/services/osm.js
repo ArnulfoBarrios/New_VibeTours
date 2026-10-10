@@ -184,7 +184,9 @@ export async function reverseGeocodeLocation(lat, lon) {
     if (response.ok) {
       const data = await response.json()
       if (data && data.address) {
-        let city = data.address.city || data.address.town || data.address.village || data.address.municipality || data.address.county || data.address.state || ''
+        const entity = data.name ? cleanAdministrativeCityName(data.name.split(',')[0]) : ''
+        const explicitSettlement = data.address.city || data.address.town || data.address.village || data.address.municipality || ''
+        let city = explicitSettlement || entity || data.address.county || data.address.state || ''
         city = cleanAdministrativeCityName(city)
         const countryRaw = data.address.country || ''
         const country = formatCountryName(countryRaw, data.address.country_code)
@@ -892,7 +894,7 @@ export const KNOWN_ICONIC_LANDMARKS = {
   'sagrada familia': { name: 'Basílica de la Sagrada Família', latitude: 41.4036, longitude: 2.1744, city: 'Barcelona', country: 'España' }
 }
 
-export function matchIconicLandmark(query, normalizedQuery, centerLat = null, centerLon = null, maxDistanceMeters = 75000) {
+export function matchIconicLandmark(query, normalizedQuery, centerLat = null, centerLon = null, maxDistanceMeters = 75000, expectedCity = '') {
   if (!query && !normalizedQuery) return null
   const normLower = String(normalizedQuery || query || '').toLowerCase().trim()
   const rawClean = String(query || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
@@ -930,6 +932,35 @@ export function matchIconicLandmark(query, normalizedQuery, centerLat = null, ce
     if (centerLat != null && centerLon != null) {
       const dist = haversineMeters(centerLat, centerLon, landmarkMatch.latitude, landmarkMatch.longitude)
       isValidInRegion = dist <= maxDistanceMeters
+    }
+    if (isValidInRegion && landmarkMatch.city) {
+      const rawCommaParts = String(normalizedQuery || query || '').split(',').map(s => s.trim()).filter(Boolean)
+      const commaCityCandidate = rawCommaParts.length > 1 ? rawCommaParts[1] : ''
+      const targetCityRaw = String(expectedCity || commaCityCandidate || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\b(colombia|local)\b/gi, '')
+        .trim()
+      const landmarkCityNorm = String(landmarkMatch.city || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+      if (targetCityRaw && landmarkCityNorm && targetCityRaw !== landmarkCityNorm && !targetCityRaw.includes(landmarkCityNorm) && !landmarkCityNorm.includes(targetCityRaw)) {
+        const metroGroups = [
+          ['barranquilla', 'puerto colombia', 'soledad', 'salgar', 'atlantico'],
+          ['santa marta', 'el rodadero', 'rodadero', 'minca', 'taganga', 'tayrona', 'parque nacional natural tayrona', 'magdalena'],
+          ['cartagena', 'cartagena de indias', 'baru', 'isla baru', 'islas del rosario', 'turbaco', 'bolivar'],
+          ['covenas', 'tolu', 'santiago de tolu', 'san antero', 'golfo de morrosquillo', 'morrosquillo', 'islas de san bernardo', 'sucre', 'cordoba']
+        ]
+        const sameMetro = metroGroups.some(group =>
+          group.some(g => targetCityRaw.includes(g)) && group.some(g => landmarkCityNorm.includes(g))
+        )
+        if (!sameMetro) {
+          isValidInRegion = false
+        }
+      }
     }
     if (isValidInRegion) {
       return landmarkMatch
@@ -1034,10 +1065,11 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
   const resolveCityFromPhoton = (item) => {
     const rawCounty = cleanAdministrativeCityName(item?.tags?.county || '')
     const rawCity = cleanAdministrativeCityName(item?.city || item?.tags?.city || '')
+    const contextCity = cleanAdministrativeCityName(options?.city || options?.destination || '')
     if (rawCounty && normalizedQuery.toLowerCase().includes(rawCounty.toLowerCase())) {
       return rawCounty
     }
-    return rawCity || rawCounty || ''
+    return rawCity || contextCity || rawCounty || ''
   }
 
   // 1. Resolve search center coordinates
@@ -1064,10 +1096,12 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
     }
     if (detectedCity) {
       const cleanCityKey = detectedCity.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-      const fallbackCentroid = FALLBACK_DESTINATION_CENTROIDS[cleanCityKey] || FALLBACK_DESTINATION_CENTROIDS[detectedCity.toLowerCase()]
-      if (fallbackCentroid) {
-        centerLat = fallbackCentroid.latitude
-        centerLon = fallbackCentroid.longitude
+      const fallbackCentroid = FALLBACK_DESTINATION_CENTROIDS[cleanCityKey] ||
+        FALLBACK_DESTINATION_CENTROIDS[detectedCity.toLowerCase()] ||
+        getCanonicalDestinationFromCache(detectedCity)
+      if (fallbackCentroid && Number.isFinite(Number(fallbackCentroid.latitude)) && Number.isFinite(Number(fallbackCentroid.longitude))) {
+        centerLat = Number(fallbackCentroid.latitude)
+        centerLon = Number(fallbackCentroid.longitude)
       }
     }
   }
@@ -1077,7 +1111,14 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
 
   // 1.5. Direct Iconic Landmark Match (Only when not requesting live providers)
   if (!options?.skipIconicLandmarks && !options?.preferLiveProviders) {
-    const landmarkMatch = matchIconicLandmark(lookupQuery, normalizedQuery, centerLat, centerLon, maxDistanceMeters)
+    const landmarkMatch = matchIconicLandmark(
+      lookupQuery,
+      normalizedQuery,
+      centerLat,
+      centerLon,
+      maxDistanceMeters,
+      options?.city || options?.destination || ''
+    )
     if (landmarkMatch) {
       const verified = withVerifiedCoordinates({
         name: landmarkMatch.name,
@@ -1269,13 +1310,16 @@ export async function geocodePlace(query, lat = null, lon = null, options = {}) 
             if (centerLat == null || dMeters <= maxDistanceMeters) {
               const address = validResult.address || {}
               const county = cleanAdministrativeCityName(address.county || '')
-              const matchedContextCity = commaParts.length > 1 ? cleanAdministrativeCityName(commaParts[1]) : ''
-              let rawCity = address.city || ''
+              const matchedContextCity = cleanAdministrativeCityName(optCity || (commaParts.length > 1 ? commaParts[1] : ''))
+              const resultEntityCity = (['city', 'town', 'village', 'municipality', 'administrative'].includes(String(validResult.type || '').toLowerCase()) && validResult.name)
+                ? cleanAdministrativeCityName(validResult.name.split(',')[0])
+                : ''
+              let rawCity = address.city || address.town || address.village || address.municipality || resultEntityCity || ''
               if (county && matchedContextCity && county.toLowerCase() === matchedContextCity.toLowerCase()) {
                 rawCity = county
               }
               if (!rawCity) {
-                rawCity = address.town || address.village || address.municipality || address.county || matchedContextCity || ''
+                rawCity = matchedContextCity || address.county || ''
               }
               const city = cleanAdministrativeCityName(rawCity)
               const country = address.country || ''

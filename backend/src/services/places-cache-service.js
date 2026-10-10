@@ -1,7 +1,22 @@
 import { supabase } from './supabase.js'
 import { GeoCache } from './geoCache.js'
-import { FALLBACK_DESTINATION_CENTROIDS, haversineDistanceKm } from './destinationService.js'
+import { FALLBACK_DESTINATION_CENTROIDS, haversineDistanceKm, getCanonicalDestinationFromCache } from './destinationService.js'
 import { isGenericFacilityName } from './open-tourism-service.js'
+
+function resolveCityCentroidForCache(city = '', normCity = '', explicitLat = null, explicitLon = null) {
+  if (explicitLat != null && explicitLon != null && Number.isFinite(Number(explicitLat)) && Number.isFinite(Number(explicitLon))) {
+    return { latitude: Number(explicitLat), longitude: Number(explicitLon) }
+  }
+  const key = normCity || normalizeCityKey(city)
+  if (key && FALLBACK_DESTINATION_CENTROIDS[key]) {
+    return FALLBACK_DESTINATION_CENTROIDS[key]
+  }
+  const canonical = city ? getCanonicalDestinationFromCache(city) : null
+  if (canonical && Number.isFinite(Number(canonical.latitude)) && Number.isFinite(Number(canonical.longitude))) {
+    return { latitude: Number(canonical.latitude), longitude: Number(canonical.longitude) }
+  }
+  return null
+}
 
 // In-memory LRU cache fallback (24 hours TTL, up to 1000 places)
 export const placesMemoryCache = new GeoCache(24 * 60 * 60 * 1000, 1000)
@@ -79,9 +94,14 @@ export async function lookupCachedPlace(name, city = '') {
   const normCity = normalizeCityKey(city)
   if (!normName) return null
 
+  const centroid = resolveCityCentroidForCache(city, normCity)
   const cacheKey = getMemoryCacheKey(normName, normCity)
   const memHit = placesMemoryCache.get(cacheKey)
   if (memHit) {
+    if (centroid && Number.isFinite(Number(memHit.latitude)) && Number.isFinite(Number(memHit.longitude))) {
+      const dist = haversineDistanceKm(centroid.latitude, centroid.longitude, Number(memHit.latitude), Number(memHit.longitude))
+      if (dist > 55) return null
+    }
     return { ...memHit, source: memHit.source || 'cache_memory' }
   }
 
@@ -100,12 +120,19 @@ export async function lookupCachedPlace(name, city = '') {
     const { data, error } = await query.limit(1).maybeSingle()
     if (error || !data) return null
 
+    const lat = Number(data.latitude)
+    const lon = Number(data.longitude)
+    if (centroid && Number.isFinite(lat) && Number.isFinite(lon)) {
+      const dist = haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon)
+      if (dist > 55) return null
+    }
+
     const cachedPlace = {
       name: data.name,
       city: data.city,
       address: data.address || '',
-      latitude: Number(data.latitude),
-      longitude: Number(data.longitude),
+      latitude: lat,
+      longitude: lon,
       placeId: data.place_id || '',
       place_id: data.place_id || '',
       source: `cache_db:${data.source}`,
@@ -125,19 +152,35 @@ export async function lookupCachedPlace(name, city = '') {
  * Looks up all cached places for a given city from memory LRU or Supabase places_cache.
  * @param {string} city - City name
  * @param {string|null} category - Optional filter ('attraction', 'restaurant', 'hotel')
+ * @param {number|null} centerLat - Optional destination center latitude
+ * @param {number|null} centerLon - Optional destination center longitude
  * @returns {Promise<Array<object>>} List of cached places
  */
-export async function lookupCachedPlacesForCity(city = '', category = null) {
+export async function lookupCachedPlacesForCity(city = '', category = null, centerLat = null, centerLon = null) {
   const normCity = normalizeCityKey(city)
   if (!normCity) return []
+
+  const centroid = resolveCityCentroidForCache(city, normCity, centerLat, centerLon)
+  const filterByCentroid = (list = []) => {
+    if (!centroid) return list
+    return (Array.isArray(list) ? list : []).filter(p => {
+      const lat = Number(p?.latitude ?? p?.lat)
+      const lon = Number(p?.longitude ?? p?.lon)
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
+      return haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon) <= 55
+    })
+  }
 
   // Check in-memory city catalog cache first (0 ms)
   const cachedCatalog = cityCatalogMemoryCache.get(normCity)
   if (cachedCatalog) {
-    if (category === 'attraction') return cachedCatalog.places || []
-    if (category === 'restaurant') return cachedCatalog.restaurants || []
-    if (category === 'hotel') return cachedCatalog.hotels || []
-    return cachedCatalog.all || []
+    const validAll = filterByCentroid(cachedCatalog.all || [])
+    if (validAll.length > 0 || !centroid) {
+      if (category === 'attraction') return filterByCentroid(cachedCatalog.places || [])
+      if (category === 'restaurant') return filterByCentroid(cachedCatalog.restaurants || [])
+      if (category === 'hotel') return filterByCentroid(cachedCatalog.hotels || [])
+      return validAll
+    }
   }
 
   if (!supabase) return []
@@ -152,14 +195,13 @@ export async function lookupCachedPlacesForCity(city = '', category = null) {
 
     if (error || !data || data.length === 0) return []
 
-    const centroid = FALLBACK_DESTINATION_CENTROIDS[normCity]
     const validRows = (centroid
       ? data.filter(r => {
           const lat = Number(r.latitude)
           const lon = Number(r.longitude)
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
           const dist = haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon)
-          return dist <= 50
+          return dist <= 55
         })
       : data
     ).filter(r => !isTestOrDummyPlace(r?.name) && !isGenericFacilityName(r?.name))
@@ -214,19 +256,36 @@ export async function lookupCachedPlacesForCity(city = '', category = null) {
 /**
  * Returns structured catalog for a city from cache if available.
  * @param {string} city
+ * @param {number|null} centerLat
+ * @param {number|null} centerLon
  * @returns {Promise<{ places: Array<object>, restaurants: Array<object>, hotels: Array<object> }|null>}
  */
-export async function getCachedCityCatalog(city = '') {
+export async function getCachedCityCatalog(city = '', centerLat = null, centerLon = null) {
   const normCity = normalizeCityKey(city)
   if (!normCity) return null
 
-  const memCatalog = cityCatalogMemoryCache.get(normCity)
+  const centroid = resolveCityCentroidForCache(city, normCity, centerLat, centerLon)
+  const filterCatalog = (cat) => {
+    if (!cat || !centroid) return cat
+    const within = (p) => {
+      const lat = Number(p?.latitude ?? p?.lat)
+      const lon = Number(p?.longitude ?? p?.lon)
+      return Number.isFinite(lat) && Number.isFinite(lon) && haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon) <= 55
+    }
+    const places = (cat.places || []).filter(within)
+    const restaurants = (cat.restaurants || []).filter(within)
+    const hotels = (cat.hotels || []).filter(within)
+    const all = (cat.all || []).filter(within)
+    return { places, restaurants, hotels, all }
+  }
+
+  const memCatalog = filterCatalog(cityCatalogMemoryCache.get(normCity))
   if (memCatalog && (memCatalog.places?.length > 0 || memCatalog.restaurants?.length > 0 || memCatalog.hotels?.length > 0)) {
     return memCatalog
   }
 
-  await lookupCachedPlacesForCity(city)
-  const populated = cityCatalogMemoryCache.get(normCity)
+  await lookupCachedPlacesForCity(city, null, centerLat, centerLon)
+  const populated = filterCatalog(cityCatalogMemoryCache.get(normCity))
   if (populated && (populated.places?.length > 0 || populated.restaurants?.length > 0 || populated.hotels?.length > 0)) {
     return populated
   }
@@ -261,6 +320,11 @@ export async function saveCachedPlace({
   const normName = normalizePlaceNameKey(name)
   const normCity = normalizeCityKey(city)
   if (!normName) return false
+
+  const centroid = resolveCityCentroidForCache(city, normCity)
+  if (centroid && haversineDistanceKm(centroid.latitude, centroid.longitude, numLat, numLon) > 55) {
+    return false
+  }
 
   const placeRecord = {
     name: name.trim(),
@@ -317,6 +381,7 @@ export async function saveCachedPlace({
 export async function saveCachedPlacesBatch(places = [], city = '', defaultSource = 'dynamic_discovery') {
   if (!Array.isArray(places) || places.length === 0) return false
   const normCity = normalizeCityKey(city)
+  const centroid = resolveCityCentroidForCache(city, normCity)
 
   const records = []
   for (const p of places) {
@@ -328,6 +393,7 @@ export async function saveCachedPlacesBatch(places = [], city = '', defaultSourc
     const lat = Number(p?.latitude ?? p?.lat)
     const lon = Number(p?.longitude ?? p?.lon)
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) continue
+    if (centroid && haversineDistanceKm(centroid.latitude, centroid.longitude, lat, lon) > 55) continue
 
     const placeCategory = classifyPlaceCategory(rawName, p?.metadata || p, p?.category)
     const record = {

@@ -1,6 +1,6 @@
 import { GeoCache } from './geoCache.js'
 import { imageForPlaceWithStatus, wikipediaSummaryText } from './imageSearch.js'
-import { cleanAdministrativeCityName, cleanLandmarkOrPlaceName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor, evaluateTourRequirements } from './destinationService.js'
+import { cleanAdministrativeCityName, cleanLandmarkOrPlaceName, formatCountryName, FALLBACK_DESTINATION_CENTROIDS, getCanonicalDestinationFromCache, resolveCanonicalDestination, TOUR_TRIP_TYPES, MICRO_DESTINATION_PATTERN, COASTAL_ISLAND_PATTERN, normalizeTourType, inferTourType, geographicScopeFor, evaluateTourRequirements } from './destinationService.js'
 import { searchWebForTravel } from './webSearch.js'
 import { geocodePlace, photonSearch, overpassAttractions, overpassHotels, overpassNearbyFood, isNonTouristFacility, isGenericFacilityName, isFoodOrDrinkEstablishment, arePlacesSimilar, haversineMeters, resolveCanonicalPlaceIdentity, hasOsmMapRecord, isWithinCoastalCorridorBounds, isWithinCorridor, computeCorridorProjection, KNOWN_ICONIC_LANDMARKS } from './osm.js'
 import { createUnifiedCandidateCatalog, getCandidateId, normalizeRealCandidate } from './candidate-catalog.js'
@@ -600,28 +600,42 @@ async function resolveOsmBackedChatPlace(place, city = '', country = '', selecte
   const name = typeof place === 'string' ? place.trim() : String(place?.name || '').trim()
   if (!name || isTemporalOrDurationPhrase(name) || isChatHotelStop(name, selectedHotel) || isUnmappedOrClosedVenue(name)) return null
 
-  // 1. If place already has verified coordinates, preserve them
-  if (typeof place === 'object' && place?.latitude && place?.longitude && place?.coordinatesVerified) {
-    return {
-      name,
-      latitude: Number(place.latitude),
-      longitude: Number(place.longitude),
-      address: place.address || `${name}, ${city}`,
-      placeId: place.placeId || place.place_id || place.id || '',
-      coordinateSource: place.coordinateSource || 'existing',
-      coordinatesVerified: true
-    }
-  }
-
-  // 2. Resolve city centroid for proximity / bounding
+  // Resolve city centroid for proximity / bounding (supports both fallback centroids and dynamic cities)
   let centerLat = null
   let centerLon = null
   if (city) {
     const cleanCityKey = city.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-    const centroid = FALLBACK_DESTINATION_CENTROIDS?.[cleanCityKey] || FALLBACK_DESTINATION_CENTROIDS?.[city.toLowerCase()]
-    if (centroid) {
-      centerLat = centroid.latitude
-      centerLon = centroid.longitude
+    const centroid = FALLBACK_DESTINATION_CENTROIDS?.[cleanCityKey] ||
+      FALLBACK_DESTINATION_CENTROIDS?.[city.toLowerCase()] ||
+      getCanonicalDestinationFromCache(city)
+    if (centroid && Number.isFinite(Number(centroid.latitude)) && Number.isFinite(Number(centroid.longitude))) {
+      centerLat = Number(centroid.latitude)
+      centerLon = Number(centroid.longitude)
+    } else {
+      const resolvedCenter = await resolveDestinationCenter({ destination: city, country }).catch(() => null)
+      if (resolvedCenter && Number.isFinite(Number(resolvedCenter.latitude)) && Number.isFinite(Number(resolvedCenter.longitude))) {
+        centerLat = Number(resolvedCenter.latitude)
+        centerLon = Number(resolvedCenter.longitude)
+      }
+    }
+  }
+
+  // 1. If place already has verified coordinates, preserve them only if within destination proximity
+  if (typeof place === 'object' && place?.latitude && place?.longitude && place?.coordinatesVerified) {
+    const pLat = Number(place.latitude)
+    const pLon = Number(place.longitude)
+    if (centerLat != null && centerLon != null && Number.isFinite(pLat) && Number.isFinite(pLon)) {
+      const distM = haversineMeters(centerLat, centerLon, pLat, pLon)
+      if (distM > 55000) return null
+    }
+    return {
+      name,
+      latitude: pLat,
+      longitude: pLon,
+      address: place.address || `${name}, ${city}`,
+      placeId: place.placeId || place.place_id || place.id || '',
+      coordinateSource: place.coordinateSource || 'existing',
+      coordinatesVerified: true
     }
   }
 
@@ -1527,42 +1541,52 @@ function verifiedCatalogEntries(entries, city, country, limit, centerLat = null,
 }
 
 async function resolveDestinationCenter({ destination = '', country = '', userLat = null, userLon = null } = {}) {
+  const cleanDest = String(destination || '').trim()
+
+  if (cleanDest) {
+    const cachedCanonical = getCanonicalDestinationFromCache(cleanDest)
+    if (cachedCanonical && Number.isFinite(Number(cachedCanonical.latitude)) && Number.isFinite(Number(cachedCanonical.longitude))) {
+      return { latitude: Number(cachedCanonical.latitude), longitude: Number(cachedCanonical.longitude), source: 'canonical-cache' }
+    }
+
+    const normalizedDestination = cleanDest
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+    const centroid = Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([key]) => {
+      const normalizedKey = String(key).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+      return normalizedKey === normalizedDestination
+    })?.[1]
+    if (centroid && Number.isFinite(Number(centroid.latitude)) && Number.isFinite(Number(centroid.longitude))) {
+      return { latitude: Number(centroid.latitude), longitude: Number(centroid.longitude), source: 'destination-centroid' }
+    }
+
+    const canonicalResolved = await resolveCanonicalDestination(cleanDest, { country }).catch(() => null)
+    if (canonicalResolved && Number.isFinite(Number(canonicalResolved.latitude)) && Number.isFinite(Number(canonicalResolved.longitude)) &&
+        Number(canonicalResolved.latitude) !== 0 && Number(canonicalResolved.longitude) !== 0) {
+      return { latitude: Number(canonicalResolved.latitude), longitude: Number(canonicalResolved.longitude), source: 'canonical-resolved' }
+    }
+
+    const osmGeo = await geocodePlace(`${cleanDest}, ${country}`.trim(), null, null, {
+      city: cleanDest,
+      destination: cleanDest,
+      country
+    }).catch(() => null)
+    if (Number.isFinite(Number(osmGeo?.latitude)) && Number.isFinite(Number(osmGeo?.longitude)) &&
+        Number(osmGeo.latitude) !== 0 && Number(osmGeo.longitude) !== 0) {
+      return { latitude: Number(osmGeo.latitude), longitude: Number(osmGeo.longitude), source: osmGeo.coordinateSource || 'osm' }
+    }
+
+    const providerGeo = await resolveProviderDestinationCenter({ destination: cleanDest, country }).catch(() => null)
+    if (providerGeo && Number.isFinite(Number(providerGeo.latitude)) && Number.isFinite(Number(providerGeo.longitude)) &&
+        Number(providerGeo.latitude) !== 0 && Number(providerGeo.longitude) !== 0) {
+      return { latitude: Number(providerGeo.latitude), longitude: Number(providerGeo.longitude), source: providerGeo.source || 'provider' }
+    }
+  }
+
   if (Number.isFinite(Number(userLat)) && Number.isFinite(Number(userLon)) && Number(userLat) !== 0 && Number(userLon) !== 0) {
     return { latitude: Number(userLat), longitude: Number(userLon), source: 'user' }
-  }
-
-  const cachedCanonical = getCanonicalDestinationFromCache(destination)
-  if (cachedCanonical && Number.isFinite(Number(cachedCanonical.latitude)) && Number.isFinite(Number(cachedCanonical.longitude))) {
-    return { latitude: Number(cachedCanonical.latitude), longitude: Number(cachedCanonical.longitude), source: 'canonical-cache' }
-  }
-
-  const normalizedDestination = String(destination || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-  const centroid = Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([key]) => {
-    const normalizedKey = String(key).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-    return normalizedKey === normalizedDestination
-  })?.[1]
-  if (centroid && Number.isFinite(Number(centroid.latitude)) && Number.isFinite(Number(centroid.longitude))) {
-    return { latitude: Number(centroid.latitude), longitude: Number(centroid.longitude), source: 'destination-centroid' }
-  }
-
-  const osmGeo = await geocodePlace(`${destination}, ${country}`.trim(), null, null, {
-    city: destination,
-    destination,
-    country
-  }).catch(() => null)
-  if (Number.isFinite(Number(osmGeo?.latitude)) && Number.isFinite(Number(osmGeo?.longitude)) &&
-      Number(osmGeo.latitude) !== 0 && Number(osmGeo.longitude) !== 0) {
-    return { latitude: Number(osmGeo.latitude), longitude: Number(osmGeo.longitude), source: osmGeo.coordinateSource || 'osm' }
-  }
-
-  const providerGeo = await resolveProviderDestinationCenter({ destination, country }).catch(() => null)
-  if (providerGeo && Number.isFinite(Number(providerGeo.latitude)) && Number.isFinite(Number(providerGeo.longitude)) &&
-      Number(providerGeo.latitude) !== 0 && Number(providerGeo.longitude) !== 0) {
-    return { latitude: Number(providerGeo.latitude), longitude: Number(providerGeo.longitude), source: providerGeo.source || 'provider' }
   }
 
   return null
@@ -2053,14 +2077,35 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
   const capitalCity = clean ? clean.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Destino'
   const targetCountry = countryName || 'Local'
 
+  // Resolve true destination center first so distant phone GPS coordinates never contaminate a named city's catalog
+  let lat = null
+  let lon = null
+  if (clean) {
+    const center = await resolveDestinationCenter({ destination: destName || clean, country: countryName })
+    if (center && Number.isFinite(Number(center.latitude)) && Number.isFinite(Number(center.longitude))) {
+      lat = Number(center.latitude)
+      lon = Number(center.longitude)
+    }
+  }
+  if ((lat == null || lon == null) && Number.isFinite(Number(userLat)) && Number.isFinite(Number(userLon)) && Number(userLat) !== 0 && Number(userLon) !== 0) {
+    lat = Number(userLat)
+    lon = Number(userLon)
+  } else if (lat != null && lon != null && Number.isFinite(Number(userLat)) && Number.isFinite(Number(userLon)) && Number(userLat) !== 0 && Number(userLon) !== 0) {
+    const distToUser = haversineMeters(lat, lon, Number(userLat), Number(userLon))
+    if (distToUser <= 35000) {
+      lat = Number(userLat)
+      lon = Number(userLon)
+    }
+  }
+
   let realHotels = []
   let realRests = []
   let realPlaces = []
   let realEvents = []
   const curatedCoastalPlaces = coastalIslands ? getCuratedCoastalStops(clean) : []
 
-  // 0. Check Database & LRU Memory cache (places_cache) in 0 ms
-  const cachedCityCatalog = await getCachedCityCatalog(clean).catch(() => null)
+  // 0. Check Database & LRU Memory cache (places_cache) in 0 ms, validated against destination center (lat, lon)
+  const cachedCityCatalog = await getCachedCityCatalog(clean, lat, lon).catch(() => null)
   if (cachedCityCatalog) {
     if (Array.isArray(cachedCityCatalog.places) && cachedCityCatalog.places.length > 0) {
       for (const p of cachedCityCatalog.places) {
@@ -2087,7 +2132,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
     const cleanKey = clean.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
     const presetIconics = DESTINATION_ICONIC_LANDMARKS[cleanKey] || DESTINATION_ICONIC_LANDMARKS[clean] || []
     if (!coastalIslands && presetIconics.length > 0) {
-      const verifiedIconics = await verifyCatalogEntriesOnOsm(presetIconics, clean, targetCountry, presetIconics.length, userLat, userLon)
+      const verifiedIconics = await verifyCatalogEntriesOnOsm(presetIconics, clean, targetCountry, presetIconics.length, lat, lon)
       for (const vi of verifiedIconics) {
         if (!realPlaces.some(rp => arePlacesSimilar(rp, vi.name))) {
           realPlaces.push(vi)
@@ -2097,7 +2142,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
     const presetRests = DESTINATION_ICONIC_RESTAURANTS[cleanKey] || DESTINATION_ICONIC_RESTAURANTS[clean] || []
     if (!coastalIslands && presetRests.length > 0) {
-      const verifiedRests = await verifyCatalogEntriesOnOsm(presetRests, clean, targetCountry, presetRests.length, userLat, userLon, 'restaurant')
+      const verifiedRests = await verifyCatalogEntriesOnOsm(presetRests, clean, targetCountry, presetRests.length, lat, lon, 'restaurant')
       for (const pr of verifiedRests) {
         if (!realRests.some(r => arePlacesSimilar(r.name, pr.name))) {
           realRests.push(pr)
@@ -2107,7 +2152,7 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
 
     const presetHotels = DESTINATION_ICONIC_HOTELS[cleanKey] || DESTINATION_ICONIC_HOTELS[clean] || []
     if (!coastalIslands && presetHotels.length > 0 && realHotels.length < 3) {
-      const verifiedHotels = await verifyCatalogEntriesOnOsm(presetHotels, clean, targetCountry, presetHotels.length, userLat, userLon, 'hotel')
+      const verifiedHotels = await verifyCatalogEntriesOnOsm(presetHotels, clean, targetCountry, presetHotels.length, lat, lon, 'hotel')
       for (const vh of verifiedHotels) {
         if (!realHotels.some(h => arePlacesSimilar(h.name, vh.name))) {
           realHotels.push(vh)
@@ -2145,8 +2190,8 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       const result = {
         name: capitalCity,
         country: targetCountry,
-        latitude: userLat,
-        longitude: userLon,
+        latitude: lat,
+        longitude: lon,
         hotels: realHotels,
         restaurants: realRests,
         places: coastalIslands
@@ -2159,17 +2204,6 @@ export async function getRealDestinationCatalog(destName = '', countryName = '',
       }
       destinationCatalogCache.set(cacheKey, result)
       return result
-    }
-  }
-
-  // 1. Dynamic Geocode & OSM Live Query
-  let lat = userLat
-  let lon = userLon
-  if (!lat || !lon) {
-    const center = await resolveDestinationCenter({ destination: destName, country: countryName })
-    if (center) {
-      lat = center.latitude
-      lon = center.longitude
     }
   }
 
@@ -4635,26 +4669,36 @@ REGLAS PARA "accommodationStatus":
       .replace(/\\n/g, '\n')
       .replace(/\\r/g, '\n')
       .trim()
+    const parsedExtracted = parsed.extractedPreferences || {}
+    const mergedKnownForChips = {
+      ...known,
+      ...Object.fromEntries(
+        Object.entries(parsedExtracted).filter(([, v]) => v !== null && v !== undefined && v !== '')
+      )
+    }
     let actionChips = Array.isArray(parsed.actionChips) ? parsed.actionChips : []
-    const defaultChips = getDefaultActionChips(known, lastUserMsg)
+    const defaultChips = getDefaultActionChips(mergedKnownForChips, lastUserMsg)
     if (actionChips.length === 0) {
       actionChips = defaultChips
     } else {
-      if (!known.datesSeason && !actionChips.some(c => /mes|semana|año|vacaciones/i.test(c))) {
+      if (!mergedKnownForChips.datesSeason && !actionChips.some(c => /mes|semana|año|vacaciones/i.test(c))) {
         actionChips = defaultChips
-      } else if (!known.durationDays && !known.durationHours && !actionChips.some(c => /día|días|semana/i.test(c))) {
+      } else if (!mergedKnownForChips.durationDays && !mergedKnownForChips.durationHours && !actionChips.some(c => /día|días|semana/i.test(c))) {
         actionChips = defaultChips
-      } else if (!known.companions && !actionChips.some(c => /familia|pareja|amigos|solo/i.test(c))) {
+      } else if (!mergedKnownForChips.companions && !actionChips.some(c => /familia|pareja|amigos|solo/i.test(c))) {
         actionChips = defaultChips
-      } else if (!known.budget && !actionChips.some(c => /económico|moderado|lujo/i.test(c))) {
+      } else if (!mergedKnownForChips.budget && !actionChips.some(c => /económico|moderado|lujo/i.test(c))) {
         actionChips = defaultChips
-      } else if (!known.transport && !actionChips.some(c => /auto|caminando|público|taxi/i.test(c))) {
+      } else if (!mergedKnownForChips.transport && !actionChips.some(c => /auto|caminando|público|taxi/i.test(c))) {
         actionChips = defaultChips
-      } else if (!known.accommodationStatus && !actionChips.some(c => /hospedaje|hotel/i.test(c))) {
+      } else if (!mergedKnownForChips.accommodationStatus && !actionChips.some(c => /hospedaje|hotel|casa propia/i.test(c))) {
         actionChips = defaultChips
       }
     }
-    const parsedExtracted = parsed.extractedPreferences || {}
+    if (mergedKnownForChips.city || mergedKnownForChips.destination) {
+      const defaultCitySet = new Set(['santa marta', 'cartagena', 'medellín', 'medellin', 'bogotá', 'bogota'])
+      actionChips = actionChips.filter(c => !defaultCitySet.has(String(c || '').toLowerCase().trim()))
+    }
 
     // Preservar o auto-promover hotel si es un nombre real comercial
     const isNegatedLodgingCall = isLodgingNegationOrUncertainty(lastUserMsg) || isLodgingRecommendationInquiry(lastUserMsg, lastAssistantMsg)
@@ -5763,8 +5807,8 @@ export function extractRequestedSpecificPlaces(prompt) {
   const isValidPlace = (clean) => {
     if (!clean || clean.length < 3) return false
     const lowerP = clean.toLowerCase()
-    const isGenericStopPhrase = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|paradas\s+adicionales|lugares\s+adicionales|otras?\s+paradas?|(?:lugares|sitios|atractivos|puntos|zonas|rincones)\s+(?:m[aá]s|mejores|bonitos|lindos|bellos|populares|tur[íi]sticos|emblem[aá]ticos|destacados|principales)|(?:los\s+|las\s+)?(?:mejores|principales|m[aá]s\s+(?:bonitos|lindos|bellos|populares|destacados))\s+(?:lugares|sitios|atractivos|puntos|zonas))\b/i.test(lowerP)
-    const NON_PLACE_TARGETS = /^(paradas?|lugares|sitios|atractivos?|actividades|un\s+d[íi]a|\d+\s+d[íi]as?|hotel|hospedaje|alojamiento|tour|itinerario|ruta|relajarnos|relajar|relajarse|descansar|descanso|lugares\s+m[aá]s\s+bonitos|los\s+lugares\s+m[aá]s\s+bonitos|los\s+mejores\s+lugares|mejores\s+lugares)$/i
+    const isGenericStopPhrase = /\b(m[aá]s\s+(paradas|lugares|sitios|atractivos|actividades)|paradas\s+adicionales|lugares\s+adicionales|otras?\s+paradas?|(?:lugares|sitios|atractivos|puntos|zonas|rincones)\s+(?:m[aá]s\s+)?(?:mejores|bonitos|lindos|bellos|populares|tur[íi]sticos|emblem[aá]ticos|destacados|principales|interesantes|ch[eé]veres|bacanos|recomendados|famosos|conocidos|t[íi]picos|imperdibles)|(?:los\s+|las\s+)?(?:mejores|principales|m[aá]s\s+(?:bonitos|lindos|bellos|populares|destacados|interesantes|ch[eé]veres|bacanos|recomendados|famosos|conocidos|t[íi]picos|imperdibles))\s+(?:lugares|sitios|atractivos|puntos|zonas))\b/i.test(lowerP)
+    const NON_PLACE_TARGETS = /^(paradas?|lugares|sitios|atractivos?|actividades|un\s+d[íi]a|\d+\s+d[íi]as?|hotel|hospedaje|alojamiento|tour|itinerario|ruta|relajarnos|relajar|relajarse|descansar|descanso|lugares\s+m[aá]s\s+(?:bonitos|interesantes|populares|recomendados)|los\s+lugares\s+m[aá]s\s+(?:bonitos|interesantes|populares|recomendados)|los\s+mejores\s+lugares|mejores\s+lugares)$/i
     const isGenericFacility = /^(restaurante|restaurant|bar|caf[eé]|hotel|hostal|hostel|posada|alojamiento|atractivo|tienda|puesto|kiosko)$/i.test(lowerP)
     return (
       isValidRouteEndpoint(clean) &&
@@ -6209,7 +6253,7 @@ export function extractChatInformationFallback(prompt) {
     }
   }
 
-  if (/\b(pr[oó]ximo mes|este mes|el otro mes)\b/i.test(text)) {
+  if (/\b(pr[oó]ximo mes|este mes|(?:el|en|dentro de)\s+otro\s+mes|otro\s+mes)\b/i.test(text)) {
     res.datesSeason = 'Próximo mes'
   } else if (/\b(este fin de semana|el fin de semana)\b/i.test(text)) {
     res.datesSeason = 'Este fin de semana'
@@ -6348,8 +6392,8 @@ export function extractChatInformationFallback(prompt) {
       }).join(' ')
     }
 
-    const destActionPattern = /\b(?:tour|viaje|itinerario|plan|vacaciones|escapada)\s+(?:a\s+el|al|a\s+la|a\s+los|a\s+las|a|hacia|en|por|para)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45}?)(?:$|\s+(?:donde|que|para|con|durante|desde|sin|de\s+\d|del\s+\d|por\s+\d|por\s+(?:un|una|\d)|en\s+\d)\b)/i
-    const destVerbPattern = /\b(?:viajar|conocer|visitar|ir|llegar)\s+(?:a\s+el|al|a\s+la|a\s+los|a\s+las|a|hacia|en|hasta)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45}?)(?:$|\s+(?:donde|que|para|con|durante|desde|sin|de\s+\d|del\s+\d|por\s+\d|por\s+(?:un|una|\d)|en\s+\d)\b)/i
+    const destActionPattern = /\b(?:tour|viaje|itinerario|plan|vacaciones|escapada)\s+(?:a\s+el|al|a\s+la|a\s+los|a\s+las|a|hacia|en|por|para)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45}?)(?=$|[,.;:!?¿¡]|\s+(?:donde|que|para|con|durante|desde|sin|y\s+(?:voy|vamos|ir[eé]|iremos|quedar|estar|durar|somos|tengo|tenemos)|voy|vamos|ir[eé]|iremos|somos|tengo|tenemos|de\s+\d|del\s+\d|por\s+\d|por\s+(?:un|una|\d)|en\s+(?:otro|este|el|un|una|\d))\b)/i
+    const destVerbPattern = /\b(?:viajar|conocer|visitar|ir|llegar)\s+(?:a\s+el|al|a\s+la|a\s+los|a\s+las|a|hacia|en|hasta)\s+([A-ZÁÉÍÓÚa-záéíóúñ\s'-]{2,45}?)(?=$|[,.;:!?¿¡]|\s+(?:donde|que|para|con|durante|desde|sin|y\s+(?:voy|vamos|ir[eé]|iremos|quedar|estar|durar|somos|tengo|tenemos)|voy|vamos|ir[eé]|iremos|somos|tengo|tenemos|de\s+\d|del\s+\d|por\s+\d|por\s+(?:un|una|\d)|en\s+(?:otro|este|el|un|una|\d))\b)/i
 
     const mAction = (prompt || '').trim().match(destActionPattern) || (prompt || '').trim().match(destVerbPattern)
     if (mAction) {
@@ -6421,7 +6465,12 @@ export function extractChatInformationFallback(prompt) {
   const extractedPlaces = extractRequestedSpecificPlaces(prompt)
   if (extractedPlaces.length > 0 && !isSwapOrChangePhrase) {
     res.specificPlaces = res.specificPlaces || []
+    const destNorm = String(res.destination || res.city || '').toLowerCase().trim()
     for (const place of extractedPlaces) {
+      const pNorm = String(place?.name || '').toLowerCase().trim()
+      if (destNorm && (pNorm === destNorm || arePlacesSimilar(pNorm, destNorm)) && res.tourType !== 'location_to_destination') {
+        continue
+      }
       if (!res.specificPlaces.some(p => arePlacesSimilar(typeof p === 'string' ? p : p.name, place.name))) {
         res.specificPlaces.push(place)
       }
