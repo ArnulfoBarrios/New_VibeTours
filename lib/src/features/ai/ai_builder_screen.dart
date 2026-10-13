@@ -7,6 +7,7 @@ import '../../core/design/premium_components.dart';
 import '../../domain/models.dart';
 import '../../state/app_state.dart';
 import '../ads/presentation/widgets/native_ad_banner.dart';
+import '../ads/presentation/widgets/quota_dialogs.dart';
 import 'ai_builder_controller.dart';
 
 class AiBuilderScreen extends ConsumerStatefulWidget {
@@ -27,6 +28,9 @@ class _AiBuilderScreenState extends ConsumerState<AiBuilderScreen> {
   }
 
   Future<void> _handleFinalizeTour() async {
+    final allowed = await QuotaEnforcement.checkAndEnforceTourCreation(context, ref);
+    if (!mounted || !allowed) return;
+
     await ref.read(aiBuilderProvider.notifier).buildTour();
     if (!mounted) return;
     final built = ref.read(aiBuilderProvider).builtTour;

@@ -31,6 +31,7 @@ import '../../state/live_tour_state.dart';
 import 'tour_rating_dialog.dart';
 import 'widgets/destination_preview_sheet.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../ads/presentation/widgets/quota_dialogs.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model for a voice assistant response from the backend
@@ -42,6 +43,7 @@ class _RouteAssistantResponse {
     this.actionType,
     this.nearbyPlaces = const [],
     this.targetDestination,
+    this.targetStopIndex,
   });
 
   factory _RouteAssistantResponse.fromJson(Map<String, dynamic> json) {
@@ -56,7 +58,9 @@ class _RouteAssistantResponse {
     }
     _NearbyFoodPlace? dest;
     if (json['targetDestination'] is Map<String, dynamic>) {
-      dest = _NearbyFoodPlace.fromJson(json['targetDestination'] as Map<String, dynamic>);
+      dest = _NearbyFoodPlace.fromJson(
+        json['targetDestination'] as Map<String, dynamic>,
+      );
     }
     return _RouteAssistantResponse(
       isRelatedToTravel: json['isRelatedToTravel'] == true,
@@ -64,6 +68,9 @@ class _RouteAssistantResponse {
       actionType: json['actionType'] as String?,
       nearbyPlaces: places,
       targetDestination: dest,
+      targetStopIndex: json['targetStopIndex'] is num
+          ? (json['targetStopIndex'] as num).toInt()
+          : null,
     );
   }
 
@@ -72,6 +79,7 @@ class _RouteAssistantResponse {
   final String? actionType;
   final List<_NearbyFoodPlace> nearbyPlaces;
   final _NearbyFoodPlace? targetDestination;
+  final int? targetStopIndex;
 }
 
 class _NearbyFoodPlace {
@@ -237,27 +245,29 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     });
     if (_autoPlayProximityEnabled) {
       unawaited(
-        ref.read(voiceGuideProvider).narrateStop(
-          currentStop,
-          stopIndex: _activeStop,
-          totalStops: tour.stops.length,
-          lang: tour.language,
-          onResolved: (name, description) {
-            if (mounted) {
-              setState(() {
-                final updatedStops = tour.stops.map((s) {
-                  if (s.id == currentStop.id) {
-                    return s.copyWith(name: name, description: description);
-                  }
-                  return s;
-                }).toList();
-                final updatedTour = tour.copyWith(stops: updatedStops);
-                _navigationTour = updatedTour;
-                ref.read(selectedTourProvider.notifier).state = updatedTour;
-              });
-            }
-          },
-        ),
+        ref
+            .read(voiceGuideProvider)
+            .narrateStop(
+              currentStop,
+              stopIndex: _activeStop,
+              totalStops: tour.stops.length,
+              lang: tour.language,
+              onResolved: (name, description) {
+                if (mounted) {
+                  setState(() {
+                    final updatedStops = tour.stops.map((s) {
+                      if (s.id == currentStop.id) {
+                        return s.copyWith(name: name, description: description);
+                      }
+                      return s;
+                    }).toList();
+                    final updatedTour = tour.copyWith(stops: updatedStops);
+                    _navigationTour = updatedTour;
+                    ref.read(selectedTourProvider.notifier).state = updatedTour;
+                  });
+                }
+              },
+            ),
       );
       ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
     }
@@ -308,7 +318,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ),
       ];
 
-      ref.read(tourControllerProvider.notifier).showTourIfPending(
+      ref
+          .read(tourControllerProvider.notifier)
+          .showTourIfPending(
             context: context,
             phase: TourPhase.liveTour,
             steps: steps,
@@ -318,7 +330,6 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   // GPS stream is maintained fixed and uninterrupted throughout the active tour
-
 
   // ── Pocket Mode & Map Menu State ───────────────────────────────────────────
   bool _isPocketModeEnabled = false;
@@ -338,16 +349,17 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   void initState() {
     super.initState();
     unawaited(WakelockPlus.enable());
-    _micPulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _micPulseController.reverse();
-        } else if (status == AnimationStatus.dismissed && _isListening) {
-          _micPulseController.forward();
-        }
-      });
+    _micPulseController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 800),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            _micPulseController.reverse();
+          } else if (status == AnimationStatus.dismissed && _isListening) {
+            _micPulseController.forward();
+          }
+        });
     _micPulseAnimation = Tween<double>(begin: 1.0, end: 1.35).animate(
       CurvedAnimation(parent: _micPulseController, curve: Curves.easeInOut),
     );
@@ -356,6 +368,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         ref.read(liveTourPlaybackProvider.notifier).setPlaying(false);
       }
     };
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(voiceTourQuotaProvider.notifier).initForTour(widget.tourId);
+    });
   }
 
   void _enrichGenericStops(Tour tour) async {
@@ -371,14 +386,16 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       final title = stop.name.trim();
       final description = stop.description.trim();
 
-      final isGenericName = title.isEmpty ||
-                            title.toLowerCase() == 'parada' ||
-                            title.toLowerCase().startsWith('parada ') ||
-                            title.toLowerCase().startsWith('atracción del recorrido');
+      final isGenericName =
+          title.isEmpty ||
+          title.toLowerCase() == 'parada' ||
+          title.toLowerCase().startsWith('parada ') ||
+          title.toLowerCase().startsWith('atracción del recorrido');
 
-      final isDescriptionEmpty = description.isEmpty ||
-                                 description.toLowerCase() == 'parada' ||
-                                 description.toLowerCase() == 'parada turistica';
+      final isDescriptionEmpty =
+          description.isEmpty ||
+          description.toLowerCase() == 'parada' ||
+          description.toLowerCase() == 'parada turistica';
 
       if (isGenericName || isDescriptionEmpty) {
         final details = await voiceGuide.fetchWikipediaAndGeocodingDetails(
@@ -390,10 +407,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         if (details != null) {
           final newName = details['name'] ?? stop.name;
           final newDesc = details['description'] ?? stop.description;
-          updatedStops[i] = stop.copyWith(
-            name: newName,
-            description: newDesc,
-          );
+          updatedStops[i] = stop.copyWith(name: newName, description: newDesc);
           changed = true;
         }
       }
@@ -429,10 +443,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   Future<void> _loadSavedProgressAndLodging(Tour tour) async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     // 1. Progress
     final savedIndex = prefs.getInt('tour_progress_${widget.tourId}');
-    if (savedIndex != null && savedIndex > 0 && savedIndex < tour.stops.length) {
+    if (savedIndex != null &&
+        savedIndex > 0 &&
+        savedIndex < tour.stops.length) {
       if (mounted) {
         setState(() {
           _activeStop = savedIndex;
@@ -453,9 +469,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             _userLodgingPlace = place;
           });
         }
-        if ((place.latitude == 0.0 && place.longitude == 0.0) && place.name.isNotEmpty) {
+        if ((place.latitude == 0.0 && place.longitude == 0.0) &&
+            place.name.isNotEmpty) {
           try {
-            final refLoc = _currentPoint ?? (tour.stops.isNotEmpty ? tour.stops.first.location : null);
+            final refLoc =
+                _currentPoint ??
+                (tour.stops.isNotEmpty ? tour.stops.first.location : null);
             final results = await DiscoveryRepository().searchLodgingOrAddress(
               place.name,
               city: tour.city,
@@ -527,7 +546,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               title: Row(
                 children: [
                   Icon(Icons.hotel_rounded, color: AppTheme.primary),
@@ -535,7 +556,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   const Expanded(
                     child: Text(
                       'Tu Alojamiento',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -556,8 +580,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                       hintText: 'Ej: Hotel El Prado, Cra 54 #70',
                       prefixIcon: const Icon(Icons.search_rounded),
                       filled: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                     ),
                   ),
                   if (searchError != null) ...[
@@ -573,9 +602,16 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                           SizedBox(width: 8),
-                          Text('Buscando ubicación...', style: TextStyle(fontSize: 12)),
+                          Text(
+                            'Buscando ubicación...',
+                            style: TextStyle(fontSize: 12),
+                          ),
                         ],
                       ),
                     ),
@@ -584,7 +620,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               ),
               actions: [
                 TextButton(
-                  onPressed: isSearching ? null : () => Navigator.of(dialogContext).pop(),
+                  onPressed: isSearching
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancelar'),
                 ),
                 FilledButton.icon(
@@ -600,17 +638,23 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                             searchError = null;
                           });
                           try {
-                            final refLoc = _currentPoint ?? (tour.stops.isNotEmpty ? tour.stops.first.location : null);
-                            final results = await DiscoveryRepository().searchLodgingOrAddress(
-                              query,
-                              city: tour.city,
-                              userLat: refLoc?.latitude,
-                              userLon: refLoc?.longitude,
-                            );
+                            final refLoc =
+                                _currentPoint ??
+                                (tour.stops.isNotEmpty
+                                    ? tour.stops.first.location
+                                    : null);
+                            final results = await DiscoveryRepository()
+                                .searchLodgingOrAddress(
+                                  query,
+                                  city: tour.city,
+                                  userLat: refLoc?.latitude,
+                                  userLon: refLoc?.longitude,
+                                );
                             if (results.isEmpty) {
                               setDialogState(() {
                                 isSearching = false;
-                                searchError = 'No se encontró el lugar. Intenta con otra dirección o nombre.';
+                                searchError =
+                                    'No se encontró el lugar. Intenta con otra dirección o nombre.';
                               });
                               return;
                             }
@@ -631,7 +675,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               });
                               _startHotelNavigation();
                               final voiceGuide = ref.read(voiceGuideProvider);
-                              unawaited(voiceGuide.speak('¡Listo! Alojamiento guardado. Trazando ruta a ${hotelPlace.name}.'));
+                              unawaited(
+                                voiceGuide.speak(
+                                  '¡Listo! Alojamiento guardado. Trazando ruta a ${hotelPlace.name}.',
+                                ),
+                              );
                             }
                           } catch (e) {
                             setDialogState(() {
@@ -662,8 +710,15 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       return;
     }
     if (_isProcessingVoice) return;
+
+    final allowed = await QuotaEnforcement.checkAndEnforceVoiceQuery(
+      context,
+      ref,
+    );
+    if (!mounted || !allowed) return;
     final loc = Localizations.localeOf(context);
-    final preferredLocale = loc.countryCode != null && loc.countryCode!.isNotEmpty
+    final preferredLocale =
+        loc.countryCode != null && loc.countryCode!.isNotEmpty
         ? '${loc.languageCode}_${loc.countryCode}'
         : loc.languageCode;
     final tour = _navigationTour;
@@ -703,7 +758,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     });
 
     if (transcript == null || transcript.trim().isEmpty) {
-      final feedbackText = sttError ?? 'No logré escucharte bien. ¿Me repites, por favor?';
+      final feedbackText =
+          sttError ?? 'No logré escucharte bien. ¿Me repites, por favor?';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(feedbackText),
@@ -770,6 +826,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       if (_currentPoint != null) 'latitude': _currentPoint!.latitude,
       if (_currentPoint != null) 'longitude': _currentPoint!.longitude,
       'tourContext': {
+        'currentStopIndex': _activeStop,
         'currentStopName': stop?.name ?? '',
         'city': tour?.city ?? '',
         'country': tour?.country ?? '',
@@ -777,6 +834,19 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         if (hotelAddress.isNotEmpty) 'hotelAddress': hotelAddress,
         if (hotelLat != null && hotelLat != 0.0) 'hotelLat': hotelLat,
         if (hotelLon != null && hotelLon != 0.0) 'hotelLon': hotelLon,
+        if (tour != null && tour.stops.isNotEmpty)
+          'stops': tour.stops
+              .asMap()
+              .entries
+              .map(
+                (e) => {
+                  'index': e.key,
+                  'name': e.value.name,
+                  'latitude': e.value.location.latitude,
+                  'longitude': e.value.location.longitude,
+                },
+              )
+              .toList(),
       },
     };
 
@@ -830,6 +900,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           await voiceGuide.speak(
             '¡Mira lo que encontré en la zona!: $names. Ya te las dejé marcadas en el mapa.',
           );
+        } else {
+          final voiceGuide = ref.read(voiceGuideProvider);
+          await voiceGuide.speak(
+            'No encontré sitios de interés adicionales muy cerca en este punto. Sigamos con el recorrido.',
+          );
         }
 
       case 'SET_ACCOMMODATION':
@@ -875,21 +950,42 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         }
 
       case 'CHANGE_DESTINATION':
-        final newDestination = response.targetDestination;
-        if (tour != null && newDestination != null) {
-          setState(() {
-            _selectedVoicePlace = newDestination;
-            _voiceFoodPlaces = [];
-            _navigatingToHotel = false;
-            _isAtStopMode = false;
-            _isOffRoute = false;
-            _liveRoute = null;
-            _liveRouteStopIndex = null;
-          });
-          // The navigation scheduler will also retry if a previous route
-          // request is still in flight; this call handles the normal case
-          // immediately.
-          await _recalculateRoute(tour, force: true);
+        if (tour != null) {
+          if (response.targetStopIndex != null &&
+              response.targetStopIndex! >= 0 &&
+              response.targetStopIndex! < tour.stops.length) {
+            final targetIndex = response.targetStopIndex!;
+            final targetStop = tour.stops[targetIndex];
+            setState(() {
+              _activeStop = targetIndex;
+              _selectedDay = targetStop.day;
+              _voiceFoodPlaces = [];
+              _selectedVoicePlace = null;
+              _navigatingToHotel = false;
+              _isAtStopMode = false;
+              _isOffRoute = false;
+              _liveRoute = null;
+              _liveRouteStopIndex = null;
+              _dismissedApproachingStopId = null;
+            });
+            _saveProgress(targetIndex);
+            await _recalculateRoute(tour, force: true);
+          } else if (response.targetDestination != null) {
+            final newDestination = response.targetDestination!;
+            setState(() {
+              _selectedVoicePlace = newDestination;
+              _voiceFoodPlaces = [];
+              _navigatingToHotel = false;
+              _isAtStopMode = false;
+              _isOffRoute = false;
+              _liveRoute = null;
+              _liveRouteStopIndex = null;
+            });
+            // The navigation scheduler will also retry if a previous route
+            // request is still in flight; this call handles the normal case
+            // immediately.
+            await _recalculateRoute(tour, force: true);
+          }
         }
 
       // DESCRIBE_CURRENT_POI is intentionally handled by the spoken answer.
@@ -939,27 +1035,34 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           final progress = (_activeStop + 1) / tour.stops.length;
           _navigationTour = tour;
           _scheduleLiveNavigation(tour);
-          
+
           final liveRoute = _liveRoute;
 
           final destinationPoint = _selectedVoicePlace != null
               ? _selectedVoicePlace!.toGeoPoint()
               : _navigatingToHotel
-                  ? ((_findHotelStop(tour) != null && _findHotelStop(tour)!.location.latitude != 0.0)
-                      ? _findHotelStop(tour)!.location
-                      : stop.location)
-                  : stop.location;
+              ? ((_findHotelStop(tour) != null &&
+                        _findHotelStop(tour)!.location.latitude != 0.0)
+                    ? _findHotelStop(tour)!.location
+                    : stop.location)
+              : stop.location;
           final destinationName = _selectedVoicePlace != null
               ? _selectedVoicePlace!.name
               : _navigatingToHotel
-                  ? (_findHotelStop(tour)?.name ?? 'Hotel')
-                  : stop.name;
+              ? (_findHotelStop(tour)?.name ?? 'Hotel')
+              : stop.name;
 
           return Stack(
             children: [
               Positioned.fill(
                 child: LiveNavigationMap(
-                  key: ValueKey('${tour.id}-$mapStyle-${_selectedVoicePlace != null ? "voice" : _navigatingToHotel ? "hotel" : "stop"}-$_selectedDay'),
+                  key: ValueKey(
+                    '${tour.id}-$mapStyle-${_selectedVoicePlace != null
+                        ? "voice"
+                        : _navigatingToHotel
+                        ? "hotel"
+                        : "stop"}-$_selectedDay',
+                  ),
                   destination: destinationPoint,
                   destinationName: destinationName,
                   styleUrl: mapStyle,
@@ -972,7 +1075,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   additionalWaypointLabels: _voiceFoodPlaces.isNotEmpty
                       ? _voiceFoodPlaces.map((p) => p.name).toList()
                       : null,
-                  additionalWaypointEmoji: _voiceFoodPlaces.isNotEmpty ? '🍽️' : null,
+                  additionalWaypointEmoji: _voiceFoodPlaces.isNotEmpty
+                      ? '🍽️'
+                      : null,
                   trackingMode: _isTrackingMode,
                   trackingHeading: _currentHeading,
                   showRecenterFab: false,
@@ -997,14 +1102,17 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 ),
               ),
 
-              if (liveRoute?.transitAdviceMessage != null && !_isTransitBannerDismissed)
+              if (liveRoute?.transitAdviceMessage != null &&
+                  !_isTransitBannerDismissed)
                 Positioned(
                   left: 16,
                   right: 16,
                   top: MediaQuery.of(context).padding.top + 70,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surface.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: AppTheme.primary.withValues(alpha: 0.4),
@@ -1025,27 +1133,37 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                         },
                         borderRadius: BorderRadius.circular(16),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           child: Row(
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(7),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   liveRoute?.usesFlightTransfer == true
                                       ? Icons.flight_takeoff_rounded
                                       : liveRoute?.usesMaritimeTransfer == true
-                                          ? Icons.directions_boat_rounded
-                                          : liveRoute?.usesBusTransfer == true
-                                              ? Icons.directions_bus_rounded
-                                              : (liveRoute?.walkingSegments.isNotEmpty == true)
-                                                  ? Icons.hiking_rounded
-                                                  : Icons.navigation_rounded,
+                                      ? Icons.directions_boat_rounded
+                                      : liveRoute?.usesBusTransfer == true
+                                      ? Icons.directions_bus_rounded
+                                      : (liveRoute
+                                                ?.walkingSegments
+                                                .isNotEmpty ==
+                                            true)
+                                      ? Icons.hiking_rounded
+                                      : Icons.navigation_rounded,
                                   size: 18,
-                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer,
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -1056,9 +1174,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                   children: [
                                     Text(
                                       liveRoute!.transitAdviceMessage!,
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
                                             fontWeight: FontWeight.w600,
-                                            color: Theme.of(context).colorScheme.onSurface,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
                                           ),
                                     ),
                                     const SizedBox(height: 4),
@@ -1068,14 +1191,16 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                           liveRoute.usesBusTransfer
                                               ? 'Toca aquí para trazar ruta a la terminal'
                                               : liveRoute.usesFlightTransfer
-                                                  ? 'Toca aquí para trazar ruta al aeropuerto'
+                                              ? 'Toca aquí para trazar ruta al aeropuerto'
                                               : liveRoute.usesMaritimeTransfer
-                                                      ? liveRoute.ports.isNotEmpty
-                                                          ? 'Toca aquí para trazar ruta al muelle'
-                                                          : 'Confirma el punto de embarque local'
-                                                      : liveRoute.walkingSegments.isNotEmpty
-                                                          ? 'Toca aquí para ver el sendero a pie'
-                                                          : 'Toca aquí para trazar ruta al transbordo',
+                                              ? liveRoute.ports.isNotEmpty
+                                                    ? 'Toca aquí para trazar ruta al muelle'
+                                                    : 'Confirma el punto de embarque local'
+                                              : liveRoute
+                                                    .walkingSegments
+                                                    .isNotEmpty
+                                              ? 'Toca aquí para ver el sendero a pie'
+                                              : 'Toca aquí para trazar ruta al transbordo',
                                           style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
@@ -1083,7 +1208,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                           ),
                                         ),
                                         const SizedBox(width: 4),
-                                        Icon(Icons.arrow_forward_rounded, size: 12, color: AppTheme.primary),
+                                        Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 12,
+                                          color: AppTheme.primary,
+                                        ),
                                       ],
                                     ),
                                   ],
@@ -1091,13 +1220,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               ),
                               GestureDetector(
                                 behavior: HitTestBehavior.opaque,
-                                onTap: () => setState(() => _isTransitBannerDismissed = true),
+                                onTap: () => setState(
+                                  () => _isTransitBannerDismissed = true,
+                                ),
                                 child: Padding(
                                   padding: const EdgeInsets.all(4),
                                   child: Icon(
                                     Icons.close_rounded,
                                     size: 18,
-                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.4),
                                   ),
                                 ),
                               ),
@@ -1137,7 +1271,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                           });
                         },
                         child: Icon(
-                          _isMapMenuExpanded ? Icons.close_rounded : Icons.menu_rounded,
+                          _isMapMenuExpanded
+                              ? Icons.close_rounded
+                              : Icons.menu_rounded,
                           color: AppTheme.primary,
                         ),
                       ),
@@ -1161,8 +1297,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                         child: Column(
                           children: [
                             _MapMenuItem(
-                              icon: _isTrackingMode ? Icons.explore_rounded : Icons.my_location_rounded,
-                              label: _isTrackingMode ? 'Vista general' : 'Seguimiento',
+                              icon: _isTrackingMode
+                                  ? Icons.explore_rounded
+                                  : Icons.my_location_rounded,
+                              label: _isTrackingMode
+                                  ? 'Vista general'
+                                  : 'Seguimiento',
                               isActive: _isTrackingMode,
                               onTap: () {
                                 setState(() {
@@ -1177,22 +1317,26 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               icon: mapStyleOption == MapStyleOption.satellite
                                   ? Icons.satellite_alt_rounded
                                   : mapStyleOption == MapStyleOption.night
-                                      ? Icons.nights_stay_rounded
-                                      : Icons.map_rounded,
+                                  ? Icons.nights_stay_rounded
+                                  : Icons.map_rounded,
                               label: mapStyleOption == MapStyleOption.satellite
                                   ? 'Mapa Satélite'
                                   : mapStyleOption == MapStyleOption.night
-                                      ? 'Mapa Oscuro'
-                                      : 'Mapa Calles',
+                                  ? 'Mapa Oscuro'
+                                  : 'Mapa Calles',
                               isActive: false,
                               onTap: () {
-                                final current = ref.read(mapStyleOptionProvider);
+                                final current = ref.read(
+                                  mapStyleOptionProvider,
+                                );
                                 final next = current == MapStyleOption.day
                                     ? MapStyleOption.satellite
                                     : current == MapStyleOption.satellite
-                                        ? MapStyleOption.night
-                                        : MapStyleOption.day;
-                                ref.read(mapStyleOptionProvider.notifier).setOption(next);
+                                    ? MapStyleOption.night
+                                    : MapStyleOption.day;
+                                ref
+                                    .read(mapStyleOptionProvider.notifier)
+                                    .setOption(next);
                                 setState(() => _isMapMenuExpanded = false);
                               },
                             ),
@@ -1244,15 +1388,22 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                             ),
                             const SizedBox(height: 4),
                             _MapMenuItem(
-                              icon: _autoPlayProximityEnabled ? Icons.sensors_rounded : Icons.sensors_off_rounded,
-                              label: _autoPlayProximityEnabled ? 'Auto-Voz: ON' : 'Auto-Voz: OFF',
+                              icon: _autoPlayProximityEnabled
+                                  ? Icons.sensors_rounded
+                                  : Icons.sensors_off_rounded,
+                              label: _autoPlayProximityEnabled
+                                  ? 'Auto-Voz: ON'
+                                  : 'Auto-Voz: OFF',
                               isActive: _autoPlayProximityEnabled,
                               onTap: () {
                                 setState(() {
-                                  _autoPlayProximityEnabled = !_autoPlayProximityEnabled;
+                                  _autoPlayProximityEnabled =
+                                      !_autoPlayProximityEnabled;
                                   _isMapMenuExpanded = false;
                                 });
-                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(
+                                  context,
+                                ).hideCurrentSnackBar();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
@@ -1272,18 +1423,25 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               isActive: false,
                               onTap: () async {
                                 const speeds = [0.75, 1.0, 1.25, 1.5];
-                                final currentIdx = speeds.indexOf(_ttsSpeedMultiplier);
-                                final nextSpeed = speeds[(currentIdx + 1) % speeds.length];
+                                final currentIdx = speeds.indexOf(
+                                  _ttsSpeedMultiplier,
+                                );
+                                final nextSpeed =
+                                    speeds[(currentIdx + 1) % speeds.length];
                                 setState(() {
                                   _ttsSpeedMultiplier = nextSpeed;
                                 });
                                 final messenger = ScaffoldMessenger.of(context);
-                                await ref.read(voiceGuideProvider).setSpeedMultiplier(nextSpeed);
+                                await ref
+                                    .read(voiceGuideProvider)
+                                    .setSpeedMultiplier(nextSpeed);
                                 if (!mounted) return;
                                 messenger.hideCurrentSnackBar();
                                 messenger.showSnackBar(
                                   SnackBar(
-                                    content: Text('Velocidad de voz: ${nextSpeed}x'),
+                                    content: Text(
+                                      'Velocidad de voz: ${nextSpeed}x',
+                                    ),
                                     duration: const Duration(seconds: 1),
                                   ),
                                 );
@@ -1326,22 +1484,39 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                             padding: const EdgeInsets.symmetric(horizontal: 3),
                             child: FilterChip(
                               avatar: isCompleted
-                                  ? const Icon(Icons.check_circle_rounded, size: 14, color: Colors.green)
+                                  ? const Icon(
+                                      Icons.check_circle_rounded,
+                                      size: 14,
+                                      color: Colors.green,
+                                    )
                                   : null,
                               label: Text(
                                 'Día $dayNum',
                                 style: TextStyle(
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                   fontSize: 12,
                                 ),
                               ),
                               selected: isSelected,
                               onSelected: (_) => _onSelectDay(tour, dayNum),
-                              backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
-                              checkmarkColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.surface.withValues(alpha: 0.9),
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              checkmarkColor: Theme.of(
+                                context,
+                              ).colorScheme.onPrimaryContainer,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 0,
+                              ),
                               visualDensity: VisualDensity.compact,
                             ),
                           );
@@ -1359,7 +1534,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    if (_voiceFoodPlaces.isNotEmpty && _selectedVoicePlace == null) ...[
+                    if (_voiceFoodPlaces.isNotEmpty &&
+                        _selectedVoicePlace == null) ...[
                       _buildNearbyFoodCarousel(context, tour),
                     ],
                     if (!_isTrackingMode) ...[
@@ -1374,7 +1550,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                             _hasUserManuallyToggledTracking = true;
                           });
                         },
-                        icon: const Icon(Icons.my_location_rounded, color: AppTheme.primary),
+                        icon: const Icon(
+                          Icons.my_location_rounded,
+                          color: AppTheme.primary,
+                        ),
                         label: const Text(
                           'Seguir ubicación',
                           style: TextStyle(
@@ -1391,10 +1570,17 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                       child: _selectedVoicePlace != null
                           ? _buildRestaurantNavigationPanel(context, tour)
                           : _navigatingToHotel
-                              ? _buildHotelNavigationPanel(context, tour)
-                              : _isAtStopMode
-                                  ? _buildAtStopModePanel(context, tour, stop, l10n)
-                                  : _buildStandardNavigationPanel(context, tour, stop, progress, liveRoute, l10n),
+                          ? _buildHotelNavigationPanel(context, tour)
+                          : _isAtStopMode
+                          ? _buildAtStopModePanel(context, tour, stop, l10n)
+                          : _buildStandardNavigationPanel(
+                              context,
+                              tour,
+                              stop,
+                              progress,
+                              liveRoute,
+                              l10n,
+                            ),
                     ),
                   ],
                 ),
@@ -1406,7 +1592,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                     behavior: HitTestBehavior.opaque,
                     child: Container(
                       color: const Color(0xFF030712),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 48,
+                      ),
                       child: SafeArea(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1415,9 +1604,16 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 IconButton.filledTonal(
-                                  onPressed: () => setState(() => _isPocketModeEnabled = false),
-                                  icon: const Icon(Icons.close_rounded, color: Colors.white),
-                                  style: IconButton.styleFrom(backgroundColor: Colors.white24),
+                                  onPressed: () => setState(
+                                    () => _isPocketModeEnabled = false,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.close_rounded,
+                                    color: Colors.white,
+                                  ),
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.white24,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1447,7 +1643,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                             ),
                             const SizedBox(height: 32),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 14,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white10,
                                 borderRadius: BorderRadius.circular(16),
@@ -1457,7 +1656,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                                 children: [
                                   Text(
                                     'Siguiente parada:',
-                                    style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                                    style: TextStyle(
+                                      color: Colors.grey.shade400,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
@@ -1473,9 +1675,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                             ),
                             const Spacer(),
                             FilledButton.icon(
-                              onPressed: () => setState(() => _isPocketModeEnabled = false),
+                              onPressed: () =>
+                                  setState(() => _isPocketModeEnabled = false),
                               icon: const Icon(Icons.touch_app_rounded),
-                              label: const Text('Toca en cualquier lugar para salir'),
+                              label: const Text(
+                                'Toca en cualquier lugar para salir',
+                              ),
                               style: FilledButton.styleFrom(
                                 backgroundColor: AppTheme.primary,
                                 foregroundColor: Colors.white,
@@ -1516,14 +1721,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         final playback = ref.read(liveTourPlaybackProvider);
         final currentUser = ref.read(authServiceProvider).currentUser;
         if (playback.tour?.id != tour.id) {
-          ref.read(liveTourPlaybackProvider.notifier).startTour(
+          ref
+              .read(liveTourPlaybackProvider.notifier)
+              .startTour(
                 tour,
                 initialStopIndex: _activeStop,
                 userId: currentUser?.id ?? 'guest',
                 isPlaying: false,
               );
         } else if (playback.currentStopIndex != _activeStop) {
-          ref.read(liveTourPlaybackProvider.notifier).setCurrentStopIndex(_activeStop);
+          ref
+              .read(liveTourPlaybackProvider.notifier)
+              .setCurrentStopIndex(_activeStop);
         }
       }
     });
@@ -1544,8 +1753,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final targetStopIndex = _selectedVoicePlace != null
         ? -2
         : _navigatingToHotel
-            ? -1
-            : _activeStop;
+        ? -1
+        : _activeStop;
     if (_liveRouteStopIndex != targetStopIndex && !_isRouting) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_recalculateRoute(tour, force: true));
@@ -1561,7 +1770,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final stream = await service.positionStream(
       distanceFilterMeters: 0,
       enableForegroundService: true,
-      foregroundTitle: tour != null ? 'Recorrido en vivo: ${tour.title}' : 'Recorrido en vivo - VibeTours',
+      foregroundTitle: tour != null
+          ? 'Recorrido en vivo: ${tour.title}'
+          : 'Recorrido en vivo - VibeTours',
       foregroundText: 'VibeTours te avisará cuando llegues a cada parada.',
     );
     if (mounted && stream != null) {
@@ -1585,12 +1796,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       final tour = _navigationTour;
       if (tour != null) {
         // Pre-cache upcoming stops in the background for 0 ms playback
-        ref.read(voiceGuideProvider).precacheTourStops(
-          tour.stops,
-          startIndex: _activeStop,
-          maxCount: 3,
-          lang: tour.language,
-        );
+        ref
+            .read(voiceGuideProvider)
+            .precacheTourStops(
+              tour.stops,
+              startIndex: _activeStop,
+              maxCount: 3,
+              lang: tour.language,
+            );
 
         // When the stream is active, wait for its first reliable fix. The
         // one-shot currentPosition can be stale and would otherwise produce a
@@ -1613,7 +1826,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     if (position.speed >= 1.0 && position.heading >= 0) {
       if (_currentHeading == null ||
           ((position.heading - _currentHeading!).abs() > 5.0 &&
-           (360.0 - (position.heading - _currentHeading!).abs()) > 5.0)) {
+              (360.0 - (position.heading - _currentHeading!).abs()) > 5.0)) {
         _currentHeading = position.heading;
       }
     }
@@ -1656,22 +1869,33 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       return;
     }
 
-    final activeStopPoint = _activeStop < tour.stops.length ? tour.stops[_activeStop].location : null;
+    final activeStopPoint = _activeStop < tour.stops.length
+        ? tour.stops[_activeStop].location
+        : null;
     final distanceToActiveStop = activeStopPoint != null
-        ? Geolocator.distanceBetween(point.latitude, point.longitude, activeStopPoint.latitude, activeStopPoint.longitude)
+        ? Geolocator.distanceBetween(
+            point.latitude,
+            point.longitude,
+            activeStopPoint.latitude,
+            activeStopPoint.longitude,
+          )
         : double.infinity;
 
     // Audioguía automática y activación de Modo En Parada por proximidad adaptable
     if (_activeStop < tour.stops.length) {
       final currentStop = tour.stops[_activeStop];
       final proximityRadius = _getStopProximityRadius(currentStop);
-      if (distanceToActiveStop <= proximityRadius && !_autoTriggeredStopIds.contains(currentStop.id)) {
+      if (distanceToActiveStop <= proximityRadius &&
+          !_autoTriggeredStopIds.contains(currentStop.id)) {
         _autoTriggeredStopIds.add(currentStop.id);
-        debugPrint('[ProximityTTS] Disparando llegada a parada ${currentStop.name} (distancia: ${distanceToActiveStop.toStringAsFixed(1)}m <= ${proximityRadius.toStringAsFixed(0)}m)');
+        debugPrint(
+          '[ProximityTTS] Disparando llegada a parada ${currentStop.name} (distancia: ${distanceToActiveStop.toStringAsFixed(1)}m <= ${proximityRadius.toStringAsFixed(0)}m)',
+        );
         _enterAtStopMode(currentStop);
         NotificationService.instance.showProximityNotification(
           title: '📍 ¡Estás cerca de ${currentStop.name}!',
-          body: 'Has llegado a tu siguiente parada. Toca aquí para ver la información y audioguía.',
+          body:
+              'Has llegado a tu siguiente parada. Toca aquí para ver la información y audioguía.',
           id: 1000 + _activeStop,
           payload: 'stop:${currentStop.id}',
         );
@@ -1697,32 +1921,25 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     } else {
       _offRouteSince = null;
     }
-    final sustainedDeviation = _offRouteSince != null &&
+    final sustainedDeviation =
+        _offRouteSince != null &&
         now.difference(_offRouteSince!) >= const Duration(seconds: 8);
 
     if (sustainedDeviation && _canReroute(now, isOffRoute: true)) {
       setState(() {
         _isOffRoute = true;
       });
-      unawaited(
-        _recalculateRoute(
-          tour,
-          force: true,
-          markOffRoute: true,
-        ),
-      );
-    } else if (refreshTraffic &&
-        !_isTrafficRefreshing &&
-        _canReroute(now)) {
+      unawaited(_recalculateRoute(tour, force: true, markOffRoute: true));
+    } else if (refreshTraffic && !_isTrafficRefreshing && _canReroute(now)) {
       // Refresh traffic metadata only. Re-routing here would replace the
       // road geometry every few minutes even when the user is still on route.
       final destination = _selectedVoicePlace != null
           ? _selectedVoicePlace!.toGeoPoint()
           : _navigatingToHotel
-              ? _findHotelStop(tour)?.location
-              : (_activeStop < tour.stops.length
-                  ? tour.stops[_activeStop].location
-                  : null);
+          ? _findHotelStop(tour)?.location
+          : (_activeStop < tour.stops.length
+                ? tour.stops[_activeStop].location
+                : null);
       if (destination != null) {
         unawaited(
           _refreshTrafficInBackground(
@@ -1732,8 +1949,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             stopIndex: _selectedVoicePlace != null
                 ? -2
                 : _navigatingToHotel
-                    ? -1
-                    : _activeStop,
+                ? -1
+                : _activeStop,
             requestToken: _routeRequestToken,
             travelMode: route.travelMode,
             coastalIslands: _isCoastalIslandsTour(tour),
@@ -1765,20 +1982,23 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       });
     }
     if (tour.stops.isEmpty) return;
-    
+
     final stopIndex = _selectedVoicePlace != null
         ? -2
         : _navigatingToHotel
-            ? -1
-            : _activeStop;
-            
+        ? -1
+        : _activeStop;
+
     final hotelStop = _findHotelStop(tour);
-    if (_navigatingToHotel && hotelStop == null && _selectedVoicePlace == null) return;
-    
+    if (_navigatingToHotel && hotelStop == null && _selectedVoicePlace == null)
+      return;
+
     final GeoPoint destination;
     if (_selectedVoicePlace != null) {
       destination = _selectedVoicePlace!.toGeoPoint();
-    } else if (_navigatingToHotel && hotelStop != null && hotelStop.location.latitude != 0.0) {
+    } else if (_navigatingToHotel &&
+        hotelStop != null &&
+        hotelStop.location.latitude != 0.0) {
       destination = hotelStop.location;
     } else {
       destination = tour.stops[_activeStop].location;
@@ -1789,8 +2009,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       _isOffRoute = markOffRoute;
     });
     final requestToken = ++_routeRequestToken;
-    final profileTransport = ref.read(touristProfileProvider).valueOrNull?.transportPreference;
-    final travelMode = _activeTravelMode ??= routeTravelModeFor(profileTransport);
+    final profileTransport = ref
+        .read(touristProfileProvider)
+        .valueOrNull
+        ?.transportPreference;
+    final travelMode = _activeTravelMode ??= routeTravelModeFor(
+      profileTransport,
+    );
     final previousRoute = _liveRoute;
     late final RoadRouteResult route;
     try {
@@ -1823,7 +2048,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       setState(() => _isRouting = false);
       return;
     }
-    
+
     // Validate non-zero coordinates and distance bounds before navigation
     final isZeroOrigin = origin.latitude == 0 && origin.longitude == 0;
     final isZeroDest = destination.latitude == 0 && destination.longitude == 0;
@@ -1838,24 +2063,32 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
 
     final directDist = Geolocator.distanceBetween(
-      origin.latitude, origin.longitude,
-      destination.latitude, destination.longitude,
+      origin.latitude,
+      origin.longitude,
+      destination.latitude,
+      destination.longitude,
     );
 
     // Intercity / distance check: only block if routing engine completely failed to find roads
-    final isMultimodal = route.usesFlightTransfer || route.usesMaritimeTransfer || route.usesBusTransfer;
-    bool isUnreachable = !isMultimodal && route.usedFallback && directDist > 25000;
-    
+    final isMultimodal =
+        route.usesFlightTransfer ||
+        route.usesMaritimeTransfer ||
+        route.usesBusTransfer;
+    bool isUnreachable =
+        !isMultimodal && route.usedFallback && directDist > 25000;
+
     if (route.geometry.isNotEmpty && !isMultimodal && route.usedFallback) {
       final snapStart = Geolocator.distanceBetween(
-        origin.latitude, origin.longitude,
-        route.geometry.first.latitude, route.geometry.first.longitude,
+        origin.latitude,
+        origin.longitude,
+        route.geometry.first.latitude,
+        route.geometry.first.longitude,
       );
       if (snapStart > 50000) {
         isUnreachable = true;
       }
     }
-    
+
     if (route.usesMaritimeTransfer && directDist > 300000) {
       isUnreachable = true;
     }
@@ -1947,7 +2180,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
 
   bool _isActiveCoastalIslandDestination(Tour tour) {
     if (!_isCoastalIslandsTour(tour)) return false;
-    final destinationName = _selectedVoicePlace?.name ??
+    final destinationName =
+        _selectedVoicePlace?.name ??
         (_navigatingToHotel || _activeStop >= tour.stops.length
             ? ''
             : tour.stops[_activeStop].name);
@@ -1966,18 +2200,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final currentStopIndex = _selectedVoicePlace != null
         ? -2
         : _navigatingToHotel
-            ? -1
-            : _activeStop;
+        ? -1
+        : _activeStop;
     if (currentStopIndex != stopIndex) return false;
 
     final currentTour = _navigationTour;
     final currentDestination = _selectedVoicePlace != null
         ? _selectedVoicePlace!.toGeoPoint()
         : _navigatingToHotel
-            ? (currentTour == null ? null : _findHotelStop(currentTour)?.location)
-            : (currentTour != null && _activeStop < currentTour.stops.length)
-                ? currentTour.stops[_activeStop].location
-                : null;
+        ? (currentTour == null ? null : _findHotelStop(currentTour)?.location)
+        : (currentTour != null && _activeStop < currentTour.stops.length)
+        ? currentTour.stops[_activeStop].location
+        : null;
     if (currentDestination == null) return false;
     return Geolocator.distanceBetween(
           destination.latitude,
@@ -1993,12 +2227,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   }
 
   String _distanceLabel(Tour tour, double progress, RoadRouteResult? route) {
-    final meters = _remainingRouteDistanceMeters(route) ?? route?.distanceMeters ?? 0;
+    final meters =
+        _remainingRouteDistanceMeters(route) ?? route?.distanceMeters ?? 0;
     if (meters > 0) {
       if (meters < 1000) return '${meters.round()} m restantes';
       return '${(meters / 1000).toStringAsFixed(1)} km restantes';
     }
-    if (_selectedVoicePlace != null || _navigatingToHotel) return 'Por calcular';
+    if (_selectedVoicePlace != null || _navigatingToHotel)
+      return 'Por calcular';
     return '${(tour.distanceKm * (1 - progress)).toStringAsFixed(1)} km restantes';
   }
 
@@ -2012,9 +2248,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           : seconds;
       return _formatDuration(remainingSeconds);
     }
-    if (_selectedVoicePlace != null || _navigatingToHotel) return 'Calculando...';
+    if (_selectedVoicePlace != null || _navigatingToHotel)
+      return 'Calculando...';
     // Calculate realistic travel time for the active leg based on remaining meters
-    final legMeters = _remainingRouteDistanceMeters(route) ?? route?.distanceMeters ?? 0;
+    final legMeters =
+        _remainingRouteDistanceMeters(route) ?? route?.distanceMeters ?? 0;
     if (legMeters > 0) {
       final speedKmh = switch (route?.travelMode ?? RouteTravelMode.driving) {
         RouteTravelMode.walking => 4.2,
@@ -2027,8 +2265,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       final estimatedMins = (legMeters / 1000.0 / speedKmh * 60).round();
       return _formatDuration(estimatedMins * 60);
     }
-    final activeStopMins = tour.stops.isNotEmpty && _activeStop < tour.stops.length
-        ? (tour.stops[_activeStop].suggestedMinutes > 0 ? tour.stops[_activeStop].suggestedMinutes : 25)
+    final activeStopMins =
+        tour.stops.isNotEmpty && _activeStop < tour.stops.length
+        ? (tour.stops[_activeStop].suggestedMinutes > 0
+              ? tour.stops[_activeStop].suggestedMinutes
+              : 25)
         : 25;
     return '$activeStopMins min';
   }
@@ -2083,10 +2324,15 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     return best;
   }
 
-  double _distanceToSegmentMeters(GeoPoint point, GeoPoint start, GeoPoint end) {
+  double _distanceToSegmentMeters(
+    GeoPoint point,
+    GeoPoint start,
+    GeoPoint end,
+  ) {
     // Local equirectangular projection is sufficiently accurate at navigation
     // distances and measures the road segment itself, not just its vertices.
-    final referenceLatitude = (start.latitude + end.latitude + point.latitude) / 3;
+    final referenceLatitude =
+        (start.latitude + end.latitude + point.latitude) / 3;
     final longitudeScale = math.cos(referenceLatitude * math.pi / 180);
     final segmentX = (end.longitude - start.longitude) * longitudeScale;
     final segmentY = end.latitude - start.latitude;
@@ -2095,9 +2341,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final lengthSquared = segmentX * segmentX + segmentY * segmentY;
     final t = lengthSquared == 0
         ? 0.0
-        : ((pointX * segmentX + pointY * segmentY) / lengthSquared).clamp(0.0, 1.0);
-    final projectedLatitude = start.latitude + t * (end.latitude - start.latitude);
-    final projectedLongitude = start.longitude + t * (end.longitude - start.longitude);
+        : ((pointX * segmentX + pointY * segmentY) / lengthSquared).clamp(
+            0.0,
+            1.0,
+          );
+    final projectedLatitude =
+        start.latitude + t * (end.latitude - start.latitude);
+    final projectedLongitude =
+        start.longitude + t * (end.longitude - start.longitude);
     return Geolocator.distanceBetween(
       point.latitude,
       point.longitude,
@@ -2166,11 +2417,18 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
 
     if (hub == null && _currentPoint != null) {
-      if (liveRoute.usesBusTransfer || _activeTravelMode == RouteTravelMode.publicTransport) {
-        final nearby = await _routeService.findBusTerminalsNear(_currentPoint!, role: 'Terminal salida');
+      if (liveRoute.usesBusTransfer ||
+          _activeTravelMode == RouteTravelMode.publicTransport) {
+        final nearby = await _routeService.findBusTerminalsNear(
+          _currentPoint!,
+          role: 'Terminal salida',
+        );
         if (nearby.isNotEmpty) hub = nearby.first;
       } else {
-        final nearby = await _routeService.findAirportsNear(_currentPoint!, role: 'Aeropuerto salida');
+        final nearby = await _routeService.findAirportsNear(
+          _currentPoint!,
+          role: 'Aeropuerto salida',
+        );
         if (nearby.isNotEmpty) hub = nearby.first;
       }
     }
@@ -2200,7 +2458,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   static String _formatFoodCategory(String? cuisine, String? type) {
     final raw = (cuisine != null && cuisine.trim().isNotEmpty)
         ? cuisine.trim().toLowerCase()
-        : (type != null && type.trim().isNotEmpty ? type.trim().toLowerCase() : '');
+        : (type != null && type.trim().isNotEmpty
+              ? type.trim().toLowerCase()
+              : '');
 
     if (raw.isEmpty) return 'Restaurante';
 
@@ -2280,17 +2540,31 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
 
     if (primary.contains('sandwich')) return 'Sándwiches';
-    if (primary.contains('burger') || primary.contains('hamburgue')) return 'Hamburguesas';
+    if (primary.contains('burger') || primary.contains('hamburgue'))
+      return 'Hamburguesas';
     if (primary.contains('pizza')) return 'Pizzería';
-    if (primary.contains('cafe') || primary.contains('café') || primary.contains('coffee')) return 'Cafetería';
-    if (primary.contains('marisco') || primary.contains('seafood') || primary.contains('fish')) return 'Pescados y mariscos';
-    if (primary.contains('carne') || primary.contains('steak') || primary.contains('bbq') || primary.contains('asado')) return 'Carnes y asados';
+    if (primary.contains('cafe') ||
+        primary.contains('café') ||
+        primary.contains('coffee'))
+      return 'Cafetería';
+    if (primary.contains('marisco') ||
+        primary.contains('seafood') ||
+        primary.contains('fish'))
+      return 'Pescados y mariscos';
+    if (primary.contains('carne') ||
+        primary.contains('steak') ||
+        primary.contains('bbq') ||
+        primary.contains('asado'))
+      return 'Carnes y asados';
     if (primary.contains('colombia')) return 'Comida colombiana';
     if (primary.contains('mexic')) return 'Comida mexicana';
     if (primary.contains('ital')) return 'Comida italiana';
-    if (primary.contains('fast_food') || primary.contains('rapida')) return 'Comida rápida';
-    if (primary.contains('helado') || primary.contains('ice_cream')) return 'Heladería';
-    if (primary.contains('panad') || primary.contains('baker')) return 'Panadería';
+    if (primary.contains('fast_food') || primary.contains('rapida'))
+      return 'Comida rápida';
+    if (primary.contains('helado') || primary.contains('ice_cream'))
+      return 'Heladería';
+    if (primary.contains('panad') || primary.contains('baker'))
+      return 'Panadería';
     if (primary.contains('bar') || primary.contains('pub')) return 'Bar';
 
     return primary[0].toUpperCase() + primary.substring(1);
@@ -2319,7 +2593,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.orange.shade800.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(12),
@@ -2334,7 +2611,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.restaurant_rounded, size: 14, color: Colors.white),
+                    const Icon(
+                      Icons.restaurant_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
                     const SizedBox(width: 5),
                     Text(
                       'Opciones en la zona (${_voiceFoodPlaces.length})',
@@ -2359,7 +2640,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 child: Container(
                   padding: const EdgeInsets.all(5),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surface.withValues(alpha: 0.95),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
@@ -2398,8 +2681,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 }
                 final distString = distanceMeters != null
                     ? (distanceMeters < 1000
-                        ? '${distanceMeters.round()} m'
-                        : '${(distanceMeters / 1000).toStringAsFixed(1)} km')
+                          ? '${distanceMeters.round()} m'
+                          : '${(distanceMeters / 1000).toStringAsFixed(1)} km')
                     : null;
 
                 return InkWell(
@@ -2409,7 +2692,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                     width: 210,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surface.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: Colors.orange.withValues(alpha: 0.45),
@@ -2446,10 +2731,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.6),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.6),
                               ),
                             ),
                           ],
@@ -2512,7 +2796,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final nameLower = (_selectedVoicePlace?.name ?? '').toLowerCase();
     final typeLower = (_selectedVoicePlace?.type ?? '').toLowerCase();
 
-    final isBusTerminal = typeLower.contains('terminal') ||
+    final isBusTerminal =
+        typeLower.contains('terminal') ||
         typeLower.contains('bus') ||
         typeLower.contains('autobús') ||
         typeLower.contains('autobus') ||
@@ -2520,27 +2805,28 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         nameLower.contains('central de autobuses') ||
         nameLower.contains('estación de autobuses');
 
-    final isAirport = !isBusTerminal && (
-        _selectedVoicePlace?.type == 'aeropuerto' ||
-        (_selectedVoicePlace?.type?.contains('Aeropuerto') ?? false) ||
-        (_selectedVoicePlace?.name.contains('Aeropuerto') ?? false) ||
-        typeLower.contains('aeropuerto') ||
-        typeLower.contains('airport') ||
-        nameLower.contains('aeropuerto') ||
-        nameLower.contains('airport')
-    );
+    final isAirport =
+        !isBusTerminal &&
+        (_selectedVoicePlace?.type == 'aeropuerto' ||
+            (_selectedVoicePlace?.type?.contains('Aeropuerto') ?? false) ||
+            (_selectedVoicePlace?.name.contains('Aeropuerto') ?? false) ||
+            typeLower.contains('aeropuerto') ||
+            typeLower.contains('airport') ||
+            nameLower.contains('aeropuerto') ||
+            nameLower.contains('airport'));
 
-    final isPort = !isBusTerminal && (
-        _selectedVoicePlace?.type == 'puerto' ||
-        _selectedVoicePlace?.type?.contains('Embarque') == true ||
-        (_selectedVoicePlace?.type?.contains('Puerto') ?? false) ||
-        (_selectedVoicePlace?.name.contains('Muelle') ?? false) ||
-        (_selectedVoicePlace?.name.contains('Puerto') ?? false) ||
-        typeLower.contains('muelle') ||
-        nameLower.contains('muelle')
-    );
+    final isPort =
+        !isBusTerminal &&
+        (_selectedVoicePlace?.type == 'puerto' ||
+            _selectedVoicePlace?.type?.contains('Embarque') == true ||
+            (_selectedVoicePlace?.type?.contains('Puerto') ?? false) ||
+            (_selectedVoicePlace?.name.contains('Muelle') ?? false) ||
+            (_selectedVoicePlace?.name.contains('Puerto') ?? false) ||
+            typeLower.contains('muelle') ||
+            nameLower.contains('muelle'));
 
-    final isHotel = typeLower == 'hotel' ||
+    final isHotel =
+        typeLower == 'hotel' ||
         nameLower.contains('hotel') ||
         nameLower.contains('hostal') ||
         nameLower.contains('resort') ||
@@ -2550,7 +2836,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         nameLower.contains('boutique') ||
         nameLower.contains('posada');
 
-    final isAttraction = typeLower == 'attraction' ||
+    final isAttraction =
+        typeLower == 'attraction' ||
         typeLower == 'tourism' ||
         typeLower == 'monument' ||
         typeLower == 'viewpoint' ||
@@ -2565,26 +2852,26 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final destinationTitle = isBusTerminal
         ? 'Ruta a la Terminal de Transporte'
         : isAirport
-            ? 'Ruta al Aeropuerto'
-            : isPort
-                ? 'Ruta al Muelle'
-                : isHotel
-                    ? 'Ruta a tu Alojamiento'
-                    : isAttraction
-                        ? 'Ruta al Punto de Interés'
-                        : 'Ruta al Restaurante';
+        ? 'Ruta al Aeropuerto'
+        : isPort
+        ? 'Ruta al Muelle'
+        : isHotel
+        ? 'Ruta a tu Alojamiento'
+        : isAttraction
+        ? 'Ruta al Punto de Interés'
+        : 'Ruta al Restaurante';
 
     final destinationIcon = isBusTerminal
         ? Icons.directions_bus_rounded
         : isAirport
-            ? Icons.flight_takeoff_rounded
-            : isPort
-                ? Icons.directions_boat_rounded
-                : isHotel
-                    ? Icons.hotel_rounded
-                    : isAttraction
-                        ? Icons.place_rounded
-                        : Icons.restaurant_rounded;
+        ? Icons.flight_takeoff_rounded
+        : isPort
+        ? Icons.directions_boat_rounded
+        : isHotel
+        ? Icons.hotel_rounded
+        : isAttraction
+        ? Icons.place_rounded
+        : Icons.restaurant_rounded;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -2596,41 +2883,41 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               child: Text(
                 destinationTitle,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            Icon(
-              destinationIcon,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            Icon(destinationIcon, color: Theme.of(context).colorScheme.primary),
           ],
         ),
         const SizedBox(height: 6),
         Text(
           _selectedVoicePlace?.name ?? 'Destino',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
-        if (_selectedVoicePlace?.cuisine != null || _selectedVoicePlace?.type != null) ...[
+        if (_selectedVoicePlace?.cuisine != null ||
+            _selectedVoicePlace?.type != null) ...[
           const SizedBox(height: 2),
           Text(
             isBusTerminal
                 ? 'Punto de abordaje para tu viaje terrestre'
                 : isAirport
-                    ? 'Terminal aérea para tu vuelo'
-                    : isPort
-                        ? 'Punto de embarque marítimo / fluvial'
-                        : isHotel
-                            ? 'Lugar de descanso y hospedaje'
-                            : isAttraction
-                                ? 'Atracción o lugar de interés'
-                                : 'Categoría: ${_formatFoodCategory(_selectedVoicePlace?.cuisine, _selectedVoicePlace?.type)}',
+                ? 'Terminal aérea para tu vuelo'
+                : isPort
+                ? 'Punto de embarque marítimo / fluvial'
+                : isHotel
+                ? 'Lugar de descanso y hospedaje'
+                : isAttraction
+                ? 'Atracción o lugar de interés'
+                : 'Categoría: ${_formatFoodCategory(_selectedVoicePlace?.cuisine, _selectedVoicePlace?.type)}',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
-                ),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.65),
+            ),
           ),
         ],
         const SizedBox(height: 14),
@@ -2673,12 +2960,15 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               child: Text(
                 'Regresando al hotel',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            Icon(Icons.hotel_rounded, color: Theme.of(context).colorScheme.primary),
+            Icon(
+              Icons.hotel_rounded,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ],
         ),
         const SizedBox(height: 6),
@@ -2688,8 +2978,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               child: Text(
                 hotelStop?.name ?? 'Hotel de alojamiento',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
               ),
             ),
             TextButton.icon(
@@ -2724,10 +3016,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 label: _isRouting ? 'Actualizando ruta' : 'Desvio detectado',
               ),
             if (_currentPoint != null)
-              const _LiveChip(
-                icon: Icons.gps_fixed_rounded,
-                label: 'GPS live',
-              )
+              const _LiveChip(icon: Icons.gps_fixed_rounded, label: 'GPS live')
             else
               const _LiveChip(
                 icon: Icons.gps_not_fixed_rounded,
@@ -2768,7 +3057,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
   void _openDestinationPreview(TourStop stop) {
     final tour = _navigationTour;
     if (tour == null) return;
-    final remainingMeters = _remainingRouteDistanceMeters(_liveRoute) ??
+    final remainingMeters =
+        _remainingRouteDistanceMeters(_liveRoute) ??
         (_currentPoint != null
             ? Geolocator.distanceBetween(
                 _currentPoint!.latitude,
@@ -2832,7 +3122,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.primary,
                         borderRadius: BorderRadius.circular(999),
@@ -2840,7 +3133,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.near_me_rounded, size: 12, color: Colors.white),
+                          const Icon(
+                            Icons.near_me_rounded,
+                            size: 12,
+                            color: Colors.white,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '¡Estás llegando! (${remainingMeters < 1000 ? "${remainingMeters.round()} m" : "${(remainingMeters / 1000).toStringAsFixed(1)} km"})',
@@ -2863,17 +3160,24 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                       ),
                     ),
                     const SizedBox(width: 2),
-                    Icon(Icons.chevron_right_rounded, size: 16, color: AppTheme.primary),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: AppTheme.primary,
+                    ),
                     const SizedBox(width: 4),
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(() => _dismissedApproachingStopId = stop.id),
+                      onTap: () =>
+                          setState(() => _dismissedApproachingStopId = stop.id),
                       child: Padding(
                         padding: const EdgeInsets.all(2),
                         child: Icon(
                           Icons.close_rounded,
                           size: 16,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                       ),
                     ),
@@ -2889,16 +3193,28 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                         height: 56,
                         child: imageUrl.isNotEmpty
                             ? CachedNetworkImage(
-                                imageUrl: optimizeImageUrl(imageUrl, width: 160, quality: 75),
+                                imageUrl: optimizeImageUrl(
+                                  imageUrl,
+                                  width: 160,
+                                  quality: 75,
+                                ),
                                 fit: BoxFit.cover,
                                 errorWidget: (context, url, error) => Container(
-                                  color: AppTheme.primary.withValues(alpha: 0.1),
-                                  child: const Icon(Icons.place_rounded, color: AppTheme.primary),
+                                  color: AppTheme.primary.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  child: const Icon(
+                                    Icons.place_rounded,
+                                    color: AppTheme.primary,
+                                  ),
                                 ),
                               )
                             : Container(
                                 color: AppTheme.primary.withValues(alpha: 0.1),
-                                child: const Icon(Icons.place_rounded, color: AppTheme.primary),
+                                child: const Icon(
+                                  Icons.place_rounded,
+                                  color: AppTheme.primary,
+                                ),
                               ),
                       ),
                     ),
@@ -2925,7 +3241,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11,
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.75,
+                              ),
                             ),
                           ),
                           if (stop.isFallbackImage) ...[
@@ -2933,7 +3251,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.info_outline_rounded, size: 10, color: Colors.amber.shade700),
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 10,
+                                  color: Colors.amber.shade700,
+                                ),
                                 const SizedBox(width: 3),
                                 Text(
                                   'Foto de referencia (demo)',
@@ -2976,7 +3298,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     final isVoicePlaying = ref.watch(liveTourPlaybackProvider).isPlaying;
     final isLastStop = _activeStop == tour.stops.length - 1;
 
-    final remainingMeters = _remainingRouteDistanceMeters(liveRoute) ??
+    final remainingMeters =
+        _remainingRouteDistanceMeters(liveRoute) ??
         (_currentPoint != null
             ? Geolocator.distanceBetween(
                 _currentPoint!.latitude,
@@ -2985,7 +3308,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 stop.location.longitude,
               )
             : null);
-    final isApproaching = remainingMeters != null &&
+    final isApproaching =
+        remainingMeters != null &&
         remainingMeters <= 400 &&
         remainingMeters > 0 &&
         _dismissedApproachingStopId != stop.id;
@@ -3011,20 +3335,41 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                     height: 44,
                     child: stop.displayImageUrl.trim().isNotEmpty
                         ? CachedNetworkImage(
-                            imageUrl: optimizeImageUrl(stop.displayImageUrl, width: 140, quality: 75),
+                            imageUrl: optimizeImageUrl(
+                              stop.displayImageUrl,
+                              width: 140,
+                              quality: 75,
+                            ),
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
-                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.4),
                               child: const Icon(Icons.image_outlined, size: 20),
                             ),
                             errorWidget: (context, url, error) => Container(
-                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
-                              child: const Icon(Icons.pin_drop_rounded, size: 20, color: AppTheme.primary),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.4),
+                              child: const Icon(
+                                Icons.pin_drop_rounded,
+                                size: 20,
+                                color: AppTheme.primary,
+                              ),
                             ),
                           )
                         : Container(
-                            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
-                            child: const Icon(Icons.pin_drop_rounded, size: 20, color: AppTheme.primary),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.4),
+                            child: const Icon(
+                              Icons.pin_drop_rounded,
+                              size: 20,
+                              color: AppTheme.primary,
+                            ),
                           ),
                   ),
                 ),
@@ -3038,14 +3383,17 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                         stop.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Icon(Icons.visibility_outlined, size: 12, color: AppTheme.primary),
+                          Icon(
+                            Icons.visibility_outlined,
+                            size: 12,
+                            color: AppTheme.primary,
+                          ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
@@ -3066,9 +3414,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.8),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
@@ -3091,7 +3444,10 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             Icon(
               transportIconFor(
                 _activeTravelMode?.name ??
-                    ref.read(touristProfileProvider).valueOrNull?.transportPreference,
+                    ref
+                        .read(touristProfileProvider)
+                        .valueOrNull
+                        ?.transportPreference,
               ),
               size: 14,
               color: AppTheme.primary,
@@ -3102,7 +3458,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             const SizedBox(width: 6),
-            Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+            Text(
+              '•',
+              style: TextStyle(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.3),
+              ),
+            ),
             const SizedBox(width: 6),
             Icon(Icons.schedule_rounded, size: 14, color: AppTheme.primary),
             const SizedBox(width: 3),
@@ -3112,9 +3475,20 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             ),
             if (_trafficLabel(liveRoute).isNotEmpty) ...[
               const SizedBox(width: 6),
-              Text('•', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3))),
+              Text(
+                '•',
+                style: TextStyle(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.3),
+                ),
+              ),
               const SizedBox(width: 6),
-              Icon(Icons.traffic_rounded, size: 14, color: Colors.orange.shade700),
+              Icon(
+                Icons.traffic_rounded,
+                size: 14,
+                color: Colors.orange.shade700,
+              ),
               const SizedBox(width: 3),
               Flexible(
                 child: Text(
@@ -3155,10 +3529,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             KeyedSubtree(
               key: _audioGuideKey,
               child: IconButton.filledTonal(
-                tooltip: isVoicePlaying ? 'Pausar audioguía' : 'Escuchar audioguía',
+                tooltip: isVoicePlaying
+                    ? 'Pausar audioguía'
+                    : 'Escuchar audioguía',
                 style: IconButton.styleFrom(
                   minimumSize: const Size(48, 48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   backgroundColor: isVoicePlaying ? AppTheme.primary : null,
                   foregroundColor: isVoicePlaying ? Colors.white : null,
                 ),
@@ -3166,9 +3544,13 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   final voiceGuide = ref.read(voiceGuideProvider);
                   if (isVoicePlaying) {
                     await voiceGuide.stop();
-                    ref.read(liveTourPlaybackProvider.notifier).setPlaying(false);
+                    ref
+                        .read(liveTourPlaybackProvider.notifier)
+                        .setPlaying(false);
                   } else {
-                    ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
+                    ref
+                        .read(liveTourPlaybackProvider.notifier)
+                        .setPlaying(true);
                     await voiceGuide.narrateStop(
                       stop,
                       stopIndex: _activeStop,
@@ -3179,13 +3561,19 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                           setState(() {
                             final updatedStops = tour.stops.map((s) {
                               if (s.id == stop.id) {
-                                return s.copyWith(name: name, description: description);
+                                return s.copyWith(
+                                  name: name,
+                                  description: description,
+                                );
                               }
                               return s;
                             }).toList();
-                            final updatedTour = tour.copyWith(stops: updatedStops);
+                            final updatedTour = tour.copyWith(
+                              stops: updatedStops,
+                            );
                             _navigationTour = updatedTour;
-                            ref.read(selectedTourProvider.notifier).state = updatedTour;
+                            ref.read(selectedTourProvider.notifier).state =
+                                updatedTour;
                           });
                         }
                       },
@@ -3193,16 +3581,15 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   }
                 },
                 icon: Icon(
-                  isVoicePlaying ? Icons.pause_rounded : Icons.record_voice_over_rounded,
+                  isVoicePlaying
+                      ? Icons.pause_rounded
+                      : Icons.record_voice_over_rounded,
                   size: 20,
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            KeyedSubtree(
-              key: _aiAssistantKey,
-              child: _buildMicButton(context),
-            ),
+            KeyedSubtree(key: _aiAssistantKey, child: _buildMicButton(context)),
             const SizedBox(width: 8),
             KeyedSubtree(
               key: _nextStopKey,
@@ -3210,7 +3597,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 tooltip: isLastStop ? 'Terminar tour' : l10n.nextStop,
                 style: IconButton.styleFrom(
                   minimumSize: const Size(48, 48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 onPressed: () => _advanceToNextStop(tour),
                 icon: Icon(
@@ -3230,10 +3619,16 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     Tour tour,
     RoadRouteResult? liveRoute,
   ) {
-    final currentMode = _activeTravelMode ??
-        routeTravelModeFor(ref.read(touristProfileProvider).valueOrNull?.transportPreference);
+    final currentMode =
+        _activeTravelMode ??
+        routeTravelModeFor(
+          ref.read(touristProfileProvider).valueOrNull?.transportPreference,
+        );
 
-    final directDist = _currentPoint != null && tour.stops.isNotEmpty && _activeStop < tour.stops.length
+    final directDist =
+        _currentPoint != null &&
+            tour.stops.isNotEmpty &&
+            _activeStop < tour.stops.length
         ? Geolocator.distanceBetween(
             _currentPoint!.latitude,
             _currentPoint!.longitude,
@@ -3242,7 +3637,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           )
         : 0.0;
 
-    final isLongDistance = directDist > 200000 ||
+    final isLongDistance =
+        directDist > 200000 ||
         (liveRoute != null && liveRoute.distanceMeters > 200000) ||
         (liveRoute?.hasFlightAlternative == true) ||
         (liveRoute?.usesFlightTransfer == true);
@@ -3391,7 +3787,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle_rounded, size: 14, color: Colors.green),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 14,
+                    color: Colors.green,
+                  ),
                   SizedBox(width: 4),
                   Text(
                     'En la parada',
@@ -3408,7 +3808,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.8),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primaryContainer.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
@@ -3437,20 +3839,41 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                     height: 48,
                     child: stop.displayImageUrl.trim().isNotEmpty
                         ? CachedNetworkImage(
-                            imageUrl: optimizeImageUrl(stop.displayImageUrl, width: 140, quality: 75),
+                            imageUrl: optimizeImageUrl(
+                              stop.displayImageUrl,
+                              width: 140,
+                              quality: 75,
+                            ),
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
-                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.4),
                               child: const Icon(Icons.image_outlined, size: 20),
                             ),
                             errorWidget: (context, url, error) => Container(
-                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
-                              child: const Icon(Icons.pin_drop_rounded, size: 20, color: AppTheme.primary),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.4),
+                              child: const Icon(
+                                Icons.pin_drop_rounded,
+                                size: 20,
+                                color: AppTheme.primary,
+                              ),
                             ),
                           )
                         : Container(
-                            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
-                            child: const Icon(Icons.pin_drop_rounded, size: 20, color: AppTheme.primary),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.4),
+                            child: const Icon(
+                              Icons.pin_drop_rounded,
+                              size: 20,
+                              color: AppTheme.primary,
+                            ),
                           ),
                   ),
                 ),
@@ -3464,13 +3887,17 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          Icon(Icons.photo_library_outlined, size: 12, color: AppTheme.primary),
+                          Icon(
+                            Icons.photo_library_outlined,
+                            size: 12,
+                            color: AppTheme.primary,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'Ver fotos y referencias',
@@ -3506,7 +3933,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
               margin: const EdgeInsets.only(bottom: 4),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -3524,7 +3953,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                   Expanded(
                     child: Text(
                       act,
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, height: 1.3),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        height: 1.3,
+                      ),
                     ),
                   ),
                 ],
@@ -3537,29 +3970,39 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.2),
               ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  stop.tips.isNotEmpty ? Icons.lightbulb_outline_rounded : Icons.info_outline_rounded,
+                  stop.tips.isNotEmpty
+                      ? Icons.lightbulb_outline_rounded
+                      : Icons.info_outline_rounded,
                   size: 16,
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    stop.tips.isNotEmpty ? stop.tips.first : stop.curiousFacts.first,
+                    stop.tips.isNotEmpty
+                        ? stop.tips.first
+                        : stop.curiousFacts.first,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.85),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.85),
                     ),
                   ),
                 ),
@@ -3573,14 +4016,20 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
             Expanded(
               child: LiquidButton(
                 label: isVoicePlaying ? 'Pausar audio' : 'Repetir audioguía',
-                icon: isVoicePlaying ? Icons.pause_rounded : Icons.record_voice_over_rounded,
+                icon: isVoicePlaying
+                    ? Icons.pause_rounded
+                    : Icons.record_voice_over_rounded,
                 onPressed: () async {
                   final voiceGuide = ref.read(voiceGuideProvider);
                   if (isVoicePlaying) {
                     await voiceGuide.stop();
-                    ref.read(liveTourPlaybackProvider.notifier).setPlaying(false);
+                    ref
+                        .read(liveTourPlaybackProvider.notifier)
+                        .setPlaying(false);
                   } else {
-                    ref.read(liveTourPlaybackProvider.notifier).setPlaying(true);
+                    ref
+                        .read(liveTourPlaybackProvider.notifier)
+                        .setPlaying(true);
                     await voiceGuide.narrateStop(
                       stop,
                       stopIndex: _activeStop,
@@ -3655,12 +4104,14 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       _dismissedApproachingStopId = null;
     });
     _saveProgress(nextIndex);
-    ref.read(voiceGuideProvider).precacheTourStops(
-      tour.stops,
-      startIndex: _activeStop,
-      maxCount: 2,
-      lang: tour.language,
-    );
+    ref
+        .read(voiceGuideProvider)
+        .precacheTourStops(
+          tour.stops,
+          startIndex: _activeStop,
+          maxCount: 2,
+          lang: tour.language,
+        );
     _recalculateRoute(tour, force: true);
   }
 
@@ -3680,76 +4131,92 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         return SafeArea(
           top: false,
           child: Container(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + (bottomInset > 0 ? bottomInset : 16)),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              24,
+              24,
+              24 + (bottomInset > 0 ? bottomInset : 16),
+            ),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
             ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Icon(Icons.wb_sunny_rounded, size: 48, color: Colors.amber),
-              const SizedBox(height: 12),
-              Text(
-                '¡Completaste el Día $finishedDay! 🎉',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Has recorrido todas las paradas programadas para hoy. ¿Qué deseas hacer ahora?',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.hotel_rounded),
-                      label: const Text('Ir a mi hotel'),
-                      onPressed: () {
-                        Navigator.of(modalContext).pop();
-                        setState(() {
-                          _activeStop = nextStopIndex;
-                          _selectedDay = nextDay;
-                          _isAtStopMode = false;
-                        });
-                        _saveProgress(nextStopIndex);
-                        _startHotelNavigation();
-                      },
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.arrow_forward_rounded),
-                      label: Text('Iniciar Día $nextDay'),
-                      onPressed: () {
-                        Navigator.of(modalContext).pop();
-                        _onAdvanceToStop(tour, nextStopIndex, nextDay);
-                      },
-                    ),
+                ),
+                const SizedBox(height: 16),
+                const Icon(
+                  Icons.wb_sunny_rounded,
+                  size: 48,
+                  color: Colors.amber,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '¡Completaste el Día $finishedDay! 🎉',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
-              ),
-            ],
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Has recorrido todas las paradas programadas para hoy. ¿Qué deseas hacer ahora?',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.hotel_rounded),
+                        label: const Text('Ir a mi hotel'),
+                        onPressed: () {
+                          Navigator.of(modalContext).pop();
+                          setState(() {
+                            _activeStop = nextStopIndex;
+                            _selectedDay = nextDay;
+                            _isAtStopMode = false;
+                          });
+                          _saveProgress(nextStopIndex);
+                          _startHotelNavigation();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.arrow_forward_rounded),
+                        label: Text('Iniciar Día $nextDay'),
+                        onPressed: () {
+                          Navigator.of(modalContext).pop();
+                          _onAdvanceToStop(tour, nextStopIndex, nextDay);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-    },
+        );
+      },
     );
   }
 
@@ -3759,6 +4226,7 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     // prevents an older request from starting playback after this point.
     await ref.read(voiceGuideProvider).stop();
     ref.read(liveTourPlaybackProvider.notifier).stopTour();
+    ref.read(voiceTourQuotaProvider.notifier).clearForTour(widget.tourId);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('tour_progress_${widget.tourId}');
@@ -3777,10 +4245,8 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => TourRatingDialog(
-            tour: tour,
-            popScreenOnComplete: true,
-          ),
+          builder: (context) =>
+              TourRatingDialog(tour: tour, popScreenOnComplete: true),
         );
       }
     }
@@ -3808,7 +4274,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         onPressed: _isProcessingVoice ? null : _onMicPressed,
         style: IconButton.styleFrom(
           minimumSize: const Size(48, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           backgroundColor: _isProcessingVoice
               ? theme.colorScheme.primary.withValues(alpha: 0.6)
               : null,
@@ -3837,18 +4305,12 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
                 ),
               ],
             ),
-            child: const Icon(
-              Icons.mic_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
+            child: const Icon(Icons.mic_rounded, color: Colors.white, size: 20),
           ),
         );
       },
     );
   }
-
-
 }
 
 class _LiveChip extends StatelessWidget {
@@ -3900,7 +4362,9 @@ class _MapMenuItem extends StatelessWidget {
                 Icon(
                   icon,
                   size: 18,
-                  color: isActive ? AppTheme.primary : Theme.of(context).colorScheme.onSurface,
+                  color: isActive
+                      ? AppTheme.primary
+                      : Theme.of(context).colorScheme.onSurface,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -3909,7 +4373,9 @@ class _MapMenuItem extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-                      color: isActive ? AppTheme.primary : Theme.of(context).colorScheme.onSurface,
+                      color: isActive
+                          ? AppTheme.primary
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),

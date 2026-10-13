@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -14,6 +15,7 @@ import '../../core/design/premium_components.dart';
 import '../../core/design/vibe_logo.dart';
 import '../../domain/models.dart';
 import '../../state/app_state.dart';
+import '../ads/presentation/widgets/quota_dialogs.dart';
 
 class TourCreatorScreen extends ConsumerStatefulWidget {
   const TourCreatorScreen({super.key});
@@ -1345,7 +1347,10 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
         ],
       ),
     );
-    if (agreed != true) return;
+    if (agreed != true || !mounted) return;
+
+    final allowed = await QuotaEnforcement.checkAndEnforceTourCreation(context, ref);
+    if (!mounted || !allowed) return;
 
     final tour = _buildTour();
     late final Tour savedTour;
@@ -1363,6 +1368,7 @@ class _TourCreatorScreenState extends ConsumerState<TourCreatorScreen> {
       return;
     }
     ref.read(selectedTourProvider.notifier).state = savedTour;
+    unawaited(ref.read(tourQuotaProvider.notifier).recordTourCreated());
     if (!mounted) return;
     _message('Tour guardado y enviado a revision del administrador.');
     context.go('/creator');

@@ -23,6 +23,7 @@ import '../../state/app_state.dart';
 import '../shared/location_disclosure_dialog.dart';
 import 'ai_builder_controller.dart';
 import 'widgets/animated_route_preview_card.dart';
+import '../ads/presentation/widgets/quota_dialogs.dart';
 
 class AiPlannerScreen extends ConsumerStatefulWidget {
   const AiPlannerScreen({super.key});
@@ -116,6 +117,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
 
     final text = _prompt.text.trim();
     if (text.isEmpty && _selectedImagePath == null) return;
+
+    final allowed = await QuotaEnforcement.checkAndEnforceTourCreation(context, ref);
+    if (!mounted || !allowed) return;
     
     final imagePath = _selectedImagePath;
     
@@ -175,6 +179,9 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
     if (_isProcessingAction) return;
     final builderState = ref.read(aiBuilderProvider);
     if (builderState.isLoading || builderState.isBuilding) return;
+
+    final allowed = await QuotaEnforcement.checkAndEnforceTourCreation(context, ref);
+    if (!mounted || !allowed) return;
     
     setState(() {
       _isProcessingAction = true;
@@ -636,7 +643,12 @@ class _AiPlannerScreenState extends ConsumerState<AiPlannerScreen>
         ref.read(aiBuilderProvider.notifier).prepareForEditing();
         context.push('/ai/builder');
       },
-      onCreateTour: () => ref.read(aiBuilderProvider.notifier).buildTour(),
+      onCreateTour: () async {
+        final allowed = await QuotaEnforcement.checkAndEnforceTourCreation(context, ref);
+        if (mounted && allowed) {
+          ref.read(aiBuilderProvider.notifier).buildTour();
+        }
+      },
     );
   }
 

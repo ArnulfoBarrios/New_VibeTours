@@ -81,14 +81,18 @@ class AdService {
       if (kDebugMode) {
         print('[AdService] Google Mobile Ads initialized successfully.');
       }
-      // Pre-load an interstitial ad
+      // Pre-load ads
       loadInterstitialAd();
+      loadRewardedAd();
     } catch (e) {
       if (kDebugMode) {
         print('[AdService] Failed to initialize Google Mobile Ads: $e');
       }
     }
   }
+
+  bool get isRewardedAdReady => _rewardedAd != null;
+
 
   /// Loads an Interstitial Ad into memory
   void loadInterstitialAd() {

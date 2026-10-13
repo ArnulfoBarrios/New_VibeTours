@@ -8877,13 +8877,20 @@ const routeAssistantSchema = z.object({
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   tourContext: z.object({
+    currentStopIndex: z.number().optional().default(0),
     currentStopName: z.string().optional().default(''),
     city: z.string().optional().default(''),
     country: z.string().optional().default(''),
     hotelName: z.string().optional().default(''),
     hotelAddress: z.string().optional().default(''),
     hotelLat: z.number().optional(),
-    hotelLon: z.number().optional()
+    hotelLon: z.number().optional(),
+    stops: z.array(z.object({
+      index: z.number().optional(),
+      name: z.string().optional(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional()
+    })).optional().default([])
   }).optional().default({})
 })
 
@@ -8919,8 +8926,9 @@ ACCIONES DISPONIBLES (actionType):
    - Extrae el nuevo nombre o dirección en "destinationAddress".
    - Tu responseText DEBE confirmar con entusiasmo: "¡Listo! Ya guardé tu alojamiento en [nombre]."
 6. "DESCRIBE_CURRENT_POI": el usuario pide información, historia o curiosidades sobre la parada actual.
-7. "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro punto del recorrido.
-   - Extrae en "destinationAddress" el nombre concreto del nuevo destino o lugar solicitado.
+7. "CHANGE_DESTINATION": el usuario quiere cambiar de parada o ir a otro punto del recorrido (ej: "vamos a la siguiente parada", "vamos a la parada 3", "ir a la catedral", "siguiente parada").
+   - Si se refiere a una parada del tour o a siguiente/anterior, asigna "targetStopIndex" (índice 0-based de la parada).
+   - Si pide un lugar externo fuera del tour, extrae en "destinationAddress" el nombre concreto del nuevo destino o lugar solicitado.
 8. null: consulta informativa general (clima, tips, etc.).
 
 RESPUESTA (responseText):
@@ -8932,7 +8940,8 @@ Devuelve ÚNICAMENTE un JSON válido con este esquema:
   "responseText": "string",
   "actionType": "SEARCH_RESTAURANTS" | "SEARCH_PLACES" | "RETURN_TO_ACCOMMODATION" | "REQUEST_ACCOMMODATION_LOCATION" | "SET_ACCOMMODATION" | "DESCRIBE_CURRENT_POI" | "CHANGE_DESTINATION" | null,
   "searchQuery": "string", // opcional, término o lugar específico para SEARCH_PLACES
-  "destinationAddress": "string" // opcional, si el usuario dio una dirección o nombre de hotel explícito
+  "destinationAddress": "string", // opcional, si el usuario dio una dirección o nombre de hotel explícito
+  "targetStopIndex": number | null // opcional, índice de parada en el tour si aplica
 }`
 
 aiRouter.post('/chat/route-assistant', async (req, res, next) => {
@@ -8946,8 +8955,13 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
       })
     }
 
+    const stopsList = Array.isArray(tourContext?.stops) && tourContext.stops.length > 0
+      ? `Paradas del tour: [${tourContext.stops.map((s, idx) => `${idx + 1}. ${s.name || s}`).join(', ')}]`
+      : ''
+
     const contextInfo = [
       tourContext?.currentStopName ? `Parada actual: ${tourContext.currentStopName}` : '',
+      stopsList,
       tourContext?.city ? `Ciudad: ${tourContext.city}` : '',
       tourContext?.country ? `País: ${tourContext.country}` : '',
       tourContext?.hotelName ? `Hotel/Alojamiento confirmado: ${tourContext.hotelName}${tourContext.hotelAddress ? ` (${tourContext.hotelAddress})` : ''}` : '',
@@ -9018,7 +9032,9 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
     // 1. Manejo de SEARCH_RESTAURANTS
     if (aiResult.isRelatedToTravel && aiResult.actionType === 'SEARCH_RESTAURANTS') {
       try {
-        nearbyPlaces = await overpassNearbyFood(centerLat, centerLon, 1200)
+        const overpassPromise = overpassNearbyFood(centerLat, centerLon, 1200)
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 5000))
+        nearbyPlaces = await Promise.race([overpassPromise, timeoutPromise])
       } catch (_) {}
 
       if (!nearbyPlaces || nearbyPlaces.length === 0) {
@@ -9048,7 +9064,9 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
 
       if (!nearbyPlaces || nearbyPlaces.length === 0) {
         try {
-          nearbyPlaces = await overpassAttractions(centerLat, centerLon, 3500)
+          const overpassPromise = overpassAttractions(centerLat, centerLon, 3500)
+          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 5000))
+          nearbyPlaces = await Promise.race([overpassPromise, timeoutPromise])
         } catch (_) {}
       }
 
@@ -9067,34 +9085,84 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
       }
     }
 
-    // 3. Manejo de CHANGE_DESTINATION. The client needs a real coordinate,
-    // not only a spoken confirmation, so resolve the requested place before
-    // returning the structured action.
+    // 3. Manejo de CHANGE_DESTINATION
     if (aiResult.isRelatedToTravel && aiResult.actionType === 'CHANGE_DESTINATION') {
-      const requestedDestination = String(aiResult.destinationAddress || '').trim() ||
-        userQuery
-          .replace(/^\s*(?:quiero|prefiero|mejor|cambia(?:r)?|ll[eé]vame|llevame|vamos|ir)\s+/i, '')
-          .replace(/^\s*(?:el\s+)?(?:destino|parada|ruta)\s*(?:a|hacia|por)?\s*/i, '')
-          .replace(/^\s*(?:a|hacia)\s+/i, '')
-          .trim()
+      const tourStops = Array.isArray(tourContext?.stops) ? tourContext.stops : []
+      let matchedStop = null
+      let matchedIndex = null
 
-      if (!requestedDestination) {
-        aiResult.actionType = null
-        aiResult.responseText = '¿A qué lugar quieres cambiar el destino?'
+      if (typeof aiResult.targetStopIndex === 'number' && tourStops[aiResult.targetStopIndex]) {
+        matchedIndex = aiResult.targetStopIndex
+        matchedStop = tourStops[matchedIndex]
       } else {
-        const query = `${requestedDestination}, ${tourContext?.city || ''} ${tourContext?.country || ''}`.trim()
-        const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
-        if (geo?.latitude != null && geo?.longitude != null) {
-          targetDestination = {
-            name: geo.name || requestedDestination,
-            latitude: geo.latitude,
-            longitude: geo.longitude,
-            address: requestedDestination,
-            type: 'attraction'
-          }
+        const lowerQ = userQuery.toLowerCase()
+        const currentIdx = typeof tourContext?.currentStopIndex === 'number' ? tourContext.currentStopIndex : 0
+        if (/\b(siguiente|pr[oó]xim[ao])\b/i.test(lowerQ) && tourStops[currentIdx + 1]) {
+          matchedIndex = currentIdx + 1
+          matchedStop = tourStops[matchedIndex]
+        } else if (/\b(anterior|previa)\b/i.test(lowerQ) && tourStops[currentIdx - 1]) {
+          matchedIndex = currentIdx - 1
+          matchedStop = tourStops[matchedIndex]
         } else {
+          const numMatch = lowerQ.match(/\bparada\s*(\d+)\b/i)
+          if (numMatch) {
+            const stopNum = parseInt(numMatch[1], 10) - 1
+            if (tourStops[stopNum]) {
+              matchedIndex = stopNum
+              matchedStop = tourStops[matchedIndex]
+            }
+          }
+          if (!matchedStop && tourStops.length > 0) {
+            for (let i = 0; i < tourStops.length; i++) {
+              const stopName = (tourStops[i].name || '').toLowerCase()
+              if (stopName && (lowerQ.includes(stopName) || (aiResult.destinationAddress && aiResult.destinationAddress.toLowerCase().includes(stopName)))) {
+                matchedIndex = i
+                matchedStop = tourStops[i]
+                break
+              }
+            }
+          }
+        }
+      }
+
+      if (matchedStop) {
+        aiResult.targetStopIndex = matchedIndex
+        targetDestination = {
+          name: matchedStop.name,
+          latitude: matchedStop.latitude,
+          longitude: matchedStop.longitude,
+          address: matchedStop.name,
+          type: 'attraction'
+        }
+        if (!aiResult.responseText || aiResult.responseText.length < 5) {
+          aiResult.responseText = `Cambiando ruta hacia ${matchedStop.name}.`
+        }
+      } else {
+        const requestedDestination = String(aiResult.destinationAddress || '').trim() ||
+          userQuery
+            .replace(/^\s*(?:quiero|prefiero|mejor|cambia(?:r)?|ll[eé]vame|llevame|vamos|ir)\s+/i, '')
+            .replace(/^\s*(?:el\s+)?(?:destino|parada|ruta)\s*(?:a|hacia|por)?\s*/i, '')
+            .replace(/^\s*(?:a|hacia)\s+/i, '')
+            .trim()
+
+        if (!requestedDestination) {
           aiResult.actionType = null
-          aiResult.responseText = `No pude ubicar "${requestedDestination}". ¿Puedes decirme el nombre o la dirección con más detalle?`
+          aiResult.responseText = '¿A qué lugar quieres cambiar el destino?'
+        } else {
+          const query = `${requestedDestination}, ${tourContext?.city || ''} ${tourContext?.country || ''}`.trim()
+          const geo = await geocodePlace(query, centerLat, centerLon).catch(() => null)
+          if (geo?.latitude != null && geo?.longitude != null) {
+            targetDestination = {
+              name: geo.name || requestedDestination,
+              latitude: geo.latitude,
+              longitude: geo.longitude,
+              address: requestedDestination,
+              type: 'attraction'
+            }
+          } else {
+            aiResult.actionType = null
+            aiResult.responseText = `No pude ubicar "${requestedDestination}". ¿Puedes decirme el nombre o la dirección con más detalle?`
+          }
         }
       }
     }
@@ -9187,6 +9255,7 @@ aiRouter.post('/chat/route-assistant', async (req, res, next) => {
       isRelatedToTravel: aiResult.isRelatedToTravel,
       responseText: aiResult.responseText,
       actionType: aiResult.actionType ?? null,
+      targetStopIndex: typeof aiResult.targetStopIndex === 'number' ? aiResult.targetStopIndex : undefined,
       nearbyPlaces: (nearbyPlaces && nearbyPlaces.length > 0) ? nearbyPlaces : undefined,
       targetDestination: targetDestination ?? undefined
     })

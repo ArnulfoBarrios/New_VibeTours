@@ -1229,6 +1229,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
     );
     ref.read(selectedTourProvider.notifier).state = tour;
     unawaited(ref.read(userToursProvider.notifier).saveTour(tour));
+    unawaited(ref.read(tourQuotaProvider.notifier).recordTourCreated());
 
     unawaited(SharedPreferences.getInstance().then((p) => p.remove(_pendingJobIdKey)));
 

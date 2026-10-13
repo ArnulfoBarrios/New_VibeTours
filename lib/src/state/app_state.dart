@@ -17,8 +17,10 @@ import '../core/services/tour_runtime_services.dart';
 import '../data/demo_tours.dart';
 import '../data/discovery_repository.dart';
 import '../data/moderation_repository.dart';
+import '../data/tour_quota_repository.dart';
 import 'package:vibetoursapp/src/data/tour_repository.dart';
 import '../domain/models.dart';
+import '../domain/tour_quota.dart';
 import '../features/ai/ai_builder_controller.dart';
 import 'live_tour_state.dart';
 
@@ -1042,5 +1044,103 @@ class TourParticipantsController extends AsyncNotifier<List<TourWithParticipants
 final tourParticipantsProvider = AsyncNotifierProvider<TourParticipantsController, List<TourWithParticipants>>(
   TourParticipantsController.new,
 );
+
+final tourQuotaRepositoryProvider = Provider<TourQuotaRepository>((ref) {
+  return TourQuotaRepository(
+    client: ref.watch(supabaseClientProvider),
+    prefs: ref.watch(sharedPreferencesProvider),
+  );
+});
+
+class TourQuotaController extends AsyncNotifier<TourQuota> {
+  @override
+  FutureOr<TourQuota> build() async {
+    final user = ref.watch(authUserProvider).valueOrNull;
+    final repo = ref.watch(tourQuotaRepositoryProvider);
+    return repo.getQuota(userId: user?.id);
+  }
+
+  Future<void> recordTourCreated() async {
+    final user = ref.read(authServiceProvider).currentUser;
+    final repo = ref.read(tourQuotaRepositoryProvider);
+    final updated = await repo.recordTourCreated(userId: user?.id);
+    state = AsyncData(updated);
+  }
+
+  Future<bool> addBonusTour() async {
+    final user = ref.read(authServiceProvider).currentUser;
+    if (user == null) return false;
+    final repo = ref.read(tourQuotaRepositoryProvider);
+    final updated = await repo.addBonusTour(userId: user.id);
+    state = AsyncData(updated);
+    return true;
+  }
+
+  void refresh() {
+    ref.invalidateSelf();
+  }
+}
+
+final tourQuotaProvider = AsyncNotifierProvider<TourQuotaController, TourQuota>(
+  TourQuotaController.new,
+);
+
+class VoiceTourQuotaNotifier extends StateNotifier<VoiceTourQuota> {
+  VoiceTourQuotaNotifier() : super(const VoiceTourQuota());
+
+  final Map<String, VoiceTourQuota> _quotasByTour = {};
+  String? _currentTourId;
+
+  /// Selects or initializes the quota for a specific active tour.
+  /// Preserves used queries if the user exits and re-enters the same tour.
+  void initForTour(String tourId) {
+    _currentTourId = tourId;
+    _quotasByTour.putIfAbsent(tourId, () => const VoiceTourQuota());
+    state = _quotasByTour[tourId]!;
+  }
+
+  /// Clears the quota for a tour when it is officially finished or stopped.
+  void clearForTour(String tourId) {
+    _quotasByTour.remove(tourId);
+    if (_currentTourId == tourId) {
+      _currentTourId = null;
+      state = const VoiceTourQuota();
+    }
+  }
+
+  void reset() {
+    if (_currentTourId != null) {
+      _quotasByTour.remove(_currentTourId);
+    }
+    state = const VoiceTourQuota();
+  }
+
+  bool useQuery() {
+    if (!state.canAskQuestion) return false;
+    final updated = state.copyWith(queriesUsed: state.queriesUsed + 1);
+    if (_currentTourId != null) {
+      _quotasByTour[_currentTourId!] = updated;
+    }
+    state = updated;
+    return true;
+  }
+
+  bool addBonusQueries([int amount = VoiceTourQuota.queriesPerAd]) {
+    if (state.hasReachedMaxBonus) return false;
+    final nextBonus = (state.bonusQueriesEarned + amount).clamp(0, VoiceTourQuota.maxBonusLimit);
+    final updated = state.copyWith(bonusQueriesEarned: nextBonus);
+    if (_currentTourId != null) {
+      _quotasByTour[_currentTourId!] = updated;
+    }
+    state = updated;
+    return true;
+  }
+}
+
+final voiceTourQuotaProvider =
+    StateNotifierProvider<VoiceTourQuotaNotifier, VoiceTourQuota>((ref) {
+  return VoiceTourQuotaNotifier();
+});
+
 
 
