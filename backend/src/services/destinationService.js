@@ -374,7 +374,7 @@ export function geographicScopeFor(input = {}, extracted = null) {
       mode: tourType === 'express_tour' ? 'express_tour' : 'single_city',
       maxDistanceKm,
       isRegional: false,
-      allowNearbyMunicipalities: true,
+      allowNearbyMunicipalities: asksForNearby || isCoastalCorridor,
     }
   }
 
@@ -872,7 +872,15 @@ export function validateCandidateLocation(place, canonicalDest, maxDistanceKm = 
 
   // 2.5 Municipal / Voronoi boundary check for single-city destinations (rejects neighboring major cities like Manizales when visiting Pereira)
   if (!canonicalDest.isMicroDestination && maxDistanceKm <= 60 && canonicalDest.city) {
-    if (isPlaceInDifferentCity({ ...place, latitude: lat, longitude: lon }, canonicalDest.city, canonicalDest.latitude, canonicalDest.longitude)) {
+    const allowNearbyMunicipalities = canonicalDest.allowNearbyMunicipalities ?? maxDistanceKm > 35
+    if (isPlaceInDifferentCity(
+      { ...place, latitude: lat, longitude: lon },
+      canonicalDest.city,
+      canonicalDest.latitude,
+      canonicalDest.longitude,
+      [],
+      { allowSameMetroGroup: allowNearbyMunicipalities }
+    )) {
       console.warn(`[validateCandidateLocation] Discarding "${place.name}" because it belongs to a neighboring city outside ${canonicalDest.city}`)
       return false
     }

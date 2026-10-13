@@ -3196,6 +3196,10 @@ async function processTourGeneration(jobId, input) {
     }
 
     // Anchor input to canonical destination
+    canonicalDest = {
+      ...canonicalDest,
+      allowNearbyMunicipalities: geographicScopeFor(input).allowNearbyMunicipalities
+    }
     input.canonicalDestination = canonicalDest
     const isUserOriginGen = Boolean(input.isUserLocationOrigin || input.originPlace === 'user_current_location' || input.tourType === 'location_to_destination')
     if (!isUserOriginGen) {
@@ -3826,9 +3830,11 @@ export function buildTourPlanner(input, location = null, places = []) {
     (refList.length > 0 && refList.some(sp => arePlacesSimilar(typeof sp === 'object' ? sp.name : sp, p.name)))
   ).length
   const baseStopTarget = stopCountForDuration(input.durationHours)
+  const requestedDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
+  const singleCityStopLimit = isIntraCityOrSingleCity && requestedDays > 1 ? requestedDays * 2 : baseStopTarget
   const stopTarget = requestedCount >= 2
     ? requestedCount
-    : Math.max(baseStopTarget, requestedCount)
+    : Math.max(requestedCount, Math.min(baseStopTarget, singleCityStopLimit))
 
   if (isCorridorRoute) {
     const rawDestName = input.destinationPlace || input.destination || ''
@@ -4121,24 +4127,40 @@ export function buildTourPlanner(input, location = null, places = []) {
         }
         daysMap.set(d, dayPlaces)
 
-        // 1. Backfill attractions if day is empty or underfilled (< 2 attractions)
-        const currentAttractions = dayPlaces.filter(p => !isFoodStop(p))
-        const attractionsPerDay = isCoastalIslands ? 0 : 2
-        while (currentAttractions.length < attractionsPerDay && availableAttractions.length > 0) {
-          const cand = availableAttractions.shift()
-          if (!cand || !cand.name) continue
-          const key = normalizePlaceKey(cand.name)
-          if (!usedNames.has(key)) {
-            usedNames.add(key)
-            const filled = { ...cand, dia: d, day: d, category: cand.category || 'attraction' }
-            dayPlaces.unshift(filled)
-            currentAttractions.push(filled)
-          }
-        }
+        daysMap.set(d, dayPlaces)
+      }
 
-        // 2. Add 1 restaurant if day has no restaurant and restaurants are available
+      // Spread verified attractions across the complete stay first, then add
+      // a second attraction per day where the destination has enough inventory.
+      const totalAttractions = [...daysMap.values()].flat().filter(p => !isFoodStop(p)).length + availableAttractions.length
+      const sparseAttractionInventory = !isCoastalIslands && totalAttractions < totalDays * 2
+      for (let targetAttractions = 1; targetAttractions <= 2; targetAttractions++) {
+        for (let d = 1; d <= totalDays; d++) {
+          if (isCoastalIslands) continue
+          const dayPlaces = daysMap.get(d) || []
+          const currentAttractions = dayPlaces.filter(p => !isFoodStop(p))
+          if (currentAttractions.length >= targetAttractions) continue
+          while (currentAttractions.length < targetAttractions && availableAttractions.length > 0) {
+            const cand = availableAttractions.shift()
+            if (!cand || !cand.name) continue
+            const key = normalizePlaceKey(cand.name)
+            if (!usedNames.has(key)) {
+              usedNames.add(key)
+              const filled = { ...cand, dia: d, day: d, category: cand.category || 'attraction' }
+              dayPlaces.unshift(filled)
+              currentAttractions.push(filled)
+            }
+          }
+          daysMap.set(d, dayPlaces)
+        }
+      }
+
+      // Restaurants become a third stop only when there are already enough
+      // verified attractions to provide two per day across the whole stay.
+      for (let d = 1; d <= totalDays; d++) {
+        const dayPlaces = daysMap.get(d) || []
         const hasFood = dayPlaces.some(p => isFoodStop(p))
-        if (!isCoastalIslands && !hasFood && availableRestaurants.length > 0) {
+        if (!isCoastalIslands && !sparseAttractionInventory && dayPlaces.length < 3 && !hasFood && availableRestaurants.length > 0) {
           const restIdx = availableRestaurants.findIndex(r => !usedNames.has(normalizePlaceKey(r.name)))
           if (restIdx !== -1) {
             const [rest] = availableRestaurants.splice(restIdx, 1)
@@ -4154,6 +4176,7 @@ export function buildTourPlanner(input, location = null, places = []) {
             })
           }
         }
+        daysMap.set(d, dayPlaces)
       }
 
       const reorderedByDay = []
@@ -4252,6 +4275,21 @@ export function buildTourPlanner(input, location = null, places = []) {
         }
       }
     }
+  }
+
+  if (
+    selectedPlaces.length > 0 &&
+    requestedPlaces.length === 0 &&
+    !input.specificPlaces?.length &&
+    !input.selectedPlaces?.length &&
+    isIntraCityOrSingleCity &&
+    !isCoastalIslands
+  ) {
+    const totalDays = Math.max(1, Number(input.durationDays || Math.ceil((input.durationHours || 24) / 24) || 1))
+    selectedPlaces = selectedPlaces.map((place, index) => {
+      const day = Math.min(totalDays, Math.floor(index * totalDays / selectedPlaces.length) + 1)
+      return { ...place, dia: day, day }
+    })
   }
 
   const isCorridorOrLocationToDest = isLocationToDestTour || (!isIntraCityOrSingleCity && Boolean(
@@ -5192,7 +5230,11 @@ function buildStopDescription(place, input = {}) {
   const inputObj = (typeof input === 'object' && input !== null) ? input : { type: input }
 
   let realDetail = ''
-  if (place.history && place.history.trim().length > 15) {
+  const destination = inputObj.city || inputObj.destination || ''
+  const suppliedDetail = place.history || place.rawTags?.description || ''
+  if (descriptionMentionsAnotherCity(suppliedDetail, destination, place)) {
+    realDetail = generateDynamicDescription(place.name, place.category || place.type || 'lugar', destination)
+  } else if (place.history && place.history.trim().length > 15) {
     realDetail = place.history.trim()
   } else if (place.rawTags?.description && place.rawTags.description.trim().length > 15) {
     realDetail = place.rawTags.description.trim()
@@ -5225,6 +5267,29 @@ function buildStopDescription(place, input = {}) {
   }
 
   return realDetail
+}
+
+function descriptionMentionsAnotherCity(description, destination, place = {}) {
+  const text = String(description || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const target = String(destination || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  if (!text || !target) return false
+
+  const explicitCity = String(place.city || place.municipality || place.tags?.['addr:city'] || '').trim()
+  if (explicitCity && isPlaceInDifferentCity({ city: explicitCity }, target, null, null, [], { allowSameMetroGroup: false })) {
+    return true
+  }
+
+  const cityNames = [...new Set(Object.entries(FALLBACK_DESTINATION_CENTROIDS)
+    .map(([key, value]) => value?.city || key)
+    .filter(Boolean))]
+  for (const cityName of cityNames) {
+    const normalizedCity = String(cityName).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    if (normalizedCity.length < 4 || !isPlaceInDifferentCity({ city: cityName }, target, null, null, [], { allowSameMetroGroup: false })) continue
+    const escaped = normalizedCity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const mention = new RegExp(`(?:^|[.!?]\\s*)${escaped}\\s*,|\\b(?:en|de|desde|hacia|ciudad de|municipio de|localidad de|distrito de|capital de)\\s+${escaped}\\b`)
+    if (mention.test(text)) return true
+  }
+  return false
 }
 
 function buildActivities(place, type) {
@@ -6113,7 +6178,9 @@ async function isPlaceBelongingToCity(placeName, targetCity = '', lat = null, lo
       { name: placeName, latitude: lat, longitude: lon, city: options.city, address: options.address, tags: options.tags },
       targetCity,
       targetCityCoords.latitude,
-      targetCityCoords.longitude
+      targetCityCoords.longitude,
+      [],
+      { allowSameMetroGroup: options.allowNearbyMunicipalities ?? maxRadiusKm > 35 }
     )) {
       console.warn(`[UniversalGeoBoundary] Rechazado "${placeName}" por pertenecer a otro municipio vecino fuera de "${targetCity}"`)
       return false
@@ -6264,16 +6331,19 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
     {
       isRegional: isRegionalOrNature,
       maxDistanceKm: geoScope.maxDistanceKm,
+      allowNearbyMunicipalities: geoScope.allowNearbyMunicipalities,
+      city: matchedPlace?.city || candidateFallback?.city || ubicacion.ciudad,
+      address: matchedPlace?.address || candidateFallback?.address || ubicacion.direccion,
+      tags: matchedPlace?.tags || candidateFallback?.tags || source.tags,
       durationDays: input.durationDays,
     }
   )
-  const isCandidateSelectedByUser = candidatePlaces.some(p => arePlacesSimilar(p?.name || '', sourceName) || arePlacesSimilar(p?.name || '', resolvedName) || (p?.name && resolvedName && ((p.name.toLowerCase().includes(resolvedName.toLowerCase())) || resolvedName.toLowerCase().includes(p.name.toLowerCase()))))
-  if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || (!isValidCityPlace && !isCandidateSelectedByUser)) {
-    const fallbackIsValid = candidateFallback &&
+  if (/parada \d+/i.test(resolvedName) || /^(parada|lugar|punto|sitio|stop)\s*\d+$/i.test(resolvedName) || !isValidCityPlace) {
+    const fallbackIsValid = isValidCityPlace && candidateFallback &&
       (isVerifiedCoordinatePlace(candidateFallback) || candidateFallback.coordinatesVerified || candidateFallback.id || candidateFallback.placeId || candidateFallback.place_id) &&
       hasUsableCoordinates(candidateFallback.latitude, candidateFallback.longitude) &&
       validateCandidateLocation(candidateFallback, cityCenterCoords, geoScope.maxDistanceKm)
-    if (!fallbackIsValid && !isCandidateSelectedByUser) {
+    if (!fallbackIsValid) {
       const error = new Error(`No pudimos confirmar la ubicación real de "${sourceName}" dentro del alcance del tour.`)
       error.code = 'OUT_OF_SCOPE_STOP_LOCATION'
       error.placeName = sourceName
@@ -6336,6 +6406,12 @@ export async function normalizeStop(stop, index, input, anchorPlace = null, cand
         description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
       }
     }
+  }
+
+  if (descriptionMentionsAnotherCity(description, input.city || input.destination, matchedPlace || candidateFallback || {})) {
+    const rawCat = matchedPlace?.category || candidateFallback?.category || source.categoria || source.category || source.type || 'lugar'
+    description = generateDynamicDescription(resolvedName, rawCat, input.city || input.destination)
+    descriptionSource = 'generated_fallback'
   }
   
   const realisticMinutes = Number(richObj?.suggestedMinutes) || estimateRealisticStopDurationMinutes({ name: resolvedName, category: matchedPlace?.category || candidateFallback?.category || source.categoria || source.category, tags: source.tags || matchedPlace?.tags }, index)
@@ -7639,7 +7715,11 @@ export async function collectTourCandidates(input, location) {
     const destLon = canonicalDest?.longitude ?? cityCenterLon ?? null
     const hasUnresolvedSpecifics = mergedSpecifics.some(p => !p || typeof p !== 'object' || !p.coordinatesVerified || !Number.isFinite(Number(p.latitude)))
     const catalog = (hasUnresolvedSpecifics && destLat != null && destLon != null)
-      ? await getRealDestinationCatalog(city, country, destLat, destLon, { requestedDays: input.durationDays, tourType: input.tourType }).catch(() => null)
+      ? await getRealDestinationCatalog(city, country, destLat, destLon, {
+          requestedDays: input.durationDays,
+          tourType: input.tourType,
+          allowNearbyMunicipalities: geoScope.allowNearbyMunicipalities
+        }).catch(() => null)
       : null
 
     const specificSettled = await Promise.allSettled(
@@ -7676,7 +7756,7 @@ export async function collectTourCandidates(input, location) {
             return null
           }
           const withinTargetBounds = !canonicalDest || validateCandidateLocation(
-            { latitude: rawLat, longitude: rawLon, name: placeName, city: rawPlace.city || city },
+            { ...rawPlace, latitude: rawLat, longitude: rawLon, name: placeName, city: rawPlace.city || city },
             canonicalDest,
             geoScope.maxDistanceKm
           )
@@ -7686,7 +7766,9 @@ export async function collectTourCandidates(input, location) {
               latitude: rawLat,
               longitude: rawLon,
               city: rawPlace.city || city,
+              municipality: rawPlace.municipality || rawPlace.tags?.['addr:city'] || rawPlace.tags?.municipality || '',
               country: rawPlace.country || country,
+              tags: rawPlace.tags || {},
               address: rawPlace.address || `${placeName}, ${city}`,
               placeId: rawPlace.placeId || rawPlace.id || '',
               coordinateSource: rawPlace.coordinateSource || 'osm',
@@ -8023,7 +8105,8 @@ export async function collectTourCandidates(input, location) {
       if (hasUnderfilledDay && destLat != null && destLon != null) {
         const activeCatalog = catalog || await getRealDestinationCatalog(city, country, destLat, destLon, {
           requestedDays: totalRequestedDays,
-          tourType: input.tourType
+          tourType: input.tourType,
+          allowNearbyMunicipalities: geoScope.allowNearbyMunicipalities
         }).catch(() => null)
         if (activeCatalog) {
           const usedKeys = new Set(geocodedSpecifics.map(p => normalizePlaceKey(p.name)))
@@ -8141,15 +8224,22 @@ export async function collectTourCandidates(input, location) {
           isRegionalOrNature,
           maxDistanceKm: geoScope.maxDistanceKm,
         })
-        if (geo && hasOsmMapRecord(geo) && (geo.latitude || geo.longitude) && isWithinCityBounds(geo.latitude, geo.longitude)) {
+        if (
+          geo &&
+          hasOsmMapRecord(geo) &&
+          (geo.latitude || geo.longitude) &&
+          isWithinCityBounds(geo.latitude, geo.longitude) &&
+          validateCandidateLocation(geo, input.canonicalDestination || location, geoScope.maxDistanceKm) &&
+          (!geo.name || arePlacesSimilar(item.name, geo.name))
+        ) {
           return {
-            name: item.name,
+            name: geo.name || item.name,
             latitude: geo.latitude,
             longitude: geo.longitude,
-            type: item.type || 'tourism',
-            category: item.category || 'historic',
-            city,
-            country,
+            type: geo.type || item.type || 'tourism',
+            category: geo.category || item.category || 'historic',
+            city: geo.city || geo.municipality || city,
+            country: geo.country || country,
             address: geo.address || geo.name || `${city}, ${item.name}`,
             placeId: geo.placeId || geo.place_id || '',
             coordinateSource: geo.coordinateSource || geo.coordinate_source || '',
@@ -8177,8 +8267,8 @@ export async function collectTourCandidates(input, location) {
     longitude: p.longitude,
     type: p.category || 'tourism',
     category: p.category || 'historic',
-    city,
-    country,
+    city: p.city || p.municipality || p.address?.municipality || city,
+    country: p.country || p.address?.country || country,
     address: p.address || `${p.name}, ${city}`,
     placeId: p.placeId || '',
     coordinateSource: 'tomtom',
@@ -8381,15 +8471,20 @@ export async function collectTourCandidates(input, location) {
         aiFallbacks.map(async (item) => {
           const searchQuery = `${item.name} ${city} ${country}`.trim()
           const geo = await geocodePlace(searchQuery).catch(() => null)
-          if (geo && hasOsmMapRecord(geo) && validateCandidateLocation(geo, input.canonicalDestination || location, geoScope.maxDistanceKm)) {
+          if (
+            geo &&
+            hasOsmMapRecord(geo) &&
+            validateCandidateLocation(geo, input.canonicalDestination || location, geoScope.maxDistanceKm) &&
+            (!geo.name || arePlacesSimilar(item.name, geo.name))
+          ) {
             return {
-              name: item.name,
+              name: geo.name || item.name,
               latitude: geo.latitude,
               longitude: geo.longitude,
-            type: item.type || 'tourism',
-            category: item.category || input.type || 'historic',
-            city,
-            country,
+            type: geo.type || item.type || 'tourism',
+            category: geo.category || item.category || input.type || 'historic',
+            city: geo.city || geo.municipality || city,
+            country: geo.country || country,
             address: geo.address || geo.name || `${city}, ${item.name}`,
             placeId: geo.placeId || geo.place_id || '',
             coordinateSource: geo.coordinateSource || geo.coordinate_source || '',
@@ -8748,22 +8843,21 @@ function isCandidateNearDestination(place, input, location) {
     place,
     input.destination || input.city || input.destinationPlace || ''
   )) return true
-  if (!location) return true
-  if (place.tags?.requested_place === 'true' || place.category === 'requested' || place.isUserSelected === true) {
-    return true
-  }
+  // Chat-selected places still need to match the resolved destination. A user
+  // may have mistyped a city or a place name, so selection is not proof of location.
+  const geoScope = geographicScopeFor(input)
   const canonicalDest = input.canonicalDestination || (location.latitude && location.longitude ? {
     displayName: location.name || `${location.city}, ${location.country}`,
     city: location.city || input.city,
     country: location.country || input.country,
     countryCode: location.countryCode || '',
     latitude: location.latitude,
-    longitude: location.longitude
+    longitude: location.longitude,
+    allowNearbyMunicipalities: geoScope.allowNearbyMunicipalities
   } : null)
 
   if (!canonicalDest) return true
 
-  const geoScope = geographicScopeFor(input)
   const maxDistanceKm = geoScope.maxDistanceKm
   return validateCandidateLocation(place, canonicalDest, maxDistanceKm)
 }

@@ -389,7 +389,7 @@ function isRegionalNatureOrExcursionPoi(item = {}) {
  * 2) Dynamic Voronoi / Rival City Gravity (rejecting POIs that sit inside the urban gravity well
  *    of another city centroid rather than the target destination).
  */
-export function isPlaceInDifferentCity(item, targetCity = '', centerLat = null, centerLon = null, nearbyCities = []) {
+export function isPlaceInDifferentCity(item, targetCity = '', centerLat = null, centerLon = null, nearbyCities = [], options = {}) {
   if (!item || typeof item !== 'object') return false
   const normTarget = normalizeCityToken(targetCity)
   const tags = item.tags && typeof item.tags === 'object' ? item.tags : {}
@@ -405,7 +405,13 @@ export function isPlaceInDifferentCity(item, targetCity = '', centerLat = null, 
   )
   const stateName = normalizeCityToken(tags.state || tags.county || '')
   const fallbackItemCity = normalizeCityToken(item.city || '')
-  const candidateCity = explicitMunicipality || (fallbackItemCity && fallbackItemCity !== stateName ? fallbackItemCity : '')
+  const normalizedAddress = normalizeCityToken(item.address || item.formattedAddress || item.formatted || '')
+  const addressCity = Object.entries(FALLBACK_DESTINATION_CENTROIDS)
+    .map(([key, value]) => normalizeCityToken(value?.city || key))
+    .filter(name => name.length >= 4)
+    .sort((a, b) => b.length - a.length)
+    .find(name => new RegExp(`(?:^| )${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?: |$)`).test(normalizedAddress)) || ''
+  const candidateCity = explicitMunicipality || (fallbackItemCity && fallbackItemCity !== stateName ? fallbackItemCity : '') || addressCity
 
   const isNatureExcursion = isRegionalNatureOrExcursionPoi(item)
   const pLat = Number(item.latitude ?? item.lat)
@@ -415,8 +421,19 @@ export function isPlaceInDifferentCity(item, targetCity = '', centerLat = null, 
   const hasCoords = Number.isFinite(pLat) && Number.isFinite(pLon) && Number.isFinite(cLat) && Number.isFinite(cLon)
   const distToTarget = hasCoords ? haversineMeters(cLat, cLon, pLat, pLon) : null
 
-  // 1. Explicit municipal tag check
-  if (normTarget && candidateCity && !areCitiesInSameMetroGroup(normTarget, candidateCity)) {
+  // 1. Explicit municipal tag check. A single-city tour only includes another
+  // municipality in the same metro when the user explicitly asks for nearby areas.
+  const allowSameMetroGroup = options.allowSameMetroGroup !== false
+  const sameMunicipality = normTarget && candidateCity && (
+    normTarget === candidateCity ||
+    normTarget.endsWith(` ${candidateCity}`) ||
+    candidateCity.endsWith(` ${normTarget}`)
+  )
+  const isDifferentMunicipality = normTarget && candidateCity && (
+    allowSameMetroGroup ? !areCitiesInSameMetroGroup(normTarget, candidateCity) : !sameMunicipality
+  )
+  if (isDifferentMunicipality) {
+    if (!allowSameMetroGroup) return true
     if (!isNatureExcursion) {
       return true
     }
@@ -436,7 +453,7 @@ export function isPlaceInDifferentCity(item, targetCity = '', centerLat = null, 
       if (!Number.isFinite(rLat) || !Number.isFinite(rLon)) return
       const normRival = normalizeCityToken(rawName)
       if (!normRival || seenRivals.has(normRival)) return
-      if (normTarget && areCitiesInSameMetroGroup(normTarget, normRival)) return
+      if (normTarget && allowSameMetroGroup && areCitiesInSameMetroGroup(normTarget, normRival)) return
       const targetToRival = haversineMeters(cLat, cLon, rLat, rLon)
       if (targetToRival < 14000) return
       seenRivals.add(normRival)

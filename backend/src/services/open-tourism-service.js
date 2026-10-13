@@ -1698,10 +1698,11 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     }
   }
 
-  // If attractions are insufficient to fill all days (4 for 1-day tour, at least 2 per day for multi-day), pull from candidatePool
+  // Pull only enough unique attractions to aim for at most two per day. Never
+  // repeat a stop to make a long itinerary look complete.
   const isExpressExpanded = numDays === 1 && Boolean(options.allowExpandedDay || options.isMoreStops)
   const targetAttractionsCount = numDays === 1 ? (isExpressExpanded ? 5 : 4) : numDays * 2
-  const maxAttractionsToPull = numDays === 1 ? (isExpressExpanded ? 6 : 4) : numDays * 3
+  const maxAttractionsToPull = numDays === 1 ? (isExpressExpanded ? 6 : 4) : numDays * 2
   if (cleanAttractions.length < targetAttractionsCount && candidatePool.length > 0) {
     for (const raw of candidatePool) {
       if (cleanAttractions.length >= maxAttractionsToPull) break
@@ -1883,7 +1884,7 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     clusters.splice(splittableIdx, 1, [first], [second])
   }
 
-  // Guarantee every day has at least 1 attraction cluster if any attractions exist
+  // Give each day a distinct attraction when the verified inventory allows it.
   if (clusters.length > 0) {
     while (clusters.length < numDays) {
       const multiCluster = clusters.find((c) => c.length >= 2)
@@ -1891,15 +1892,15 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
         const extra = multiCluster.pop()
         clusters.push([extra])
       } else {
-        const recycled = cleanAttractions[clusters.length % cleanAttractions.length]
-        clusters.push([{ ...recycled }])
+        break
       }
     }
   }
 
-  // Density Invariant: Every day of a trip should have at least 2 attractions (or 4-5 for 1-day express tour)
-  // For multi-day trips, only assign globally unused attractions so cross-day deduplication never strips stops and leaves a day empty.
-  const minRequiredPerDay = isExpressExpanded ? 5 : (numDays === 1 ? 4 : 2)
+  // When the city has fewer than two attractions per day, use one distinct
+  // attraction on each available day and never recycle one to fill the rest.
+  const sparseAttractionInventory = numDays > 1 && cleanAttractions.length < numDays * 2
+  const minRequiredPerDay = isExpressExpanded ? 5 : (numDays === 1 ? 4 : (sparseAttractionInventory ? 1 : 2))
   const globallyAssignedNames = new Set(
     clusters.slice(0, numDays).flatMap(c => c.map(s => (s?.name || '').toLowerCase())).filter(Boolean)
   )
@@ -1922,7 +1923,8 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     }
   }
 
-  // Build final day plans (1..numDays) and assign the closest restaurant to each day's cluster centroid
+  // Add a real restaurant only to a day that already has an attraction. In a
+  // sparse itinerary it can be the second stop, but never a third filler stop.
   const usedRests = new Set()
   const days = []
 
@@ -1942,6 +1944,7 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
     let chosenRest = null
     let bestRestDist = Infinity
     for (const rest of cleanRestaurants) {
+      if (dayAttractions.length === 0) break
       const restKey = rest.name.toLowerCase()
       if (usedRests.has(restKey)) continue
       if (dayAttractions.some((a) => arePlaceNamesSemanticallySame(a.name, rest.name, city))) continue
@@ -1954,20 +1957,8 @@ export function clusterStopsIntoCoherentDays(attractions = [], restaurants = [],
       }
     }
 
-    if (!chosenRest && cleanRestaurants.length > 0) {
-      chosenRest = cleanRestaurants[(d - 1) % cleanRestaurants.length]
-    }
-    if (!chosenRest && cleanRestaurants.length === 0 && city) {
-      chosenRest = {
-        name: d % 2 === 1 ? `Almuerzo tradicional en el centro de ${city}` : `Cena y gastronomía local en ${city}`,
-        latitude: dayLat,
-        longitude: dayLon,
-        address: city,
-        entityType: 'restaurant',
-        category: 'restaurant',
-        type: 'food',
-        isRestaurant: true
-      }
+    if (chosenRest && sparseAttractionInventory && dayAttractions.length >= 2) {
+      chosenRest = null
     }
     if (chosenRest) {
       usedRests.add(chosenRest.name.toLowerCase())

@@ -279,7 +279,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
         if (lat != null) 'latitude': lat,
         // ignore: use_null_aware_elements
         if (lon != null) 'longitude': lon,
-      });
+      }, timeout: const Duration(seconds: 25));
 
       if (requestSequence != _chatRequestSequence) return;
 
