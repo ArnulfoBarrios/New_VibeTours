@@ -1040,6 +1040,52 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
     }
   }
 
+  String _completedTourItineraryText(Tour tour) {
+    final stopsByDay = <int, List<TourStop>>{};
+    for (final stop in tour.stops) {
+      stopsByDay.putIfAbsent(stop.day, () => <TourStop>[]).add(stop);
+    }
+
+    if (stopsByDay.isEmpty) {
+      return '¡Tu tour personalizado está listo!';
+    }
+
+    final days = stopsByDay.keys.toList()..sort();
+    final buffer = StringBuffer(
+      '¡Tu tour personalizado está listo! Aquí tienes el itinerario completo:\n\n',
+    );
+
+    for (final day in days) {
+      final dayStops = stopsByDay[day]!
+        ..sort((a, b) => a.order.compareTo(b.order));
+      final city = tour.city.trim();
+      buffer.writeln(city.isEmpty ? 'Día $day' : 'Día $day: $city');
+      for (final stop in dayStops) {
+        buffer.writeln('• ${stop.name}');
+      }
+      if (day != days.last) buffer.writeln();
+    }
+
+    return buffer.toString().trim();
+  }
+
+  int _findTourItineraryPreviewIndex(List<ChatMessage> messages) {
+    final generateTourPattern = RegExp(
+      r'\b(generar|generate)\s+(el\s+)?tour\b',
+      caseSensitive: false,
+    );
+
+    for (var index = messages.length - 1; index >= 0; index--) {
+      final message = messages[index];
+      if (message.type != ChatMessageType.ai) continue;
+      final hasGenerateTourAction = (message.actionChips ?? const <String>[])
+          .any((chip) => generateTourPattern.hasMatch(chip));
+      if (hasGenerateTourAction) return index;
+    }
+
+    return -1;
+  }
+
   void _handleCompletedTour(Map<String, dynamic> tourData) {
     tourData['isPublished'] = false;
     tourData['isAiGenerated'] = true;
@@ -1214,9 +1260,28 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
       unawaited(_saveUserLodging(tour.city, hotelToSave));
     }
 
+    final completedItineraryText = _completedTourItineraryText(tour);
+    final messages = List<ChatMessage>.from(state.messages);
+    final itineraryPreviewIndex = _findTourItineraryPreviewIndex(messages);
+    if (itineraryPreviewIndex >= 0) {
+      final preview = messages[itineraryPreviewIndex];
+      messages[itineraryPreviewIndex] = ChatMessage(
+        id: preview.id,
+        text: completedItineraryText,
+        type: preview.type,
+        timestamp: preview.timestamp,
+        embeddedTour: preview.embeddedTour,
+        actionChips: preview.actionChips,
+        localImagePath: preview.localImagePath,
+        destinationSuggestions: preview.destinationSuggestions,
+      );
+    }
+
     final aiMsg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      text: '¡Tu tour personalizado está listo! Aquí tienes el itinerario detallado:',
+      text: itineraryPreviewIndex >= 0
+          ? '¡Tu tour personalizado está listo!'
+          : completedItineraryText,
       type: ChatMessageType.ai,
       timestamp: DateTime.now(),
       embeddedTour: tour,
@@ -1225,7 +1290,7 @@ class AiBuilderController extends StateNotifier<AiBuilderState> with WidgetsBind
     state = state.copyWith(
       isBuilding: false, 
       builtTour: tour,
-      messages: [...state.messages, aiMsg],
+      messages: [...messages, aiMsg],
     );
     ref.read(selectedTourProvider.notifier).state = tour;
     unawaited(ref.read(userToursProvider.notifier).saveTour(tour));

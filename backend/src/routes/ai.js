@@ -170,6 +170,80 @@ function destinationKey(value) {
     .toLowerCase()
 }
 
+function destinationEditDistance(left, right) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= left.length; i++) {
+    const current = [i]
+    for (let j = 1; j <= right.length; j++) {
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1)
+      )
+    }
+    for (let j = 0; j <= right.length; j++) previous[j] = current[j]
+  }
+  return previous[right.length]
+}
+
+function suggestDestinationCorrections(query) {
+  const normalizedQuery = destinationKey(String(query || '').split(',')[0]).replace(/[^a-z0-9]/g, '')
+  if (normalizedQuery.length < 4) return []
+
+  const maxDistance = normalizedQuery.length >= 8 ? 2 : 1
+  const candidates = new Map()
+  for (const [key, destination] of Object.entries(FALLBACK_DESTINATION_CENTROIDS)) {
+    if (destination.isMicroDestination) continue
+    const city = cleanAdministrativeCityName(destination.city || destination.entityName || key)
+    const normalizedCity = destinationKey(city).replace(/[^a-z0-9]/g, '')
+    if (!city || normalizedCity === normalizedQuery || Math.abs(normalizedCity.length - normalizedQuery.length) > maxDistance) continue
+    const distance = destinationEditDistance(normalizedQuery, normalizedCity)
+    if (distance <= maxDistance && (!candidates.has(city) || candidates.get(city).distance > distance)) {
+      candidates.set(city, { city, distance })
+    }
+  }
+
+  return [...candidates.values()]
+    .sort((a, b) => a.distance - b.distance || a.city.localeCompare(b.city))
+    .slice(0, 3)
+    .map(candidate => candidate.city)
+}
+
+function getDestinationCorrectionSuggestions(query, canonical) {
+  const geocoderSuggestions = Array.isArray(canonical?.candidates)
+    ? canonical.candidates.map(candidate => candidate.displayName || candidate.city).filter(Boolean)
+    : []
+  return [...new Set([...geocoderSuggestions, ...suggestDestinationCorrections(query)])].slice(0, 3)
+}
+
+function buildDestinationConfirmationResponse(query, canonical, preferences) {
+  const suggestions = getDestinationCorrectionSuggestions(query, canonical)
+  const cleanQuery = String(query || '').trim()
+  let responseMessage
+  if (canonical?.isAmbiguous) {
+    responseMessage = `Encontré más de un lugar llamado “${cleanQuery}”. ¿Cuál de estas ciudades querías indicar?`
+  } else if (!canonical) {
+    responseMessage = `No pude ubicar “${cleanQuery}” como una ciudad. ¿Podrías revisar el nombre o decirme también el departamento o país?`
+  } else {
+    responseMessage = `No pude confirmar “${cleanQuery}” como una ciudad con suficiente confianza. ¿Podrías revisar si la escribiste bien?`
+  }
+  if (suggestions.length > 0) {
+    responseMessage += ` Tal vez quisiste decir: ${suggestions.join(', ')}.`
+  }
+
+  return {
+    responseMessage,
+    message: responseMessage,
+    botMessage: responseMessage,
+    actionChips: suggestions,
+    destinationSuggestions: suggestions,
+    readyToBuild: false,
+    needsDestinationConfirmation: true,
+    preferences,
+    updatedPreferences: preferences
+  }
+}
+
 function applyTourType(input, extracted = null) {
   const coastalPlaceNames = [
     ...(Array.isArray(input?.specificPlaces) ? input.specificPlaces : []),
@@ -932,6 +1006,21 @@ aiRouter.post('/chat', async (req, res, next) => {
       }
     }
 
+    // Después de pedir una corrección de destino, aceptar una respuesta breve
+    // como "Cali" aunque el extractor no la haya clasificado como ciudad.
+    if (currentPreferences.destinationAwaitingConfirmation && !validExtracted.city && !validExtracted.destination) {
+      const replyCandidate = cleanAdministrativeCityName(
+        message.trim()
+          .replace(/^(?:no[,;:]?\s*)?(?:quise decir|quería decir|me refería a|la ciudad es|sería|es|mejor)\s+/i, '')
+          .replace(/[.!?¿¡]+$/g, '')
+      )
+      const isGenericCorrectionReply = /^(?:no|s[ií]|otra|otro|otra ciudad|otro lugar|ninguna|no s[eé]|no recuerdo)$/i.test(replyCandidate)
+      if (!isGenericCorrectionReply && isValidRouteEndpoint(replyCandidate)) {
+        validExtracted.city = replyCandidate
+        validExtracted.destination = replyCandidate
+      }
+    }
+
     const updatedPreferences = {
       ...currentPreferences,
       ...validExtracted
@@ -1137,6 +1226,10 @@ aiRouter.post('/chat', async (req, res, next) => {
       updatedPreferences.country = updatedPreferences.countries.join(', ')
     } else {
       let rawDest = updatedPreferences.destination || updatedPreferences.city
+      if (!rawDest && currentPreferences.destinationAwaitingConfirmation) {
+        const pendingQuery = currentPreferences.unconfirmedDestination || ''
+        return res.json(buildDestinationConfirmationResponse(pendingQuery, null, updatedPreferences))
+      }
       if (rawDest && typeof rawDest === 'string' && rawDest.trim().length > 0) {
         rawDest = cleanAdministrativeCityName(rawDest)
         const rawDestinationKey = destinationKey(rawDest)
@@ -1182,6 +1275,49 @@ aiRouter.post('/chat', async (req, res, next) => {
               ? await canonicalWarmup
               : await resolveCanonicalDestination(rawDest)
         }
+        const explicitlyConfirmsPendingDestination = Boolean(
+          currentPreferences.destinationAwaitingConfirmation &&
+          destinationKey(currentPreferences.unconfirmedDestination) === rawDestinationKey &&
+          (
+            /\b(s[ií]|correcto|confirmo|as[ií]\s+es|exacto|esa\s+misma|ese\s+mismo)\b/i.test(message) ||
+            message.includes(',') ||
+            Boolean(validExtracted.country || validExtracted.region)
+          )
+        )
+        const needsDestinationConfirmation = !canonical || canonical.isAmbiguous || canonical.isLowConfidence
+        const userConfirmedSmallSettlement = Boolean(
+          canonical &&
+          !canonical.isAmbiguous &&
+          canonical.isLowConfidence &&
+          canonical.resolutionSource !== 'openai' &&
+          explicitlyConfirmsPendingDestination
+        )
+        if (needsDestinationConfirmation && !userConfirmedSmallSettlement) {
+          const previousDestinationKey = destinationKey(
+            currentPreferences.canonicalDestination?.city || currentPreferences.city || currentPreferences.destination
+          )
+          if (previousDestinationKey && previousDestinationKey !== rawDestinationKey) {
+            updatedPreferences.specificPlaces = []
+            updatedPreferences.selectedHotel = null
+          }
+          updatedPreferences.city = null
+          updatedPreferences.destination = null
+          updatedPreferences.canonicalDestination = null
+          updatedPreferences.destinationPlace = null
+          updatedPreferences.region = validExtracted.region || null
+          updatedPreferences.country = validExtracted.country ||
+            (currentPreferences.destinationAwaitingConfirmation ? currentPreferences.country : null)
+          updatedPreferences.latitude = null
+          updatedPreferences.longitude = null
+          updatedPreferences.readyToBuild = false
+          updatedPreferences.destinationAwaitingConfirmation = true
+          updatedPreferences.unconfirmedDestination = rawDest
+
+          return res.json(buildDestinationConfirmationResponse(rawDest, canonical, updatedPreferences))
+        }
+
+        delete updatedPreferences.destinationAwaitingConfirmation
+        delete updatedPreferences.unconfirmedDestination
         if (canonical) {
           // If destination changed, clear previous specific places and hotel to prevent cross-destination pollution
           const isLocationToDest = Boolean(

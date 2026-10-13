@@ -1990,8 +1990,11 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
         : _activeStop;
 
     final hotelStop = _findHotelStop(tour);
-    if (_navigatingToHotel && hotelStop == null && _selectedVoicePlace == null)
+    if (_navigatingToHotel &&
+        hotelStop == null &&
+        _selectedVoicePlace == null) {
       return;
+    }
 
     final GeoPoint destination;
     if (_selectedVoicePlace != null) {
@@ -2233,8 +2236,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
       if (meters < 1000) return '${meters.round()} m restantes';
       return '${(meters / 1000).toStringAsFixed(1)} km restantes';
     }
-    if (_selectedVoicePlace != null || _navigatingToHotel)
+    if (_selectedVoicePlace != null || _navigatingToHotel) {
       return 'Por calcular';
+    }
     return '${(tour.distanceKm * (1 - progress)).toStringAsFixed(1)} km restantes';
   }
 
@@ -2248,8 +2252,9 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
           : seconds;
       return _formatDuration(remainingSeconds);
     }
-    if (_selectedVoicePlace != null || _navigatingToHotel)
+    if (_selectedVoicePlace != null || _navigatingToHotel) {
       return 'Calculando...';
+    }
     // Calculate realistic travel time for the active leg based on remaining meters
     final legMeters =
         _remainingRouteDistanceMeters(route) ?? route?.distanceMeters ?? 0;
@@ -2540,31 +2545,38 @@ class _LiveTourScreenState extends ConsumerState<LiveTourScreen>
     }
 
     if (primary.contains('sandwich')) return 'Sándwiches';
-    if (primary.contains('burger') || primary.contains('hamburgue'))
+    if (primary.contains('burger') || primary.contains('hamburgue')) {
       return 'Hamburguesas';
+    }
     if (primary.contains('pizza')) return 'Pizzería';
     if (primary.contains('cafe') ||
         primary.contains('café') ||
-        primary.contains('coffee'))
+        primary.contains('coffee')) {
       return 'Cafetería';
+    }
     if (primary.contains('marisco') ||
         primary.contains('seafood') ||
-        primary.contains('fish'))
+        primary.contains('fish')) {
       return 'Pescados y mariscos';
+    }
     if (primary.contains('carne') ||
         primary.contains('steak') ||
         primary.contains('bbq') ||
-        primary.contains('asado'))
+        primary.contains('asado')) {
       return 'Carnes y asados';
+    }
     if (primary.contains('colombia')) return 'Comida colombiana';
     if (primary.contains('mexic')) return 'Comida mexicana';
     if (primary.contains('ital')) return 'Comida italiana';
-    if (primary.contains('fast_food') || primary.contains('rapida'))
+    if (primary.contains('fast_food') || primary.contains('rapida')) {
       return 'Comida rápida';
-    if (primary.contains('helado') || primary.contains('ice_cream'))
+    }
+    if (primary.contains('helado') || primary.contains('ice_cream')) {
       return 'Heladería';
-    if (primary.contains('panad') || primary.contains('baker'))
+    }
+    if (primary.contains('panad') || primary.contains('baker')) {
       return 'Panadería';
+    }
     if (primary.contains('bar') || primary.contains('pub')) return 'Bar';
 
     return primary[0].toUpperCase() + primary.substring(1);

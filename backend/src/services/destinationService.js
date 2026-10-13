@@ -492,6 +492,32 @@ export function getCanonicalDestinationFromCache(query) {
   return canonicalCache.get(cacheKey) || canonicalCache.get(normKey) || null
 }
 
+function normalizeDestinationQuery(value) {
+  return String(value || '')
+    .split(',')[0]
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function isLowConfidenceSettlement(candidate, query, isAmbiguous = false) {
+  const normalizedQuery = normalizeDestinationQuery(query)
+  const exactNameMatch = [candidate.city, candidate.entityName, candidate.rawName]
+    .some(name => normalizeDestinationQuery(name) === normalizedQuery)
+  const type = String(candidate.type || '').toLowerCase()
+  const category = String(candidate.category || '').toLowerCase()
+  const isSmallSettlement = category === 'place' &&
+    ['village', 'hamlet', 'isolated_dwelling', 'residential'].includes(type)
+  const isPoorlyRankedSettlement = category === 'place' &&
+    Number(candidate.placeRank) >= 19 && !['city', 'town'].includes(type)
+  const isVeryLowImportance = Number(candidate.importance) > 0 &&
+    Number(candidate.importance) < 0.18 && Number(candidate.placeRank) > 12
+
+  return Boolean(isAmbiguous || !exactNameMatch || isSmallSettlement || isPoorlyRankedSettlement || isVeryLowImportance)
+}
+
 export async function resolveCanonicalDestination(query, options = {}) {
   if (!query || typeof query !== 'string') return null
   let cleaned = query.trim().replace(/^(destino|lugar|ciudad|ubicaci[oó]n|location|destination|pais|pa[íi]s)\s*:\s*/i, '').trim()
@@ -504,15 +530,26 @@ export async function resolveCanonicalDestination(query, options = {}) {
 
   // Fast-path: If destination is already a known top destination centroid, return immediately in 0ms
   const normKey = cleaned.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-  const immediateFallback = FALLBACK_DESTINATION_CENTROIDS[normKey] ||
-    FALLBACK_DESTINATION_CENTROIDS[cleaned.toLowerCase().trim()] ||
-    Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([k]) => normKey === k || (k.length >= 4 && (normKey === k || normKey.startsWith(k) || k.startsWith(normKey) || normKey.includes(k))))?.[1]
+  const queryName = normalizeDestinationQuery(cleaned).replace(/\s+/g, ' ')
+  const fallbackEntries = Object.entries(FALLBACK_DESTINATION_CENTROIDS)
+  const exactFallbackEntry = fallbackEntries.find(([key]) => normalizeDestinationQuery(key) === queryName)
+  const knownFallbackAlias = /^cartagena(?: de indias)?$/.test(queryName)
+    ? FALLBACK_DESTINATION_CENTROIDS.cartagena
+    : null
+  const exactFallback = exactFallbackEntry?.[1] || knownFallbackAlias || FALLBACK_DESTINATION_CENTROIDS[cleaned.toLowerCase().trim()]
+  const immediateFallback = exactFallback ||
+    fallbackEntries.find(([key]) => {
+      const normalizedKey = normalizeDestinationQuery(key).replace(/\s+/g, ' ')
+      return normalizedKey.length >= 4 && (queryName.startsWith(normalizedKey) || normalizedKey.startsWith(queryName) || queryName.includes(normalizedKey))
+    })?.[1]
 
   if (immediateFallback) {
     const result = {
       ...immediateFallback,
       placeId: `canonical_${normKey}`,
       isAmbiguous: false,
+      isLowConfidence: !exactFallback,
+      resolutionSource: 'fallback',
       candidates: []
     }
     canonicalCache.set(cacheKey, result)
@@ -642,6 +679,12 @@ export async function resolveCanonicalDestination(query, options = {}) {
             latitude: primary.latitude,
             longitude: primary.longitude,
             placeId: primary.placeId,
+            category: primary.category,
+            type: primary.type,
+            importance: primary.importance,
+            placeRank: primary.placeRank,
+            isLowConfidence: isLowConfidenceSettlement(primary, cleaned, isAmbiguous),
+            resolutionSource: 'nominatim',
             isAmbiguous,
             candidates: isAmbiguous ? distinctDestinations : []
           }
@@ -708,6 +751,11 @@ export async function resolveCanonicalDestination(query, options = {}) {
           latitude: feat.geometry.coordinates[1],
           longitude: feat.geometry.coordinates[0],
           placeId: props.osm_id,
+          category: props.osm_key || '',
+          type: props.osm_value || props.type || '',
+          isLowConfidence: ['village', 'hamlet', 'isolated_dwelling', 'residential'].includes(String(props.osm_value || props.type || '').toLowerCase()) ||
+            normalizeDestinationQuery(props.name || city) !== normalizeDestinationQuery(cleaned),
+          resolutionSource: 'photon',
           isAmbiguous: false,
           candidates: []
         }
@@ -764,6 +812,8 @@ export async function resolveCanonicalDestination(query, options = {}) {
           latitude: Number(aiPlace.latitude),
           longitude: Number(aiPlace.longitude),
           placeId: `ai_${Date.now()}`,
+          isLowConfidence: true,
+          resolutionSource: 'openai',
           isAmbiguous: false,
           candidates: []
         }
@@ -774,14 +824,18 @@ export async function resolveCanonicalDestination(query, options = {}) {
   }
 
   // Fallback to precomputed destination centroids if all network providers fail
-  const fallback = FALLBACK_DESTINATION_CENTROIDS[normKey] ||
-    FALLBACK_DESTINATION_CENTROIDS[cleaned.toLowerCase().trim()] ||
-    Object.entries(FALLBACK_DESTINATION_CENTROIDS).find(([k]) => normKey.includes(k) || k.includes(normKey))?.[1]
+  const fallback = exactFallback ||
+    fallbackEntries.find(([key]) => {
+      const normalizedKey = normalizeDestinationQuery(key).replace(/\s+/g, ' ')
+      return queryName.includes(normalizedKey) || normalizedKey.includes(queryName)
+    })?.[1]
 
   if (fallback) {
     const result = {
       ...fallback,
       placeId: `fallback_${normKey}`,
+      isLowConfidence: normalizeDestinationQuery(cleaned) !== normalizeDestinationQuery(fallback.city || fallback.entityName),
+      resolutionSource: 'fallback',
       isAmbiguous: false,
       candidates: []
     }
